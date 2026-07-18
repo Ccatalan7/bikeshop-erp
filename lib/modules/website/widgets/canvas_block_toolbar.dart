@@ -23,7 +23,11 @@ class CanvasElementToolbar extends StatefulWidget {
   final VoidCallback onRotateQuarterTurn;
   final ValueChanged<CanvasElementAlignment> onAlign;
   final VoidCallback? onToggleCrop;
+  final VoidCallback? onReplaceImage;
   final VoidCallback? onResetImageFrame;
+  final VoidCallback? onRemoveBackground;
+  final VoidCallback? onRestoreOriginalImage;
+  final bool backgroundRemovalBusy;
   final bool cropActive;
   final double maxWidth;
   final bool hoverLabelBelow;
@@ -42,7 +46,11 @@ class CanvasElementToolbar extends StatefulWidget {
     required this.onRotateQuarterTurn,
     required this.onAlign,
     this.onToggleCrop,
+    this.onReplaceImage,
     this.onResetImageFrame,
+    this.onRemoveBackground,
+    this.onRestoreOriginalImage,
+    this.backgroundRemovalBusy = false,
     this.cropActive = false,
     this.maxWidth = double.infinity,
     this.hoverLabelBelow = true,
@@ -68,7 +76,10 @@ class _CanvasElementToolbarState extends State<CanvasElementToolbar> {
   VoidCallback get onRotateQuarterTurn => widget.onRotateQuarterTurn;
   ValueChanged<CanvasElementAlignment> get onAlign => widget.onAlign;
   VoidCallback? get onToggleCrop => widget.onToggleCrop;
+  VoidCallback? get onReplaceImage => widget.onReplaceImage;
   VoidCallback? get onResetImageFrame => widget.onResetImageFrame;
+  VoidCallback? get onRemoveBackground => widget.onRemoveBackground;
+  VoidCallback? get onRestoreOriginalImage => widget.onRestoreOriginalImage;
   bool get cropActive => widget.cropActive;
   Function(String key, dynamic value) get onUpdate => widget.onUpdate;
 
@@ -248,6 +259,12 @@ class _CanvasElementToolbarState extends State<CanvasElementToolbar> {
       ],
       if (type == 'image') ...[
         _buildIconButton(
+          key: const ValueKey('toolbar_replace_image'),
+          icon: Icons.photo_library_outlined,
+          tooltip: 'Reemplazar desde Biblioteca',
+          onTap: onReplaceImage ?? () {},
+        ),
+        _buildIconButton(
           icon: Icons.fit_screen,
           tooltip: properties['fit'] == 'contain'
               ? 'Rellenar el marco'
@@ -270,6 +287,25 @@ class _CanvasElementToolbarState extends State<CanvasElementToolbar> {
             icon: Icons.center_focus_strong_rounded,
             tooltip: 'Centrar encuadre',
             onTap: onResetImageFrame!,
+          ),
+        if (onRemoveBackground != null)
+          _buildIconButton(
+            key: const ValueKey('toolbar_remove_background'),
+            icon: widget.backgroundRemovalBusy
+                ? Icons.hourglass_top_rounded
+                : Icons.auto_fix_high_rounded,
+            tooltip: widget.backgroundRemovalBusy
+                ? 'Quitando fondo...'
+                : 'Quitar fondo',
+            isActive: widget.backgroundRemovalBusy,
+            onTap: widget.backgroundRemovalBusy ? () {} : onRemoveBackground!,
+          ),
+        if (onRestoreOriginalImage != null)
+          _buildIconButton(
+            key: const ValueKey('toolbar_restore_background'),
+            icon: Icons.restore_rounded,
+            tooltip: 'Restaurar imagen original',
+            onTap: onRestoreOriginalImage!,
           ),
       ],
       if (type == 'shape') ...[

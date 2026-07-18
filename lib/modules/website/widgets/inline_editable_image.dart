@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import '../../../shared/services/image_service.dart';
+
+import 'website_media_picker.dart';
 
 /// Inline editable image widget for Odoo-style editing.
 /// When edit mode is active, clicking on image shows upload options.
@@ -35,51 +35,25 @@ class InlineEditableImage extends StatefulWidget {
 }
 
 class _InlineEditableImageState extends State<InlineEditableImage> {
-  bool _isUploading = false;
   bool _isHovering = false;
 
   Future<void> _pickAndUploadImage() async {
     if (!widget.isEditMode) return;
-
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1920,
-      maxHeight: 1080,
-      imageQuality: 85,
-    );
-
-    if (pickedFile == null) return;
-
-    setState(() => _isUploading = true);
-
     try {
-      final bytes = await pickedFile.readAsBytes();
-      final fileName =
-          'website_${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}';
-
-      // Upload with automatic optimization (resizes to max 1200px, compresses as JPEG)
-      final url = await ImageService.uploadWebsiteImageWithOptimization(
-        bytes: bytes,
-        fileName: fileName,
+      final selection = await showWebsiteMediaPicker(
+        context: context,
+        currentUrl: widget.imageUrl,
       );
-
-      if (url != null) {
-        widget.onChanged?.call(url);
-      }
+      if (selection != null) widget.onChanged?.call(selection.publicUrl);
     } catch (e) {
-      debugPrint('Error uploading image: $e');
+      debugPrint('Error selecting image: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al subir imagen: $e'),
+            content: Text('Error al seleccionar imagen: $e'),
             backgroundColor: Colors.red,
           ),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isUploading = false);
       }
     }
   }
@@ -132,7 +106,7 @@ class _InlineEditableImageState extends State<InlineEditableImage> {
             imageWidget,
 
             // Hover overlay
-            if (_isHovering || _isUploading)
+            if (_isHovering)
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
@@ -140,43 +114,31 @@ class _InlineEditableImageState extends State<InlineEditableImage> {
                     borderRadius: widget.borderRadius,
                   ),
                   child: Center(
-                    child: _isUploading
-                        ? const Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              CircularProgressIndicator(color: Colors.white),
-                              SizedBox(height: 8),
-                              Text(
-                                'Subiendo...',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                            ],
-                          )
-                        : Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue,
-                                  borderRadius: BorderRadius.circular(50),
-                                ),
-                                child: const Icon(
-                                  Icons.camera_alt,
-                                  color: Colors.white,
-                                  size: 32,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Cambiar imagen',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.blue,
+                            borderRadius: BorderRadius.circular(50),
                           ),
+                          child: const Icon(
+                            Icons.camera_alt,
+                            color: Colors.white,
+                            size: 32,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Cambiar imagen',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

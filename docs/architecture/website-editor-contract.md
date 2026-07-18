@@ -109,6 +109,15 @@ imagery, readable contrast, and a strong CTA.
 - Present products as customers recognize them commercially. Components should
   be shown plausibly and cleanly—for example, inner tubes folded or boxed as
   sold, not as an unexplained inflated tube floating beside a bicycle.
+- Product campaign imagery must be presentation-ready. When a catalog photo
+  contains a white studio rectangle, create or select a transparent media
+  cutout and keep that cutout as the editable image layer; do not disguise the
+  rectangle by placing several catalog photos inside a larger decorative card.
+  Preserve the real package, label, proportions, and product binding. A linked
+  Canvas image exposes `Imagen visible`: `product` follows the catalog image;
+  `manual` keeps the same `productId` binding while rendering the selected
+  picker asset. The renderer must never silently replace a deliberate cutout
+  with the product's white-background catalog image.
 - Reject generated imagery with distorted bikes/components, impossible product
   geometry, illegible packaging, fake labels, or other obvious AI artifacts.
 - Copy and CTA claims must be supported by the current catalog/promotion state.
@@ -352,6 +361,23 @@ primary action.
   public rendering must round-trip together.
 - Product-linked image layers must continue to show their product owner and use
   the current catalog image; a manual asset may be an explicit fallback.
+- Background removal is a shared media operation, not a campaign-specific
+  workaround. Canvas image toolbars and schema image controls open the same
+  non-destructive Before/After workflow. Applying it creates a new transparent
+  PNG in the normal Website Builder media path, keeps the original URL
+  restorable, sets a linked Canvas image to the explicit `manual` source, and
+  remains undoable through the page draft.
+- The free local path removes only a near-uniform background connected to the
+  image border and exposes its tolerance. It must run before any paid provider.
+  An asset that already contains meaningful transparency is a no-op: preview
+  the existing cutout on the transparency grid, explain that no new copy is
+  needed, and disable both Apply and paid processing. Never flood-fill an
+  existing transparent cutout as though its transparent RGB values were a
+  removable solid background.
+  Complex-background processing is an explicit user action, is authenticated
+  and tenant-scoped through `website-remove-background`, and states that it
+  consumes one provider credit. Provider secrets never enter Flutter or saved
+  block data.
 
 ## Page navigation inside the editor
 
@@ -449,6 +475,14 @@ defaults. A local override is valid only when the editor exposes a deliberate,
 visible opt-out such as `inheritTheme = false`; the override value must remain
 editable and round-trip like every other editor value.
 
+The header owns one site-wide contrast policy. `Automático` is the safe default:
+solid headers derive their foreground from the configured background luminance,
+while headers over page content use one restrained tonal protection and tint the
+logo, links, account controls, and icons as a single foreground system. Explicit
+light/dark modes are global intentional overrides, not per-slide repairs. Moving
+or resizing a Canvas layer behind the header must never require recoloring each
+header child independently.
+
 ## Draft, save, and round-trip semantics
 
 Website content/configuration edits stage in `WebsiteEditModeProvider` and
@@ -477,6 +511,7 @@ persist through the editor-wide `Guardar` action.
 | `/productos` shows header/footer but no catalog in the editor | The routed system page mounted without its required initial data load in edit mode | Exercise the real route and preserve the public page's initialization/filter lifecycle |
 | A CTA works visually but is absent from destination/configuration tools | A raw href or duplicate page/menu owner bypassed the typed destination system | Use `WebsiteLinkValueEditor`, canonical entity routes, and destination audit |
 | Theme controls change only some blocks | Renderers hardcoded fonts/colors/button geometry instead of inheriting saved theme values | Theme values are global consumers; overrides require explicit editor-visible opt-out |
+| Logo or header icons disappear over a bright hero layer | Overlay mode recolored only some header descendants and trusted the hero to provide contrast | Resolve one global header foreground, tint the logo and controls together, and use the shared automatic overlay protection in Edit, Preview, and public rendering |
 
 ## Known implementation debt
 

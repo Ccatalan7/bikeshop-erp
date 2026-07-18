@@ -43,6 +43,7 @@ Map<String, dynamic> createCanvasElement({
         'h': 200.0,
         'imageUrl': '',
         'productId': '',
+        'imageSource': 'manual',
         'fit': 'cover',
         'focalPointX': 0.5,
         'focalPointY': 0.5,

@@ -20,9 +20,11 @@ import '../models/website_block_type.dart';
 import '../models/website_font_registry.dart';
 import '../models/website_action.dart';
 import '../models/canvas_element_factory.dart';
+import '../models/website_editor_drag_payload.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../models/website_page_models.dart';
 import '../services/website_backup_service.dart';
+import '../services/website_background_removal_service.dart';
 import '../services/website_service.dart';
 import 'block_resize_handle.dart';
 import '../services/google_business_service.dart';
@@ -30,6 +32,8 @@ import 'focal_point_picker.dart';
 import 'text_formatting_toolbar.dart';
 import 'website_link_value_editor.dart';
 import 'website_action_editor.dart';
+import 'website_background_removal_dialog.dart';
+import 'website_media_picker.dart';
 import 'website_workspace_scope.dart';
 
 /// Sanitize filename for Supabase Storage (remove spaces and special chars)
@@ -82,18 +86,7 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
     if (!mounted) return;
     final currentSelection = editProvider.selectedBlockId;
 
-    // Check for Canvas element selection changes
-    String? currentActiveElementId;
-    if (currentSelection != null) {
-      try {
-        final blockData = editProvider.blocks.firstWhere(
-          (b) => b['id'] == currentSelection,
-        );
-        currentActiveElementId =
-            (blockData['block_data'] ?? blockData['data'])?['activeElementId']
-                ?.toString();
-      } catch (_) {}
-    }
+    final currentActiveElementId = editProvider.selectedCanvasElementId;
 
     final blockChanged = currentSelection != null &&
         (currentSelection != _previousSelectedBlockId ||
@@ -363,6 +356,8 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
   // Drag state for block reordering
   String? _draggingBlockId;
   int? _hoveringBlockIndex;
+  _AddPanelMode _mode = _AddPanelMode.layers;
+  String _insertQuery = '';
 
   WebsiteEditModeProvider get editProvider => widget.editProvider;
 
@@ -380,6 +375,13 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
     final blockOptionsByCategory = <String, List<_BlockOption>>{};
     for (final definition in WebsiteBlockRegistry.all()) {
       if (definition.type == WebsiteBlockType.footer) continue;
+      final query = _insertQuery.trim().toLowerCase();
+      if (query.isNotEmpty &&
+          !definition.title.toLowerCase().contains(query) &&
+          !definition.type.name.toLowerCase().contains(query) &&
+          !definition.type.editorCategory.toLowerCase().contains(query)) {
+        continue;
+      }
       blockOptionsByCategory
           .putIfAbsent(definition.type.editorCategory, () => [])
           .add(_BlockOption(definition.type.name));
@@ -390,270 +392,309 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<_AddPanelMode>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(
+                  value: _AddPanelMode.layers,
+                  icon: Icon(Icons.layers_outlined, size: 17),
+                  label: Text('Capas'),
+                ),
+                ButtonSegment(
+                  value: _AddPanelMode.insert,
+                  icon: Icon(Icons.add_box_outlined, size: 17),
+                  label: Text('Insertar'),
+                ),
+              ],
+              selected: {_mode},
+              onSelectionChanged: (value) =>
+                  setState(() => _mode = value.first),
+            ),
+          ),
+          const SizedBox(height: 18),
           // =========================
           // PAGE STRUCTURE (Wix-like)
           // =========================
-          const Text(
-            'ESTRUCTURA DE LA PÁGINA',
-            style: TextStyle(
-              color: Colors.white54,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1,
+          if (_mode == _AddPanelMode.layers) ...[
+            const Text(
+              'CAPAS DE LA PÁGINA',
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF2D2D2D),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-            ),
-            child: blocks.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Text(
-                      'Aún no hay bloques. Agrega uno desde abajo.',
-                      style: TextStyle(color: Colors.white38, fontSize: 12),
-                    ),
-                  )
-                : Column(
-                    children: List.generate(blocks.length, (index) {
-                      // Apply visual reordering during drag
-                      var displayIndex = index;
-                      if (_draggingBlockId != null &&
-                          _hoveringBlockIndex != null) {
-                        final draggedOriginalIndex = blocks
-                            .indexWhere((b) => b['id'] == _draggingBlockId);
-                        if (draggedOriginalIndex >= 0) {
-                          if (index == _hoveringBlockIndex) {
-                            displayIndex = draggedOriginalIndex;
-                          } else if (draggedOriginalIndex <
-                                  _hoveringBlockIndex! &&
-                              index > draggedOriginalIndex &&
-                              index <= _hoveringBlockIndex!) {
-                            displayIndex = index - 1;
-                          } else if (draggedOriginalIndex >
-                                  _hoveringBlockIndex! &&
-                              index >= _hoveringBlockIndex! &&
-                              index < draggedOriginalIndex) {
-                            displayIndex = index + 1;
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF2D2D2D),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              child: blocks.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text(
+                        'Aún no hay bloques. Agrega uno desde abajo.',
+                        style: TextStyle(color: Colors.white38, fontSize: 12),
+                      ),
+                    )
+                  : Column(
+                      children: List.generate(blocks.length, (index) {
+                        // Apply visual reordering during drag
+                        var displayIndex = index;
+                        if (_draggingBlockId != null &&
+                            _hoveringBlockIndex != null) {
+                          final draggedOriginalIndex = blocks
+                              .indexWhere((b) => b['id'] == _draggingBlockId);
+                          if (draggedOriginalIndex >= 0) {
+                            if (index == _hoveringBlockIndex) {
+                              displayIndex = draggedOriginalIndex;
+                            } else if (draggedOriginalIndex <
+                                    _hoveringBlockIndex! &&
+                                index > draggedOriginalIndex &&
+                                index <= _hoveringBlockIndex!) {
+                              displayIndex = index - 1;
+                            } else if (draggedOriginalIndex >
+                                    _hoveringBlockIndex! &&
+                                index >= _hoveringBlockIndex! &&
+                                index < draggedOriginalIndex) {
+                              displayIndex = index + 1;
+                            }
                           }
                         }
-                      }
-                      displayIndex = displayIndex.clamp(0, blocks.length - 1);
+                        displayIndex = displayIndex.clamp(0, blocks.length - 1);
 
-                      final block = blocks[displayIndex];
-                      final id = block['id']?.toString() ?? 'block_$index';
-                      final type = (block['block_type'] ?? block['type'] ?? '')
-                          .toString();
-                      final isVisible = block['is_visible'] ?? true;
-                      final isSelected = editProvider.selectedBlockId == id;
-                      final isDropTarget = _hoveringBlockIndex == index &&
-                          _draggingBlockId != null;
+                        final block = blocks[displayIndex];
+                        final id = block['id']?.toString() ?? 'block_$index';
+                        final type =
+                            (block['block_type'] ?? block['type'] ?? '')
+                                .toString();
+                        final isVisible = block['is_visible'] ?? true;
+                        final isSelected = editProvider.selectedBlockId == id;
+                        final isDropTarget = _hoveringBlockIndex == index &&
+                            _draggingBlockId != null;
 
-                      return DragTarget<String>(
-                        key: ValueKey('block_target_$index'),
-                        onWillAcceptWithDetails: (details) => true,
-                        onMove: (details) {
-                          if (_hoveringBlockIndex != index) {
+                        return DragTarget<WebsiteEditorDragPayload>(
+                          key: ValueKey('block_target_$index'),
+                          onWillAcceptWithDetails: (details) =>
+                              details.data is ExistingWebsiteBlockDragPayload,
+                          onMove: (details) {
+                            if (_hoveringBlockIndex != index) {
+                              setState(() {
+                                _hoveringBlockIndex = index;
+                              });
+                            }
+                          },
+                          onAcceptWithDetails: (details) {
+                            // Compute reordered list
+                            final draggedIndex = blocks
+                                .indexWhere((b) => b['id'] == _draggingBlockId);
+                            if (draggedIndex >= 0 &&
+                                _hoveringBlockIndex != null &&
+                                draggedIndex != _hoveringBlockIndex) {
+                              var newIndex = _hoveringBlockIndex!;
+                              // Adjust for ReorderableListView's convention
+                              if (newIndex > draggedIndex) newIndex += 1;
+                              editProvider.reorderBlocks(
+                                  draggedIndex, newIndex);
+                            }
                             setState(() {
-                              _hoveringBlockIndex = index;
+                              _draggingBlockId = null;
+                              _hoveringBlockIndex = null;
                             });
-                          }
-                        },
-                        onAcceptWithDetails: (details) {
-                          // Compute reordered list
-                          final draggedIndex = blocks
-                              .indexWhere((b) => b['id'] == _draggingBlockId);
-                          if (draggedIndex >= 0 &&
-                              _hoveringBlockIndex != null &&
-                              draggedIndex != _hoveringBlockIndex) {
-                            var newIndex = _hoveringBlockIndex!;
-                            // Adjust for ReorderableListView's convention
-                            if (newIndex > draggedIndex) newIndex += 1;
-                            editProvider.reorderBlocks(draggedIndex, newIndex);
-                          }
-                          setState(() {
-                            _draggingBlockId = null;
-                            _hoveringBlockIndex = null;
-                          });
-                        },
-                        builder: (context, candidateData, rejectedData) {
-                          return Container(
-                            decoration: BoxDecoration(
-                              color: isDropTarget
-                                  ? Colors.white.withValues(alpha: 0.08)
-                                  : isSelected
-                                      ? const Color(0xFF00A09D)
-                                          .withValues(alpha: 0.12)
-                                      : Colors.transparent,
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: Colors.white.withValues(alpha: 0.06),
+                          },
+                          builder: (context, candidateData, rejectedData) {
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: isDropTarget
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : isSelected
+                                        ? const Color(0xFF00A09D)
+                                            .withValues(alpha: 0.12)
+                                        : Colors.transparent,
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: Colors.white.withValues(alpha: 0.06),
+                                  ),
                                 ),
                               ),
-                            ),
-                            child: InkWell(
-                              onTap: () => editProvider.selectBlock(id),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 10),
-                                child: Row(
-                                  children: [
-                                    Draggable<String>(
-                                      data: id,
-                                      dragAnchorStrategy:
-                                          pointerDragAnchorStrategy,
-                                      onDragStarted: () {
-                                        setState(() {
-                                          _draggingBlockId = id;
-                                        });
-                                      },
-                                      onDraggableCanceled: (_, __) {
-                                        setState(() {
-                                          _draggingBlockId = null;
-                                          _hoveringBlockIndex = null;
-                                        });
-                                      },
-                                      feedback: Material(
-                                        color: Colors.transparent,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 8),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF2D2D2D),
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black
-                                                    .withValues(alpha: 0.4),
-                                                blurRadius: 8,
-                                              ),
-                                            ],
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(Icons.drag_handle,
-                                                  color: Colors.white54,
-                                                  size: 18),
-                                              const SizedBox(width: 8),
-                                              Icon(_blockIcon(type),
-                                                  color: Colors.white70,
-                                                  size: 16),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                _blockLabel(type),
-                                                style: const TextStyle(
-                                                  color: Colors.white70,
-                                                  fontSize: 13,
+                              child: InkWell(
+                                onTap: () => editProvider.selectBlock(id),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 10),
+                                  child: Row(
+                                    children: [
+                                      Draggable<WebsiteEditorDragPayload>(
+                                        data:
+                                            ExistingWebsiteBlockDragPayload(id),
+                                        dragAnchorStrategy:
+                                            pointerDragAnchorStrategy,
+                                        onDragStarted: () {
+                                          setState(() {
+                                            _draggingBlockId = id;
+                                          });
+                                        },
+                                        onDraggableCanceled: (_, __) {
+                                          setState(() {
+                                            _draggingBlockId = null;
+                                            _hoveringBlockIndex = null;
+                                          });
+                                        },
+                                        feedback: Material(
+                                          color: Colors.transparent,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF2D2D2D),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withValues(alpha: 0.4),
+                                                  blurRadius: 8,
                                                 ),
-                                              ),
-                                            ],
+                                              ],
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(Icons.drag_handle,
+                                                    color: Colors.white54,
+                                                    size: 18),
+                                                const SizedBox(width: 8),
+                                                Icon(_blockIcon(type),
+                                                    color: Colors.white70,
+                                                    size: 16),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  _blockLabel(type),
+                                                  style: const TextStyle(
+                                                    color: Colors.white70,
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      childWhenDragging: const Icon(
-                                        Icons.drag_handle,
-                                        color: Colors.white12,
-                                        size: 18,
-                                      ),
-                                      child: const MouseRegion(
-                                        cursor: SystemMouseCursors.grab,
-                                        child: Icon(
+                                        childWhenDragging: const Icon(
                                           Icons.drag_handle,
-                                          color: Colors.white38,
+                                          color: Colors.white12,
                                           size: 18,
                                         ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Icon(
-                                      _blockIcon(type),
-                                      color: Colors.white70,
-                                      size: 16,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        _blockLabel(type),
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 13,
+                                        child: const MouseRegion(
+                                          cursor: SystemMouseCursors.grab,
+                                          child: Icon(
+                                            Icons.drag_handle,
+                                            color: Colors.white38,
+                                            size: 18,
+                                          ),
                                         ),
-                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                    ),
-                                    IconButton(
-                                      onPressed: () => editProvider
-                                          .toggleBlockVisibility(id),
-                                      icon: Icon(
-                                        isVisible
-                                            ? Icons.visibility
-                                            : Icons.visibility_off,
-                                        size: 18,
-                                        color: isVisible
-                                            ? Colors.white54
-                                            : Colors.orange.shade300,
+                                      const SizedBox(width: 8),
+                                      Icon(
+                                        _blockIcon(type),
+                                        color: Colors.white70,
+                                        size: 16,
                                       ),
-                                      tooltip:
-                                          isVisible ? 'Ocultar' : 'Mostrar',
-                                      constraints: const BoxConstraints(
-                                          minWidth: 32, minHeight: 32),
-                                      padding: EdgeInsets.zero,
-                                    ),
-                                  ],
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          _blockLabel(type),
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 13,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        onPressed: () => editProvider
+                                            .toggleBlockVisibility(id),
+                                        icon: Icon(
+                                          isVisible
+                                              ? Icons.visibility
+                                              : Icons.visibility_off,
+                                          size: 18,
+                                          color: isVisible
+                                              ? Colors.white54
+                                              : Colors.orange.shade300,
+                                        ),
+                                        tooltip:
+                                            isVisible ? 'Ocultar' : 'Mostrar',
+                                        constraints: const BoxConstraints(
+                                            minWidth: 32, minHeight: 32),
+                                        padding: EdgeInsets.zero,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          );
-                        },
-                      );
-                    }),
-                  ),
-          ),
-          const SizedBox(height: 20),
-
-          for (final category in categoryOrder.take(2))
-            if (blockOptionsByCategory[category]?.isNotEmpty == true)
-              _buildSection(category, blockOptionsByCategory[category]!),
-          _buildSection('Canvas (arrastrable)', [
-            const _BlockOption(
-              'canvas_el:text',
-              labelOverride: 'Texto',
-              iconOverride: Icons.text_fields_rounded,
+                            );
+                          },
+                        );
+                      }),
+                    ),
             ),
-            const _BlockOption(
-              'canvas_el:button',
-              labelOverride: 'Botón',
-              iconOverride: Icons.smart_button_rounded,
+            const SizedBox(height: 20),
+          ],
+          if (_mode == _AddPanelMode.insert) ...[
+            TextField(
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search, size: 18),
+                hintText: 'Buscar bloque o elemento',
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (value) => setState(() => _insertQuery = value),
             ),
-            const _BlockOption(
-              'canvas_el:image',
-              labelOverride: 'Imagen',
-              iconOverride: Icons.image_outlined,
-            ),
-            const _BlockOption(
-              'canvas_el:shape',
-              labelOverride: 'Forma',
-              iconOverride: Icons.rectangle_outlined,
-            ),
-            const _BlockOption(
-              'canvas_el:product',
-              labelOverride: 'Producto',
-              iconOverride: Icons.inventory_2_outlined,
-            ),
-            const _BlockOption(
-              'canvas_el:productsGallery',
-              labelOverride: 'Galería productos',
-              iconOverride: Icons.grid_view_rounded,
-            ),
-          ]),
-          for (final category in categoryOrder.skip(2))
-            if (blockOptionsByCategory[category]?.isNotEmpty == true)
-              _buildSection(category, blockOptionsByCategory[category]!),
+            const SizedBox(height: 12),
+            for (final category in categoryOrder.take(2))
+              if (blockOptionsByCategory[category]?.isNotEmpty == true)
+                _buildSection(category, blockOptionsByCategory[category]!),
+            _buildSection('Canvas (arrastrable)', [
+              const _BlockOption(
+                'canvas_el:text',
+                labelOverride: 'Texto',
+                iconOverride: Icons.text_fields_rounded,
+              ),
+              const _BlockOption(
+                'canvas_el:button',
+                labelOverride: 'Botón',
+                iconOverride: Icons.smart_button_rounded,
+              ),
+              const _BlockOption(
+                'canvas_el:image',
+                labelOverride: 'Imagen',
+                iconOverride: Icons.image_outlined,
+              ),
+              const _BlockOption(
+                'canvas_el:shape',
+                labelOverride: 'Forma',
+                iconOverride: Icons.rectangle_outlined,
+              ),
+              const _BlockOption(
+                'canvas_el:product',
+                labelOverride: 'Producto',
+                iconOverride: Icons.inventory_2_outlined,
+              ),
+              const _BlockOption(
+                'canvas_el:productsGallery',
+                labelOverride: 'Galería productos',
+                iconOverride: Icons.grid_view_rounded,
+              ),
+            ]),
+            for (final category in categoryOrder.skip(2))
+              if (blockOptionsByCategory[category]?.isNotEmpty == true)
+                _buildSection(category, blockOptionsByCategory[category]!),
+          ],
         ],
       ),
     );
@@ -687,8 +728,12 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
 
   Widget _buildBlockCard(_BlockOption option) {
     return Builder(
-      builder: (context) => Draggable<String>(
-        data: option.type,
+      builder: (context) => Draggable<WebsiteEditorDragPayload>(
+        data: option.type.startsWith('canvas_el:')
+            ? CanvasElementDragPayload(
+                option.type.replaceFirst('canvas_el:', ''),
+              )
+            : NewWebsiteBlockDragPayload(option.type),
         feedback: Material(
           color: Colors.transparent,
           child: Container(
@@ -819,6 +864,8 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
     return parsed;
   }
 }
+
+enum _AddPanelMode { layers, insert }
 
 class _SyncTab extends StatefulWidget {
   const _SyncTab();
@@ -1438,6 +1485,39 @@ class _BlockOption {
 
 enum _InspectorSection { content, layout, style }
 
+class _CanvasSelectionContext {
+  const _CanvasSelectionContext({
+    required this.canvasData,
+    required this.element,
+    this.slideIndex,
+  });
+
+  final Map<String, dynamic> canvasData;
+  final Map<String, dynamic> element;
+  final int? slideIndex;
+
+  String get id => element['id']?.toString() ?? '';
+  String get type => (element['type'] ?? 'text').toString();
+  String get label => switch (type) {
+        'button' => (element['label'] ?? 'Botón').toString(),
+        'image' => (element['altText'] ?? 'Imagen').toString().trim().isEmpty
+            ? 'Imagen'
+            : element['altText'].toString(),
+        'shape' => 'Forma',
+        'product' => 'Producto',
+        'productsGallery' => 'Galería de productos',
+        _ => (element['text'] ?? 'Texto').toString(),
+      };
+  IconData get icon => switch (type) {
+        'button' => Icons.smart_button_rounded,
+        'image' => Icons.image_outlined,
+        'shape' => Icons.rectangle_outlined,
+        'product' => Icons.inventory_2_outlined,
+        'productsGallery' => Icons.grid_view_rounded,
+        _ => Icons.text_fields_rounded,
+      };
+}
+
 /// Inspector for the selected block.
 ///
 /// Professional editors keep block identity and primary actions stable while
@@ -1488,19 +1568,21 @@ class _EditBlockTabState extends State<_EditBlockTab> {
   @override
   Widget build(BuildContext context) {
     final selectedId = editProvider.selectedBlockId;
-    _syncSelection(selectedId);
 
     if (selectedId == null) {
+      _syncSelection(null);
       return _buildNoSelection();
     }
 
     // Handle special elements (header/footer) - these are not blocks
     // Use ValueKey to preserve state across rebuilds
     if (selectedId == 'header') {
+      _syncSelection(selectedId);
       return _HeaderBlockControls(
           key: const ValueKey('header_controls'), provider: editProvider);
     }
     if (selectedId == 'footer') {
+      _syncSelection(selectedId);
       return _FooterBlockControls(
           key: const ValueKey('footer_controls'), provider: editProvider);
     }
@@ -1513,12 +1595,27 @@ class _EditBlockTabState extends State<_EditBlockTab> {
     final blockType = block['block_type']?.toString() ?? '';
     final blockData = Map<String, dynamic>.from(block['block_data'] ?? {});
     final isVisible = block['is_visible'] ?? true;
+    final canvasSelection = _resolveCanvasSelection(
+      blockType: blockType,
+      blockData: blockData,
+      blockId: selectedId,
+    );
+    _syncSelection(
+      canvasSelection == null
+          ? selectedId
+          : '$selectedId/${canvasSelection.slideIndex ?? 'root'}/${canvasSelection.id}',
+    );
 
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-          child: _buildBlockHeader(blockType, isVisible, selectedId),
+          child: _buildBlockHeader(
+            blockType,
+            isVisible,
+            selectedId,
+            canvasSelection: canvasSelection,
+          ),
         ),
         _buildSectionNavigation(),
         const Divider(height: 1, color: Colors.white12),
@@ -1534,6 +1631,7 @@ class _EditBlockTabState extends State<_EditBlockTab> {
               blockData: blockData,
               block: block,
               blockId: selectedId,
+              canvasSelection: canvasSelection,
             ),
           ),
         ),
@@ -1622,7 +1720,38 @@ class _EditBlockTabState extends State<_EditBlockTab> {
     required Map<String, dynamic> blockData,
     required Map<String, dynamic> block,
     required String blockId,
+    _CanvasSelectionContext? canvasSelection,
   }) {
+    if (canvasSelection != null) {
+      void updateSlideValue(String key, dynamic value) {
+        final rawSlides = blockData['slides'];
+        if (canvasSelection.slideIndex == null || rawSlides is! List) {
+          editProvider.updateBlockData(blockId, key, value);
+          return;
+        }
+        final slides = rawSlides
+            .whereType<Map>()
+            .map((slide) => Map<String, dynamic>.from(slide))
+            .toList();
+        final index = canvasSelection.slideIndex!;
+        if (index < 0 || index >= slides.length) return;
+        slides[index] = {...slides[index], key: value};
+        editProvider.updateBlockData(blockId, 'slides', slides);
+      }
+
+      return _CanvasBlockControls(
+        data: canvasSelection.canvasData,
+        blockId: blockId,
+        provider: editProvider,
+        slideIndex: canvasSelection.slideIndex,
+        elementsOnly: true,
+        selectedElementOnly: true,
+        inspectorSection: _section,
+        onElementsChanged: (elements) => updateSlideValue('elements', elements),
+        onCanvasSettingChanged: updateSlideValue,
+      );
+    }
+
     switch (_section) {
       case _InspectorSection.content:
         return _buildBlockControls(blockType, blockData, blockId);
@@ -1649,6 +1778,12 @@ class _EditBlockTabState extends State<_EditBlockTab> {
               blockId: blockId,
               provider: editProvider,
             ),
+            const SizedBox(height: 18),
+            _BlockResponsiveVisibilityControl(
+              data: blockData,
+              blockId: blockId,
+              provider: editProvider,
+            ),
           ],
         );
       case _InspectorSection.style:
@@ -1671,6 +1806,46 @@ class _EditBlockTabState extends State<_EditBlockTab> {
           ],
         );
     }
+  }
+
+  _CanvasSelectionContext? _resolveCanvasSelection({
+    required String blockType,
+    required Map<String, dynamic> blockData,
+    required String blockId,
+  }) {
+    int? slideIndex;
+    Map<String, dynamic> canvasData = blockData;
+    if (blockType == WebsiteBlockType.carousel.name) {
+      final rawSlides = blockData['slides'];
+      if (rawSlides is! List || rawSlides.isEmpty) return null;
+      slideIndex = editProvider.carouselSlideSelection(
+        blockId,
+        rawSlides.length,
+      );
+      final slide = rawSlides[slideIndex];
+      if (slide is! Map) return null;
+      canvasData = Map<String, dynamic>.from(slide);
+    } else if (blockType != WebsiteBlockType.canvas.name) {
+      return null;
+    }
+
+    final elementId = editProvider.canvasElementSelection(
+      blockId,
+      slideIndex: slideIndex,
+    );
+    if (elementId == null) return null;
+    final rawElements = canvasData['elements'];
+    if (rawElements is! List) return null;
+    for (final raw in rawElements) {
+      if (raw is Map && raw['id']?.toString() == elementId) {
+        return _CanvasSelectionContext(
+          canvasData: canvasData,
+          element: Map<String, dynamic>.from(raw),
+          slideIndex: slideIndex,
+        );
+      }
+    }
+    return null;
   }
 
   Widget _buildNoSelection() {
@@ -1708,66 +1883,121 @@ class _EditBlockTabState extends State<_EditBlockTab> {
     );
   }
 
-  Widget _buildBlockHeader(String blockType, bool isVisible, String blockId) {
+  Widget _buildBlockHeader(
+    String blockType,
+    bool isVisible,
+    String blockId, {
+    _CanvasSelectionContext? canvasSelection,
+  }) {
     final parsedType = _tryParseWebsiteBlockType(blockType);
     final title = parsedType != null
         ? WebsiteBlockRegistry.definitionFor(parsedType).title
         : blockType;
     final icon = parsedType?.icon ?? Icons.widgets_rounded;
 
-    return Row(
+    final effectiveTitle = canvasSelection?.label ?? title;
+    final effectiveIcon = canvasSelection?.icon ?? icon;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: const Color(0xFF00A09D).withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Icon(
-            icon,
-            color: const Color(0xFF00A09D),
-            size: 20,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        if (canvasSelection != null) ...[
+          Row(
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+              InkWell(
+                onTap: () => editProvider.selectCanvasElement(
+                  blockId,
+                  null,
+                  slideIndex: canvasSelection.slideIndex,
+                ),
+                borderRadius: BorderRadius.circular(6),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.arrow_back_rounded,
+                          size: 15, color: Colors.white54),
+                      SizedBox(width: 5),
+                      Text('Volver al bloque',
+                          style:
+                              TextStyle(color: Colors.white54, fontSize: 11)),
+                    ],
+                  ),
                 ),
               ),
-              Text(
-                isVisible ? 'Visible' : 'Oculto',
-                style: TextStyle(
-                  color: isVisible ? const Color(0xFF00A09D) : Colors.orange,
-                  fontSize: 11,
+              const Spacer(),
+              Flexible(
+                child: Text(
+                  canvasSelection.slideIndex == null
+                      ? title
+                      : '$title > Slide ${canvasSelection.slideIndex! + 1}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white38, fontSize: 10.5),
                 ),
               ),
             ],
           ),
-        ),
-        // Quick actions
-        _QuickActionButton(
-          icon: isVisible ? Icons.visibility : Icons.visibility_off,
-          tooltip: isVisible ? 'Ocultar' : 'Mostrar',
-          onPressed: () => editProvider.toggleBlockVisibility(blockId),
-        ),
-        _QuickActionButton(
-          icon: Icons.content_copy,
-          tooltip: 'Duplicar',
-          onPressed: () => editProvider.duplicateBlock(blockId),
-        ),
-        _QuickActionButton(
-          icon: Icons.delete_outline,
-          tooltip: 'Eliminar',
-          onPressed: () => editProvider.deleteBlock(blockId),
-          isDestructive: true,
+          const SizedBox(height: 10),
+        ],
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00A09D).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(
+                effectiveIcon,
+                color: const Color(0xFF00A09D),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    effectiveTitle,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    isVisible ? 'Visible' : 'Oculto',
+                    style: TextStyle(
+                      color:
+                          isVisible ? const Color(0xFF00A09D) : Colors.orange,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (canvasSelection == null) ...[
+              _QuickActionButton(
+                icon: isVisible ? Icons.visibility : Icons.visibility_off,
+                tooltip: isVisible ? 'Ocultar' : 'Mostrar',
+                onPressed: () => editProvider.toggleBlockVisibility(blockId),
+              ),
+              _QuickActionButton(
+                icon: Icons.content_copy,
+                tooltip: 'Duplicar',
+                onPressed: () => editProvider.duplicateBlock(blockId),
+              ),
+              _QuickActionButton(
+                icon: Icons.delete_outline,
+                tooltip: 'Eliminar',
+                onPressed: () => editProvider.deleteBlock(blockId),
+                isDestructive: true,
+              ),
+            ],
+          ],
         ),
       ],
     );
@@ -1798,7 +2028,6 @@ class _EditBlockTabState extends State<_EditBlockTab> {
       String blockType, Map<String, dynamic> data, String blockId) {
     // Build controls based on block type
     switch (blockType) {
-      case 'hero':
       case 'carousel':
         return _CarouselBlockControls(
             data: data, blockId: blockId, provider: editProvider);
@@ -1831,6 +2060,142 @@ class _EditBlockTabState extends State<_EditBlockTab> {
           rawBlockType: blockType,
         );
     }
+  }
+}
+
+class _BlockResponsiveVisibilityControl extends StatelessWidget {
+  const _BlockResponsiveVisibilityControl({
+    required this.data,
+    required this.blockId,
+    required this.provider,
+  });
+
+  final Map<String, dynamic> data;
+  final String blockId;
+  final WebsiteEditModeProvider provider;
+
+  Map<String, bool> get _visibility {
+    final result = <String, bool>{
+      'desktop': true,
+      'tablet': true,
+      'mobile': true,
+    };
+    final raw = data['visibility'];
+    if (raw is Map) {
+      for (final key in result.keys) {
+        final value = raw[key];
+        if (value is bool) result[key] = value;
+      }
+    }
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final visibility = _visibility;
+    const options = <(String, String, IconData)>[
+      ('desktop', 'Escritorio', Icons.desktop_windows_outlined),
+      ('tablet', 'Tablet', Icons.tablet_mac_outlined),
+      ('mobile', 'Móvil', Icons.phone_iphone_outlined),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .035),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.devices_outlined, color: Color(0xFF00A09D), size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Visibilidad responsive',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'El contenido se conserva; sólo decides en qué tamaños aparece.',
+            style: TextStyle(color: Colors.white38, fontSize: 10),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (final option in options)
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      right: option.$1 == 'mobile' ? 0 : 6,
+                    ),
+                    child: Semantics(
+                      button: true,
+                      selected: visibility[option.$1]!,
+                      label:
+                          '${option.$2}: ${visibility[option.$1]! ? 'visible' : 'oculto'}',
+                      child: InkWell(
+                        onTap: () {
+                          final updated = Map<String, bool>.from(visibility);
+                          updated[option.$1] = !updated[option.$1]!;
+                          provider.updateBlockData(
+                            blockId,
+                            'visibility',
+                            updated,
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: visibility[option.$1]!
+                                ? const Color(0xFF00A09D).withValues(alpha: .18)
+                                : Colors.white.withValues(alpha: .035),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: visibility[option.$1]!
+                                  ? const Color(0xFF00A09D)
+                                  : Colors.white12,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(
+                                option.$3,
+                                size: 18,
+                                color: visibility[option.$1]!
+                                    ? const Color(0xFF20C5C1)
+                                    : Colors.white30,
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                option.$2,
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  color: visibility[option.$1]!
+                                      ? Colors.white
+                                      : Colors.white38,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -2241,6 +2606,7 @@ class _CarouselBlockControls extends StatefulWidget {
 
 class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
   int _selectedSlideIndex = 0;
+  WebsiteEditModeProvider get editProvider => widget.provider;
 
   void _selectSlide(int index, {bool rebuild = true}) {
     final count = _slides.length;
@@ -2294,18 +2660,6 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           '🎠 [CarouselControls] _updateSlideMultiple: index=$index, keys=${updates.keys.join(", ")}');
       _updateSlides(slides);
     }
-  }
-
-  void _updateSlideTransient(int index, String key, dynamic value) {
-    final slides = List<Map<String, dynamic>>.from(_slides);
-    if (index < 0 || index >= slides.length) return;
-    slides[index] = {...slides[index], key: value};
-    widget.provider.updateBlockData(
-      widget.blockId,
-      'slides',
-      slides,
-      saveHistory: false,
-    );
   }
 
   void _setCompositionEnabled(Map<String, dynamic> slide, bool enabled) {
@@ -2540,17 +2894,21 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                 },
                 blockId: widget.blockId,
                 provider: widget.provider,
+                slideIndex: _selectedSlideIndex,
                 elementsOnly: true,
                 onElementsChanged: (elements) =>
                     _updateSlide(_selectedSlideIndex, 'elements', elements),
                 onCanvasSettingChanged: (key, value) =>
                     _updateSlide(_selectedSlideIndex, key, value),
-                onActiveElementChanged: (elementId) => _updateSlideTransient(
-                  _selectedSlideIndex,
-                  'activeElementId',
+                onActiveElementChanged: (elementId) =>
+                    widget.provider.selectCanvasElement(
+                  widget.blockId,
                   elementId,
+                  slideIndex: _selectedSlideIndex,
+                  slideCount: _slides.length,
                 ),
               ),
+              _buildNestedLayers(widget.provider.blocks),
               const SizedBox(height: 20),
             ] else ...[
               _EditorTextField(
@@ -2794,6 +3152,222 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
       ],
     );
   }
+
+  Widget _buildNestedLayers(List<Map<String, dynamic>> blocks) {
+    final selectedId = editProvider.selectedBlockId;
+    if (selectedId == null) return const SizedBox.shrink();
+    final block = blocks.cast<Map<String, dynamic>?>().firstWhere(
+          (candidate) => candidate?['id']?.toString() == selectedId,
+          orElse: () => null,
+        );
+    if (block == null) return const SizedBox.shrink();
+    final type = (block['block_type'] ?? block['type'] ?? '').toString();
+    final data = Map<String, dynamic>.from(
+      block['block_data'] as Map? ?? const <String, dynamic>{},
+    );
+    var slideIndex = 0;
+    List<dynamic> rawElements;
+    if (type == WebsiteBlockType.carousel.name) {
+      final slides = List<dynamic>.from(data['slides'] as List? ?? const []);
+      if (slides.isEmpty) return const SizedBox.shrink();
+      slideIndex = editProvider.carouselSlideSelection(
+        selectedId,
+        slides.length,
+      );
+      final slide = Map<String, dynamic>.from(slides[slideIndex] as Map? ?? {});
+      if (slide['useComposition'] != true) return const SizedBox.shrink();
+      rawElements = List<dynamic>.from(slide['elements'] as List? ?? const []);
+    } else if (type == WebsiteBlockType.canvas.name) {
+      rawElements = List<dynamic>.from(data['elements'] as List? ?? const []);
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    final elements = rawElements
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    if (elements.isEmpty) return const SizedBox.shrink();
+    final selectedElementId = editProvider.canvasElementSelection(
+      selectedId,
+      slideIndex: type == WebsiteBlockType.carousel.name ? slideIndex : null,
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF242424),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 2, 6, 6),
+            child: Text(
+              type == WebsiteBlockType.carousel.name
+                  ? 'CAPAS · SLIDE ${slideIndex + 1}'
+                  : 'CAPAS DEL CANVAS',
+              style: const TextStyle(
+                color: Colors.white38,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: .8,
+              ),
+            ),
+          ),
+          for (var index = elements.length - 1; index >= 0; index--)
+            _buildNestedLayerRow(
+              blockId: selectedId,
+              type: type,
+              slideIndex: slideIndex,
+              elements: elements,
+              index: index,
+              selected: elements[index]['id']?.toString() == selectedElementId,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNestedLayerRow({
+    required String blockId,
+    required String type,
+    required int slideIndex,
+    required List<Map<String, dynamic>> elements,
+    required int index,
+    required bool selected,
+  }) {
+    final element = elements[index];
+    final id = element['id']?.toString() ?? '';
+    final elementType = element['type']?.toString() ?? 'element';
+    final hidden = element['hidden'] == true;
+    final locked = element['locked'] == true;
+    final label = (element['name'] ??
+            element['text'] ??
+            element['label'] ??
+            element['title'] ??
+            _canvasElementLabel(elementType))
+        .toString();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      decoration: BoxDecoration(
+        color: selected
+            ? const Color(0xFF00A09D).withValues(alpha: .14)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: InkWell(
+        onTap: () => editProvider.selectCanvasElement(
+          blockId,
+          id,
+          slideIndex:
+              type == WebsiteBlockType.carousel.name ? slideIndex : null,
+        ),
+        borderRadius: BorderRadius.circular(7),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          child: Row(
+            children: [
+              Icon(_canvasElementIcon(elementType),
+                  size: 15,
+                  color: selected ? const Color(0xFF00A09D) : Colors.white54),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: hidden ? Colors.white30 : Colors.white70,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: hidden ? 'Mostrar capa' : 'Ocultar capa',
+                onPressed: () => _patchNestedLayer(
+                  blockId: blockId,
+                  type: type,
+                  slideIndex: slideIndex,
+                  elements: elements,
+                  index: index,
+                  key: 'hidden',
+                  value: !hidden,
+                ),
+                icon: Icon(hidden ? Icons.visibility_off : Icons.visibility,
+                    size: 15, color: Colors.white38),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: locked ? 'Desbloquear capa' : 'Bloquear capa',
+                onPressed: () => _patchNestedLayer(
+                  blockId: blockId,
+                  type: type,
+                  slideIndex: slideIndex,
+                  elements: elements,
+                  index: index,
+                  key: 'locked',
+                  value: !locked,
+                ),
+                icon: Icon(locked ? Icons.lock : Icons.lock_open,
+                    size: 15, color: Colors.white38),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _patchNestedLayer({
+    required String blockId,
+    required String type,
+    required int slideIndex,
+    required List<Map<String, dynamic>> elements,
+    required int index,
+    required String key,
+    required dynamic value,
+  }) {
+    final updated =
+        elements.map((element) => Map<String, dynamic>.from(element)).toList();
+    updated[index][key] = value;
+    if (type == WebsiteBlockType.canvas.name) {
+      editProvider.updateBlockData(blockId, 'elements', updated);
+      return;
+    }
+    final block = editProvider.blocks.firstWhere(
+      (candidate) => candidate['id']?.toString() == blockId,
+    );
+    final data = Map<String, dynamic>.from(block['block_data'] as Map? ?? {});
+    final slides = List<dynamic>.from(data['slides'] as List? ?? const []);
+    final slide = Map<String, dynamic>.from(slides[slideIndex] as Map? ?? {});
+    slides[slideIndex] = {...slide, 'elements': updated};
+    editProvider.updateBlockData(blockId, 'slides', slides);
+  }
+
+  static IconData _canvasElementIcon(String type) => switch (type) {
+        'text' => Icons.text_fields_rounded,
+        'button' => Icons.smart_button_rounded,
+        'image' => Icons.image_outlined,
+        'shape' => Icons.rectangle_outlined,
+        'product' => Icons.inventory_2_outlined,
+        'productsGallery' => Icons.grid_view_rounded,
+        _ => Icons.layers_outlined,
+      };
+
+  static String _canvasElementLabel(String type) => switch (type) {
+        'text' => 'Texto',
+        'button' => 'Botón',
+        'image' => 'Imagen',
+        'shape' => 'Forma',
+        'product' => 'Producto',
+        'productsGallery' => 'Galería de productos',
+        _ => 'Elemento',
+      };
 
   Future<void> _uploadSlideVideoFile() async {
     try {
@@ -5426,11 +6000,12 @@ class _GenericBlockControls extends StatelessWidget {
 
           if (sectionFields.isEmpty) continue;
           usedKeys.addAll(allSectionFields.map((f) => f.key));
+          final isFirstVisibleSection = sectionWidgets.isEmpty;
 
           sectionWidgets.add(
             _CollapsibleSection(
               title: section.label,
-              initiallyExpanded: true,
+              initiallyExpanded: isFirstVisibleSection,
               children: [
                 if (section.description != null &&
                     section.description!.isNotEmpty)
@@ -5557,7 +6132,10 @@ class _CanvasBlockControls extends StatelessWidget {
   final Map<String, dynamic> data;
   final String blockId;
   final WebsiteEditModeProvider provider;
+  final int? slideIndex;
   final bool elementsOnly;
+  final bool selectedElementOnly;
+  final _InspectorSection? inspectorSection;
   final ValueChanged<List<Map<String, dynamic>>>? onElementsChanged;
   final ValueChanged<String?>? onActiveElementChanged;
   final void Function(String key, dynamic value)? onCanvasSettingChanged;
@@ -5566,7 +6144,10 @@ class _CanvasBlockControls extends StatelessWidget {
     required this.data,
     required this.blockId,
     required this.provider,
+    this.slideIndex,
     this.elementsOnly = false,
+    this.selectedElementOnly = false,
+    this.inspectorSection,
     this.onElementsChanged,
     this.onActiveElementChanged,
     this.onCanvasSettingChanged,
@@ -5584,8 +6165,9 @@ class _CanvasBlockControls extends StatelessWidget {
   }
 
   String? _activeElementId() {
-    final raw = data['activeElementId'];
-    final id = raw?.toString();
+    final id = provider
+        .canvasElementSelection(blockId, slideIndex: slideIndex)
+        ?.toString();
     if (id == null || id.trim().isEmpty) return null;
     return id.trim();
   }
@@ -5595,9 +6177,17 @@ class _CanvasBlockControls extends StatelessWidget {
       onActiveElementChanged!(id);
       return;
     }
-    // Don't save to history for transient activeElementId changes
-    provider.updateBlockData(blockId, 'activeElementId', id,
-        saveHistory: false);
+    final block = provider.getBlock(blockId);
+    final blockData = Map<String, dynamic>.from(
+      block?['block_data'] ?? const <String, dynamic>{},
+    );
+    final slides = blockData['slides'];
+    provider.selectCanvasElement(
+      blockId,
+      id,
+      slideIndex: slideIndex,
+      slideCount: slideIndex == null || slides is! List ? null : slides.length,
+    );
   }
 
   void _setElements(List<Map<String, dynamic>> elements) {
@@ -5920,157 +6510,161 @@ class _CanvasBlockControls extends StatelessWidget {
         ],
 
         // ========== CANVAS-WIDE LAYOUT POLICY ==========
-        _CollapsibleSection(
-          title: 'Reglas del lienzo',
-          icon: Icons.crop_free_rounded,
-          initiallyExpanded: true,
-          children: [
-            _EditorToggle(
-              label: 'Restringir capas al área segura',
-              value: data['constrainElementsToSafeArea'] != false,
-              onChanged: (value) => _setCanvasSetting(
-                'constrainElementsToSafeArea',
-                value,
+        if (!selectedElementOnly)
+          _CollapsibleSection(
+            title: 'Reglas del lienzo',
+            icon: Icons.crop_free_rounded,
+            initiallyExpanded: true,
+            children: [
+              _EditorToggle(
+                label: 'Restringir capas al área segura',
+                value: data['constrainElementsToSafeArea'] != false,
+                onChanged: (value) => _setCanvasSetting(
+                  'constrainElementsToSafeArea',
+                  value,
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              data['constrainElementsToSafeArea'] == false
-                  ? 'Sangrado general activado: cualquier capa puede cruzar la guía. La parte fuera de la diapositiva se recorta en vista previa.'
-                  : 'Regla general activa para capas actuales y nuevas. La guía visible conserva la composición entre editor y vista previa.',
-              style: const TextStyle(
-                color: Colors.white38,
-                fontSize: 11,
-                height: 1.35,
-              ),
-            ),
-          ],
-        ),
-
-        // ========== CANVAS ELEMENTS ==========
-        _CollapsibleSection(
-          title: 'Canvas Elements (${elements.length})',
-          icon: Icons.layers_rounded,
-          initiallyExpanded:
-              active == null, // Only expanded when no element selected
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _addElement('text'),
-                    icon: const Icon(Icons.text_fields_rounded, size: 18),
-                    label: const Text('Texto'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _addElement('button'),
-                    icon: const Icon(Icons.smart_button_rounded, size: 18),
-                    label: const Text('Botón'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _addElement('image'),
-                    icon: const Icon(Icons.image_outlined, size: 18),
-                    label: const Text('Imagen'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _addElement('shape'),
-                    icon: const Icon(Icons.rectangle_outlined, size: 18),
-                    label: const Text('Forma'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (elements.isEmpty)
+              const SizedBox(height: 6),
               Text(
-                'Agrega elementos y arrástralos en el canvas.',
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
-              )
-            else
-              Column(
-                children: elements.map((e) {
-                  final id = e['id']?.toString() ?? '';
-                  final type = (e['type'] ?? 'text').toString();
-                  final title = switch (type) {
-                    'button' => (e['label'] ?? 'Botón').toString(),
-                    'image' =>
-                      (e['altText'] ?? 'Imagen').toString().trim().isEmpty
-                          ? 'Imagen'
-                          : e['altText'].toString(),
-                    'shape' => 'Forma',
-                    'product' => 'Producto',
-                    'productsGallery' => 'Galería de productos',
-                    _ => (e['text'] ?? 'Texto').toString(),
-                  };
-                  final isActive = id == activeId;
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E1E1E),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: isActive
-                            ? const Color(0xFF00A09D)
-                            : Colors.white.withValues(alpha: 0.08),
-                      ),
-                    ),
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(
-                        switch (type) {
-                          'button' => Icons.smart_button_rounded,
-                          'image' => Icons.image_outlined,
-                          'shape' => Icons.rectangle_outlined,
-                          'product' => Icons.inventory_2_outlined,
-                          'productsGallery' => Icons.grid_view_rounded,
-                          _ => Icons.text_fields_rounded,
-                        },
-                        color: Colors.white70,
-                        size: 18,
-                      ),
-                      title: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 13),
-                      ),
-                      onTap: () => _setActive(id),
-                      trailing: IconButton(
-                        tooltip: 'Eliminar',
-                        icon: const Icon(Icons.delete_outline, size: 18),
-                        color: Colors.red.shade300,
-                        onPressed: () => _deleteElement(id),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            if (active == null) ...[
-              const SizedBox(height: 12),
-              Text(
-                'Selecciona un elemento para editarlo.',
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                data['constrainElementsToSafeArea'] == false
+                    ? 'Sangrado general activado: cualquier capa puede cruzar la guía. La parte fuera de la diapositiva se recorta en vista previa.'
+                    : 'Regla general activa para capas actuales y nuevas. La guía visible conserva la composición entre editor y vista previa.',
+                style: const TextStyle(
+                  color: Colors.white38,
+                  fontSize: 11,
+                  height: 1.35,
+                ),
               ),
             ],
-          ],
-        ),
+          ),
+
+        // ========== CANVAS ELEMENTS ==========
+        if (!selectedElementOnly)
+          _CollapsibleSection(
+            title: 'Canvas Elements (${elements.length})',
+            icon: Icons.layers_rounded,
+            initiallyExpanded:
+                active == null, // Only expanded when no element selected
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _addElement('text'),
+                      icon: const Icon(Icons.text_fields_rounded, size: 18),
+                      label: const Text('Texto'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _addElement('button'),
+                      icon: const Icon(Icons.smart_button_rounded, size: 18),
+                      label: const Text('Botón'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _addElement('image'),
+                      icon: const Icon(Icons.image_outlined, size: 18),
+                      label: const Text('Imagen'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _addElement('shape'),
+                      icon: const Icon(Icons.rectangle_outlined, size: 18),
+                      label: const Text('Forma'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (elements.isEmpty)
+                Text(
+                  'Agrega elementos y arrástralos en el canvas.',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                )
+              else
+                Column(
+                  children: elements.map((e) {
+                    final id = e['id']?.toString() ?? '';
+                    final type = (e['type'] ?? 'text').toString();
+                    final title = switch (type) {
+                      'button' => (e['label'] ?? 'Botón').toString(),
+                      'image' =>
+                        (e['altText'] ?? 'Imagen').toString().trim().isEmpty
+                            ? 'Imagen'
+                            : e['altText'].toString(),
+                      'shape' => 'Forma',
+                      'product' => 'Producto',
+                      'productsGallery' => 'Galería de productos',
+                      _ => (e['text'] ?? 'Texto').toString(),
+                    };
+                    final isActive = id == activeId;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E1E1E),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isActive
+                              ? const Color(0xFF00A09D)
+                              : Colors.white.withValues(alpha: 0.08),
+                        ),
+                      ),
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(
+                          switch (type) {
+                            'button' => Icons.smart_button_rounded,
+                            'image' => Icons.image_outlined,
+                            'shape' => Icons.rectangle_outlined,
+                            'product' => Icons.inventory_2_outlined,
+                            'productsGallery' => Icons.grid_view_rounded,
+                            _ => Icons.text_fields_rounded,
+                          },
+                          color: Colors.white70,
+                          size: 18,
+                        ),
+                        title: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 13),
+                        ),
+                        onTap: () => _setActive(id),
+                        trailing: IconButton(
+                          tooltip: 'Eliminar',
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          color: Colors.red.shade300,
+                          onPressed: () => _deleteElement(id),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              if (active == null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Selecciona un elemento para editarlo.',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                ),
+              ],
+            ],
+          ),
 
         // ========== ELEMENT EDITOR (when element is selected) ==========
-        if (active != null) ...[
+        if (active != null &&
+            (inspectorSection == null ||
+                inspectorSection == _InspectorSection.layout)) ...[
           _CollapsibleSection(
             title: 'Posición y tamaño',
             icon: Icons.open_with_rounded,
@@ -6202,8 +6796,17 @@ class _CanvasBlockControls extends StatelessWidget {
               ),
             ],
           ),
+        ],
+        if (active != null &&
+            (inspectorSection == null ||
+                inspectorSection == _InspectorSection.content ||
+                inspectorSection == _InspectorSection.style)) ...[
           _CollapsibleSection(
-            title: 'Contenido y apariencia',
+            title: inspectorSection == _InspectorSection.content
+                ? 'Contenido'
+                : inspectorSection == _InspectorSection.style
+                    ? 'Apariencia'
+                    : 'Contenido y apariencia',
             icon: switch (activeType) {
               'button' => Icons.smart_button_rounded,
               'image' => Icons.image_outlined,
@@ -6212,158 +6815,335 @@ class _CanvasBlockControls extends StatelessWidget {
               'productsGallery' => Icons.grid_view_rounded,
               _ => Icons.text_fields_rounded,
             },
-            initiallyExpanded: false,
+            initiallyExpanded: selectedElementOnly,
             children: [
               if (activeType == 'text') ...[
-                _EditorTextField(
-                  label: 'Texto',
-                  value: active['text']?.toString() ?? '',
-                  onChanged: (v) => _updateElement(activeId!, {'text': v}),
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 12),
-                _EditorSlider(
-                  label: 'Tamaño fuente',
-                  value: ((active['fontSize'] as num?)?.toDouble() ?? 24)
-                      .clamp(10, 80),
-                  min: 10,
-                  max: 80,
-                  divisions: 70,
-                  valueLabel:
-                      '${((active['fontSize'] as num?)?.toDouble() ?? 24).toStringAsFixed(0)}px',
-                  onChanged: (v) => _updateElement(activeId!, {'fontSize': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorDropdown(
-                  label: 'Tipografía del tema',
-                  value: (active['fontRole'] ?? 'heading').toString(),
-                  options: const [
-                    ('heading', 'Títulos'),
-                    ('body', 'Texto general'),
-                  ],
-                  onChanged: (v) => _updateElement(activeId!, {'fontRole': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorDropdown(
-                  label: 'Peso',
-                  value: (active['fontWeight'] ?? 'w600').toString(),
-                  options: const [
-                    ('w400', 'Normal'),
-                    ('w500', 'Medio'),
-                    ('w600', 'Semi-bold'),
-                    ('w700', 'Bold'),
-                  ],
-                  onChanged: (v) =>
-                      _updateElement(activeId!, {'fontWeight': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorDropdown(
-                  label: 'Alineación',
-                  value: (active['align'] ?? 'left').toString(),
-                  options: const [
-                    ('left', 'Izquierda'),
-                    ('center', 'Centro'),
-                    ('right', 'Derecha'),
-                  ],
-                  onChanged: (v) => _updateElement(activeId!, {'align': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorTextField(
-                  label: 'Color (hex)',
-                  value: (active['color'] ?? '#111111').toString(),
-                  onChanged: (v) => _updateElement(activeId!, {'color': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorSlider(
-                  label: 'Espaciado de letras',
-                  value: ((active['letterSpacing'] as num?)?.toDouble() ?? 0)
-                      .clamp(-1, 8),
-                  min: -1,
-                  max: 8,
-                  divisions: 18,
-                  valueLabel:
-                      ((active['letterSpacing'] as num?)?.toDouble() ?? 0)
-                          .toStringAsFixed(1),
-                  onChanged: (v) =>
-                      _updateElement(activeId!, {'letterSpacing': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorSlider(
-                  label: 'Interlineado',
-                  value: ((active['lineHeight'] as num?)?.toDouble() ?? 1.1)
-                      .clamp(0.8, 2.0),
-                  min: 0.8,
-                  max: 2.0,
-                  divisions: 12,
-                  valueLabel:
-                      ((active['lineHeight'] as num?)?.toDouble() ?? 1.1)
-                          .toStringAsFixed(1),
-                  onChanged: (v) =>
-                      _updateElement(activeId!, {'lineHeight': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorToggle(
-                  label: 'MAYÚSCULAS',
-                  value: active['uppercase'] == true,
-                  onChanged: (v) => _updateElement(activeId!, {'uppercase': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorDropdown(
-                  label: 'Animación',
-                  value: (active['anim'] ?? 'none').toString(),
-                  options: const [
-                    ('none', 'Ninguna'),
-                    ('fade', 'Fade'),
-                    ('fadeUp', 'Fade up'),
-                  ],
-                  onChanged: (v) => _updateElement(activeId!, {'anim': v}),
-                ),
-              ] else if (activeType == 'button') ...[
-                WebsiteActionEditor(
-                  showVariant: true,
-                  value: WebsiteActionValue.resolvePrimary(
-                        active,
-                        labelKeys: const ['label'],
-                        hrefKeys: const ['link'],
-                        defaultLabel: 'Botón',
-                        defaultHref: '/',
-                        defaultVariant: WebsiteActionVariant.fromStorage(
-                          active['style']?.toString(),
-                        ),
-                      ) ??
-                      const WebsiteActionValue(
-                        label: 'Botón',
-                        href: '/',
-                      ),
-                  onChanged: (action) => _updateElement(activeId!, {
-                    'label': action.label,
-                    'link': action.href,
-                    'style': action.variant.storageValue,
-                    'actions': WebsiteActionValue.mergePrimary(
-                      active['actions'],
-                      action,
-                    ),
-                  }),
-                ),
-                const SizedBox(height: 12),
-                _EditorToggle(
-                  label: 'Usar estilo global del tema',
-                  value: active['inheritTheme'] != false,
-                  onChanged: (v) =>
-                      _updateElement(activeId!, {'inheritTheme': v}),
-                ),
-                if (active['inheritTheme'] == false) ...[
-                  const SizedBox(height: 12),
+                if (inspectorSection != _InspectorSection.style) ...[
                   _EditorTextField(
-                    label: 'Color fondo (hex)',
-                    value: (active['bgColor'] ?? '#00A09D').toString(),
-                    onChanged: (v) => _updateElement(activeId!, {'bgColor': v}),
+                    label: 'Texto',
+                    value: active['text']?.toString() ?? '',
+                    onChanged: (v) => _updateElement(activeId!, {'text': v}),
+                    maxLines: 3,
+                  ),
+                ],
+                if (inspectorSection != _InspectorSection.content) ...[
+                  _EditorSlider(
+                    label: 'Tamaño fuente',
+                    value: ((active['fontSize'] as num?)?.toDouble() ?? 24)
+                        .clamp(10, 80),
+                    min: 10,
+                    max: 80,
+                    divisions: 70,
+                    valueLabel:
+                        '${((active['fontSize'] as num?)?.toDouble() ?? 24).toStringAsFixed(0)}px',
+                    onChanged: (v) =>
+                        _updateElement(activeId!, {'fontSize': v}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorDropdown(
+                    label: 'Tipografía del tema',
+                    value: (active['fontRole'] ?? 'heading').toString(),
+                    options: const [
+                      ('heading', 'Títulos'),
+                      ('body', 'Texto general'),
+                    ],
+                    onChanged: (v) =>
+                        _updateElement(activeId!, {'fontRole': v}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorDropdown(
+                    label: 'Peso',
+                    value: (active['fontWeight'] ?? 'w600').toString(),
+                    options: const [
+                      ('w400', 'Normal'),
+                      ('w500', 'Medio'),
+                      ('w600', 'Semi-bold'),
+                      ('w700', 'Bold'),
+                    ],
+                    onChanged: (v) =>
+                        _updateElement(activeId!, {'fontWeight': v}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorDropdown(
+                    label: 'Alineación',
+                    value: (active['align'] ?? 'left').toString(),
+                    options: const [
+                      ('left', 'Izquierda'),
+                      ('center', 'Centro'),
+                      ('right', 'Derecha'),
+                    ],
+                    onChanged: (v) => _updateElement(activeId!, {'align': v}),
                   ),
                   const SizedBox(height: 12),
                   _EditorTextField(
-                    label: 'Color texto (hex)',
-                    value: (active['fgColor'] ?? '#FFFFFF').toString(),
-                    onChanged: (v) => _updateElement(activeId!, {'fgColor': v}),
+                    label: 'Color (hex)',
+                    value: (active['color'] ?? '#111111').toString(),
+                    onChanged: (v) => _updateElement(activeId!, {'color': v}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorSlider(
+                    label: 'Espaciado de letras',
+                    value: ((active['letterSpacing'] as num?)?.toDouble() ?? 0)
+                        .clamp(-1, 8),
+                    min: -1,
+                    max: 8,
+                    divisions: 18,
+                    valueLabel:
+                        ((active['letterSpacing'] as num?)?.toDouble() ?? 0)
+                            .toStringAsFixed(1),
+                    onChanged: (v) =>
+                        _updateElement(activeId!, {'letterSpacing': v}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorSlider(
+                    label: 'Interlineado',
+                    value: ((active['lineHeight'] as num?)?.toDouble() ?? 1.1)
+                        .clamp(0.8, 2.0),
+                    min: 0.8,
+                    max: 2.0,
+                    divisions: 12,
+                    valueLabel:
+                        ((active['lineHeight'] as num?)?.toDouble() ?? 1.1)
+                            .toStringAsFixed(1),
+                    onChanged: (v) =>
+                        _updateElement(activeId!, {'lineHeight': v}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorToggle(
+                    label: 'MAYÚSCULAS',
+                    value: active['uppercase'] == true,
+                    onChanged: (v) =>
+                        _updateElement(activeId!, {'uppercase': v}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorDropdown(
+                    label: 'Animación',
+                    value: (active['anim'] ?? 'none').toString(),
+                    options: const [
+                      ('none', 'Ninguna'),
+                      ('fade', 'Fade'),
+                      ('fadeUp', 'Fade up'),
+                    ],
+                    onChanged: (v) => _updateElement(activeId!, {'anim': v}),
+                  ),
+                ],
+              ] else if (activeType == 'button') ...[
+                if (inspectorSection != _InspectorSection.style) ...[
+                  WebsiteActionEditor(
+                    showVariant: true,
+                    value: WebsiteActionValue.resolvePrimary(
+                          active,
+                          labelKeys: const ['label'],
+                          hrefKeys: const ['link'],
+                          defaultLabel: 'Botón',
+                          defaultHref: '/',
+                          defaultVariant: WebsiteActionVariant.fromStorage(
+                            active['style']?.toString(),
+                          ),
+                        ) ??
+                        const WebsiteActionValue(
+                          label: 'Botón',
+                          href: '/',
+                        ),
+                    onChanged: (action) => _updateElement(activeId!, {
+                      'label': action.label,
+                      'link': action.href,
+                      'style': action.variant.storageValue,
+                      'actions': WebsiteActionValue.mergePrimary(
+                        active['actions'],
+                        action,
+                      ),
+                    }),
+                  ),
+                ],
+                if (inspectorSection != _InspectorSection.content) ...[
+                  _EditorToggle(
+                    label: 'Usar estilo global del tema',
+                    value: active['inheritTheme'] != false,
+                    onChanged: (v) =>
+                        _updateElement(activeId!, {'inheritTheme': v}),
+                  ),
+                  if (active['inheritTheme'] == false) ...[
+                    const SizedBox(height: 12),
+                    _EditorTextField(
+                      label: 'Color fondo (hex)',
+                      value: (active['bgColor'] ?? '#00A09D').toString(),
+                      onChanged: (v) =>
+                          _updateElement(activeId!, {'bgColor': v}),
+                    ),
+                    const SizedBox(height: 12),
+                    _EditorTextField(
+                      label: 'Color texto (hex)',
+                      value: (active['fgColor'] ?? '#FFFFFF').toString(),
+                      onChanged: (v) =>
+                          _updateElement(activeId!, {'fgColor': v}),
+                    ),
+                    const SizedBox(height: 12),
+                    _EditorSlider(
+                      label: 'Radio',
+                      value: ((active['radius'] as num?)?.toDouble() ?? 12)
+                          .clamp(0, 32),
+                      min: 0,
+                      max: 32,
+                      divisions: 32,
+                      valueLabel:
+                          '${((active['radius'] as num?)?.toDouble() ?? 12).toStringAsFixed(0)}px',
+                      onChanged: (v) =>
+                          _updateElement(activeId!, {'radius': v}),
+                    ),
+                    const SizedBox(height: 12),
+                    _EditorToggle(
+                      label: 'Sombra',
+                      value: (active['shadow'] as bool?) ?? false,
+                      onChanged: (v) =>
+                          _updateElement(activeId!, {'shadow': v}),
+                    ),
+                    const SizedBox(height: 12),
+                    _EditorToggle(
+                      label: 'MAYÚSCULAS',
+                      value: (active['uppercase'] as bool?) ?? false,
+                      onChanged: (v) =>
+                          _updateElement(activeId!, {'uppercase': v}),
+                    ),
+                    const SizedBox(height: 12),
+                    _EditorSlider(
+                      label: 'Letter spacing',
+                      value:
+                          ((active['letterSpacing'] as num?)?.toDouble() ?? 0.0)
+                              .clamp(0, 6),
+                      min: 0,
+                      max: 6,
+                      divisions: 12,
+                      valueLabel:
+                          ((active['letterSpacing'] as num?)?.toDouble() ?? 0.0)
+                              .toStringAsFixed(1),
+                      onChanged: (v) =>
+                          _updateElement(activeId!, {'letterSpacing': v}),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  _EditorDropdown(
+                    label: 'Animación',
+                    value: (active['anim'] ?? 'none').toString(),
+                    options: const [
+                      ('none', 'Ninguna'),
+                      ('fade', 'Fade'),
+                      ('fadeUp', 'Fade up'),
+                    ],
+                    onChanged: (v) => _updateElement(activeId!, {'anim': v}),
+                  ),
+                ],
+              ] else if (activeType == 'image') ...[
+                if (inspectorSection != _InspectorSection.style) ...[
+                  const _SectionHeader('Producto vinculado (opcional)'),
+                  const SizedBox(height: 8),
+                  _CanvasProductSelector(
+                    currentProductId: (active['productId'] ?? '').toString(),
+                    onChanged: (id) => _updateElement(activeId!, {
+                      'productId': id,
+                      'imageSource': id.isEmpty ? 'manual' : 'product',
+                    }),
+                  ),
+                  if ((active['productId'] ?? '').toString().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _EditorDropdown(
+                      label: 'Imagen visible',
+                      value: (active['imageSource'] ?? 'product').toString(),
+                      options: const [
+                        ('product', 'Imagen actual del catálogo'),
+                        ('manual', 'Imagen seleccionada / recorte'),
+                      ],
+                      onChanged: (v) =>
+                          _updateElement(activeId!, {'imageSource': v}),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      (active['imageSource'] ?? 'product') == 'manual'
+                          ? 'La capa conserva el vínculo comercial, pero muestra el recurso seleccionado abajo. Útil para recortes transparentes y campañas.'
+                          : 'La capa sigue automáticamente la imagen principal del producto en el catálogo.',
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 11,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  const _SectionHeader('Imagen seleccionada'),
+                  const SizedBox(height: 8),
+                  _ImagePicker(
+                    currentUrl: (active['imageUrl'] ?? '').toString(),
+                    onChanged: (url) =>
+                        _updateElement(activeId!, {'imageUrl': url}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorTextField(
+                    label: 'Texto alternativo',
+                    value: (active['altText'] ?? '').toString(),
+                    onChanged: (v) => _updateElement(activeId!, {'altText': v}),
+                  ),
+                ],
+                if (inspectorSection != _InspectorSection.content) ...[
+                  _EditorDropdown(
+                    label: 'Fit',
+                    value: (active['fit'] ?? 'cover').toString(),
+                    options: const [
+                      ('cover', 'Cover'),
+                      ('contain', 'Contain'),
+                    ],
+                    onChanged: (v) => _updateElement(activeId!, {'fit': v}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorSlider(
+                    label: 'Encuadre horizontal',
+                    value:
+                        (((active['focalPointX'] as num?)?.toDouble() ?? 0.5) *
+                                100)
+                            .clamp(0, 100),
+                    min: 0,
+                    max: 100,
+                    divisions: 100,
+                    valueLabel:
+                        '${((((active['focalPointX'] as num?)?.toDouble() ?? 0.5) * 100)).round()}%',
+                    onChanged: (v) =>
+                        _updateElement(activeId!, {'focalPointX': v / 100}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorSlider(
+                    label: 'Encuadre vertical',
+                    value:
+                        (((active['focalPointY'] as num?)?.toDouble() ?? 0.5) *
+                                100)
+                            .clamp(0, 100),
+                    min: 0,
+                    max: 100,
+                    divisions: 100,
+                    valueLabel:
+                        '${((((active['focalPointY'] as num?)?.toDouble() ?? 0.5) * 100)).round()}%',
+                    onChanged: (v) =>
+                        _updateElement(activeId!, {'focalPointY': v / 100}),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () => _updateElement(activeId!, {
+                        'fit': 'cover',
+                        'focalPointX': 0.5,
+                        'focalPointY': 0.5,
+                      }),
+                      icon: const Icon(Icons.center_focus_strong_rounded,
+                          size: 16),
+                      label: const Text('Centrar encuadre'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF20C5C1),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ),
+                  const Text(
+                    'En el lienzo: doble clic o usa Recortar; arrastra la imagen para reencuadrar y sus ocho bordes para cambiar el marco.',
+                    style: TextStyle(
+                        color: Colors.white38, fontSize: 11, height: 1.3),
                   ),
                   const SizedBox(height: 12),
                   _EditorSlider(
@@ -6378,345 +7158,226 @@ class _CanvasBlockControls extends StatelessWidget {
                     onChanged: (v) => _updateElement(activeId!, {'radius': v}),
                   ),
                   const SizedBox(height: 12),
-                  _EditorToggle(
-                    label: 'Sombra',
-                    value: (active['shadow'] as bool?) ?? false,
-                    onChanged: (v) => _updateElement(activeId!, {'shadow': v}),
+                  _EditorDropdown(
+                    label: 'Animación',
+                    value: (active['anim'] ?? 'none').toString(),
+                    options: const [
+                      ('none', 'Ninguna'),
+                      ('fade', 'Fade'),
+                      ('fadeUp', 'Fade up'),
+                    ],
+                    onChanged: (v) => _updateElement(activeId!, {'anim': v}),
+                  ),
+                ],
+              ] else if (activeType == 'shape') ...[
+                if (inspectorSection != _InspectorSection.style) ...[
+                  _EditorDropdown(
+                    label: 'Forma',
+                    value: (active['shape'] ?? 'rectangle').toString(),
+                    options: const [
+                      ('rectangle', 'Rectángulo'),
+                      ('ellipse', 'Elipse'),
+                    ],
+                    onChanged: (v) => _updateElement(activeId!, {'shape': v}),
+                  ),
+                ],
+                if (inspectorSection != _InspectorSection.content) ...[
+                  _EditorTextField(
+                    label: 'Color de relleno (hex)',
+                    value: (active['fillColor'] ?? '#1F2937').toString(),
+                    onChanged: (v) =>
+                        _updateElement(activeId!, {'fillColor': v}),
                   ),
                   const SizedBox(height: 12),
-                  _EditorToggle(
-                    label: 'MAYÚSCULAS',
-                    value: (active['uppercase'] as bool?) ?? false,
+                  _EditorTextField(
+                    label: 'Color de borde (hex)',
+                    value: (active['borderColor'] ?? '#1F2937').toString(),
                     onChanged: (v) =>
-                        _updateElement(activeId!, {'uppercase': v}),
+                        _updateElement(activeId!, {'borderColor': v}),
                   ),
                   const SizedBox(height: 12),
                   _EditorSlider(
-                    label: 'Letter spacing',
-                    value:
-                        ((active['letterSpacing'] as num?)?.toDouble() ?? 0.0)
-                            .clamp(0, 6),
+                    label: 'Borde',
+                    value: ((active['borderWidth'] as num?)?.toDouble() ?? 0)
+                        .clamp(0, 16),
                     min: 0,
-                    max: 6,
-                    divisions: 12,
+                    max: 16,
+                    divisions: 16,
                     valueLabel:
-                        ((active['letterSpacing'] as num?)?.toDouble() ?? 0.0)
-                            .toStringAsFixed(1),
+                        '${((active['borderWidth'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}px',
                     onChanged: (v) =>
-                        _updateElement(activeId!, {'letterSpacing': v}),
+                        _updateElement(activeId!, {'borderWidth': v}),
+                  ),
+                  const SizedBox(height: 12),
+                  if ((active['shape'] ?? 'rectangle') == 'rectangle')
+                    _EditorSlider(
+                      label: 'Radio',
+                      value: ((active['radius'] as num?)?.toDouble() ?? 0)
+                          .clamp(0, 80),
+                      min: 0,
+                      max: 80,
+                      divisions: 40,
+                      valueLabel:
+                          '${((active['radius'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}px',
+                      onChanged: (v) =>
+                          _updateElement(activeId!, {'radius': v}),
+                    ),
+                ],
+              ] else if (activeType == 'product') ...[
+                if (inspectorSection != _InspectorSection.style) ...[
+                  _CanvasProductSelector(
+                    currentProductId: (active['productId'] ?? '').toString(),
+                    onChanged: (id) =>
+                        _updateElement(activeId!, {'productId': id}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorToggle(
+                    label: 'Mostrar precio',
+                    value: (active['showPrice'] as bool?) ?? true,
+                    onChanged: (v) =>
+                        _updateElement(activeId!, {'showPrice': v}),
                   ),
                 ],
-                const SizedBox(height: 12),
-                _EditorDropdown(
-                  label: 'Animación',
-                  value: (active['anim'] ?? 'none').toString(),
-                  options: const [
-                    ('none', 'Ninguna'),
-                    ('fade', 'Fade'),
-                    ('fadeUp', 'Fade up'),
-                  ],
-                  onChanged: (v) => _updateElement(activeId!, {'anim': v}),
-                ),
-              ] else if (activeType == 'image') ...[
-                const _SectionHeader('Producto vinculado (opcional)'),
-                const SizedBox(height: 8),
-                _CanvasProductSelector(
-                  currentProductId: (active['productId'] ?? '').toString(),
-                  onChanged: (id) =>
-                      _updateElement(activeId!, {'productId': id}),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Si seleccionas un producto, la capa usa su imagen actual del catálogo. La imagen manual queda como respaldo.',
-                  style: TextStyle(color: Colors.white38, fontSize: 11),
-                ),
-                const SizedBox(height: 12),
-                const _SectionHeader('Imagen manual / respaldo'),
-                const SizedBox(height: 8),
-                _ImagePicker(
-                  currentUrl: (active['imageUrl'] ?? '').toString(),
-                  onChanged: (url) =>
-                      _updateElement(activeId!, {'imageUrl': url}),
-                ),
-                const SizedBox(height: 12),
-                _EditorTextField(
-                  label: 'Texto alternativo',
-                  value: (active['altText'] ?? '').toString(),
-                  onChanged: (v) => _updateElement(activeId!, {'altText': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorDropdown(
-                  label: 'Fit',
-                  value: (active['fit'] ?? 'cover').toString(),
-                  options: const [
-                    ('cover', 'Cover'),
-                    ('contain', 'Contain'),
-                  ],
-                  onChanged: (v) => _updateElement(activeId!, {'fit': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorSlider(
-                  label: 'Encuadre horizontal',
-                  value: (((active['focalPointX'] as num?)?.toDouble() ?? 0.5) *
-                          100)
-                      .clamp(0, 100),
-                  min: 0,
-                  max: 100,
-                  divisions: 100,
-                  valueLabel:
-                      '${((((active['focalPointX'] as num?)?.toDouble() ?? 0.5) * 100)).round()}%',
-                  onChanged: (v) =>
-                      _updateElement(activeId!, {'focalPointX': v / 100}),
-                ),
-                const SizedBox(height: 12),
-                _EditorSlider(
-                  label: 'Encuadre vertical',
-                  value: (((active['focalPointY'] as num?)?.toDouble() ?? 0.5) *
-                          100)
-                      .clamp(0, 100),
-                  min: 0,
-                  max: 100,
-                  divisions: 100,
-                  valueLabel:
-                      '${((((active['focalPointY'] as num?)?.toDouble() ?? 0.5) * 100)).round()}%',
-                  onChanged: (v) =>
-                      _updateElement(activeId!, {'focalPointY': v / 100}),
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () => _updateElement(activeId!, {
-                      'fit': 'cover',
-                      'focalPointX': 0.5,
-                      'focalPointY': 0.5,
-                    }),
-                    icon:
-                        const Icon(Icons.center_focus_strong_rounded, size: 16),
-                    label: const Text('Centrar encuadre'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF20C5C1),
-                      visualDensity: VisualDensity.compact,
+                if (inspectorSection != _InspectorSection.content) ...[
+                  _EditorDropdown(
+                    label: 'Animación',
+                    value: (active['anim'] ?? 'none').toString(),
+                    options: const [
+                      ('none', 'Ninguna'),
+                      ('fade', 'Fade'),
+                      ('fadeUp', 'Fade up'),
+                    ],
+                    onChanged: (v) => _updateElement(activeId!, {'anim': v}),
+                  ),
+                ],
+              ] else if (activeType == 'productsGallery') ...[
+                if (inspectorSection != _InspectorSection.style) ...[
+                  _EditorDropdown(
+                    label: 'Modo',
+                    value: (active['mode'] ?? 'latest').toString(),
+                    options: const [
+                      ('latest', 'Últimos publicados'),
+                      ('manual', 'Manual (IDs)'),
+                    ],
+                    onChanged: (v) => _updateElement(activeId!, {'mode': v}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorSlider(
+                    label: 'Máx productos',
+                    value: ((active['maxProducts'] as num?)?.toDouble() ?? 6)
+                        .clamp(1, 24),
+                    min: 1,
+                    max: 24,
+                    divisions: 23,
+                    valueLabel: '${(active['maxProducts'] ?? 6)}',
+                    onChanged: (v) => _updateElement(
+                      activeId!,
+                      {'maxProducts': v.round()},
                     ),
                   ),
-                ),
-                const Text(
-                  'En el lienzo: doble clic o usa Recortar; arrastra la imagen para reencuadrar y sus ocho bordes para cambiar el marco.',
-                  style: TextStyle(
-                      color: Colors.white38, fontSize: 11, height: 1.3),
-                ),
-                const SizedBox(height: 12),
-                _EditorSlider(
-                  label: 'Radio',
-                  value: ((active['radius'] as num?)?.toDouble() ?? 12)
-                      .clamp(0, 32),
-                  min: 0,
-                  max: 32,
-                  divisions: 32,
-                  valueLabel:
-                      '${((active['radius'] as num?)?.toDouble() ?? 12).toStringAsFixed(0)}px',
-                  onChanged: (v) => _updateElement(activeId!, {'radius': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorDropdown(
-                  label: 'Animación',
-                  value: (active['anim'] ?? 'none').toString(),
-                  options: const [
-                    ('none', 'Ninguna'),
-                    ('fade', 'Fade'),
-                    ('fadeUp', 'Fade up'),
+                  if ((active['mode'] ?? 'latest').toString() == 'manual') ...[
+                    const SizedBox(height: 12),
+                    _CanvasProductsMultiSelector(
+                      selectedIds: ((active['productIds'] as List?) ?? const [])
+                          .map((e) => e.toString())
+                          .where((e) => e.isNotEmpty)
+                          .toList(),
+                      onConfirm: (ids) =>
+                          _updateElement(activeId!, {'productIds': ids}),
+                    ),
                   ],
-                  onChanged: (v) => _updateElement(activeId!, {'anim': v}),
-                ),
-              ] else if (activeType == 'shape') ...[
-                _EditorDropdown(
-                  label: 'Forma',
-                  value: (active['shape'] ?? 'rectangle').toString(),
-                  options: const [
-                    ('rectangle', 'Rectángulo'),
-                    ('ellipse', 'Elipse'),
-                  ],
-                  onChanged: (v) => _updateElement(activeId!, {'shape': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorTextField(
-                  label: 'Color de relleno (hex)',
-                  value: (active['fillColor'] ?? '#1F2937').toString(),
-                  onChanged: (v) => _updateElement(activeId!, {'fillColor': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorTextField(
-                  label: 'Color de borde (hex)',
-                  value: (active['borderColor'] ?? '#1F2937').toString(),
-                  onChanged: (v) =>
-                      _updateElement(activeId!, {'borderColor': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorSlider(
-                  label: 'Borde',
-                  value: ((active['borderWidth'] as num?)?.toDouble() ?? 0)
-                      .clamp(0, 16),
-                  min: 0,
-                  max: 16,
-                  divisions: 16,
-                  valueLabel:
-                      '${((active['borderWidth'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}px',
-                  onChanged: (v) =>
-                      _updateElement(activeId!, {'borderWidth': v}),
-                ),
-                const SizedBox(height: 12),
-                if ((active['shape'] ?? 'rectangle') == 'rectangle')
-                  _EditorSlider(
-                    label: 'Radio',
-                    value: ((active['radius'] as num?)?.toDouble() ?? 0)
-                        .clamp(0, 80),
-                    min: 0,
-                    max: 80,
-                    divisions: 40,
-                    valueLabel:
-                        '${((active['radius'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}px',
-                    onChanged: (v) => _updateElement(activeId!, {'radius': v}),
+                ],
+                if (inspectorSection != _InspectorSection.content) ...[
+                  _EditorDropdown(
+                    label: 'Diseño',
+                    value: (active['layout'] ?? 'grid').toString(),
+                    options: const [
+                      ('grid', 'Cuadrícula'),
+                      ('carousel', 'Carrusel'),
+                    ],
+                    onChanged: (v) => _updateElement(activeId!, {'layout': v}),
                   ),
-              ] else if (activeType == 'product') ...[
-                _CanvasProductSelector(
-                  currentProductId: (active['productId'] ?? '').toString(),
-                  onChanged: (id) =>
-                      _updateElement(activeId!, {'productId': id}),
-                ),
-                const SizedBox(height: 12),
-                _EditorToggle(
-                  label: 'Mostrar precio',
-                  value: (active['showPrice'] as bool?) ?? true,
-                  onChanged: (v) => _updateElement(activeId!, {'showPrice': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorDropdown(
-                  label: 'Animación',
-                  value: (active['anim'] ?? 'none').toString(),
-                  options: const [
-                    ('none', 'Ninguna'),
-                    ('fade', 'Fade'),
-                    ('fadeUp', 'Fade up'),
-                  ],
-                  onChanged: (v) => _updateElement(activeId!, {'anim': v}),
-                ),
-              ] else if (activeType == 'productsGallery') ...[
-                _EditorDropdown(
-                  label: 'Modo',
-                  value: (active['mode'] ?? 'latest').toString(),
-                  options: const [
-                    ('latest', 'Últimos publicados'),
-                    ('manual', 'Manual (IDs)'),
-                  ],
-                  onChanged: (v) => _updateElement(activeId!, {'mode': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorDropdown(
-                  label: 'Diseño',
-                  value: (active['layout'] ?? 'grid').toString(),
-                  options: const [
-                    ('grid', 'Cuadrícula'),
-                    ('carousel', 'Carrusel'),
-                  ],
-                  onChanged: (v) => _updateElement(activeId!, {'layout': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorSlider(
-                  label: 'Máx productos',
-                  value: ((active['maxProducts'] as num?)?.toDouble() ?? 6)
-                      .clamp(1, 24),
-                  min: 1,
-                  max: 24,
-                  divisions: 23,
-                  valueLabel: '${(active['maxProducts'] ?? 6)}',
-                  onChanged: (v) =>
-                      _updateElement(activeId!, {'maxProducts': v.round()}),
-                ),
-                const SizedBox(height: 12),
-                if ((active['layout'] ?? 'grid').toString() == 'grid')
-                  _EditorSlider(
-                    label: 'Columnas',
-                    value: ((active['columns'] as num?)?.toDouble() ?? 3)
-                        .clamp(1, 4),
-                    min: 1,
-                    max: 4,
-                    divisions: 3,
-                    valueLabel: '${(active['columns'] ?? 3)}',
-                    onChanged: (v) =>
-                        _updateElement(activeId!, {'columns': v.round()}),
-                  )
-                else
-                  _EditorSlider(
-                    label: 'Ancho tarjeta',
-                    value: ((active['cardWidth'] as num?)?.toDouble() ?? 300)
-                        .clamp(220, 380),
-                    min: 220,
-                    max: 380,
-                    divisions: 32,
-                    valueLabel:
-                        '${((active['cardWidth'] as num?)?.toDouble() ?? 300).toStringAsFixed(0)}px',
-                    onChanged: (v) =>
-                        _updateElement(activeId!, {'cardWidth': v}),
-                  ),
-                const SizedBox(height: 12),
-                if ((active['mode'] ?? 'latest').toString() == 'manual') ...[
-                  _CanvasProductsMultiSelector(
-                    selectedIds: ((active['productIds'] as List?) ?? const [])
-                        .map((e) => e.toString())
-                        .where((e) => e.isNotEmpty)
-                        .toList(),
-                    onConfirm: (ids) =>
-                        _updateElement(activeId!, {'productIds': ids}),
+                  const SizedBox(height: 12),
+                  if ((active['layout'] ?? 'grid').toString() == 'grid')
+                    _EditorSlider(
+                      label: 'Columnas',
+                      value: ((active['columns'] as num?)?.toDouble() ?? 3)
+                          .clamp(1, 4),
+                      min: 1,
+                      max: 4,
+                      divisions: 3,
+                      valueLabel: '${(active['columns'] ?? 3)}',
+                      onChanged: (v) => _updateElement(
+                        activeId!,
+                        {'columns': v.round()},
+                      ),
+                    )
+                  else
+                    _EditorSlider(
+                      label: 'Ancho tarjeta',
+                      value: ((active['cardWidth'] as num?)?.toDouble() ?? 300)
+                          .clamp(220, 380),
+                      min: 220,
+                      max: 380,
+                      divisions: 32,
+                      valueLabel:
+                          '${((active['cardWidth'] as num?)?.toDouble() ?? 300).toStringAsFixed(0)}px',
+                      onChanged: (v) =>
+                          _updateElement(activeId!, {'cardWidth': v}),
+                    ),
+                  const SizedBox(height: 12),
+                  _EditorDropdown(
+                    label: 'Animación',
+                    value: (active['anim'] ?? 'none').toString(),
+                    options: const [
+                      ('none', 'Ninguna'),
+                      ('fade', 'Fade'),
+                      ('fadeUp', 'Fade up'),
+                    ],
+                    onChanged: (v) => _updateElement(activeId!, {'anim': v}),
                   ),
                 ],
+              ],
+              if (inspectorSection == null) ...[
+                const SizedBox(height: 16),
+                const Divider(color: Colors.white12),
+                const SizedBox(height: 8),
+                const _SectionHeader('Capas'),
                 const SizedBox(height: 12),
-                _EditorDropdown(
-                  label: 'Animación',
-                  value: (active['anim'] ?? 'none').toString(),
-                  options: const [
-                    ('none', 'Ninguna'),
-                    ('fade', 'Fade'),
-                    ('fadeUp', 'Fade up'),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _moveElement(activeId!, -1),
+                        icon:
+                            const Icon(Icons.arrow_downward_rounded, size: 18),
+                        label: const Text('Enviar atrás'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _moveElement(activeId!, 1),
+                        icon: const Icon(Icons.arrow_upward_rounded, size: 18),
+                        label: const Text('Traer adelante'),
+                      ),
+                    ),
                   ],
-                  onChanged: (v) => _updateElement(activeId!, {'anim': v}),
+                ),
+                const SizedBox(height: 12),
+                const Divider(color: Colors.white12),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () => _setActive(null),
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  label: const Text('Deseleccionar elemento'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red.shade300,
+                    side: BorderSide(
+                        color: Colors.red.shade300.withValues(alpha: 0.5)),
+                  ),
                 ),
               ],
-              const SizedBox(height: 16),
-              const Divider(color: Colors.white12),
-              const SizedBox(height: 8),
-              const _SectionHeader('Capas'),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _moveElement(activeId!, -1),
-                      icon: const Icon(Icons.arrow_downward_rounded, size: 18),
-                      label: const Text('Enviar atrás'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _moveElement(activeId!, 1),
-                      icon: const Icon(Icons.arrow_upward_rounded, size: 18),
-                      label: const Text('Traer adelante'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Divider(color: Colors.white12),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: () => _setActive(null),
-                icon: const Icon(Icons.close_rounded, size: 18),
-                label: const Text('Deseleccionar elemento'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red.shade300,
-                  side: BorderSide(
-                      color: Colors.red.shade300.withValues(alpha: 0.5)),
-                ),
-              ),
             ],
           ),
         ],
@@ -9087,92 +9748,75 @@ class _VideoPickerState extends State<_VideoPicker> {
 }
 
 class _ImagePickerState extends State<_ImagePicker> {
-  bool _isUploading = false;
+  bool _isRemovingBackground = false;
+
+  Future<String?> _currentTenantId() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return null;
+    final profile = await Supabase.instance.client
+        .from('user_profiles')
+        .select('tenant_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+    return profile?['tenant_id']?.toString();
+  }
+
+  Future<void> _removeBackground() async {
+    final currentUrl = widget.currentUrl?.trim() ?? '';
+    if (currentUrl.isEmpty || _isRemovingBackground) return;
+    setState(() => _isRemovingBackground = true);
+    try {
+      final tenantId = await _currentTenantId();
+      if (!mounted) return;
+      final selection = await showWebsiteBackgroundRemovalDialog(
+        context: context,
+        imageUrl: currentUrl,
+        tenantId: tenantId,
+      );
+      if (!mounted || selection == null) return;
+      final service = WebsiteBackgroundRemovalService();
+      final resultUrl = selection.imageUrl ??
+          await service.uploadTransparentPng(
+            selection.pngBytes!,
+            prefix: 'block-no-bg',
+          );
+      if (!mounted) return;
+      widget.onChanged(resultUrl);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fondo eliminado y PNG guardado en la biblioteca.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isRemovingBackground = false);
+    }
+  }
 
   Future<void> _pickAndUploadImage() async {
     try {
-      final picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1920,
-        maxHeight: 1080,
-        imageQuality: 85,
+      final selection = await showWebsiteMediaPicker(
+        context: context,
+        currentUrl: widget.currentUrl,
       );
-
-      if (image == null) return;
-
-      setState(() {
-        _isUploading = true;
-      });
-
-      // Read file bytes
-      final bytes = await image.readAsBytes();
-      final sanitizedName = _sanitizeFileName(image.name);
-      final fileName =
-          'website_${DateTime.now().millisecondsSinceEpoch}_$sanitizedName';
-      final filePath = 'website-images/$fileName';
-
-      // Upload to Supabase Storage
-      final supabase = Supabase.instance.client;
-
-      // Use the standard vinabike-assets bucket
-      await supabase.storage.from(StorageConfig.defaultBucket).uploadBinary(
-            filePath,
-            bytes,
-            fileOptions: FileOptions(
-              contentType: _getContentType(image.name),
-              upsert: true,
-            ),
-          );
-
-      // Get public URL
-      final publicUrl = supabase.storage
-          .from(StorageConfig.defaultBucket)
-          .getPublicUrl(filePath);
-
-      setState(() {
-        _isUploading = false;
-      });
-
-      widget.onChanged(publicUrl);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Imagen subida correctamente'),
-            backgroundColor: Color(0xFF00A09D),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
+      if (selection != null) widget.onChanged(selection.publicUrl);
     } catch (e) {
-      setState(() => _isUploading = false);
-      debugPrint('Error uploading image: $e');
+      debugPrint('Error selecting image: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al subir imagen: $e'),
+            content: Text('Error al seleccionar imagen: $e'),
             backgroundColor: Colors.red,
           ),
         );
       }
-    }
-  }
-
-  String _getContentType(String fileName) {
-    final ext = fileName.split('.').last.toLowerCase();
-    switch (ext) {
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      case 'gif':
-        return 'image/gif';
-      case 'webp':
-        return 'image/webp';
-      default:
-        return 'image/jpeg';
     }
   }
 
@@ -9184,7 +9828,7 @@ class _ImagePickerState extends State<_ImagePicker> {
       children: [
         // Image preview / upload area
         InkWell(
-          onTap: _isUploading ? null : _pickAndUploadImage,
+          onTap: _pickAndUploadImage,
           borderRadius: BorderRadius.circular(8),
           child: Container(
             height: 140,
@@ -9193,101 +9837,87 @@ class _ImagePickerState extends State<_ImagePicker> {
               color: const Color(0xFF2D2D2D),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: _isUploading
-                    ? const Color(0xFF00A09D)
-                    : Colors.white.withValues(alpha: 0.1),
-                width: _isUploading ? 2 : 1,
+                color: Colors.white.withValues(alpha: 0.1),
+                width: 1,
               ),
-              image: hasImage && !_isUploading
+              image: hasImage
                   ? DecorationImage(
                       image: NetworkImage(widget.currentUrl!),
                       fit: BoxFit.cover,
                     )
                   : null,
             ),
-            child: _isUploading
-                ? Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+            child: hasImage
+                ? Stack(
                     children: [
-                      const SizedBox(
-                        width: 32,
-                        height: 32,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Color(0xFF00A09D)),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Subiendo imagen...',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: 12,
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Row(
+                          children: [
+                            _buildActionButton(
+                              icon: Icons.edit,
+                              tooltip: 'Cambiar imagen',
+                              onTap: _pickAndUploadImage,
+                            ),
+                            const SizedBox(width: 4),
+                            _buildActionButton(
+                              icon: _isRemovingBackground
+                                  ? Icons.hourglass_top_rounded
+                                  : Icons.auto_fix_high_rounded,
+                              tooltip: _isRemovingBackground
+                                  ? 'Quitando fondo...'
+                                  : 'Quitar fondo',
+                              onTap: _isRemovingBackground
+                                  ? () {}
+                                  : _removeBackground,
+                            ),
+                            const SizedBox(width: 4),
+                            _buildActionButton(
+                              icon: Icons.delete,
+                              tooltip: 'Eliminar',
+                              onTap: () => widget.onChanged(''),
+                              isDestructive: true,
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   )
-                : hasImage
-                    ? Stack(
-                        children: [
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: Row(
-                              children: [
-                                _buildActionButton(
-                                  icon: Icons.edit,
-                                  tooltip: 'Cambiar imagen',
-                                  onTap: _pickAndUploadImage,
-                                ),
-                                const SizedBox(width: 4),
-                                _buildActionButton(
-                                  icon: Icons.delete,
-                                  tooltip: 'Eliminar',
-                                  onTap: () => widget.onChanged(''),
-                                  isDestructive: true,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      )
-                    : Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF00A09D)
-                                  .withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(50),
-                            ),
-                            child: const Icon(
-                              Icons.cloud_upload_outlined,
-                              color: Color(0xFF00A09D),
-                              size: 28,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Haz clic para subir imagen',
-                            style: TextStyle(
-                              color: Color(0xFF00A09D),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'JPG, PNG, WebP • Máx 1920x1080',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.4),
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00A09D).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(50),
+                        ),
+                        child: const Icon(
+                          Icons.cloud_upload_outlined,
+                          color: Color(0xFF00A09D),
+                          size: 28,
+                        ),
                       ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Haz clic para subir imagen',
+                        style: TextStyle(
+                          color: Color(0xFF00A09D),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'JPG, PNG, WebP • Máx 1920x1080',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.4),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ),
       ],
@@ -11041,7 +11671,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
 
   // Header style options
   String _headerStyle = 'solid';
-  String _headerColorMode = 'light';
+  String _headerColorMode = 'auto';
   bool _showTopBanner = false;
   bool _headerShadow = true;
   bool _loaded = false;
@@ -11053,6 +11683,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     'sticky': 'Fijo al hacer scroll'
   };
   final _headerColorModes = {
+    'auto': 'Automático (recomendado)',
     'light': 'Claro (texto oscuro)',
     'dark': 'Oscuro (texto claro)'
   };
@@ -11116,7 +11747,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
         service.getSetting('header_bg_color', '#FFFFFF');
 
     _headerStyle = service.getSetting('header_style', 'solid');
-    _headerColorMode = service.getSetting('header_color_mode', 'light');
+    _headerColorMode = service.getSetting('header_color_mode', 'auto');
     final rawBannerValue =
         service.getSetting('header_show_top_banner', 'false');
     _showTopBanner = rawBannerValue == 'true';
@@ -11233,7 +11864,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
 
           // Color mode dropdown
           _buildDropdown(
-            label: 'Modo de color',
+            label: 'Contraste del contenido',
             value: _headerColorMode,
             items: _headerColorModes.keys.toList(),
             labels: _headerColorModes,
@@ -11241,6 +11872,17 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
               setState(() => _headerColorMode = v!);
               _markChanged();
             },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _headerColorMode == 'auto'
+                ? 'El logo, los enlaces y los íconos se adaptan al fondo. Sobre banners se agrega una protección tonal sutil para que ninguna capa los haga desaparecer.'
+                : 'Este modo reemplaza el contraste automático en todo el sitio.',
+            style: const TextStyle(
+              color: Colors.white54,
+              fontSize: 11,
+              height: 1.35,
+            ),
           ),
           const SizedBox(height: 12),
 

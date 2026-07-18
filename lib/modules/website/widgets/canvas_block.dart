@@ -8,8 +8,12 @@ import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
 import '../models/website_action.dart';
 import '../models/canvas_element_factory.dart';
+import '../models/website_editor_drag_payload.dart';
+import '../services/website_background_removal_service.dart';
 import 'canvas_block_toolbar.dart';
+import 'website_background_removal_dialog.dart';
 import 'website_action_button.dart';
+import 'website_media_picker.dart';
 
 // Conditional import for web video backgrounds (reuses the video banner platform implementation).
 // Conditional import for web video backgrounds (reuses the video banner platform implementation).
@@ -80,6 +84,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
   final FocusNode _canvasFocusNode = FocusNode(debugLabel: 'Canvas editor');
   late List<Map<String, dynamic>> _elements;
   String? _activeElementIdLocal;
+  String? _backgroundRemovalElementId;
 
   bool _commitScheduled = false;
   List<Map<String, dynamic>>? _pendingElementsCommit;
@@ -475,16 +480,26 @@ class _CanvasBlockState extends State<CanvasBlock> {
     final el = _defaultElement(type);
     final w = (el['w'] as num?)?.toDouble() ?? 200;
     final h = (el['h'] as num?)?.toDouble() ?? 56;
-
-    // Place so cursor lands near top-left but keep within bounds.
-    final x = (localPos.dx).clamp(0.0, math.max(0.0, canvasSize.width - w));
-    final y = (localPos.dy).clamp(0.0, math.max(0.0, canvasSize.height - h));
-    // Use _calculateScale for consistency
-    final scaleX = _calculateScale(canvasSize.width);
+    final scale = math.max(_calculateScale(canvasSize.width), 0.0001);
     final offsetX = _calculateOffsetX(canvasSize.width);
+    final designWidth = _computeDesignWidth(canvasSize.width);
+    final designHeight = canvasSize.height / scale;
 
-    el['x'] = (x - offsetX) / scaleX;
-    el['y'] = y / scaleX;
+    // Convert the pointer to design coordinates before applying design-space
+    // element bounds. Mixing rendered pixels with design-unit widths creates
+    // an artificial right/bottom limit whenever the Canvas is scaled.
+    final pointerX = (localPos.dx - offsetX) / scale;
+    final pointerY = localPos.dy / scale;
+    final constrain = widget.data['constrainElementsToSafeArea'] != false;
+    final maxX = constrain
+        ? math.max(0.0, designWidth - w)
+        : math.max(0.0, designWidth - 32.0);
+    final maxY = constrain
+        ? math.max(0.0, designHeight - h)
+        : math.max(0.0, designHeight - 32.0);
+
+    el['x'] = pointerX.clamp(0.0, maxX);
+    el['y'] = pointerY.clamp(0.0, maxY);
 
     setState(() {
       _elements.add(el);
@@ -554,6 +569,98 @@ class _CanvasBlockState extends State<CanvasBlock> {
       'fit': 'cover',
       'focalPointX': 0.5,
       'focalPointY': 0.5,
+    });
+  }
+
+  Future<void> _replaceImage(String elementId) async {
+    final element = _elements.firstWhere(
+      (item) => item['id']?.toString() == elementId,
+      orElse: () => <String, dynamic>{},
+    );
+    if (element.isEmpty || element['locked'] == true) return;
+    final selection = await showWebsiteMediaPicker(
+      context: context,
+      currentUrl: element['imageUrl']?.toString(),
+    );
+    if (!mounted || selection == null) return;
+    _patchElement(elementId, {
+      'imageUrl': selection.publicUrl,
+      'imageSource': 'manual',
+      'backgroundRemovalActive': false,
+      'fit': element['fit'] ?? 'contain',
+    });
+  }
+
+  Future<void> _removeImageBackground(String elementId) async {
+    final index =
+        _elements.indexWhere((item) => item['id']?.toString() == elementId);
+    if (index == -1 || _elements[index]['type'] != 'image') return;
+    final element = _elements[index];
+    if (element['locked'] == true) return;
+    final imageUrl = (element['imageUrl'] ?? '').toString().trim();
+    if (imageUrl.isEmpty || _backgroundRemovalElementId != null) return;
+
+    setState(() => _backgroundRemovalElementId = elementId);
+    try {
+      final selection = await showWebsiteBackgroundRemovalDialog(
+        context: context,
+        imageUrl: imageUrl,
+        tenantId: widget.tenantId,
+      );
+      if (!mounted || selection == null) return;
+
+      final service = WebsiteBackgroundRemovalService();
+      final resultUrl = selection.imageUrl ??
+          await service.uploadTransparentPng(
+            selection.pngBytes!,
+            prefix: 'canvas-no-bg',
+          );
+      if (!mounted) return;
+
+      final originalUrl =
+          (element['backgroundRemovalOriginalUrl'] ?? '').toString().trim();
+      _patchElement(elementId, {
+        'imageUrl': resultUrl,
+        'imageSource': 'manual',
+        'backgroundRemovalOriginalUrl':
+            originalUrl.isEmpty ? imageUrl : originalUrl,
+        'backgroundRemovalMethod': selection.method,
+        'backgroundRemovalActive': true,
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fondo eliminado y PNG guardado en la biblioteca.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString().replaceFirst('Exception: ', ''),
+          ),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _backgroundRemovalElementId = null);
+      }
+    }
+  }
+
+  void _restoreImageBeforeBackgroundRemoval(String elementId) {
+    final element = _elements.firstWhere(
+      (item) => item['id']?.toString() == elementId,
+      orElse: () => <String, dynamic>{},
+    );
+    final originalUrl =
+        (element['backgroundRemovalOriginalUrl'] ?? '').toString().trim();
+    if (originalUrl.isEmpty) return;
+    _patchElement(elementId, {
+      'imageUrl': originalUrl,
+      'imageSource': 'manual',
+      'backgroundRemovalActive': false,
     });
   }
 
@@ -1256,7 +1363,24 @@ class _CanvasBlockState extends State<CanvasBlock> {
         onToggleCrop: type == 'image' && el['locked'] != true
             ? () => _toggleCropMode(id)
             : null,
+        onReplaceImage: type == 'image' && el['locked'] != true
+            ? () => _replaceImage(id)
+            : null,
         onResetImageFrame: type == 'image' ? () => _resetImageFrame(id) : null,
+        onRemoveBackground: type == 'image' &&
+                el['locked'] != true &&
+                (el['imageUrl'] ?? '').toString().trim().isNotEmpty
+            ? () => _removeImageBackground(id)
+            : null,
+        onRestoreOriginalImage: type == 'image' &&
+                el['backgroundRemovalActive'] == true &&
+                (el['backgroundRemovalOriginalUrl'] ?? '')
+                    .toString()
+                    .trim()
+                    .isNotEmpty
+            ? () => _restoreImageBeforeBackgroundRemoval(id)
+            : null,
+        backgroundRemovalBusy: _backgroundRemovalElementId == id,
         onUpdate: (k, v) => _patchElement(id, {k: v}),
       ),
     );
@@ -1470,14 +1594,13 @@ class _CanvasBlockState extends State<CanvasBlock> {
                       // MUST be above the background so it can receive hit tests.
                       if (widget.editable)
                         Positioned.fill(
-                          child: DragTarget<String>(
+                          child: DragTarget<WebsiteEditorDragPayload>(
                             onWillAcceptWithDetails: (data) =>
-                                data.data.startsWith('canvas_el:'),
+                                data.data is CanvasElementDragPayload,
                             onAcceptWithDetails: (details) {
                               final payload = details.data;
-                              if (!payload.startsWith('canvas_el:')) return;
-                              final type =
-                                  payload.replaceFirst('canvas_el:', '');
+                              if (payload is! CanvasElementDragPayload) return;
+                              final type = payload.elementType;
 
                               final ctx = _canvasKey.currentContext;
                               final box = ctx?.findRenderObject() as RenderBox?;
@@ -1994,13 +2117,20 @@ class _CanvasBlockState extends State<CanvasBlock> {
         break;
       case 'image':
         final sourceProductId = (el['productId'] ?? '').toString().trim();
-        if (sourceProductId.isNotEmpty) {
+        final imageSource = (el['imageSource'] ??
+                (sourceProductId.isNotEmpty ? 'product' : 'manual'))
+            .toString();
+        final useProductImage =
+            sourceProductId.isNotEmpty && imageSource != 'manual';
+        if (useProductImage) {
           _ensureProductsLoaded({sourceProductId});
         }
         final sourceProduct =
-            sourceProductId.isNotEmpty ? _productCache[sourceProductId] : null;
+            useProductImage ? _productCache[sourceProductId] : null;
         final productImageUrl = sourceProduct?['image_url']?.toString().trim();
-        final imageUrl = productImageUrl != null && productImageUrl.isNotEmpty
+        final imageUrl = useProductImage &&
+                productImageUrl != null &&
+                productImageUrl.isNotEmpty
             ? productImageUrl
             : (el['imageUrl'] ?? '').toString().trim();
         final fitRaw = (el['fit'] ?? 'cover').toString();

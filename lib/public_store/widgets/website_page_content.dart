@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../modules/website/models/website_editor_drag_payload.dart';
 import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
 import '../../modules/website/widgets/add_block_dialog.dart';
 import '../../modules/website/widgets/block_spacer_handle.dart';
@@ -417,7 +418,7 @@ class WebsitePageContent extends StatelessWidget {
 }
 
 /// Drop target used to insert a new block at a specific index when dragging
-/// from the "Agregar" tab (which provides Draggable<String>).
+/// from the shared inserter.
 class _InsertBlockDropZone extends StatefulWidget {
   final int insertIndex;
   final void Function(String blockType) onInsert;
@@ -438,8 +439,9 @@ class _InsertBlockDropZoneState extends State<_InsertBlockDropZone> {
 
   @override
   Widget build(BuildContext context) {
-    return DragTarget<String>(
-      onWillAcceptWithDetails: (_) {
+    return DragTarget<WebsiteEditorDragPayload>(
+      onWillAcceptWithDetails: (details) {
+        if (details.data is! NewWebsiteBlockDragPayload) return false;
         if (!_isHovering) setState(() => _isHovering = true);
         return true;
       },
@@ -448,10 +450,12 @@ class _InsertBlockDropZoneState extends State<_InsertBlockDropZone> {
       },
       onAcceptWithDetails: (details) {
         setState(() => _isHovering = false);
-        widget.onInsert(details.data);
+        final payload = details.data;
+        if (payload is! NewWebsiteBlockDragPayload) return;
+        widget.onInsert(payload.blockType);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Bloque "${details.data}" agregado'),
+            content: Text('Bloque "${payload.blockType}" agregado'),
             duration: const Duration(seconds: 1),
           ),
         );

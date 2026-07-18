@@ -391,6 +391,10 @@ verify_jwt = true
 # Product-form saves invoke this with the current ERP user's authenticated session.
 verify_jwt = true
 
+[functions.website-remove-background]
+# Website editors invoke this with the current authenticated ERP session.
+verify_jwt = true
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

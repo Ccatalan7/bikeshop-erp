@@ -53,7 +53,14 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
-        "npm:pg@^8.20.0"
+        "npm:@playwright/test@1.61.1",
+        "npm:@univerjs/preset-sheets-core@0.25.1",
+        "npm:@univerjs/presets@0.25.1",
+        "npm:esbuild@0.28.1",
+        "npm:firebase-tools@15.23.0",
+        "npm:pg@^8.20.0",
+        "npm:prettier@3.9.5",
+        "npm:supabase@2.109.1"
       ]
     }
   }

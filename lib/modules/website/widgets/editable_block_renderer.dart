@@ -780,7 +780,10 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     })();
 
     return CanvasBlock(
-      data: widget.data,
+      data: <String, dynamic>{
+        ...widget.data,
+        'activeElementId': editProvider.canvasElementSelection(widget.blockId),
+      },
       editable: true,
       accentColor: widget.accentColor,
       onNavigate: widget.onNavigate,
@@ -793,12 +796,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         editProvider.selectBlock(widget.blockId);
       },
       onActiveElementChanged: (id) {
-        if (id != null) {
-          editProvider.selectBlock(widget.blockId);
-        }
-        // Don't save to history for transient activeElementId changes
-        editProvider.updateBlockData(widget.blockId, 'activeElementId', id,
-            saveHistory: false);
+        editProvider.selectCanvasElement(widget.blockId, id);
       },
       onElementsChanged: (elements) {
         // Avoid needless writes
@@ -1075,18 +1073,14 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
             }
           },
           onSlideTransientUpdated: (index, field, value) {
-            final updatedSlides = List<Map<String, dynamic>>.from(slides);
-            if (index >= updatedSlides.length) return;
-            updatedSlides[index] = {
-              ...Map<String, dynamic>.from(updatedSlides[index]),
-              field: value,
-            };
-            editProvider.updateBlockData(
-              widget.blockId,
-              'slides',
-              updatedSlides,
-              saveHistory: false,
-            );
+            if (field == 'activeElementId') {
+              editProvider.selectCanvasElement(
+                widget.blockId,
+                value?.toString(),
+                slideIndex: index,
+                slideCount: slides.length,
+              );
+            }
           },
           onSlideActionUpdated: (index, action) {
             final updatedSlides = List<Map<String, dynamic>>.from(slides);
@@ -4337,7 +4331,9 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
                     slide['constrainElementsToSafeArea'] != false,
                 'blockHeight':
                     (slide['designHeight'] as num?)?.toDouble() ?? 750.0,
-                'activeElementId': slide['activeElementId'],
+                'activeElementId': context
+                    .read<WebsiteEditModeProvider>()
+                    .canvasElementSelection(widget.blockId, slideIndex: index),
                 'elements': compositionElements,
               },
               editable: true,
@@ -4345,11 +4341,12 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
               onElementsChanged: (elements) =>
                   widget.onSlideUpdated(index, 'elements', elements),
               onActiveElementChanged: (elementId) {
-                context
-                    .read<WebsiteEditModeProvider>()
-                    .selectBlock(widget.blockId);
-                widget.onSlideTransientUpdated(
-                    index, 'activeElementId', elementId);
+                context.read<WebsiteEditModeProvider>().selectCanvasElement(
+                      widget.blockId,
+                      elementId,
+                      slideIndex: index,
+                      slideCount: widget.slides.length,
+                    );
               },
               onBackgroundTap: () => context
                   .read<WebsiteEditModeProvider>()

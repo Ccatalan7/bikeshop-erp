@@ -434,6 +434,44 @@ void main() {
     expect(panel, isNot(contains("'constrainToCanvas'")));
   });
 
+  test('linked Canvas images can use a campaign-specific media cutout', () {
+    final factory =
+        File('lib/modules/website/models/canvas_element_factory.dart')
+            .readAsStringSync();
+    final canvas = File('lib/modules/website/widgets/canvas_block.dart')
+        .readAsStringSync();
+    final inspector =
+        File('lib/modules/website/widgets/website_editor_panel.dart')
+            .readAsStringSync();
+
+    expect(factory, contains("'imageSource': 'manual'"));
+    expect(canvas, contains("imageSource != 'manual'"));
+    expect(inspector, contains('Imagen seleccionada / recorte'));
+    expect(inspector, contains('conserva el vínculo comercial'));
+  });
+
+  test('background removal is shared by Canvas and schema image controls', () {
+    final canvas = File('lib/modules/website/widgets/canvas_block.dart')
+        .readAsStringSync();
+    final toolbar =
+        File('lib/modules/website/widgets/canvas_block_toolbar.dart')
+            .readAsStringSync();
+    final inspector =
+        File('lib/modules/website/widgets/website_editor_panel.dart')
+            .readAsStringSync();
+    final dialog = File(
+      'lib/modules/website/widgets/website_background_removal_dialog.dart',
+    ).readAsStringSync();
+
+    expect(toolbar, contains("ValueKey('toolbar_remove_background')"));
+    expect(canvas, contains('showWebsiteBackgroundRemovalDialog('));
+    expect(canvas, contains("'backgroundRemovalOriginalUrl'"));
+    expect(inspector, contains('showWebsiteBackgroundRemovalDialog('));
+    expect(dialog, contains("'Quitar fondo'"));
+    expect(dialog, contains("'Aplicar PNG'"));
+    expect(dialog, contains("'Usar modo inteligente'"));
+  });
+
   test('inspector uses task navigation and progressive control groups', () {
     final panel = File('lib/modules/website/widgets/website_editor_panel.dart')
         .readAsStringSync();

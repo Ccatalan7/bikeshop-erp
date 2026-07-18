@@ -4,6 +4,8 @@ import 'package:uuid/uuid.dart';
 import '../models/website_page_models.dart';
 import '../models/website_action.dart';
 import '../models/canvas_element_factory.dart';
+import '../models/website_block_registry.dart';
+import '../models/website_block_type.dart';
 
 const _uuid = Uuid();
 
@@ -48,6 +50,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   String? _selectedBlockId;
   int _selectionVersion = 0; // Tracks explicit selection events
   final Map<String, int> _carouselSlideSelections = {};
+  final Map<String, String?> _canvasElementSelections = {};
   bool _hasUnsavedChanges = false;
   bool _hasHeaderChanges = false; // Track header-specific changes
   List<Map<String, dynamic>> _blocks = [];
@@ -137,11 +140,65 @@ class WebsiteEditModeProvider extends ChangeNotifier {
         .toInt();
   }
 
+  String _canvasSelectionKey(String blockId, int? slideIndex) =>
+      '$blockId:${slideIndex == null ? 'root' : 'slide_$slideIndex'}';
+
+  /// Selected nested Canvas layer for a standalone Canvas block or a composed
+  /// carousel slide. This is editor-only state: it never enters block_data,
+  /// persistence, dirty tracking, or undo history.
+  String? canvasElementSelection(String blockId, {int? slideIndex}) =>
+      _canvasElementSelections[_canvasSelectionKey(blockId, slideIndex)];
+
+  /// Select a nested Canvas layer while restoring its owning block/slide.
+  /// Repeated selection is intentional and increments [selectionVersion] so
+  /// the inspector can recover after another surface cleared its context.
+  void selectCanvasElement(
+    String blockId,
+    String? elementId, {
+    int? slideIndex,
+    int? slideCount,
+  }) {
+    _selectedBlockId = blockId;
+    if (slideIndex != null && slideCount != null && slideCount > 0) {
+      _carouselSlideSelections[blockId] =
+          slideIndex.clamp(0, slideCount - 1).toInt();
+    }
+    _canvasElementSelections[_canvasSelectionKey(blockId, slideIndex)] =
+        elementId;
+    _selectionVersion++;
+    notifyListeners();
+  }
+
+  /// Nested selection for the currently selected block, used by the inspector
+  /// identity and scroll reset contract.
+  String? get selectedCanvasElementId {
+    final blockId = _selectedBlockId;
+    if (blockId == null) return null;
+    final block = getBlock(blockId);
+    if (block == null) return null;
+    final type = (block['block_type'] ?? block['type'] ?? '').toString();
+    if (type == WebsiteBlockType.carousel.name) {
+      final data = Map<String, dynamic>.from(block['block_data'] ?? const {});
+      final slides = data['slides'];
+      final count = slides is List ? slides.length : 0;
+      if (count <= 0) return null;
+      return canvasElementSelection(
+        blockId,
+        slideIndex: carouselSlideSelection(blockId, count),
+      );
+    }
+    if (type == WebsiteBlockType.canvas.name) {
+      return canvasElementSelection(blockId);
+    }
+    return null;
+  }
+
   void selectCarouselSlide(String blockId, int index, int slideCount) {
     if (slideCount <= 0) return;
     final normalized = index.clamp(0, slideCount - 1).toInt();
-    if (_carouselSlideSelections[blockId] == normalized) return;
     _carouselSlideSelections[blockId] = normalized;
+    _selectedBlockId = blockId;
+    _selectionVersion++;
     notifyListeners();
   }
 
@@ -994,7 +1051,41 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     if (blockIndex == -1) return false;
     final block = _blocks[blockIndex];
     final blockType = (block['block_type'] ?? block['type'] ?? '').toString();
-    if (blockType != 'canvas') return false;
+    if (blockType == WebsiteBlockType.carousel.name) {
+      final data = Map<String, dynamic>.from(block['block_data'] ?? const {});
+      final rawSlides = data['slides'];
+      if (rawSlides is! List || rawSlides.isEmpty) return false;
+      final slides = rawSlides
+          .whereType<Map>()
+          .map((slide) => Map<String, dynamic>.from(slide))
+          .toList();
+      if (slides.isEmpty) return false;
+      final slideIndex = carouselSlideSelection(canvasBlockId, slides.length);
+      final slide = Map<String, dynamic>.from(slides[slideIndex]);
+      final rawElements = slide['elements'];
+      final elements = rawElements is List
+          ? rawElements
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : <Map<String, dynamic>>[];
+      final id = 'el_${DateTime.now().microsecondsSinceEpoch}';
+      elements.add(createCanvasElement(id: id, type: elementType));
+      slides[slideIndex] = {
+        ...slide,
+        'useComposition': true,
+        'elements': elements,
+      };
+      updateBlockData(canvasBlockId, 'slides', slides);
+      selectCanvasElement(
+        canvasBlockId,
+        id,
+        slideIndex: slideIndex,
+        slideCount: slides.length,
+      );
+      return true;
+    }
+    if (blockType != WebsiteBlockType.canvas.name) return false;
 
     final data = Map<String, dynamic>.from(block['block_data'] ?? {});
     final rawElements = data['elements'];
@@ -1011,8 +1102,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
     elements.add(next);
     updateBlockData(canvasBlockId, 'elements', elements);
-    // Don't save to history for activeElementId - it's transient
-    updateBlockData(canvasBlockId, 'activeElementId', id, saveHistory: false);
+    selectCanvasElement(canvasBlockId, id);
     return true;
   }
 
@@ -1205,7 +1295,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     final newBlock = {
       'id': _uuid.v4(), // Use proper UUID for database compatibility
       'block_type': blockType,
-      'block_data': _getDefaultDataForType(blockType),
+      'block_data': _defaultDataForType(blockType),
       'is_visible': true,
       'sort_order': _blocks.length,
     };
@@ -1225,8 +1315,34 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Get default data for block type
-  Map<String, dynamic> _getDefaultDataForType(String blockType) {
+  Map<String, dynamic> _defaultDataForType(String blockType) {
+    final normalized = blockType.trim();
+    for (final type in WebsiteBlockType.values) {
+      if (type.name.toLowerCase() == normalized.toLowerCase()) {
+        return _deepCopyMap(
+          WebsiteBlockRegistry.definitionFor(type).defaultData,
+        );
+      }
+    }
+    return _legacyDefaultDataForUnknownType(blockType);
+  }
+
+  Map<String, dynamic> _deepCopyMap(Map<String, dynamic> source) =>
+      source.map((key, value) => MapEntry(key, _deepCopyValue(value)));
+
+  dynamic _deepCopyValue(dynamic value) {
+    if (value is Map) {
+      return value.map(
+        (key, nested) => MapEntry(key.toString(), _deepCopyValue(nested)),
+      );
+    }
+    if (value is List) return value.map(_deepCopyValue).toList();
+    return value;
+  }
+
+  /// Compatibility fallback for marketplace/legacy block types not registered
+  /// in [WebsiteBlockRegistry]. Registered blocks must never add defaults here.
+  Map<String, dynamic> _legacyDefaultDataForUnknownType(String blockType) {
     switch (blockType) {
       case 'hero':
         return {

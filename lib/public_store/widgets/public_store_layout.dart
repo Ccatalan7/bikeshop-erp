@@ -20,6 +20,7 @@ import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/public_store_scroll_state.dart';
 import '../theme/public_store_theme.dart';
+import '../theme/public_header_contrast.dart';
 import 'floating_whatsapp_button.dart';
 import 'customer_account_menu.dart';
 import '../../modules/website/services/website_service.dart';
@@ -843,7 +844,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     }
 
     final headerStyle = getHeaderSetting('header_style', 'solid');
-    final headerColorMode = getHeaderSetting('header_color_mode', 'light');
+    final headerColorMode = getHeaderSetting('header_color_mode', 'auto');
     final showTopBannerRaw =
         getHeaderSetting('header_show_top_banner', 'false');
     final showTopBanner = showTopBannerRaw == 'true';
@@ -3336,7 +3337,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required Color accentColor,
     bool isEditMode = false,
     String headerStyle = 'solid',
-    String headerColorMode = 'light',
+    String headerColorMode = 'auto',
     bool showTopBanner = true,
     bool headerShadow = true,
     Color headerBgColor = Colors.white,
@@ -3356,10 +3357,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             builder: (context, child) {
               final isMenuOpen = MegaMenuController.instance.isAnyMenuOpen;
 
-              // Determine colors based on mode
-              // FORCE WHITE TEXT IF MENU IS OPEN
-              // FORCE BLACK BACKGROUND IF MENU IS OPEN (Unified Block)
-              final isDarkMode = headerColorMode == 'dark' || isOverlay;
+              final contrastMode =
+                  PublicHeaderContrastModeX.parse(headerColorMode);
+              final usesLightForeground = isMenuOpen ||
+                  contrastMode.usesLightForeground(
+                    isOverlay: isOverlay,
+                    backgroundColor: headerBgColor,
+                  );
 
               // If menu is open, we force everything to Look like the Mega Menu Panel (Black)
               final effectiveBgColor = isMenuOpen
@@ -3367,8 +3371,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   : (isOverlay ? Colors.transparent : headerBgColor);
 
               final textColor =
-                  (isDarkMode || isMenuOpen) ? Colors.white : Colors.black87;
-              final iconColor = (isDarkMode || isMenuOpen)
+                  usesLightForeground ? Colors.white : Colors.black87;
+              final iconColor = usesLightForeground
                   ? Colors.white
                   : PublicStoreTheme.logoBlue;
 
@@ -3378,7 +3382,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
               final screenWidth = constraints.maxWidth;
               final isDesktopHeader = screenWidth >= 900;
-              final useMobileGradient = screenWidth < 900 && isOverlay;
+              final useAdaptiveOverlayScrim = isOverlay &&
+                  contrastMode == PublicHeaderContrastMode.automatic;
               final headerHorizontalPadding = isDesktopHeader ? 24.0 : 16.0;
               final headerVerticalPadding = isDesktopHeader ? 8.0 : 10.0;
               final headerLogoHeight = isDesktopHeader ? 38.0 : 40.0;
@@ -3403,14 +3408,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     color: effectiveBgColor,
                     shadowColor: Colors.black,
                     child: Container(
-                      decoration: useMobileGradient
+                      decoration: useAdaptiveOverlayScrim
                           ? BoxDecoration(
                               gradient: LinearGradient(
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 colors: [
-                                  Colors.black.withValues(alpha: 0.55),
-                                  Colors.black.withValues(alpha: 0.15),
+                                  Colors.black.withValues(alpha: 0.52),
+                                  Colors.black.withValues(alpha: 0.24),
                                 ],
                               ),
                             )
@@ -3421,7 +3426,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                           if (showTopBanner && topBannerText.isNotEmpty)
                             Container(
                               width: double.infinity,
-                              color: isDarkMode
+                              color: usesLightForeground
                                   ? Colors.black.withValues(alpha: 0.3)
                                   : primaryColor,
                               padding: const EdgeInsets.symmetric(
@@ -3525,7 +3530,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                       logoUrl: logoUrl,
                                       storeName: storeName,
                                       textColor: textColor,
-                                      isDarkMode: isDarkMode,
+                                      isDarkMode: usesLightForeground,
                                       height: headerLogoHeight,
                                     ),
                                   ),
@@ -5397,26 +5402,36 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     double height = 48,
     Alignment alignment = Alignment.center,
   }) {
+    Widget applyContrast(Widget child) {
+      if (!isDarkMode) return child;
+      return ColorFiltered(
+        colorFilter: ColorFilter.mode(textColor, BlendMode.srcIn),
+        child: child,
+      );
+    }
+
     // 1. Try Network URL if available
     if (logoUrl.isNotEmpty) {
       return Container(
         height: height,
         alignment: alignment,
-        child: Image.network(
-          logoUrl,
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) {
-            // 2. Fallback to Local Asset
-            return Image.asset(
-              'assets/images/vinabike_logo.png',
-              fit: BoxFit.contain,
-              height: height,
-              errorBuilder: (context, error, stackTrace) {
-                // 3. Fallback to Text
-                return _buildTextLogo(context, storeName, textColor);
-              },
-            );
-          },
+        child: applyContrast(
+          Image.network(
+            logoUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              // 2. Fallback to Local Asset
+              return Image.asset(
+                'assets/images/vinabike_logo.png',
+                fit: BoxFit.contain,
+                height: height,
+                errorBuilder: (context, error, stackTrace) {
+                  // 3. Fallback to Text
+                  return _buildTextLogo(context, storeName, textColor);
+                },
+              );
+            },
+          ),
         ),
       );
     }
@@ -5425,13 +5440,15 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     return Container(
       height: height,
       alignment: alignment,
-      child: Image.asset(
-        'assets/images/vinabike_logo.png',
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) {
-          // 3. Fallback to Text
-          return _buildTextLogo(context, storeName, textColor);
-        },
+      child: applyContrast(
+        Image.asset(
+          'assets/images/vinabike_logo.png',
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            // 3. Fallback to Text
+            return _buildTextLogo(context, storeName, textColor);
+          },
+        ),
       ),
     );
   }
