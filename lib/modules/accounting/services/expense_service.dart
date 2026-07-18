@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../shared/services/database_service.dart';
 import '../models/expense.dart';
@@ -287,22 +288,18 @@ class ExpenseService extends ChangeNotifier {
 
   Future<Expense> saveExpense(Expense expense) async {
     try {
-      final payload = expense.toDatabasePayload();
-      Map<String, dynamic> stored;
-
-      if (expense.id == null || expense.id!.isEmpty) {
-        stored = await _databaseService.insert(
-          'expenses',
-          payload,
-        );
-      } else {
-        payload.remove('created_at');
-        stored = await _databaseService.update(
-          'expenses',
-          expense.id!,
-          payload,
-        );
+      if (expense.id != null && expense.id!.isNotEmpty) {
+        final saved = await _saveExistingExpenseAtomically(expense);
+        await fetchExpenses(forceRefresh: true);
+        notifyListeners();
+        return await _hydrateExpense(saved);
       }
+
+      final payload = expense.toDatabasePayload();
+      final stored = await _databaseService.insert(
+        'expenses',
+        payload,
+      );
 
       final saved = Expense.fromJson(stored);
       await _syncExpenseLines(saved.id!, saved.tenantId, expense.lines);
@@ -324,6 +321,80 @@ class ExpenseService extends ChangeNotifier {
     } catch (e) {
       throw Exception('No se pudo guardar el gasto: $e');
     }
+  }
+
+  Future<Expense> _saveExistingExpenseAtomically(Expense expense) async {
+    if (expense.updatedAt == null) {
+      throw StateError(
+        'El gasto no tiene versión de edición; recarga antes de guardar.',
+      );
+    }
+    if (expense.lines.length != 1) {
+      throw StateError(
+        'La edición simple requiere exactamente una línea de gasto.',
+      );
+    }
+
+    final line = expense.lines.single;
+    final operationKey = const Uuid().v4();
+    final params = <String, dynamic>{
+      'p_operation_key': operationKey,
+      'p_expense_id': expense.id,
+      'p_expected_updated_at': expense.updatedAt!.toUtc().toIso8601String(),
+      'p_payload': <String, dynamic>{
+        'category_id': expense.categoryId,
+        'supplier_id': expense.supplierId,
+        'supplier_name': expense.supplierName,
+        'supplier_rut': expense.supplierRut,
+        'document_type': expense.documentType.name,
+        'document_number': expense.documentNumber,
+        'issue_date': expense.issueDate.toUtc().toIso8601String(),
+        'payment_method_id': expense.paymentMethodId,
+        'payment_account_id': expense.paymentAccountId,
+        'notes': expense.notes,
+        'reference': expense.reference,
+        'account_id': line.accountId,
+        'description': line.description,
+        'total_amount': expense.totalAmount.round(),
+      },
+    };
+
+    dynamic raw;
+    try {
+      raw = await _databaseService.rpc(
+        'save_expense_aggregate',
+        params: params,
+      );
+    } catch (error, stackTrace) {
+      if (!_isOutcomeAmbiguous(error)) rethrow;
+
+      try {
+        raw = await _databaseService.rpc(
+          'get_expense_aggregate_save_operation',
+          params: {'p_operation_key': operationKey},
+        );
+      } catch (_) {
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+
+      if (raw == null) {
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+    }
+
+    if (raw is! Map || raw['expense'] is! Map) {
+      throw StateError('La respuesta del guardado atómico es inválida.');
+    }
+
+    return Expense.fromJson(
+      Map<String, dynamic>.from(raw['expense'] as Map),
+    );
+  }
+
+  bool _isOutcomeAmbiguous(Object error) {
+    return error is! PostgrestException ||
+        error.code == null ||
+        error.code!.isEmpty;
   }
 
   Future<ExpenseLink> saveExpenseLink(ExpenseLink link) async {

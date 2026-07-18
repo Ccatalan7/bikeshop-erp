@@ -35476,5 +35476,10 @@ grant select on public.stock_movements_ledger_view to authenticated;
 -- Prevent preserved legacy expense journals from colliding with newly issued
 -- GTO numbers and make UUID document lineage authoritative in expense traces.
 \ir ../migrations/20260717080000_prevent_expense_number_journal_collisions.sql
+-- Atomic, idempotent simple-expense edits with optimistic concurrency,
+-- integer CLP tax rounding, and immutable superseded-journal evidence.
+\ir ../migrations/20260718090000_add_atomic_expense_edit.sql
+-- Preserve the original posting audit timestamp across the RPC draft bridge.
+\ir ../migrations/20260718091000_preserve_expense_posted_at_on_atomic_edit.sql
 
 commit;

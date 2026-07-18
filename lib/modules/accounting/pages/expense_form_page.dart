@@ -64,10 +64,11 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
   final NumberFormat _currencyFormat = ChileanUtils.currencyFormat;
 
   // Calculated values
-  double get _totalPaid => _parseAmount(_totalController.text);
+  double get _totalPaid => _parseAmount(_totalController.text).roundToDouble();
   bool get _hasIva => _documentType == ExpenseDocumentType.invoice;
-  double get _netAmount =>
-      (!_hasIva || _totalPaid <= 0) ? _totalPaid : _totalPaid / 1.19;
+  double get _netAmount => (!_hasIva || _totalPaid <= 0)
+      ? _totalPaid
+      : (_totalPaid / 1.19).roundToDouble();
   double get _ivaAmount =>
       (!_hasIva || _totalPaid <= 0) ? 0 : _totalPaid - _netAmount;
 
@@ -1304,6 +1305,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
     }
 
     final tenantId = await TenantService().getTenantId();
+    if (!mounted) return;
     if (tenantId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Error: No se pudo obtener el tenant')),
@@ -1318,10 +1320,8 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
       final tax = _ivaAmount;
       final total = _totalPaid;
       final taxRate = _hasIva ? 19.0 : 0.0;
-      final hasExplicitPayments = _existingExpense?.payments.isNotEmpty == true;
       final effectivePostedAt = _existingExpense?.postedAt ?? _date;
-      final effectivePaidAt =
-          hasExplicitPayments ? (_existingExpense?.paidAt ?? _date) : _date;
+      final effectivePaidAt = _existingExpense?.paidAt ?? _date;
 
       // For new expenses, generate the number now (increments counter)
       // For existing expenses, use what's already there
@@ -1336,6 +1336,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
         id: _existingExpense?.id,
         tenantId: tenantId,
         expenseNumber: expenseNumber,
+        categoryId: _existingExpense?.categoryId,
         supplierId: _selectedSupplier?.id,
         supplierName: _selectedSupplier?.name,
         supplierRut: _selectedSupplier?.rut,
@@ -1365,7 +1366,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
         paymentAccountId: _selectedPaymentMethod!.accountId,
         paymentMethodId: _selectedPaymentMethod!.id,
         createdAt: _existingExpense?.createdAt,
-        updatedAt: DateTime.now(),
+        updatedAt: _existingExpense?.updatedAt,
         lines: [
           ExpenseLine(
             id: _existingExpense?.lines.isNotEmpty == true
@@ -1597,8 +1598,9 @@ class _SupplierPickerSheetState extends State<_SupplierPickerSheet> {
                                     setState(() => _isCreating = true);
                                     final created =
                                         await widget.onCreateSupplier(name);
+                                    if (!mounted || !context.mounted) return;
                                     setState(() => _isCreating = false);
-                                    if (created != null && mounted) {
+                                    if (created != null) {
                                       Navigator.pop(context, created);
                                     }
                                   },
