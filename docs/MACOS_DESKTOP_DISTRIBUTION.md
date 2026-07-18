@@ -33,7 +33,8 @@ and macOS code seal were verified.
 After the first install:
 
 1. Open `Vinabike ERP` from `~/Applications` and choose **Keep in Dock**.
-2. The Flutter app checks GitHub Releases silently.
+2. The Flutter app checks the public `macos-latest` stable manifest silently,
+   without consuming GitHub's anonymous API quota.
 3. A per-user LaunchAgent downloads and prepares a new version outside the app
    sandbox.
 4. The in-app prompt appears only after the update is verified and ready.

@@ -23,6 +23,9 @@ class DesktopUpdateInfo {
 class DesktopUpdateService extends ChangeNotifier {
   static const _repo = 'Ccatalan7/bikeshop-erp';
   static const _currentBuildTag = String.fromEnvironment('VINABIKE_BUILD_TAG');
+  static const _macosLatestManifestUrl =
+      'https://github.com/$_repo/releases/download/macos-latest/'
+      'macos-release-manifest.json';
 
   bool _hasChecked = false;
   bool _dismissed = false;
@@ -252,8 +255,7 @@ class DesktopUpdateService extends ChangeNotifier {
   }
 
   Future<DesktopUpdateInfo> _fetchLatestMacosRelease() async {
-    final uri =
-        Uri.parse('https://api.github.com/repos/$_repo/releases?per_page=100');
+    final uri = Uri.parse(_macosLatestManifestUrl);
     final response = await http.get(
       uri,
       headers: const {'User-Agent': 'VinabikeERP-Updater'},
@@ -261,58 +263,50 @@ class DesktopUpdateService extends ChangeNotifier {
 
     if (response.statusCode != 200) {
       throw StateError(
-        'GitHub releases request failed with ${response.statusCode}.',
+        'macOS stable manifest request failed with ${response.statusCode}.',
       );
     }
 
-    final releases = jsonDecode(response.body) as List<dynamic>;
-    for (final releaseValue in releases) {
-      final release = releaseValue as Map<String, dynamic>;
-      if (release['draft'] == true || release['prerelease'] == true) {
-        continue;
-      }
-
-      final tag = release['tag_name']?.toString() ?? '';
-      if (!tag.startsWith('macos-v')) continue;
-
-      final assets = release['assets'];
-      if (assets is! List) continue;
-
-      Map<String, dynamic>? zipAsset;
-      Map<String, dynamic>? installerAsset;
-      var hasManifest = false;
-      var hasManifestSignature = false;
-      for (final assetValue in assets) {
-        final asset = assetValue as Map<String, dynamic>;
-        final name = asset['name']?.toString() ?? '';
-        if (RegExp(r'^vinabike_erp_macos_.*\.zip$').hasMatch(name)) {
-          zipAsset = asset;
-        } else if (name == 'install_vinabike_erp_macos.sh') {
-          installerAsset = asset;
-        } else if (name == 'macos-release-manifest.json') {
-          hasManifest = true;
-        } else if (name == 'macos-release-manifest.json.sig') {
-          hasManifestSignature = true;
-        }
-      }
-
-      if (zipAsset == null ||
-          installerAsset == null ||
-          !hasManifest ||
-          !hasManifestSignature) {
-        continue;
-      }
-
-      return DesktopUpdateInfo(
-        tag: tag,
-        releaseName: release['name']?.toString() ?? 'macOS release',
-        assetName: zipAsset['name']?.toString() ?? '',
-        installerDownloadUrl:
-            installerAsset['browser_download_url']?.toString() ?? '',
-      );
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Invalid macOS stable manifest.');
     }
 
-    throw StateError('No verified macOS release asset was found.');
+    final tag = decoded['tag_name']?.toString() ?? '';
+    final archiveName = decoded['archive_name']?.toString() ?? '';
+    final archiveUrl = Uri.tryParse(decoded['archive_url']?.toString() ?? '');
+    final installerUrl =
+        Uri.tryParse(decoded['installer_url']?.toString() ?? '');
+    final archiveHash = decoded['archive_sha256']?.toString() ?? '';
+    final installerHash = decoded['installer_sha256']?.toString() ?? '';
+    final bundleId = decoded['bundle_id']?.toString() ?? '';
+    final bundleVersion = decoded['bundle_version']?.toString() ?? '';
+    final commit = decoded['commit']?.toString() ?? '';
+    final immutableReleasePrefix = '/$_repo/releases/download/$tag/';
+    final sha256Pattern = RegExp(r'^[a-f0-9]{64}$');
+
+    if (!RegExp(r'^macos-v.+$').hasMatch(tag) ||
+        !RegExp(r'^vinabike_erp_macos_.+\.zip$').hasMatch(archiveName) ||
+        bundleId != 'com.vinabike.vinabikeErp' ||
+        int.tryParse(bundleVersion) == null ||
+        !RegExp(r'^[a-f0-9]{40}$').hasMatch(commit) ||
+        !sha256Pattern.hasMatch(archiveHash) ||
+        !sha256Pattern.hasMatch(installerHash) ||
+        archiveUrl?.scheme != 'https' ||
+        archiveUrl?.host != 'github.com' ||
+        !archiveUrl!.path.startsWith(immutableReleasePrefix) ||
+        installerUrl?.scheme != 'https' ||
+        installerUrl?.host != 'github.com' ||
+        !installerUrl!.path.startsWith(immutableReleasePrefix)) {
+      throw const FormatException('Invalid macOS stable manifest.');
+    }
+
+    return DesktopUpdateInfo(
+      tag: tag,
+      releaseName: 'Vinabike ERP $tag',
+      assetName: archiveName,
+      installerDownloadUrl: installerUrl.toString(),
+    );
   }
 
   Future<String?> _readInstalledReleaseTag() async {

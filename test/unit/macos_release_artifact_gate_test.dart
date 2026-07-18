@@ -136,6 +136,22 @@ void main() {
     expect(updaterService, contains("errorTag != 'unknown'"));
     expect(updaterService, contains("'VinabikeERP'"));
     expect(updaterService, contains("'coordination'"));
+    final macosFetchStart =
+        updaterService.indexOf('_fetchLatestMacosRelease() async');
+    final macosFetchEnd = updaterService.indexOf(
+      '_readInstalledReleaseTag() async',
+      macosFetchStart,
+    );
+    final macosFetchSource =
+        updaterService.substring(macosFetchStart, macosFetchEnd);
+    expect(
+      updaterService,
+      contains('releases/download/macos-latest/'),
+    );
+    expect(macosFetchSource, contains('_macosLatestManifestUrl'));
+    expect(macosFetchSource, isNot(contains('api.github.com')));
+    expect(macosFetchSource, contains('archive_sha256'));
+    expect(macosFetchSource, contains('installer_sha256'));
     expect(installer, contains('<key>WatchPaths</key>'));
     expect(installer, contains(r'${USER_HOME}/Applications'));
     expect(installer, contains(r'${SUPPORT_ROOT}/coordination'));
