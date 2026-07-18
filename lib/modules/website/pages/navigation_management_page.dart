@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../shared/widgets/main_layout.dart';
 import '../services/website_service.dart';
 import '../models/website_page_models.dart';
 import '../models/website_destination.dart';
 import '../widgets/website_link_value_editor.dart';
 import '../../inventory/services/category_service.dart';
 import '../../inventory/models/category_models.dart' as cat_models;
+import '../widgets/website_admin_ui.dart';
 
 /// Navigation Management Page - Manage website menus (header, footer)
 class NavigationManagementPage extends StatefulWidget {
@@ -66,99 +66,58 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    final body = Column(
-      children: [
-        // Header
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            border: Border(
-              bottom: BorderSide(color: theme.colorScheme.outlineVariant),
-            ),
+    return WebsiteAdminShell(
+      embedded: widget.embedded,
+      title: 'Navegación',
+      description: 'Define el recorrido principal del encabezado y del pie.',
+      actions: [
+        IconButton.outlined(
+          onPressed: _loadNavigation,
+          tooltip: 'Actualizar navegación',
+          icon: const Icon(Icons.refresh_rounded, size: 19),
+        ),
+        FilledButton.icon(
+          onPressed: () => _showAddLinkDialog(
+            _tabController.index == 0
+                ? MenuLocation.header
+                : MenuLocation.footer,
           ),
-          child: Row(
-            children: [
-              if (!widget.embedded) ...[
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                const SizedBox(width: 16),
-              ],
-              const Icon(
-                Icons.menu_book,
-                color: Colors.teal,
-                size: 32,
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('Agregar enlace'),
+        ),
+      ],
+      child: Column(
+        children: [
+          TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            dividerHeight: 1,
+            tabs: [
+              Tab(
+                text: 'Encabezado  ·  ${_headerLinks.length}',
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Gestión de Navegación',
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      'Configura los menús del header y footer',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              FilledButton.icon(
-                onPressed: () => _showAddLinkDialog(
-                  _tabController.index == 0
-                      ? MenuLocation.header
-                      : MenuLocation.footer,
-                ),
-                icon: const Icon(Icons.add),
-                label: const Text('Agregar Enlace'),
+              Tab(
+                text: 'Pie de página  ·  ${_footerLinks.length}',
               ),
             ],
           ),
-        ),
 
-        // Tabs
-        TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(
-              icon: const Icon(Icons.web),
-              text: 'Header (${_headerLinks.length})',
-            ),
-            Tab(
-              icon: const Icon(Icons.call_to_action),
-              text: 'Footer (${_footerLinks.length})',
-            ),
-          ],
-        ),
-
-        // Content
-        Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildLinkList(_headerLinks, MenuLocation.header),
-                    _buildLinkList(_footerLinks, MenuLocation.footer),
-                  ],
-                ),
-        ),
-      ],
+          // Content
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildLinkList(_headerLinks, MenuLocation.header),
+                      _buildLinkList(_footerLinks, MenuLocation.footer),
+                    ],
+                  ),
+          ),
+        ],
+      ),
     );
-
-    if (widget.embedded) return body;
-
-    return MainLayout(child: body);
   }
 
   Widget _buildLinkList(List<WebsiteNavigation> links, MenuLocation location) {
@@ -352,6 +311,7 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
   }
 
   Future<void> _confirmDeleteLink(WebsiteNavigation link) async {
+    final service = context.read<WebsiteService>();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -374,7 +334,6 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
 
     if (confirmed == true) {
       try {
-        final service = context.read<WebsiteService>();
         await service.deleteNavigation(link.id);
         _loadNavigation();
 
@@ -1322,9 +1281,10 @@ class _NavigationTreeItemState extends State<_NavigationTreeItem> {
           padding: EdgeInsets.only(left: indent, right: 8, top: 4, bottom: 4),
           child: Container(
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerLow,
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-              borderRadius: BorderRadius.circular(8),
+              color: link.isVisible
+                  ? theme.colorScheme.surface
+                  : theme.colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(6),
             ),
             child: Row(
               children: [
@@ -1351,19 +1311,10 @@ class _NavigationTreeItemState extends State<_NavigationTreeItem> {
                     size: 16, color: theme.colorScheme.outline),
                 const SizedBox(width: 8),
 
-                // Link Type Icon
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color:
-                        widget.getColor(link.linkType).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Icon(
-                    widget.getIcon(link.linkType),
-                    size: 16,
-                    color: widget.getColor(link.linkType),
-                  ),
+                Icon(
+                  widget.getIcon(link.linkType),
+                  size: 18,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: 12),
 
@@ -1377,34 +1328,12 @@ class _NavigationTreeItemState extends State<_NavigationTreeItem> {
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.secondaryContainer,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              widget.getLabel(link.linkType),
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: theme.colorScheme.onSecondaryContainer,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              link.linkValue ?? '',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: theme.colorScheme.outline),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
+                      Text(
+                        '${widget.getLabel(link.linkType)} · ${link.linkValue ?? 'Sin destino'}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -1424,17 +1353,6 @@ class _NavigationTreeItemState extends State<_NavigationTreeItem> {
                     ),
                   ),
                 IconButton(
-                  icon: const Icon(Icons.add_circle_outline, size: 20),
-                  onPressed: () =>
-                      widget.onAddSubItem(widget.location, parentId: link.id),
-                  tooltip: 'Agregar Sub-item',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 20),
-                  onPressed: () => widget.onEdit(link),
-                  tooltip: 'Editar',
-                ),
-                IconButton(
                   icon: Icon(
                     link.isVisible ? Icons.visibility : Icons.visibility_off,
                     size: 20,
@@ -1443,11 +1361,49 @@ class _NavigationTreeItemState extends State<_NavigationTreeItem> {
                   onPressed: () => widget.onToggleVisibility(link),
                   tooltip: link.isVisible ? 'Ocultar' : 'Mostrar',
                 ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline,
-                      size: 20, color: Colors.red),
-                  onPressed: () => widget.onDelete(link),
-                  tooltip: 'Eliminar',
+                PopupMenuButton<String>(
+                  tooltip: 'Más acciones',
+                  icon: const Icon(Icons.more_horiz_rounded, size: 20),
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'child':
+                        widget.onAddSubItem(
+                          widget.location,
+                          parentId: link.id,
+                        );
+                      case 'edit':
+                        widget.onEdit(link);
+                      case 'delete':
+                        widget.onDelete(link);
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'child',
+                      child: ListTile(
+                        leading: Icon(Icons.subdirectory_arrow_right_rounded),
+                        title: Text('Agregar subenlace'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: ListTile(
+                        leading: Icon(Icons.edit_outlined),
+                        title: Text('Editar'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: ListTile(
+                        leading: Icon(Icons.delete_outline),
+                        title: Text('Eliminar'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
                 ),
                 // Sorting Arrows
                 Column(

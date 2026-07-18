@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/widgets/branded_loading.dart';
-import '../../../shared/widgets/main_layout.dart';
+import '../widgets/website_admin_ui.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
 import '../services/website_service.dart';
 
@@ -360,98 +360,41 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    final content = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: theme.dividerColor.withValues(alpha: 0.1),
-                ),
+    return WebsiteAdminShell(
+      embedded: widget.embedded,
+      title: 'SEO y datos estructurados',
+      description:
+          'Controla cómo entienden y presentan tu tienda los buscadores.',
+      actions: [
+        if (_hasChanges)
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Text(
+              'Cambios sin guardar',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.tertiary,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            child: Row(
-              children: [
-                if (!widget.embedded) ...[
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => context.go('/website'),
-                  ),
-                  const SizedBox(width: 12),
-                ],
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                child: const Icon(Icons.search, color: Colors.white, size: 24),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'SEO y Datos Estructurados',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Optimización para buscadores y Google Merchant Center',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (_hasChanges)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.edit, color: Colors.orange, size: 16),
-                        SizedBox(width: 6),
-                        Text('Cambios sin guardar',
-                            style: TextStyle(
-                                color: Colors.orange,
-                                fontWeight: FontWeight.w500,
-                                fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                const SizedBox(width: 16),
-                FilledButton.icon(
-                  onPressed: _isSaving ? null : _saveSettings,
-                  icon: _isSaving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.save),
-                  label: Text(_isSaving ? 'Guardando...' : 'Guardar'),
-                ),
-              ],
-            ),
           ),
-
+        FilledButton.icon(
+          onPressed: _isSaving ? null : _saveSettings,
+          icon: _isSaving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.save_outlined, size: 18),
+          label: Text(_isSaving ? 'Guardando…' : 'Guardar'),
+        ),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           // Tab Bar
           Container(
             decoration: BoxDecoration(
@@ -463,19 +406,12 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
             ),
             child: TabBar(
               controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
               tabs: const [
-                Tab(
-                  icon: Icon(Icons.settings),
-                  text: 'Configuración',
-                ),
-                Tab(
-                  icon: Icon(Icons.verified_user),
-                  text: 'Verificación',
-                ),
+                Tab(text: 'Configuración'),
+                Tab(text: 'Verificación'),
               ],
-              indicatorColor: Colors.green,
-              labelColor: Colors.green,
-              unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
             ),
           ),
 
@@ -501,7 +437,8 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
                               builder: (context, constraints) {
                                 if (constraints.maxWidth > 1200) {
                                   return Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
                                         child: Column(
@@ -556,11 +493,9 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
                     ],
                   ),
           ),
-      ],
+        ],
+      ),
     );
-
-    if (widget.embedded) return content;
-    return MainLayout(child: content);
   }
 
   /// Build the Verification/Audit tab content
@@ -930,65 +865,52 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
     final completionPercent =
         [hasBusinessInfo, hasLegalPages, hasMeta].where((v) => v).length / 3;
 
-    return Card(
-      color: isComplete ? Colors.green.shade50 : Colors.orange.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isComplete ? Colors.green : Colors.orange,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                isComplete ? Icons.verified : Icons.warning_amber,
-                color: Colors.white,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isComplete
-                        ? '¡Listo para Google Merchant Center!'
-                        : 'Configuración incompleta',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: isComplete
-                          ? Colors.green.shade800
-                          : Colors.orange.shade800,
-                    ),
+    final statusColor =
+        isComplete ? Colors.green.shade700 : Colors.orange.shade800;
+    return WebsiteAdminSurface(
+      accent: statusColor,
+      child: Row(
+        children: [
+          Icon(
+            isComplete ? Icons.verified_outlined : Icons.warning_amber_rounded,
+            color: statusColor,
+            size: 25,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isComplete
+                      ? '¡Listo para Google Merchant Center!'
+                      : 'Configuración incompleta',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    isComplete
-                        ? 'Tu sitio cumple con los requisitos de Google Merchant Center'
-                        : 'Completa los campos requeridos para aprobar la verificación',
-                    style: TextStyle(
-                      color: isComplete
-                          ? Colors.green.shade700
-                          : Colors.orange.shade700,
-                    ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isComplete
+                      ? 'Tu sitio cumple con los requisitos de Google Merchant Center'
+                      : 'Completa los campos requeridos para aprobar la verificación',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
-                  if (!isComplete) ...[
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: completionPercent,
-                      backgroundColor: Colors.orange.shade200,
-                      valueColor:
-                          AlwaysStoppedAnimation(Colors.orange.shade600),
-                    ),
-                  ],
+                ),
+                if (!isComplete) ...[
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: completionPercent,
+                    minHeight: 3,
+                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                    valueColor: AlwaysStoppedAnimation(statusColor),
+                  ),
                 ],
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1201,91 +1123,88 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
   }
 
   Widget _buildSocialSection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionHeader(
-              theme: theme,
-              icon: Icons.share,
-              iconColor: Colors.purple,
-              title: 'Redes Sociales',
-              subtitle: 'Open Graph y Twitter Cards',
-            ),
-            const Divider(height: 32),
+    return WebsiteAdminSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader(
+            theme: theme,
+            icon: Icons.share,
+            iconColor: Colors.purple,
+            title: 'Redes Sociales',
+            subtitle: 'Open Graph y Twitter Cards',
+          ),
+          const Divider(height: 32),
 
-            // Open Graph subsection
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Row(
-                children: [
-                  Icon(Icons.facebook, color: Colors.blue.shade700, size: 20),
-                  const SizedBox(width: 8),
-                  Text('Open Graph (Facebook, LinkedIn)',
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w600)),
-                ],
-              ),
+          // Open Graph subsection
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Row(
+              children: [
+                Icon(Icons.facebook, color: Colors.blue.shade700, size: 20),
+                const SizedBox(width: 8),
+                Text('Open Graph (Facebook, LinkedIn)',
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+              ],
             ),
-            _buildTextField(
-              controller: _ogTitleController,
-              label: 'og:title',
-              hint: 'Título para compartir en redes',
-            ),
-            const SizedBox(height: 12),
-            _buildTextField(
-              controller: _ogDescriptionController,
-              label: 'og:description',
-              hint: 'Descripción para compartir',
-              maxLines: 2,
-            ),
-            const SizedBox(height: 12),
-            _buildTextField(
-              controller: _ogImageController,
-              label: 'og:image',
-              hint: 'URL de imagen para compartir',
-              icon: Icons.image,
-            ),
+          ),
+          _buildTextField(
+            controller: _ogTitleController,
+            label: 'og:title',
+            hint: 'Título para compartir en redes',
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: _ogDescriptionController,
+            label: 'og:description',
+            hint: 'Descripción para compartir',
+            maxLines: 2,
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: _ogImageController,
+            label: 'og:image',
+            hint: 'URL de imagen para compartir',
+            icon: Icons.image,
+          ),
 
-            const SizedBox(height: 24),
+          const SizedBox(height: 24),
 
-            // Twitter Cards subsection
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Row(
-                children: [
-                  Icon(Icons.alternate_email,
-                      color: Colors.lightBlue.shade600, size: 20),
-                  const SizedBox(width: 8),
-                  Text('Twitter Cards',
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w600)),
-                ],
-              ),
+          // Twitter Cards subsection
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Row(
+              children: [
+                Icon(Icons.alternate_email,
+                    color: Colors.lightBlue.shade600, size: 20),
+                const SizedBox(width: 8),
+                Text('Twitter Cards',
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+              ],
             ),
-            _buildTextField(
-              controller: _twitterTitleController,
-              label: 'twitter:title',
-              hint: 'Título para Twitter',
-            ),
-            const SizedBox(height: 12),
-            _buildTextField(
-              controller: _twitterDescriptionController,
-              label: 'twitter:description',
-              hint: 'Descripción para Twitter',
-              maxLines: 2,
-            ),
-            const SizedBox(height: 12),
-            _buildTextField(
-              controller: _twitterImageController,
-              label: 'twitter:image',
-              hint: 'URL de imagen para Twitter',
-              icon: Icons.image,
-            ),
-          ],
-        ),
+          ),
+          _buildTextField(
+            controller: _twitterTitleController,
+            label: 'twitter:title',
+            hint: 'Título para Twitter',
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: _twitterDescriptionController,
+            label: 'twitter:description',
+            hint: 'Descripción para Twitter',
+            maxLines: 2,
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: _twitterImageController,
+            label: 'twitter:image',
+            hint: 'URL de imagen para Twitter',
+            icon: Icons.image,
+          ),
+        ],
       ),
     );
   }
@@ -1420,15 +1339,8 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
   }) {
     return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: iconColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: iconColor, size: 22),
-        ),
-        const SizedBox(width: 16),
+        Icon(icon, color: theme.colorScheme.onSurfaceVariant, size: 21),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1440,18 +1352,12 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
                           ?.copyWith(fontWeight: FontWeight.bold)),
                   if (isRequired) ...[
                     const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
+                    Text(
+                      'Requerido',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.error,
+                        fontWeight: FontWeight.w600,
                       ),
-                      child: const Text('Requerido',
-                          style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ],

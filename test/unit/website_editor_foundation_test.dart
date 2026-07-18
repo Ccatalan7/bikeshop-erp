@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/website/models/website_block_registry.dart';
 import 'package:vinabike_erp/modules/website/models/website_block_type.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
+import 'package:vinabike_erp/modules/website/services/website_media_service.dart';
 
 void main() {
   test('nested Canvas selection is transient and never dirties block data', () {
@@ -134,5 +135,49 @@ void main() {
         reason: '${type.name} must not use provider-local defaults',
       );
     }
+  });
+
+  test('product media keeps the catalog item visible and de-duplicates images',
+      () {
+    final products = WebsiteProductMediaItem.fromRows([
+      {
+        'id': 'product-1',
+        'name': 'Cámara Maxxis 29',
+        'sku': 'MAX-29',
+        'brand': 'Maxxis',
+        'category_name': 'Cámaras',
+        'stock_quantity': 7,
+        'is_active': true,
+        'is_published': true,
+        'website_image_url': 'https://cdn.example.com/maxxis-main.png',
+        'image_url': 'https://cdn.example.com/inventory-main.png',
+        'website_image_urls': [
+          'https://cdn.example.com/maxxis-main.png',
+          'https://cdn.example.com/maxxis-side.png',
+        ],
+      },
+      {
+        'id': 'product-2',
+        'name': 'Producto sin foto',
+        'sku': 'NO-PHOTO',
+        'inventory_qty': 0,
+      },
+    ]);
+
+    expect(products, hasLength(2));
+    expect(products.first.imageUrls, [
+      'https://cdn.example.com/maxxis-main.png',
+      'https://cdn.example.com/maxxis-side.png',
+    ]);
+    expect(products.last.imageUrls, isEmpty);
+
+    final linked = products.first.assetFor(
+      products.first.imageUrls.last,
+      linkProduct: true,
+    );
+    expect(linked.productId, 'product-1');
+    expect(linked.linksProduct, isTrue);
+    expect(linked.productImageIndex, 1);
+    expect(linked.comesFromProduct, isTrue);
   });
 }

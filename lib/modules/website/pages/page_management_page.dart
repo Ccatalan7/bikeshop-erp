@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../../../shared/widgets/main_layout.dart';
 import '../services/website_service.dart';
 import '../models/website_page_models.dart';
+import '../widgets/website_admin_ui.dart';
 
 /// Page Management UI - Manage website pages (Odoo-style multi-page support)
 /// Allows creating, editing, and organizing pages for the public store
@@ -53,106 +53,35 @@ class _PageManagementPageState extends State<PageManagementPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    final body = Column(
-      children: [
-        // Header
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            border: Border(
-              bottom: BorderSide(color: theme.dividerColor),
-            ),
-          ),
-          child: Row(
-            children: [
-              // Back button
-              if (!widget.embedded) ...[
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => Navigator.pop(context),
-                  tooltip: 'Volver',
-                ),
-                const SizedBox(width: 16),
-              ],
-              // Title
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Páginas del Sitio',
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      'Administra las páginas de tu tienda online',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Add page button
-              FilledButton.icon(
-                onPressed: () => _showPageDialog(context),
-                icon: const Icon(Icons.add),
-                label: const Text('Nueva Página'),
-              ),
-            ],
-          ),
-        ),
-
-        // Content
-        Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _pages.isEmpty
-                  ? _buildEmptyState(theme)
-                  : _buildPagesList(theme),
+    return WebsiteAdminShell(
+      embedded: widget.embedded,
+      title: 'Páginas',
+      description: 'Organiza la portada y las páginas públicas de la tienda.',
+      actions: [
+        FilledButton.icon(
+          onPressed: () => _showPageDialog(context),
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('Nueva página'),
         ),
       ],
+      child: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _pages.isEmpty
+              ? _buildEmptyState(theme)
+              : _buildPagesList(theme),
     );
-
-    if (widget.embedded) return body;
-
-    return MainLayout(child: body);
   }
 
   Widget _buildEmptyState(ThemeData theme) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.web_outlined,
-            size: 80,
-            color: theme.colorScheme.outline,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No hay páginas creadas',
-            style: theme.textTheme.titleLarge?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Crea tu primera página para comenzar',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
-          ),
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: () => _showPageDialog(context),
-            icon: const Icon(Icons.add),
-            label: const Text('Crear Página'),
-          ),
-        ],
+    return WebsiteAdminEmptyState(
+      icon: Icons.web_stories_outlined,
+      title: 'Todavía no hay páginas',
+      description:
+          'Crea la primera página y decide después si estará visible en la navegación.',
+      action: FilledButton.icon(
+        onPressed: () => _showPageDialog(context),
+        icon: const Icon(Icons.add_rounded, size: 18),
+        label: const Text('Crear página'),
       ),
     );
   }
@@ -201,10 +130,22 @@ class _PageManagementPageState extends State<PageManagementPage> {
               ],
             ),
             const SizedBox(height: 12),
-            ...otherPages.map((page) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _buildPageCard(page, theme),
-                )),
+            WebsiteAdminSurface(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  for (var index = 0; index < otherPages.length; index++) ...[
+                    _buildPageCard(otherPages[index], theme),
+                    if (index < otherPages.length - 1)
+                      Divider(
+                        height: 1,
+                        indent: 64,
+                        color: theme.colorScheme.outlineVariant,
+                      ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ],
       ),
@@ -212,93 +153,68 @@ class _PageManagementPageState extends State<PageManagementPage> {
   }
 
   Widget _buildHomePageCard(WebsitePage page, ThemeData theme) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: theme.colorScheme.primary.withValues(alpha: 0.3),
-          width: 2,
-        ),
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: [
-              theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-              theme.colorScheme.surface,
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+    return WebsiteAdminSurface(
+      accent: theme.colorScheme.primary,
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.55),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.home_rounded,
+              color: theme.colorScheme.primary,
+              size: 21,
+            ),
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            children: [
-              // Home icon
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.home_rounded,
-                  color: Colors.white,
-                  size: 32,
-                ),
-              ),
-              const SizedBox(width: 20),
-              // Page info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          page.title,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        _buildStatusChip(page.isPublished, theme),
-                        if (page.isSystem) ...[
-                          const SizedBox(width: 8),
-                          _buildSystemChip(theme),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
                     Text(
-                      'URL: ${page.fullPath}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        fontFamily: 'monospace',
+                      page.title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (page.metaDescription?.isNotEmpty == true) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        page.metaDescription!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.outline,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    const SizedBox(width: 8),
+                    _buildStatusChip(page.isPublished, theme),
+                    if (page.isSystem) ...[
+                      const SizedBox(width: 8),
+                      _buildSystemChip(theme),
                     ],
                   ],
                 ),
-              ),
-              // Actions
-              _buildPageActions(page, theme, isHome: true),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  'URL: ${page.fullPath}',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+                if (page.metaDescription?.isNotEmpty == true) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    page.metaDescription!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
           ),
-        ),
+          _buildPageActions(page, theme, isHome: true),
+        ],
       ),
     );
   }
@@ -306,39 +222,22 @@ class _PageManagementPageState extends State<PageManagementPage> {
   Widget _buildPageCard(WebsitePage page, ThemeData theme) {
     final isSelected = _selectedPage?.id == page.id;
 
-    return Card(
-      elevation: isSelected ? 2 : 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: isSelected
-              ? theme.colorScheme.primary
-              : theme.colorScheme.outlineVariant,
-        ),
-      ),
+    return Material(
+      color: isSelected
+          ? theme.colorScheme.primaryContainer.withValues(alpha: 0.18)
+          : theme.colorScheme.surface,
       child: InkWell(
         onTap: () => setState(() => _selectedPage = isSelected ? null : page),
-        borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
-              // Page icon
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color:
-                      _getTemplateColor(page.template).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  _getTemplateIcon(page.template),
-                  color: _getTemplateColor(page.template),
-                  size: 24,
-                ),
+              Icon(
+                _getTemplateIcon(page.template),
+                color: theme.colorScheme.onSurfaceVariant,
+                size: 21,
               ),
-              const SizedBox(width: 16),
-              // Page info
+              const SizedBox(width: 20),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -396,7 +295,6 @@ class _PageManagementPageState extends State<PageManagementPage> {
                   ],
                 ),
               ),
-              // Actions
               _buildPageActions(page, theme),
             ],
           ),
@@ -594,6 +492,7 @@ class _PageManagementPageState extends State<PageManagementPage> {
   }
 
   void _confirmDelete(WebsitePage page) {
+    final service = context.read<WebsiteService>();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -611,16 +510,16 @@ class _PageManagementPageState extends State<PageManagementPage> {
             onPressed: () async {
               Navigator.pop(context);
               try {
-                await context.read<WebsiteService>().deletePage(page.id);
+                await service.deletePage(page.id);
                 await _loadPages();
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(this.context).showSnackBar(
                     const SnackBar(content: Text('Página eliminada')),
                   );
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(this.context).showSnackBar(
                     SnackBar(content: Text('Error al eliminar: $e')),
                   );
                 }
@@ -661,23 +560,6 @@ class _PageManagementPageState extends State<PageManagementPage> {
         return Icons.shopping_cart_outlined;
       default:
         return Icons.web_outlined;
-    }
-  }
-
-  Color _getTemplateColor(PageTemplate template) {
-    switch (template) {
-      case PageTemplate.landing:
-        return Colors.purple;
-      case PageTemplate.blog:
-        return Colors.blue;
-      case PageTemplate.productList:
-        return Colors.orange;
-      case PageTemplate.productDetail:
-        return Colors.teal;
-      case PageTemplate.cart:
-        return Colors.green;
-      default:
-        return Colors.blueGrey;
     }
   }
 

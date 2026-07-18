@@ -9,7 +9,6 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -25,6 +24,7 @@ import '../providers/website_edit_mode_provider.dart';
 import '../models/website_page_models.dart';
 import '../services/website_backup_service.dart';
 import '../services/website_background_removal_service.dart';
+import '../services/website_media_service.dart';
 import '../services/website_service.dart';
 import 'block_resize_handle.dart';
 import '../services/google_business_service.dart';
@@ -33,6 +33,7 @@ import 'text_formatting_toolbar.dart';
 import 'website_link_value_editor.dart';
 import 'website_action_editor.dart';
 import 'website_background_removal_dialog.dart';
+import 'website_color_picker.dart';
 import 'website_media_picker.dart';
 import 'website_workspace_scope.dart';
 
@@ -3041,39 +3042,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
             ),
             const SizedBox(height: 12),
 
-            // YouTube URL option - use _EditorTextField like the title field
-            _EditorTextField(
-              label: 'URL de YouTube',
-              value: slide['videoUrl']?.toString() ?? '',
-              onChanged: (v) {
-                debugPrint('🎬 [CarouselSlide] YouTube URL changed: "$v"');
-                _updateSlide(_selectedSlideIndex, 'videoUrl', v);
-                // Clear file URL if entering YouTube URL
-                if (v.isNotEmpty) {
-                  _updateSlide(_selectedSlideIndex, 'videoFileUrl', '');
-                }
-              },
-              hint: 'https://youtube.com/watch?v=...',
-            ),
-
-            const SizedBox(height: 12),
-
-            // Divider with "o"
-            const Row(
-              children: [
-                Expanded(child: Divider(color: Colors.white24)),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('o',
-                      style: TextStyle(color: Colors.white38, fontSize: 12)),
-                ),
-                Expanded(child: Divider(color: Colors.white24)),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            // Upload video file button
+            // Upload/file selection is the primary workflow.
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -3122,6 +3091,26 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                 ),
               ),
             ],
+            const SizedBox(height: 12),
+            _CollapsibleSection(
+              title: 'YouTube / enlace avanzado',
+              icon: Icons.link_rounded,
+              initiallyExpanded:
+                  (slide['videoUrl']?.toString() ?? '').isNotEmpty,
+              children: [
+                _EditorTextField(
+                  label: 'URL de YouTube',
+                  value: slide['videoUrl']?.toString() ?? '',
+                  onChanged: (v) {
+                    _updateSlide(_selectedSlideIndex, 'videoUrl', v);
+                    if (v.isNotEmpty) {
+                      _updateSlide(_selectedSlideIndex, 'videoFileUrl', '');
+                    }
+                  },
+                  hint: 'https://youtube.com/watch?v=...',
+                ),
+              ],
+            ),
           ],
         ),
         _CollapsibleSection(
@@ -3800,39 +3789,7 @@ class _SlideEditorState extends State<_SlideEditor> {
         ),
         const SizedBox(height: 12),
 
-        // YouTube URL option
-        _EditorTextField(
-          label: 'URL de YouTube',
-          value: widget.slide['videoUrl']?.toString() ?? '',
-          onChanged: (v) {
-            debugPrint('🎬 [SlideEditor] YouTube URL onChanged: "$v"');
-            widget.onUpdate('videoUrl', v);
-            // Clear file URL if entering YouTube URL
-            if (v.isNotEmpty) {
-              widget.onUpdate('videoFileUrl', '');
-            }
-          },
-          hint: 'https://youtube.com/watch?v=...',
-        ),
-
-        const SizedBox(height: 12),
-
-        // Divider with "o" (or)
-        const Row(
-          children: [
-            Expanded(child: Divider(color: Colors.white24)),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: Text('o',
-                  style: TextStyle(color: Colors.white38, fontSize: 12)),
-            ),
-            Expanded(child: Divider(color: Colors.white24)),
-          ],
-        ),
-
-        const SizedBox(height: 12),
-
-        // Upload video file button
+        // Upload/file selection is the primary workflow.
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
@@ -3920,6 +3877,25 @@ class _SlideEditorState extends State<_SlideEditor> {
             ),
           ),
         ],
+        const SizedBox(height: 12),
+        _CollapsibleSection(
+          title: 'YouTube / enlace avanzado',
+          icon: Icons.link_rounded,
+          initiallyExpanded: hasYoutubeUrl,
+          children: [
+            _EditorTextField(
+              label: 'URL de YouTube',
+              value: widget.slide['videoUrl']?.toString() ?? '',
+              onChanged: (v) {
+                widget.onUpdate('videoUrl', v);
+                if (v.isNotEmpty) {
+                  widget.onUpdate('videoFileUrl', '');
+                }
+              },
+              hint: 'https://youtube.com/watch?v=...',
+            ),
+          ],
+        ),
 
         const SizedBox(height: 20),
         _EditorToggle(
@@ -5351,19 +5327,6 @@ class _GenericBlockControls extends StatelessWidget {
     required this.rawBlockType,
   });
 
-  Color _tryParseHexColor(String? value) {
-    if (value == null) return Colors.transparent;
-    var hex = value.trim();
-    if (hex.isEmpty) return Colors.transparent;
-    if (hex.startsWith('#')) hex = hex.substring(1);
-    if (hex.length == 6) hex = 'FF$hex';
-    if (hex.length != 8) return Colors.transparent;
-
-    final parsed = int.tryParse(hex, radix: 16);
-    if (parsed == null) return Colors.transparent;
-    return Color(parsed);
-  }
-
   List<String> _toStringList(dynamic value) {
     if (value is List) {
       return value
@@ -5455,21 +5418,36 @@ class _GenericBlockControls extends StatelessWidget {
 
     switch (field.type) {
       case WebsiteBlockFieldType.text:
+        if (field.key == 'videoUrl') {
+          final current =
+              raw?.toString() ?? (field.defaultValue?.toString() ?? '');
+          return _CollapsibleSection(
+            title: 'YouTube / enlace avanzado',
+            icon: Icons.link_rounded,
+            initiallyExpanded: current.trim().isNotEmpty,
+            children: [
+              _EditorTextField(
+                label: label,
+                value: current,
+                onChanged: (v) {
+                  setValue(v);
+                  if (v.trim().isNotEmpty &&
+                      currentData.containsKey('videoFileUrl')) {
+                    provider.updateBlockData(blockId, 'videoFileUrl', '');
+                  }
+                },
+              ),
+              _helpText(field.helpText),
+            ],
+          );
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _EditorTextField(
               label: label,
               value: raw?.toString() ?? (field.defaultValue?.toString() ?? ''),
-              onChanged: (v) {
-                setValue(v);
-                if (field.key == 'videoUrl' && v.trim().isNotEmpty) {
-                  // If entering a YouTube URL, clear any uploaded file.
-                  if (currentData.containsKey('videoFileUrl')) {
-                    provider.updateBlockData(blockId, 'videoFileUrl', '');
-                  }
-                }
-              },
+              onChanged: (v) => setValue(v),
             ),
             _buildTextFormattingInspector(
               field: field,
@@ -5581,40 +5559,12 @@ class _GenericBlockControls extends StatelessWidget {
       case WebsiteBlockFieldType.color:
         final current =
             raw?.toString() ?? (field.defaultValue?.toString() ?? '');
-        final preview = _tryParseHexColor(current);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: preview,
-                    borderRadius: BorderRadius.circular(6),
-                    border:
-                        Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _EditorTextField(
-                    label: '',
-                    value: current,
-                    hint: '#RRGGBB',
-                    onChanged: (v) => setValue(v),
-                  ),
-                ),
-              ],
-            ),
-            _helpText(field.helpText),
-          ],
+        return WebsiteColorPickerField(
+          label: label,
+          value: current.isEmpty ? '#000000' : current,
+          helperText: field.helpText,
+          allowAlpha: true,
+          onChanged: (value) => setValue(value),
         );
       case WebsiteBlockFieldType.image:
         final currentUrl = raw?.toString();
@@ -6240,6 +6190,209 @@ class _CanvasBlockControls extends StatelessWidget {
     _setElements(elements);
   }
 
+  void _moveElementToEdge(String elementId, {required bool front}) {
+    final elements = _elements();
+    final idx = elements.indexWhere((e) => e['id']?.toString() == elementId);
+    if (idx == -1 || elements.length < 2) return;
+    final target = front ? elements.length - 1 : 0;
+    if (idx == target) return;
+    final item = elements.removeAt(idx);
+    elements.insert(front ? elements.length : 0, item);
+    _setElements(elements);
+  }
+
+  void _alignElementToCanvas(String elementId, String alignment) {
+    final elements = _elements();
+    final idx = elements.indexWhere((e) => e['id']?.toString() == elementId);
+    if (idx == -1 || elements[idx]['locked'] == true) return;
+
+    final element = elements[idx];
+    final width = (element['w'] as num?)?.toDouble() ?? 200;
+    final height = (element['h'] as num?)?.toDouble() ?? 56;
+    final designWidth = (data['designWidth'] as num?)?.toDouble() ?? 1200.0;
+    final designHeight = (data['designHeight'] as num?)?.toDouble() ??
+        (data['blockHeight'] as num?)?.toDouble() ??
+        750.0;
+    var x = (element['x'] as num?)?.toDouble() ?? 0;
+    var y = (element['y'] as num?)?.toDouble() ?? 0;
+
+    switch (alignment) {
+      case 'left':
+        x = 0;
+        break;
+      case 'hCenter':
+        x = (designWidth - width) / 2;
+        break;
+      case 'right':
+        x = designWidth - width;
+        break;
+      case 'top':
+        y = 0;
+        break;
+      case 'vCenter':
+        y = (designHeight - height) / 2;
+        break;
+      case 'bottom':
+        y = designHeight - height;
+        break;
+    }
+    _updateElement(elementId, {'x': x, 'y': y});
+  }
+
+  Widget _inspectorLayoutAction({
+    required String label,
+    required IconData icon,
+    required VoidCallback? onPressed,
+    Key? key,
+  }) {
+    return Expanded(
+      child: OutlinedButton.icon(
+        key: key,
+        onPressed: onPressed,
+        icon: Icon(icon, size: 16),
+        label: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 10.5),
+        ),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 36),
+          padding: const EdgeInsets.symmetric(horizontal: 7),
+          visualDensity: VisualDensity.compact,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildElementArrangeControls(
+    Map<String, dynamic> active,
+    List<Map<String, dynamic>> elements,
+  ) {
+    final activeId = active['id']?.toString() ?? '';
+    final index = elements.indexWhere((e) => e['id']?.toString() == activeId);
+    final locked = active['locked'] == true;
+    final canMoveBackward = index > 0;
+    final canMoveForward = index >= 0 && index < elements.length - 1;
+
+    return _CollapsibleSection(
+      title: 'Alinear y ordenar',
+      icon: Icons.layers_outlined,
+      initiallyExpanded: true,
+      children: [
+        const Text(
+          'Las acciones relativas también están siempre visibles en el toolbar del lienzo.',
+          style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.3),
+        ),
+        const SizedBox(height: 14),
+        const _SectionHeader('Orden de capas'),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _inspectorLayoutAction(
+              key: const ValueKey('inspector_layer_backward'),
+              label: 'Una atrás',
+              icon: Icons.flip_to_back_rounded,
+              onPressed:
+                  canMoveBackward ? () => _moveElement(activeId, -1) : null,
+            ),
+            const SizedBox(width: 8),
+            _inspectorLayoutAction(
+              key: const ValueKey('inspector_layer_forward'),
+              label: 'Una adelante',
+              icon: Icons.flip_to_front_rounded,
+              onPressed:
+                  canMoveForward ? () => _moveElement(activeId, 1) : null,
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _inspectorLayoutAction(
+              label: 'Al fondo',
+              icon: Icons.vertical_align_bottom_rounded,
+              onPressed: canMoveBackward
+                  ? () => _moveElementToEdge(activeId, front: false)
+                  : null,
+            ),
+            const SizedBox(width: 8),
+            _inspectorLayoutAction(
+              label: 'Al frente',
+              icon: Icons.vertical_align_top_rounded,
+              onPressed: canMoveForward
+                  ? () => _moveElementToEdge(activeId, front: true)
+                  : null,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        const _SectionHeader('Alinear al lienzo'),
+        if (locked) ...[
+          const SizedBox(height: 6),
+          const Text(
+            'Desbloquea la capa para cambiar su posición.',
+            style: TextStyle(color: Colors.white38, fontSize: 11),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _inspectorLayoutAction(
+              label: 'Izquierda',
+              icon: Icons.align_horizontal_left_rounded,
+              onPressed:
+                  locked ? null : () => _alignElementToCanvas(activeId, 'left'),
+            ),
+            const SizedBox(width: 6),
+            _inspectorLayoutAction(
+              label: 'Centro',
+              icon: Icons.align_horizontal_center_rounded,
+              onPressed: locked
+                  ? null
+                  : () => _alignElementToCanvas(activeId, 'hCenter'),
+            ),
+            const SizedBox(width: 6),
+            _inspectorLayoutAction(
+              label: 'Derecha',
+              icon: Icons.align_horizontal_right_rounded,
+              onPressed: locked
+                  ? null
+                  : () => _alignElementToCanvas(activeId, 'right'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _inspectorLayoutAction(
+              label: 'Arriba',
+              icon: Icons.align_vertical_top_rounded,
+              onPressed:
+                  locked ? null : () => _alignElementToCanvas(activeId, 'top'),
+            ),
+            const SizedBox(width: 6),
+            _inspectorLayoutAction(
+              label: 'Medio',
+              icon: Icons.align_vertical_center_rounded,
+              onPressed: locked
+                  ? null
+                  : () => _alignElementToCanvas(activeId, 'vCenter'),
+            ),
+            const SizedBox(width: 6),
+            _inspectorLayoutAction(
+              label: 'Abajo',
+              icon: Icons.align_vertical_bottom_rounded,
+              onPressed: locked
+                  ? null
+                  : () => _alignElementToCanvas(activeId, 'bottom'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   void _addElement(String type) {
     final now = DateTime.now().microsecondsSinceEpoch;
     final id = 'el_$now';
@@ -6338,9 +6491,10 @@ class _CanvasBlockControls extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 12),
-              _EditorTextField(
-                label: 'Color de fondo (hex)',
+              WebsiteColorPickerField(
+                label: 'Color de fondo',
                 value: bg,
+                allowAlpha: true,
                 onChanged: (v) =>
                     provider.updateBlockData(blockId, 'backgroundColor', v),
               ),
@@ -6395,34 +6549,69 @@ class _CanvasBlockControls extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 12),
-              _EditorTextField(
-                label: 'Video URL (mp4/webm) (opcional)',
-                value: backgroundVideoUrl,
-                onChanged: (v) =>
-                    provider.updateBlockData(blockId, 'backgroundVideoUrl', v),
+              const _SectionHeader('Video de fondo'),
+              const SizedBox(height: 8),
+              _VideoPicker(
+                currentUrl: backgroundVideoUrl,
+                onChanged: (url) => provider.updateBlockDataMultiple(
+                  blockId,
+                  {
+                    'backgroundVideoUrl': url,
+                    if (url.isNotEmpty) 'backgroundYoutubeId': '',
+                  },
+                ),
               ),
               const SizedBox(height: 12),
-              _EditorTextField(
-                label: 'YouTube URL / ID (opcional)',
-                value: backgroundYoutubeId,
-                onChanged: (v) {
-                  String id = v;
-                  // Try to extract ID if it looks like a URL
-                  if (v.contains('youtube.com') || v.contains('youtu.be')) {
-                    final regExp = RegExp(
-                      r'^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*',
-                    );
-                    final match = regExp.firstMatch(v);
-                    if (match != null && match.groupCount >= 7) {
-                      final extracted = match.group(7);
-                      if (extracted != null && extracted.isNotEmpty) {
-                        id = extracted;
+              _CollapsibleSection(
+                title: 'Enlaces avanzados',
+                icon: Icons.link_rounded,
+                initiallyExpanded: false,
+                children: [
+                  const Text(
+                    'Usa estas opciones sólo para recursos ya alojados o videos de YouTube.',
+                    style: TextStyle(
+                      color: Colors.white38,
+                      fontSize: 11,
+                      height: 1.3,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorTextField(
+                    label: 'URL directa de video (mp4/webm)',
+                    value: backgroundVideoUrl,
+                    onChanged: (v) => provider.updateBlockData(
+                      blockId,
+                      'backgroundVideoUrl',
+                      v,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorTextField(
+                    label: 'YouTube URL / ID',
+                    value: backgroundYoutubeId,
+                    onChanged: (v) {
+                      String id = v;
+                      if (v.contains('youtube.com') || v.contains('youtu.be')) {
+                        final regExp = RegExp(
+                          r'^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*',
+                        );
+                        final match = regExp.firstMatch(v);
+                        if (match != null && match.groupCount >= 7) {
+                          final extracted = match.group(7);
+                          if (extracted != null && extracted.isNotEmpty) {
+                            id = extracted;
+                          }
+                        }
                       }
-                    }
-                  }
-                  provider.updateBlockData(blockId, 'backgroundYoutubeId', id);
-                },
-                hint: 'Pegue enlace de YouTube o ID',
+                      provider.updateBlockData(
+                        blockId,
+                        'backgroundYoutubeId',
+                        id,
+                      );
+                    },
+                    hint: 'Pega el enlace o ID',
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               _EditorDropdown(
@@ -6444,9 +6633,10 @@ class _CanvasBlockControls extends StatelessWidget {
               ),
               if (overlayEnabled) ...[
                 const SizedBox(height: 12),
-                _EditorTextField(
-                  label: 'Overlay color (hex)',
+                WebsiteColorPickerField(
+                  label: 'Color del overlay',
                   value: overlayColor,
+                  allowAlpha: false,
                   onChanged: (v) =>
                       provider.updateBlockData(blockId, 'overlayColor', v),
                 ),
@@ -6796,6 +6986,8 @@ class _CanvasBlockControls extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          _buildElementArrangeControls(active, elements),
         ],
         if (active != null &&
             (inspectorSection == null ||
@@ -6875,9 +7067,10 @@ class _CanvasBlockControls extends StatelessWidget {
                     onChanged: (v) => _updateElement(activeId!, {'align': v}),
                   ),
                   const SizedBox(height: 12),
-                  _EditorTextField(
-                    label: 'Color (hex)',
+                  WebsiteColorPickerField(
+                    label: 'Color del texto',
                     value: (active['color'] ?? '#111111').toString(),
+                    allowAlpha: true,
                     onChanged: (v) => _updateElement(activeId!, {'color': v}),
                   ),
                   const SizedBox(height: 12),
@@ -6965,16 +7158,18 @@ class _CanvasBlockControls extends StatelessWidget {
                   ),
                   if (active['inheritTheme'] == false) ...[
                     const SizedBox(height: 12),
-                    _EditorTextField(
-                      label: 'Color fondo (hex)',
+                    WebsiteColorPickerField(
+                      label: 'Color del botón',
                       value: (active['bgColor'] ?? '#00A09D').toString(),
+                      allowAlpha: true,
                       onChanged: (v) =>
                           _updateElement(activeId!, {'bgColor': v}),
                     ),
                     const SizedBox(height: 12),
-                    _EditorTextField(
-                      label: 'Color texto (hex)',
+                    WebsiteColorPickerField(
+                      label: 'Color del texto',
                       value: (active['fgColor'] ?? '#FFFFFF').toString(),
+                      allowAlpha: true,
                       onChanged: (v) =>
                           _updateElement(activeId!, {'fgColor': v}),
                     ),
@@ -7073,8 +7268,19 @@ class _CanvasBlockControls extends StatelessWidget {
                   const SizedBox(height: 8),
                   _ImagePicker(
                     currentUrl: (active['imageUrl'] ?? '').toString(),
-                    onChanged: (url) =>
-                        _updateElement(activeId!, {'imageUrl': url}),
+                    allowProductLink: true,
+                    onAssetChanged: (selection) => _updateElement(activeId!, {
+                      'imageUrl': selection.publicUrl,
+                      if (selection.linksProduct) ...{
+                        'productId': selection.productId ?? '',
+                        'imageSource': selection.productImageIndex == 0
+                            ? 'product'
+                            : 'manual',
+                      } else ...{
+                        if (selection.comesFromProduct) 'productId': '',
+                        'imageSource': 'manual',
+                      },
+                    }),
                   ),
                   const SizedBox(height: 12),
                   _EditorTextField(
@@ -7182,16 +7388,18 @@ class _CanvasBlockControls extends StatelessWidget {
                   ),
                 ],
                 if (inspectorSection != _InspectorSection.content) ...[
-                  _EditorTextField(
-                    label: 'Color de relleno (hex)',
+                  WebsiteColorPickerField(
+                    label: 'Color de relleno',
                     value: (active['fillColor'] ?? '#1F2937').toString(),
+                    allowAlpha: true,
                     onChanged: (v) =>
                         _updateElement(activeId!, {'fillColor': v}),
                   ),
                   const SizedBox(height: 12),
-                  _EditorTextField(
-                    label: 'Color de borde (hex)',
+                  WebsiteColorPickerField(
+                    label: 'Color de borde',
                     value: (active['borderColor'] ?? '#1F2937').toString(),
+                    allowAlpha: true,
                     onChanged: (v) =>
                         _updateElement(activeId!, {'borderColor': v}),
                   ),
@@ -7339,31 +7547,6 @@ class _CanvasBlockControls extends StatelessWidget {
                 ],
               ],
               if (inspectorSection == null) ...[
-                const SizedBox(height: 16),
-                const Divider(color: Colors.white12),
-                const SizedBox(height: 8),
-                const _SectionHeader('Capas'),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _moveElement(activeId!, -1),
-                        icon:
-                            const Icon(Icons.arrow_downward_rounded, size: 18),
-                        label: const Text('Enviar atrás'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _moveElement(activeId!, 1),
-                        icon: const Icon(Icons.arrow_upward_rounded, size: 18),
-                        label: const Text('Traer adelante'),
-                      ),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 12),
                 const Divider(color: Colors.white12),
                 const SizedBox(height: 12),
@@ -8537,57 +8720,29 @@ class _ThemeTabState extends State<_ThemeTab> {
           children: [
             const _SectionHeader('COLOR PRINCIPAL'),
             const SizedBox(height: 12),
-            _EditorTextField(
-              label: 'Color Hex',
-              controller: _primaryColorController,
+            WebsiteColorPickerField(
+              label: 'Color principal',
+              value: _primaryColorController.text,
+              allowAlpha: false,
               onChanged: (val) {
-                _primaryColorController.text = val;
+                setState(() => _primaryColorController.text = val);
                 context
                     .read<WebsiteEditModeProvider>()
                     .updateThemeSetting('theme_primary_color', val);
-              },
-              value: _primaryColorController.text,
-              hint: '#00A09D',
-            ),
-            const SizedBox(height: 12),
-            _BackgroundColorControl(
-              currentValue: _primaryColorController.text,
-              onChanged: (val) {
-                if (val != null) {
-                  setState(() => _primaryColorController.text = val);
-                  // Update provider for live preview
-                  context
-                      .read<WebsiteEditModeProvider>()
-                      .updateThemeSetting('theme_primary_color', val);
-                }
               },
             ),
             const SizedBox(height: 24),
             const _SectionHeader('COLOR DE ACENTO'),
             const SizedBox(height: 12),
-            _EditorTextField(
-              label: 'Color Hex',
-              controller: _accentColorController,
+            WebsiteColorPickerField(
+              label: 'Color de acento',
+              value: _accentColorController.text,
+              allowAlpha: false,
               onChanged: (val) {
-                _accentColorController.text = val;
+                setState(() => _accentColorController.text = val);
                 context
                     .read<WebsiteEditModeProvider>()
                     .updateThemeSetting('theme_accent_color', val);
-              },
-              value: _accentColorController.text,
-              hint: '#FF6D00',
-            ),
-            const SizedBox(height: 12),
-            _BackgroundColorControl(
-              currentValue: _accentColorController.text,
-              onChanged: (val) {
-                if (val != null) {
-                  setState(() => _accentColorController.text = val);
-                  // Update provider for live preview
-                  context
-                      .read<WebsiteEditModeProvider>()
-                      .updateThemeSetting('theme_accent_color', val);
-                }
               },
             ),
           ],
@@ -8707,15 +8862,15 @@ class _ThemeTabState extends State<_ThemeTab> {
               style: TextStyle(color: Colors.white38, fontSize: 12),
             ),
             const SizedBox(height: 16),
-            _BackgroundColorControl(
-              currentValue: _pageBackground,
+            WebsiteColorPickerField(
+              label: 'Color de fondo',
+              value: _pageBackground,
+              allowAlpha: false,
               onChanged: (val) {
-                if (val != null) {
-                  setState(() => _pageBackground = val);
-                  context
-                      .read<WebsiteEditModeProvider>()
-                      .updateThemeSetting('theme_background_color', val);
-                }
+                setState(() => _pageBackground = val);
+                context
+                    .read<WebsiteEditModeProvider>()
+                    .updateThemeSetting('theme_background_color', val);
               },
             ),
           ],
@@ -9566,12 +9721,16 @@ class _EditorDropdown extends StatelessWidget {
 
 class _ImagePicker extends StatefulWidget {
   final String? currentUrl;
-  final Function(String) onChanged;
+  final ValueChanged<String>? onChanged;
+  final ValueChanged<WebsiteMediaAsset>? onAssetChanged;
+  final bool allowProductLink;
 
   const _ImagePicker({
     this.currentUrl,
-    required this.onChanged,
-  });
+    this.onChanged,
+    this.onAssetChanged,
+    this.allowProductLink = false,
+  }) : assert(onChanged != null || onAssetChanged != null);
 
   @override
   State<_ImagePicker> createState() => _ImagePickerState();
@@ -9750,6 +9909,25 @@ class _VideoPickerState extends State<_VideoPicker> {
 class _ImagePickerState extends State<_ImagePicker> {
   bool _isRemovingBackground = false;
 
+  void _emitAsset(WebsiteMediaAsset asset) {
+    final onAssetChanged = widget.onAssetChanged;
+    if (onAssetChanged != null) {
+      onAssetChanged(asset);
+      return;
+    }
+    widget.onChanged?.call(asset.publicUrl);
+  }
+
+  void _emitUrl(String url) {
+    _emitAsset(
+      WebsiteMediaAsset(
+        name: url.isEmpty ? 'Sin imagen' : 'Imagen seleccionada',
+        path: url,
+        publicUrl: url,
+      ),
+    );
+  }
+
   Future<String?> _currentTenantId() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return null;
@@ -9781,7 +9959,7 @@ class _ImagePickerState extends State<_ImagePicker> {
             prefix: 'block-no-bg',
           );
       if (!mounted) return;
-      widget.onChanged(resultUrl);
+      _emitUrl(resultUrl);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Fondo eliminado y PNG guardado en la biblioteca.'),
@@ -9805,8 +9983,9 @@ class _ImagePickerState extends State<_ImagePicker> {
       final selection = await showWebsiteMediaPicker(
         context: context,
         currentUrl: widget.currentUrl,
+        allowProductLink: widget.allowProductLink,
       );
-      if (selection != null) widget.onChanged(selection.publicUrl);
+      if (selection != null) _emitAsset(selection);
     } catch (e) {
       debugPrint('Error selecting image: $e');
       if (mounted) {
@@ -9876,7 +10055,7 @@ class _ImagePickerState extends State<_ImagePicker> {
                             _buildActionButton(
                               icon: Icons.delete,
                               tooltip: 'Eliminar',
-                              onTap: () => widget.onChanged(''),
+                              onTap: () => _emitUrl(''),
                               isDestructive: true,
                             ),
                           ],
@@ -9901,7 +10080,7 @@ class _ImagePickerState extends State<_ImagePicker> {
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        'Haz clic para subir imagen',
+                        'Haz clic para elegir imagen',
                         style: TextStyle(
                           color: Color(0xFF00A09D),
                           fontSize: 13,
@@ -9966,215 +10145,38 @@ class _ColorField extends StatefulWidget {
 }
 
 class _ColorFieldState extends State<_ColorField> {
-  static const List<Color> presetColors = [
-    Colors.white,
-    Color(0xFFF5F5F5),
-    Color(0xFFE0E0E0),
-    Color(0xFF9E9E9E),
-    Color(0xFF616161),
-    Color(0xFF212121),
-    Colors.black,
-    Color(0xFFEF5350), // Red
-    Color(0xFFEC407A), // Pink
-    Color(0xFFAB47BC), // Purple
-    Color(0xFF7E57C2), // Deep Purple
-    Color(0xFF5C6BC0), // Indigo
-    Color(0xFF42A5F5), // Blue
-    Color(0xFF29B6F6), // Light Blue
-    Color(0xFF26C6DA), // Cyan
-    Color(0xFF26A69A), // Teal
-    Color(0xFF66BB6A), // Green
-    Color(0xFF9CCC65), // Light Green
-    Color(0xFFD4E157), // Lime
-    Color(0xFFFFEE58), // Yellow
-    Color(0xFFFFCA28), // Amber
-    Color(0xFFFFA726), // Orange
-    Color(0xFFFF7043), // Deep Orange
-  ];
-
-  Color _parseColor(String value) {
-    try {
-      String hex = value.replaceAll('#', '');
-      if (hex.length == 6) {
-        return Color(int.parse('FF$hex', radix: 16));
-      }
-    } catch (_) {}
-    return Colors.grey;
-  }
-
   String _colorToHex(Color color) {
-    return '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
+    return serializeWebsiteEditorColor(color, includeAlpha: true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentColor = _parseColor(widget.controller.text);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          widget.label,
-          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        WebsiteColorPickerField(
+          label: widget.label,
+          value: widget.controller.text.isEmpty
+              ? '#FFFFFF'
+              : widget.controller.text,
+          allowAlpha: true,
+          onChanged: (value) {
+            widget.controller.text = value;
+            widget.onChanged?.call();
+            setState(() {});
+          },
         ),
         const SizedBox(height: 8),
-        // Color preview + hex input row
-        Row(
-          children: [
-            // Clickable color swatch to open FULL picker dialog
-            GestureDetector(
-              onTap: () {
-                // Open full color picker dialog
-                showDialog(
-                  context: context,
-                  builder: (context) {
-                    return AlertDialog(
-                      title: const Text('Seleccionar color'),
-                      content: SingleChildScrollView(
-                        child: ColorPicker(
-                          pickerColor: currentColor,
-                          onColorChanged: (color) {
-                            widget.controller.text = _colorToHex(color);
-                            widget.onChanged?.call();
-                            // Force rebuild of parent text field to show new color
-                            setState(() {});
-                          },
-                          // Use simple picker for cleaner UI, or full for power
-                          enableAlpha: true,
-                          displayThumbColor: true,
-                          paletteType: PaletteType.hsvWithHue,
-                          pickerAreaHeightPercent: 0.8,
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          child: const Text('Listo'),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              },
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: currentColor,
-                  borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.3)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: currentColor.withValues(alpha: 0.4),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.palette, // Better icon for "Open Picker"
-                  color: Colors.white70,
-                  size: 18,
-                ),
-              ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () => _activateEyedropper(context),
+            icon: const Icon(Icons.colorize, size: 16),
+            label: const Text('Tomar color de la página'),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF20C5C1),
+              visualDensity: VisualDensity.compact,
             ),
-            const SizedBox(width: 8),
-            // Eyedropper Button
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: const Color(0xFF2D2D2D), // Dark bg for tool button
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-              ),
-              child: IconButton(
-                icon:
-                    const Icon(Icons.colorize, size: 18, color: Colors.white70),
-                tooltip: 'Pipeta (Seleccionar de la pantalla)',
-                onPressed: () => _activateEyedropper(context),
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Hex input
-            Expanded(
-              child: TextFormField(
-                controller: widget.controller,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-                decoration: InputDecoration(
-                  hintText: '#FFFFFF',
-                  hintStyle: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.3), fontSize: 13),
-                  filled: true,
-                  fillColor: const Color(0xFF2D2D2D),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                onChanged: (_) {
-                  setState(() {});
-                  widget.onChanged?.call();
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        // Preset colors grid
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-          ),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: presetColors.map((color) {
-              final isSelected = currentColor.toARGB32() == color.toARGB32();
-              return GestureDetector(
-                onTap: () {
-                  widget.controller.text = _colorToHex(color);
-                  widget.onChanged?.call();
-                  setState(() {});
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: isSelected ? Colors.blue : Colors.white24,
-                      width: isSelected ? 2 : 1,
-                    ),
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: Colors.blue.withValues(alpha: 0.4),
-                              blurRadius: 6,
-                            )
-                          ]
-                        : null,
-                  ),
-                  child: isSelected
-                      ? Icon(
-                          Icons.check,
-                          size: 16,
-                          color: color.computeLuminance() > 0.5
-                              ? Colors.black
-                              : Colors.white,
-                        )
-                      : null,
-                ),
-              );
-            }).toList(),
           ),
         ),
       ],
@@ -10481,10 +10483,9 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
           maxLines: 2,
         ),
         const SizedBox(height: 12),
-        _EditorTextField(
-          label: 'URL Imagen de fondo',
-          value: widget.data['imageUrl']?.toString() ?? '',
-          onChanged: (v) => _updateField('imageUrl', v),
+        _ImagePicker(
+          currentUrl: widget.data['imageUrl']?.toString() ?? '',
+          onChanged: (url) => _updateField('imageUrl', url),
         ),
         const SizedBox(height: 20),
 
@@ -10502,38 +10503,7 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
         ),
         const SizedBox(height: 12),
 
-        // YouTube URL option
-        _EditorTextField(
-          label: 'URL de YouTube',
-          value: widget.data['videoUrl']?.toString() ?? '',
-          onChanged: (v) {
-            _updateField('videoUrl', v);
-            // Clear file URL if entering YouTube URL
-            if (v.isNotEmpty) {
-              _updateField('videoFileUrl', '');
-            }
-          },
-          hint: 'https://youtube.com/watch?v=...',
-        ),
-
-        const SizedBox(height: 12),
-
-        // Divider with "o" (or)
-        const Row(
-          children: [
-            Expanded(child: Divider(color: Colors.white24)),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: Text('o',
-                  style: TextStyle(color: Colors.white38, fontSize: 12)),
-            ),
-            Expanded(child: Divider(color: Colors.white24)),
-          ],
-        ),
-
-        const SizedBox(height: 12),
-
-        // Upload video file button
+        // Upload/file selection is the primary workflow.
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
@@ -10613,6 +10583,25 @@ class _VideoBannerBlockControlsState extends State<_VideoBannerBlockControls> {
             ),
           ),
         ],
+        const SizedBox(height: 12),
+        _CollapsibleSection(
+          title: 'YouTube / enlace avanzado',
+          icon: Icons.link_rounded,
+          initiallyExpanded: hasYoutubeUrl,
+          children: [
+            _EditorTextField(
+              label: 'URL de YouTube',
+              value: widget.data['videoUrl']?.toString() ?? '',
+              onChanged: (v) {
+                _updateField('videoUrl', v);
+                if (v.isNotEmpty) {
+                  _updateField('videoFileUrl', '');
+                }
+              },
+              hint: 'https://youtube.com/watch?v=...',
+            ),
+          ],
+        ),
 
         const SizedBox(height: 20),
 
@@ -10736,10 +10725,11 @@ class _PartnersBannerBlockControlsState
           onChanged: (v) => _updateField('title', v),
         ),
         const SizedBox(height: 12),
-        _EditorTextField(
-          label: 'URL Imagen de fondo',
-          value: widget.data['imageUrl']?.toString() ?? '',
-          onChanged: (v) => _updateField('imageUrl', v),
+        const _SectionHeader('Imagen de fondo'),
+        const SizedBox(height: 8),
+        _ImagePicker(
+          currentUrl: widget.data['imageUrl']?.toString() ?? '',
+          onChanged: (url) => _updateField('imageUrl', url),
         ),
         const SizedBox(height: 20),
         const Text('Elementos de lista',
@@ -10885,11 +10875,16 @@ class _BrandLogosBlockControlsState extends State<_BrandLogosBlockControls> {
           onChanged: (v) => _updateField('title', v),
         ),
         const SizedBox(height: 12),
-        _EditorTextField(
+        WebsiteColorPickerField(
           label: 'Color de acento (línea bajo título)',
-          value: widget.data['accentColor']?.toString() ?? '',
+          value: (widget.data['accentColor']?.toString().isNotEmpty ?? false)
+              ? widget.data['accentColor'].toString()
+              : '#E53935',
+          allowAlpha: true,
+          allowTransparent: true,
+          helperText:
+              'Elige “Sin color” dentro del selector si no quieres mostrar la línea.',
           onChanged: (v) => _updateField('accentColor', v),
-          hint: '#E53935 o dejar vacío',
         ),
         const SizedBox(height: 16),
         // Logo size selector
@@ -15186,55 +15181,12 @@ class _BorderColorPicker extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final colors = [
-      '#E0E0E0', // Light gray
-      '#9E9E9E', // Gray
-      '#424242', // Dark gray
-      '#000000', // Black
-      '#00A09D', // Brand teal
-      '#FF6D00', // Orange
-      '#1976D2', // Blue
-      '#D32F2F', // Red
-    ];
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: colors.map((color) {
-        final isSelected = color.toLowerCase() == currentColor.toLowerCase();
-        return GestureDetector(
-          onTap: () => onChanged(color),
-          child: Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: _hexToColor(color),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isSelected ? Colors.white : Colors.white24,
-                width: isSelected ? 2 : 1,
-              ),
-            ),
-            child: isSelected
-                ? Icon(Icons.check,
-                    size: 14,
-                    color: _hexToColor(color).computeLuminance() > 0.5
-                        ? Colors.black
-                        : Colors.white)
-                : null,
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Color _hexToColor(String hex) {
-    final buffer = StringBuffer();
-    if (hex.length == 6 || hex.length == 7) buffer.write('ff');
-    buffer.write(hex.replaceFirst('#', ''));
-    return Color(int.parse(buffer.toString(), radix: 16));
-  }
+  Widget build(BuildContext context) => WebsiteColorPickerField(
+        label: 'Color del borde',
+        value: currentColor,
+        allowAlpha: true,
+        onChanged: onChanged,
+      );
 }
 
 /// Box shadow control
@@ -15378,83 +15330,18 @@ class _BackgroundColorControl extends StatelessWidget {
   const _BackgroundColorControl({this.currentValue, required this.onChanged});
 
   @override
-  Widget build(BuildContext context) {
-    // Preset colors maintaining the dark/professional vibe
-    final presets = [
-      null, // Transparent/None
-      '#FFFFFF', // White
-      '#F8F9FA', // Light Gray
-      '#1A1A1A', // Dark
-      '#00A09D', // Brand Primary
-      '#2D2D2D', // UI Dark
-    ];
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: presets.map((color) {
-        final isSelected = color == currentValue ||
-            (color == null && (currentValue == null || currentValue!.isEmpty));
-
-        if (color == null) {
-          return _buildColorOption(
-            context,
-            color: Colors.transparent,
-            isSelected: isSelected,
-            isNone: true,
-            onTap: () => onChanged(null),
+  Widget build(BuildContext context) => WebsiteColorPickerField(
+        label: 'Color',
+        value: (currentValue == null || currentValue!.isEmpty)
+            ? '#00000000'
+            : currentValue!,
+        allowAlpha: true,
+        allowTransparent: true,
+        onChanged: (value) {
+          final color = parseWebsiteEditorColor(value);
+          onChanged(
+            websiteEditorColorOpacity(color) == 0 ? null : value,
           );
-        }
-
-        return _buildColorOption(
-          context,
-          color: _hexToColor(color),
-          isSelected: isSelected,
-          onTap: () => onChanged(color),
-        );
-      }).toList(),
-    );
-  }
-
-  Color _hexToColor(String hex) {
-    final buffer = StringBuffer();
-    if (hex.length == 6 || hex.length == 7) buffer.write('ff');
-    buffer.write(hex.replaceFirst('#', ''));
-    return Color(int.parse(buffer.toString(), radix: 16));
-  }
-
-  Widget _buildColorOption(
-    BuildContext context, {
-    required Color color,
-    required bool isSelected,
-    required VoidCallback onTap,
-    bool isNone = false,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: isSelected ? const Color(0xFF00A09D) : Colors.white24,
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: isNone
-            ? const Icon(Icons.block, size: 16, color: Colors.white54)
-            : (isSelected
-                ? Icon(
-                    Icons.check,
-                    size: 16,
-                    color: color.computeLuminance() > 0.5
-                        ? Colors.black
-                        : Colors.white,
-                  )
-                : null),
-      ),
-    );
-  }
+        },
+      );
 }

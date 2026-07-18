@@ -325,7 +325,10 @@ inspector, backgrounds, logos, galleries, categorías, productos y Canvas.
 1. `Biblioteca`: buscar/reutilizar assets, recientes, tipo, dimensiones,
    transparencia y usos.
 2. `Subir`: click o drop, progreso, validación, retry y preservación de PNG/WebP.
-3. `Producto`: elegir imagen real del catálogo cuando el campo permite binding.
+3. `Productos`: buscar por nombre, SKU, marca o categoría y reutilizar la
+   imagen principal o una variante de galería sin duplicar el asset. Los campos
+   genéricos usan sólo la imagen; una capa Canvas compatible ofrece de forma
+   explícita `Usar sólo imagen` o `Vincular producto`.
 4. `URL`: sólo en `Opciones avanzadas`.
 
 El picker retorna una referencia estructurada con asset, URL compatible, alt,
@@ -645,6 +648,10 @@ copy/destino no se duplican por dispositivo.
 - Seleccionar, abrir crop, cambiar tab o hacer scroll no habilita Guardar.
 - Un gesto equivale a un undo.
 - Todo campo de imagen usa el picker visual; URL es secundaria.
+- Todo color usa el selector visual compartido con paleta y opacidad explícita;
+  hexadecimal/ARGB queda sólo en opciones avanzadas.
+- Todo medio basado en archivo presenta biblioteca/subida/picker antes que URL
+  o identificadores avanzados.
 - Transparencia PNG/WebP se conserva.
 - Toda CTA usa acción/destino universal y reaparece en auditoría de destinos.
 - Tema global llega a todos los bloques salvo override explícito visible.

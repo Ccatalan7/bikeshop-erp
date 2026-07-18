@@ -2,7 +2,7 @@
 
 **Status:** Mandatory for every Website Builder, public storefront, campaign,
 and editor-management change  
-**Last updated:** 2026-07-14
+**Last updated:** 2026-07-18
 
 This document is the current engineering contract for the Viñabike Website
 Editor. Read it before changing website editor controls, blocks, renderers,
@@ -221,6 +221,26 @@ every field in `block_data`. It must preserve professional editor conventions:
   formatting; image fit/crop/reframe; button presentation; shape form) plus a
   compact universal set for rotation, alignment, arrangement, duplicate, and
   delete. Secondary and precise controls remain in the right inspector.
+- Canvas toolbars use a stable, shallow hierarchy. The primary rail contains
+  the selected type's frequent actions, **move one layer backward/forward**,
+  Arrange, More, Duplicate, and Delete. Relative layer order must never be
+  buried behind a generic ellipsis. Arrange is one in-place palette containing
+  the four layer-order commands plus six canvas-alignment commands; More is one
+  in-place palette for precise-inspector handoff, rotation/reset, lock, and
+  genuinely secondary type actions. A palette returns directly to the primary
+  rail; there are no palette-inside-palette flows.
+- Type-specific primary actions follow the same contract everywhere: images
+  lead with a labelled Replace action, fit and crop; text leads with
+  bold/italic/underline, a compact size stepper and an explicit alignment
+  palette; buttons lead with presentation variants; shapes lead with form;
+  catalog layers expose their frequent layout/price switches. Less frequent
+  media processing and exact values stay in More or the inspector rather than
+  expanding the rail into a permanent second row.
+- The selected layer's **Design** inspector mirrors alignment and all four
+  layer-order operations using labelled controls, disables impossible boundary
+  actions, and keeps X/Y/width/height/rotation as the precision path. Inline
+  and inspector controls update the same element list and saved properties;
+  neither surface owns a private transform.
 - Every transformable Canvas layer exposes direct edge/corner resize handles
   and a rotation handle. The inspector remains the accessible precision
   fallback for X/Y/width/height/rotation, so a capability is neither
@@ -352,6 +372,18 @@ list and reuse `CanvasBlock` plus `_CanvasBlockControls`.
 Every image field must offer the canonical visual picker/upload workflow as the
 primary action.
 
+- The canonical picker exposes `Biblioteca`, `Productos`, `Subir`, and
+  `URL avanzada`. `Productos` is tenant-scoped and searches product name, SKU,
+  brand, and category; products without an image remain visible with an
+  explicit unavailable state instead of silently disappearing.
+- Reusing a product image must not upload or duplicate the asset. Generic image
+  fields consume only the selected image URL. Product-aware Canvas image layers
+  additionally offer two explicit outcomes: `Usar sólo imagen` or
+  `Vincular producto`.
+- A linked Canvas image stores the real product id and follows the catalog's
+  primary image. Selecting a non-primary gallery image may retain the product
+  relationship while using an explicit manual image source so the chosen
+  variant is not silently replaced.
 - Raw URL entry may exist only as a collapsed secondary/advanced option.
 - Reuse `InlineEditableImage` or the shared schema-routed media control. Never
   create a block-local URL-only dialog.
@@ -378,6 +410,28 @@ primary action.
   and tenant-scoped through `website-remove-background`, and states that it
   consumes one provider credit. Provider secrets never enter Flutter or saved
   block data.
+
+## Visual-input contract
+
+Inspector controls describe design intent in the language of a professional
+editor. Serialized values remain an implementation detail.
+
+- All color fields route through `WebsiteColorPickerField`. The collapsed
+  inspector shows a swatch, a readable color family, and explicit opacity. The
+  picker exposes the site palette, recent colors, a full visual selector, and
+  opacity; hexadecimal/ARGB input exists only under `Código avanzado`.
+- Existing `#RRGGBB` and `#AARRGGBB` values must round-trip unchanged. When a
+  renderer accepts alpha, the inspector must expose that alpha as an ordinary
+  percentage/slider rather than hiding it in the first two hex digits.
+- Media backed by a user file leads with library/upload/file selection. Direct
+  URLs and provider IDs are collapsed advanced sources for already hosted
+  media, never the first or only workflow.
+- Schema fields, Canvas layers, block-specific inspectors, header/footer, and
+  global `Tema` consume the same controls. A new block may declare capability
+  metadata, but it must not create its own palette, raw color field, or
+  URL-first uploader.
+- Visual changes still stage through `WebsiteEditModeProvider`, use global
+  `Guardar`, and render identically in Edit, Preview, and public mode.
 
 ## Page navigation inside the editor
 
@@ -440,7 +494,7 @@ reused:
 | CTA label, destination, and presentation | `WebsiteActionValue`, `WebsiteActionEditor`, `WebsiteActionButton` |
 | Destination selection | `WebsiteLinkValueEditor` and typed `WebsiteDestination` |
 | Formatted inline text | `InlineEditableTextV2`, `TextFormattingToolbar` |
-| Images | `InlineEditableImage` / shared media picker |
+| Images | `InlineEditableImage` / shared media picker with Library, Products, Upload, and Advanced URL sources |
 | Cover focal point | `FocalPointPicker` |
 | Global typography/colors/buttons | `WebsiteThemeBuilder` and saved theme settings |
 | Layered composition | `CanvasBlock`, `_CanvasBlockControls`, `DeferredCanvasBlock` |

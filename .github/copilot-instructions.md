@@ -4865,7 +4865,7 @@ Current canonical controls/capabilities:
 - Visible CTA action (label, destination, presentation): `WebsiteActionValue`, `WebsiteActionEditor`, and `WebsiteActionButton`. Banner, carousel, pricing, products “Ver todos”, standalone, and Canvas buttons must use this contract rather than private label/link widgets or renderers.
 - Inline formatted text: `InlineEditableTextV2` + `TextFormattingToolbar` with explicit toolbar presets.
 - Layered campaign composition: `CanvasBlock` + `_CanvasBlockControls` + `DeferredCanvasBlock`. Carousel slides with `useComposition` must store their editable `elements` inside the slide and reuse this same renderer and inspector for text, images, shapes, products, galleries, and buttons. Never flatten a designed campaign into one poster image when copy, product imagery, geometry, or CTA can remain editor-native layers. Desktop/mobile variants use the same element schema and its editor-visible responsive visibility controls.
-- Canvas contextual editing is a shared professional interaction system, not block-local buttons added case by case. All layer creation paths must use `createCanvasElement`; selected transformable layers expose eight edge/corner handles, direct rotation, keyboard nudging, alignment/arrangement, duplicate/delete, and type-specific primary actions through `CanvasElementToolbar`, with precise fallbacks in `_CanvasBlockControls`. Image crop is non-destructive frame editing: persist the frame (`x/y/w/h`), `fit`, normalized `focalPointX/Y`, and rotation; keep crop mode transient; and consume the same values in Edit, Preview, and public rendering. Keep selection chrome above the bounded carousel content clip so handles remain reachable without letting transformed content overflow the slide. Every direct-manipulation target must remain fully inside a hit-testable parent (paint overflow from `Clip.none` is not hit-test overflow); never begin a rotation gesture at the element center; and never use `Tooltip`, `PopupMenuButton`, `MenuAnchor`, `showMenu`, or another `OverlayPortal` inside transformed selection chrome or the rapidly rebuilding positioned Canvas toolbar. Use semantics plus a local non-interactive hover label and in-place secondary palettes. Verify real drag rotation at responsive scale and on a short layer, not only the presence of an icon or field.
+- Canvas contextual editing is a shared professional interaction system, not block-local buttons added case by case. All layer creation paths must use `createCanvasElement`; selected transformable layers expose eight edge/corner handles, direct rotation, keyboard nudging, alignment/arrangement, duplicate/delete, and type-specific primary actions through `CanvasElementToolbar`, with precise fallbacks in `_CanvasBlockControls`. Keep the primary rail shallow and predictable: frequent type actions, direct one-step backward/forward layer order, Arrange, More, Duplicate, and Delete. Arrange contains all four order commands plus canvas alignment in one in-place palette; More contains secondary transforms and inspector handoff. Never hide relative order behind an ellipsis or require a palette-inside-palette flow. Mirror full alignment/order in the selected layer's Design inspector with labelled controls and the same persisted element list. Image crop is non-destructive frame editing: persist the frame (`x/y/w/h`), `fit`, normalized `focalPointX/Y`, and rotation; keep crop mode transient; and consume the same values in Edit, Preview, and public rendering. Keep selection chrome above the bounded carousel content clip so handles remain reachable without letting transformed content overflow the slide. Every direct-manipulation target must remain fully inside a hit-testable parent (paint overflow from `Clip.none` is not hit-test overflow); never begin a rotation gesture at the element center; and never use `Tooltip`, `PopupMenuButton`, `MenuAnchor`, `showMenu`, or another `OverlayPortal` inside transformed selection chrome or the rapidly rebuilding positioned Canvas toolbar. Use semantics plus a local non-interactive hover label and in-place secondary palettes. Verify real drag rotation at responsive scale and on a short layer, not only the presence of an icon or field.
 - Click-to-replace images: `InlineEditableImage` / the shared image picker path, not ad-hoc URL-only controls.
 - Cover/background focal point: `FocalPointPicker`, promoted as the shared focal-point control for every cover/background image.
 - Block field controls: schema-driven `WebsiteBlockFieldSchema` rendering where the field type can describe the capability.
@@ -4898,6 +4898,29 @@ complete editor control and must not be shipped.
 - The asset selected in the picker, its alt/focal/responsive metadata, the edit
   preview, and the public renderer must round-trip through the same persisted
   editor value.
+
+### Mandatory visual input rule
+
+The Website Builder must present human, visual controls before serialized
+implementation values. Raw codes are compatibility tools, not the normal user
+experience.
+
+- Every color capability must use the shared visual color picker as its primary
+  control. Show a real swatch, site palette, full visual selector, recent
+  colors, and an explicit opacity percentage/slider when alpha is supported.
+  Never make users infer transparency from an eight-digit ARGB/hex code.
+- Hex/ARGB, CSS values, raw identifiers, and similar exact values may remain
+  only inside a clearly collapsed `Código avanzado` section for copying,
+  interchange, or precision entry. Do not expose them as the default inspector
+  field or duplicate the visual control beside them.
+- Image, video, audio, and file-backed capabilities must lead with the shared
+  library/upload/file picker. A URL can remain only as a collapsed advanced
+  source for already hosted media. Do not put an URL field before the picker.
+- Apply these rules through shared schema-routed controls across Canvas,
+  carousel, block inspectors, header/footer, and `Tema`; do not build a local
+  palette or uploader for one block.
+- The visual control must round-trip the existing stored representation without
+  silently discarding alpha, product/media ownership, or renderer behavior.
 
 Do not add block-local duplicates such as a second link picker, a second text formatting toolbar, a block-only focal point picker, a local color picker, or a one-off image position control unless the task is explicitly to prototype a replacement. If a duplicate already exists and you touch that area, either migrate it to the canonical control or document why it remains temporarily as compatibility debt.
 

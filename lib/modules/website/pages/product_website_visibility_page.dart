@@ -11,8 +11,8 @@ import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/branded_loading.dart';
-import '../../../shared/widgets/main_layout.dart';
 import '../services/website_service.dart';
+import '../widgets/website_admin_ui.dart';
 
 enum _CatalogKindFilter { all, products, services }
 
@@ -980,9 +980,6 @@ class _ProductWebsiteVisibilityPageState
         .length;
   }
 
-  int get _readyCount => _products
-      .where((product) => product.hasImage && product.hasWebsiteDescription)
-      .length;
   int get _missingImageCount =>
       _products.where((product) => !product.hasImage).length;
   int get _missingDescriptionCount =>
@@ -991,69 +988,37 @@ class _ProductWebsiteVisibilityPageState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final body = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (widget.section == WebsiteCatalogSection.products)
-          _buildHeader(theme),
-        if (_isLoading)
-          const Expanded(child: Center(child: BrandedLoading()))
-        else if (_error != null)
-          Expanded(child: _buildErrorState(theme))
-        else if (_showCategorySelectionPage)
-          Expanded(child: _buildCategorySelectionPage(theme))
-        else ...[
-          _buildSummaryStrip(theme),
-          _buildPublicRulesPanel(theme),
-          _buildFilterPanel(theme),
-          _buildActionBar(theme),
-          Expanded(child: _buildProductTable(theme)),
-        ],
+    return WebsiteAdminShell(
+      embedded: widget.embedded,
+      title: widget.section == WebsiteCatalogSection.categories
+          ? 'Categorías del catálogo'
+          : 'Catálogo web',
+      description: widget.section == WebsiteCatalogSection.categories
+          ? 'Decide qué familias organizan la experiencia pública.'
+          : 'Controla qué productos y servicios puede encontrar el cliente.',
+      actions: [
+        IconButton.outlined(
+          tooltip: 'Actualizar catálogo',
+          onPressed: _isApplying ? null : _loadProducts,
+          icon: const Icon(Icons.refresh_rounded, size: 19),
+        ),
       ],
-    );
-
-    if (widget.embedded) return body;
-    return MainLayout(child: body);
-  }
-
-  Widget _buildHeader(ThemeData theme) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, widget.embedded ? 12 : 18, 16, 12),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (!widget.embedded) ...[
-            IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () => context.go('/website'),
-              tooltip: 'Volver',
-            ),
-            const SizedBox(width: 8),
+          if (_isLoading)
+            const Expanded(child: Center(child: BrandedLoading()))
+          else if (_error != null)
+            Expanded(child: _buildErrorState(theme))
+          else if (_showCategorySelectionPage)
+            Expanded(child: _buildCategorySelectionPage(theme))
+          else ...[
+            _buildSummaryStrip(theme),
+            _buildPublicRulesPanel(theme),
+            _buildFilterPanel(theme),
+            _buildActionBar(theme),
+            Expanded(child: _buildProductTable(theme)),
           ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Visibilidad de productos',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Controla qué productos y servicios aparecen en la tienda online.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            tooltip: 'Actualizar',
-            onPressed: _isApplying ? null : _loadProducts,
-            icon: const Icon(Icons.refresh),
-          ),
         ],
       ),
     );
@@ -1069,85 +1034,76 @@ class _ProductWebsiteVisibilityPageState
         border: Border.all(color: theme.colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Wrap(
-        spacing: 20,
-        runSpacing: 10,
-        children: [
-          _buildSummaryMetric(
-            theme,
-            'Catálogo',
-            _products.length.toString(),
-            tooltip: 'Total de productos y servicios del ERP.',
-          ),
-          _buildSummaryMetric(
-            theme,
-            'Productos públicos',
-            _publicProductCount.toString(),
-            tooltip:
-                'Coincide con /productos: activo, publicado, web encendido y pasa las reglas de stock, imagen y categorías. Click para ver la lista.',
-            selected:
-                _publicCatalogListView == _PublicCatalogListView.publicProducts,
-            onTap: () => _showPublicCatalogListView(
-              _PublicCatalogListView.publicProducts,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _buildSummaryMetric(
+              theme,
+              'Catálogo',
+              _products.length.toString(),
+              tooltip: 'Total de productos y servicios del ERP.',
             ),
-          ),
-          _buildSummaryMetric(
-            theme,
-            'Servicios públicos',
-            _publicServiceCount.toString(),
-            tooltip:
-                'Coincide con /servicios: activo, publicado, web encendido y pasa las reglas públicas. Click para ver la lista.',
-            selected:
-                _publicCatalogListView == _PublicCatalogListView.publicServices,
-            onTap: () => _showPublicCatalogListView(
-              _PublicCatalogListView.publicServices,
+            _buildSummaryMetric(
+              theme,
+              'Productos públicos',
+              _publicProductCount.toString(),
+              tooltip:
+                  'Coincide con /productos: activo, publicado, web encendido y pasa las reglas de stock, imagen y categorías. Click para ver la lista.',
+              selected: _publicCatalogListView ==
+                  _PublicCatalogListView.publicProducts,
+              onTap: () => _showPublicCatalogListView(
+                _PublicCatalogListView.publicProducts,
+              ),
             ),
-          ),
-          _buildSummaryMetric(
-            theme,
-            'Marcados web',
-            _markedWebCount.toString(),
-            tooltip:
-                'Productos y servicios con publicación web activa antes de las reglas del catálogo público. Click para ver la lista.',
-            selected:
-                _publicCatalogListView == _PublicCatalogListView.markedWeb,
-            onTap: () => _showPublicCatalogListView(
-              _PublicCatalogListView.markedWeb,
+            _buildSummaryMetric(
+              theme,
+              'Servicios públicos',
+              _publicServiceCount.toString(),
+              tooltip:
+                  'Coincide con /servicios: activo, publicado, web encendido y pasa las reglas públicas. Click para ver la lista.',
+              selected: _publicCatalogListView ==
+                  _PublicCatalogListView.publicServices,
+              onTap: () => _showPublicCatalogListView(
+                _PublicCatalogListView.publicServices,
+              ),
             ),
-          ),
-          _buildSummaryMetric(
-            theme,
-            'Ocultos por reglas',
-            _policyBlockedWebCount.toString(),
-            tooltip:
-                'Marcados para web, pero no salen en el catálogo por las reglas de stock, imagen o categoría. Click para ver la lista.',
-            selected:
-                _publicCatalogListView == _PublicCatalogListView.hiddenByRules,
-            onTap: () => _showPublicCatalogListView(
-              _PublicCatalogListView.hiddenByRules,
+            _buildSummaryMetric(
+              theme,
+              'Marcados web',
+              _markedWebCount.toString(),
+              tooltip:
+                  'Productos y servicios con publicación web activa antes de las reglas del catálogo público. Click para ver la lista.',
+              selected:
+                  _publicCatalogListView == _PublicCatalogListView.markedWeb,
+              onTap: () => _showPublicCatalogListView(
+                _PublicCatalogListView.markedWeb,
+              ),
             ),
-          ),
-          _buildSummaryMetric(
-            theme,
-            'Listos',
-            _readyCount.toString(),
-            tooltip: 'Tienen imagen y descripción web.',
-          ),
-          _buildSummaryMetric(
-            theme,
-            'Sin imagen',
-            _missingImageCount.toString(),
-          ),
-          _buildSummaryMetric(
-            theme,
-            'Sin descripción web',
-            _missingDescriptionCount.toString(),
-          ),
-          _buildSummaryMetric(
-              theme, 'Resultado', _filteredProducts.length.toString()),
-          _buildSummaryMetric(
-              theme, 'Seleccionados', _selectedProductIds.length.toString()),
-        ],
+            _buildSummaryMetric(
+              theme,
+              'Ocultos por reglas',
+              _policyBlockedWebCount.toString(),
+              tooltip:
+                  'Marcados para web, pero no salen en el catálogo por las reglas de stock, imagen o categoría. Click para ver la lista.',
+              selected: _publicCatalogListView ==
+                  _PublicCatalogListView.hiddenByRules,
+              onTap: () => _showPublicCatalogListView(
+                _PublicCatalogListView.hiddenByRules,
+              ),
+            ),
+            _buildSummaryMetric(
+              theme,
+              'Sin imagen',
+              _missingImageCount.toString(),
+            ),
+            _buildSummaryMetric(
+              theme,
+              'Sin descripción web',
+              _missingDescriptionCount.toString(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1164,33 +1120,18 @@ class _ProductWebsiteVisibilityPageState
     final foreground =
         selected ? theme.colorScheme.primary : theme.colorScheme.onSurface;
     final metric = Container(
-      padding: interactive
-          ? const EdgeInsets.symmetric(horizontal: 8, vertical: 5)
-          : EdgeInsets.zero,
-      decoration: interactive
-          ? BoxDecoration(
-              color: selected
-                  ? theme.colorScheme.primary.withValues(alpha: 0.08)
-                  : theme.colorScheme.surface.withValues(alpha: 0.72),
-              border: Border.all(
-                color: selected
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.outlineVariant,
-              ),
-              borderRadius: BorderRadius.circular(6),
-            )
-          : null,
-      child: Row(
+      constraints: const BoxConstraints(minWidth: 128),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: selected
+            ? theme.colorScheme.primary.withValues(alpha: 0.07)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            value,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: foreground,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(width: 6),
           Text(
             label,
             style: theme.textTheme.bodySmall?.copyWith(
@@ -1200,16 +1141,29 @@ class _ProductWebsiteVisibilityPageState
               fontWeight: interactive ? FontWeight.w700 : null,
             ),
           ),
-          if (interactive) ...[
-            const SizedBox(width: 5),
-            Icon(
-              Icons.list_alt_outlined,
-              size: 15,
-              color: selected
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onSurfaceVariant,
-            ),
-          ],
+          const SizedBox(height: 2),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                value,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: foreground,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if (interactive) ...[
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 14,
+                  color: selected
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ],
+          ),
         ],
       ),
     );

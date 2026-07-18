@@ -2,13 +2,12 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/widgets/branded_loading.dart';
-import '../../../shared/widgets/main_layout.dart';
 import '../services/google_business_service.dart';
 import '../services/website_service.dart';
+import '../widgets/website_admin_ui.dart';
 
 /// Integrations configuration page for Google Merchant, Analytics, etc.
 class IntegrationsPage extends StatefulWidget {
@@ -70,69 +69,28 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
       });
     }
 
-    final content = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Header
-        Padding(
-          padding: const EdgeInsets.all(24),
-          child: Row(
-            children: [
-              if (!widget.embedded) ...[
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => context.go('/website'),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Integraciones',
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      'Conecta tu tienda con Google y otras plataformas',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
+    return WebsiteAdminShell(
+      embedded: widget.embedded,
+      title: 'Integraciones',
+      description: 'Conecta publicación, medición y presencia local.',
+      child: _isLoading
+          ? const Center(child: BrandedLoading())
+          : WebsiteAdminBody(
+              maxWidth: 1120,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildGoogleBusinessProfileSection(theme),
+                  const SizedBox(height: 16),
+                  _buildGoogleMerchantSection(theme),
+                  const SizedBox(height: 16),
+                  _buildGoogleAnalyticsSection(theme),
+                  const SizedBox(height: 16),
+                  _buildComingSoonSection(theme),
+                ],
               ),
-            ],
-          ),
-        ),
-        // Content
-        Expanded(
-          child: _isLoading
-              ? const Center(child: BrandedLoading())
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildGoogleBusinessProfileSection(theme),
-                      const SizedBox(height: 24),
-                      _buildGoogleMerchantSection(theme),
-                      const SizedBox(height: 24),
-                      _buildGoogleAnalyticsSection(theme),
-                      const SizedBox(height: 24),
-                      _buildComingSoonSection(theme),
-                      const SizedBox(height: 24),
-                    ],
-                  ),
-                ),
-        ),
-      ],
+            ),
     );
-
-    if (widget.embedded) return content;
-    return MainLayout(child: content);
   }
 
   // ==========================================================================
@@ -156,17 +114,9 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
             // Header
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.business,
-                    size: 24,
-                    color: theme.colorScheme.primary,
-                  ),
+                _buildIntegrationIcon(
+                  Icons.business_outlined,
+                  const Color(0xFF4285F4),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -496,6 +446,7 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
       final googleService = context.read<GoogleBusinessService>();
       final hasAccess = await _ensureGoogleApiAccess(googleService);
       if (!hasAccess) return;
+      if (!mounted) return;
 
       final locationName =
           _websiteService.getSetting('business_google_location_id');
@@ -589,13 +540,9 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
           children: [
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.shopping_bag, color: Colors.blue),
+                _buildIntegrationIcon(
+                  Icons.shopping_bag_outlined,
+                  const Color(0xFF19A974),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -727,13 +674,9 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
           children: [
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.analytics, color: Colors.orange),
+                _buildIntegrationIcon(
+                  Icons.analytics_outlined,
+                  const Color(0xFF7C4DFF),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -797,13 +740,9 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
           children: [
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.purple.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.rocket_launch, color: Colors.purple),
+                _buildIntegrationIcon(
+                  Icons.rocket_launch_outlined,
+                  const Color(0xFFF28C28),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -826,11 +765,11 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
               spacing: 12,
               runSpacing: 12,
               children: [
-                _buildComingSoonChip('Facebook Pixel'),
-                _buildComingSoonChip('Meta Catalog'),
-                _buildComingSoonChip('Google Ads'),
-                _buildComingSoonChip('Mailchimp'),
-                _buildComingSoonChip('WhatsApp Business'),
+                _buildComingSoonItem('Facebook Pixel'),
+                _buildComingSoonItem('Meta Catalog'),
+                _buildComingSoonItem('Google Ads'),
+                _buildComingSoonItem('Mailchimp'),
+                _buildComingSoonItem('WhatsApp Business'),
               ],
             ),
           ],
@@ -867,11 +806,35 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
     );
   }
 
-  Widget _buildComingSoonChip(String label) {
-    return Chip(
-      avatar: const Icon(Icons.schedule, size: 16),
-      label: Text(label),
-      backgroundColor: Colors.grey.withValues(alpha: 0.1),
+  Widget _buildIntegrationIcon(IconData icon, Color color) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(icon, size: 20, color: color),
+    );
+  }
+
+  Widget _buildComingSoonItem(String label) {
+    return SizedBox(
+      width: 160,
+      child: Row(
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: const BoxDecoration(
+              color: Color(0xFFF28C28),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(label)),
+        ],
+      ),
     );
   }
 }

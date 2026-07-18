@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
@@ -8,7 +7,7 @@ import '../../../shared/services/inventory_service.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/branded_loading.dart';
-import '../../../shared/widgets/main_layout.dart';
+import '../widgets/website_admin_ui.dart';
 
 /// Page for selecting and managing featured products shown on website homepage
 class FeaturedProductsPage extends StatefulWidget {
@@ -101,218 +100,188 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
             ))
         .toList();
 
-    final body = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                if (!widget.embedded) ...[
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => context.go('/website'),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-              Text('Productos Destacados',
-                  style: theme.textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () {
-                    websiteService.loadFeaturedProducts();
-                    _loadProducts();
-                  },
-                  tooltip: 'Actualizar',
-                ),
-              ],
-            ),
-          ),
-          // Content
+    return WebsiteAdminShell(
+      embedded: widget.embedded,
+      title: 'Productos destacados',
+      description: 'Elige hasta ocho productos para la portada y ordénalos.',
+      actions: [
+        IconButton.outlined(
+          icon: const Icon(Icons.refresh_rounded, size: 19),
+          onPressed: () {
+            websiteService.loadFeaturedProducts();
+            _loadProducts();
+          },
+          tooltip: 'Actualizar productos',
+        ),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Expanded(
             child: websiteService.isLoading && featured.isEmpty
                 ? const Center(child: BrandedLoading())
                 : Column(
-              children: [
-                // Info banner
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  margin: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
                     children: [
-                      Icon(
-                        Icons.info_outline,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
+                        child: Row(
                           children: [
-                            Text(
-                              'Productos destacados en homepage',
-                              style: TextStyle(
-                                color: theme.colorScheme.onPrimaryContainer,
-                                fontWeight: FontWeight.bold,
+                            Icon(
+                              Icons.star_outline_rounded,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                '${featured.length} de 8 espacios ocupados',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 4),
                             Text(
-                              'Seleccionados: ${featured.length} / 8 (máximo)',
-                              style: TextStyle(
-                                color: theme.colorScheme.onPrimaryContainer,
+                              'La portada respeta este orden',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
 
-                // Current featured products
-                if (featured.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.star, color: Colors.amber),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Destacados Actuales',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          'Arrastra para reordenar',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    height: 140,
-                    child: ReorderableListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: featuredProductDetails.length,
-                      onReorder: (oldIndex, newIndex) {
-                            _reorderFeatured(
-                                websiteService, oldIndex, newIndex);
-                      },
-                      itemBuilder: (context, index) {
-                        final product = featuredProductDetails[index];
-                        final featuredItem = featured[index];
-                        return _buildFeaturedProductCard(
-                          context,
-                          product,
-                          featuredItem,
-                          websiteService,
-                        );
-                      },
-                    ),
-                  ),
-                  const Divider(height: 32),
-                ],
-
-                // Add products section
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      Icon(Icons.add_circle_outline,
-                          color: theme.colorScheme.primary),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Agregar Productos',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Search bar
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Buscar por nombre, SKU...',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                _searchController.clear();
-                              },
-                            )
-                          : null,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Products list
-                Expanded(
-                  child: _isLoadingProducts
-                      ? const Center(child: BrandedLoading())
-                      : _filteredProducts.isEmpty
-                          ? Center(
-                              child: Text(
-                                _searchController.text.isEmpty
-                                    ? 'No hay productos'
-                                    : 'No se encontraron productos',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
+                      // Current featured products
+                      if (featured.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.star, color: Colors.amber),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Destacados Actuales',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            )
-                          : ListView.builder(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16),
-                              itemCount: _filteredProducts.length,
-                              itemBuilder: (context, index) {
-                                final product = _filteredProducts[index];
-                                final isFeatured = featured.any(
-                                  (fp) => fp.productId == product.id,
-                                );
-                                return _buildProductListItem(
-                                  context,
-                                  product,
-                                  isFeatured,
-                                  websiteService,
-                                  featured.length >= 8,
-                                );
-                              },
+                              const Spacer(),
+                              Text(
+                                'Arrastra para reordenar',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          height: 140,
+                          child: ReorderableListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: featuredProductDetails.length,
+                            onReorder: (oldIndex, newIndex) {
+                              _reorderFeatured(
+                                  websiteService, oldIndex, newIndex);
+                            },
+                            itemBuilder: (context, index) {
+                              final product = featuredProductDetails[index];
+                              final featuredItem = featured[index];
+                              return _buildFeaturedProductCard(
+                                context,
+                                product,
+                                featuredItem,
+                                websiteService,
+                              );
+                            },
+                          ),
+                        ),
+                        const Divider(height: 32),
+                      ],
+
+                      // Add products section
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          children: [
+                            Icon(Icons.add_circle_outline,
+                                color: theme.colorScheme.primary),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Agregar Productos',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                ),
-              ],
-            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Search bar
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: 'Buscar por nombre, SKU...',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                    },
+                                  )
+                                : null,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Products list
+                      Expanded(
+                        child: _isLoadingProducts
+                            ? const Center(child: BrandedLoading())
+                            : _filteredProducts.isEmpty
+                                ? Center(
+                                    child: Text(
+                                      _searchController.text.isEmpty
+                                          ? 'No hay productos'
+                                          : 'No se encontraron productos',
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16),
+                                    itemCount: _filteredProducts.length,
+                                    itemBuilder: (context, index) {
+                                      final product = _filteredProducts[index];
+                                      final isFeatured = featured.any(
+                                        (fp) => fp.productId == product.id,
+                                      );
+                                      return _buildProductListItem(
+                                        context,
+                                        product,
+                                        isFeatured,
+                                        websiteService,
+                                        featured.length >= 8,
+                                      );
+                                    },
+                                  ),
+                      ),
+                    ],
+                  ),
           ),
-      ],
+        ],
+      ),
     );
-
-    if (widget.embedded) return body;
-
-    return MainLayout(child: body);
   }
 
   Widget _buildFeaturedProductCard(

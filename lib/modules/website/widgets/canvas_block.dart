@@ -581,11 +581,18 @@ class _CanvasBlockState extends State<CanvasBlock> {
     final selection = await showWebsiteMediaPicker(
       context: context,
       currentUrl: element['imageUrl']?.toString(),
+      allowProductLink: true,
     );
     if (!mounted || selection == null) return;
     _patchElement(elementId, {
       'imageUrl': selection.publicUrl,
-      'imageSource': 'manual',
+      if (selection.linksProduct) ...{
+        'productId': selection.productId ?? '',
+        'imageSource': selection.productImageIndex == 0 ? 'product' : 'manual',
+      } else ...{
+        if (selection.comesFromProduct) 'productId': '',
+        'imageSource': 'manual',
+      },
       'backgroundRemovalActive': false,
       'fit': element['fit'] ?? 'contain',
     });
@@ -1357,8 +1364,11 @@ class _CanvasBlockState extends State<CanvasBlock> {
         onMoveBackward: () => _moveBackward(id),
         onRotateQuarterTurn: () => _rotateQuarterTurn(id),
         onAlign: (alignment) => _alignElement(id, alignment, canvasW, canvasH),
+        onOpenInspector: widget.onActiveElementChanged == null
+            ? null
+            : () => widget.onActiveElementChanged?.call(id),
         cropActive: _croppingElementId == id,
-        maxWidth: math.max(120.0, canvasW - 16),
+        maxWidth: estimatedToolbarWidth,
         hoverLabelBelow: toolbarTop + 68 <= canvasH,
         onToggleCrop: type == 'image' && el['locked'] != true
             ? () => _toggleCropMode(id)
