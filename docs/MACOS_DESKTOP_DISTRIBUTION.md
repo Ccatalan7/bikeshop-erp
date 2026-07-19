@@ -121,10 +121,19 @@ Ctrl+Shift+B -> Publish macOS Update (all changes)
 ```
 
 It runs `scripts/publish_macos_update.sh`, which stays on the current authorized
-branch, commits pending Source Control changes when needed, pushes the exact
-commit, dispatches `.github/workflows/macos-release.yml` with
-`publish_release=true`, waits for the guarded workflow, and verifies the
-published assets.
+branch and stages pending Source Control changes. Before any commit or push, it
+runs the same release-integrity commands used by CI: clean Node dependency
+installation, spreadsheet-engine generation, Flutter dependency resolution,
+analyzer, the complete Flutter test suite, and the ERP web release build. It
+also refuses publication if tracked or untracked Source Control changes appear
+while that preflight is running. Only after that exact snapshot passes does it
+commit when needed, push, dispatch `.github/workflows/macos-release.yml` with
+`publish_release=true`, wait for the guarded workflow, and verify the published
+assets.
+
+If the local preflight fails, the task stops before commit, push, or workflow
+dispatch. Fix the reported failure and run the same task again; no partial
+macOS update is published.
 
 Pushes and ordinary dispatches are artifact-only. They build and verify but
 cannot publish an update. Only the separate `Production` job has write access

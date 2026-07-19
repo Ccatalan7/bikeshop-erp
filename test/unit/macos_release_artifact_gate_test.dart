@@ -177,4 +177,54 @@ void main() {
     expect(publishHelper, isNot(contains('git switch')));
     expect(runbook, contains('smartpegas1.0'));
   });
+
+  test('developer helper verifies the exact local snapshot before publication',
+      () {
+    final stage = publishHelper.indexOf('git add -A');
+    final npmInstall = publishHelper.indexOf('npm ci', stage);
+    final spreadsheetBuild = publishHelper.indexOf(
+      'npm run build:spreadsheet-engine',
+      npmInstall,
+    );
+    final flutterDependencies = publishHelper.indexOf(
+      '"\$flutter_bin" pub get',
+      spreadsheetBuild,
+    );
+    final analyzer = publishHelper.indexOf(
+      '"\$flutter_bin" analyze --no-fatal-infos --no-fatal-warnings lib test',
+      flutterDependencies,
+    );
+    final tests = publishHelper.indexOf('"\$flutter_bin" test', analyzer);
+    final webBuild = publishHelper.indexOf(
+      '"\$flutter_bin" build web --release --no-wasm-dry-run',
+      tests,
+    );
+    final snapshotGuard = publishHelper.indexOf(
+      'if ! git diff --quiet',
+      webBuild,
+    );
+    final commit = publishHelper.indexOf('git commit -m', snapshotGuard);
+    final push = publishHelper.indexOf('git push origin', commit);
+    final dispatch = publishHelper.indexOf('gh workflow run', push);
+
+    expect(stage, greaterThanOrEqualTo(0));
+    expect(npmInstall, greaterThan(stage));
+    expect(spreadsheetBuild, greaterThan(npmInstall));
+    expect(flutterDependencies, greaterThan(spreadsheetBuild));
+    expect(analyzer, greaterThan(flutterDependencies));
+    expect(tests, greaterThan(analyzer));
+    expect(webBuild, greaterThan(tests));
+    expect(snapshotGuard, greaterThan(webBuild));
+    expect(commit, greaterThan(snapshotGuard));
+    expect(push, greaterThan(commit));
+    expect(dispatch, greaterThan(push));
+    expect(
+      publishHelper,
+      contains('git ls-files --others --exclude-standard'),
+    );
+    expect(
+      publishHelper,
+      contains('"\$repo_root/.fvm/flutter_sdk/bin/flutter"'),
+    );
+  });
 }

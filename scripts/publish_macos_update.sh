@@ -42,9 +42,19 @@ require_command() {
 require_command git
 require_command gh
 require_command jq
+require_command npm
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
+
+flutter_bin="$(command -v flutter || true)"
+if [[ -z "$flutter_bin" && -x "$repo_root/.fvm/flutter_sdk/bin/flutter" ]]; then
+  flutter_bin="$repo_root/.fvm/flutter_sdk/bin/flutter"
+fi
+if [[ -z "$flutter_bin" ]]; then
+  echo "Required command 'flutter' was not found in PATH or .fvm/flutter_sdk." >&2
+  exit 1
+fi
 
 branch="$(git branch --show-current)"
 if [[ -z "$branch" ]]; then
@@ -79,6 +89,32 @@ if [[ "$REQUIRE_CONFIRMATION" == 'YES' ]]; then
     echo 'Cancelled.'
     exit 1
   fi
+fi
+
+step 'Running the local release integrity preflight'
+npm ci
+npm run build:spreadsheet-engine
+"$flutter_bin" pub get
+"$flutter_bin" analyze --no-fatal-infos --no-fatal-warnings lib test
+"$flutter_bin" test
+"$flutter_bin" build web --release --no-wasm-dry-run \
+  --dart-define=STORE_PERF_LOGS=true \
+  -t lib/main.dart \
+  -o build/web_erp
+
+if ! git diff --quiet; then
+  echo 'Tracked files changed while the release preflight was running.' >&2
+  echo 'Nothing was committed, pushed, or published. Review these files and run the task again:' >&2
+  git status --short >&2
+  exit 1
+fi
+
+new_untracked_files="$(git ls-files --others --exclude-standard)"
+if [[ -n "$new_untracked_files" ]]; then
+  echo 'New untracked files appeared while the release preflight was running.' >&2
+  echo 'Nothing was committed, pushed, or published. Review these files and run the task again:' >&2
+  printf '%s\n' "$new_untracked_files" >&2
+  exit 1
 fi
 
 if [[ -n "$staged_files" ]]; then

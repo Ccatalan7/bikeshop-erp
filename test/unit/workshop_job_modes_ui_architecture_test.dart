@@ -10,6 +10,9 @@ void main() {
     final table = File(
       'lib/modules/bikeshop/pages/pegas_table_page.dart',
     ).readAsStringSync();
+    final operationalStatusBadge = File(
+      'lib/shared/widgets/operational_status_badge.dart',
+    ).readAsStringSync();
     final service = File(
       'lib/modules/bikeshop/services/bikeshop_service.dart',
     ).readAsStringSync();
@@ -320,9 +323,15 @@ void main() {
     );
     expect(
       table,
-      contains("message: 'Cambiar estado y ver acciones'"),
+      contains('OperationalStatusBadge('),
       reason:
           'Paid normal services remain operational through the canonical table action instead of a second form selector.',
+    );
+    expect(
+      operationalStatusBadge,
+      contains("tooltip ?? 'Cambiar estado y ver acciones'"),
+      reason:
+          'The shared operational badge must preserve the canonical table action tooltip.',
     );
     expect(table, contains('discountAmount: job.discountAmount'));
     expect(table, contains('_bikeshopService.convertToBillableJob('));
