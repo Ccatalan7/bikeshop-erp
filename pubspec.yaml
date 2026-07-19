@@ -125,6 +125,7 @@ flutter:
     - assets/icons/
     - assets/sounds/
     - assets/block_marketplace/
+    - assets/manuals/
     - web/spreadsheet_engine/univer_desktop_host.html
     - web/spreadsheet_engine/univer.bundle.js
     - web/spreadsheet_engine/univer.bundle.css

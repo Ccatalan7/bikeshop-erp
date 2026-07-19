@@ -9,7 +9,10 @@ import '../utils/web_utils.dart' as web_utils;
 import '../theme/public_store_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../providers/cart_provider.dart';
+import '../models/storefront_tax_summary.dart';
+import '../models/order_confirmation_policy.dart';
 import '../services/meta_pixel_service.dart';
+import '../services/public_order_access_token_store.dart';
 import '../../modules/website/services/mercadopago_service.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/models/website_models.dart';
@@ -41,6 +44,7 @@ class _OrderConfirmationCache {
 }
 
 enum _PaymentPresentation {
+  cancelled,
   paid,
   failed,
   pending,
@@ -61,6 +65,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
   bool _isRetryingPayment = false;
   String? _error;
   String? _paymentMessage;
+  String? _orderAccessToken;
 
   // Keep this page alive in memory to prevent reloading on navigation
   @override
@@ -75,6 +80,14 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadWebsiteSettings();
     });
+
+    _orderAccessToken = PublicOrderAccessTokenStore.read(widget.orderId);
+    if (_orderAccessToken == null) {
+      _error =
+          'Esta sesión no tiene acceso a ese pedido. Vuelve al checkout o abre el enlace seguro enviado por la tienda.';
+      _isLoading = false;
+      return;
+    }
 
     // Check if order is already cached (survives widget rebuilds)
     if (_OrderConfirmationCache.loadedOrders.containsKey(widget.orderId)) {
@@ -232,13 +245,14 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
         final payment = await mercadopagoService.getPaymentStatus(
           paymentId,
           orderId: widget.orderId,
+          orderAccessToken: _orderAccessToken!,
         );
         final paymentStatus = payment?['status']?.toString();
-        final externalReference = payment?['external_reference']?.toString();
+        final paymentOrderId = payment?['order_id']?.toString();
 
         if (payment == null ||
             paymentStatus != 'approved' ||
-            externalReference != widget.orderId) {
+            paymentOrderId != widget.orderId) {
           _paymentMessage =
               'MercadoPago todavía no confirmó el pago. Te notificaremos cuando se procese.';
           callbackProcessed = true;
@@ -278,12 +292,13 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
   bool _canRetryMercadoPago(OnlineOrder order) {
     final method = (order.paymentMethod ?? '').toLowerCase();
-    final paymentStatus = order.paymentStatus.toLowerCase();
-    final orderStatus = order.status.toLowerCase();
+    final presentation = OrderConfirmationPolicy.resolve(
+      order,
+      callbackStatus: widget.paymentStatus,
+    );
 
     return method == 'mercadopago' &&
-        paymentStatus != 'paid' &&
-        orderStatus != 'cancelled';
+        OrderConfirmationPolicy.allowsPaymentAction(presentation);
   }
 
   Future<void> _retryMercadoPagoPayment(OnlineOrder order) async {
@@ -296,6 +311,12 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     final mercadopagoService = context.read<MercadoPagoService>();
 
     try {
+      final orderAccessToken =
+          _orderAccessToken ?? PublicOrderAccessTokenStore.read(widget.orderId);
+      if (orderAccessToken == null) {
+        throw Exception('La sesión segura del pedido venció.');
+      }
+
       if (tenantId.isEmpty) {
         throw Exception(
             'No se pudo detectar la tienda para reintentar el pago.');
@@ -309,17 +330,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
       final preference = await mercadopagoService.createPreference(
         orderId: order.id,
-        orderNumber: order.orderNumber,
-        total: order.total,
-        items: order.items
-            .map((item) => {
-                  'title': item.productName,
-                  'quantity': item.quantity,
-                  'unit_price': item.unitPrice,
-                })
-            .toList(),
-        customerEmail: order.customerEmail,
-        customerName: order.customerName,
+        orderAccessToken: orderAccessToken,
       );
 
       final initPoint = preference['init_point'] as String?;
@@ -400,15 +411,15 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
       final websiteService =
           Provider.of<WebsiteService>(context, listen: false);
-      final tenantId = await _resolveTenantId();
-
-      if (tenantId == null || tenantId.isEmpty) {
-        throw Exception('No se pudo detectar la tienda del pedido');
+      final orderAccessToken =
+          _orderAccessToken ?? PublicOrderAccessTokenStore.read(widget.orderId);
+      if (orderAccessToken == null) {
+        throw Exception('La sesión segura del pedido venció');
       }
 
       final order = await websiteService.getPublicOrderById(
         orderId: widget.orderId,
-        tenantId: tenantId,
+        accessToken: orderAccessToken,
       );
 
       if (order == null) {
@@ -561,91 +572,94 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
         final horizontalMargin = constraints.maxWidth < 760 ? 16.0 : 24.0;
         final verticalMargin = isMobile ? 28.0 : 44.0;
 
-        return SingleChildScrollView(
-          child: Center(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 1320),
-              margin: EdgeInsets.symmetric(
-                horizontal: horizontalMargin,
-                vertical: verticalMargin,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildConfirmationHero(
-                    order: order,
+        // PublicStoreLayout owns the single scroll viewport for checkout and
+        // order routes. A second viewport here receives an unbounded height
+        // from that outer scrollable and can leave this subtree unlaid out on
+        // Flutter Web after the order finishes loading.
+        return Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 1320),
+            margin: EdgeInsets.symmetric(
+              horizontal: horizontalMargin,
+              vertical: verticalMargin,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildConfirmationHero(
+                  order: order,
+                  paymentPresentation: paymentPresentation,
+                ),
+                const SizedBox(height: 32),
+                if (isMobile) ...[
+                  _buildSummaryRail(
+                    order,
                     paymentPresentation: paymentPresentation,
                   ),
-                  const SizedBox(height: 32),
-                  if (isMobile) ...[
-                    _buildSummaryRail(
+                  const SizedBox(height: 24),
+                  _buildOrderDetailsSection(order),
+                  const SizedBox(height: 24),
+                  _buildProductsSection(order),
+                  if (paymentPresentation ==
+                      _PaymentPresentation.transferPending) ...[
+                    const SizedBox(height: 24),
+                    _buildTransferSection(
                       order,
-                      paymentPresentation: paymentPresentation,
-                    ),
-                    const SizedBox(height: 24),
-                    _buildOrderDetailsSection(order),
-                    const SizedBox(height: 24),
-                    _buildProductsSection(order),
-                    if (order.paymentMethod == 'transfer') ...[
-                      const SizedBox(height: 24),
-                      _buildTransferSection(
-                        order,
-                        hasTransferDestination: hasTransferDestination,
-                        transferBankName: transferBankName,
-                        transferAccountType: transferAccountType,
-                        transferAccountNumber: transferAccountNumber,
-                        transferAccountHolder: transferAccountHolder,
-                        transferRut: transferRut,
-                        transferProofInstructions: transferProofInstructions,
-                      ),
-                    ],
-                    const SizedBox(height: 24),
-                    _buildNextStepsSection(paymentPresentation),
-                  ] else ...[
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          flex: 7,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildOrderDetailsSection(order),
-                              const SizedBox(height: 24),
-                              _buildProductsSection(order),
-                              if (order.paymentMethod == 'transfer') ...[
-                                const SizedBox(height: 24),
-                                _buildTransferSection(
-                                  order,
-                                  hasTransferDestination:
-                                      hasTransferDestination,
-                                  transferBankName: transferBankName,
-                                  transferAccountType: transferAccountType,
-                                  transferAccountNumber: transferAccountNumber,
-                                  transferAccountHolder: transferAccountHolder,
-                                  transferRut: transferRut,
-                                  transferProofInstructions:
-                                      transferProofInstructions,
-                                ),
-                              ],
-                              const SizedBox(height: 24),
-                              _buildNextStepsSection(paymentPresentation),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 28),
-                        Expanded(
-                          flex: 4,
-                          child: _buildSummaryRail(
-                            order,
-                            paymentPresentation: paymentPresentation,
-                          ),
-                        ),
-                      ],
+                      hasTransferDestination: hasTransferDestination,
+                      transferBankName: transferBankName,
+                      transferAccountType: transferAccountType,
+                      transferAccountNumber: transferAccountNumber,
+                      transferAccountHolder: transferAccountHolder,
+                      transferRut: transferRut,
+                      transferProofInstructions: transferProofInstructions,
                     ),
                   ],
+                  const SizedBox(height: 24),
+                  _buildNextStepsSection(paymentPresentation),
+                ] else ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 7,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildOrderDetailsSection(order),
+                            const SizedBox(height: 24),
+                            _buildProductsSection(order),
+                            if (paymentPresentation ==
+                                _PaymentPresentation.transferPending) ...[
+                              const SizedBox(height: 24),
+                              _buildTransferSection(
+                                order,
+                                hasTransferDestination: hasTransferDestination,
+                                transferBankName: transferBankName,
+                                transferAccountType: transferAccountType,
+                                transferAccountNumber: transferAccountNumber,
+                                transferAccountHolder: transferAccountHolder,
+                                transferRut: transferRut,
+                                transferProofInstructions:
+                                    transferProofInstructions,
+                              ),
+                            ],
+                            const SizedBox(height: 24),
+                            _buildNextStepsSection(paymentPresentation),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 28),
+                      Expanded(
+                        flex: 4,
+                        child: _buildSummaryRail(
+                          order,
+                          paymentPresentation: paymentPresentation,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
-              ),
+              ],
             ),
           ),
         );
@@ -665,69 +679,69 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
       builder: (context, constraints) {
         final horizontalMargin = constraints.maxWidth < 760 ? 16.0 : 24.0;
 
-        return SingleChildScrollView(
-          child: Center(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 1320),
-              margin: EdgeInsets.symmetric(
-                horizontal: horizontalMargin,
-                vertical: 44,
-              ),
-              child: Center(
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 36, horizontal: 8),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 148,
-                        height: 148,
-                        decoration: BoxDecoration(
-                          color: accentColor.withValues(alpha: 0.08),
-                          border: Border.all(
-                            color: accentColor.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        child: Icon(
-                          icon,
-                          size: 62,
-                          color: accentColor,
+        // Scrolling is deliberately delegated to PublicStoreLayout; this
+        // state must remain a regular box inside its inline route column.
+        return Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 1320),
+            margin: EdgeInsets.symmetric(
+              horizontal: horizontalMargin,
+              vertical: 44,
+            ),
+            child: Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 560),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 36, horizontal: 8),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 148,
+                      height: 148,
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.08),
+                        border: Border.all(
+                          color: accentColor.withValues(alpha: 0.2),
                         ),
                       ),
-                      const SizedBox(height: 32),
-                      _buildSectionHeading(title),
-                      const SizedBox(height: 16),
-                      Text(
-                        message,
-                        style: const TextStyle(
-                          fontFamily: null,
-                          fontSize: 15,
-                          color: PublicStoreTheme.textSecondary,
-                          height: 1.6,
-                        ),
-                        textAlign: TextAlign.center,
+                      child: Icon(
+                        icon,
+                        size: 62,
+                        color: accentColor,
                       ),
-                      const SizedBox(height: 32),
-                      FilledButton(
-                        onPressed: onPressed,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: _logoBlue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 30,
-                            vertical: 18,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                        ),
-                        child: Text(actionLabel),
+                    ),
+                    const SizedBox(height: 32),
+                    _buildSectionHeading(title),
+                    const SizedBox(height: 16),
+                    Text(
+                      message,
+                      style: const TextStyle(
+                        fontFamily: null,
+                        fontSize: 15,
+                        color: PublicStoreTheme.textSecondary,
+                        height: 1.6,
                       ),
-                    ],
-                  ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 32),
+                    FilledButton(
+                      onPressed: onPressed,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _logoBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 30,
+                          vertical: 18,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                      child: Text(actionLabel),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -744,8 +758,9 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     return LayoutBuilder(
       builder: (context, constraints) {
         final isCompact = constraints.maxWidth < 820;
-        final statusLine =
-            _paymentMessage ?? _presentationStatusLine(paymentPresentation);
+        final statusLine = paymentPresentation == _PaymentPresentation.cancelled
+            ? _presentationStatusLine(paymentPresentation)
+            : _paymentMessage ?? _presentationStatusLine(paymentPresentation);
 
         final titleBlock = Column(
           crossAxisAlignment:
@@ -940,11 +955,13 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            paymentPresentation == _PaymentPresentation.failed
-                ? Icons.error_outline
-                : paymentPresentation == _PaymentPresentation.paid
-                    ? Icons.check_circle_outline
-                    : Icons.info_outline,
+            paymentPresentation == _PaymentPresentation.cancelled
+                ? Icons.block_outlined
+                : paymentPresentation == _PaymentPresentation.failed
+                    ? Icons.error_outline
+                    : paymentPresentation == _PaymentPresentation.paid
+                        ? Icons.check_circle_outline
+                        : Icons.info_outline,
             size: 20,
             color: accent,
           ),
@@ -969,8 +986,10 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
   Widget _buildOrderDetailsSection(OnlineOrder order) {
     final rows = <MapEntry<String, String>>[
       MapEntry('Número de pedido', order.orderNumber),
-      MapEntry('Nombre', order.customerName),
-      MapEntry('Email', order.customerEmail),
+      if (order.customerName.trim().isNotEmpty)
+        MapEntry('Nombre', order.customerName),
+      if (order.customerEmail.trim().isNotEmpty)
+        MapEntry('Email', order.customerEmail),
       if (order.customerPhone != null && order.customerPhone!.trim().isNotEmpty)
         MapEntry('Teléfono', order.customerPhone!),
       MapEntry('Entrega', order.deliveryDisplayName),
@@ -1106,6 +1125,16 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     OnlineOrder order, {
     required _PaymentPresentation paymentPresentation,
   }) {
+    final taxSummary = StorefrontTaxSummary.calculate(
+      order.items.map(
+        (item) => StorefrontTaxLineInput(
+          label: item.productName,
+          grossUnitPrice: item.unitPrice,
+          quantity: item.quantity,
+          taxRate: item.taxRate,
+        ),
+      ),
+    );
     final retryLabel = paymentPresentation == _PaymentPresentation.failed
         ? 'PAGAR CON OTRO MEDIO'
         : 'REINTENTAR PAGO';
@@ -1161,13 +1190,13 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
           ),
           const SizedBox(height: 18),
           _buildSummaryMetric(
-            'Subtotal',
+            taxSummary.isValid ? taxSummary.netLabel : 'Neto',
             ChileanUtils.formatCurrency(order.subtotal),
           ),
-          if (order.taxAmount > 0) ...[
+          if (order.taxAmount > 0 || taxSummary.isValid) ...[
             const SizedBox(height: 12),
             _buildSummaryMetric(
-              'IVA (19%)',
+              taxSummary.isValid ? taxSummary.ivaLabel : 'IVA incluido',
               ChileanUtils.formatCurrency(order.taxAmount),
               secondary: true,
             ),
@@ -1259,7 +1288,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             child: OutlinedButton.icon(
               onPressed: () => _downloadOrderPdf(order),
               icon: const Icon(Icons.download, size: 18),
-              label: const Text('DESCARGAR PEDIDO'),
+              label: const Text('DESCARGAR RESUMEN DEL PEDIDO'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: _logoBlue,
                 side: const BorderSide(color: _logoBlue),
@@ -1269,6 +1298,14 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                 ),
               ),
             ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Documento informativo: no acredita pago ni reemplaza una boleta o voucher oficial.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -1636,36 +1673,25 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
   }
 
   _PaymentPresentation _paymentPresentationFor(OnlineOrder order) {
-    final callbackStatus = (widget.paymentStatus ?? '').trim().toLowerCase();
-    final paymentStatus = order.paymentStatus.trim().toLowerCase();
-    final paymentMethod = (order.paymentMethod ?? '').trim().toLowerCase();
-
-    if (paymentStatus == 'paid' || order.paidAt != null) {
-      return _PaymentPresentation.paid;
-    }
-
-    if (callbackStatus == 'failure' ||
-        callbackStatus == 'rejected' ||
-        paymentStatus == 'failed' ||
-        paymentStatus == 'refunded') {
-      return _PaymentPresentation.failed;
-    }
-
-    if (callbackStatus == 'pending' ||
-        callbackStatus == 'in_process' ||
-        (paymentMethod == 'mercadopago' && paymentStatus == 'pending')) {
-      return _PaymentPresentation.pending;
-    }
-
-    if (paymentMethod == 'transfer') {
-      return _PaymentPresentation.transferPending;
-    }
-
-    return _PaymentPresentation.orderReceived;
+    return switch (OrderConfirmationPolicy.resolve(
+      order,
+      callbackStatus: widget.paymentStatus,
+    )) {
+      OrderConfirmationState.cancelled => _PaymentPresentation.cancelled,
+      OrderConfirmationState.paid => _PaymentPresentation.paid,
+      OrderConfirmationState.failed => _PaymentPresentation.failed,
+      OrderConfirmationState.pending => _PaymentPresentation.pending,
+      OrderConfirmationState.transferPending =>
+        _PaymentPresentation.transferPending,
+      OrderConfirmationState.orderReceived =>
+        _PaymentPresentation.orderReceived,
+    };
   }
 
   Color _presentationAccentColor(_PaymentPresentation paymentPresentation) {
     switch (paymentPresentation) {
+      case _PaymentPresentation.cancelled:
+        return const Color(0xFFB45309);
       case _PaymentPresentation.paid:
       case _PaymentPresentation.orderReceived:
         return _successGreen;
@@ -1680,6 +1706,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
   IconData _presentationIcon(_PaymentPresentation paymentPresentation) {
     switch (paymentPresentation) {
+      case _PaymentPresentation.cancelled:
+        return Icons.block;
       case _PaymentPresentation.paid:
       case _PaymentPresentation.orderReceived:
         return Icons.check;
@@ -1694,6 +1722,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
   String _presentationKicker(_PaymentPresentation paymentPresentation) {
     switch (paymentPresentation) {
+      case _PaymentPresentation.cancelled:
+        return 'PEDIDO CANCELADO';
       case _PaymentPresentation.paid:
         return 'PAGO CONFIRMADO';
       case _PaymentPresentation.failed:
@@ -1709,6 +1739,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
   String _presentationTitle(_PaymentPresentation paymentPresentation) {
     switch (paymentPresentation) {
+      case _PaymentPresentation.cancelled:
+        return 'Este pedido fue cancelado.';
       case _PaymentPresentation.paid:
         return 'Pago confirmado. Estamos preparando tu pedido.';
       case _PaymentPresentation.failed:
@@ -1724,6 +1756,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
   String _presentationSubtitle(_PaymentPresentation paymentPresentation) {
     switch (paymentPresentation) {
+      case _PaymentPresentation.cancelled:
+        return 'No realices ni reintentes un pago para este pedido. Los montos quedan visibles solo como registro de lo solicitado.';
       case _PaymentPresentation.paid:
         return 'Recibimos tu pago y dejaremos el pedido listo para retiro o despacho.';
       case _PaymentPresentation.failed:
@@ -1739,6 +1773,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
   String? _presentationStatusLine(_PaymentPresentation paymentPresentation) {
     switch (paymentPresentation) {
+      case _PaymentPresentation.cancelled:
+        return 'El pedido está cerrado. No se preparará ni debe pagarse.';
       case _PaymentPresentation.failed:
         return 'El pago no se completó. Puedes intentar nuevamente.';
       case _PaymentPresentation.pending:
@@ -1753,6 +1789,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
   String _summaryPaymentLabel(_PaymentPresentation paymentPresentation) {
     switch (paymentPresentation) {
+      case _PaymentPresentation.cancelled:
+        return 'PEDIDO CANCELADO';
       case _PaymentPresentation.paid:
         return 'PAGO PROCESADO';
       case _PaymentPresentation.failed:
@@ -1768,6 +1806,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
   String _summaryFooterText(_PaymentPresentation paymentPresentation) {
     switch (paymentPresentation) {
+      case _PaymentPresentation.cancelled:
+        return 'Este pedido está cerrado. Conserva el número solo como referencia y no realices un pago.';
       case _PaymentPresentation.paid:
         return 'Guarda tu número de pedido y revisa tu correo para seguir el estado de la compra.';
       case _PaymentPresentation.failed:
@@ -1783,6 +1823,12 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
   List<String> _nextStepsFor(_PaymentPresentation paymentPresentation) {
     switch (paymentPresentation) {
+      case _PaymentPresentation.cancelled:
+        return const [
+          'No realices ni reintentes el pago de este pedido.',
+          'Si ya habías pagado, contáctanos con el número de pedido para revisar el estado del reembolso.',
+          'Si todavía quieres los productos, inicia un pedido nuevo.',
+        ];
       case _PaymentPresentation.paid:
         return const [
           'Te enviaremos un email de confirmación con los detalles de tu pedido.',

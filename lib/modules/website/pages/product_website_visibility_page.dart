@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../public_store/services/public_inventory_service.dart';
+import '../../../shared/models/product_tax_treatment.dart';
 import '../../../shared/models/public_product_visibility_policy.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/tenant_service.dart';
@@ -178,7 +179,7 @@ class _ProductWebsiteVisibilityPageState
     extends State<ProductWebsiteVisibilityPage> {
   static const _productSelectColumns =
       'id,name,sku,product_type,category_id,category_name,brand_id,brand,'
-      'price,inventory_qty,stock_quantity,track_stock,is_active,is_published,'
+      'price,tax_rate,inventory_qty,stock_quantity,track_stock,is_active,is_published,'
       'show_on_website,image_url,image_url_optimized,image_urls,description,'
       'website_description,website_image_url,website_image_url_optimized,'
       'website_image_urls,updated_at';
@@ -500,13 +501,23 @@ class _ProductWebsiteVisibilityPageState
     final tenantId = _tenantId;
     if (tenantId == null || tenantId.isEmpty) return;
 
-    final rows = visible
+    final activeRows = visible
         ? sourceRows.where((product) => product.isActive).toList()
         : sourceRows;
-    final skippedInactive = visible ? sourceRows.length - rows.length : 0;
+    final rows = visible
+        ? activeRows
+            .where((product) => product.hasTaxClassification)
+            .toList(growable: false)
+        : activeRows;
+    final skippedInactive = visible ? sourceRows.length - activeRows.length : 0;
+    final skippedUnclassified = visible ? activeRows.length - rows.length : 0;
 
     if (rows.isEmpty) {
-      _showSnackBar('No hay productos activos para publicar en la web.');
+      _showSnackBar(
+        skippedUnclassified > 0
+            ? 'No se puede publicar: falta clasificar IVA 19% o Exento.'
+            : 'No hay productos activos para publicar en la web.',
+      );
       return;
     }
 
@@ -521,8 +532,11 @@ class _ProductWebsiteVisibilityPageState
       final skippedText = skippedInactive > 0
           ? ' $skippedInactive inactivo${skippedInactive == 1 ? '' : 's'} omitido${skippedInactive == 1 ? '' : 's'}.'
           : '';
+      final taxText = skippedUnclassified > 0
+          ? ' $skippedUnclassified sin clasificación tributaria omitido${skippedUnclassified == 1 ? '' : 's'}.'
+          : '';
       _showSnackBar(
-          '${ids.length} producto${ids.length == 1 ? '' : 's'} $verb.$skippedText');
+          '${ids.length} producto${ids.length == 1 ? '' : 's'} $verb.$skippedText$taxText');
     } catch (e) {
       _showSnackBar('No se pudo actualizar la visibilidad: $e');
     } finally {
@@ -533,12 +547,20 @@ class _ProductWebsiteVisibilityPageState
   Future<void> _showOnlyCurrentResult() async {
     if (_filteredProducts.isEmpty || _isApplying) return;
 
+    final publishableRows = _filteredProducts
+        .where((product) => product.isActive && product.hasTaxClassification)
+        .toList(growable: false);
+    final skippedUnclassified = _filteredProducts
+        .where((product) => product.isActive && !product.hasTaxClassification)
+        .length;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Mostrar solo este resultado'),
         content: Text(
-          'Se publicarán ${_filteredProducts.length} productos del filtro actual y se ocultará el resto del catálogo web. Los productos inactivos seguirán inactivos.',
+          'Se publicarán ${publishableRows.length} productos activos y clasificados del filtro actual; el resto del catálogo web se ocultará.'
+          '${skippedUnclassified > 0 ? ' $skippedUnclassified sin clasificación tributaria será omitido.' : ''}',
         ),
         actions: [
           TextButton(
@@ -558,10 +580,7 @@ class _ProductWebsiteVisibilityPageState
     final tenantId = _tenantId;
     if (tenantId == null || tenantId.isEmpty) return;
 
-    final showIds = _filteredProducts
-        .where((product) => product.isActive)
-        .map((product) => product.id)
-        .toSet();
+    final showIds = publishableRows.map((product) => product.id).toSet();
     final hideIds = _products
         .where((product) => !showIds.contains(product.id))
         .map((product) => product.id)
@@ -2492,6 +2511,17 @@ class _ProductWebsiteVisibilityPageState
                       color: Colors.orange.shade700,
                     ),
                   ),
+                if (!product.hasTaxClassification)
+                  Tooltip(
+                    message: product.isVisibleOnWebsite
+                        ? 'Publicado sin clasificación tributaria. Clasifícalo o despublícalo.'
+                        : 'Falta definir IVA 19% o Exento antes de publicar.',
+                    child: Icon(
+                      Icons.warning_amber_rounded,
+                      size: 18,
+                      color: Colors.amber.shade900,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -2616,6 +2646,7 @@ class _WebsiteProductVisibilityRow {
     required this.brandId,
     required this.brand,
     required this.price,
+    required this.taxRate,
     required this.stockQuantity,
     required this.trackStock,
     required this.isActive,
@@ -2640,6 +2671,7 @@ class _WebsiteProductVisibilityRow {
   final String? brandId;
   final String? brand;
   final double price;
+  final double? taxRate;
   final int stockQuantity;
   final bool trackStock;
   final bool isActive;
@@ -2682,6 +2714,7 @@ class _WebsiteProductVisibilityRow {
       brandId: json['brand_id']?.toString(),
       brand: json['brand']?.toString(),
       price: (json['price'] as num?)?.toDouble() ?? 0,
+      taxRate: (json['tax_rate'] as num?)?.toDouble(),
       stockQuantity: math.max(inventoryQty ?? 0, stockQty ?? 0),
       trackStock: json['track_stock'] as bool? ?? true,
       isActive: json['is_active'] as bool? ?? true,
@@ -2707,6 +2740,7 @@ class _WebsiteProductVisibilityRow {
   }
 
   bool get isService => productType == 'service';
+  bool get hasTaxClassification => hasSupportedProductTaxRate(taxRate);
   bool get tracksStock => !isService && trackStock;
   bool get isVisibleOnWebsite => isActive && isPublished && showOnWebsite;
   bool get hasImage => imageUrl != null || imageUrls.isNotEmpty;
@@ -2780,6 +2814,11 @@ class _WebsiteProductVisibilityRow {
     Set<String> visibleCategoryIds,
   ) {
     if (!isActive) return 'Inactivo: no aparece en la tienda online.';
+    if (!hasTaxClassification) {
+      return isVisibleOnWebsite
+          ? 'Publicado sin clasificación tributaria. Clasifícalo o despublícalo.'
+          : 'Falta definir IVA 19% o Exento antes de publicar.';
+    }
     if (!isPublished || !showOnWebsite) return 'Oculto de la tienda online.';
     if (!isAllowedByStockPolicy(policy.stockPolicy)) {
       return 'Marcado web, pero la regla de stock lo oculta.';
@@ -2843,6 +2882,7 @@ class _WebsiteProductVisibilityRow {
       brandId: brandId,
       brand: brand,
       price: price,
+      taxRate: taxRate,
       stockQuantity: stockQuantity,
       trackStock: trackStock,
       isActive: isActive,

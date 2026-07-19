@@ -443,6 +443,7 @@ class CartPage extends StatelessWidget {
     CartProvider cart, {
     required bool isMobile,
   }) {
+    final taxSummary = cart.taxSummary;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(isMobile ? 20 : 24),
@@ -466,16 +467,23 @@ class CartPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
-          _buildSummaryMetric(
-            'Subtotal',
-            ChileanUtils.formatCurrency(cart.subtotal),
-          ),
-          const SizedBox(height: 12),
-          _buildSummaryMetric(
-            'IVA (19%)',
-            ChileanUtils.formatCurrency(cart.ivaAmount),
-            secondary: true,
-          ),
+          if (taxSummary.isValid) ...[
+            _buildSummaryMetric(
+              taxSummary.netLabel,
+              ChileanUtils.formatCurrency(taxSummary.netAmount.toDouble()),
+            ),
+            const SizedBox(height: 12),
+            _buildSummaryMetric(
+              taxSummary.ivaLabel,
+              ChileanUtils.formatCurrency(taxSummary.taxAmount.toDouble()),
+              secondary: true,
+            ),
+          ] else ...[
+            _buildTaxConfigurationWarning(
+              taxSummary.checkoutBlockMessage ??
+                  'No podemos validar los impuestos de este carrito.',
+            ),
+          ],
           const SizedBox(height: 18),
           Container(
             width: double.infinity,
@@ -513,7 +521,9 @@ class CartPage extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: () => context.go('/tienda/checkout'),
+              onPressed: taxSummary.isValid
+                  ? () => context.go('/tienda/checkout')
+                  : null,
               style: FilledButton.styleFrom(
                 backgroundColor: _logoBlue,
                 foregroundColor: Colors.white,
@@ -689,6 +699,29 @@ class CartPage extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTaxConfigurationWarning(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFF8E8),
+        border: Border(
+          left: BorderSide(color: Color(0xFFB7791F), width: 3),
+        ),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(
+          fontFamily: null,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF6B4F19),
+          height: 1.45,
+        ),
+      ),
     );
   }
 

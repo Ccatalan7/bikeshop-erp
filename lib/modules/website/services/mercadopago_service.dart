@@ -3,7 +3,34 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../shared/config/supabase_config.dart';
+class MercadoPagoCheckoutException implements Exception {
+  const MercadoPagoCheckoutException(this.message, {this.retryable = false});
+
+  final String message;
+  final bool retryable;
+
+  @override
+  String toString() => message;
+}
+
+String _mercadoPagoCheckoutErrorMessage(int? status, Object? details) {
+  final providerMessage = details is Map ? details['error']?.toString() : null;
+
+  if (status == 403) {
+    return 'La sesión segura del pedido venció. Vuelve a abrir el pedido desde esta compra.';
+  }
+  if (status == 409 &&
+      providerMessage == 'Payment checkout is already being prepared') {
+    return 'Estamos preparando el pago. Espera unos segundos y vuelve a intentarlo.';
+  }
+  if (status == 409) {
+    return 'Este pedido ya no está disponible para pago. Puede haberse pagado, cancelado o cambiado su stock.';
+  }
+  if (status == 429 || (status != null && status >= 500)) {
+    return 'Mercado Pago está demorando más de lo normal. No se generará un cobro duplicado; inténtalo nuevamente en unos segundos.';
+  }
+  return 'No pudimos preparar el pago de forma segura. Revisa el pedido e inténtalo nuevamente.';
+}
 
 /// Service for integrating MercadoPago payment gateway
 ///
@@ -20,7 +47,6 @@ class MercadoPagoService extends ChangeNotifier {
   String? _publicKey;
   String? _accessToken;
   bool _isTestMode = true; // Start in test mode
-  String? _storeUrl;
   String? _tenantId; // Tenant ID for multi-tenant filtering
 
   String? get publicKey => _publicKey;
@@ -49,7 +75,6 @@ class MercadoPagoService extends ChangeNotifier {
           .inFilter('key', [
         'mercadopago_public_key',
         'mercadopago_test_mode',
-        'store_url',
       ]);
 
       // Filter by tenant if available
@@ -69,9 +94,6 @@ class MercadoPagoService extends ChangeNotifier {
             break;
           case 'mercadopago_test_mode':
             _isTestMode = value == 'true' || value == '1';
-            break;
-          case 'store_url':
-            _storeUrl = value;
             break;
         }
       }
@@ -192,78 +214,66 @@ class MercadoPagoService extends ChangeNotifier {
   /// (URL where customer should be redirected to complete payment)
   Future<Map<String, dynamic>> createPreference({
     required String orderId,
-    required String orderNumber,
-    required double total,
-    required List<Map<String, dynamic>> items,
-    required String customerEmail,
-    String? customerName,
+    required String orderAccessToken,
   }) async {
     if (_tenantId == null) {
       throw Exception('No se pudo detectar la tienda para iniciar el pago.');
     }
 
     try {
-      // Build back_urls
-      final successUrl = _buildReturnUrl(orderId: orderId, status: 'success');
-      final failureUrl = _buildReturnUrl(orderId: orderId, status: 'failure');
-      final pendingUrl = _buildReturnUrl(orderId: orderId, status: 'pending');
-
-      debugPrint('🔗 [MercadoPago] Creating preference with back_urls:');
-      debugPrint('   success: $successUrl');
-      debugPrint('   failure: $failureUrl');
-      debugPrint('   pending: $pendingUrl');
-
       // Call our Supabase Edge Function to create the preference
-      // (This keeps the access token secure on the server)
+      // (provider credentials and authoritative monetary data stay server-side).
       final response = await _supabase.functions.invoke(
         'mercadopago-create-preference',
         body: {
-          'tenant_id': _tenantId, // Pass tenant_id for multi-tenant filtering
           'order_id': orderId,
-          'order_number': orderNumber,
-          'total': total,
-          'items': items,
-          'payer': {
-            'email': customerEmail,
-            if (customerName != null) 'name': customerName,
-          },
-          'back_urls': {
-            'success': successUrl,
-            'failure': failureUrl,
-            'pending': pendingUrl,
-          },
-          'auto_return': 'approved',
-          'notification_url': _getWebhookUrl(),
+          'order_access_token': orderAccessToken,
         },
       );
 
       if (response.status != 200) {
-        throw Exception('Error creating payment preference: ${response.data}');
+        throw MercadoPagoCheckoutException(
+          _mercadoPagoCheckoutErrorMessage(response.status, response.data),
+          retryable: response.status == 409 || response.status == 429,
+        );
       }
 
       return response.data as Map<String, dynamic>;
-    } catch (e) {
-      debugPrint('Error creating MercadoPago preference: $e');
+    } on MercadoPagoCheckoutException {
       rethrow;
+    } on FunctionException catch (error) {
+      debugPrint(
+        'MercadoPago preference function failed with status ${error.status}.',
+      );
+      throw MercadoPagoCheckoutException(
+        _mercadoPagoCheckoutErrorMessage(error.status, error.details),
+        retryable:
+            error.status == 409 || error.status == 429 || error.status >= 500,
+      );
+    } catch (error) {
+      debugPrint(
+        'MercadoPago preference request failed: ${error.runtimeType}.',
+      );
+      throw const MercadoPagoCheckoutException(
+        'No pudimos comunicarnos con Mercado Pago. No se generará un cobro duplicado; inténtalo nuevamente en unos segundos.',
+        retryable: true,
+      );
     }
   }
 
   /// Get payment status from MercadoPago
   Future<Map<String, dynamic>?> getPaymentStatus(
     String paymentId, {
-    String? orderId,
+    required String orderId,
+    required String orderAccessToken,
   }) async {
-    if (_tenantId == null) {
-      throw Exception('No se pudo detectar la tienda para verificar el pago.');
-    }
-
     try {
       final response = await _supabase.functions.invoke(
         'mercadopago-get-payment',
         body: {
           'payment_id': paymentId,
-          'tenant_id': _tenantId,
-          if (orderId != null) 'order_id': orderId,
+          'order_id': orderId,
+          'order_access_token': orderAccessToken,
         },
       );
 
@@ -287,8 +297,13 @@ class MercadoPagoService extends ChangeNotifier {
     required String orderId,
     required String paymentId,
     required String status,
+    required String orderAccessToken,
   }) async {
-    await getPaymentStatus(paymentId, orderId: orderId);
+    await getPaymentStatus(
+      paymentId,
+      orderId: orderId,
+      orderAccessToken: orderAccessToken,
+    );
   }
 
   /// Handle MercadoPago webhook notification
@@ -303,52 +318,5 @@ class MercadoPagoService extends ChangeNotifier {
     // This is a placeholder - actual webhook handling should be done
     // in a Supabase Edge Function for security
     debugPrint('Webhook received: $notification');
-  }
-
-  // ============================================================================
-  // HELPER METHODS
-  // ============================================================================
-
-  String _resolveStoreUrl() {
-    if (_storeUrl != null && _storeUrl!.isNotEmpty) {
-      return _storeUrl!;
-    }
-
-    if (kIsWeb) {
-      final origin = Uri.base.origin;
-      if (origin.isNotEmpty) {
-        return origin;
-      }
-    }
-
-    return 'https://vinabike-store.web.app';
-  }
-
-  String _buildReturnUrl({required String orderId, required String status}) {
-    final base = _normalizeBaseUrl(_resolveStoreUrl());
-
-    String url;
-    if (status == 'failure') {
-      // Use clean public store routes (no /tienda prefix) for web callbacks.
-      // This also matches our canonical URLs on vinabike-store.web.app.
-      url = '$base/checkout?pedido=$orderId&status=$status';
-    } else {
-      url = '$base/pedido/$orderId?status=$status';
-    }
-
-    debugPrint('🔗 [MercadoPago] Built return URL for $status: $url');
-    return url;
-  }
-
-  String _getWebhookUrl() {
-    final supabaseUrl = _normalizeBaseUrl(SupabaseConfig.url);
-    return '$supabaseUrl/functions/v1/mercadopago-webhook';
-  }
-
-  String _normalizeBaseUrl(String url) {
-    if (url.endsWith('/')) {
-      return url.substring(0, url.length - 1);
-    }
-    return url;
   }
 }

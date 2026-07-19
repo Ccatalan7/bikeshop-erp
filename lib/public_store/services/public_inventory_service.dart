@@ -85,6 +85,58 @@ class PublicInventoryService extends ChangeNotifier {
     return cleaned;
   }
 
+  /// The main public catalog RPC predates checkout tax classification and does
+  /// not expose it. Hydrate only the requested public product IDs through the
+  /// narrow allowlisted RPC; if that contract is unavailable, keep products
+  /// visible but leave `taxRate` null so checkout fails closed.
+  Future<List<Map<String, dynamic>>> _attachCheckoutTaxRates({
+    required String tenantId,
+    required List<Map<String, dynamic>> rows,
+  }) async {
+    if (rows.isEmpty) return rows;
+
+    final productIds = rows
+        .map((row) => row['id']?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    if (productIds.isEmpty) return rows;
+
+    try {
+      final response = await _supabase.rpc(
+        'get_public_product_tax_classifications',
+        params: {
+          'p_tenant_id': tenantId,
+          'p_product_ids': productIds,
+        },
+      );
+      final taxRatesById = <String, Object?>{};
+      for (final raw in response as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final id = row['id']?.toString();
+        if (id != null && id.isNotEmpty) {
+          taxRatesById[id] = row['tax_rate'];
+        }
+      }
+
+      return rows.map((row) {
+        final id = row['id']?.toString();
+        if (id == null || !taxRatesById.containsKey(id)) return row;
+        return <String, dynamic>{
+          ...row,
+          'tax_rate': taxRatesById[id],
+        };
+      }).toList();
+    } catch (error) {
+      debugPrint(
+        '⚠️ PublicInventoryService: tax classification unavailable; '
+        'checkout will stay blocked: $error',
+      );
+      return rows;
+    }
+  }
+
   Future<PublicProductPage> getProductPageForTenant({
     required String tenantId,
     List<String>? categoryIds,
@@ -119,10 +171,15 @@ class PublicInventoryService extends ChangeNotifier {
       final rows = (response as List)
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
-      final products = rows.map(Product.fromJson).toList();
-      final totalCount = rows.isEmpty
+      final classifiedRows = await _attachCheckoutTaxRates(
+        tenantId: tenantId,
+        rows: rows,
+      );
+      final products = classifiedRows.map(Product.fromJson).toList();
+      final totalCount = classifiedRows.isEmpty
           ? 0
-          : (rows.first['total_count'] as num?)?.toInt() ?? products.length;
+          : (classifiedRows.first['total_count'] as num?)?.toInt() ??
+              products.length;
 
       debugPrint(
           '⏱️ [PublicInventory] Product page RPC: ${sw.elapsedMilliseconds}ms (${products.length}/$totalCount products)');
@@ -265,14 +322,12 @@ class PublicInventoryService extends ChangeNotifier {
       // We'll filter in-memory after fetching to keep services/non-stock items
       // visible.
       if (onlyInStock && (searchQuery == null || searchQuery.isEmpty)) {
-        // Be resilient: some code paths historically updated only one of the
-        // legacy/current stock columns.
         // IMPORTANT: services and non-stock-tracked items must NEVER be
         // filtered out by stock constraints.
         // PostgREST supports only one `or=` param, so we include all
         // “in-stock” conditions in a single OR group.
         query = query.or(
-          'product_type.eq.service,track_stock.eq.false,inventory_qty.gt.0,stock_quantity.gt.0',
+          'product_type.eq.service,track_stock.eq.false,stock_quantity.gt.0',
         );
       }
 
@@ -308,8 +363,10 @@ class PublicInventoryService extends ChangeNotifier {
       debugPrint(
           '⏱️ [PublicInventory] Products query: ${sw.elapsedMilliseconds}ms');
 
-      final products =
-          (response as List).map((json) => Product.fromJson(json)).toList();
+      final rows = (response as List)
+          .map((json) => Map<String, dynamic>.from(json as Map))
+          .toList();
+      final products = rows.map(Product.fromJson).toList();
 
       if (searchQuery != null && searchQuery.isNotEmpty) {
         final effectivePolicy = policy ?? const PublicProductVisibilityPolicy();
@@ -514,8 +571,14 @@ class PublicInventoryService extends ChangeNotifier {
         }),
       );
 
-      final products =
-          (response as List).map((json) => Product.fromJson(json)).toList();
+      final rows = (response as List)
+          .map((json) => Map<String, dynamic>.from(json as Map))
+          .toList();
+      final classifiedRows = await _attachCheckoutTaxRates(
+        tenantId: tenantId,
+        rows: rows,
+      );
+      final products = classifiedRows.map(Product.fromJson).toList();
 
       debugPrint(
           '✅ PublicInventoryService: Found ${products.length} featured products');
@@ -618,8 +681,14 @@ class PublicInventoryService extends ChangeNotifier {
         }),
       );
 
-      final products =
-          (response as List).map((json) => Product.fromJson(json)).toList();
+      final rows = (response as List)
+          .map((json) => Map<String, dynamic>.from(json as Map))
+          .toList();
+      final classifiedRows = await _attachCheckoutTaxRates(
+        tenantId: tenantId,
+        rows: rows,
+      );
+      final products = classifiedRows.map(Product.fromJson).toList();
       final visibleProducts = policy == null
           ? products
           : products.where(policy.allowsProduct).toList();

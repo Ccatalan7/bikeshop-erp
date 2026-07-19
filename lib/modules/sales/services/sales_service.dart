@@ -35,6 +35,15 @@ String formatSalesNegativeStockWarning(
       '${remaining > 0 ? ' y $remaining más' : ''}.';
 }
 
+class SalesInvoiceDeletionException implements Exception {
+  const SalesInvoiceDeletionException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 class SalesService extends ChangeNotifier {
   static const _invoicesCollection = 'sales_invoices';
   static const _paymentsCollection = 'sales_payments';
@@ -388,6 +397,39 @@ class SalesService extends ChangeNotifier {
   }
 
   Future<void> deleteInvoice(String invoiceId) async {
+    late final Map<String, dynamic> currentInvoice;
+    try {
+      final response = await _databaseService.supabase
+          .from(_invoicesCollection)
+          .select('id, invoice_number, status')
+          .eq('id', invoiceId)
+          .maybeSingle();
+      if (response == null) {
+        throw const SalesInvoiceDeletionException(
+          'La factura ya no existe o no está disponible para este negocio.',
+        );
+      }
+      currentInvoice = Map<String, dynamic>.from(response);
+    } on SalesInvoiceDeletionException {
+      rethrow;
+    } catch (_) {
+      throw const SalesInvoiceDeletionException(
+        'No se pudo verificar el estado actual de la factura. Recarga e inténtalo nuevamente.',
+      );
+    }
+
+    final invoiceNumber =
+        currentInvoice['invoice_number']?.toString().trim().isNotEmpty == true
+            ? currentInvoice['invoice_number'].toString().trim()
+            : 'seleccionada';
+    final currentStatus = InvoiceStatusX.fromName(currentInvoice['status']) ??
+        InvoiceStatus.draft;
+    if (!currentStatus.canBeDeleted) {
+      throw SalesInvoiceDeletionException(
+        currentStatus.deletionBlockedMessage(invoiceNumber),
+      );
+    }
+
     Map<String, dynamic>? linkedJob;
     try {
       final response = await _databaseService.supabase
@@ -399,7 +441,7 @@ class SalesService extends ChangeNotifier {
         linkedJob = Map<String, dynamic>.from(response);
       }
     } catch (_) {
-      throw Exception(
+      throw const SalesInvoiceDeletionException(
         'No se pudo verificar si esta factura pertenece a un trabajo. Recarga e inténtalo nuevamente.',
       );
     }
@@ -409,7 +451,7 @@ class SalesService extends ChangeNotifier {
       final label = jobNumber == null || jobNumber.isEmpty
           ? 'un trabajo de taller'
           : 'el trabajo $jobNumber';
-      throw Exception(
+      throw SalesInvoiceDeletionException(
         'Esta factura pertenece a $label y no se puede eliminar por separado. Adminístrala desde la ficha del trabajo.',
       );
     }
@@ -420,8 +462,24 @@ class SalesService extends ChangeNotifier {
       invalidateInvoicesCache();
       AccountingDashboardSection.invalidateCache();
       notifyListeners();
-    } catch (e) {
-      throw Exception('No se pudo eliminar la factura: $e');
+    } on PostgrestException catch (error) {
+      if (error.code == '23514') {
+        throw SalesInvoiceDeletionException(
+          'La factura $invoiceNumber ya no es un borrador eliminable. Recarga la lista y usa su acción de corrección.',
+        );
+      }
+      if (error.code == '23503') {
+        throw SalesInvoiceDeletionException(
+          'La factura $invoiceNumber está vinculada a otro registro y no se puede eliminar por separado.',
+        );
+      }
+      throw const SalesInvoiceDeletionException(
+        'No se pudo eliminar el borrador. Recarga e inténtalo nuevamente.',
+      );
+    } catch (_) {
+      throw const SalesInvoiceDeletionException(
+        'No se pudo eliminar el borrador. Recarga e inténtalo nuevamente.',
+      );
     }
   }
 

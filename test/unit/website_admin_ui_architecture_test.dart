@@ -67,8 +67,132 @@ void main() {
     expect(source, contains('bottom: BorderSide'));
     expect(source, isNot(contains('ListView.separated')));
     expect(source, contains('_showOrderInspector'));
+    expect(source, contains('OrderEvidenceSection('));
+    expect(source, contains('openBrowserWorkspace('));
+    expect(source, contains('InteractiveTableField('));
+    expect(source, contains('OperationalStatusBadge('));
+    expect(source, contains('OnlineOrderWorkflowPolicy.legalNextStatuses'));
+    expect(source, contains('showModernContextMenu<String>'));
+    expect(source, contains('showOnlineOrderCorrectionDialog'));
+    expect(source, contains("value: 'correction'"));
+    expect(
+        source,
+        contains(
+            "'/sales/invoices/\$invoiceId/edit?returnTo=/website/orders'"));
+    expect(source, contains("value: 'ready_for_pickup'"));
+    expect(source, contains("tooltip: 'Guía operativa'"));
     expect(source, isNot(contains('Card(')));
     expect(source, isNot(contains('_buildOrderRow')));
+  });
+
+  test('online-order evidence is read-only and keeps fiscal labels honest', () {
+    final widget = File(
+      'lib/modules/website/widgets/order_evidence_section.dart',
+    ).readAsStringSync();
+    final documentService = File(
+      'lib/modules/website/services/online_order_official_document_service.dart',
+    ).readAsStringSync();
+    final documentModel = File(
+      'lib/modules/website/models/online_order_official_document.dart',
+    ).readAsStringSync();
+    final communicationService = File(
+      'lib/modules/website/services/order_communication_service.dart',
+    ).readAsStringSync();
+
+    expect(documentModel, contains('Voucher Mercado Pago válido como boleta'));
+    expect(widget, contains('Respaldo interno · no tributario'));
+    expect(widget, contains('verifiedArtifactUri'));
+    expect(widget, isNot(contains('Reenviar')));
+    expect(widget, isNot(contains('Card(')));
+    expect(widget, isNot(contains('Chip(')));
+    for (final source in [documentService, communicationService]) {
+      expect(source, contains('.select('));
+      expect(source, isNot(contains('.insert(')));
+      expect(source, isNot(contains('.update(')));
+      expect(source, isNot(contains(".rpc(")));
+    }
+  });
+
+  test('jobs and online orders consume the same operational table primitives',
+      () {
+    final jobs = File(
+      'lib/modules/bikeshop/pages/pegas_table_page.dart',
+    ).readAsStringSync();
+    final orders = File(
+      'lib/modules/website/pages/online_orders_page.dart',
+    ).readAsStringSync();
+
+    for (final source in [jobs, orders]) {
+      expect(source, contains('OperationalStatusBadge('));
+      expect(source, contains('InteractiveTableField('));
+    }
+    expect(jobs, isNot(contains('class _InteractiveTableField')));
+    expect(orders, isNot(contains('_statusChipPalette')));
+  });
+
+  test('online order mutations use the optimistic lifecycle commands', () {
+    final model = File(
+      'lib/modules/website/models/website_models.dart',
+    ).readAsStringSync();
+    final service = File(
+      'lib/modules/website/services/website_service.dart',
+    ).readAsStringSync();
+    final orders = File(
+      'lib/modules/website/pages/online_orders_page.dart',
+    ).readAsStringSync();
+
+    expect(model, contains("json['version']"));
+    expect(service, contains("'transition_online_order_status'"));
+    expect(service, contains("'update_online_order_internal_notes'"));
+    expect(service, contains("'p_expected_version': expectedVersion"));
+    expect(
+      service,
+      contains("'online_order_payment_processing_status_view'"),
+    );
+    expect(
+      service,
+      contains("'process_mercadopago_payment_observation'"),
+    );
+    expect(service, contains("'request_online_order_correction'"));
+    expect(service, contains("'apply_online_order_correction'"));
+    expect(service, contains("'mercadopago-refund-payment'"));
+    expect(service, isNot(contains(".from('online_orders').update")));
+    expect(service, isNot(contains("rpc('cancel_online_order'")));
+    expect(service, contains('_orders = ordersWithProducts;'));
+    expect(service, contains('ordersEnrichmentWarning'));
+    expect(orders, contains('websiteService.ordersEnrichmentWarning'));
+    expect(orders, contains('websiteService.ordersLoadError'));
+    expect(orders, contains('expectedVersion: order.version'));
+    expect(orders, contains('hasPaymentProcessingAttention'));
+    expect(orders, contains('Reintentar procesamiento'));
+  });
+
+  test('online correction UI separates physical and financial dispositions',
+      () {
+    final dialog = File(
+      'lib/modules/website/widgets/online_order_correction_dialog.dart',
+    ).readAsStringSync();
+    final migration = File(
+      'supabase/migrations/20260718210000_add_online_order_correction_workflow.sql',
+    ).readAsStringSync();
+
+    expect(dialog, contains("value: 'restock'"));
+    expect(dialog, contains("value: 'quarantine'"));
+    expect(dialog, contains("value: 'scrap'"));
+    expect(dialog, contains("value: 'financial_only'"));
+    expect(dialog, contains('Mercado Pago se reembolsa primero'));
+    expect(migration, contains('public.create_sales_return('));
+    expect(migration, contains('public.create_sales_credit_note('));
+    expect(migration, contains('public.create_sales_customer_refund('));
+    expect(migration, contains('authorize_online_order_refund_execution'));
+    expect(migration, contains('Provider refund success is terminal'));
+    expect(migration, contains('cancel_before_fulfillment'));
+    expect(migration, contains('enqueue_partial_online_order_refund_email'));
+    expect(
+      migration,
+      contains('prevent_void_of_online_order_correction_artifact'),
+    );
+    expect(migration, contains("provider_state <> 'succeeded'"));
   });
 
   test('canonical surface registry covers the administration hub and routes',

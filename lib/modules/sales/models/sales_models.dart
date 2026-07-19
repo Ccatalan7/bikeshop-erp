@@ -70,6 +70,10 @@ class Invoice {
   final String? notes; // Internal notes
   final String?
       source; // 'pos', 'quick_sale', 'manual_sale', 'ecommerce', 'mechanic_job'
+  final String? voidReason;
+  final DateTime? voidedAt;
+  final String? voidedBy;
+  final String? voidOperationId;
 
   Invoice({
     this.id,
@@ -106,6 +110,10 @@ class Invoice {
     this.workDescription,
     this.notes,
     this.source,
+    this.voidReason,
+    this.voidedAt,
+    this.voidedBy,
+    this.voidOperationId,
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
@@ -144,6 +152,10 @@ class Invoice {
     String? workDescription,
     String? notes,
     String? source,
+    String? voidReason,
+    DateTime? voidedAt,
+    String? voidedBy,
+    String? voidOperationId,
   }) {
     return Invoice(
       id: id ?? this.id,
@@ -181,6 +193,10 @@ class Invoice {
       workDescription: workDescription ?? this.workDescription,
       notes: notes ?? this.notes,
       source: source ?? this.source,
+      voidReason: voidReason ?? this.voidReason,
+      voidedAt: voidedAt ?? this.voidedAt,
+      voidedBy: voidedBy ?? this.voidedBy,
+      voidOperationId: voidOperationId ?? this.voidOperationId,
     );
   }
 
@@ -229,6 +245,11 @@ class Invoice {
       workDescription: json['work_description']?.toString(),
       notes: json['notes']?.toString(),
       source: json['source']?.toString(),
+      voidReason: json['void_reason']?.toString(),
+      voidedAt:
+          json['voided_at'] == null ? null : _parseDate(json['voided_at']),
+      voidedBy: json['voided_by']?.toString(),
+      voidOperationId: json['void_operation_id']?.toString(),
     );
   }
 
@@ -331,6 +352,26 @@ extension InvoiceStatusX on InvoiceStatus {
         );
       },
     );
+  }
+
+  /// Only an unposted draft may be physically removed. Every later state is
+  /// retained as business evidence and corrected through an explicit workflow.
+  bool get canBeDeleted => this == InvoiceStatus.draft;
+
+  String deletionBlockedMessage(String invoiceNumber) {
+    switch (this) {
+      case InvoiceStatus.draft:
+        return '';
+      case InvoiceStatus.sent:
+        return 'La factura $invoiceNumber está enviada. Usa Correcciones > Descartar factura para anularla y ocultarla del listado normal.';
+      case InvoiceStatus.confirmed:
+      case InvoiceStatus.overdue:
+        return 'La factura $invoiceNumber ya fue confirmada. Si no existió la venta y no tiene pagos, usa Correcciones > Descartar factura; el stock y la contabilidad se revertirán automáticamente.';
+      case InvoiceStatus.paid:
+        return 'La factura $invoiceNumber está pagada y se conserva como respaldo. Usa Correcciones para registrar una nota de crédito o devolución.';
+      case InvoiceStatus.cancelled:
+        return 'La factura $invoiceNumber ya está anulada. Se conserva como respaldo auditable y no se elimina.';
+    }
   }
 }
 

@@ -1299,6 +1299,34 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       );
     }
 
+    final parentAction = trace['parent_action']?.toString();
+    if (parentAction == 'void' || movement.triggerAction == 'void') {
+      final parentOperationId = trace['parent_operation_id']?.toString() ??
+          movement.triggerOperationId;
+      final actor =
+          trace['parent_actor_id']?.toString() ?? movement.triggerActorId;
+      final parentContext = trace['parent_context'];
+      final reason = parentContext is Map
+          ? parentContext['reason']?.toString()
+          : movement.triggerReason;
+      final reasonText = reason == null || reason.trim().isEmpty
+          ? ''
+          : ' • motivo: ${reason.trim()}';
+      final actorText =
+          actor == null || actor.isEmpty ? '' : ' • usuario registrado: $actor';
+      final commandText = parentOperationId == null || parentOperationId.isEmpty
+          ? ''
+          : ' • operación de descarte $parentOperationId';
+
+      return Text(
+        'Disparador probado: Descartar factura • ${trace['old_status'] ?? '∅'} → ${trace['new_status'] ?? '∅'}$reasonText$actorText$commandText • movimiento ${movement.operationId}',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w700,
+        ),
+      );
+    }
+
     final action = trace['action']?.toString() ?? 'acción';
     final sourceChannel = trace['source_channel']?.toString();
     final executor = trace['executor']?.toString();

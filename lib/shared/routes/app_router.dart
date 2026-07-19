@@ -150,6 +150,7 @@ import '../../public_store/services/public_store_scroll_state.dart';
 import '../../public_store/providers/public_store_tenant_provider.dart';
 import '../../modules/website/services/website_service.dart';
 import '../services/tenant_service.dart';
+import '../utils/mercadopago_reference.dart';
 
 class _EnsurePublicStoreScrollState extends StatelessWidget {
   final Widget child;
@@ -387,11 +388,9 @@ class AppRouter {
             qp['external_reference'] ?? qp['externalReference'];
         final orderIdFromQuery =
             qp['pedido'] ?? qp['order'] ?? qp['order_id'] ?? qp['orderId'];
-        final inferredOrderId = (externalReference?.isNotEmpty ?? false)
-            ? externalReference
-            : (orderIdFromQuery?.isNotEmpty ?? false)
-                ? orderIdFromQuery
-                : null;
+        final inferredOrderId =
+            mercadoPagoOrderIdFromExternalReference(externalReference) ??
+                mercadoPagoOrderIdFromExternalReference(orderIdFromQuery);
 
         String normalizePaymentStatus() {
           final explicit = qp['status'];

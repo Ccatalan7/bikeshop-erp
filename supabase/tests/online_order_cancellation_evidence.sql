@@ -25,14 +25,35 @@ values
     now(), now()
   );
 
--- The auth bootstrap trigger creates a profile/tenant for new users. Repoint
--- the two test actors to the deterministic fixture tenants.
-update public.user_profiles
-   set tenant_id = '9e000000-0000-4000-8000-000000000001', role = 'admin'
- where user_id = '9e000000-0000-4000-8000-000000000099';
-update public.user_profiles
-   set tenant_id = '9e000000-0000-4000-8000-000000000002', role = 'admin'
- where user_id = '9e000000-0000-4000-8000-000000000098';
+-- Production-derived schema clones do not guarantee an auth.users bootstrap
+-- trigger. Replace any trigger-created rows with deterministic staff profiles.
+delete from public.user_profiles
+where user_id in (
+  '9e000000-0000-4000-8000-000000000099',
+  '9e000000-0000-4000-8000-000000000098'
+);
+
+insert into public.user_profiles (
+  user_id,
+  tenant_id,
+  role,
+  permissions,
+  is_active
+) values
+  (
+    '9e000000-0000-4000-8000-000000000099',
+    '9e000000-0000-4000-8000-000000000001',
+    'admin',
+    '{}'::jsonb,
+    true
+  ),
+  (
+    '9e000000-0000-4000-8000-000000000098',
+    '9e000000-0000-4000-8000-000000000002',
+    'admin',
+    '{}'::jsonb,
+    true
+  );
 update auth.users
    set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb)
        || jsonb_build_object('tenant_id', '9e000000-0000-4000-8000-000000000001')
@@ -53,13 +74,13 @@ select set_config(
 );
 
 insert into public.products(
-  id, tenant_id, name, sku, price, cost, product_type, is_service,
+  id, tenant_id, name, sku, price, cost, tax_rate, product_type, is_service,
   track_stock, inventory_qty, stock_quantity, min_stock_level, max_stock_level
 )
 values(
   '9e000000-0000-4000-8000-000000000010',
   '9e000000-0000-4000-8000-000000000001',
-  'Online cancellation product', 'ONLINE-CANCEL-001', 1000, 500,
+  'Online cancellation product', 'ONLINE-CANCEL-001', 1000, 500, 19,
   'product', false, true, 10, 10, 0, 100
 );
 
@@ -283,16 +304,34 @@ select is(
   'refused paid cancellation does not restore or alter stock'
 );
 
+-- Build the validation order in two deterministic phases so its immutable
+-- line tax snapshot exists before the normal processing command runs.
+select set_config('app.public_order_rpc_in_progress', 'true', true);
 insert into public.online_orders(
-  id, tenant_id, order_number, customer_email, customer_name,
-  subtotal, total, status, payment_status
+  id, tenant_id, order_number, customer_email, customer_name, delivery_type,
+  subtotal, tax_amount, shipping_cost, discount_amount, total,
+  status, payment_status, payment_method
 )
 values(
   '9e000000-0000-4000-8000-000000000030',
   '9e000000-0000-4000-8000-000000000001',
   'WEB-VALIDATION-001', 'validation@example.invalid', 'Validation Customer',
-  1000, 1000, 'pending', 'pending'
+  'pickup', 840, 160, 0, 0, 1000, 'pending', 'pending', 'transfer'
 );
+insert into public.online_order_items(
+  id, tenant_id, order_id, product_id, product_name, product_sku,
+  quantity, unit_price, subtotal, unit_cost, tax_rate, is_service,
+  purchase_treatment, product_type
+) values (
+  '9e000000-0000-4000-8000-000000000031',
+  '9e000000-0000-4000-8000-000000000001',
+  '9e000000-0000-4000-8000-000000000030',
+  '9e000000-0000-4000-8000-000000000010',
+  'Online cancellation product', 'ONLINE-CANCEL-001',
+  1, 1000, 1000, 500, 19, false, 'inventory', 'product'
+);
+select set_config('app.public_order_rpc_in_progress', '', true);
+select public.process_online_order('9e000000-0000-4000-8000-000000000030');
 
 select throws_ok(
   $$select public.cancel_online_order('9e000000-0000-4000-8000-000000000030', 'Invalid fraction', 0.5)$$,

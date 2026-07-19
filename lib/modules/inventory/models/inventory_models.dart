@@ -20,7 +20,7 @@ class Product {
       'whatsapp_catalog_meta_product_id,whatsapp_catalog_synced_at,'
       'whatsapp_catalog_synced_url,whatsapp_catalog_url_matches,'
       'whatsapp_catalog_verified_at,'
-      'warehouse_location,is_active,'
+      'warehouse_location,tax_rate,is_active,'
       'is_published,is_google_merchant,purchase_treatment,product_type,'
       'track_stock,is_set,set_type,parent_set_id,component_label,'
       'component_position,created_at,updated_at';

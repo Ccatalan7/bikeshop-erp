@@ -24,5 +24,15 @@ void main() {
       expect(diagnostic.kind, MailErrorKind.token);
       expect(diagnostic.label, 'Token/OAuth');
     });
+
+    test('classifies a missing Zoho group scope as permissions', () {
+      final diagnostic = MailErrorDiagnostic.fromMessage(
+        'Permisos Zoho insuficientes: falta el scope '
+        'ZohoMail.organization.groups.READ. Reconecta Zoho.',
+      );
+
+      expect(diagnostic.kind, MailErrorKind.permissions);
+      expect(diagnostic.label, 'Permisos');
+    });
   });
 }

@@ -178,6 +178,12 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     if (_filterStatus != null) {
       filtered =
           filtered.where((invoice) => invoice.status == _filterStatus).toList();
+    } else {
+      // Cancelled invoices remain available as audit evidence under the
+      // explicit Anuladas filter, without cluttering day-to-day operations.
+      filtered = filtered
+          .where((invoice) => invoice.status != InvoiceStatus.cancelled)
+          .toList();
     }
 
     filtered.sort((a, b) {
@@ -487,7 +493,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               children: [
-                _buildMobileStatusChip('Todas', null),
+                _buildMobileStatusChip('Activas', null),
                 _buildMobileStatusChip('Borrador', InvoiceStatus.draft),
                 _buildMobileStatusChip('Enviada', InvoiceStatus.sent),
                 _buildMobileStatusChip('Confirmada', InvoiceStatus.confirmed),
@@ -779,23 +785,32 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
   Widget _buildSummaryCards(List<Invoice> invoices) {
     if (invoices.isEmpty) return const SizedBox.shrink();
 
-    final totalReceivable = invoices
-        .where((inv) => inv.status != InvoiceStatus.draft && inv.balance > 0)
+    // Drafts are not posted receivables and cancelled invoices retain their
+    // historical balance only as evidence. Neither may affect operational
+    // collection KPIs.
+    final collectibleInvoices = invoices.where(
+      (invoice) =>
+          invoice.status != InvoiceStatus.draft &&
+          invoice.status != InvoiceStatus.cancelled,
+    );
+
+    final totalReceivable = collectibleInvoices
+        .where((inv) => inv.balance > 0)
         .fold(0.0, (sum, inv) => sum + inv.balance);
 
-    final overdue = invoices.where((inv) {
+    final overdue = collectibleInvoices.where((inv) {
       if (inv.dueDate == null || inv.balance <= 0) return false;
       return inv.dueDate!.isBefore(DateTime.now());
     }).fold(0.0, (sum, inv) => sum + inv.balance);
 
-    final dueIn30Days = invoices.where((inv) {
+    final dueIn30Days = collectibleInvoices.where((inv) {
       if (inv.dueDate == null || inv.balance <= 0) return false;
       final now = DateTime.now();
       return inv.dueDate!.isAfter(now) &&
           inv.dueDate!.isBefore(now.add(const Duration(days: 30)));
     }).fold(0.0, (sum, inv) => sum + inv.balance);
 
-    final overdueCount = invoices.where((inv) {
+    final overdueCount = collectibleInvoices.where((inv) {
       if (inv.dueDate == null || inv.balance <= 0) return false;
       return inv.dueDate!.isBefore(DateTime.now());
     }).length;
@@ -1083,6 +1098,31 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           const SizedBox(width: 12),
           if (!isMobile) ...[
             PopupMenuButton<String>(
+              tooltip: 'Filtrar por estado',
+              onSelected: (value) {
+                setState(() {
+                  _filterStatus =
+                      value == 'active' ? null : InvoiceStatusX.fromName(value);
+                });
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'active', child: Text('Activas')),
+                PopupMenuItem(value: 'draft', child: Text('Borradores')),
+                PopupMenuItem(value: 'sent', child: Text('Enviadas')),
+                PopupMenuItem(value: 'confirmed', child: Text('Confirmadas')),
+                PopupMenuItem(value: 'paid', child: Text('Pagadas')),
+                PopupMenuItem(value: 'overdue', child: Text('Vencidas')),
+                PopupMenuDivider(),
+                PopupMenuItem(value: 'cancelled', child: Text('Anuladas')),
+              ],
+              child: OutlinedButton.icon(
+                onPressed: null,
+                icon: const Icon(Icons.filter_alt_outlined, size: 18),
+                label: Text(_invoiceFilterLabel),
+              ),
+            ),
+            const SizedBox(width: 8),
+            PopupMenuButton<String>(
               icon: const Icon(Icons.view_column_outlined),
               tooltip: 'Columnas',
               itemBuilder: (context) {
@@ -1115,6 +1155,25 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
         ],
       ),
     );
+  }
+
+  String get _invoiceFilterLabel {
+    switch (_filterStatus) {
+      case null:
+        return 'Activas';
+      case InvoiceStatus.draft:
+        return 'Borradores';
+      case InvoiceStatus.sent:
+        return 'Enviadas';
+      case InvoiceStatus.confirmed:
+        return 'Confirmadas';
+      case InvoiceStatus.paid:
+        return 'Pagadas';
+      case InvoiceStatus.overdue:
+        return 'Vencidas';
+      case InvoiceStatus.cancelled:
+        return 'Anuladas';
+    }
   }
 
   Widget _buildInvoiceTable(List<Invoice> invoices, SalesService salesService,
@@ -1349,16 +1408,19 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                       ],
                     ),
                   ),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete_outline, size: 16, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('Eliminar', style: TextStyle(color: Colors.red)),
-                      ],
+                  if (_canOfferInvoiceDelete(invoice))
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline,
+                              size: 16, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Eliminar borrador',
+                              style: TextStyle(color: Colors.red)),
+                        ],
+                      ),
                     ),
-                  ),
                 ],
                 onSelected: (value) {
                   if (value == 'edit') {
@@ -1564,6 +1626,43 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                                   payments: accounting.payments,
                                   onPaymentTap: _openLinkedPayment,
                                 ),
+                              if (invoice.status == InvoiceStatus.cancelled &&
+                                  invoice.voidReason?.trim().isNotEmpty ==
+                                      true) ...[
+                                const SizedBox(height: 12),
+                                Container(
+                                  width: paperWidth,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFF1F2),
+                                    border: Border.all(
+                                      color: const Color(0xFFFECACA),
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(
+                                        Icons.info_outline,
+                                        size: 18,
+                                        color: Color(0xFF991B1B),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Factura descartada: ${invoice.voidReason!.trim()}',
+                                          style: const TextStyle(
+                                            color: Color(0xFF991B1B),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 24),
                               DocumentPaperShell(
                                 width: paperWidth,
@@ -1990,19 +2089,20 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                         ],
                       ),
                     ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete_outline,
-                              size: 16, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text('Eliminar',
-                              style:
-                                  TextStyle(color: Colors.red, fontSize: 13)),
-                        ],
+                    if (_canOfferInvoiceDelete(invoice))
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline,
+                                size: 16, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Eliminar borrador',
+                                style:
+                                    TextStyle(color: Colors.red, fontSize: 13)),
+                          ],
+                        ),
                       ),
-                    ),
                   ],
                   onSelected: (value) {
                     if (value == 'duplicate') {
@@ -2202,9 +2302,11 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Eliminar factura'),
+        title: const Text('Eliminar borrador'),
         content: Text(
-            '¿Está seguro que desea eliminar la factura ${invoice.invoiceNumber}?'),
+          'Se eliminará definitivamente el borrador ${invoice.invoiceNumber}. '
+          'Esta acción solo está disponible porque aún no ha sido contabilizado. ¿Continuar?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -2241,18 +2343,27 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 if (mounted) {
                   messenger.showSnackBar(
                     SnackBar(
-                      content: Text('Error al eliminar factura: $e'),
+                      content: Text(
+                        e is SalesInvoiceDeletionException
+                            ? e.message
+                            : 'No se pudo eliminar el borrador. Recarga e inténtalo nuevamente.',
+                      ),
                       backgroundColor: Colors.red,
                     ),
                   );
                 }
               }
             },
-            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+            child: const Text('Eliminar borrador',
+                style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
+  }
+
+  bool _canOfferInvoiceDelete(Invoice invoice) {
+    return invoice.status.canBeDeleted && invoice.source != 'mechanic_job';
   }
 
   Widget _buildInvoiceDocument(Invoice invoice, double containerWidth) {

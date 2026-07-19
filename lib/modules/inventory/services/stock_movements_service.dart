@@ -31,7 +31,9 @@ class StockMovementsService extends ChangeNotifier {
       'integrity_status,is_summary_excluded,linked_adjustment_id,'
       'canonical_movement_id,operation_id,source_document_type,'
       'source_document_id,evidence_stock_before,evidence_stock_after,'
-      'evidence_balance_provenance,evidence_integrity_status';
+      'evidence_balance_provenance,evidence_integrity_status,'
+      'trigger_operation_id,trigger_action,trigger_source_channel,'
+      'trigger_actor_id,trigger_reason';
 
   List<StockMovement> _movements = [];
   bool _isLoading = false;
@@ -320,7 +322,7 @@ class StockMovementsService extends ChangeNotifier {
     }
 
     var query = _supabase
-        .from('stock_movements_ledger_view')
+        .from('stock_movements_operational_view')
         .select(_movementSelect)
         .eq('tenant_id', tenantId);
 
@@ -345,11 +347,12 @@ class StockMovementsService extends ChangeNotifier {
     if (tenantId == null) throw Exception('No tenant_id found');
 
     final response = await _supabase
-        .from('inventory_accounting_operation_trace_view')
+        .from('inventory_accounting_operation_trace_enriched_view')
         .select(
           'operation_id,source_channel,action,document_type,document_id,'
           'actor_id,executor,old_status,new_status,outcome,started_at,'
-          'completed_at,checkpoints',
+          'completed_at,checkpoints,context,parent_operation_id,parent_action,'
+          'parent_source_channel,parent_actor_id,parent_outcome,parent_context',
         )
         .eq('tenant_id', tenantId)
         .eq('operation_id', operationId)

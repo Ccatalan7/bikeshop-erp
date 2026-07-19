@@ -17,6 +17,29 @@ values ('96000000-0000-4000-8000-000000000001', 'Sales Channel Guard Test');
 insert into public.tenants (id, shop_name)
 values ('96000000-0000-4000-8000-000000000003', 'Other Tenant Guard Test');
 
+-- This guard suite historically models free shipping. Keep that contract as
+-- explicit tariff data so checkout still follows the production quote RPC and
+-- the server-owned total remains the product total asserted below.
+insert into public.online_shipping_rate_tiers (
+  tenant_id,
+  country_code,
+  min_order_gross,
+  max_order_gross,
+  shipping_gross,
+  tax_rate,
+  estimated_min_business_days,
+  estimated_max_business_days
+) values (
+  '96000000-0000-4000-8000-000000000001',
+  'CL',
+  0,
+  null,
+  0,
+  0,
+  0,
+  0
+);
+
 insert into auth.users (
   id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at
@@ -29,21 +52,36 @@ values (
   now(), now()
 );
 
-update public.user_profiles
-   set tenant_id = '96000000-0000-4000-8000-000000000003'
- where user_id = '96000000-0000-4000-8000-000000000099';
+-- Production-derived schema clones do not guarantee an auth.users bootstrap
+-- trigger. Seed the foreign-tenant actor explicitly and deterministically.
+delete from public.user_profiles
+where user_id = '96000000-0000-4000-8000-000000000099';
+
+insert into public.user_profiles (
+  user_id,
+  tenant_id,
+  role,
+  permissions,
+  is_active
+) values (
+  '96000000-0000-4000-8000-000000000099',
+  '96000000-0000-4000-8000-000000000003',
+  'admin',
+  '{}'::jsonb,
+  true
+);
 
 select set_config('request.jwt.claim.sub', '', true);
 
 insert into public.products (
-  id, tenant_id, name, sku, price, cost, product_type, is_service,
+  id, tenant_id, name, sku, price, cost, tax_rate, product_type, is_service,
   track_stock, inventory_qty, stock_quantity, min_stock_level, max_stock_level,
   is_active, is_published, show_on_website
 )
 values (
   '96000000-0000-4000-8000-000000000002',
   '96000000-0000-4000-8000-000000000001',
-  'Online Guard Product', 'ONLINE-GUARD-001', 1190, 500,
+  'Online Guard Product', 'ONLINE-GUARD-001', 1190, 500, 19,
   'product', false, true, 10, 10, 0, 100, true, true, true
 );
 
@@ -176,10 +214,13 @@ select ok(
 );
 
 select ok(
-  has_function_privilege(
+  not has_function_privilege(
     'anon', 'public.create_public_online_order(jsonb,jsonb)', 'EXECUTE'
+  )
+  and has_function_privilege(
+    'anon', 'public.create_public_online_order_with_access(jsonb,jsonb)', 'EXECUTE'
   ),
-  'anonymous checkout retains access to the hardened order RPC'
+  'anonymous checkout can only use the token-issuing hardened order RPC'
 );
 
 select ok(

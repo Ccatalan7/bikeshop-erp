@@ -1498,6 +1498,11 @@ supabase secrets set --project-ref xzdvtzdqjeyqxnkqprtf KEY_NAME="value" ANOTHER
 supabase secrets list --project-ref xzdvtzdqjeyqxnkqprtf
 ```
 
+For a read-only readiness audit, both `supabase secrets list --output json`
+and `supabase functions list --output json` are supported by CLI 2.109.1. Parse
+the JSON and report only required secret names as present/absent; do not echo
+secret digests or any locally sourced credential value.
+
 **2. Deploying Edge Functions:**
 ```bash
 # Correct syntax to deploy a single edge function:

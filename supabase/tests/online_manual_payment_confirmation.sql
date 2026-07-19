@@ -7,6 +7,29 @@ values
   ('9f000000-0000-4000-8000-000000000001', 'Online Manual Payment Test'),
   ('9f000000-0000-4000-8000-000000000002', 'Online Manual Payment Other');
 
+-- Shipping is intentionally free in this lifecycle fixture. Seed an explicit
+-- tariff instead of relying on the pre-shipping-quote runtime fallback so the
+-- historical payment, invoice, and stock assertions remain unchanged.
+insert into public.online_shipping_rate_tiers (
+  tenant_id,
+  country_code,
+  min_order_gross,
+  max_order_gross,
+  shipping_gross,
+  tax_rate,
+  estimated_min_business_days,
+  estimated_max_business_days
+) values (
+  '9f000000-0000-4000-8000-000000000001',
+  'CL',
+  0,
+  null,
+  0,
+  0,
+  0,
+  0
+);
+
 insert into auth.users(
   id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at
@@ -25,12 +48,35 @@ values
     now(), now()
   );
 
-update public.user_profiles
-   set tenant_id = '9f000000-0000-4000-8000-000000000001', role = 'admin'
- where user_id = '9f000000-0000-4000-8000-000000000099';
-update public.user_profiles
-   set tenant_id = '9f000000-0000-4000-8000-000000000002', role = 'admin'
- where user_id = '9f000000-0000-4000-8000-000000000098';
+-- Production-derived schema clones do not guarantee an auth.users bootstrap
+-- trigger. Replace any trigger-created rows with deterministic staff profiles.
+delete from public.user_profiles
+where user_id in (
+  '9f000000-0000-4000-8000-000000000099',
+  '9f000000-0000-4000-8000-000000000098'
+);
+
+insert into public.user_profiles (
+  user_id,
+  tenant_id,
+  role,
+  permissions,
+  is_active
+) values
+  (
+    '9f000000-0000-4000-8000-000000000099',
+    '9f000000-0000-4000-8000-000000000001',
+    'admin',
+    '{}'::jsonb,
+    true
+  ),
+  (
+    '9f000000-0000-4000-8000-000000000098',
+    '9f000000-0000-4000-8000-000000000002',
+    'admin',
+    '{}'::jsonb,
+    true
+  );
 update auth.users
    set raw_user_meta_data = raw_user_meta_data
        || jsonb_build_object('tenant_id', '9f000000-0000-4000-8000-000000000001')
@@ -48,14 +94,14 @@ select set_config(
 );
 
 insert into public.products(
-  id, tenant_id, name, sku, price, cost, product_type, is_service,
+  id, tenant_id, name, sku, price, cost, tax_rate, product_type, is_service,
   track_stock, inventory_qty, stock_quantity, min_stock_level, max_stock_level,
   is_active, is_published, show_on_website
 )
 values(
   '9f000000-0000-4000-8000-000000000010',
   '9f000000-0000-4000-8000-000000000001',
-  'Online transfer product', 'ONLINE-TRANSFER-001', 1000, 400,
+  'Online transfer product', 'ONLINE-TRANSFER-001', 1000, 400, 19,
   'product', false, true, 10, 10, 0, 100, true, true, true
 );
 

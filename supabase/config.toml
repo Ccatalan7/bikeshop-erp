@@ -395,6 +395,26 @@ verify_jwt = true
 # Website editors invoke this with the current authenticated ERP session.
 verify_jwt = true
 
+[functions.mercadopago-refund-payment]
+# Only authenticated ERP staff can begin/retry a refund saga. The function
+# independently revalidates the user and tenant-scoped correction through RLS.
+verify_jwt = true
+
+[functions.mercadopago-webhook]
+# Mercado Pago cannot send a Supabase JWT. The function validates the official
+# HMAC manifest before fetching any provider resource or applying an event.
+verify_jwt = false
+
+[functions.mercadopago-get-payment]
+# The storefront calls this endpoint with the Supabase anon JWT and a separate
+# order-scoped access token; the gateway must reject requests with no valid JWT.
+verify_jwt = true
+
+[functions.mercadopago-expire-preferences]
+# pg_cron invokes this worker with a dedicated constant-time checked secret.
+# It never accepts a browser JWT and all database writes use service-only RPCs.
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

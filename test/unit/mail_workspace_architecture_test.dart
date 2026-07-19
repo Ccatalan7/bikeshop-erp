@@ -41,7 +41,6 @@ void main() {
     final manager = File(
       'lib/modules/mail/providers/mail_account_manager.dart',
     ).readAsStringSync();
-
     expect(page, contains('_desktopSplitMinWidth = 1120'));
     expect(page, contains('_inboxStatusRowHeight = 32'));
     expect(page, contains('height: _inboxStatusRowHeight'));
@@ -53,6 +52,16 @@ void main() {
     expect(page, contains("label: const Text('Redactar')"));
     expect(manager, contains('_selectedEmail?.providerId != providerId'));
     expect(manager, contains('_selectionRequestId++'));
+    expect(manager, contains('final failedProviders = <EmailProvider>[]'));
+    expect(manager, contains('final hadSenderIdentityFailure ='));
+    expect(manager, contains('if (hadSenderIdentityFailure)'));
+    expect(manager, contains('_error = null;'));
+    expect(
+        manager, contains('_providerFailureMessage(\n        failedProviders'));
+    expect(
+      manager,
+      isNot(contains('await Future.wait(\n        providersToRefresh')),
+    );
   });
 
   test('compose and message rendering retain the shared safety contract', () {
@@ -62,12 +71,22 @@ void main() {
     final detail = File(
       'lib/modules/mail/widgets/email_detail_view_unified.dart',
     ).readAsStringSync();
+    final zoho = File(
+      'lib/modules/mail/providers/zoho_provider.dart',
+    ).readAsStringSync();
 
     expect(compose, contains('widget.initialProviderId'));
+    expect(compose, contains('sender.identity.address'));
+    expect(compose, contains('refreshSenderIdentities()'));
+    expect(compose, contains("'Desde:'"));
     expect(compose, contains("'CCO:'"));
     expect(compose, contains('bcc: _bccController.text.trim()'));
     expect(compose, contains('onPressed: _canSend ? _send : null'));
     expect(compose, contains('_requestClose'));
+    expect(zoho, contains("body: {'action': 'sender_identities'}"));
+    expect(zoho, isNot(contains("url: _accountUrl,\n        );")));
+    expect(zoho, contains('resolveSenderIdentity(fromAddress)'));
+    expect(zoho, contains("'fromAddress': sender.address"));
     expect(detail, contains('_emailBodyRendererVersion = 9'));
     expect(detail, contains('BoxConstraints(maxWidth: 960)'));
     expect(detail, contains("'overflow-wrap': 'break-word'"));

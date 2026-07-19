@@ -399,6 +399,7 @@ class OnlineOrder {
 
   final String status;
   final String paymentStatus;
+  final int version;
 
   final String? paymentMethod;
   final String? paymentReference;
@@ -414,6 +415,20 @@ class OnlineOrder {
   final DateTime? refundedAt;
 
   final String? salesInvoiceId;
+
+  /// Mercado Pago provider truth is committed before stock/accounting. These
+  /// fields expose the latest tenant-scoped processing projection to staff;
+  /// they never replace [paymentStatus].
+  final int? paymentProcessingEventId;
+  final String? paymentProviderStatus;
+  final String? paymentValidationOutcome;
+  final String? paymentProcessingState;
+  final int paymentProcessingAttemptCount;
+  final DateTime? paymentProcessingLastAttemptedAt;
+  final DateTime? paymentProcessingActionRequiredAt;
+  final String? paymentProcessingErrorCode;
+  final String? paymentProcessingErrorMessage;
+  final bool paymentProcessingRequiresRefundReview;
 
   final String? customerNotes;
   final String? internalNotes;
@@ -449,6 +464,7 @@ class OnlineOrder {
     required this.total,
     required this.status,
     required this.paymentStatus,
+    this.version = 0,
     this.paymentMethod,
     this.paymentReference,
     this.paidAt,
@@ -461,6 +477,16 @@ class OnlineOrder {
     this.refundAmount = 0.0,
     this.refundedAt,
     this.salesInvoiceId,
+    this.paymentProcessingEventId,
+    this.paymentProviderStatus,
+    this.paymentValidationOutcome,
+    this.paymentProcessingState,
+    this.paymentProcessingAttemptCount = 0,
+    this.paymentProcessingLastAttemptedAt,
+    this.paymentProcessingActionRequiredAt,
+    this.paymentProcessingErrorCode,
+    this.paymentProcessingErrorMessage,
+    this.paymentProcessingRequiresRefundReview = false,
     this.customerNotes,
     this.internalNotes,
     this.notes,
@@ -495,6 +521,7 @@ class OnlineOrder {
       total: (json['total'] as num?)?.toDouble() ?? 0.0,
       status: json['status'] as String? ?? 'pending',
       paymentStatus: json['payment_status'] as String? ?? 'pending',
+      version: (json['version'] as num?)?.toInt() ?? 0,
       paymentMethod: json['payment_method'] as String?,
       paymentReference: json['payment_reference'] as String?,
       paidAt: json['paid_at'] != null
@@ -519,6 +546,31 @@ class OnlineOrder {
           ? DateTime.parse(json['refunded_at'] as String)
           : null,
       salesInvoiceId: json['sales_invoice_id'] as String?,
+      paymentProcessingEventId:
+          (json['payment_processing_event_id'] as num?)?.toInt(),
+      paymentProviderStatus: json['payment_provider_status'] as String?,
+      paymentValidationOutcome: json['payment_validation_outcome'] as String?,
+      paymentProcessingState: json['payment_processing_state'] as String?,
+      paymentProcessingAttemptCount:
+          (json['payment_processing_attempt_count'] as num?)?.toInt() ?? 0,
+      paymentProcessingLastAttemptedAt:
+          json['payment_processing_last_attempted_at'] != null
+              ? DateTime.parse(
+                  json['payment_processing_last_attempted_at'] as String,
+                )
+              : null,
+      paymentProcessingActionRequiredAt:
+          json['payment_processing_action_required_at'] != null
+              ? DateTime.parse(
+                  json['payment_processing_action_required_at'] as String,
+                )
+              : null,
+      paymentProcessingErrorCode:
+          json['payment_processing_error_code'] as String?,
+      paymentProcessingErrorMessage:
+          json['payment_processing_error_message'] as String?,
+      paymentProcessingRequiresRefundReview:
+          json['payment_processing_requires_refund_review'] as bool? ?? false,
       customerNotes: json['customer_notes'] as String?,
       internalNotes: json['internal_notes'] as String?,
       notes: json['notes'] as String?,
@@ -558,6 +610,7 @@ class OnlineOrder {
       'total': total,
       'status': status,
       'payment_status': paymentStatus,
+      'version': version,
       'payment_method': paymentMethod,
       'payment_reference': paymentReference,
       'paid_at': paidAt?.toIso8601String(),
@@ -570,6 +623,19 @@ class OnlineOrder {
       'refund_amount': refundAmount,
       'refunded_at': refundedAt?.toIso8601String(),
       'sales_invoice_id': salesInvoiceId,
+      'payment_processing_event_id': paymentProcessingEventId,
+      'payment_provider_status': paymentProviderStatus,
+      'payment_validation_outcome': paymentValidationOutcome,
+      'payment_processing_state': paymentProcessingState,
+      'payment_processing_attempt_count': paymentProcessingAttemptCount,
+      'payment_processing_last_attempted_at':
+          paymentProcessingLastAttemptedAt?.toIso8601String(),
+      'payment_processing_action_required_at':
+          paymentProcessingActionRequiredAt?.toIso8601String(),
+      'payment_processing_error_code': paymentProcessingErrorCode,
+      'payment_processing_error_message': paymentProcessingErrorMessage,
+      'payment_processing_requires_refund_review':
+          paymentProcessingRequiresRefundReview,
       'customer_notes': customerNotes,
       'internal_notes': internalNotes,
       'notes': notes,
@@ -603,6 +669,7 @@ class OnlineOrder {
     double? total,
     String? status,
     String? paymentStatus,
+    int? version,
     String? paymentMethod,
     String? paymentReference,
     DateTime? paidAt,
@@ -615,6 +682,16 @@ class OnlineOrder {
     double? refundAmount,
     DateTime? refundedAt,
     String? salesInvoiceId,
+    int? paymentProcessingEventId,
+    String? paymentProviderStatus,
+    String? paymentValidationOutcome,
+    String? paymentProcessingState,
+    int? paymentProcessingAttemptCount,
+    DateTime? paymentProcessingLastAttemptedAt,
+    DateTime? paymentProcessingActionRequiredAt,
+    String? paymentProcessingErrorCode,
+    String? paymentProcessingErrorMessage,
+    bool? paymentProcessingRequiresRefundReview,
     String? customerNotes,
     String? internalNotes,
     String? notes,
@@ -647,6 +724,7 @@ class OnlineOrder {
       total: total ?? this.total,
       status: status ?? this.status,
       paymentStatus: paymentStatus ?? this.paymentStatus,
+      version: version ?? this.version,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       paymentReference: paymentReference ?? this.paymentReference,
       paidAt: paidAt ?? this.paidAt,
@@ -659,6 +737,27 @@ class OnlineOrder {
       refundAmount: refundAmount ?? this.refundAmount,
       refundedAt: refundedAt ?? this.refundedAt,
       salesInvoiceId: salesInvoiceId ?? this.salesInvoiceId,
+      paymentProcessingEventId:
+          paymentProcessingEventId ?? this.paymentProcessingEventId,
+      paymentProviderStatus:
+          paymentProviderStatus ?? this.paymentProviderStatus,
+      paymentValidationOutcome:
+          paymentValidationOutcome ?? this.paymentValidationOutcome,
+      paymentProcessingState:
+          paymentProcessingState ?? this.paymentProcessingState,
+      paymentProcessingAttemptCount:
+          paymentProcessingAttemptCount ?? this.paymentProcessingAttemptCount,
+      paymentProcessingLastAttemptedAt: paymentProcessingLastAttemptedAt ??
+          this.paymentProcessingLastAttemptedAt,
+      paymentProcessingActionRequiredAt: paymentProcessingActionRequiredAt ??
+          this.paymentProcessingActionRequiredAt,
+      paymentProcessingErrorCode:
+          paymentProcessingErrorCode ?? this.paymentProcessingErrorCode,
+      paymentProcessingErrorMessage:
+          paymentProcessingErrorMessage ?? this.paymentProcessingErrorMessage,
+      paymentProcessingRequiresRefundReview:
+          paymentProcessingRequiresRefundReview ??
+              this.paymentProcessingRequiresRefundReview,
       customerNotes: customerNotes ?? this.customerNotes,
       internalNotes: internalNotes ?? this.internalNotes,
       notes: notes ?? this.notes,
@@ -704,6 +803,15 @@ class OnlineOrder {
     }
   }
 
+  /// Operational cancellation is terminal and always takes precedence over a
+  /// stale or still-pending payment projection in customer-facing surfaces.
+  bool get isCancelled => status.trim().toLowerCase() == 'cancelled';
+
+  /// True only when the order contains durable evidence that money was
+  /// recorded. This does not make a cancelled order active again.
+  bool get hasRecordedPayment =>
+      paymentStatus.trim().toLowerCase() == 'paid' || paidAt != null;
+
   String get deliveryDisplayName {
     switch (deliveryType) {
       case 'pickup':
@@ -714,6 +822,19 @@ class OnlineOrder {
         return deliveryType;
     }
   }
+
+  bool get hasPaymentProcessingAttention =>
+      paymentProcessingState == 'action_required' ||
+      (paymentProcessingState == 'pending' &&
+          paymentProviderStatus == 'approved' &&
+          paymentValidationOutcome == 'payment_validated');
+
+  bool get canRetryPaymentProcessing =>
+      paymentProcessingEventId != null &&
+      paymentProviderStatus == 'approved' &&
+      paymentValidationOutcome == 'payment_validated' &&
+      paymentProcessingState != 'processed' &&
+      !paymentProcessingRequiresRefundReview;
 
   String get shippingAddressDisplay {
     final parts = [
@@ -747,6 +868,7 @@ class OnlineOrderItem {
   final int quantity;
   final double unitPrice;
   final double subtotal;
+  final double? taxRate;
   final DateTime createdAt;
   final bool productContextLoaded;
   final bool productExists;
@@ -769,6 +891,7 @@ class OnlineOrderItem {
     required this.quantity,
     required this.unitPrice,
     required this.subtotal,
+    this.taxRate,
     required this.createdAt,
     this.productContextLoaded = false,
     this.productExists = false,
@@ -804,6 +927,7 @@ class OnlineOrderItem {
       quantity: (json['quantity'] as num?)?.toInt() ?? 1,
       unitPrice: (json['unit_price'] as num?)?.toDouble() ?? 0.0,
       subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
+      taxRate: (json['tax_rate'] as num?)?.toDouble(),
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : DateTime.now(),
@@ -836,6 +960,7 @@ class OnlineOrderItem {
       'quantity': quantity,
       'unit_price': unitPrice,
       'subtotal': subtotal,
+      'tax_rate': taxRate,
       'created_at': createdAt.toIso8601String(),
     };
   }
@@ -849,6 +974,7 @@ class OnlineOrderItem {
     int? quantity,
     double? unitPrice,
     double? subtotal,
+    double? taxRate,
     DateTime? createdAt,
     bool? productContextLoaded,
     bool? productExists,
@@ -871,6 +997,7 @@ class OnlineOrderItem {
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
       subtotal: subtotal ?? this.subtotal,
+      taxRate: taxRate ?? this.taxRate,
       createdAt: createdAt ?? this.createdAt,
       productContextLoaded: productContextLoaded ?? this.productContextLoaded,
       productExists: productExists ?? this.productExists,

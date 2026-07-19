@@ -860,6 +860,7 @@ class GmailProvider extends EmailProvider {
     required String to,
     required String subject,
     required String content,
+    String? fromAddress,
     String? cc,
     String? bcc,
   }) async {
@@ -868,10 +869,15 @@ class GmailProvider extends EmailProvider {
     notifyListeners();
 
     try {
+      final sender = resolveSenderIdentity(fromAddress);
+      if (sender == null) {
+        throw StateError('El remitente no está autorizado por Gmail.');
+      }
+
       // Build RFC 2822 message
       final message = StringBuffer();
       message.writeln('To: $to');
-      message.writeln('From: $_email');
+      message.writeln('From: ${sender.address}');
       if (cc != null && cc.isNotEmpty) message.writeln('Cc: $cc');
       if (bcc != null && bcc.isNotEmpty) message.writeln('Bcc: $bcc');
       message.writeln('Subject: $subject');

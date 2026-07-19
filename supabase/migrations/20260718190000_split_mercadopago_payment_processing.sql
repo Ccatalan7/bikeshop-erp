@@ -1,0 +1,1624 @@
+-- Preserve Mercado Pago provider truth before attempting inventory/accounting.
+--
+-- A provider-approved payment is an external financial fact. It must not vanish
+-- from the ERP merely because invoice creation, stock consumption, or journal
+-- posting fails later in the same transaction. This migration therefore splits
+-- the provider path into two independently committed RPCs:
+--
+--   1. record_mercadopago_payment_observation(...) appends validated provider
+--      evidence and a durable pending processing projection;
+--   2. process_mercadopago_payment_observation(event_id) marks the order paid
+--      without firing the legacy auto-processor, then attempts invoice/stock/
+--      accounting inside a PL/pgSQL subtransaction. Business failure rolls back
+--      only those derived effects and leaves an explicit action_required state.
+--
+-- This migration never invents stock, an invoice, a refund, or a fiscal
+-- document. Existing provider events remain immutable. Existing manual-transfer
+-- confirmation retains the legacy auto-processing trigger behavior.
+
+begin;
+
+set local lock_timeout = '750ms';
+set local statement_timeout = '30s';
+
+alter table public.sales_channel_payment_events
+  add column if not exists provider_paid_at timestamp with time zone;
+
+alter table public.sales_channel_payment_events
+  drop constraint if exists sales_channel_payment_events_outcome_check;
+alter table public.sales_channel_payment_events
+  add constraint sales_channel_payment_events_outcome_check check (
+    outcome in (
+      'payment_validated',
+      'applied',
+      'recorded_pending',
+      'recorded_failed',
+      'ignored_stale',
+      'rejected_amount',
+      'rejected_currency',
+      'rejected_conflicting_payment'
+    )
+  );
+
+create unique index if not exists uq_sales_channel_payment_events_tenant_id_id
+  on public.sales_channel_payment_events(tenant_id, id);
+
+comment on column public.sales_channel_payment_events.provider_paid_at is
+  'Provider-reported approval timestamp. Null for non-approved or historical observations.';
+comment on column public.sales_channel_payment_events.outcome is
+  'Provider-observation validation result. payment_validated proves a matching provider payment; it does not imply invoice, stock, accounting, fulfillment, voucher, or DTE success.';
+
+create table if not exists public.sales_channel_payment_processing (
+  payment_event_id bigint primary key,
+  tenant_id uuid not null references public.tenants(id) on delete restrict,
+  order_id uuid not null,
+  processing_state text not null default 'pending' check (
+    processing_state in ('pending', 'processed', 'action_required')
+  ),
+  attempt_count integer not null default 0 check (attempt_count >= 0),
+  first_attempted_at timestamp with time zone,
+  last_attempted_at timestamp with time zone,
+  processed_at timestamp with time zone,
+  action_required_at timestamp with time zone,
+  invoice_id uuid,
+  operation_id uuid,
+  last_error_code text check (
+    last_error_code is null
+    or (
+      nullif(btrim(last_error_code), '') is not null
+      and length(last_error_code) <= 96
+    )
+  ),
+  last_error_message text check (
+    last_error_message is null
+    or (
+      nullif(btrim(last_error_message), '') is not null
+      and length(last_error_message) <= 320
+    )
+  ),
+  requires_refund_review boolean not null default false,
+  created_at timestamp with time zone not null default clock_timestamp(),
+  updated_at timestamp with time zone not null default clock_timestamp(),
+  constraint sales_channel_payment_processing_event_tenant_fkey
+    foreign key (tenant_id, payment_event_id)
+    references public.sales_channel_payment_events(tenant_id, id)
+    on delete restrict,
+  constraint sales_channel_payment_processing_order_tenant_fkey
+    foreign key (tenant_id, order_id)
+    references public.online_orders(tenant_id, id)
+    on delete restrict,
+  constraint sales_channel_payment_processing_invoice_tenant_fkey
+    foreign key (tenant_id, invoice_id)
+    references public.sales_invoices(tenant_id, id)
+    on delete restrict,
+  constraint sales_channel_payment_processing_operation_fkey
+    foreign key (operation_id)
+    references public.inventory_accounting_operations(id)
+    on delete restrict,
+  check (
+    (processing_state = 'processed' and processed_at is not null)
+    or (processing_state = 'action_required' and action_required_at is not null)
+    or processing_state = 'pending'
+  )
+);
+
+create index if not exists idx_sales_channel_payment_processing_attention
+  on public.sales_channel_payment_processing(
+    tenant_id,
+    processing_state,
+    updated_at desc,
+    payment_event_id desc
+  );
+create index if not exists idx_sales_channel_payment_processing_order
+  on public.sales_channel_payment_processing(
+    tenant_id,
+    order_id,
+    updated_at desc
+  );
+
+create table if not exists public.sales_channel_payment_processing_attempts (
+  id bigint generated by default as identity primary key,
+  payment_event_id bigint not null references public.sales_channel_payment_events(id)
+    on delete restrict,
+  tenant_id uuid not null references public.tenants(id) on delete restrict,
+  order_id uuid not null,
+  attempt_number integer not null check (attempt_number > 0),
+  result_state text not null check (
+    result_state in ('processed', 'action_required')
+  ),
+  invoice_id uuid,
+  operation_id uuid,
+  error_code text,
+  error_message text,
+  requires_refund_review boolean not null default false,
+  attempted_at timestamp with time zone not null,
+  completed_at timestamp with time zone not null default clock_timestamp(),
+  unique (payment_event_id, attempt_number),
+  constraint sales_channel_payment_processing_attempt_order_tenant_fkey
+    foreign key (tenant_id, order_id)
+    references public.online_orders(tenant_id, id)
+    on delete restrict,
+  constraint sales_channel_payment_processing_attempt_invoice_tenant_fkey
+    foreign key (tenant_id, invoice_id)
+    references public.sales_invoices(tenant_id, id)
+    on delete restrict,
+  constraint sales_channel_payment_processing_attempt_operation_fkey
+    foreign key (operation_id)
+    references public.inventory_accounting_operations(id)
+    on delete restrict,
+  check (error_code is null or length(error_code) <= 96),
+  check (error_message is null or length(error_message) <= 320)
+);
+
+create index if not exists idx_sales_channel_payment_processing_attempts_order
+  on public.sales_channel_payment_processing_attempts(
+    tenant_id,
+    order_id,
+    attempted_at desc,
+    id desc
+  );
+
+alter table public.sales_channel_payment_processing enable row level security;
+alter table public.sales_channel_payment_processing_attempts enable row level security;
+
+drop policy if exists sales_channel_payment_processing_staff_read
+  on public.sales_channel_payment_processing;
+create policy sales_channel_payment_processing_staff_read
+  on public.sales_channel_payment_processing
+  for select to authenticated
+  using (
+    sales_channel_payment_processing.tenant_id = public.user_tenant_id()
+    and exists (
+      select 1
+      from public.user_profiles profile
+      where profile.user_id = auth.uid()
+        and profile.tenant_id = sales_channel_payment_processing.tenant_id
+        and profile.is_active is true
+        and (
+          profile.role in ('admin', 'manager', 'cashier', 'accountant')
+          or coalesce(profile.permissions->'create_invoices', 'false'::jsonb)
+               = 'true'::jsonb
+          or coalesce(profile.permissions->'access_accounting', 'false'::jsonb)
+               = 'true'::jsonb
+        )
+    )
+  );
+
+drop policy if exists sales_channel_payment_processing_attempts_staff_read
+  on public.sales_channel_payment_processing_attempts;
+create policy sales_channel_payment_processing_attempts_staff_read
+  on public.sales_channel_payment_processing_attempts
+  for select to authenticated
+  using (
+    sales_channel_payment_processing_attempts.tenant_id = public.user_tenant_id()
+    and exists (
+      select 1
+      from public.user_profiles profile
+      where profile.user_id = auth.uid()
+        and profile.tenant_id = sales_channel_payment_processing_attempts.tenant_id
+        and profile.is_active is true
+        and (
+          profile.role in ('admin', 'manager', 'cashier', 'accountant')
+          or coalesce(profile.permissions->'create_invoices', 'false'::jsonb)
+               = 'true'::jsonb
+          or coalesce(profile.permissions->'access_accounting', 'false'::jsonb)
+               = 'true'::jsonb
+        )
+    )
+  );
+
+revoke all on public.sales_channel_payment_processing
+  from public, anon, authenticated, service_role;
+revoke all on public.sales_channel_payment_processing_attempts
+  from public, anon, authenticated, service_role;
+grant select on public.sales_channel_payment_processing to authenticated;
+grant select on public.sales_channel_payment_processing_attempts to authenticated;
+
+create or replace function public.prevent_sales_channel_payment_processing_attempt_mutation()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  raise exception 'Payment processing attempts are append-only'
+    using errcode = '55000';
+end;
+$$;
+
+revoke all on function public.prevent_sales_channel_payment_processing_attempt_mutation()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_sales_channel_payment_processing_attempts_immutable
+  on public.sales_channel_payment_processing_attempts;
+create trigger trg_sales_channel_payment_processing_attempts_immutable
+  before update or delete on public.sales_channel_payment_processing_attempts
+  for each row execute function
+    public.prevent_sales_channel_payment_processing_attempt_mutation();
+
+create or replace function public.sanitize_mercadopago_payment_evidence(
+  p_payload jsonb
+)
+returns jsonb
+language sql
+immutable
+set search_path = public
+as $$
+  select jsonb_strip_nulls(jsonb_build_object(
+    'operation_number', nullif(left(btrim(coalesce(p_payload->>'operation_number', '')), 160), ''),
+    'status_detail', nullif(left(btrim(coalesce(p_payload->>'status_detail', '')), 160), ''),
+    'payment_type_id', nullif(left(btrim(coalesce(p_payload->>'payment_type_id', '')), 96), ''),
+    'payment_method_id', nullif(left(btrim(coalesce(p_payload->>'payment_method_id', '')), 96), ''),
+    'merchant_order_id', nullif(left(btrim(coalesce(p_payload->>'merchant_order_id', '')), 160), ''),
+    'authorization_code', nullif(left(btrim(coalesce(p_payload->>'authorization_code', '')), 160), ''),
+    'date_created', nullif(left(btrim(coalesce(p_payload->>'date_created', '')), 64), ''),
+    'date_approved', nullif(left(btrim(coalesce(p_payload->>'date_approved', '')), 64), ''),
+    'date_last_updated', nullif(left(btrim(coalesce(p_payload->>'date_last_updated', '')), 64), ''),
+    'transaction_amount', case
+      when coalesce(p_payload->>'transaction_amount', '') ~ '^-?[0-9]{1,14}([.][0-9]{1,4})?$'
+        then (p_payload->>'transaction_amount')::numeric
+      else null
+    end,
+    'currency_id', case
+      when upper(btrim(coalesce(p_payload->>'currency_id', ''))) ~ '^[A-Z]{3}$'
+        then upper(btrim(p_payload->>'currency_id'))
+      else null
+    end,
+    'total_paid_amount', case
+      when coalesce(p_payload->>'total_paid_amount', '') ~ '^-?[0-9]{1,14}([.][0-9]{1,4})?$'
+        then (p_payload->>'total_paid_amount')::numeric
+      else null
+    end,
+    'card_last_four_digits', case
+      when coalesce(p_payload->>'card_last_four_digits', '') ~ '^[0-9]{4}$'
+        then p_payload->>'card_last_four_digits'
+      else null
+    end,
+    'processing_mode', nullif(left(btrim(coalesce(p_payload->>'processing_mode', '')), 96), ''),
+    'point_of_interaction_type', nullif(left(btrim(coalesce(p_payload->>'point_of_interaction_type', '')), 96), ''),
+    'point_of_interaction_sub_type', nullif(left(btrim(coalesce(p_payload->>'point_of_interaction_sub_type', '')), 96), ''),
+    'point_of_interaction_unit', nullif(left(btrim(coalesce(p_payload->>'point_of_interaction_unit', '')), 96), ''),
+    'point_of_interaction_sub_unit', nullif(left(btrim(coalesce(p_payload->>'point_of_interaction_sub_unit', '')), 96), '')
+  ));
+$$;
+
+revoke all on function public.sanitize_mercadopago_payment_evidence(jsonb)
+  from public, anon, authenticated, service_role;
+
+create or replace function public.record_mercadopago_payment_observation(
+  p_order_id uuid,
+  p_tenant_id uuid,
+  p_payment_id text,
+  p_provider_status text,
+  p_amount numeric,
+  p_currency text,
+  p_paid_at timestamp with time zone default null,
+  p_provider_payload jsonb default '{}'::jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_order public.online_orders%rowtype;
+  v_existing public.sales_channel_payment_events%rowtype;
+  v_processing public.sales_channel_payment_processing%rowtype;
+  v_status text := lower(btrim(coalesce(p_provider_status, '')));
+  v_currency text := upper(btrim(coalesce(p_currency, '')));
+  v_payment_id text := btrim(coalesce(p_payment_id, ''));
+  v_outcome text;
+  v_error text;
+  v_payload jsonb;
+  v_event_id bigint;
+begin
+  if p_order_id is null or p_tenant_id is null
+     or v_payment_id = '' or length(v_payment_id) > 160
+     or v_status = '' or length(v_status) > 96 then
+    raise exception 'Mercado Pago observation is missing valid identifiers'
+      using errcode = '22023';
+  end if;
+  if p_provider_payload is null
+     or jsonb_typeof(p_provider_payload) <> 'object' then
+    raise exception 'Mercado Pago evidence must be a JSON object'
+      using errcode = '22023';
+  end if;
+  if p_paid_at is not null
+     and p_paid_at > clock_timestamp() + interval '5 minutes' then
+    raise exception 'Mercado Pago approval timestamp is in the future'
+      using errcode = '22023';
+  end if;
+
+  v_payload := public.sanitize_mercadopago_payment_evidence(p_provider_payload);
+
+  select * into v_order
+  from public.online_orders orders
+  where orders.id = p_order_id
+    and orders.tenant_id = p_tenant_id
+  for update;
+
+  if not found then
+    raise exception 'Online order not found for Mercado Pago observation'
+      using errcode = '23503';
+  end if;
+
+  select * into v_existing
+  from public.sales_channel_payment_events payment_event
+  where payment_event.tenant_id = p_tenant_id
+    and payment_event.provider = 'mercadopago'
+    and payment_event.external_payment_id = v_payment_id
+    and payment_event.provider_status = v_status;
+
+  if found then
+    if v_existing.order_id is distinct from p_order_id
+       or round(coalesce(v_existing.amount, 0), 2)
+            is distinct from round(coalesce(p_amount, 0), 2)
+       or upper(coalesce(v_existing.currency, '')) is distinct from v_currency then
+      raise exception 'Mercado Pago observation replay conflicts with durable evidence'
+        using errcode = '23000';
+    end if;
+
+    insert into public.sales_channel_payment_processing (
+      payment_event_id,
+      tenant_id,
+      order_id,
+      processing_state,
+      processed_at,
+      action_required_at,
+      last_error_code,
+      last_error_message,
+      requires_refund_review
+    ) values (
+      v_existing.id,
+      v_existing.tenant_id,
+      v_existing.order_id,
+      case
+        when v_existing.outcome = 'applied' then 'processed'
+        when v_existing.provider_status = 'approved'
+          and v_existing.outcome like 'rejected_%' then 'action_required'
+        else 'pending'
+      end,
+      case when v_existing.outcome = 'applied' then v_existing.created_at end,
+      case
+        when v_existing.provider_status = 'approved'
+          and v_existing.outcome like 'rejected_%' then v_existing.created_at
+      end,
+      case
+        when v_existing.provider_status = 'approved'
+          and v_existing.outcome like 'rejected_%' then v_existing.outcome
+      end,
+      case
+        when v_existing.provider_status = 'approved'
+          and v_existing.outcome like 'rejected_%'
+          then 'Pago aprobado requiere conciliacion manual.'
+      end,
+      v_existing.provider_status = 'approved'
+        and v_existing.outcome like 'rejected_%'
+    ) on conflict (payment_event_id) do nothing;
+
+    select * into v_processing
+    from public.sales_channel_payment_processing processing
+    where processing.payment_event_id = v_existing.id;
+
+    return jsonb_build_object(
+      'event_id', v_existing.id,
+      'outcome', v_existing.outcome,
+      'order_id', v_existing.order_id,
+      'processing_state', v_processing.processing_state,
+      'replay', true,
+      'validation_error', v_existing.validation_error
+    );
+  end if;
+
+  if v_currency <> 'CLP' then
+    v_outcome := 'rejected_currency';
+    v_error := 'La moneda del pago no coincide con CLP.';
+  elsif p_amount is null or round(p_amount, 2) <> round(v_order.total, 2) then
+    v_outcome := 'rejected_amount';
+    v_error := 'El monto del pago no coincide con el total del pedido.';
+  elsif v_status = 'approved' then
+    -- This proves only provider/payment truth. Derived sale effects are phase 2.
+    v_outcome := 'payment_validated';
+  elsif v_order.payment_status in ('paid', 'refunded') then
+    v_outcome := 'ignored_stale';
+  elsif v_status in ('rejected', 'cancelled') then
+    v_outcome := 'recorded_failed';
+  else
+    v_outcome := 'recorded_pending';
+  end if;
+
+  insert into public.sales_channel_payment_events (
+    tenant_id,
+    provider,
+    external_payment_id,
+    provider_status,
+    provider_paid_at,
+    order_id,
+    invoice_id,
+    operation_id,
+    amount,
+    currency,
+    outcome,
+    validation_error,
+    provider_payload
+  ) values (
+    p_tenant_id,
+    'mercadopago',
+    v_payment_id,
+    v_status,
+    case when v_status = 'approved' then p_paid_at end,
+    v_order.id,
+    null,
+    null,
+    p_amount,
+    nullif(v_currency, ''),
+    v_outcome,
+    v_error,
+    v_payload
+  ) returning id into v_event_id;
+
+  insert into public.sales_channel_payment_processing (
+    payment_event_id,
+    tenant_id,
+    order_id
+  ) values (
+    v_event_id,
+    p_tenant_id,
+    v_order.id
+  );
+
+  return jsonb_build_object(
+    'event_id', v_event_id,
+    'outcome', v_outcome,
+    'order_id', v_order.id,
+    'processing_state', 'pending',
+    'replay', false,
+    'validation_error', v_error
+  );
+end;
+$$;
+
+revoke all on function public.record_mercadopago_payment_observation(
+  uuid, uuid, text, text, numeric, text, timestamp with time zone, jsonb
+) from public, anon, authenticated, service_role;
+grant execute on function public.record_mercadopago_payment_observation(
+  uuid, uuid, text, text, numeric, text, timestamp with time zone, jsonb
+) to service_role;
+
+-- The manual-transfer path still reaches process_online_order via this trigger.
+-- Only the provider phase-2 RPC sets the transaction-local deferral guard.
+create or replace function public.handle_online_order_payment()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invoice_id uuid;
+begin
+  if current_setting('app.defer_online_order_payment_processing', true) = 'true' then
+    return new;
+  end if;
+
+  if new.payment_status = 'paid'
+     and (old.payment_status is null or old.payment_status <> 'paid')
+     and new.status <> 'cancelled' then
+    v_invoice_id := public.process_online_order(new.id);
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.handle_online_order_payment()
+  from public, anon, authenticated, service_role;
+
+create or replace function public.process_mercadopago_payment_observation(
+  p_payment_event_id bigint
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_event public.sales_channel_payment_events%rowtype;
+  v_processing public.sales_channel_payment_processing%rowtype;
+  v_order public.online_orders%rowtype;
+  v_invoice public.sales_invoices%rowtype;
+  v_invoice_id uuid;
+  v_operation_id uuid;
+  v_attempt_number integer;
+  v_attempted_at timestamp with time zone := clock_timestamp();
+  v_error_code text;
+  v_error_message text;
+  v_sqlstate text;
+  v_payment_count integer;
+  v_payment_total numeric(14,2);
+  v_requires_refund_review boolean := false;
+begin
+  if p_payment_event_id is null then
+    raise exception 'Payment event identifier is required'
+      using errcode = '22023';
+  end if;
+
+  select payment_event.* into v_event
+  from public.sales_channel_payment_events payment_event
+  where payment_event.id = p_payment_event_id
+    and payment_event.provider = 'mercadopago';
+
+  if not found then
+    raise exception 'Mercado Pago payment observation not found'
+      using errcode = '23503';
+  end if;
+
+  select processing.* into v_processing
+  from public.sales_channel_payment_processing processing
+  where processing.payment_event_id = v_event.id
+    and processing.tenant_id = v_event.tenant_id
+    and processing.order_id = v_event.order_id
+  for update;
+
+  if not found then
+    raise exception 'Mercado Pago payment processing projection is missing'
+      using errcode = '23503';
+  end if;
+
+  if auth.uid() is null then
+    -- service_role workers and direct database maintenance are trusted. An
+    -- authenticated/anon API role without a subject must never inherit that
+    -- internal bypass.
+    if coalesce(auth.role(), '') in ('authenticated', 'anon') then
+      raise exception 'Payment observation not found or access denied'
+        using errcode = '42501';
+    end if;
+  elsif not exists (
+    select 1
+    from public.user_profiles profile
+    where profile.user_id = auth.uid()
+      and profile.tenant_id = v_event.tenant_id
+      and profile.is_active is true
+      and (
+        profile.role in ('admin', 'manager', 'cashier')
+        or coalesce(profile.permissions->'create_invoices', 'false'::jsonb)
+             = 'true'::jsonb
+      )
+  ) then
+    raise exception 'Payment observation not found or access denied'
+      using errcode = '42501';
+  end if;
+
+  if v_processing.processing_state = 'processed' then
+    return jsonb_build_object(
+      'event_id', v_event.id,
+      'order_id', v_event.order_id,
+      'outcome', v_event.outcome,
+      'processing_state', v_processing.processing_state,
+      'attempt_count', v_processing.attempt_count,
+      'invoice_id', v_processing.invoice_id,
+      'operation_id', v_processing.operation_id,
+      'replay', true
+    );
+  end if;
+
+  select * into v_order
+  from public.online_orders orders
+  where orders.id = v_event.order_id
+    and orders.tenant_id = v_event.tenant_id
+  for update;
+
+  if not found then
+    raise exception 'Online order missing for durable payment observation'
+      using errcode = '23503';
+  end if;
+
+  v_attempt_number := v_processing.attempt_count + 1;
+
+  if v_event.outcome in ('rejected_amount', 'rejected_currency', 'rejected_conflicting_payment') then
+    v_error_code := v_event.outcome;
+    v_error_message := 'Pago aprobado requiere conciliacion manual antes de aplicar la venta.';
+    v_requires_refund_review := v_event.provider_status = 'approved';
+  elsif v_event.outcome = 'ignored_stale' then
+    update public.sales_channel_payment_processing
+       set processing_state = 'processed',
+           attempt_count = v_attempt_number,
+           first_attempted_at = coalesce(first_attempted_at, v_attempted_at),
+           last_attempted_at = v_attempted_at,
+           processed_at = clock_timestamp(),
+           action_required_at = null,
+           last_error_code = null,
+           last_error_message = null,
+           requires_refund_review = false,
+           updated_at = clock_timestamp()
+     where payment_event_id = v_event.id;
+
+    insert into public.sales_channel_payment_processing_attempts (
+      payment_event_id, tenant_id, order_id, attempt_number, result_state,
+      attempted_at
+    ) values (
+      v_event.id, v_event.tenant_id, v_event.order_id, v_attempt_number,
+      'processed', v_attempted_at
+    );
+
+    return jsonb_build_object(
+      'event_id', v_event.id,
+      'order_id', v_event.order_id,
+      'outcome', v_event.outcome,
+      'processing_state', 'processed',
+      'attempt_count', v_attempt_number,
+      'replay', false
+    );
+  elsif v_event.outcome in ('recorded_pending', 'recorded_failed') then
+    if v_order.payment_status not in ('paid', 'refunded') then
+      perform set_config('app.defer_online_order_payment_processing', 'true', true);
+      update public.online_orders
+         set payment_status = case
+               when v_event.outcome = 'recorded_failed' then 'failed'
+               else 'pending'
+             end,
+             payment_method = 'mercadopago',
+             payment_reference = v_event.external_payment_id,
+             paid_at = null
+       where id = v_order.id
+         and tenant_id = v_order.tenant_id;
+      perform set_config('app.defer_online_order_payment_processing', '', true);
+    end if;
+
+    update public.sales_channel_payment_processing
+       set processing_state = 'processed',
+           attempt_count = v_attempt_number,
+           first_attempted_at = coalesce(first_attempted_at, v_attempted_at),
+           last_attempted_at = v_attempted_at,
+           processed_at = clock_timestamp(),
+           action_required_at = null,
+           last_error_code = null,
+           last_error_message = null,
+           requires_refund_review = false,
+           updated_at = clock_timestamp()
+     where payment_event_id = v_event.id;
+
+    insert into public.sales_channel_payment_processing_attempts (
+      payment_event_id, tenant_id, order_id, attempt_number, result_state,
+      attempted_at
+    ) values (
+      v_event.id, v_event.tenant_id, v_event.order_id, v_attempt_number,
+      'processed', v_attempted_at
+    );
+
+    return jsonb_build_object(
+      'event_id', v_event.id,
+      'order_id', v_event.order_id,
+      'outcome', v_event.outcome,
+      'processing_state', 'processed',
+      'attempt_count', v_attempt_number,
+      'replay', false
+    );
+  elsif v_event.outcome not in ('payment_validated', 'applied') then
+    raise exception 'Unsupported Mercado Pago observation outcome: %', v_event.outcome
+      using errcode = '23514';
+  end if;
+
+  if v_error_code is null and v_order.payment_status = 'refunded' then
+    v_error_code := 'approved_payment_after_refund';
+    v_error_message := 'Pago aprobado observado despues de un reembolso; requiere conciliacion.';
+    v_requires_refund_review := true;
+  elsif v_error_code is null
+     and v_order.payment_status = 'paid'
+     and nullif(btrim(coalesce(v_order.payment_reference, '')), '')
+       is distinct from v_event.external_payment_id then
+    v_error_code := 'conflicting_approved_payment';
+    v_error_message := 'Existe otro pago aprobado asociado al pedido; revisar posible cobro duplicado.';
+    v_requires_refund_review := true;
+  end if;
+
+  if v_error_code is null and v_order.payment_status <> 'paid' then
+    begin
+      perform set_config('app.defer_online_order_payment_processing', 'true', true);
+      update public.online_orders
+         set payment_status = 'paid',
+             payment_method = 'mercadopago',
+             payment_reference = v_event.external_payment_id,
+             paid_at = coalesce(v_event.provider_paid_at, clock_timestamp())
+       where id = v_order.id
+         and tenant_id = v_order.tenant_id;
+      perform set_config('app.defer_online_order_payment_processing', '', true);
+    exception when others then
+      perform set_config('app.defer_online_order_payment_processing', '', true);
+      get stacked diagnostics v_sqlstate = returned_sqlstate;
+      v_error_code := 'payment_state_update_failed_' || lower(v_sqlstate);
+      v_error_message := 'El pago fue validado, pero no se pudo actualizar el estado del pedido.';
+    end;
+  end if;
+
+  if v_error_code is null and v_order.status = 'cancelled' then
+    v_error_code := 'approved_payment_for_cancelled_order';
+    v_error_message := 'El pedido cancelado recibio un pago aprobado; requiere conciliacion.';
+    v_requires_refund_review := true;
+  end if;
+
+  if v_error_code is null then
+    begin
+      -- Checkout does not reserve inventory. Lock and revalidate the exact
+      -- product rows immediately before creating a posted invoice so two paid
+      -- checkouts cannot drive the general staff-sale path below zero.
+      perform product.id
+      from public.products product
+      join public.online_order_items item
+        on item.product_id = product.id
+       and item.tenant_id = product.tenant_id
+      where item.order_id = v_order.id
+        and item.tenant_id = v_event.tenant_id
+      order by product.id
+      for update of product;
+
+      if exists (
+        select 1
+        from public.online_order_items item
+        join public.products product
+          on product.id = item.product_id
+         and product.tenant_id = item.tenant_id
+        where item.order_id = v_order.id
+          and item.tenant_id = v_event.tenant_id
+          and not (
+            coalesce(item.is_service, product.is_service, false)
+            or coalesce(item.product_type, product.product_type) = 'service'
+          )
+          and coalesce(product.track_stock, true)
+          and (
+            (
+              product.stock_quantity is not null
+              and product.inventory_qty is not null
+              and product.stock_quantity <> product.inventory_qty
+            )
+            or coalesce(product.stock_quantity, product.inventory_qty, 0)
+                 < item.quantity
+          )
+      ) then
+        raise exception 'Canonical product stock is unavailable for paid online order'
+          using errcode = '23514';
+      end if;
+
+      if v_order.sales_invoice_id is not null and exists (
+        select 1
+        from public.sales_payments payment
+        where payment.tenant_id = v_event.tenant_id
+          and payment.invoice_id = v_order.sales_invoice_id
+          and payment.deleted_at is null
+          and coalesce(payment.idempotency_key, '')
+                <> 'mercadopago:' || v_event.external_payment_id
+          and coalesce(payment.reference, '') <> v_event.external_payment_id
+      ) then
+        raise exception 'Existing invoice has unrelated payment evidence'
+          using errcode = '23514';
+      end if;
+
+      v_invoice_id := public.process_online_order(v_order.id);
+
+      update public.sales_payments payment
+         set idempotency_key = 'mercadopago:' || v_event.external_payment_id,
+             updated_at = clock_timestamp()
+       where payment.tenant_id = v_event.tenant_id
+         and payment.invoice_id = v_invoice_id
+         and payment.deleted_at is null
+         and (
+           payment.reference = v_event.external_payment_id
+           or payment.idempotency_key = 'mercadopago:' || v_event.external_payment_id
+         );
+
+      select count(*)::integer, coalesce(sum(payment.amount), 0)
+        into v_payment_count, v_payment_total
+      from public.sales_payments payment
+      where payment.tenant_id = v_event.tenant_id
+        and payment.invoice_id = v_invoice_id
+        and payment.deleted_at is null
+        and payment.idempotency_key = 'mercadopago:' || v_event.external_payment_id;
+
+      if v_payment_count <> 1
+         or round(v_payment_total, 2) <> round(v_event.amount, 2) then
+        raise exception 'Provider payment ledger did not reconcile exactly once'
+          using errcode = '23514';
+      end if;
+
+      select * into v_invoice
+      from public.sales_invoices invoice
+      where invoice.id = v_invoice_id
+        and invoice.tenant_id = v_event.tenant_id;
+
+      if not found
+         or lower(coalesce(v_invoice.status, '')) <> 'paid'
+         or round(coalesce(v_invoice.balance, v_invoice.total), 2) <> 0 then
+        raise exception 'Processed invoice is not fully settled'
+          using errcode = '23514';
+      end if;
+
+      select operation.id into v_operation_id
+      from public.inventory_accounting_operations operation
+      where operation.tenant_id = v_event.tenant_id
+        and operation.document_type = 'sales_invoice'
+        and operation.document_id = v_invoice_id
+        and operation.outcome = 'completed'
+      order by operation.created_at desc, operation.id desc
+      limit 1;
+
+      if v_operation_id is null then
+        raise exception 'Completed invoice inventory/accounting trace is missing'
+          using errcode = '23514';
+      end if;
+    exception when others then
+      get stacked diagnostics v_sqlstate = returned_sqlstate;
+      v_error_code := case
+        when v_sqlstate = '23514' then 'sale_processing_business_rule'
+        when v_sqlstate = '23505' then 'sale_processing_idempotency_conflict'
+        when v_sqlstate = '55P03' then 'sale_processing_lock_timeout'
+        else 'sale_processing_internal_' || lower(v_sqlstate)
+      end;
+      v_error_message := case
+        when v_sqlstate = '55P03'
+          then 'El pago esta validado; el procesamiento quedo pendiente por concurrencia.'
+        else 'El pago esta validado, pero stock, factura o contabilidad requieren revision.'
+      end;
+      v_invoice_id := null;
+      v_operation_id := null;
+    end;
+  end if;
+
+  if v_error_code is not null then
+    update public.sales_channel_payment_processing
+       set processing_state = 'action_required',
+           attempt_count = v_attempt_number,
+           first_attempted_at = coalesce(first_attempted_at, v_attempted_at),
+           last_attempted_at = v_attempted_at,
+           processed_at = null,
+           action_required_at = coalesce(action_required_at, clock_timestamp()),
+           invoice_id = null,
+           operation_id = null,
+           last_error_code = left(v_error_code, 96),
+           last_error_message = left(v_error_message, 320),
+           requires_refund_review = v_requires_refund_review,
+           updated_at = clock_timestamp()
+     where payment_event_id = v_event.id;
+
+    insert into public.sales_channel_payment_processing_attempts (
+      payment_event_id, tenant_id, order_id, attempt_number, result_state,
+      error_code, error_message, requires_refund_review, attempted_at
+    ) values (
+      v_event.id, v_event.tenant_id, v_event.order_id, v_attempt_number,
+      'action_required', left(v_error_code, 96), left(v_error_message, 320),
+      v_requires_refund_review, v_attempted_at
+    );
+
+    return jsonb_build_object(
+      'event_id', v_event.id,
+      'order_id', v_event.order_id,
+      'outcome', v_event.outcome,
+      'payment_status', (
+        select orders.payment_status
+        from public.online_orders orders
+        where orders.id = v_event.order_id
+      ),
+      'processing_state', 'action_required',
+      'attempt_count', v_attempt_number,
+      'error_code', left(v_error_code, 96),
+      'error_message', left(v_error_message, 320),
+      'requires_refund_review', v_requires_refund_review,
+      'replay', false
+    );
+  end if;
+
+  update public.sales_channel_payment_processing
+     set processing_state = 'processed',
+         attempt_count = v_attempt_number,
+         first_attempted_at = coalesce(first_attempted_at, v_attempted_at),
+         last_attempted_at = v_attempted_at,
+         processed_at = clock_timestamp(),
+         action_required_at = null,
+         invoice_id = v_invoice_id,
+         operation_id = v_operation_id,
+         last_error_code = null,
+         last_error_message = null,
+         requires_refund_review = false,
+         updated_at = clock_timestamp()
+   where payment_event_id = v_event.id;
+
+  insert into public.sales_channel_payment_processing_attempts (
+    payment_event_id, tenant_id, order_id, attempt_number, result_state,
+    invoice_id, operation_id, attempted_at
+  ) values (
+    v_event.id, v_event.tenant_id, v_event.order_id, v_attempt_number,
+    'processed', v_invoice_id, v_operation_id, v_attempted_at
+  );
+
+  return jsonb_build_object(
+    'event_id', v_event.id,
+    'order_id', v_event.order_id,
+    'outcome', v_event.outcome,
+    'payment_status', 'paid',
+    'processing_state', 'processed',
+    'attempt_count', v_attempt_number,
+    'invoice_id', v_invoice_id,
+    'operation_id', v_operation_id,
+    'replay', false
+  );
+end;
+$$;
+
+revoke all on function public.process_mercadopago_payment_observation(bigint)
+  from public, anon, authenticated, service_role;
+grant execute on function public.process_mercadopago_payment_observation(bigint)
+  to authenticated, service_role;
+
+-- Prevent future Edge Functions from accidentally returning to the unsafe
+-- single-transaction provider path. The function remains only as historical
+-- schema evidence for old migrations/tests and has no API-role grant.
+revoke all on function public.apply_mercadopago_payment_event(
+  uuid, uuid, text, text, numeric, text, timestamp with time zone, jsonb
+) from public, anon, authenticated, service_role;
+
+insert into public.sales_channel_payment_processing (
+  payment_event_id,
+  tenant_id,
+  order_id,
+  processing_state,
+  processed_at,
+  action_required_at,
+  invoice_id,
+  operation_id,
+  last_error_code,
+  last_error_message,
+  requires_refund_review
+)
+select
+  payment_event.id,
+  payment_event.tenant_id,
+  payment_event.order_id,
+  case
+    when payment_event.provider_status = 'approved'
+      and payment_event.outcome like 'rejected_%' then 'action_required'
+    else 'processed'
+  end,
+  case
+    when payment_event.provider_status = 'approved'
+      and payment_event.outcome like 'rejected_%' then null
+    else payment_event.created_at
+  end,
+  case
+    when payment_event.provider_status = 'approved'
+      and payment_event.outcome like 'rejected_%' then payment_event.created_at
+  end,
+  payment_event.invoice_id,
+  payment_event.operation_id,
+  case
+    when payment_event.provider_status = 'approved'
+      and payment_event.outcome like 'rejected_%' then payment_event.outcome
+  end,
+  case
+    when payment_event.provider_status = 'approved'
+      and payment_event.outcome like 'rejected_%'
+      then 'Pago aprobado historico requiere conciliacion manual.'
+  end,
+  payment_event.provider_status = 'approved'
+    and payment_event.outcome like 'rejected_%'
+from public.sales_channel_payment_events payment_event
+where payment_event.provider = 'mercadopago'
+on conflict (payment_event_id) do nothing;
+
+create or replace view public.online_order_payment_processing_status_view
+with (security_invoker = true) as
+select
+  processing.tenant_id,
+  processing.order_id,
+  processing.payment_event_id,
+  payment_event.external_payment_id,
+  payment_event.provider_status,
+  payment_event.outcome as validation_outcome,
+  processing.processing_state,
+  processing.attempt_count,
+  processing.first_attempted_at,
+  processing.last_attempted_at,
+  processing.processed_at,
+  processing.action_required_at,
+  processing.invoice_id,
+  processing.operation_id,
+  processing.last_error_code,
+  processing.last_error_message,
+  processing.requires_refund_review,
+  processing.updated_at
+from public.sales_channel_payment_processing processing
+join public.sales_channel_payment_events payment_event
+  on payment_event.id = processing.payment_event_id
+ and payment_event.tenant_id = processing.tenant_id
+ and payment_event.order_id = processing.order_id;
+
+revoke all on public.online_order_payment_processing_status_view
+  from public, anon, authenticated, service_role;
+grant select on public.online_order_payment_processing_status_view
+  to authenticated;
+
+comment on table public.sales_channel_payment_processing is
+  'Current tenant-scoped projection for independently committed provider-payment processing. action_required preserves provider truth without inventing sale effects.';
+comment on table public.sales_channel_payment_processing_attempts is
+  'Append-only attempts to derive online sale, stock, payment, and accounting effects from a durable provider observation.';
+comment on function public.record_mercadopago_payment_observation(
+  uuid, uuid, text, text, numeric, text, timestamp with time zone, jsonb
+) is
+  'Phase 1, service-role only: validates and durably records provider truth without creating invoice, stock, accounting, fulfillment, voucher, or DTE effects.';
+comment on function public.process_mercadopago_payment_observation(bigint) is
+  'Phase 2, replay-safe staff/worker command: keeps validated payment truth and records action_required when derived sale processing cannot complete.';
+
+-- A complete Mercado Pago voucher proves the payment itself. It must remain
+-- recordable when sale processing is action_required and therefore no internal
+-- sales invoice exists yet. Chilean DTE rows continue to require the invoice.
+alter table public.online_order_official_documents
+  alter column sales_invoice_id drop not null;
+
+create or replace function public.record_online_order_official_document_unhardened(
+  p_tenant_id uuid,
+  p_order_id uuid,
+  p_document_kind text,
+  p_provider text,
+  p_provider_document_id text,
+  p_fiscal_validity text,
+  p_amount numeric,
+  p_currency text,
+  p_issued_at timestamp with time zone,
+  p_artifact_url text,
+  p_artifact_sha256 text,
+  p_status text,
+  p_source_event_key text,
+  p_payment_operation_id text default null,
+  p_document_type text default null,
+  p_folio text default null,
+  p_metadata jsonb default '{}'::jsonb
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_order public.online_orders%rowtype;
+  v_invoice public.sales_invoices%rowtype;
+  v_existing public.online_order_official_documents%rowtype;
+  v_document_kind text := lower(btrim(coalesce(p_document_kind, '')));
+  v_provider text := lower(btrim(coalesce(p_provider, '')));
+  v_provider_document_id text := btrim(coalesce(p_provider_document_id, ''));
+  v_payment_operation_id text := nullif(btrim(coalesce(p_payment_operation_id, '')), '');
+  v_fiscal_validity text := lower(btrim(coalesce(p_fiscal_validity, '')));
+  v_document_type text := nullif(btrim(coalesce(p_document_type, '')), '');
+  v_folio text := nullif(btrim(coalesce(p_folio, '')), '');
+  v_currency text := upper(btrim(coalesce(p_currency, '')));
+  v_artifact_url text := btrim(coalesce(p_artifact_url, ''));
+  v_artifact_sha256 text := lower(btrim(coalesce(p_artifact_sha256, '')));
+  v_status text := lower(btrim(coalesce(p_status, '')));
+  v_source_event_key text := btrim(coalesce(p_source_event_key, ''));
+  v_metadata jsonb;
+  v_invoice_id uuid;
+  v_fingerprint text;
+  v_document_id uuid;
+  v_source_lock bigint;
+  v_document_lock bigint;
+begin
+  if v_provider in ('mercado_pago', 'mercado-pago') then
+    v_provider := 'mercadopago';
+  end if;
+  if p_metadata is null or jsonb_typeof(p_metadata) <> 'object' then
+    raise exception 'Official document metadata must be a JSON object'
+      using errcode = '22023';
+  end if;
+  v_metadata := public.sanitize_online_order_document_metadata(p_metadata);
+
+  if p_tenant_id is null or p_order_id is null then
+    raise exception 'Official document requires tenant and order identifiers'
+      using errcode = '22023';
+  end if;
+  if v_provider_document_id = '' or length(v_provider_document_id) > 256 then
+    raise exception 'Official document provider identifier is invalid'
+      using errcode = '22023';
+  end if;
+  if v_source_event_key = '' or length(v_source_event_key) > 256 then
+    raise exception 'Official document source event key is invalid'
+      using errcode = '22023';
+  end if;
+  if v_provider !~ '^[a-z0-9][a-z0-9_-]{0,63}$' then
+    raise exception 'Official document provider is invalid'
+      using errcode = '22023';
+  end if;
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'Official document amount must be positive'
+      using errcode = '22023';
+  end if;
+  if v_currency !~ '^[A-Z]{3}$' then
+    raise exception 'Official document currency is invalid'
+      using errcode = '22023';
+  end if;
+  if p_issued_at is null
+     or p_issued_at > clock_timestamp() + interval '5 minutes' then
+    raise exception 'Official document issue time is invalid'
+      using errcode = '22023';
+  end if;
+  if v_artifact_url !~* '^https://[^[:space:]/@]+(/[^[:space:]]*)?$' then
+    raise exception 'Official document requires a secure HTTPS artifact URL'
+      using errcode = '22023';
+  end if;
+  if v_artifact_sha256 !~ '^[0-9a-f]{64}$' then
+    raise exception 'Official document requires a SHA-256 artifact hash'
+      using errcode = '22023';
+  end if;
+
+  select * into v_order
+  from public.online_orders orders
+  where orders.id = p_order_id
+    and orders.tenant_id = p_tenant_id
+  for update;
+
+  if not found then
+    raise exception 'Online order not found for official document'
+      using errcode = '23503';
+  end if;
+  if v_order.payment_status <> 'paid' then
+    raise exception 'Official document requires a paid online order'
+      using errcode = '23514';
+  end if;
+  if p_issued_at < v_order.created_at - interval '5 minutes' then
+    raise exception 'Official document predates the online order'
+      using errcode = '23514';
+  end if;
+
+  if v_order.sales_invoice_id is not null then
+    select * into v_invoice
+    from public.sales_invoices invoice
+    where invoice.id = v_order.sales_invoice_id
+      and invoice.tenant_id = v_order.tenant_id;
+    if not found then
+      raise exception 'Online order sales invoice is missing or cross-tenant'
+        using errcode = '23503';
+    end if;
+    v_invoice_id := v_invoice.id;
+  end if;
+
+  if round(p_amount, 2) <> round(v_order.total, 2)
+     or (
+       v_invoice_id is not null
+       and round(p_amount, 2) <> round(v_invoice.total, 2)
+     ) then
+    raise exception 'Official document amount does not match order or linked invoice'
+      using errcode = '23514';
+  end if;
+  if v_currency <> upper(coalesce(
+    (select tenant.currency from public.tenants tenant where tenant.id = p_tenant_id),
+    'CLP'
+  )) then
+    raise exception 'Official document currency does not match tenant currency'
+      using errcode = '23514';
+  end if;
+
+  if v_document_kind = 'payment_voucher' then
+    if v_provider <> 'mercadopago'
+       or lower(btrim(coalesce(v_order.payment_method, '')))
+         not in ('mercadopago', 'mercado_pago') then
+      raise exception 'Only Mercado Pago orders can record payment vouchers'
+        using errcode = '23514';
+    end if;
+    if v_status <> 'approved'
+       or v_fiscal_validity <> 'voucher_valid_as_boleta'
+       or v_payment_operation_id is null
+       or v_document_type is not null
+       or v_folio is not null then
+      raise exception 'Mercado Pago voucher evidence is incomplete'
+        using errcode = '23514';
+    end if;
+    if nullif(btrim(coalesce(v_order.payment_reference, '')), '')
+         is distinct from v_payment_operation_id then
+      raise exception 'Voucher operation does not match the online order payment'
+        using errcode = '23514';
+    end if;
+    if not exists (
+      select 1
+      from public.sales_channel_payment_events payment_event
+      where payment_event.tenant_id = v_order.tenant_id
+        and payment_event.order_id = v_order.id
+        and payment_event.provider = 'mercadopago'
+        and payment_event.external_payment_id = v_payment_operation_id
+        and payment_event.provider_status = 'approved'
+        and payment_event.outcome in ('payment_validated', 'applied')
+        and round(payment_event.amount, 2) = round(p_amount, 2)
+        and upper(payment_event.currency) = v_currency
+    ) then
+      raise exception 'Voucher requires a durable validated provider payment'
+        using errcode = '23514';
+    end if;
+  elsif v_document_kind = 'tax_document' then
+    if v_invoice_id is null then
+      raise exception 'Official DTE evidence requires the linked sales invoice'
+        using errcode = '23514';
+    end if;
+    if v_status not in ('issued', 'accepted')
+       or v_fiscal_validity <> 'official_chilean_dte'
+       or v_document_type is null
+       or v_folio is null then
+      raise exception 'Official DTE evidence is incomplete'
+        using errcode = '23514';
+    end if;
+  else
+    raise exception 'Unsupported official document kind: %', v_document_kind
+      using errcode = '22023';
+  end if;
+
+  v_fingerprint := encode(extensions.digest(convert_to(
+    jsonb_build_object(
+      'tenant_id', p_tenant_id,
+      'order_id', p_order_id,
+      'sales_invoice_id', v_invoice_id,
+      'document_kind', v_document_kind,
+      'provider', v_provider,
+      'provider_document_id', v_provider_document_id,
+      'payment_operation_id', v_payment_operation_id,
+      'fiscal_validity', v_fiscal_validity,
+      'document_type', v_document_type,
+      'folio', v_folio,
+      'amount', round(p_amount, 2),
+      'currency', v_currency,
+      'issued_at', p_issued_at,
+      'artifact_url', v_artifact_url,
+      'artifact_sha256', v_artifact_sha256,
+      'status', v_status
+    )::text,
+    'UTF8'
+  ), 'sha256'), 'hex');
+
+  v_source_lock := hashtextextended(
+    p_tenant_id::text || ':' || v_source_event_key,
+    0
+  );
+  v_document_lock := hashtextextended(
+    p_tenant_id::text || ':' || v_document_kind || ':' || v_provider || ':'
+      || v_provider_document_id || ':' || v_status,
+    0
+  );
+  perform pg_advisory_xact_lock(least(v_source_lock, v_document_lock));
+  if v_source_lock <> v_document_lock then
+    perform pg_advisory_xact_lock(greatest(v_source_lock, v_document_lock));
+  end if;
+
+  select * into v_existing
+  from public.online_order_official_documents document
+  where document.tenant_id = p_tenant_id
+    and (
+      document.source_event_key = v_source_event_key
+      or (
+        document.document_kind = v_document_kind
+        and document.provider = v_provider
+        and document.provider_document_id = v_provider_document_id
+        and document.status = v_status
+      )
+    )
+  order by (document.source_event_key = v_source_event_key) desc
+  limit 1;
+
+  if found then
+    if v_existing.evidence_fingerprint <> v_fingerprint then
+      raise exception 'Official document idempotency key conflicts with different evidence'
+        using errcode = '23000';
+    end if;
+    perform public.enqueue_transactional_email_from_official_document_id(v_existing.id);
+    return v_existing.id;
+  end if;
+
+  insert into public.online_order_official_documents (
+    tenant_id, order_id, sales_invoice_id, document_kind, provider,
+    provider_document_id, payment_operation_id, fiscal_validity, document_type,
+    folio, amount, currency, issued_at, artifact_url, artifact_sha256, status,
+    source_event_key, evidence_fingerprint, metadata, recorded_by
+  ) values (
+    p_tenant_id, p_order_id, v_invoice_id, v_document_kind, v_provider,
+    v_provider_document_id, v_payment_operation_id, v_fiscal_validity,
+    v_document_type, v_folio, round(p_amount, 2), v_currency, p_issued_at,
+    v_artifact_url, v_artifact_sha256, v_status, v_source_event_key,
+    v_fingerprint, v_metadata, auth.uid()
+  ) returning id into v_document_id;
+
+  return v_document_id;
+end;
+$$;
+
+revoke all on function public.record_online_order_official_document_unhardened(
+  uuid, uuid, text, text, text, text, numeric, text, timestamp with time zone,
+  text, text, text, text, text, text, text, jsonb
+) from public, anon, authenticated, service_role;
+
+-- The hardened 18-argument recorder and email gate introduced in 18000 remain
+-- authoritative. Its private email base must, however, accept a payment
+-- voucher whose sale invoice is intentionally absent while processing is
+-- action_required. IS NOT DISTINCT FROM keeps the DTE/invoice binding exact
+-- while allowing the explicitly supported NULL/NULL voucher case.
+create or replace function public.enqueue_transactional_email_official_document_base(
+  p_document_id uuid
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_document public.online_order_official_documents%rowtype;
+  v_order public.online_orders%rowtype;
+  v_tenant public.tenants%rowtype;
+  v_settings public.transactional_email_settings%rowtype;
+  v_message_kind text;
+  v_recipient text;
+  v_subject text;
+  v_store_url text;
+  v_items jsonb;
+  v_payload jsonb;
+  v_attachment_manifest jsonb;
+  v_source_event_key text;
+  v_idempotency_key text;
+  v_delivery_mode text := 'dry_run';
+  v_state text := 'pending';
+  v_suppression_reason text;
+  v_outbox_id uuid;
+begin
+  select * into v_document
+  from public.online_order_official_documents
+  where id = p_document_id;
+
+  if not found then
+    return null;
+  end if;
+
+  if v_document.document_kind = 'payment_voucher' then
+    if v_document.provider <> 'mercadopago'
+       or v_document.status <> 'approved'
+       or v_document.fiscal_validity <> 'voucher_valid_as_boleta'
+       or nullif(v_document.payment_operation_id, '') is null then
+      return null;
+    end if;
+    v_message_kind := 'payment_voucher_available';
+  elsif v_document.document_kind = 'tax_document' then
+    if v_document.status not in ('issued', 'accepted')
+       or v_document.fiscal_validity <> 'official_chilean_dte'
+       or nullif(v_document.document_type, '') is null
+       or nullif(v_document.folio, '') is null then
+      return null;
+    end if;
+    v_message_kind := 'tax_document_issued';
+  else
+    return null;
+  end if;
+
+  select * into v_order
+  from public.online_orders
+  where id = v_document.order_id
+    and tenant_id = v_document.tenant_id
+    and sales_invoice_id is not distinct from v_document.sales_invoice_id
+    and payment_status = 'paid';
+
+  if not found then
+    return null;
+  end if;
+
+  if v_message_kind = 'payment_voucher_available'
+     and (
+       lower(btrim(coalesce(v_order.payment_method, '')))
+         not in ('mercadopago', 'mercado_pago')
+       or nullif(btrim(coalesce(v_order.payment_reference, '')), '')
+         is distinct from v_document.payment_operation_id
+     ) then
+    return null;
+  end if;
+
+  v_recipient := lower(btrim(coalesce(v_order.customer_email, '')));
+  if v_recipient !~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then
+    return null;
+  end if;
+
+  select * into v_tenant
+  from public.tenants
+  where id = v_document.tenant_id;
+
+  select * into v_settings
+  from public.transactional_email_settings
+  where tenant_id = v_document.tenant_id;
+
+  if found and v_settings.enabled and v_settings.delivery_mode = 'send' then
+    v_delivery_mode := 'send';
+  end if;
+
+  v_store_url := public.transactional_email_store_url(
+    v_settings.public_store_url,
+    v_tenant.custom_domain
+  );
+
+  select coalesce(jsonb_agg(
+    jsonb_build_object(
+      'name', item.product_name,
+      'sku', item.product_sku,
+      'quantity', item.quantity,
+      'unitPrice', item.unit_price,
+      'subtotal', item.subtotal
+    ) order by item.created_at, item.id
+  ), '[]'::jsonb)
+  into v_items
+  from public.online_order_items item
+  where item.order_id = v_order.id
+    and item.tenant_id = v_order.tenant_id;
+
+  v_subject := case v_message_kind
+    when 'payment_voucher_available'
+      then format('Comprobante oficial de pago · %s', v_order.order_number)
+    when 'tax_document_issued'
+      then format('Documento tributario emitido · %s', v_order.order_number)
+  end;
+
+  v_payload := jsonb_build_object(
+    'schemaVersion', 1,
+    'eventType', v_message_kind,
+    'store', jsonb_strip_nulls(jsonb_build_object(
+      'name', v_tenant.shop_name,
+      'logoUrl', case
+        when v_tenant.logo_url ~* '^https://[^[:space:]]+$'
+          then v_tenant.logo_url
+        else null
+      end,
+      'storeUrl', v_store_url,
+      'currency', v_document.currency,
+      'timezone', coalesce(v_tenant.timezone, 'America/Santiago')
+    )),
+    'customer', jsonb_build_object('name', v_order.customer_name),
+    'order', jsonb_build_object(
+      'id', v_order.id,
+      'number', v_order.order_number,
+      'status', v_order.status,
+      'paymentStatus', v_order.payment_status,
+      'createdAt', v_order.created_at,
+      'deliveryType', v_order.delivery_type,
+      'subtotal', v_order.subtotal,
+      'shippingCost', v_order.shipping_cost,
+      'discountAmount', v_order.discount_amount,
+      'total', v_order.total
+    ),
+    'items', v_items,
+    'document', jsonb_build_object(
+      'kind', v_document.document_kind,
+      'taxStatus', v_document.fiscal_validity,
+      'label', case v_message_kind
+        when 'payment_voucher_available'
+          then 'Comprobante oficial de pago válido como boleta'
+        else 'Documento tributario electrónico oficial'
+      end
+    )
+  );
+
+  if v_message_kind = 'payment_voucher_available' then
+    v_payload := v_payload || jsonb_build_object(
+      'officialPaymentVoucher', jsonb_build_object(
+        'provider', v_document.provider,
+        'providerDocumentId', v_document.provider_document_id,
+        'operationId', v_document.payment_operation_id,
+        'status', v_document.status,
+        'fiscalValidity', v_document.fiscal_validity,
+        'amount', v_document.amount,
+        'currency', v_document.currency,
+        'issuedAt', v_document.issued_at,
+        'downloadUrl', v_document.artifact_url,
+        'artifactSha256', v_document.artifact_sha256
+      )
+    );
+  else
+    v_payload := v_payload || jsonb_build_object(
+      'officialTaxDocument', jsonb_build_object(
+        'provider', v_document.provider,
+        'providerDocumentId', v_document.provider_document_id,
+        'documentType', v_document.document_type,
+        'folio', v_document.folio,
+        'status', v_document.status,
+        'fiscalValidity', v_document.fiscal_validity,
+        'amount', v_document.amount,
+        'currency', v_document.currency,
+        'issuedAt', v_document.issued_at,
+        'downloadUrl', v_document.artifact_url,
+        'artifactSha256', v_document.artifact_sha256
+      )
+    );
+  end if;
+
+  v_attachment_manifest := jsonb_build_array(jsonb_strip_nulls(
+    jsonb_build_object(
+      'kind', v_document.document_kind,
+      'url', v_document.artifact_url,
+      'sha256', v_document.artifact_sha256,
+      'mimeType', coalesce(
+        v_document.metadata->>'mime_type',
+        'application/pdf'
+      ),
+      'providerDocumentId', v_document.provider_document_id,
+      'issuedAt', v_document.issued_at
+    )
+  ));
+
+  v_source_event_key := 'online_order_official_document:' || v_document.id::text;
+  v_idempotency_key := 'txn-email:v1:' || encode(extensions.digest(
+    convert_to(
+      v_document.tenant_id::text || ':' || v_document.order_id::text || ':'
+        || v_source_event_key || ':' || v_message_kind || ':' || v_recipient,
+      'UTF8'
+    ),
+    'sha256'
+  ), 'hex');
+
+  select suppression.reason into v_suppression_reason
+  from public.transactional_email_suppressions suppression
+  where suppression.tenant_id = v_document.tenant_id
+    and suppression.email_sha256 = encode(
+      extensions.digest(convert_to(v_recipient, 'UTF8'), 'sha256'),
+      'hex'
+    )
+    and suppression.lifted_at is null
+  order by suppression.suppressed_at desc
+  limit 1;
+
+  if v_suppression_reason is not null then
+    v_state := 'suppressed';
+  end if;
+
+  insert into public.transactional_email_outbox (
+    tenant_id,
+    order_id,
+    order_event_id,
+    source_event_key,
+    message_kind,
+    template_key,
+    template_version,
+    recipient_email,
+    recipient_name,
+    sender_name,
+    sender_email,
+    reply_to_email,
+    subject,
+    render_payload,
+    attachment_manifest,
+    idempotency_key,
+    delivery_mode,
+    state,
+    suppression_reason
+  ) values (
+    v_document.tenant_id,
+    v_document.order_id,
+    null,
+    v_source_event_key,
+    v_message_kind,
+    v_message_kind,
+    1,
+    v_recipient,
+    nullif(btrim(v_order.customer_name), ''),
+    nullif(btrim(coalesce(v_settings.from_name, v_tenant.shop_name)), ''),
+    nullif(lower(btrim(v_settings.from_email)), ''),
+    nullif(lower(btrim(v_settings.reply_to_email)), ''),
+    v_subject,
+    v_payload,
+    v_attachment_manifest,
+    v_idempotency_key,
+    v_delivery_mode,
+    v_state,
+    v_suppression_reason
+  )
+  on conflict (idempotency_key) do nothing
+  returning id into v_outbox_id;
+
+  if v_outbox_id is null then
+    select id into v_outbox_id
+    from public.transactional_email_outbox
+    where idempotency_key = v_idempotency_key;
+  end if;
+
+  return v_outbox_id;
+end;
+$$;
+
+revoke all on function public.enqueue_transactional_email_official_document_base(uuid)
+  from public, anon, authenticated, service_role;
+
+comment on column public.online_order_official_documents.sales_invoice_id is
+  'Required for official DTE evidence. Nullable only for a complete Mercado Pago payment voucher whose provider payment is durably validated while sale processing still requires attention.';
+
+commit;

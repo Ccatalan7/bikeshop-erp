@@ -7160,6 +7160,10 @@ begin
     raise notice 'consume_sales_invoice_inventory: invoice ID is null';
     return;
   end if;
+  if p_invoice.tenant_id is null then
+    raise exception 'Sales invoice tenant is required for inventory consumption'
+      using errcode = '23503';
+  end if;
 
   v_status := lower(coalesce(p_invoice.status, 'draft'));
 
@@ -7173,7 +7177,8 @@ begin
   select coalesce(sum(quantity), 0)::integer
     into v_net_quantity
     from public.stock_movements
-   where reference = v_reference;
+   where tenant_id = p_invoice.tenant_id
+     and reference = v_reference;
 
   if v_net_quantity < 0 then
     return;
@@ -7194,13 +7199,41 @@ begin
   loop
     v_resolved_product_id := v_item.product_id;
 
-    -- Try to resolve by SKU if product_id is null
-    if v_resolved_product_id is null and v_item.product_sku is not null and v_item.product_sku != '' then
-      select id
+    if v_resolved_product_id is not null and not exists (
+      select 1 from public.products product
+      where product.id = v_resolved_product_id
+        and product.tenant_id = p_invoice.tenant_id
+    ) then
+      if exists (
+        select 1 from public.products product
+        where product.id = v_resolved_product_id
+      ) then
+        raise exception 'Sales invoice product belongs to another tenant'
+          using errcode = '42501';
+      end if;
+      v_resolved_product_id := null;
+    end if;
+
+    -- Resolve SKU only inside the invoice tenant. A SKU known exclusively in
+    -- another tenant is an isolation violation, not a free-text line.
+    if v_resolved_product_id is null
+       and nullif(v_item.product_sku, '') is not null then
+      select product.id
         into v_resolved_product_id
-        from public.products
-       where sku = v_item.product_sku
+        from public.products product
+       where product.tenant_id = p_invoice.tenant_id
+         and product.sku = v_item.product_sku
        limit 1;
+      if not found then
+        if exists (
+          select 1 from public.products product
+          where product.sku = v_item.product_sku
+            and product.tenant_id <> p_invoice.tenant_id
+        ) then
+          raise exception 'Sales invoice SKU belongs to another tenant'
+            using errcode = '42501';
+        end if;
+      end if;
     end if;
 
     v_quantity_int := coalesce(v_item.quantity::int, 0);
@@ -7216,8 +7249,9 @@ begin
     -- CHECK IF PRODUCT IS A SET
     select is_set, name
       into v_is_set, v_set_name
-      from public.products
+     from public.products
      where id = v_resolved_product_id
+       and tenant_id = p_invoice.tenant_id
        and coalesce(track_stock, true) = true;
 
     if not found then
@@ -7231,7 +7265,8 @@ begin
            component_product_id,
            quantity_in_set
          from public.product_set_components
-         where set_product_id = v_resolved_product_id
+         where tenant_id = p_invoice.tenant_id
+           and set_product_id = v_resolved_product_id
        loop
           v_qty_to_deduct := v_quantity_int * v_component.quantity_in_set;
 
@@ -7240,9 +7275,13 @@ begin
              set inventory_qty = coalesce(stock_quantity, inventory_qty, 0) - v_qty_to_deduct,
                  stock_quantity = coalesce(stock_quantity, inventory_qty, 0) - v_qty_to_deduct,
                  updated_at = now()
-           where id = v_component.component_product_id;
+           where id = v_component.component_product_id
+             and tenant_id = p_invoice.tenant_id;
 
-          if found then
+          if not found then
+            raise exception 'Sales invoice set component is outside the current tenant'
+              using errcode = '42501';
+          else
             -- Log Component Movement (FIXED: Includes tenant_id)
             insert into public.stock_movements (
               tenant_id, id, product_id, warehouse_id, type, movement_type, quantity,
@@ -7274,6 +7313,7 @@ begin
              stock_quantity = coalesce(stock_quantity, inventory_qty, 0) - v_quantity_int,
              updated_at = now()
        where id = v_resolved_product_id
+         and tenant_id = p_invoice.tenant_id
          and coalesce(is_service, false) = false
          and coalesce(track_stock, true) = true;
 
@@ -20922,6 +20962,8 @@ create table if not exists online_orders (
 
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
+  version bigint not null default 0,
+  updated_by uuid references auth.users(id) on delete set null,
   unique(tenant_id, order_number)
 );
 
@@ -20997,6 +21039,11 @@ create table if not exists online_order_items (
   quantity integer not null,
   unit_price numeric(12,2) not null,
   subtotal numeric(12,2) not null,
+  unit_cost numeric(12,2),
+  tax_rate numeric(5,2),
+  is_service boolean,
+  purchase_treatment text,
+  product_type text,
   created_at timestamp with time zone not null default now()
 );
 
@@ -21008,6 +21055,222 @@ exception
   when undefined_table then raise notice '⚠ Table online_order_items does not exist';
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in online_order_items';
 end $$;
+
+-- Canonical immutable lifecycle/event receipt stream for online orders.
+alter table public.online_orders
+  add column if not exists version bigint not null default 0,
+  add column if not exists updated_by uuid;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.online_orders'::regclass
+      and conname = 'online_orders_updated_by_fkey'
+  ) then
+    alter table public.online_orders
+      add constraint online_orders_updated_by_fkey
+      foreign key (updated_by) references auth.users(id) on delete set null;
+  end if;
+end $$;
+
+alter table public.online_order_items
+  add column if not exists unit_cost numeric(12,2),
+  add column if not exists tax_rate numeric(5,2),
+  add column if not exists is_service boolean,
+  add column if not exists purchase_treatment text,
+  add column if not exists product_type text;
+
+comment on column public.online_order_items.unit_cost is
+  'Immutable-at-checkout unit cost snapshot for prospective COGS. Null means no trustworthy historical snapshot exists.';
+comment on column public.online_order_items.tax_rate is
+  'Product tax-rate snapshot captured at checkout; it does not by itself select invoice tax treatment.';
+comment on column public.online_order_items.is_service is
+  'Service classification snapshot captured at checkout.';
+comment on column public.online_order_items.purchase_treatment is
+  'Inventory/workshop-consumable classification snapshot captured at checkout.';
+comment on column public.online_order_items.product_type is
+  'Product/service type snapshot captured at checkout.';
+
+create table if not exists public.online_order_events (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete restrict,
+  order_id uuid not null references public.online_orders(id) on delete restrict,
+  event_type text not null check (event_type in (
+    'order_created', 'status_transition', 'payment_transition',
+    'internal_note_updated'
+  )),
+  from_status text,
+  to_status text,
+  from_payment_status text,
+  to_payment_status text,
+  changed boolean not null,
+  expected_version bigint,
+  result_version bigint not null,
+  actor_id uuid references auth.users(id) on delete set null,
+  operation_key text not null,
+  request_snapshot jsonb not null,
+  response_snapshot jsonb not null,
+  occurred_at timestamptz not null default clock_timestamp(),
+  unique (tenant_id, operation_key),
+  check (jsonb_typeof(request_snapshot) = 'object'),
+  check (jsonb_typeof(response_snapshot) = 'object'),
+  check (
+    (event_type = 'status_transition' and to_status is not null)
+    or (event_type = 'payment_transition' and to_payment_status is not null)
+    or event_type in ('order_created', 'internal_note_updated')
+  )
+);
+
+create index if not exists idx_online_order_events_order
+  on public.online_order_events(
+    tenant_id, order_id, occurred_at desc, id desc
+  );
+
+alter table public.online_order_events enable row level security;
+drop policy if exists online_order_events_select on public.online_order_events;
+create policy online_order_events_select
+  on public.online_order_events for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+revoke all on public.online_order_events
+  from public, anon, authenticated, service_role;
+grant select on public.online_order_events to authenticated;
+
+create or replace function public.prevent_online_order_event_mutation()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  raise exception 'Online order events are append-only'
+    using errcode = '55000';
+end;
+$$;
+
+revoke all on function public.prevent_online_order_event_mutation()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_online_order_events_immutable
+  on public.online_order_events;
+create trigger trg_online_order_events_immutable
+  before update or delete on public.online_order_events
+  for each row execute function public.prevent_online_order_event_mutation();
+
+create or replace function public.stamp_online_order_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  new.version := old.version + 1;
+  new.updated_at := clock_timestamp();
+  new.updated_by := auth.uid();
+  return new;
+end;
+$$;
+
+revoke all on function public.stamp_online_order_update()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_stamp_online_order_update on public.online_orders;
+create trigger trg_stamp_online_order_update
+  before update on public.online_orders
+  for each row execute function public.stamp_online_order_update();
+
+create or replace function public.capture_online_order_transition_event()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_operation_key text;
+  v_request jsonb;
+  v_response jsonb;
+begin
+  if old.status is distinct from new.status then
+    v_operation_key := nullif(
+      current_setting('app.online_order_operation_key', true), ''
+    );
+    v_operation_key := coalesce(
+      v_operation_key,
+      'system:status:' || new.id::text || ':' || new.version::text || ':'
+        || gen_random_uuid()::text
+    );
+    v_request := coalesce(
+      nullif(current_setting('app.online_order_request_snapshot', true), '')::jsonb,
+      jsonb_build_object(
+        'source', 'database_trigger',
+        'from_status', old.status,
+        'to_status', new.status
+      )
+    );
+    v_response := jsonb_build_object(
+      'success', true, 'order_id', new.id,
+      'old_status', old.status, 'new_status', new.status,
+      'status', new.status, 'payment_status', new.payment_status,
+      'version', new.version, 'invoice_id', new.sales_invoice_id,
+      'changed', true
+    );
+    insert into public.online_order_events (
+      tenant_id, order_id, event_type, from_status, to_status,
+      from_payment_status, to_payment_status, changed, expected_version,
+      result_version, actor_id, operation_key, request_snapshot,
+      response_snapshot
+    ) values (
+      new.tenant_id, new.id, 'status_transition', old.status, new.status,
+      old.payment_status, new.payment_status, true, old.version, new.version,
+      new.updated_by, v_operation_key, v_request, v_response
+    );
+  end if;
+
+  if old.payment_status is distinct from new.payment_status then
+    v_operation_key := 'system:payment:' || new.id::text || ':'
+      || new.version::text || ':' || md5(concat_ws(
+        ':', coalesce(old.payment_status, ''),
+        coalesce(new.payment_status, ''),
+        coalesce(new.payment_reference, '')
+      ));
+    v_request := jsonb_build_object(
+      'source', 'database_trigger',
+      'from_payment_status', old.payment_status,
+      'to_payment_status', new.payment_status,
+      'payment_method', new.payment_method,
+      'payment_reference', new.payment_reference
+    );
+    v_response := jsonb_build_object(
+      'success', true, 'order_id', new.id, 'status', new.status,
+      'old_payment_status', old.payment_status,
+      'new_payment_status', new.payment_status,
+      'payment_status', new.payment_status, 'version', new.version,
+      'invoice_id', new.sales_invoice_id, 'changed', true
+    );
+    insert into public.online_order_events (
+      tenant_id, order_id, event_type, from_status, to_status,
+      from_payment_status, to_payment_status, changed, expected_version,
+      result_version, actor_id, operation_key, request_snapshot,
+      response_snapshot
+    ) values (
+      new.tenant_id, new.id, 'payment_transition', old.status, new.status,
+      old.payment_status, new.payment_status, true, old.version, new.version,
+      new.updated_by, v_operation_key, v_request, v_response
+    );
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.capture_online_order_transition_event()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_capture_online_order_transition_event
+  on public.online_orders;
+create trigger trg_capture_online_order_transition_event
+  after update of status, payment_status on public.online_orders
+  for each row execute function public.capture_online_order_transition_event();
 
 -- Durable ERP notifications for app-shell alerts that must survive refresh/login.
 create table if not exists erp_notifications (
@@ -22382,13 +22645,22 @@ begin
   -- Generate invoice number PER TENANT in format: INV-25-00001
   v_year := to_char(v_invoice_date, 'YY');
 
+  perform pg_advisory_xact_lock(hashtextextended(
+    'online_order_invoice_number:' || v_tenant_id::text || ':' || v_year,
+    0
+  ));
+
   select coalesce(max(cast(substring(invoice_number from '\d+$') as integer)), 0) + 1
   into v_next_number
   from sales_invoices
   where tenant_id = v_tenant_id
     and invoice_number ~ ('^INV-' || v_year || '-\d+$');
 
-  v_invoice_number := 'INV-' || v_year || '-' || lpad(v_next_number::text, 5, '0');
+  v_invoice_number := 'INV-' || v_year || '-' || lpad(
+    v_next_number::text,
+    greatest(5, length(v_next_number::text)),
+    '0'
+  );
 
   -- Build items JSONB array from order items
   select jsonb_agg(
@@ -22398,11 +22670,17 @@ begin
       'product_sku', oi.product_sku,
       'quantity', oi.quantity,
       'price', oi.unit_price,
-      'subtotal', oi.subtotal
-    )
+      'subtotal', oi.subtotal,
+      'cost', oi.unit_cost,
+      'tax_rate', oi.tax_rate,
+      'is_service', oi.is_service,
+      'purchase_treatment', oi.purchase_treatment,
+      'product_type', oi.product_type
+    ) order by oi.created_at, oi.id
   ) into v_items
   from online_order_items oi
-  where oi.order_id = p_order_id;
+  where oi.order_id = p_order_id
+    and oi.tenant_id = v_tenant_id;
 
   -- Default to empty array if no items
   if v_items is null then
@@ -22487,9 +22765,9 @@ begin
     status = case
       when status = 'pending' then 'confirmed'
       else status
-    end,
-    updated_at = now()
-  where id = p_order_id;
+    end
+  where id = p_order_id
+    and tenant_id = v_tenant_id;
 
   -- Create payment record ONLY if payment is confirmed
   if v_should_create_payment and v_payment_method.id is not null then
@@ -22948,50 +23226,93 @@ end $$;
 grant execute on function public.cancel_online_order(uuid, text, numeric) to authenticated;
 grant execute on function public.update_online_order_status(uuid, text, text, text, text, text) to authenticated;
 
--- Function to generate order number
-create or replace function public.generate_online_order_number()
+-- Tenant/year order numbers serialize on one advisory transaction lock.
+create or replace function public.generate_online_order_number(
+  p_tenant_id uuid,
+  p_at timestamptz default clock_timestamp()
+)
 returns text
 language plpgsql
+security definer
+set search_path = public
 as $$
 declare
   v_year text;
-  v_count integer;
-  v_number text;
+  v_next bigint;
 begin
-  v_year := to_char(now(), 'YY');
-
-  select count(*) + 1 into v_count
-  from online_orders
-  where extract(year from created_at) = extract(year from now());
-
-  v_number := 'WEB-' || v_year || '-' || lpad(v_count::text, 5, '0');
-
-  return v_number;
+  if p_tenant_id is null or not exists (
+    select 1 from public.tenants tenant where tenant.id = p_tenant_id
+  ) then
+    raise exception 'A valid tenant is required to generate an online order number'
+      using errcode = '23503';
+  end if;
+  v_year := to_char(coalesce(p_at, clock_timestamp()), 'YY');
+  perform pg_advisory_xact_lock(hashtextextended(
+    'online_order_number:' || p_tenant_id::text || ':' || v_year,
+    0
+  ));
+  select coalesce(max(
+    substring(order_number from ('^WEB-' || v_year || '-([0-9]+)$'))::bigint
+  ), 0) + 1
+    into v_next
+    from public.online_orders
+   where tenant_id = p_tenant_id
+     and order_number ~ ('^WEB-' || v_year || '-[0-9]+$');
+  return 'WEB-' || v_year || '-' || lpad(
+    v_next::text,
+    greatest(5, length(v_next::text)),
+    '0'
+  );
 end;
 $$;
 
+create or replace function public.generate_online_order_number()
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_tenant_id uuid := public.user_tenant_id();
+begin
+  if v_tenant_id is null then
+    raise exception 'Tenant context is required to generate an online order number'
+      using errcode = '42501';
+  end if;
+  return public.generate_online_order_number(v_tenant_id, clock_timestamp());
+end;
+$$;
+
+revoke all on function public.generate_online_order_number(uuid, timestamptz)
+  from public, anon, authenticated, service_role;
+revoke all on function public.generate_online_order_number()
+  from public, anon, authenticated, service_role;
+
 -- Trigger to auto-generate order number
 create or replace function public.auto_generate_order_number()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
 begin
-  if NEW.order_number is null or NEW.order_number = '' then
-    NEW.order_number := public.generate_online_order_number();
+  if NEW.order_number is null or btrim(NEW.order_number) = '' then
+    NEW.order_number := public.generate_online_order_number(
+      NEW.tenant_id,
+      coalesce(NEW.created_at, clock_timestamp())
+    );
   end if;
   return NEW;
 end;
-$$ language plpgsql;
+$$;
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_trigger
-    where tgname = 'trg_auto_generate_order_number'
-  ) then
-    create trigger trg_auto_generate_order_number
-      before insert on online_orders
-      for each row execute procedure auto_generate_order_number();
-  end if;
-end $$;
+revoke all on function public.auto_generate_order_number()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_auto_generate_order_number on online_orders;
+create trigger trg_auto_generate_order_number
+  before insert on online_orders
+  for each row execute procedure auto_generate_order_number();
 
 -- Secure public checkout RPC: create orders from product IDs and quantities only.
 -- Prices, names, SKU snapshots, totals, IVA, and stock checks are derived server-side.
@@ -23019,11 +23340,14 @@ declare
   v_product_id uuid;
   v_quantity integer;
   v_product record;
+  v_unit_price numeric(12,2);
   v_line_total numeric(12,2);
   v_total numeric(12,2) := 0;
   v_subtotal numeric(12,2) := 0;
   v_tax_amount numeric(12,2) := 0;
   v_customer_id_text text;
+  v_checkout_key text;
+  v_created_response jsonb;
 begin
   if p_order_data is null or jsonb_typeof(p_order_data) <> 'object' then
     raise exception 'Invalid order payload';
@@ -23048,6 +23372,10 @@ begin
   v_customer_address := nullif(btrim(coalesce(p_order_data->>'customer_address', '')), '');
   v_delivery_type := lower(btrim(coalesce(nullif(p_order_data->>'delivery_type', ''), 'shipping')));
   v_payment_method := lower(btrim(coalesce(nullif(p_order_data->>'payment_method', ''), 'transfer')));
+  v_checkout_key := nullif(
+    btrim(coalesce(p_order_data->>'checkout_idempotency_key', '')),
+    ''
+  );
 
   if length(v_customer_name) < 2 or length(v_customer_name) > 160 then
     raise exception 'Invalid customer name';
@@ -23122,7 +23450,7 @@ begin
     customer_notes
   ) values (
     v_tenant_id,
-    coalesce(nullif(p_order_data->>'order_number', ''), ''),
+    public.generate_online_order_number(v_tenant_id, clock_timestamp()),
     v_customer_id,
     v_customer_email,
     v_customer_name,
@@ -23159,35 +23487,51 @@ begin
       raise exception 'Invalid quantity for product %', v_product_id;
     end if;
 
-    select id,
-           name,
-           sku,
-           price,
-           product_type,
-           track_stock,
-           inventory_qty,
-           stock_quantity
+    select product.id,
+           product.name,
+           product.sku,
+           coalesce(product.website_price, product.price) as public_price,
+           product.cost,
+           product.tax_rate,
+           product.product_type,
+           product.is_service,
+           product.purchase_treatment,
+           product.track_stock,
+           product.inventory_qty,
+           product.stock_quantity
       into v_product
-      from products
-     where id = v_product_id
-       and tenant_id = v_tenant_id
-       and is_active = true
-       and is_published = true
-       and coalesce(show_on_website, true) = true
-     limit 1;
+      from products product
+     where product.id = v_product_id
+       and product.tenant_id = v_tenant_id
+       and product.is_active = true
+       and coalesce(product.is_published, false) = true
+       and coalesce(product.show_on_website, false) = true
+     for update;
 
     if not found then
       raise exception 'Product is unavailable: %', v_product_id;
     end if;
 
-    if coalesce(v_product.product_type, 'product') <> 'service'
-       and coalesce(v_product.track_stock, true) = true
-       and greatest(coalesce(v_product.inventory_qty, 0), coalesce(v_product.stock_quantity, 0)) < v_quantity then
-      raise exception 'Insufficient stock for product %', v_product.name;
+    if not (
+      coalesce(v_product.is_service, false)
+      or v_product.product_type = 'service'
+    )
+       and coalesce(v_product.track_stock, true) then
+      if v_product.stock_quantity is not null
+         and v_product.inventory_qty is not null
+         and v_product.stock_quantity <> v_product.inventory_qty then
+        raise exception 'Product stock columns disagree; checkout blocked for %',
+          v_product.name;
+      end if;
+      if coalesce(v_product.stock_quantity, v_product.inventory_qty, 0)
+         < v_quantity then
+        raise exception 'Insufficient stock for product %', v_product.name;
+      end if;
     end if;
 
-    v_line_total := round(coalesce(v_product.price, 0)::numeric * v_quantity, 2);
-    if v_line_total <= 0 then
+    v_unit_price := round(coalesce(v_product.public_price, 0)::numeric, 2);
+    v_line_total := round(v_unit_price * v_quantity, 2);
+    if v_unit_price <= 0 or v_line_total <= 0 then
       raise exception 'Invalid price for product %', v_product.name;
     end if;
 
@@ -23199,7 +23543,12 @@ begin
       product_sku,
       quantity,
       unit_price,
-      subtotal
+      subtotal,
+      unit_cost,
+      tax_rate,
+      is_service,
+      purchase_treatment,
+      product_type
     ) values (
       v_tenant_id,
       v_order_id,
@@ -23207,8 +23556,16 @@ begin
       v_product.name,
       v_product.sku,
       v_quantity,
-      round(v_product.price::numeric, 2),
-      v_line_total
+      v_unit_price,
+      v_line_total,
+      v_product.cost,
+      v_product.tax_rate,
+      (
+        coalesce(v_product.is_service, false)
+        or v_product.product_type = 'service'
+      ),
+      coalesce(v_product.purchase_treatment, 'inventory'),
+      coalesce(v_product.product_type, 'product')
     );
 
     v_total := v_total + v_line_total;
@@ -23231,9 +23588,46 @@ begin
          tax_amount = v_tax_amount,
          shipping_cost = 0,
          discount_amount = 0,
-         total = v_total,
-         updated_at = now()
-   where id = v_order_id;
+         total = v_total
+   where id = v_order_id
+     and tenant_id = v_tenant_id;
+
+  select jsonb_build_object(
+    'success', true,
+    'order_id', orders.id,
+    'status', orders.status,
+    'payment_status', orders.payment_status,
+    'version', orders.version,
+    'invoice_id', orders.sales_invoice_id,
+    'total', orders.total,
+    'changed', true
+  )
+    into v_created_response
+    from public.online_orders orders
+   where orders.id = v_order_id
+     and orders.tenant_id = v_tenant_id;
+
+  insert into public.online_order_events (
+    tenant_id, order_id, event_type, from_status, to_status,
+    from_payment_status, to_payment_status, changed, expected_version,
+    result_version, actor_id, operation_key, request_snapshot,
+    response_snapshot
+  )
+  select
+    orders.tenant_id, orders.id, 'order_created', null, orders.status,
+    null, orders.payment_status, true, null, orders.version, v_auth_uid,
+    'checkout-created:' || orders.id::text,
+    jsonb_build_object(
+      'source', 'public_checkout',
+      'checkout_idempotency_key', v_checkout_key,
+      'delivery_type', orders.delivery_type,
+      'payment_method', orders.payment_method,
+      'item_count', jsonb_array_length(p_order_items)
+    ),
+    v_created_response
+  from public.online_orders orders
+  where orders.id = v_order_id
+    and orders.tenant_id = v_tenant_id;
 
   perform pg_catalog.set_config('app.public_order_rpc_in_progress', '', true);
 
@@ -26333,18 +26727,19 @@ as $$
       )
       and (
         a.stock_policy = 'all'
+        or coalesce(p.is_service, false)
         or p.product_type = 'service'
         or (
           a.stock_policy = 'available_only'
           and (
             coalesce(p.track_stock, true) = false
-            or greatest(coalesce(p.inventory_qty, 0), coalesce(p.stock_quantity, 0)) > 0
+            or coalesce(p.stock_quantity, p.inventory_qty, 0) > 0
           )
         )
         or (
           a.stock_policy = 'out_of_stock_only'
           and coalesce(p.track_stock, true) = true
-          and greatest(coalesce(p.inventory_qty, 0), coalesce(p.stock_quantity, 0)) <= 0
+          and coalesce(p.stock_quantity, p.inventory_qty, 0) <= 0
         )
       )
   ),
@@ -35481,5 +35876,93 @@ grant select on public.stock_movements_ledger_view to authenticated;
 \ir ../migrations/20260718090000_add_atomic_expense_edit.sql
 -- Preserve the original posting audit timestamp across the RPC draft bridge.
 \ir ../migrations/20260718091000_preserve_expense_posted_at_on_atomic_edit.sql
+-- Non-workshop invoices, including anonymous ecommerce transfer invoices, must
+-- bypass workshop synchronization before its authenticated actor assertion.
+\ir ../migrations/20260718120000_gate_workshop_invoice_sync_by_link.sql
+-- Canonical online-order lifecycle: tenant/year numbering, public checkout
+-- price/stock truth, prospective product snapshots, optimistic replay-safe
+-- transitions, append-only event receipts, protected mutation boundaries, and
+-- tenant-scoped invoice SKU resolution.
+\ir ../migrations/20260718130000_harden_online_order_lifecycle.sql
+-- Delivery-safe transactional order communications: immutable event-derived
+-- outbox, dry-run-first Resend worker contract, signed provider evidence,
+-- recipient suppressions, and redacted guest access tokens. Payment status,
+-- official payment voucher, and SII/DTE document evidence remain distinct.
+\ir ../migrations/20260718140000_add_transactional_order_email_foundation.sql
+-- Official online-order artifacts remain a separate append-only legal-evidence
+-- boundary. Only complete Mercado Pago vouchers or issued/accepted Chilean DTEs
+-- can enqueue the corresponding transactional document email.
+\ir ../migrations/20260718150000_add_online_order_official_document_ledger.sql
+-- Unpaid standalone invoices can be discarded without physical deletion:
+-- stock, journal evidence, status, actor and reason remain atomically linked.
+\ir ../migrations/20260718160000_add_atomic_sales_invoice_discard.sql
+-- Public order UUIDs are identifiers, never bearer credentials. Checkout now
+-- returns a hashed/expiring access token atomically; confirmation and Mercado
+-- Pago authorization consume only its redacted projection.
+\ir ../migrations/20260718170000_secure_public_order_access.sql
+-- A Mercado Pago voucher is valid as a boleta only when a separately verified
+-- tenant SII emission-model declaration and every prescribed fiscal field are
+-- bound into immutable evidence. No tenant is configured or backfilled here.
+\ir ../migrations/20260718180000_harden_mercadopago_voucher_fiscal_evidence.sql
+-- Provider truth commits before derived sale effects. Mercado Pago retries are
+-- replay-safe; paid orders that cannot yet reconcile stock/invoice/accounting
+-- remain explicitly action_required with append-only processing evidence.
+\ir ../migrations/20260718190000_split_mercadopago_payment_processing.sql
+-- Ecommerce tax classification follows each immutable product-line snapshot,
+-- never the payment rail. Gross CLP prices split into per-line net/IVA and
+-- unclassified or historically inconsistent pending rows fail closed.
+\ir ../migrations/20260718200000_fix_online_order_tax_classification.sql
+-- Paid-order correction saga: durable Mercado Pago/manual refund evidence is
+-- committed before replay-safe atomic return, credit-note and refund-ledger
+-- effects. Also replace the legacy global order-number key with tenant scope.
+\ir ../migrations/20260718210000_add_online_order_correction_workflow.sql
+-- Every current/future product tax classification receives immutable
+-- provenance. The exact audited public Viñabike batch applies only when its
+-- no-PII membership and commercial snapshot hashes still match.
+\ir ../migrations/20260718220000_apply_curated_product_tax_classification.sql
+-- Verified Viñabike sender identity plus a fail-closed pg_cron/pg_net worker.
+-- The scheduler is installed disabled, requires explicit dry-run acceptance
+-- before send, re-checks recipient suppressions at claim time, and reconciles
+-- signed provider events that race the worker acknowledgement.
+\ir ../migrations/20260718230000_prepare_transactional_email_delivery.sql
+-- Push notifications use a dedicated Vault/Edge shared secret. The message
+-- trigger contains no bearer JWT, and the Edge Function rejects unauthenticated
+-- callers before reading the request body.
+\ir ../migrations/20260718240000_secure_push_notification_webhook.sql
+\ir ../migrations/20260718250000_sync_storefront_sales_contact.sql
+-- A claimed Mercado Pago voucher must match the exact sanitized provider card
+-- evidence. Payments API redirects/tickets/3DS resources never qualify as an
+-- official artifact, and `approved` alone remains non-fiscal.
+\ir ../migrations/20260718260000_bind_mercadopago_voucher_to_provider_evidence.sql
+-- Public storefront settings keep only their non-sensitive projection. Legacy
+-- permissive policies and destructive API-role grants are removed so provider
+-- tokens and future credentials remain service-role only.
+\ir ../migrations/20260718270000_harden_website_settings_secret_access.sql
+-- Public checkout and confirmation use tokenized SECURITY DEFINER RPCs.
+-- Direct order/order-line table access is removed from anon, and authenticated
+-- sessions retain only RLS-governed reads; all mutation paths stay audited.
+\ir ../migrations/20260718280000_close_direct_public_online_order_reads.sql
+-- Unpaid online checkout reserves available physical inventory without moving
+-- stock. Cancellation/expiry releases it; invoice posting converts the exact
+-- commitment to append-only, movement-linked consumption evidence. Product
+-- sets reserve components and public catalog availability subtracts live
+-- commitments.
+\ir ../migrations/20260718290000_add_online_inventory_reservations.sql
+-- Public checkout, legal pages and Google Merchant use the same server-side
+-- gross-CLP shipping tariff. The immutable order snapshot separates shipping
+-- net/IVA from product amounts and rejects overlapping rate ranges.
+\ir ../migrations/20260718300000_align_merchant_transparency_and_online_shipping.sql
+-- Public order creation re-prices products and shipping inside the database,
+-- rejects stale browser consent, and posts shipping as a taxable non-stock
+-- invoice line without fabricating an inventory movement.
+\ir ../migrations/20260718300010_apply_authoritative_online_shipping_quote.sql
+-- Checkout Pro preferences are durable, replay-safe provider resources. Their
+-- lifetime is bounded by the authoritative inventory reservation, and paid or
+-- cancelled orders queue every remaining link for provider-side expiration.
+\ir ../migrations/20260718310000_harden_mercadopago_preference_lifecycle.sql
+-- Approved provider truth may include a credential-free Mercado Pago payment
+-- receipt. Record and email it as explicitly non-fiscal; never weaken the
+-- separately verified SII voucher-as-boleta path.
+\ir ../migrations/20260718320000_produce_mercadopago_payment_voucher.sql
 
 commit;

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/models/stock_adjustment_origin.dart';
+import '../../../shared/models/product_tax_treatment.dart';
 import '../../../shared/models/product.dart'
     show PurchaseTreatment, parsePurchaseTreatment;
 import '../../../shared/services/database_service.dart';
@@ -359,6 +360,24 @@ class BulkProductEditService {
       final normalizedWebsite = draft.googleMerchant ? true : draft.website;
       final normalizedMerchant =
           normalizedWebsite ? draft.googleMerchant : false;
+      if ((normalizedWebsite || normalizedMerchant) &&
+          !hasSupportedProductTaxRate(product.taxRate)) {
+        const message =
+            'Falta clasificar el tratamiento tributario como IVA 19% o Exento.';
+        errors.add('${product.name}: $message');
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.failed,
+            summary: message,
+            beforeValues: const {},
+            afterValues: const {},
+          ),
+        );
+        continue;
+      }
       final beforeValues = <String, dynamic>{
         'website': product.isPublished,
         'google_merchant': product.isGoogleMerchant,
@@ -967,6 +986,19 @@ class BulkProductEditService {
           payload: payload,
           afterValues: afterValues,
         );
+
+        final effectivePublished = payload.containsKey('is_published')
+            ? payload['is_published'] == true
+            : product.isPublished;
+        final effectiveMerchant = payload.containsKey('is_google_merchant')
+            ? payload['is_google_merchant'] == true
+            : product.isGoogleMerchant;
+        if ((effectivePublished || effectiveMerchant) &&
+            !hasSupportedProductTaxRate(product.taxRate)) {
+          throw Exception(
+            'Falta clasificar el tratamiento tributario como IVA 19% o Exento antes de mantener la publicación.',
+          );
+        }
 
         final conversionTarget = _customInventoryConversionTarget(
           product: product,

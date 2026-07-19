@@ -5,6 +5,60 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'email_provider.dart';
 
+@visibleForTesting
+List<EmailSenderIdentity> parseZohoSenderIdentities(
+  Object? payload, {
+  required String? accountEmail,
+}) {
+  final root = _stringKeyedMap(payload);
+  final data = _stringKeyedMap(root?['data']);
+  final rawDetails = root?['sender_identities'] ?? data?['sender_identities'];
+  final byAddress = <String, EmailSenderIdentity>{};
+
+  if (rawDetails is List) {
+    for (final rawDetail in rawDetails) {
+      final detail = _stringKeyedMap(rawDetail);
+      if (detail == null) continue;
+
+      final address = detail['address']?.toString().trim() ?? '';
+      if (!_looksLikeEmailAddress(address)) continue;
+
+      final displayName =
+          (detail['display_name'] ?? detail['displayName'])?.toString().trim();
+      final normalized = address.toLowerCase();
+      byAddress.putIfAbsent(
+        normalized,
+        () => EmailSenderIdentity(
+          address: address,
+          displayName:
+              displayName == null || displayName.isEmpty ? null : displayName,
+        ),
+      );
+    }
+  }
+
+  final primaryAddress = accountEmail?.trim() ?? '';
+  final primaryKey = primaryAddress.toLowerCase();
+  final primaryFromZoho = byAddress.remove(primaryKey);
+  final identities = <EmailSenderIdentity>[
+    if (_looksLikeEmailAddress(primaryAddress))
+      primaryFromZoho ?? EmailSenderIdentity(address: primaryAddress),
+    ...byAddress.values,
+  ];
+
+  return List<EmailSenderIdentity>.unmodifiable(identities);
+}
+
+Map<String, dynamic>? _stringKeyedMap(Object? value) {
+  if (value is! Map) return null;
+  return value.map(
+    (key, mapValue) => MapEntry(key.toString(), mapValue),
+  );
+}
+
+bool _looksLikeEmailAddress(String value) =>
+    RegExp(r'^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$').hasMatch(value);
+
 /// Zoho Mail implementation of EmailProvider
 class ZohoProvider extends EmailProvider {
   static const String _providerId = 'zoho';
@@ -13,6 +67,8 @@ class ZohoProvider extends EmailProvider {
   String? _email;
   String? _accountId;
   String? _inboxFolderId;
+  List<EmailSenderIdentity> _senderIdentities = const <EmailSenderIdentity>[];
+  String? _senderIdentityError;
 
   List<Email> _emails = [];
   Email? _selectedEmail;
@@ -35,13 +91,22 @@ class ZohoProvider extends EmailProvider {
   String? get accountEmail => _email;
 
   @override
+  List<EmailSenderIdentity> get senderIdentities => _senderIdentities;
+
+  @override
+  EmailSenderIdentity? get defaultSenderIdentity => resolveEmailSenderIdentity(
+        _senderIdentities,
+        defaultAddress: _email,
+      );
+
+  @override
   bool get isAuthenticated => _email != null && _accountId != null;
 
   @override
   bool get isLoading => _isLoading;
 
   @override
-  String? get error => _error;
+  String? get error => _senderIdentityError ?? _error;
 
   @override
   List<Email> get emails => _emails;
@@ -69,9 +134,11 @@ class ZohoProvider extends EmailProvider {
         if (data['connected'] == true && account != null) {
           _email = account['account_email'] as String?;
           _accountId = account['provider_account_id']?.toString();
+          await _loadSenderIdentities(notify: false);
         } else {
           _email = null;
           _accountId = null;
+          _senderIdentities = const <EmailSenderIdentity>[];
         }
         debugPrint('🔐 [Zoho] Server connection loaded for $_email');
       }
@@ -142,6 +209,7 @@ class ZohoProvider extends EmailProvider {
       final account = data['account'] as Map<String, dynamic>?;
       _email = account?['account_email'] as String?;
       _accountId = account?['provider_account_id']?.toString();
+      await _loadSenderIdentities(notify: false);
 
       debugPrint('🔐 [Zoho] Extracted accountId: $_accountId, email: $_email');
       debugPrint('🔐 [Zoho] Token exchange successful for $_email');
@@ -171,6 +239,8 @@ class ZohoProvider extends EmailProvider {
     await _clearLegacyLocalTokens();
     _email = null;
     _accountId = null;
+    _senderIdentities = const <EmailSenderIdentity>[];
+    _senderIdentityError = null;
     _emails = [];
     _selectedEmail = null;
 
@@ -210,6 +280,65 @@ class ZohoProvider extends EmailProvider {
   @override
   Future<String?> getValidAccessToken() async {
     return isAuthenticated ? 'server-managed' : null;
+  }
+
+  @override
+  Future<void> refreshSenderIdentities() => _loadSenderIdentities(
+        notify: true,
+        propagateError: true,
+      );
+
+  Future<void> _loadSenderIdentities({
+    required bool notify,
+    bool propagateError = false,
+  }) async {
+    _senderIdentities = parseZohoSenderIdentities(
+      null,
+      accountEmail: _email,
+    );
+
+    if (isAuthenticated) {
+      try {
+        final response = await _supabase.functions.invoke(
+          'zoho-oauth',
+          body: {'action': 'sender_identities'},
+        );
+
+        if (response.status != 200) {
+          throw Exception(_zohoSenderIdentityErrorMessage(
+            response.data,
+            status: response.status,
+          ));
+        }
+
+        _senderIdentities = parseZohoSenderIdentities(
+          response.data,
+          accountEmail: _email,
+        );
+        _senderIdentityError = null;
+      } catch (error) {
+        debugPrint('📤 [Zoho] Could not refresh sender identities: $error');
+        _senderIdentityError = _zohoSenderIdentityErrorMessage(error);
+        if (propagateError) rethrow;
+      }
+    }
+
+    if (notify) notifyListeners();
+  }
+
+  String _zohoSenderIdentityErrorMessage(Object? error, {int? status}) {
+    final raw = error?.toString() ?? '';
+    final normalized = raw.toLowerCase();
+    if (status == 403 ||
+        normalized.contains('organization.groups.read') ||
+        normalized.contains('insufficient') ||
+        normalized.contains('permisos zoho') ||
+        normalized.contains('scope')) {
+      return 'Permisos Zoho insuficientes: falta autorizar grupos para usar '
+          'remitentes compartidos. Reconecta Zoho.';
+    }
+    return 'Zoho no pudo verificar los remitentes autorizados. '
+        'Se mantuvo solamente la cuenta principal. Detalle: $raw';
   }
 
   Future<void> _clearLegacyLocalTokens() async {
@@ -566,6 +695,7 @@ class ZohoProvider extends EmailProvider {
     required String to,
     required String subject,
     required String content,
+    String? fromAddress,
     String? cc,
     String? bcc,
   }) async {
@@ -574,12 +704,20 @@ class ZohoProvider extends EmailProvider {
     notifyListeners();
 
     try {
+      // Re-read the account immediately before sending so a removed alias or
+      // group permission cannot remain usable from stale UI state.
+      await _loadSenderIdentities(notify: false);
+      final sender = resolveSenderIdentity(fromAddress);
+      if (sender == null) {
+        throw StateError('El remitente no está autorizado por Zoho.');
+      }
+
       final url = '$_accountUrl/messages';
       await _proxyRequest(
         method: 'POST',
         url: url,
         body: {
-          'fromAddress': _email,
+          'fromAddress': sender.address,
           'toAddress': to,
           'subject': subject,
           'content': content,
@@ -653,6 +791,7 @@ class ZohoProvider extends EmailProvider {
   @override
   void clearError() {
     _error = null;
+    _senderIdentityError = null;
     notifyListeners();
   }
 

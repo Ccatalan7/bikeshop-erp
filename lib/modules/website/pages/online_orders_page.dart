@@ -2,11 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/branded_loading.dart';
+import '../../../shared/widgets/interactive_table_field.dart';
+import '../../../shared/widgets/modern_context_menu.dart';
+import '../../../shared/widgets/operational_status_badge.dart';
+import '../../../shared/services/workspace_manager.dart';
 import '../widgets/website_admin_ui.dart';
+import '../widgets/order_evidence_section.dart';
+import '../widgets/online_order_correction_dialog.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
+import '../models/online_order_workflow_policy.dart';
 
 /// Page for managing online orders from the website
 class OnlineOrdersPage extends StatefulWidget {
@@ -51,38 +58,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     WebsiteService websiteService,
   ) async {
     if (order.paymentStatus == 'paid' || order.paidAt != null) {
-      if (!mounted) return;
-      final openInvoice = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          icon: const Icon(Icons.account_balance_wallet_outlined),
-          title: const Text('Este pedido ya tiene un pago'),
-          content: Text(
-            order.salesInvoiceId == null
-                ? 'No se cancelará ni se marcará un reembolso automáticamente. '
-                    'Primero debe existir una factura para registrar la devolución, '
-                    'la nota de crédito y el reembolso con trazabilidad.'
-                : 'No se cancelará ni se marcará un reembolso automáticamente. '
-                    'Abra la factura y use Correcciones para registrar la devolución, '
-                    'la nota de crédito y el reembolso sin perder evidencia.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cerrar'),
-            ),
-            if (order.salesInvoiceId != null)
-              FilledButton.icon(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                icon: const Icon(Icons.receipt_long),
-                label: const Text('Abrir factura'),
-              ),
-          ],
-        ),
-      );
-      if (openInvoice == true && mounted && order.salesInvoiceId != null) {
-        context.go('/sales/invoices/${order.salesInvoiceId}');
-      }
+      await _showOrderCorrection(order, cancelOrder: true);
       return;
     }
 
@@ -97,7 +73,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'La factura vinculada se conservará como cancelada. Si ya había '
+              'La venta ERP vinculada se conservará como cancelada. Si ya había '
               'descontado stock, el sistema lo restaurará y dejará la operación '
               'conectada a sus movimientos y evidencia contable.',
             ),
@@ -138,18 +114,16 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     if (reason == null || !mounted) return;
 
     try {
-      final result = await websiteService.cancelOrder(
+      await websiteService.updateOrderStatus(
         order.id,
-        reason: reason,
-        refundAmount: 0,
+        'cancelled',
+        expectedVersion: order.version,
+        notes: reason,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result?['message']?.toString() ??
-                'Pedido cancelado con su evidencia preservada.',
-          ),
+        const SnackBar(
+          content: Text('Pedido cancelado con su evidencia preservada.'),
         ),
       );
     } catch (error) {
@@ -181,7 +155,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
             children: [
               Text(
                 'Se registrará un pago por ${ChileanUtils.formatCurrency(order.total)} '
-                'y la factura descontará el inventario una sola vez.',
+                'y la venta ERP descontará el inventario una sola vez.',
               ),
               const SizedBox(height: 16),
               TextField(
@@ -263,9 +237,8 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           action: order.salesInvoiceId == null
               ? null
               : SnackBarAction(
-                  label: 'Ver factura',
-                  onPressed: () =>
-                      context.go('/sales/invoices/${order.salesInvoiceId}'),
+                  label: 'Ver venta ERP',
+                  onPressed: () => _openInvoice(order.salesInvoiceId!),
                 ),
         ),
       );
@@ -287,6 +260,101 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<WebsiteService>().initializeOrders();
     });
+  }
+
+  Future<void> _openInvoice(String invoiceId) async {
+    await context.push(
+      '/sales/invoices/$invoiceId/edit?returnTo=/website/orders',
+    );
+    if (!mounted) return;
+    await context.read<WebsiteService>().loadOrders();
+  }
+
+  Future<void> _showOrderCorrection(
+    OnlineOrder order, {
+    bool cancelOrder = false,
+  }) async {
+    if (!mounted) return;
+    if (order.salesInvoiceId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'El pago debe estar conciliado con una venta ERP antes de corregirlo.',
+          ),
+        ),
+      );
+      return;
+    }
+    final completed = await showOnlineOrderCorrectionDialog(
+      context: context,
+      order: order,
+      service: context.read<WebsiteService>(),
+      cancelOrder: cancelOrder,
+    );
+    if (completed != true || !mounted) return;
+    await context.read<WebsiteService>().loadOrders();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Corrección aplicada con evidencia de dinero, stock y contabilidad.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openInvoicePreview(OnlineOrder order) async {
+    final invoiceId = order.salesInvoiceId;
+    if (invoiceId == null || invoiceId.isEmpty) return;
+    final uri = Uri(
+      path: '/sales/invoices',
+      queryParameters: {
+        'selectedInvoiceId': invoiceId,
+        'view': 'split',
+      },
+    );
+    await context.push(uri.toString());
+    if (!mounted) return;
+    await context.read<WebsiteService>().loadOrders();
+  }
+
+  Future<void> _openCustomer(String customerId) async {
+    await context.push('/clientes/$customerId');
+  }
+
+  Future<void> _showInvoiceCellContextMenu({
+    required TapDownDetails details,
+    required OnlineOrder order,
+  }) async {
+    final invoiceId = order.salesInvoiceId;
+    if (invoiceId == null || invoiceId.isEmpty) return;
+    final value = await showModernContextMenu<String>(
+      context: context,
+      globalPosition: details.globalPosition,
+      title: 'Venta ERP · ${order.orderNumber}',
+      actions: const [
+        ModernContextMenuAction(
+          value: 'preview',
+          icon: Icons.receipt_long_outlined,
+          label: 'Abrir vista PDF',
+          subtitle: 'Documento interno, panel dividido',
+          iconColor: Color(0xFF2563EB),
+        ),
+        ModernContextMenuAction(
+          value: 'edit',
+          icon: Icons.edit_outlined,
+          label: 'Editar venta ERP',
+          subtitle: 'Formulario completo',
+          iconColor: Color(0xFF475569),
+        ),
+      ],
+    );
+    if (!mounted || value == null) return;
+    if (value == 'preview') {
+      await _openInvoicePreview(order);
+    } else {
+      await _openInvoice(invoiceId);
+    }
   }
 
   @override
@@ -324,6 +392,11 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
       title: 'Pedidos online',
       description: 'Revisa el avance operativo y el estado real de cada pago.',
       actions: [
+        IconButton.outlined(
+          icon: const Icon(Icons.help_outline_rounded, size: 19),
+          onPressed: _showOperationsGuide,
+          tooltip: 'Guía operativa',
+        ),
         IconButton.outlined(
           icon: const Icon(Icons.refresh_rounded, size: 19),
           onPressed: () => websiteService.loadOrders(),
@@ -364,6 +437,10 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                               value: 'confirmed', child: Text('Confirmado')),
                           DropdownMenuItem(
                               value: 'processing', child: Text('En Proceso')),
+                          DropdownMenuItem(
+                            value: 'ready_for_pickup',
+                            child: Text('Listo para retiro'),
+                          ),
                           DropdownMenuItem(
                               value: 'shipped', child: Text('Enviado')),
                           DropdownMenuItem(
@@ -443,6 +520,10 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                           DropdownMenuItem(
                               value: 'processing', child: Text('En proceso')),
                           DropdownMenuItem(
+                            value: 'ready_for_pickup',
+                            child: Text('Listo para retiro'),
+                          ),
+                          DropdownMenuItem(
                               value: 'shipped', child: Text('Enviado')),
                           DropdownMenuItem(
                               value: 'delivered', child: Text('Entregado')),
@@ -516,20 +597,33 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
             ),
           ),
 
+          if (websiteService.ordersEnrichmentWarning != null)
+            _OrdersLoadNotice(
+              message: websiteService.ordersEnrichmentWarning!,
+              onRetry: websiteService.loadOrders,
+            ),
+
           // Orders List
           Expanded(
             child: websiteService.isLoading
                 ? const Center(child: BrandedLoading())
-                : orders.isEmpty
+                : websiteService.ordersLoadError != null &&
+                        websiteService.orders.isEmpty
                     ? WebsiteAdminEmptyState(
-                        icon: Icons.shopping_bag_outlined,
-                        title: 'No hay pedidos en esta vista',
-                        description: _selectedStatus == 'all' &&
-                                _selectedPaymentStatus == 'all'
-                            ? 'Cuando entre una compra desde el sitio aparecerá aquí con su pago y trazabilidad.'
-                            : 'Cambia los filtros para revisar otros estados de pedido o pago.',
+                        icon: Icons.error_outline_rounded,
+                        title: 'No se pudieron cargar los pedidos',
+                        description: websiteService.ordersLoadError!,
                       )
-                    : _buildOrdersTable(orders),
+                    : orders.isEmpty
+                        ? WebsiteAdminEmptyState(
+                            icon: Icons.shopping_bag_outlined,
+                            title: 'No hay pedidos en esta vista',
+                            description: _selectedStatus == 'all' &&
+                                    _selectedPaymentStatus == 'all'
+                                ? 'Cuando entre una compra desde el sitio aparecerá aquí con su pago y trazabilidad.'
+                                : 'Cambia los filtros para revisar otros estados de pedido o pago.',
+                          )
+                        : _buildOrdersTable(orders),
           ),
         ],
       ),
@@ -722,7 +816,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                         sortKey: 'payment',
                       ),
                       _buildTableHeader(
-                        'Factura',
+                        'Venta ERP',
                         widthOf('invoice'),
                         columnKey: 'invoice',
                         sortKey: 'invoice',
@@ -849,6 +943,20 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     final theme = Theme.of(context);
     final statusColor = _getStatusColor(order.status);
     final paymentColor = _getPaymentStatusColor(order.paymentStatus);
+    final legalNextStatuses = OnlineOrderWorkflowPolicy.legalNextStatuses(
+      currentStatus: order.status,
+      deliveryType: order.deliveryType,
+      paymentStatus: order.paymentStatus,
+    );
+    final canConfirmManualPayment =
+        OnlineOrderWorkflowPolicy.canConfirmManualPayment(
+      orderStatus: order.status,
+      paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod,
+      hasInvoice: order.salesInvoiceId != null,
+    );
+    final webhookOwnsPayment = order.paymentStatus == 'pending' &&
+        OnlineOrderWorkflowPolicy.isWebhookOwnedPayment(order.paymentMethod);
     final itemQuantity = order.items.fold<int>(
       0,
       (total, item) => total + item.quantity,
@@ -903,12 +1011,23 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                 ),
                 _buildTableCell(
                   width: widths['customer']!,
-                  child: Text(
-                    order.customerName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+                  child: InteractiveTableField(
+                    onTap: order.customerId == null
+                        ? null
+                        : () => _openCustomer(order.customerId!),
+                    maxWidth: widths['customer']! - 20,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Text(
+                      order.customerName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: order.customerId == null
+                            ? theme.colorScheme.onSurface
+                            : theme.colorScheme.primary,
+                      ),
                     ),
                   ),
                 ),
@@ -957,44 +1076,57 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                     statusColor,
                     maxWidth: widths['status']! - 20,
                     compact: true,
+                    onTap: legalNextStatuses.isEmpty
+                        ? null
+                        : () => _showOrderStatusMenu(order),
                   ),
                 ),
                 _buildTableCell(
                   width: widths['payment']!,
-                  child: _buildStatusLabel(
-                    order.paymentStatusDisplayName,
-                    paymentColor,
-                    maxWidth: widths['payment']! - 20,
-                    compact: true,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: _buildStatusLabel(
+                          order.paymentStatusDisplayName,
+                          paymentColor,
+                          maxWidth: widths['payment']! -
+                              (order.hasPaymentProcessingAttention ? 38 : 20),
+                          compact: true,
+                          onTap: order.hasPaymentProcessingAttention
+                              ? () => _showPaymentProcessingAction(order)
+                              : canConfirmManualPayment
+                                  ? () => _handlePaymentConfirmation(
+                                        order,
+                                        context.read<WebsiteService>(),
+                                      )
+                                  : null,
+                          tooltip: order.hasPaymentProcessingAttention
+                              ? 'El pago está preservado, pero la venta ERP requiere atención.'
+                              : webhookOwnsPayment
+                                  ? 'Mercado Pago actualiza este estado automáticamente mediante su webhook.'
+                                  : null,
+                        ),
+                      ),
+                      if (order.hasPaymentProcessingAttention) ...[
+                        const SizedBox(width: 5),
+                        Tooltip(
+                          message: order.paymentProcessingRequiresRefundReview
+                              ? 'Requiere conciliación del cobro o reembolso.'
+                              : 'Requiere completar stock, venta ERP o contabilidad.',
+                          child: const Icon(
+                            Icons.error_outline_rounded,
+                            size: 16,
+                            color: Color(0xFF9A6700),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 _buildTableCell(
                   width: widths['invoice']!,
-                  child: Row(
-                    children: [
-                      Icon(
-                        order.salesInvoiceId == null
-                            ? Icons.receipt_long_outlined
-                            : Icons.verified_outlined,
-                        size: 14,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          order.salesInvoiceId == null
-                              ? 'Pendiente'
-                              : 'Emitida',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                  child: _buildInvoiceTableCell(order, widths['invoice']!),
                 ),
                 _buildTableCell(
                   width: widths['total']!,
@@ -1040,8 +1172,409 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     );
   }
 
+  Widget _buildInvoiceTableCell(OnlineOrder order, double width) {
+    final theme = Theme.of(context);
+    final invoiceId = order.salesInvoiceId;
+    if (invoiceId != null && invoiceId.isNotEmpty) {
+      return Tooltip(
+        message: 'Abrir venta ERP · clic secundario para más opciones',
+        child: InteractiveTableField(
+          onTap: () => _openInvoice(invoiceId),
+          onSecondaryTapDown: (details) => _showInvoiceCellContextMenu(
+            details: details,
+            order: order,
+          ),
+          accentColor: theme.colorScheme.primary,
+          maxWidth: width - 20,
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.verified_outlined,
+                size: 14,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  'Vinculada',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (order.hasPaymentProcessingAttention) {
+      return InteractiveTableField(
+        onTap: () => _showPaymentProcessingAction(order),
+        accentColor: const Color(0xFF9A6700),
+        maxWidth: width - 20,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              size: 14,
+              color: Color(0xFF9A6700),
+            ),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                order.paymentProcessingRequiresRefundReview
+                    ? 'Conciliar'
+                    : 'Revisar',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF7A5200),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (order.paymentStatus == 'paid' && order.status != 'cancelled') {
+      return InteractiveTableField(
+        onTap: () => _createInvoice(order, context.read<WebsiteService>()),
+        accentColor: theme.colorScheme.primary,
+        maxWidth: width - 20,
+        padding: EdgeInsets.zero,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.add_circle_outline_rounded,
+                size: 14,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  'Generar',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.receipt_long_outlined,
+          size: 14,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            'Pendiente',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showOrderStatusMenu(OnlineOrder order) async {
+    final nextStatuses = OnlineOrderWorkflowPolicy.legalNextStatuses(
+      currentStatus: order.status,
+      deliveryType: order.deliveryType,
+      paymentStatus: order.paymentStatus,
+    );
+    if (nextStatuses.isEmpty) return;
+    final theme = Theme.of(context);
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 12, 14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Siguiente estado',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '${order.orderNumber} · ${order.statusDisplayName}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      tooltip: 'Cerrar',
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(height: 1, color: theme.colorScheme.outlineVariant),
+              for (var index = 0; index < nextStatuses.length; index++) ...[
+                _buildStatusTransitionRow(
+                  dialogContext,
+                  nextStatuses[index],
+                ),
+                if (index < nextStatuses.length - 1)
+                  Divider(
+                    height: 1,
+                    indent: 58,
+                    color: theme.colorScheme.outlineVariant,
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected == null || !mounted) return;
+    await _applyOrderStatusTransition(order, selected);
+  }
+
+  Widget _buildStatusTransitionRow(
+    BuildContext dialogContext,
+    String status,
+  ) {
+    final theme = Theme.of(dialogContext);
+    final definition = OnlineOrderWorkflowPolicy.definitionFor(status);
+    final destructive = status == 'cancelled';
+    final color = destructive
+        ? theme.colorScheme.error
+        : theme.colorScheme.onSurfaceVariant;
+    return InkWell(
+      onTap: () => Navigator.pop(dialogContext, status),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+        child: Row(
+          children: [
+            Icon(_statusActionIcon(status), size: 20, color: color),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    OnlineOrderWorkflowPolicy.actionLabel(status),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: destructive ? theme.colorScheme.error : null,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    definition.meaning,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 19,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _statusActionIcon(String status) {
+    return switch (status) {
+      'confirmed' => Icons.check_circle_outline_rounded,
+      'processing' => Icons.inventory_2_outlined,
+      'ready_for_pickup' => Icons.storefront_outlined,
+      'shipped' => Icons.local_shipping_outlined,
+      'delivered' => Icons.task_alt_rounded,
+      'cancelled' => Icons.cancel_outlined,
+      _ => Icons.arrow_forward_rounded,
+    };
+  }
+
+  Future<void> _applyOrderStatusTransition(
+    OnlineOrder order,
+    String newStatus,
+  ) async {
+    final websiteService = context.read<WebsiteService>();
+    if (newStatus == 'cancelled') {
+      await _handleCancellation(order, websiteService);
+      return;
+    }
+
+    _ShippingTransitionInput? shipping;
+    if (newStatus == 'shipped') {
+      shipping = await _requestShippingDetails(order);
+      if (shipping == null || !mounted) return;
+    }
+
+    try {
+      final invoiceId = await websiteService.updateOrderStatus(
+        order.id,
+        newStatus,
+        expectedVersion: order.version,
+        trackingNumber: shipping?.trackingNumber,
+        trackingUrl: shipping?.trackingUrl,
+        carrier: shipping?.carrier,
+      );
+      if (!mounted) return;
+      final definition = OnlineOrderWorkflowPolicy.definitionFor(newStatus);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${order.orderNumber} ahora está ${definition.label.toLowerCase()}.',
+          ),
+          action: invoiceId == null
+              ? null
+              : SnackBarAction(
+                  label: 'ABRIR VENTA',
+                  onPressed: () => _openInvoice(invoiceId),
+                ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo cambiar el estado: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  Future<_ShippingTransitionInput?> _requestShippingDetails(
+    OnlineOrder order,
+  ) async {
+    final carrierController =
+        TextEditingController(text: order.shippingCarrier);
+    final trackingController =
+        TextEditingController(text: order.trackingNumber);
+    final urlController = TextEditingController(text: order.trackingUrl);
+    final result = await showDialog<_ShippingTransitionInput>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Registrar despacho · ${order.orderNumber}'),
+        content: SizedBox(
+          width: 440,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: carrierController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Transportista',
+                  hintText: 'Ej.: Chilexpress',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: trackingController,
+                decoration: const InputDecoration(
+                  labelText: 'Número de seguimiento',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: urlController,
+                decoration: const InputDecoration(
+                  labelText: 'Enlace de seguimiento',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Volver'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              _ShippingTransitionInput(
+                carrier: _optionalText(carrierController.text),
+                trackingNumber: _optionalText(trackingController.text),
+                trackingUrl: _optionalText(urlController.text),
+              ),
+            ),
+            child: const Text('Registrar despacho'),
+          ),
+        ],
+      ),
+    );
+    carrierController.dispose();
+    trackingController.dispose();
+    urlController.dispose();
+    return result;
+  }
+
+  String? _optionalText(String value) {
+    final normalized = value.trim();
+    return normalized.isEmpty ? null : normalized;
+  }
+
   Widget _buildOrderTableActions(OnlineOrder order) {
     final websiteService = context.read<WebsiteService>();
+    final legalNextStatuses = OnlineOrderWorkflowPolicy.legalNextStatuses(
+      currentStatus: order.status,
+      deliveryType: order.deliveryType,
+      paymentStatus: order.paymentStatus,
+    );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1049,19 +1582,22 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           tooltip: 'Más acciones',
           onSelected: (value) async {
             switch (value) {
-              case 'confirm':
-                await _confirmOrder(order, websiteService);
-                break;
               case 'confirm_payment':
                 await _handlePaymentConfirmation(order, websiteService);
                 break;
               case 'create_invoice':
                 await _createInvoice(order, websiteService);
                 break;
+              case 'payment_processing':
+                await _showPaymentProcessingAction(order);
+                break;
               case 'open_invoice':
                 if (order.salesInvoiceId != null && mounted) {
-                  context.go('/sales/invoices/${order.salesInvoiceId}');
+                  await _openInvoice(order.salesInvoiceId!);
                 }
+                break;
+              case 'correction':
+                await _showOrderCorrection(order);
                 break;
               case 'cancel':
                 await _handleCancellation(order, websiteService);
@@ -1069,22 +1605,12 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
             }
           },
           itemBuilder: (context) => [
-            if (order.status == 'pending')
-              const PopupMenuItem(
-                value: 'confirm',
-                child: ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.check_circle_outline_rounded),
-                  title: Text('Confirmar pedido'),
-                ),
-              ),
-            if (order.salesInvoiceId != null &&
-                order.status != 'cancelled' &&
-                order.paymentStatus != 'paid' &&
-                order.paymentStatus != 'refunded' &&
-                const {'transfer', 'transferencia', 'bank_transfer'}
-                    .contains(order.paymentMethod?.toLowerCase()))
+            if (OnlineOrderWorkflowPolicy.canConfirmManualPayment(
+              orderStatus: order.status,
+              paymentStatus: order.paymentStatus,
+              paymentMethod: order.paymentMethod,
+              hasInvoice: order.salesInvoiceId != null,
+            ))
               const PopupMenuItem(
                 value: 'confirm_payment',
                 child: ListTile(
@@ -1094,14 +1620,30 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                   title: Text('Confirmar pago'),
                 ),
               ),
-            if (order.salesInvoiceId == null && order.paymentStatus == 'paid')
+            if (order.hasPaymentProcessingAttention)
+              PopupMenuItem(
+                value: 'payment_processing',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.error_outline_rounded),
+                  title: Text(
+                    order.paymentProcessingRequiresRefundReview
+                        ? 'Conciliar cobro'
+                        : 'Revisar procesamiento',
+                  ),
+                ),
+              ),
+            if (order.salesInvoiceId == null &&
+                order.paymentStatus == 'paid' &&
+                !order.hasPaymentProcessingAttention)
               const PopupMenuItem(
                 value: 'create_invoice',
                 child: ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.receipt_long_outlined),
-                  title: Text('Crear factura'),
+                  title: Text('Crear venta ERP'),
                 ),
               ),
             if (order.salesInvoiceId != null)
@@ -1111,10 +1653,20 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.open_in_new_rounded),
-                  title: Text('Abrir factura'),
+                  title: Text('Abrir venta ERP'),
                 ),
               ),
-            if (order.status != 'cancelled')
+            if (order.salesInvoiceId != null && order.paymentStatus == 'paid')
+              const PopupMenuItem(
+                value: 'correction',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.assignment_return_outlined),
+                  title: Text('Gestionar devolución'),
+                ),
+              ),
+            if (legalNextStatuses.contains('cancelled'))
               PopupMenuItem(
                 value: 'cancel',
                 child: ListTile(
@@ -1134,42 +1686,417 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     );
   }
 
-  Future<void> _confirmOrder(
-    OnlineOrder order,
-    WebsiteService websiteService,
-  ) async {
-    await websiteService.updateOrderStatus(order.id, 'confirmed');
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${order.orderNumber} confirmado.')),
-    );
-  }
-
   Future<void> _createInvoice(
     OnlineOrder order,
     WebsiteService websiteService,
   ) async {
+    if (order.hasPaymentProcessingAttention) {
+      await _showPaymentProcessingAction(order);
+      return;
+    }
     try {
       final invoiceId = await websiteService.processOrder(order.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Factura creada: $invoiceId'),
-          action: SnackBarAction(
-            label: 'Abrir',
-            onPressed: () => context.go('/sales/invoices/$invoiceId'),
+          content: Text(
+            invoiceId == null
+                ? 'El pedido fue procesado, pero no devolvió una venta ERP para abrir.'
+                : 'Venta ERP creada: $invoiceId',
           ),
+          action: invoiceId == null
+              ? null
+              : SnackBarAction(
+                  label: 'Abrir',
+                  onPressed: () => _openInvoice(invoiceId),
+                ),
         ),
       );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No se pudo crear la factura: $error'),
+          content: Text('No se pudo crear la venta ERP: $error'),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     }
+  }
+
+  Future<void> _showPaymentProcessingAction(OnlineOrder order) async {
+    final eventId = order.paymentProcessingEventId;
+    if (eventId == null || !mounted) return;
+    final actorCanRetry =
+        context.read<WebsiteService>().canRetryOnlineOrderPaymentProcessing;
+
+    final shouldRetry = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        final needsReconciliation = order.paymentProcessingRequiresRefundReview;
+        final detail = order.paymentProcessingErrorMessage?.trim();
+        return AlertDialog(
+          icon: Icon(
+            needsReconciliation
+                ? Icons.account_balance_wallet_outlined
+                : Icons.sync_problem_rounded,
+            color: const Color(0xFF9A6700),
+          ),
+          title: Text(
+            needsReconciliation
+                ? 'Conciliar pago de Mercado Pago'
+                : 'Completar procesamiento de la venta',
+          ),
+          content: SizedBox(
+            width: 500,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  order.paymentProviderStatus == 'approved'
+                      ? 'Mercado Pago confirmó el cobro y esa evidencia está preservada. '
+                          'La venta ERP, el stock y la contabilidad son una etapa separada.'
+                      : 'Existe una observación de Mercado Pago que requiere revisión antes de continuar.',
+                ),
+                if (detail != null && detail.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  Text(
+                    detail,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                Text(
+                  needsReconciliation
+                      ? 'No descuentes stock ni crees una venta manual. Revisa el pago en Mercado Pago y gestiona la conciliación o el reembolso; luego conserva el comprobante de esa corrección.'
+                      : 'Verifica primero que el stock físico sea suficiente. El reintento es idempotente: si la venta ya quedó completa, no la duplicará.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if (order.paymentProcessingAttemptCount > 0) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    '${order.paymentProcessingAttemptCount} intento${order.paymentProcessingAttemptCount == 1 ? '' : 's'} registrado${order.paymentProcessingAttemptCount == 1 ? '' : 's'}.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                if (order.canRetryPaymentProcessing && !actorCanRetry) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Tu perfil puede revisar la incidencia, pero el reintento debe realizarlo administración, gerencia o caja.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cerrar'),
+            ),
+            if (order.canRetryPaymentProcessing && actorCanRetry)
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Reintentar procesamiento'),
+              ),
+          ],
+        );
+      },
+    );
+
+    if (shouldRetry != true || !mounted) return;
+    try {
+      final result = await context
+          .read<WebsiteService>()
+          .retryMercadoPagoPaymentProcessing(eventId);
+      if (!mounted) return;
+      final state = result['processing_state']?.toString();
+      final invoiceId = result['invoice_id']?.toString();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            state == 'processed'
+                ? 'Pago conciliado: venta, stock y contabilidad quedaron procesados.'
+                : 'El pago sigue preservado, pero el procesamiento aún requiere atención.',
+          ),
+          action:
+              state == 'processed' && invoiceId != null && invoiceId.isNotEmpty
+                  ? SnackBarAction(
+                      label: 'Abrir venta',
+                      onPressed: () => _openInvoice(invoiceId),
+                    )
+                  : null,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo reintentar: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _showOperationsGuide() async {
+    final theme = Theme.of(context);
+    final lifecycle = OnlineOrderWorkflowPolicy.definitions
+        .where((definition) => definition.status != 'cancelled')
+        .toList();
+    final cancelled = OnlineOrderWorkflowPolicy.definitionFor('cancelled');
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 860, maxHeight: 760),
+          child: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                color: const Color(0xFF0A3C66),
+                padding: const EdgeInsets.fromLTRB(24, 20, 14, 18),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: const Icon(
+                        Icons.route_outlined,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Guía operativa de pedidos online',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          SizedBox(height: 3),
+                          Text(
+                            'Qué significa cada estado y cuál es la siguiente acción segura.',
+                            style: TextStyle(
+                              color: Color(0xFFD7E6F3),
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      tooltip: 'Cerrar',
+                      color: Colors.white,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Flujo operativo',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'El chip Estado ofrece únicamente el siguiente avance válido para ese pedido y su modalidad de entrega.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      for (var index = 0;
+                          index < lifecycle.length;
+                          index++) ...[
+                        _buildGuideWorkflowStep(lifecycle[index]),
+                        if (index < lifecycle.length - 1)
+                          Divider(
+                            height: 1,
+                            indent: 150,
+                            color: theme.colorScheme.outlineVariant,
+                          ),
+                      ],
+                      const SizedBox(height: 20),
+                      Text(
+                        'Pago, venta ERP y documento fiscal',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildGuideFact(
+                        icon: Icons.account_balance_outlined,
+                        title: 'Transferencia pendiente',
+                        description:
+                            'Después de comprobar el abono en el banco, haz clic en el chip Pago y registra referencia y fecha efectiva.',
+                      ),
+                      _buildGuideFact(
+                        icon: Icons.sync_rounded,
+                        title: 'Mercado Pago',
+                        description:
+                            'El webhook valida el pago y actualiza el pedido automáticamente. No confirmes ese pago de forma manual.',
+                      ),
+                      _buildGuideFact(
+                        icon: Icons.sync_problem_rounded,
+                        title: 'Pago confirmado con acción pendiente',
+                        description:
+                            'El cobro no se pierde si falla stock, venta ERP o contabilidad. Abre Revisar y reintenta solo cuando no se solicite conciliación o reembolso; nunca ajustes stock manualmente para ocultar el error.',
+                      ),
+                      _buildGuideFact(
+                        icon: Icons.receipt_long_outlined,
+                        title: 'Venta ERP vinculada',
+                        description:
+                            'Haz clic en Venta ERP para abrir el registro que controla stock y contabilidad. No lo confundas con la boleta de Mercado Pago.',
+                      ),
+                      _buildGuideFact(
+                        icon: Icons.verified_user_outlined,
+                        title: 'Boleta o voucher oficial',
+                        description:
+                            'Un pago aprobado no basta. El sistema solo presenta y envía el comprobante oficial de Mercado Pago como boleta cuando conserva el documento completo y Viña Bike tiene declarado en SII el modelo que le da esa validez. Una transferencia requiere una boleta electrónica separada.',
+                      ),
+                      _buildGuideFact(
+                        icon: Icons.cancel_outlined,
+                        title: cancelled.label,
+                        description:
+                            '${cancelled.meaning} ${cancelled.nextAction}',
+                        destructive: true,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGuideWorkflowStep(OnlineOrderWorkflowDefinition definition) {
+    final theme = Theme.of(context);
+    final deliveryNote = switch (definition.deliveryType) {
+      'shipping' => ' · Solo despacho',
+      'pickup' => ' · Solo retiro',
+      _ => '',
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 132,
+            child: OperationalStatusBadge(
+              label: definition.label,
+              accentColor: _getStatusColor(definition.status),
+              maxWidth: 124,
+              compact: true,
+            ),
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  definition.meaning,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Lo cambia: ${definition.owner}$deliveryNote',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  definition.nextAction,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuideFact({
+    required IconData icon,
+    required String title,
+    required String description,
+    bool destructive = false,
+  }) {
+    final theme = Theme.of(context);
+    final color = destructive
+        ? theme.colorScheme.error
+        : theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 19, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: destructive ? theme.colorScheme.error : null,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  description,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _showOrderInspector(OnlineOrder order) async {
@@ -1264,6 +2191,52 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                         ],
                       ),
                       const SizedBox(height: 22),
+                      if (order.hasPaymentProcessingAttention) ...[
+                        InkWell(
+                          onTap: () {
+                            Navigator.pop(dialogContext);
+                            _showPaymentProcessingAction(order);
+                          },
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 11,
+                            ),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFFF8E8),
+                              border: Border(
+                                left: BorderSide(
+                                  color: Color(0xFF9A6700),
+                                  width: 3,
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.error_outline_rounded,
+                                  size: 18,
+                                  color: Color(0xFF9A6700),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    order.paymentProcessingRequiresRefundReview
+                                        ? 'El cobro requiere conciliación o reembolso antes de continuar.'
+                                        : 'El pago está confirmado; falta completar la venta ERP, stock o contabilidad.',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_right_rounded),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
                       Wrap(
                         spacing: 28,
                         runSpacing: 18,
@@ -1304,10 +2277,10 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                           ),
                           _buildInspectorField(
                             theme,
-                            'Factura',
+                            'Venta ERP',
                             order.salesInvoiceId == null
                                 ? 'Pendiente'
-                                : 'Emitida',
+                                : 'Vinculada',
                             Icons.receipt_long_outlined,
                           ),
                         ],
@@ -1445,6 +2418,18 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                           ),
                         ),
                       ],
+                      const SizedBox(height: 26),
+                      OrderEvidenceSection(
+                        orderId: order.id,
+                        salesInvoiceId: order.salesInvoiceId,
+                        onOpenOfficialDocument: (document, verifiedUri) {
+                          Navigator.pop(dialogContext);
+                          _openOfficialOrderDocument(
+                            verifiedUri,
+                            '${document.displayLabel} · ${order.orderNumber}',
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -1460,16 +2445,27 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
+                    if (order.salesInvoiceId != null &&
+                        order.paymentStatus == 'paid')
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pop(dialogContext);
+                          _showOrderCorrection(order);
+                        },
+                        icon: const Icon(Icons.assignment_return_outlined),
+                        label: const Text('Gestionar devolución'),
+                      ),
+                    if (order.salesInvoiceId != null &&
+                        order.paymentStatus == 'paid')
+                      const SizedBox(width: 8),
                     if (order.salesInvoiceId != null)
                       OutlinedButton.icon(
                         onPressed: () {
                           Navigator.pop(dialogContext);
-                          context.go(
-                            '/sales/invoices/${order.salesInvoiceId}',
-                          );
+                          _openInvoice(order.salesInvoiceId!);
                         },
                         icon: const Icon(Icons.receipt_long_outlined),
-                        label: const Text('Abrir factura'),
+                        label: const Text('Abrir venta ERP'),
                       ),
                     const SizedBox(width: 8),
                     FilledButton(
@@ -1484,6 +2480,30 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         ),
       ),
     );
+  }
+
+  void _openOfficialOrderDocument(Uri verifiedUri, String title) {
+    try {
+      final workspaceId = context.read<WorkspaceManager>().openBrowserWorkspace(
+            verifiedUri.toString(),
+            title: title,
+          );
+      if (workspaceId != null) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudo abrir el documento: cierre una pestaña e inténtelo nuevamente.',
+          ),
+        ),
+      );
+    } catch (_) {
+      context.go(
+        buildBrowserWorkspaceRoute(
+          url: verifiedUri.toString(),
+          title: title,
+        ),
+      );
+    }
   }
 
   Widget _buildInspectorField(
@@ -1535,121 +2555,16 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     Color color, {
     double maxWidth = 132,
     bool compact = false,
+    VoidCallback? onTap,
+    String? tooltip,
   }) {
-    final theme = Theme.of(context);
-    final palette = _statusChipPalette(color, theme);
-    final constrainedMaxWidth = maxWidth.isFinite ? maxWidth : 132.0;
-    final minWidthTarget = compact ? 84.0 : 108.0;
-    final minWidth = constrainedMaxWidth < minWidthTarget
-        ? constrainedMaxWidth
-        : minWidthTarget;
-    final normalizedLabel =
-        label.trim().isEmpty ? 'SIN ESTADO' : label.trim().toUpperCase();
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      curve: Curves.easeOutCubic,
-      width: constrainedMaxWidth,
-      constraints: BoxConstraints(
-        minWidth: minWidth,
-        maxWidth: constrainedMaxWidth,
-      ),
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 8 : 10,
-        vertical: 6,
-      ),
-      decoration: BoxDecoration(
-        color: palette.background,
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: palette.border, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(
-              alpha: theme.brightness == Brightness.dark ? 0.18 : 0.06,
-            ),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: compact ? 5 : 6,
-            height: compact ? 5 : 6,
-            decoration: BoxDecoration(
-              color: palette.dot,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: palette.dot.withValues(alpha: 0.22),
-                  blurRadius: 4,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              normalizedLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: compact ? 10.5 : 11.5,
-                fontWeight: FontWeight.w700,
-                height: 1.05,
-                letterSpacing: 0,
-                color: palette.foreground,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  ({Color background, Color border, Color foreground, Color dot})
-      _statusChipPalette(Color accent, ThemeData theme) {
-    final hsl = HSLColor.fromColor(accent);
-    final isNeutral = hsl.saturation < 0.12;
-    final isDark = theme.brightness == Brightness.dark;
-
-    if (isNeutral) {
-      return (
-        background: isDark
-            ? theme.colorScheme.surfaceContainerHigh
-            : const Color(0xFFF8FAFC),
-        border: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-        foreground: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF334155),
-        dot: const Color(0xFF94A3B8),
-      );
-    }
-
-    final surface =
-        isDark ? theme.colorScheme.surfaceContainerHigh : Colors.white;
-    final borderBase =
-        isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB);
-    final foreground = hsl
-        .withSaturation((hsl.saturation * 0.82).clamp(0.42, 0.78).toDouble())
-        .withLightness(
-          (hsl.lightness * (isDark ? 1.12 : 0.68))
-              .clamp(isDark ? 0.62 : 0.34, isDark ? 0.78 : 0.46)
-              .toDouble(),
-        )
-        .toColor();
-    return (
-      background: Color.alphaBlend(
-        accent.withValues(alpha: isDark ? 0.16 : 0.07),
-        surface,
-      ),
-      border: Color.alphaBlend(
-        accent.withValues(alpha: isDark ? 0.38 : 0.2),
-        borderBase,
-      ),
-      foreground: foreground,
-      dot: accent,
+    return OperationalStatusBadge(
+      label: label,
+      accentColor: color,
+      maxWidth: maxWidth,
+      compact: compact,
+      onTap: onTap,
+      tooltip: tooltip,
     );
   }
 
@@ -1661,6 +2576,8 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         return const Color(0xFF4B7087);
       case 'processing':
         return const Color(0xFF756A91);
+      case 'ready_for_pickup':
+        return const Color(0xFF5F7D68);
       case 'shipped':
         return const Color(0xFF526B82);
       case 'delivered':
@@ -1688,6 +2605,54 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
   }
 }
 
+class _OrdersLoadNotice extends StatelessWidget {
+  const _OrdersLoadNotice({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const accent = Color(0xFF9A742F);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.07),
+        border: Border(
+          bottom: BorderSide(color: accent.withValues(alpha: 0.28)),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline_rounded, size: 18, color: accent),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded, size: 17),
+            label: const Text('Reintentar'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ManualPaymentConfirmationInput {
   const _ManualPaymentConfirmationInput({
     required this.reference,
@@ -1696,4 +2661,16 @@ class _ManualPaymentConfirmationInput {
 
   final String reference;
   final DateTime date;
+}
+
+class _ShippingTransitionInput {
+  const _ShippingTransitionInput({
+    required this.carrier,
+    required this.trackingNumber,
+    required this.trackingUrl,
+  });
+
+  final String? carrier;
+  final String? trackingNumber;
+  final String? trackingUrl;
 }

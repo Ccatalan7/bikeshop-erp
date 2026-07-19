@@ -68,10 +68,6 @@ target_movements as (
   join target_invoice invoice on movement.tenant_id = invoice.tenant_id
   where movement.source_document_id = invoice.id
      or movement.reference = 'sales_invoice:' || invoice.id::text
-     or (
-       movement.reference_type = 'sales_invoice'
-       and movement.reference_id = invoice.id::text
-     )
 ),
 target_journals as (
   select entry.*

@@ -7,6 +7,7 @@ import 'package:mime/mime.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/constants/storage_constants.dart';
+import '../../../shared/models/product_tax_treatment.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 
@@ -499,7 +500,12 @@ class ProductImportService {
     final price = _parseDecimal(valueFor('price')) ?? 0;
     final cost = _parseDecimal(valueFor('cost')) ?? 0;
     final rawTaxRate = _parseDecimal(valueFor('tax_rate'));
-    final taxRate = _normalizeTaxRate(rawTaxRate);
+    final taxRate = normalizeProductTaxRate(rawTaxRate);
+    if (rawTaxRate != null && taxRate == null) {
+      throw ProductImportRowException(
+        'IVA debe ser 19, 0.19 o 0 (Exento).',
+      );
+    }
     final directImageUrl = valueFor('image_url');
     final directGalleryInputs = _parseList(valueFor('image_urls'));
     final primaryBase64 = valueFor('image_base64');
@@ -552,8 +558,9 @@ class ProductImportService {
       'cost_currency': 'CLP',
       'tax_rate': taxRate,
       'is_active': true,
-      'is_published': true,
-      'show_on_website': true,
+      // Publication is opt-in and requires an explicit supported tax class.
+      'is_published': false,
+      'show_on_website': false,
     };
 
     final images = await _processImages(
@@ -595,6 +602,11 @@ class ProductImportService {
     final publishedRaw = valueFor('is_published') ?? valueFor('published');
     final parsedPublished = _parseBool(publishedRaw);
     if (parsedPublished != null) {
+      if (parsedPublished && taxRate == null) {
+        throw ProductImportRowException(
+          'No se puede publicar sin clasificar IVA 19% o Exento.',
+        );
+      }
       payload['is_published'] = parsedPublished;
       payload['show_on_website'] = parsedPublished;
     }
@@ -812,14 +824,6 @@ class ProductImportService {
         .where((item) => item.isNotEmpty)
         .toList(growable: false);
     return items.isEmpty ? null : items;
-  }
-
-  double? _normalizeTaxRate(double? value) {
-    if (value == null) return null;
-    if (value > 1) {
-      return value / 100;
-    }
-    return value;
   }
 
   String _normalize(String input) {

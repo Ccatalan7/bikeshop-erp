@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "projectRef": "xzdvtzdqjeyqxnkqprtf",
+  "tenantId": "5443b130-cc28-45af-a420-cd500b288890",
+  "provider": "resend",
+  "sender": {
+    "name": "Ventas Viñabike",
+    "email": "ventas@vinabike.cl",
+    "replyTo": "ventas@vinabike.cl",
+    "publicStoreUrl": "https://vinabike.cl"
+  },
+  "edgeFunctions": [
+    {
+      "name": "send-transactional-order-email",
+      "verifyJwt": false
+    },
+    {
+      "name": "resend-transactional-webhook",
+      "verifyJwt": false
+    },
+    {
+      "name": "mercadopago-webhook",
+      "verifyJwt": false,
+      "role": "nonFiscalPaymentVoucherProducer"
+    },
+    {
+      "name": "mercadopago-get-payment",
+      "verifyJwt": true,
+      "role": "nonFiscalPaymentVoucherProducer"
+    }
+  ],
+  "nonFiscalPaymentVoucherProducer": {
+    "documentKind": "mercadopago_payment_voucher",
+    "messageKind": "mercadopago_payment_voucher_available",
+    "fiscalValidity": "not_a_tax_document",
+    "sourceField": "transaction_details.external_resource_url",
+    "requiredMigration": "20260718320000_produce_mercadopago_payment_voucher.sql",
+    "recordsAbsence": true,
+    "writesOutboxDirectly": false,
+    "deploymentStatus": "deployed",
+    "deployedAt": "2026-07-19T05:03:09Z"
+  },
+  "edgeConfiguration": {
+    "defaultMode": "dry_run",
+    "sendMode": "send",
+    "secretNames": [
+      "RESEND_API_KEY",
+      "RESEND_WEBHOOK_SECRET",
+      "TRANSACTIONAL_EMAIL_WORKER_SECRET"
+    ],
+    "configurationNames": [
+      "TRANSACTIONAL_EMAIL_MODE"
+    ]
+  },
+  "databaseVaultSecretNames": [
+    "transactional_email_worker_secret"
+  ],
+  "worker": {
+    "endpoint": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/send-transactional-order-email",
+    "cronJobName": "vinabike_transactional_email_worker",
+    "schedule": "* * * * *",
+    "tenantScoped": true,
+    "requiredRequestFields": [
+      "action",
+      "tenant_id",
+      "mode"
+    ],
+    "defaultEnabled": false,
+    "defaultMode": "dry_run",
+    "maximumBatchSize": 50
+  },
+  "webhook": {
+    "endpoint": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/resend-transactional-webhook",
+    "events": [
+      "email.sent",
+      "email.delivery_delayed",
+      "email.delivered",
+      "email.bounced",
+      "email.complained",
+      "email.failed",
+      "email.suppressed"
+    ]
+  },
+  "activationPhases": [
+    "disabled",
+    "dry_run",
+    "send"
+  ],
+  "productionState": {
+    "verifiedAt": "2026-07-19T05:29:00Z",
+    "databaseHead": "20260718320000",
+    "storeRelease": "ops-20260719T052509Z-8fa03a6087c5",
+    "transactionalEmailWorker": {
+      "enabled": true,
+      "mode": "send",
+      "batchSize": 20
+    },
+    "mercadopagoPreferenceWorker": {
+      "enabled": true,
+      "batchSize": 20
+    },
+    "edgeFunctionVersions": {
+      "mercadopago-create-preference": 120,
+      "mercadopago-webhook": 124,
+      "mercadopago-get-payment": 98,
+      "mercadopago-expire-preferences": 1,
+      "send-transactional-order-email": 8,
+      "resend-transactional-webhook": 7
+    }
+  }
+}

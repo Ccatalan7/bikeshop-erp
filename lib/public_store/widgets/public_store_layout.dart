@@ -4205,7 +4205,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   ),
                   helperText: settingKey == 'contact_phone'
                       ? 'Ej: +56 9 9835 7797'
-                      : 'Ej: vinabikechile@gmail.com',
+                      : 'Ej: contacto@vinabike.cl',
                 ),
                 keyboardType: settingKey == 'contact_phone'
                     ? TextInputType.phone
@@ -4245,7 +4245,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   String _getHintForFooterContactSetting(String key) {
     switch (key) {
       case 'contact_email':
-        return 'vinabikechile@gmail.com';
+        return 'contacto@vinabike.cl';
       case 'contact_phone':
         return '+56 9 9835 7797';
       case 'contact_address':

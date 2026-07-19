@@ -12,8 +12,10 @@ import '../providers/public_store_tenant_provider.dart';
 import '../services/customer_account_service.dart';
 import '../services/address_autocomplete_service.dart';
 import '../services/meta_pixel_service.dart';
+import '../services/public_order_access_token_store.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/services/mercadopago_service.dart';
+import '../../modules/website/models/public_shipping_quote.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../../shared/models/customer_address.dart';
@@ -63,6 +65,12 @@ class _CheckoutPageState extends State<CheckoutPage>
   bool _saveAddressToAccount = true;
   bool _createAccountAfterCheckout = false;
   bool _obscureAccountPassword = true;
+  PublicShippingQuote? _shippingQuote;
+  bool _shippingQuoteLoading = false;
+  String? _shippingQuoteError;
+  String? _shippingQuoteSignature;
+  String? _shippingQuoteAttemptedSignature;
+  int _shippingQuoteGeneration = 0;
   // Stable for this checkout page so a timeout/retry returns the same order.
   final String _checkoutIdempotencyKey = const Uuid().v4();
 
@@ -140,6 +148,123 @@ class _CheckoutPageState extends State<CheckoutPage>
   void _onAutocompleteChanged() {
     if (!mounted) return;
     setState(() {});
+  }
+
+  int? _wholeClpCartTotal(CartProvider cart) {
+    final value = cart.total;
+    if (!value.isFinite || value < 0) return null;
+    final rounded = value.round();
+    return (value - rounded).abs() <= 0.000001 ? rounded : null;
+  }
+
+  String? _shippingSignature(CartProvider cart) {
+    final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
+    final itemGross = _wholeClpCartTotal(cart);
+    if (tenantId == null || tenantId.isEmpty || itemGross == null) return null;
+    return '$tenantId|$_deliveryType|$itemGross';
+  }
+
+  bool _hasCurrentShippingQuote(CartProvider cart) {
+    final signature = _shippingSignature(cart);
+    final quote = _shippingQuote;
+    return signature != null &&
+        signature == _shippingQuoteSignature &&
+        quote != null &&
+        quote.deliveryType == _deliveryType &&
+        quote.itemGross == _wholeClpCartTotal(cart);
+  }
+
+  void _scheduleShippingQuoteRefresh(CartProvider cart) {
+    final signature = _shippingSignature(cart);
+    if (signature == null ||
+        signature == _shippingQuoteSignature ||
+        signature == _shippingQuoteAttemptedSignature) {
+      return;
+    }
+    _shippingQuoteAttemptedSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _shippingSignature(context.read<CartProvider>()) != signature) {
+        return;
+      }
+      _loadShippingQuote();
+    });
+  }
+
+  Future<PublicShippingQuote?> _loadShippingQuote({bool force = false}) async {
+    final cart = context.read<CartProvider>();
+    final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
+    final itemGross = _wholeClpCartTotal(cart);
+    if (tenantId == null || tenantId.isEmpty || itemGross == null) {
+      if (mounted) {
+        setState(() {
+          _shippingQuoteLoading = false;
+          _shippingQuoteError = itemGross == null
+              ? 'El carrito contiene un monto que no puede expresarse en pesos completos.'
+              : 'No pudimos identificar la tienda para calcular el despacho.';
+        });
+      }
+      return null;
+    }
+
+    final deliveryType = _deliveryType;
+    final signature = '$tenantId|$deliveryType|$itemGross';
+    if (!force &&
+        _shippingQuoteSignature == signature &&
+        _shippingQuote != null) {
+      return _shippingQuote;
+    }
+
+    final generation = ++_shippingQuoteGeneration;
+    _shippingQuoteAttemptedSignature = signature;
+    if (mounted) {
+      setState(() {
+        _shippingQuoteLoading = true;
+        _shippingQuoteError = null;
+      });
+    }
+
+    try {
+      final quote = await context.read<WebsiteService>().quotePublicShipping(
+            tenantId: tenantId,
+            deliveryType: deliveryType,
+            itemGross: itemGross,
+          );
+      if (quote.deliveryType != deliveryType || quote.itemGross != itemGross) {
+        throw const FormatException(
+          'La cotización recibida no corresponde al carrito actual.',
+        );
+      }
+      if (!mounted || generation != _shippingQuoteGeneration) return null;
+      setState(() {
+        _shippingQuote = quote;
+        _shippingQuoteSignature = signature;
+        _shippingQuoteLoading = false;
+        _shippingQuoteError = null;
+      });
+      return quote;
+    } catch (error) {
+      if (!mounted || generation != _shippingQuoteGeneration) return null;
+      debugPrint('Checkout shipping quote failed: $error');
+      setState(() {
+        _shippingQuote = null;
+        _shippingQuoteSignature = null;
+        _shippingQuoteLoading = false;
+        _shippingQuoteError =
+            'No pudimos calcular el despacho. Reintenta antes de pagar.';
+      });
+      return null;
+    }
+  }
+
+  void _selectDeliveryType(String value) {
+    if (value == _deliveryType) return;
+    setState(() {
+      _deliveryType = value;
+      _shippingQuote = null;
+      _shippingQuoteSignature = null;
+      _shippingQuoteError = null;
+    });
   }
 
   void _prefillFromAccount({bool force = false}) {
@@ -471,6 +596,35 @@ class _CheckoutPageState extends State<CheckoutPage>
       return;
     }
 
+    final taxSummary = cart.taxSummary;
+    if (!taxSummary.isValid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            taxSummary.checkoutBlockMessage ??
+                'No podemos validar los impuestos de este carrito.',
+          ),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+      return;
+    }
+
+    final shippingQuote = await _loadShippingQuote(force: true);
+    if (!mounted) return;
+    if (shippingQuote == null ||
+        shippingQuote.deliveryType != _deliveryType ||
+        shippingQuote.itemGross != _wholeClpCartTotal(cart)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Necesitamos confirmar el costo de entrega antes de crear el pedido.',
+          ),
+        ),
+      );
+      return;
+    }
+
     debugPrint('🔵 [Checkout] Setting _isProcessing = true');
     setState(() => _isProcessing = true);
 
@@ -508,22 +662,6 @@ class _CheckoutPageState extends State<CheckoutPage>
             'No se pudo detectar la tienda. Por favor recarga la página.');
       }
       debugPrint('🔵 [Checkout] ✅ tenantId is valid, continuing...');
-
-      // ============================================================================
-      // TAX HANDLING BASED ON PAYMENT METHOD
-      // ============================================================================
-      debugPrint(
-          '🔵 [Checkout] Calculating tax... paymentMethod: $_paymentMethod');
-      // MercadoPago/Card: IVA is charged (tax_included)
-      // Wire transfer: No IVA (no_tax) per current store checkout rules
-      // ============================================================================
-      final bool chargesIva =
-          _paymentMethod == 'mercadopago' || _paymentMethod == 'card';
-      debugPrint('🔵 [Checkout] chargesIva: $chargesIva');
-      final double taxAmount = chargesIva ? cart.ivaAmount : 0.0;
-      debugPrint('🔵 [Checkout] taxAmount: $taxAmount');
-      final double subtotalAmount = chargesIva ? cart.subtotal : cart.total;
-      debugPrint('🔵 [Checkout] subtotalAmount: $subtotalAmount');
 
       debugPrint('🔵 [Checkout] Creating orderData map...');
       // Create order data (database will generate id and orderNumber)
@@ -563,11 +701,16 @@ class _CheckoutPageState extends State<CheckoutPage>
                 : null,
         'shipping_postal_code': isPickup ? null : resolvedAddress!.postalCode,
         'shipping_country': isPickup ? null : 'Chile',
-        'subtotal': subtotalAmount,
-        'tax_amount': taxAmount,
-        'shipping_cost': 0, // Will be calculated later
+        // Informational mirror only. The database re-reads product prices and
+        // tax classifications, then calculates the immutable order snapshot.
+        'subtotal': taxSummary.netAmount,
+        'tax_amount': taxSummary.taxAmount,
+        // Consent snapshot only. The database independently derives this
+        // amount from authoritative prices and rejects a stale quote.
+        'shipping_quote_cost': shippingQuote.shippingGross,
+        'shipping_cost': shippingQuote.shippingGross,
         'discount_amount': 0,
-        'total': cart.total, // Total stays the same (what customer pays)
+        'total': shippingQuote.orderGross,
         'status': 'pending',
         'payment_status': 'pending',
         'payment_method': _paymentMethod,
@@ -599,8 +742,17 @@ class _CheckoutPageState extends State<CheckoutPage>
           '🔵 [Checkout] orderItems created: ${orderItems.length} items');
 
       debugPrint('🔵 [Checkout] Calling websiteService.createOrder()...');
-      final orderId = await websiteService.createOrder(orderData, orderItems);
-      debugPrint('🔵 [Checkout] ✅ Order created! orderId: $orderId');
+      final checkoutAccess =
+          await websiteService.createOrder(orderData, orderItems);
+      final orderId = checkoutAccess.orderId;
+
+      // Persist before any external redirect or local navigation. The token is
+      // never appended to the URL, logged, or copied into Mercado Pago URLs.
+      PublicOrderAccessTokenStore.save(
+        orderId: orderId,
+        accessToken: checkoutAccess.accessToken,
+      );
+      debugPrint('🔵 [Checkout] ✅ Secure order created');
 
       if (!mounted) return;
 
@@ -644,43 +796,26 @@ class _CheckoutPageState extends State<CheckoutPage>
           }
           debugPrint('✅ [Checkout] MercadoPago is configured');
 
-          final order = await websiteService.getPublicOrderById(
-            orderId: orderId,
-            tenantId: tenantId,
-          );
-          if (order == null) {
-            debugPrint('❌ [Checkout] Order not found: $orderId');
-            throw Exception('Order not found');
-          }
-          debugPrint('✅ [Checkout] Order found: ${order.orderNumber}');
-
           debugPrint('🔵 [Checkout] Creating MercadoPago preference...');
           final preference = await mercadopagoService.createPreference(
             orderId: orderId,
-            orderNumber: order.orderNumber,
-            total: cart.total,
-            items: cart.items
-                .map((item) => {
-                      'title': item.product.name,
-                      'quantity': item.quantity,
-                      'unit_price': item.product.price,
-                    })
-                .toList(),
-            customerEmail: _emailController.text.trim(),
-            customerName: _nameController.text.trim(),
+            orderAccessToken: checkoutAccess.accessToken,
           );
           debugPrint('✅ [Checkout] Preference created: ${preference.keys}');
 
           // Open MercadoPago checkout
           final initPoint = preference['init_point'] as String?;
-          debugPrint('🔵 [Checkout] init_point: $initPoint');
+          debugPrint(
+            '🔵 [Checkout] MercadoPago checkout URL received: '
+            '${initPoint?.isNotEmpty == true}',
+          );
 
           if (initPoint == null || initPoint.isEmpty) {
             debugPrint('❌ [Checkout] No init_point in preference!');
             throw Exception('MercadoPago no devolvió URL de pago');
           }
 
-          debugPrint('🚀 [Checkout] Redirecting to MercadoPago: $initPoint');
+          debugPrint('🚀 [Checkout] Redirecting to MercadoPago');
           if (kIsWeb) {
             // For web, use window.open to redirect to MercadoPago
             web_utils.WebUtils.openUrl(initPoint);
@@ -745,11 +880,16 @@ class _CheckoutPageState extends State<CheckoutPage>
     super.build(context); // Required for AutomaticKeepAliveClientMixin
     final cart = context.watch<CartProvider>();
     context.watch<CustomerAccountService>();
+    context.watch<PublicStoreTenantProvider>();
     _accountService ??=
         Provider.of<CustomerAccountService>(context, listen: false);
 
     debugPrint(
         '🛒 [CheckoutPage.build] cart.isEmpty: ${cart.isEmpty}, items: ${cart.items.length}');
+
+    if (cart.isNotEmpty) {
+      _scheduleShippingQuoteRefresh(cart);
+    }
 
     // Get edit mode for key to prevent element reactivation conflicts
     final editProvider = context.watch<WebsiteEditModeProvider>();
@@ -1072,7 +1212,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                     value: 'mercadopago',
                     title: 'MercadoPago',
                     subtitle:
-                        'Pago seguro con tarjeta de crédito, débito o efectivo.',
+                        'Pago seguro con tarjeta de crédito, débito o saldo de Mercado Pago.',
                     badgeLabel: 'RECOMENDADO',
                   ),
                   _buildPaymentOption(
@@ -1114,7 +1254,7 @@ class _CheckoutPageState extends State<CheckoutPage>
           groupValue: _deliveryType,
           onChanged: (value) {
             if (value == null) return;
-            setState(() => _deliveryType = value);
+            _selectDeliveryType(value);
           },
           child: Column(
             children: [
@@ -1122,7 +1262,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                 value: 'shipping',
                 title: 'Despacho a domicilio',
                 subtitle:
-                    'Enviaremos tu pedido a la dirección que indiques. La tienda confirmará costo y coordinación si aplica.',
+                    'Chile continental, 3 a 12 días hábiles. Verás el costo exacto antes de realizar el pedido.',
                 icon: Icons.local_shipping_outlined,
               ),
               _buildDeliveryOption(
@@ -1295,7 +1435,7 @@ class _CheckoutPageState extends State<CheckoutPage>
         ),
       ),
       child: InkWell(
-        onTap: () => setState(() => _deliveryType = value),
+        onTap: () => _selectDeliveryType(value),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 14),
           child: Row(
@@ -1575,6 +1715,19 @@ class _CheckoutPageState extends State<CheckoutPage>
   }
 
   Widget _buildOrderSummary(CartProvider cart, {required bool isMobile}) {
+    final taxSummary = cart.taxSummary;
+    final hasCurrentShippingQuote = _hasCurrentShippingQuote(cart);
+    final shippingQuote = hasCurrentShippingQuote ? _shippingQuote : null;
+    final shippingLabel = shippingQuote == null
+        ? (_shippingQuoteLoading ? 'Calculando…' : '—')
+        : shippingQuote.isPickup
+            ? 'Sin costo'
+            : ChileanUtils.formatCurrency(
+                shippingQuote.shippingGross.toDouble(),
+              );
+    final orderTotalLabel = shippingQuote == null
+        ? '—'
+        : ChileanUtils.formatCurrency(shippingQuote.orderGross.toDouble());
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(isMobile ? 20 : 24),
@@ -1610,22 +1763,78 @@ class _CheckoutPageState extends State<CheckoutPage>
             color: _warmLine,
           ),
           const SizedBox(height: 18),
-          _buildSummaryMetric(
-            'Subtotal',
-            ChileanUtils.formatCurrency(cart.subtotal),
-          ),
-          const SizedBox(height: 12),
-          _buildSummaryMetric(
-            'IVA (19%)',
-            ChileanUtils.formatCurrency(cart.ivaAmount),
-            secondary: true,
-          ),
+          if (taxSummary.isValid) ...[
+            _buildSummaryMetric(
+              taxSummary.netLabel,
+              ChileanUtils.formatCurrency(taxSummary.netAmount.toDouble()),
+            ),
+            const SizedBox(height: 12),
+            _buildSummaryMetric(
+              taxSummary.ivaLabel,
+              ChileanUtils.formatCurrency(taxSummary.taxAmount.toDouble()),
+              secondary: true,
+            ),
+          ] else ...[
+            _buildTaxConfigurationWarning(
+              taxSummary.checkoutBlockMessage ??
+                  'No podemos validar los impuestos de este carrito.',
+            ),
+          ],
           const SizedBox(height: 12),
           _buildSummaryMetric(
             _deliveryType == 'pickup' ? 'Retiro' : 'Envío',
-            _deliveryType == 'pickup' ? 'Sin costo' : 'Por calcular',
+            shippingLabel,
             secondary: true,
           ),
+          if (shippingQuote != null && !shippingQuote.isPickup) ...[
+            const SizedBox(height: 8),
+            Text(
+              'IVA incluido · entrega estimada entre '
+              '${shippingQuote.estimatedMinBusinessDays} y '
+              '${shippingQuote.estimatedMaxBusinessDays} días hábiles.',
+              style: const TextStyle(
+                fontFamily: null,
+                fontSize: 12,
+                color: PublicStoreTheme.textMuted,
+                height: 1.45,
+              ),
+            ),
+          ],
+          if (_shippingQuoteLoading) ...[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(minHeight: 2),
+          ],
+          if (_shippingQuoteError != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  size: 18,
+                  color: PublicStoreTheme.error,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _shippingQuoteError!,
+                    style: const TextStyle(
+                      fontFamily: null,
+                      fontSize: 13,
+                      color: PublicStoreTheme.error,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _shippingQuoteLoading
+                      ? null
+                      : () => _loadShippingQuote(force: true),
+                  child: const Text('REINTENTAR'),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 18),
           Container(
             width: double.infinity,
@@ -1648,7 +1857,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                 ),
               ),
               Text(
-                ChileanUtils.formatCurrency(cart.total),
+                orderTotalLabel,
                 style: const TextStyle(
                   fontFamily: null,
                   fontSize: 44,
@@ -1663,7 +1872,12 @@ class _CheckoutPageState extends State<CheckoutPage>
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: _isProcessing ? null : _placeOrder,
+              onPressed: _isProcessing ||
+                      _shippingQuoteLoading ||
+                      !taxSummary.isValid ||
+                      !hasCurrentShippingQuote
+                  ? null
+                  : _placeOrder,
               style: FilledButton.styleFrom(
                 backgroundColor: _logoBlue,
                 foregroundColor: Colors.white,
@@ -1994,6 +2208,29 @@ class _CheckoutPageState extends State<CheckoutPage>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTaxConfigurationWarning(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFF8E8),
+        border: Border(
+          left: BorderSide(color: Color(0xFFB7791F), width: 3),
+        ),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(
+          fontFamily: null,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF6B4F19),
+          height: 1.45,
+        ),
+      ),
     );
   }
 

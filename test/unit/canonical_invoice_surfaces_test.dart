@@ -21,6 +21,12 @@ void main() {
             .readAsStringSync();
     final salesService = File('lib/modules/sales/services/sales_service.dart')
         .readAsStringSync();
+    final correctionsMenu =
+        File('lib/modules/sales/widgets/sales_corrections_menu.dart')
+            .readAsStringSync();
+    final voidService =
+        File('lib/modules/sales/services/sales_invoice_void_service.dart')
+            .readAsStringSync();
     final jobForm =
         File('lib/modules/bikeshop/pages/mechanic_job_form_page.dart')
             .readAsStringSync();
@@ -30,6 +36,52 @@ void main() {
     expect(form, contains('SalesCorrectionsMenu('));
     expect(editor, contains('SalesCorrectionsMenu('));
     expect(listPreview, contains('SalesCorrectionsMenu('));
+    expect(correctionsMenu, contains("value: 'void'"));
+    expect(correctionsMenu, contains('Descartar factura'));
+    expect(voidService, contains("'void_sales_invoice'"));
+    expect(
+      listPreview,
+      contains('invoice.status != InvoiceStatus.cancelled'),
+      reason:
+          'The normal invoice list must hide cancelled audit evidence by default.',
+    );
+    expect(
+      listPreview,
+      contains("value: 'cancelled', child: Text('Anuladas')"),
+      reason:
+          'Cancelled invoices must remain reachable through an explicit filter.',
+    );
+    final summaryStart = listPreview.indexOf(
+      'Widget _buildSummaryCards(List<Invoice> invoices)',
+    );
+    final summaryEnd = listPreview.indexOf(
+      'Widget _buildSummaryCard(',
+      summaryStart,
+    );
+    expect(summaryStart, greaterThanOrEqualTo(0));
+    expect(summaryEnd, greaterThan(summaryStart));
+    final summaryFlow = listPreview.substring(summaryStart, summaryEnd);
+    expect(summaryFlow, contains('invoice.status != InvoiceStatus.draft'));
+    expect(
+      summaryFlow,
+      contains('invoice.status != InvoiceStatus.cancelled'),
+      reason:
+          'Cancelled historical balances must not contaminate collection KPIs.',
+    );
+    expect(
+      RegExp(r'if \(_canOfferInvoiceDelete\(invoice\)\)')
+          .allMatches(listPreview)
+          .length,
+      2,
+      reason:
+          'Both list-row and selected-preview menus must hide physical deletion outside eligible drafts.',
+    );
+    expect(
+      salesService,
+      contains(".select('id, invoice_number, status')"),
+      reason:
+          'Deletion must re-read the authoritative server status before the destructive write.',
+    );
     expect(paymentForm, contains('registerPaymentWithInvoiceTax('));
     expect(paymentForm, contains('_taxChoiceIsLocked'));
     expect(paymentForm, isNot(contains('value.defaultTaxTreatment ==')));

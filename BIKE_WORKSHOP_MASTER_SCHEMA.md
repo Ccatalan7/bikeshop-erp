@@ -1025,6 +1025,16 @@ It is the operational context layer that should tell the mechanic what is alread
 
 ## Visit Workspace Layer
 
+### In-product Jobs Table guide
+
+The Jobs Table header exposes one quiet help action on desktop and the same
+action inside the mobile overflow menu. Both open the bundled employee manual
+inside the ERP PDF preview. The guide summarizes only user-facing operational
+truth: creation modes, lifecycle actions, quotations, invoicing, payments, and
+time evidence. Any change to those workflows must update the guide source and
+regenerate its PDF in the same task; the manual must never become a competing
+source of business rules.
+
 ### Invoice-linked inventory integrity (current rule)
 
 - A posted sales invoice item edit must replace the previously posted inventory snapshot atomically; leaving an invoice confirmed/paid is not a reason to ignore product or quantity changes.
@@ -1053,7 +1063,9 @@ It is the operational context layer that should tell the mechanic what is alread
 - Professional ERP ownership rule: `mechanic_jobs` is the operational/reservation document; its linked `sales_invoices` row is the exclusive owner of on-hand stock, revenue, COGS, receivable, and payment posting. Job status changes must not independently post those ledgers.
 - Live production inspection on 2026-07-10 found 398 jobs, 396 linked invoices, zero persisted `mechanic_job:<id>` stock movements, and zero `mechanic_jobs` revenue journals. The legacy job posting helpers remain dangerous because they are `SECURITY DEFINER`; direct client execution must be revoked and any future attempt observed/blocked by the ownership control.
 - The existing job restore helper deletes original OUT movement rows. It is not an acceptable future posting path; corrections must use append-only linked reversals.
-- Stock needed for work before invoicing belongs in a future reservation/available-to-promise layer. A reservation must never reduce on-hand stock or post COGS/revenue, and invoice confirmation must release/convert it exactly once.
+- Stock needed before invoicing belongs in a reservation/available-to-promise layer. Online checkout now implements that contract in `online_order_inventory_reservations`: tracked products and set components reduce online availability without reducing on-hand stock or posting COGS/revenue; services and non-tracked products never invent a physical reservation.
+- Posting the linked sales invoice converts each online reservation through `active -> consuming -> consumed` in the same transaction as its exact negative stock movements. The consumed projection retains those movement UUIDs and an append-only event trail. A posted Mercado Pago invoice created inside a nested payment trigger may defer only the zero-movement insert phase; `process_online_order` then runs the same reconciliation kernel strictly after its internal stock write, so partial or missing consumption still aborts the transaction.
+- Unpaid cancellation and expiry terminalize the commitment as `released` or `expired` without a stock movement. POS, manual adjustments, catalog availability, set-recipe edits, and later checkouts all respect the live reserved floor; failed or ambiguous payment acknowledgements replay durable order/reservation identities instead of reserving or consuming twice.
 - The original 2026-07-10 reconciliation had 117 legacy linked-invoice product
   variances across 82 jobs. On 2026-07-15 the one fully proven FV-00809 pedal
   gap was repaired through a traced append-only movement. A refined audit of

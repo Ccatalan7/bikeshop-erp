@@ -17,9 +17,12 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:cross_file/cross_file.dart';
 
 import '../../../shared/widgets/branded_loading.dart';
+import '../../../shared/widgets/asset_pdf_preview_dialog.dart';
 import '../../../shared/widgets/hover_zoom_image.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/interactive_table_field.dart';
 import '../../../shared/widgets/modern_context_menu.dart';
+import '../../../shared/widgets/operational_status_badge.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/invoice_pdf_generator.dart';
 import '../../crm/models/crm_models.dart';
@@ -1846,6 +1849,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                 case 'calendar':
                   context.push('/taller/calendario');
                   break;
+                case 'manual':
+                  _openJobsTableManual();
+                  break;
                 case 'refresh':
                   _loadData();
                   break;
@@ -1859,6 +1865,16 @@ class _PegasTablePageState extends State<PegasTablePage>
                     Icon(Icons.calendar_month, size: 20),
                     SizedBox(width: 12),
                     Text('Ver Calendario'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'manual',
+                child: Row(
+                  children: [
+                    Icon(Icons.help_outline_rounded, size: 20),
+                    SizedBox(width: 12),
+                    Text('Manual de uso'),
                   ],
                 ),
               ),
@@ -2274,6 +2290,17 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
+  Future<void> _openJobsTableManual() {
+    return showAssetPdfPreviewDialog(
+      context,
+      assetPath: 'assets/manuals/manual_jobs_table.pdf',
+      title: 'Manual de Jobs Table',
+      description:
+          'Creación, estados, presupuestos, cobros y control de tiempos.',
+      fileName: 'manual_jobs_table.pdf',
+    );
+  }
+
   Widget _buildModernHeader() {
     final isMobile = MediaQuery.of(context).size.width < 600;
     final theme = Theme.of(context);
@@ -2371,6 +2398,12 @@ class _PegasTablePageState extends State<PegasTablePage>
               ),
               const SizedBox(width: 8),
             ],
+            IconButton(
+              icon: const Icon(Icons.help_outline_rounded),
+              onPressed: _openJobsTableManual,
+              tooltip: 'Manual de Jobs Table',
+            ),
+            const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.refresh),
               onPressed: _loadData,
@@ -4288,52 +4321,6 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
-  ({Color background, Color border, Color foreground, Color meta, Color dot})
-      _statusBadgePalette(Color accentColor, ThemeData theme) {
-    final hsl = HSLColor.fromColor(accentColor);
-    final isNeutral = hsl.saturation < 0.12;
-    final isDark = theme.brightness == Brightness.dark;
-
-    if (isNeutral) {
-      return (
-        background: isDark
-            ? theme.colorScheme.surfaceContainerHigh
-            : const Color(0xFFF8FAFC),
-        border: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-        foreground: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF334155),
-        meta: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-        dot: isDark ? const Color(0xFF94A3B8) : const Color(0xFF94A3B8),
-      );
-    }
-
-    final surface =
-        isDark ? theme.colorScheme.surfaceContainerHigh : Colors.white;
-    final borderBase =
-        isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB);
-    final foreground = hsl
-        .withSaturation((hsl.saturation * 0.82).clamp(0.42, 0.78).toDouble())
-        .withLightness(
-          (hsl.lightness * (isDark ? 1.12 : 0.68))
-              .clamp(isDark ? 0.62 : 0.34, isDark ? 0.78 : 0.46)
-              .toDouble(),
-        )
-        .toColor();
-
-    return (
-      background: Color.alphaBlend(
-        accentColor.withValues(alpha: isDark ? 0.16 : 0.07),
-        surface,
-      ),
-      border: Color.alphaBlend(
-        accentColor.withValues(alpha: isDark ? 0.38 : 0.2),
-        borderBase,
-      ),
-      foreground: foreground,
-      meta: foreground.withValues(alpha: isDark ? 0.78 : 0.68),
-      dot: accentColor,
-    );
-  }
-
   Widget _buildStatusBadge({
     required String label,
     required Color accentColor,
@@ -4344,158 +4331,15 @@ class _PegasTablePageState extends State<PegasTablePage>
     double maxWidth = 132,
     bool compact = false,
   }) {
-    final theme = Theme.of(context);
-    final palette = _statusBadgePalette(accentColor, theme);
-    final constrainedMaxWidth = maxWidth.isFinite ? maxWidth : 132.0;
-    final minWidthTarget = compact ? 84.0 : 108.0;
-    final minWidth = constrainedMaxWidth < minWidthTarget
-        ? constrainedMaxWidth
-        : minWidthTarget;
-    final radius = BorderRadius.circular(7);
-    final normalizedLabel =
-        label.trim().isEmpty ? 'SIN ESTADO' : label.trim().toUpperCase();
-
-    final badge = AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      curve: Curves.easeOutCubic,
-      width: constrainedMaxWidth,
-      constraints: BoxConstraints(
-        minWidth: minWidth,
-        maxWidth: constrainedMaxWidth,
-      ),
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 8 : 10,
-        vertical: timestamp == null && metaText == null ? 6 : 5,
-      ),
-      decoration: BoxDecoration(
-        color: palette.background,
-        borderRadius: radius,
-        border: Border.all(color: palette.border, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(
-                alpha: theme.brightness == Brightness.dark ? 0.18 : 0.06),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: compact ? 5 : 6,
-                height: compact ? 5 : 6,
-                decoration: BoxDecoration(
-                  color: palette.dot,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: palette.dot.withValues(alpha: 0.22),
-                      blurRadius: 4,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  normalizedLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: compact ? 10.5 : 11.5,
-                    fontWeight: FontWeight.w700,
-                    height: 1.05,
-                    letterSpacing: 0,
-                    color: palette.foreground,
-                  ),
-                ),
-              ),
-              if (onTap != null) ...[
-                const SizedBox(width: 3),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  size: compact ? 13 : 15,
-                  color: palette.foreground,
-                ),
-              ],
-            ],
-          ),
-          if (timestamp != null) ...[
-            const SizedBox(height: 3),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.access_time_rounded,
-                  size: compact ? 9 : 10,
-                  color: palette.meta,
-                ),
-                const SizedBox(width: 3),
-                Flexible(
-                  child: Text(
-                    _formatStatusTimestamp(timestamp),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: compact ? 9 : 9.5,
-                      fontWeight: FontWeight.w500,
-                      height: 1.05,
-                      color: palette.meta,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-          if (metaText != null) ...[
-            const SizedBox(height: 3),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  metaIcon,
-                  size: compact ? 9 : 10,
-                  color: palette.meta,
-                ),
-                const SizedBox(width: 3),
-                Flexible(
-                  child: Text(
-                    metaText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: compact ? 9 : 9.5,
-                      fontWeight: FontWeight.w500,
-                      height: 1.05,
-                      color: palette.meta,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-
-    if (onTap == null) return badge;
-
-    return Tooltip(
-      message: 'Cambiar estado y ver acciones',
-      child: _buildInteractiveTableField(
-        onTap: onTap,
-        accentColor: accentColor,
-        padding: EdgeInsets.zero,
-        borderRadius: radius,
-        child: badge,
-      ),
+    return OperationalStatusBadge(
+      label: label,
+      accentColor: accentColor,
+      timestamp: timestamp,
+      metaText: metaText,
+      metaIcon: metaIcon,
+      onTap: onTap,
+      maxWidth: maxWidth,
+      compact: compact,
     );
   }
 
@@ -5114,7 +4958,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     double? maxWidth,
     GestureTapDownCallback? onSecondaryTapDown,
   }) {
-    return _InteractiveTableField(
+    return InteractiveTableField(
       onTap: onTap,
       accentColor: accentColor,
       padding: padding,
@@ -9903,40 +9747,6 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
   }
 
-  /// Formats a status timestamp into a compact, localized string
-  /// Examples: "hace 2h", "hace 3d", "15 ene"
-  String _formatStatusTimestamp(DateTime timestamp) {
-    final now = DateTime.now();
-    final diff = now.difference(timestamp);
-
-    if (diff.inMinutes < 1) {
-      return 'ahora';
-    } else if (diff.inMinutes < 60) {
-      return 'hace ${diff.inMinutes}m';
-    } else if (diff.inHours < 24) {
-      return 'hace ${diff.inHours}h';
-    } else if (diff.inDays < 7) {
-      return 'hace ${diff.inDays}d';
-    } else {
-      // For older dates, show day and month
-      final months = [
-        'ene',
-        'feb',
-        'mar',
-        'abr',
-        'may',
-        'jun',
-        'jul',
-        'ago',
-        'sep',
-        'oct',
-        'nov',
-        'dic'
-      ];
-      return '${timestamp.day} ${months[timestamp.month - 1]}';
-    }
-  }
-
   String? _serviceWarrantyMeta(MechanicJob job) {
     final warranty = job.serviceWarranty;
     if (warranty == null || warranty.state == ServiceWarrantyState.notStarted) {
@@ -11062,83 +10872,6 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _InteractiveTableField extends StatefulWidget {
-  final Widget child;
-  final VoidCallback? onTap;
-  final Color? accentColor;
-  final EdgeInsetsGeometry padding;
-  final BorderRadius borderRadius;
-  final double? maxWidth;
-  final GestureTapDownCallback? onSecondaryTapDown;
-
-  const _InteractiveTableField({
-    required this.child,
-    required this.onTap,
-    required this.padding,
-    required this.borderRadius,
-    this.accentColor,
-    this.maxWidth,
-    this.onSecondaryTapDown,
-  });
-
-  @override
-  State<_InteractiveTableField> createState() => _InteractiveTableFieldState();
-}
-
-class _InteractiveTableFieldState extends State<_InteractiveTableField> {
-  bool _isHovered = false;
-
-  bool get _isEnabled =>
-      widget.onTap != null || widget.onSecondaryTapDown != null;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_isEnabled) return widget.child;
-
-    final theme = Theme.of(context);
-    final accent = widget.accentColor ?? theme.colorScheme.primary;
-    final hoverFill = accent.withValues(
-        alpha: theme.brightness == Brightness.dark ? 0.12 : 0.055);
-    final idleFill = accent.withValues(alpha: 0);
-    final hoverBorder = accent.withValues(
-        alpha: theme.brightness == Brightness.dark ? 0.3 : 0.2);
-    final idleBorder = accent.withValues(alpha: 0);
-
-    Widget content = widget.child;
-    if (widget.maxWidth != null) {
-      content = ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: widget.maxWidth!),
-        child: content,
-      );
-    }
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap,
-        onSecondaryTapDown: widget.onSecondaryTapDown,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 90),
-          curve: Curves.easeOut,
-          padding: widget.padding,
-          decoration: BoxDecoration(
-            color: _isHovered ? hoverFill : idleFill,
-            borderRadius: widget.borderRadius,
-            border: Border.all(
-              color: _isHovered ? hoverBorder : idleBorder,
-              width: 1,
-            ),
-          ),
-          child: content,
-        ),
       ),
     );
   }

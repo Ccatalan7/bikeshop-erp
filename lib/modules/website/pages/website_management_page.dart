@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../shared/widgets/asset_pdf_preview_dialog.dart';
 import '../services/website_service.dart';
 import '../widgets/website_admin_ui.dart';
 
@@ -51,6 +52,16 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
     }
   }
 
+  Future<void> _openManual() {
+    return showAssetPdfPreviewDialog(
+      context,
+      assetPath: 'assets/manuals/manual_sitio_web_ventas_online.pdf',
+      title: 'Manual de sitio web y ventas online',
+      description: 'Publicación, pedidos, pagos, documentos y excepciones.',
+      fileName: 'manual_sitio_web_ventas_online.pdf',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return WebsiteAdminShell(
@@ -59,6 +70,11 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
       title: 'Sitio web',
       description: 'Controla lo que publicas y cómo compran tus clientes.',
       actions: [
+        IconButton.outlined(
+          onPressed: _openManual,
+          tooltip: 'Manual de sitio web y ventas',
+          icon: const Icon(Icons.help_outline_rounded, size: 19),
+        ),
         OutlinedButton.icon(
           onPressed: () => context.go('/tienda?preview=true'),
           icon: const Icon(Icons.visibility_outlined, size: 18),

@@ -1,6 +1,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { JWT } from 'npm:google-auth-library'
+import { pushWebhookAuthorized } from '../_shared/push_notification_auth.ts'
 
 interface NotificationPayload {
     type: 'INSERT'
@@ -21,7 +22,30 @@ interface NotificationPayload {
 console.log("Push Notification Function Initialized")
 
 Deno.serve(async (req) => {
-    const payload: NotificationPayload = await req.json()
+    if (req.method !== 'POST') {
+        return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' },
+        })
+    }
+
+    const webhookSecret = Deno.env.get('PUSH_NOTIFICATION_WEBHOOK_SECRET')
+    if (!pushWebhookAuthorized(req.headers, webhookSecret)) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' },
+        })
+    }
+
+    let payload: NotificationPayload
+    try {
+        payload = await req.json()
+    } catch (_) {
+        return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+        })
+    }
 
     // Only handle inserts
     if (payload.type !== 'INSERT') {

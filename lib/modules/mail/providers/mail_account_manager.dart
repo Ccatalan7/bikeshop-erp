@@ -199,6 +199,46 @@ class MailAccountManager extends ChangeNotifier {
     }
   }
 
+  /// Refreshes provider-confirmed From identities without reconnecting OAuth.
+  Future<void> refreshSenderIdentities({String? providerId}) async {
+    final hadSenderIdentityFailure =
+        _error?.startsWith('No se pudieron verificar') == true &&
+            _error!.contains('remitentes');
+    final providersToRefresh = providerId == null
+        ? connectedProviders
+        : connectedProviders
+            .where((provider) => provider.providerId == providerId)
+            .toList(growable: false);
+
+    final failedProviders = <EmailProvider>[];
+    Object? firstError;
+    StackTrace? firstStackTrace;
+    for (final provider in providersToRefresh) {
+      try {
+        await provider.refreshSenderIdentities();
+      } catch (error, stackTrace) {
+        failedProviders.add(provider);
+        firstError ??= error;
+        firstStackTrace ??= stackTrace;
+      }
+    }
+
+    if (failedProviders.isNotEmpty) {
+      _error = _providerFailureMessage(
+        failedProviders,
+        singleAction: 'No se pudieron verificar los remitentes de',
+        multiAction: 'No se pudieron verificar algunos remitentes',
+      );
+      notifyListeners();
+      Error.throwWithStackTrace(firstError!, firstStackTrace!);
+    }
+
+    if (hadSenderIdentityFailure) {
+      _error = null;
+      notifyListeners();
+    }
+  }
+
   /// Start OAuth flow for a provider
   Future<String> getAuthorizationUrl(
     String providerId, {
@@ -296,6 +336,19 @@ class MailAccountManager extends ChangeNotifier {
           multiAction: 'No se pudieron actualizar algunas cuentas',
           suffix: 'Mostrando correos guardados.',
         );
+      } else {
+        final permissionWarnings = connectedProviders.where((provider) {
+          final detail = provider.error?.toLowerCase() ?? '';
+          return detail.contains('permisos zoho') ||
+              detail.contains('organization.groups.read');
+        }).toList(growable: false);
+        if (permissionWarnings.isNotEmpty) {
+          _error = _providerFailureMessage(
+            permissionWarnings,
+            singleAction: 'No se pudieron verificar los remitentes de',
+            multiAction: 'No se pudieron verificar algunos remitentes',
+          );
+        }
       }
 
       // Save to SQLite cache for next app launch
@@ -766,6 +819,7 @@ class MailAccountManager extends ChangeNotifier {
     required String to,
     required String subject,
     required String content,
+    String? fromAddress,
     String? cc,
     String? bcc,
   }) async {
@@ -776,6 +830,7 @@ class MailAccountManager extends ChangeNotifier {
       to: to,
       subject: subject,
       content: content,
+      fromAddress: fromAddress,
       cc: cc,
       bcc: bcc,
     );

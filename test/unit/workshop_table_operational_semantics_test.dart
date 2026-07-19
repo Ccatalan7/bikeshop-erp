@@ -6,6 +6,7 @@ void main() {
   late String table;
   late String form;
   late String logbook;
+  late String operationalBadge;
 
   setUpAll(() {
     table = File(
@@ -16,6 +17,9 @@ void main() {
     ).readAsStringSync();
     logbook = File(
       'lib/modules/bikeshop/pages/client_logbook_page.dart',
+    ).readAsStringSync();
+    operationalBadge = File(
+      'lib/shared/widgets/operational_status_badge.dart',
     ).readAsStringSync();
   });
 
@@ -42,8 +46,12 @@ void main() {
       reason:
           'The form must explain the single lifecycle owner instead of rendering a second status editor.',
     );
-    expect(table, contains("message: 'Cambiar estado y ver acciones'"));
-    expect(table, contains('Icons.keyboard_arrow_down_rounded'));
+    expect(table, contains('OperationalStatusBadge('));
+    expect(
+      operationalBadge,
+      contains("tooltip ?? 'Cambiar estado y ver acciones'"),
+    );
+    expect(operationalBadge, contains('Icons.keyboard_arrow_down_rounded'));
     expect(logbook, contains('if (job.isServiceBudget)'));
     expect(logbook, contains('job.proposalStatusDisplayName'));
   });

@@ -7,11 +7,44 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { filterMerchantProductsByCheckoutTax } from "../_shared/google_merchant_feed.ts";
 import { publicProductUrl } from "../_shared/product_url.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+type MerchantProduct = {
+  id: string;
+  tax_rate?: unknown;
+  name?: string | null;
+  website_name?: string | null;
+  sku?: string | null;
+  description?: string | null;
+  website_description?: string | null;
+  website_merchant_title?: string | null;
+  website_merchant_description?: string | null;
+  website_merchant_brand?: string | null;
+  website_merchant_gtin?: string | null;
+  website_merchant_mpn?: string | null;
+  website_google_product_category?: string | null;
+  price: number;
+  website_price?: number | null;
+  price_currency?: string | null;
+  stock_quantity?: number | null;
+  image_url?: string | null;
+  image_url_optimized?: string | null;
+  website_image_url?: string | null;
+  website_image_url_optimized?: string | null;
+  image_urls?: string[] | null;
+  website_image_urls?: string[] | null;
+  brand?: string | null;
+  brand_id?: string | null;
+  category_id?: string | null;
+  category_name?: string | null;
+  barcode?: string | null;
+  gtin?: string | null;
 };
 
 serve(async (req) => {
@@ -81,7 +114,7 @@ serve(async (req) => {
       .eq("tenant_id", tenantId);
 
     const settingsMap = new Map(
-      (settings || []).map((s: any) => [s.key, s.value]),
+      (settings || []).map((s) => [s.key, s.value]),
     );
 
     // Build store URL from custom domain or subdomain
@@ -118,6 +151,7 @@ serve(async (req) => {
         price,
         website_price,
         price_currency,
+        tax_rate,
         stock_quantity,
         image_url,
         website_image_url,
@@ -132,14 +166,19 @@ serve(async (req) => {
         gtin,
         is_active,
         is_published,
+        show_on_website,
         is_google_merchant,
-        lifecycle_status
+        lifecycle_status,
+        product_type
       `)
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
       .eq("is_published", true)
+      .eq("show_on_website", true)
       .eq("is_google_merchant", true)
       .eq("lifecycle_status", "active")
+      .eq("product_type", "product")
+      .in("tax_rate", [0, 0.19, 19])
       .gt("price", 0)
       .order("name");
 
@@ -158,7 +197,7 @@ serve(async (req) => {
         .select("id, name")
         .in("id", brandIds);
 
-      brandsMap = new Map((brands || []).map((b: any) => [b.id, b.name]));
+      brandsMap = new Map((brands || []).map((b) => [b.id, b.name]));
     }
 
     // Step 5: Get category paths for products with category_id
@@ -173,11 +212,14 @@ serve(async (req) => {
         .select("id, full_path")
         .in("id", categoryIds);
 
-      categoriesMap = new Map((categories || []).map((c: any) => [c.id, c.full_path]));
+      categoriesMap = new Map((categories || []).map((c) => [c.id, c.full_path]));
     }
 
     // Step 6: Filter products that have at least an image
-    const validProducts = (products || []).filter((p) => productImageUrls(p).length > 0);
+    const validProducts = filterMerchantProductsByCheckoutTax(
+      (products || []) as MerchantProduct[],
+    )
+      .filter((p) => productImageUrls(p).length > 0);
 
     // Step 7: Generate XML feed
     const feed = `<?xml version="1.0" encoding="UTF-8"?>
@@ -216,7 +258,7 @@ ${
 });
 
 function generateProductItem(
-  product: any,
+  product: MerchantProduct,
   storeUrl: string,
   storeName: string,
   brandsMap: Map<string, string>,
@@ -264,10 +306,11 @@ function generateProductItem(
 
   // Price with currency (default CLP)
   const currency = product.price_currency || "CLP";
-  const price = `${Math.round(product.website_price || product.price)} ${currency}`;
+  const effectivePrice = product.website_price ?? product.price;
+  const price = `${Math.round(effectivePrice)} ${currency}`;
 
   // Availability based on stock
-  const availability = product.stock_quantity > 0 ? "in_stock" : "out_of_stock";
+  const availability = (product.stock_quantity ?? 0) > 0 ? "in_stock" : "out_of_stock";
 
   // Brand resolution: brand_id → brands table → product.brand → store name
   let brand = firstNonEmpty(product.website_merchant_brand);
@@ -355,7 +398,6 @@ function fixExcessiveCaps(text: string): string {
   // Count uppercase vs lowercase letters
   const letters = text.replace(/[^a-zA-Z]/g, "");
   const upperCount = (letters.match(/[A-Z]/g) || []).length;
-  const lowerCount = (letters.match(/[a-z]/g) || []).length;
 
   // If more than 60% uppercase, convert to Title Case
   if (letters.length > 0 && upperCount / letters.length > 0.6) {
@@ -413,7 +455,7 @@ function firstNonEmpty(...values: Array<string | null | undefined>): string {
   return "";
 }
 
-function productImageUrls(product: any): string[] {
+function productImageUrls(product: MerchantProduct): string[] {
   const urls: string[] = [];
 
   const add = (value: unknown) => {

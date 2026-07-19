@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 class Product {
   // Shared preview payload for ERP/POS card/list surfaces.
   static const String listPreviewSelect =
@@ -22,7 +20,7 @@ class Product {
       'website_merchant_mpn,website_google_product_category,'
       'category,category_id,category_name,brand_id,brand,'
       'model,manufacturer,manufacturer_sku,gtin,color,size,material,weight,'
-      'specifications,product_type,track_stock,'
+      'specifications,product_type,track_stock,tax_rate,'
       'is_active,is_published,show_on_website,created_at,updated_at';
 
   final String id;
@@ -211,9 +209,10 @@ class Product {
       barcode: json['barcode'] as String?,
       price: websitePrice ?? (json['price'] as num).toDouble(),
       cost: (json['cost'] as num?)?.toDouble() ?? 0,
-      // Be resilient: some code paths historically updated only one column.
-      // Treat stock as the max of both.
-      stockQuantity: math.max(inventoryQty ?? 0, stockQty ?? 0),
+      // stock_quantity is the canonical sellable balance. Falling back is only
+      // for old payloads that do not include the current column; taking the
+      // maximum would advertise stock when the canonical balance is zero.
+      stockQuantity: stockQty ?? inventoryQty ?? 0,
       minStockLevel: json['min_stock_level'] as int? ?? 5,
       maxStockLevel: json['max_stock_level'] as int? ?? 100,
       imageUrl: websiteImageUrl ?? json['image_url'] as String?,

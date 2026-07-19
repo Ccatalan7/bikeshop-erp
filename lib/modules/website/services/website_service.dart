@@ -6,12 +6,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
 import '../models/website_action.dart';
 import '../models/website_models.dart';
+import '../models/public_order_access.dart';
+import '../models/public_shipping_quote.dart';
+import '../models/online_order_correction.dart';
 import '../models/website_page_models.dart';
 import '../../../shared/models/product.dart';
+import '../../../shared/models/product_tax_treatment.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/web_data_bridge.dart';
 
@@ -45,6 +50,10 @@ class WebsiteService extends ChangeNotifier {
   static const String _orderItemProductContextSelect =
       'id,name,sku,category_name,stock_quantity,inventory_qty,is_active,'
       'is_published,product_type,track_stock,purchase_treatment';
+
+  bool get canRetryOnlineOrderPaymentProcessing =>
+      _tenantService.hasAnyRole(const ['admin', 'manager', 'cashier']) ||
+      _tenantService.hasPermission('create_invoices');
 
   Map<String, dynamic> _deepMergeMaps(
     Map<String, dynamic> base,
@@ -435,6 +444,8 @@ class WebsiteService extends ChangeNotifier {
   bool _isLoading = false;
   bool _isInitializing = false;
   String? _error;
+  String? _ordersLoadError;
+  String? _ordersEnrichmentWarning;
   bool _disposed = false; // Track disposal state
   bool _notifyScheduled = false;
   bool _hasLoadedForTenant =
@@ -465,6 +476,8 @@ class WebsiteService extends ChangeNotifier {
   List<Map<String, dynamic>> get blocks => _blocks;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  String? get ordersLoadError => _ordersLoadError;
+  String? get ordersEnrichmentWarning => _ordersEnrichmentWarning;
   bool get hasLoadedForTenant => _hasLoadedForTenant;
 
   /// Safe version of notifyListeners that checks disposal state
@@ -2084,6 +2097,8 @@ class WebsiteService extends ChangeNotifier {
   Future<void> loadOrders() async {
     _isLoading = true;
     _error = null;
+    _ordersLoadError = null;
+    _ordersEnrichmentWarning = null;
     if (!_isInitializing) _safeNotifyListeners();
 
     try {
@@ -2106,11 +2121,34 @@ class WebsiteService extends ChangeNotifier {
 
       final loadedOrders =
           (response as List).map((json) => OnlineOrder.fromJson(json)).toList();
-      _orders = await _attachProductContextToOrders(loadedOrders, tenantId);
+      final ordersWithProducts =
+          await _attachProductContextToOrders(loadedOrders, tenantId);
+      // Payment-processing metadata is an operational enrichment, not the
+      // authoritative order list. Keep the base orders visible if that
+      // projection is temporarily unavailable (for example during a staged
+      // backend rollout) and tell the operator exactly what is incomplete.
+      _orders = ordersWithProducts;
+      try {
+        _orders = await _attachPaymentProcessingToOrders(
+          ordersWithProducts,
+          tenantId,
+        );
+      } catch (enrichmentError) {
+        _ordersEnrichmentWarning =
+            'Los pedidos están cargados, pero el estado operativo de algunos '
+            'pagos no está disponible. Actualiza nuevamente en unos minutos.';
+        debugPrint(
+          '⚠️ [WebsiteService] Payment processing enrichment unavailable: '
+          '$enrichmentError',
+        );
+      }
 
       _error = null;
     } catch (e) {
       _error = 'Error al cargar pedidos online: $e';
+      _ordersLoadError =
+          'No se pudieron cargar los pedidos. Revisa la conexión o los permisos '
+          'y vuelve a intentarlo.';
       debugPrint(_error);
     } finally {
       _isLoading = false;
@@ -2137,6 +2175,86 @@ class WebsiteService extends ChangeNotifier {
       debugPrint('Error loading order items: $e');
       return [];
     }
+  }
+
+  Future<List<OnlineOrder>> _attachPaymentProcessingToOrders(
+    List<OnlineOrder> orders,
+    String tenantId,
+  ) async {
+    if (orders.isEmpty) return orders;
+
+    final response = await _supabase
+        .from('online_order_payment_processing_status_view')
+        .select('''
+          order_id,
+          payment_event_id,
+          provider_status,
+          validation_outcome,
+          processing_state,
+          attempt_count,
+          last_attempted_at,
+          action_required_at,
+          last_error_code,
+          last_error_message,
+          requires_refund_review,
+          updated_at
+        ''')
+        .eq('tenant_id', tenantId)
+        .inFilter('order_id', orders.map((order) => order.id).toList())
+        .order('updated_at', ascending: false);
+
+    int operationalPriority(Map<String, dynamic> row) {
+      if (row['processing_state'] == 'action_required') return 3;
+      if (row['processing_state'] == 'pending' &&
+          row['provider_status'] == 'approved' &&
+          row['validation_outcome'] == 'payment_validated') {
+        return 2;
+      }
+      if (row['provider_status'] == 'approved') return 1;
+      return 0;
+    }
+
+    // An unresolved approved-payment incident must not disappear merely
+    // because a later stale/pending provider notification was received.
+    final operationalByOrder = <String, Map<String, dynamic>>{};
+    for (final rawRow in response as List) {
+      final row = Map<String, dynamic>.from(rawRow as Map);
+      final orderId = row['order_id']?.toString();
+      if (orderId != null && orderId.isNotEmpty) {
+        final current = operationalByOrder[orderId];
+        if (current == null ||
+            operationalPriority(row) > operationalPriority(current)) {
+          operationalByOrder[orderId] = row;
+        }
+      }
+    }
+
+    return orders.map((order) {
+      final processing = operationalByOrder[order.id];
+      if (processing == null) return order;
+      return order.copyWith(
+        paymentProcessingEventId:
+            (processing['payment_event_id'] as num?)?.toInt(),
+        paymentProviderStatus: processing['provider_status']?.toString(),
+        paymentValidationOutcome: processing['validation_outcome']?.toString(),
+        paymentProcessingState: processing['processing_state']?.toString(),
+        paymentProcessingAttemptCount:
+            (processing['attempt_count'] as num?)?.toInt() ?? 0,
+        paymentProcessingLastAttemptedAt:
+            processing['last_attempted_at'] == null
+                ? null
+                : DateTime.parse(processing['last_attempted_at'] as String),
+        paymentProcessingActionRequiredAt:
+            processing['action_required_at'] == null
+                ? null
+                : DateTime.parse(processing['action_required_at'] as String),
+        paymentProcessingErrorCode: processing['last_error_code']?.toString(),
+        paymentProcessingErrorMessage:
+            processing['last_error_message']?.toString(),
+        paymentProcessingRequiresRefundReview:
+            processing['requires_refund_review'] as bool? ?? false,
+      );
+    }).toList();
   }
 
   Future<List<OnlineOrder>> _attachProductContextToOrders(
@@ -2252,7 +2370,12 @@ class WebsiteService extends ChangeNotifier {
       final items = await _loadOrderItems(order.id);
       debugPrint('🎉 [WebsiteService] Order items loaded: ${items.length}');
 
-      return order.copyWith(items: items);
+      final enriched = order.copyWith(items: items);
+      return (await _attachPaymentProcessingToOrders(
+        [enriched],
+        tenantId,
+      ))
+          .single;
     } catch (e, stackTrace) {
       debugPrint('❌ [WebsiteService] Error loading order: $e');
       debugPrint('❌ [WebsiteService] Stack trace: $stackTrace');
@@ -2262,17 +2385,20 @@ class WebsiteService extends ChangeNotifier {
 
   Future<OnlineOrder?> getPublicOrderById({
     required String orderId,
-    required String tenantId,
+    required String accessToken,
   }) async {
     try {
-      final response = await _supabase.rpc('get_public_online_order', params: {
-        'p_order_id': orderId,
-        'p_tenant_id': tenantId,
-      });
+      final response = await _supabase.rpc(
+        'get_public_online_order_by_access_token',
+        params: {'p_token': accessToken},
+      );
 
       if (response == null) return null;
 
-      return OnlineOrder.fromJson(Map<String, dynamic>.from(response as Map));
+      return onlineOrderFromPublicAccessResponse(
+        response,
+        expectedOrderId: orderId,
+      );
     } catch (e, stackTrace) {
       debugPrint('❌ [WebsiteService] Error loading public order: $e');
       debugPrint('❌ [WebsiteService] Stack trace: $stackTrace');
@@ -2281,25 +2407,24 @@ class WebsiteService extends ChangeNotifier {
   }
 
   /// Create a new online order from the public store
-  Future<String> createOrder(Map<String, dynamic> orderData,
-      List<Map<String, dynamic>> orderItems) async {
+  Future<PublicOrderCheckoutAccess> createOrder(
+    Map<String, dynamic> orderData,
+    List<Map<String, dynamic>> orderItems,
+  ) async {
     try {
       debugPrint('🛒 [WebsiteService] createOrder() called');
 
       final orderId = await _supabase.rpc(
-        'create_public_online_order',
+        'create_public_online_order_with_access',
         params: {
           'p_order_data': orderData,
           'p_order_items': orderItems,
         },
       );
 
-      if (orderId is! String || orderId.isEmpty) {
-        throw StateError('Secure checkout did not return an order id');
-      }
-
-      debugPrint('🛒 [WebsiteService] Secure order id: $orderId');
-      return orderId;
+      final result = PublicOrderCheckoutAccess.fromRpc(orderId);
+      debugPrint('🛒 [WebsiteService] Secure checkout completed');
+      return result;
     } catch (e) {
       _error = 'Error al crear pedido: $e';
       debugPrint('🛒 [WebsiteService] ❌ createOrder() error: $_error');
@@ -2308,24 +2433,47 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
+  Future<PublicShippingQuote> quotePublicShipping({
+    required String tenantId,
+    required String deliveryType,
+    required int itemGross,
+  }) async {
+    final response = await _supabase.rpc(
+      'quote_public_online_shipping',
+      params: {
+        'p_tenant_id': tenantId,
+        'p_delivery_type': deliveryType,
+        'p_item_gross': itemGross,
+        'p_country_code': 'CL',
+      },
+    );
+    return PublicShippingQuote.fromRpc(response);
+  }
+
   Future<String?> updateOrderStatus(
     String orderId,
     String status, {
+    required int expectedVersion,
+    String? operationKey,
     String? trackingNumber,
     String? trackingUrl,
     String? carrier,
     String? notes,
   }) async {
     try {
-      final response =
-          await _supabase.rpc('update_online_order_status', params: {
-        'p_order_id': orderId,
-        'p_new_status': status,
-        'p_tracking_number': trackingNumber,
-        'p_tracking_url': trackingUrl,
-        'p_carrier': carrier,
-        'p_notes': notes,
-      });
+      final response = await _supabase.rpc(
+        'transition_online_order_status',
+        params: {
+          'p_order_id': orderId,
+          'p_new_status': status,
+          'p_expected_version': expectedVersion,
+          'p_operation_key': operationKey ?? const Uuid().v4(),
+          'p_tracking_number': trackingNumber,
+          'p_tracking_url': trackingUrl,
+          'p_carrier': carrier,
+          'p_notes': notes,
+        },
+      );
 
       await loadOrders();
       if (response is Map && response['invoice_id'] != null) {
@@ -2340,61 +2488,26 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
-  Future<void> updatePaymentStatus(String orderId, String paymentStatus) async {
-    try {
-      await _supabase.from('online_orders').update({
-        'payment_status': paymentStatus,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', orderId);
-
-      await loadOrders();
-    } catch (e) {
-      _error = 'Error al actualizar estado de pago: $e';
-      debugPrint(_error);
-      _safeNotifyListeners();
-      rethrow;
-    }
-  }
-
   Future<void> updateOrderNotes(
     String orderId, {
+    required int expectedVersion,
+    String? operationKey,
     String? internalNotes,
   }) async {
     try {
-      await _supabase.from('online_orders').update({
-        'internal_notes': internalNotes,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', orderId);
+      await _supabase.rpc(
+        'update_online_order_internal_notes',
+        params: {
+          'p_order_id': orderId,
+          'p_internal_notes': internalNotes,
+          'p_expected_version': expectedVersion,
+          'p_operation_key': operationKey ?? const Uuid().v4(),
+        },
+      );
 
       await loadOrders();
     } catch (e) {
       _error = 'Error al actualizar notas del pedido: $e';
-      debugPrint(_error);
-      _safeNotifyListeners();
-      rethrow;
-    }
-  }
-
-  Future<Map<String, dynamic>?> cancelOrder(
-    String orderId, {
-    required String reason,
-    double? refundAmount,
-  }) async {
-    try {
-      final response = await _supabase.rpc('cancel_online_order', params: {
-        'p_order_id': orderId,
-        'p_reason': reason,
-        'p_refund_amount': refundAmount,
-      });
-
-      await loadOrders();
-      return response is Map<String, dynamic>
-          ? response
-          : response is Map
-              ? Map<String, dynamic>.from(response)
-              : null;
-    } catch (e) {
-      _error = 'Error al cancelar pedido: $e';
       debugPrint(_error);
       _safeNotifyListeners();
       rethrow;
@@ -2441,9 +2554,217 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
+  Future<Map<String, dynamic>> retryMercadoPagoPaymentProcessing(
+    int paymentEventId,
+  ) async {
+    try {
+      if (!canRetryOnlineOrderPaymentProcessing) {
+        throw StateError(
+          'Tu perfil no está autorizado para generar la venta y sus movimientos.',
+        );
+      }
+      final response = await _supabase.rpc(
+        'process_mercadopago_payment_observation',
+        params: {'p_payment_event_id': paymentEventId},
+      );
+      if (response is! Map) {
+        throw StateError('El procesamiento no devolvió un resultado válido.');
+      }
+
+      final result = Map<String, dynamic>.from(response);
+      await loadOrders();
+      return result;
+    } catch (e) {
+      _error = 'Error al reintentar el procesamiento de Mercado Pago: $e';
+      debugPrint(_error);
+      _safeNotifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<OnlineOrderCorrectionPreview> loadOnlineOrderCorrectionPreview(
+    String orderId,
+  ) async {
+    final response = await _supabase.rpc(
+      'get_online_order_correction_preview',
+      params: {'p_order_id': orderId},
+    );
+    if (response is! Map) {
+      throw StateError('La vista previa de corrección no es válida.');
+    }
+    return OnlineOrderCorrectionPreview.fromJson(
+      Map<String, dynamic>.from(response),
+    );
+  }
+
+  Future<OnlineOrderCorrectionRecord?> loadLatestOnlineOrderCorrection(
+    String orderId,
+  ) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) {
+      throw StateError('No existe una tienda activa para esta sesión.');
+    }
+    final response = await _supabase
+        .from('online_order_correction_status_view')
+        .select()
+        .eq('tenant_id', tenantId)
+        .eq('order_id', orderId)
+        .maybeSingle();
+    if (response == null) return null;
+    return OnlineOrderCorrectionRecord.fromJson(response);
+  }
+
+  Future<OnlineOrderCorrectionRecord> requestOnlineOrderCorrection({
+    required String orderId,
+    required int expectedVersion,
+    required List<OnlineOrderCorrectionLineRequest> lines,
+    required String reason,
+    required String operationKey,
+    String correctionIntent = 'return',
+  }) async {
+    final response = await _supabase.rpc(
+      'request_online_order_correction',
+      params: {
+        'p_order_id': orderId,
+        'p_expected_order_version': expectedVersion,
+        'p_lines': lines.map((line) => line.toJson()).toList(growable: false),
+        'p_reason': reason,
+        'p_operation_key': operationKey,
+        'p_correction_intent': correctionIntent,
+      },
+    );
+    if (response is! Map) {
+      throw StateError('La solicitud no devolvió un recibo durable.');
+    }
+    return OnlineOrderCorrectionRecord.fromJson(
+      Map<String, dynamic>.from(response),
+    );
+  }
+
+  Future<OnlineOrderCorrectionRecord> executeOnlineOrderCorrection(
+    OnlineOrderCorrectionRecord correction, {
+    String? manualReference,
+    DateTime? manualRefundedAt,
+  }) async {
+    if (correction.provider == 'mercadopago') {
+      final response = await _supabase.functions.invoke(
+        'mercadopago-refund-payment',
+        body: {'correction_id': correction.id},
+      );
+      if (response.status < 200 || response.status >= 300) {
+        final detail = response.data is Map
+            ? (response.data as Map)['error']?.toString()
+            : null;
+        throw StateError(
+          detail ?? 'Mercado Pago no pudo completar la corrección.',
+        );
+      }
+      final payload = response.data;
+      if (payload is Map && payload['correction'] is Map) {
+        await loadOrders();
+        return OnlineOrderCorrectionRecord.fromJson(
+          Map<String, dynamic>.from(payload['correction'] as Map),
+        );
+      }
+      final refreshed =
+          await loadLatestOnlineOrderCorrection(correction.orderId);
+      if (refreshed == null) {
+        throw StateError('No se pudo recuperar la corrección aplicada.');
+      }
+      await loadOrders();
+      return refreshed;
+    }
+
+    await _supabase.rpc(
+      'authorize_online_order_refund_execution',
+      params: {'p_correction_id': correction.id},
+    );
+    if (correction.needsManualEvidence) {
+      final reference = manualReference?.trim() ?? '';
+      if (reference.isEmpty) {
+        throw StateError('La referencia del reembolso es obligatoria.');
+      }
+      await _supabase.rpc(
+        'record_manual_online_order_refund_evidence',
+        params: {
+          'p_correction_id': correction.id,
+          'p_reference': reference,
+          'p_refunded_at':
+              (manualRefundedAt ?? DateTime.now()).toUtc().toIso8601String(),
+          'p_request_id': 'manual:${const Uuid().v4()}',
+        },
+      );
+    }
+    dynamic response;
+    try {
+      response = await _supabase.rpc(
+        'apply_online_order_correction',
+        params: {
+          'p_correction_id': correction.id,
+          'p_request_id': 'apply:${const Uuid().v4()}',
+        },
+      );
+    } catch (error) {
+      try {
+        await _supabase.rpc(
+          'record_online_order_correction_apply_failure',
+          params: {
+            'p_correction_id': correction.id,
+            'p_request_id': 'apply-failure:${const Uuid().v4()}',
+            'p_error_code': 'internal_effects_failed',
+            'p_error_message':
+                'El dinero fue devuelto, pero los efectos internos requieren revisión.',
+          },
+        );
+      } catch (_) {
+        // Preserve the original apply failure for the operator. The correction
+        // remains replay-safe even if recording this secondary receipt fails.
+      }
+      rethrow;
+    }
+    if (response is! Map) {
+      throw StateError('La corrección no devolvió un recibo durable.');
+    }
+    await loadOrders();
+    return OnlineOrderCorrectionRecord.fromJson(
+      Map<String, dynamic>.from(response),
+    );
+  }
+
   // ============================================================================
   // PRODUCT WEBSITE VISIBILITY
   // ============================================================================
+
+  Future<void> _assertTaxClassificationForWebPublication({
+    required List<String> productIds,
+    String? tenantId,
+  }) async {
+    if (productIds.isEmpty) return;
+
+    dynamic query = _supabase.from('products').select('id,tax_rate');
+    if (tenantId != null && tenantId.trim().isNotEmpty) {
+      query = query.eq('tenant_id', tenantId.trim());
+    }
+    final response = await query.inFilter('id', productIds);
+    final rows = (response as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
+    final returnedIds = rows.map((row) => row['id']?.toString()).toSet();
+    if (productIds.any((id) => !returnedIds.contains(id))) {
+      throw StateError(
+        'No se pudo validar la clasificación tributaria de todos los productos.',
+      );
+    }
+
+    final unclassified = rows
+        .where((row) => !hasSupportedProductTaxRate(row['tax_rate']))
+        .length;
+    if (unclassified > 0) {
+      throw StateError(
+        '$unclassified producto${unclassified == 1 ? '' : 's'} sin IVA 19% o Exento no puede${unclassified == 1 ? '' : 'n'} publicarse.',
+      );
+    }
+  }
 
   Future<void> updateProductWebsiteVisibility({
     required String productId,
@@ -2452,6 +2773,11 @@ class WebsiteService extends ChangeNotifier {
     bool? websiteFeatured,
   }) async {
     try {
+      if (showOnWebsite) {
+        await _assertTaxClassificationForWebPublication(
+          productIds: [productId],
+        );
+      }
       final updates = <String, dynamic>{
         'show_on_website': showOnWebsite,
         'is_published': showOnWebsite,
@@ -2496,6 +2822,12 @@ class WebsiteService extends ChangeNotifier {
       final now = DateTime.now().toUtc().toIso8601String();
       for (var start = 0; start < ids.length; start += chunkSize) {
         final chunk = ids.skip(start).take(chunkSize).toList(growable: false);
+        if (showOnWebsite) {
+          await _assertTaxClassificationForWebPublication(
+            productIds: chunk,
+            tenantId: tenantId,
+          );
+        }
         await _supabase
             .from('products')
             .update({

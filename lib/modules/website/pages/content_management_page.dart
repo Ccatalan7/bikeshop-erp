@@ -143,7 +143,8 @@ También puedes retirar tu pedido sin costo en nuestra tienda.
 # Política de Devoluciones
 
 ## Plazo
-Tienes 30 días desde la recepción para solicitar cambio o devolución.
+Tienes 10 días corridos desde la recepción para ejercer el derecho a retracto,
+sin perjuicio de la garantía legal aplicable.
 
 ## Condiciones
 El producto debe estar:
@@ -153,7 +154,7 @@ El producto debe estar:
 - Con comprobante de compra
 
 ## Proceso
-1. Contacta a ventas@vinabike.cl
+1. Contacta a ventas@vinabike.cl con tu número de pedido
 2. Envía fotos del producto
 3. Espera autorización
 4. Despacha el producto
@@ -183,19 +184,19 @@ No aceptamos devoluciones de:
 5. Confirma el pago
 
 ## ¿Qué métodos de pago aceptan?
-- Tarjetas de crédito/débito
+- Tarjetas de crédito y débito procesadas por Mercado Pago
 - Transferencia bancaria
-- WebPay
-- Mercado Pago
 
 ## ¿Puedo modificar mi pedido?
 Sí, contacta inmediatamente a ventas@vinabike.cl
 
 ## ¿Emiten boleta o factura?
-Sí, emitimos ambos documentos tributarios.
+Emitimos boleta para las compras de consumidores finales. No emitimos factura
+desde la tienda online por el momento.
 
 ## ¿Tienen tienda física?
-Sí, visítanos en Santiago. Consulta horarios en contacto.
+Sí, en Álvarez 32, Local 17, Viña del Mar. Consulta los horarios publicados
+antes de visitarnos.
 
 ## ¿Hacen mantención de bicicletas?
 Sí, ofrecemos servicio técnico. Agenda tu hora.

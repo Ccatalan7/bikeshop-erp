@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/sales_models.dart';
 import '../pages/sales_credit_note_page.dart';
 import '../pages/sales_return_page.dart';
 import '../services/sales_credit_note_service.dart';
+import '../services/sales_invoice_void_service.dart';
 import '../services/sales_return_service.dart';
 
 typedef SalesCorrectionCapabilityLoader = Future<bool> Function();
@@ -12,6 +14,11 @@ typedef SalesCorrectionPageOpener = Future<void> Function(
   Invoice invoice,
 );
 typedef SalesCorrectionRefresh = Future<void> Function();
+typedef SalesInvoiceVoidExecutor = Future<void> Function({
+  required String invoiceId,
+  required String reason,
+  required String idempotencyKey,
+});
 
 /// Canonical entry point for post-sale corrections.
 ///
@@ -29,6 +36,8 @@ class SalesCorrectionsMenu extends StatefulWidget {
     this.creditNoteCapabilityLoader,
     this.returnPageOpener,
     this.creditNotePageOpener,
+    this.voidService,
+    this.voidExecutor,
   });
 
   final Invoice invoice;
@@ -39,6 +48,8 @@ class SalesCorrectionsMenu extends StatefulWidget {
   final SalesCorrectionCapabilityLoader? creditNoteCapabilityLoader;
   final SalesCorrectionPageOpener? returnPageOpener;
   final SalesCorrectionPageOpener? creditNotePageOpener;
+  final SalesInvoiceVoidService? voidService;
+  final SalesInvoiceVoidExecutor? voidExecutor;
 
   @override
   State<SalesCorrectionsMenu> createState() => _SalesCorrectionsMenuState();
@@ -71,6 +82,12 @@ class _SalesCorrectionsMenuState extends State<SalesCorrectionsMenu> {
 
   bool get _canReturn => widget.invoice.status == InvoiceStatus.paid;
 
+  bool get _canVoid =>
+      widget.invoice.source != 'mechanic_job' &&
+      (widget.invoice.status == InvoiceStatus.sent ||
+          widget.invoice.status == InvoiceStatus.confirmed ||
+          widget.invoice.status == InvoiceStatus.overdue);
+
   Future<_CorrectionCapabilities> _loadCapabilities() async {
     final results = await Future.wait<bool>([
       (widget.returnCapabilityLoader ?? SalesReturnService().isEnabled)(),
@@ -84,17 +101,69 @@ class _SalesCorrectionsMenuState extends State<SalesCorrectionsMenu> {
   }
 
   Future<void> _open(String action) async {
+    var changed = true;
     if (action == 'return') {
       final opener = widget.returnPageOpener ?? _openReturnPage;
       await opener(context, widget.invoice);
     } else if (action == 'credit') {
       final opener = widget.creditNotePageOpener ?? _openCreditNotePage;
       await opener(context, widget.invoice);
+    } else if (action == 'void') {
+      changed = await _discardInvoice();
     }
 
-    if (!mounted) return;
+    if (!mounted || !changed) return;
     final refresh = widget.onChanged;
     if (refresh != null) await refresh();
+  }
+
+  Future<bool> _discardInvoice() async {
+    final invoiceId = widget.invoice.id;
+    if (invoiceId == null) return false;
+
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) => _DiscardSalesInvoiceDialog(
+        invoiceNumber: widget.invoice.invoiceNumber,
+      ),
+    );
+    if (reason == null || !mounted) return false;
+
+    try {
+      final idempotencyKey = const Uuid().v4();
+      final executor = widget.voidExecutor;
+      if (executor != null) {
+        await executor(
+          invoiceId: invoiceId,
+          reason: reason,
+          idempotencyKey: idempotencyKey,
+        );
+      } else {
+        await (widget.voidService ?? SalesInvoiceVoidService()).voidInvoice(
+          invoiceId: invoiceId,
+          reason: reason,
+          idempotencyKey: idempotencyKey,
+        );
+      }
+      if (!mounted) return true;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Factura ${widget.invoice.invoiceNumber} descartada. Stock y contabilidad revertidos.',
+          ),
+        ),
+      );
+      return true;
+    } on SalesInvoiceVoidException catch (error) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+      return false;
+    }
   }
 
   Future<void> _openReturnPage(
@@ -127,14 +196,15 @@ class _SalesCorrectionsMenuState extends State<SalesCorrectionsMenu> {
 
   @override
   Widget build(BuildContext context) {
-    if ((!_canCredit && !_canReturn) || widget.invoice.id == null) {
+    if ((!_canCredit && !_canReturn && !_canVoid) ||
+        widget.invoice.id == null) {
       return const SizedBox.shrink();
     }
 
     return FutureBuilder<_CorrectionCapabilities>(
       future: _capabilities,
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
+        if (snapshot.hasError && !_canVoid) {
           return Tooltip(
             message: 'No se pudo verificar el módulo de correcciones.',
             child: Icon(
@@ -149,14 +219,24 @@ class _SalesCorrectionsMenuState extends State<SalesCorrectionsMenu> {
             capabilities?.returnsEnabled == true && _canReturn;
         final creditNotesEnabled =
             capabilities?.creditNotesEnabled == true && _canCredit;
-        if (!returnsEnabled && !creditNotesEnabled) {
+        if (!returnsEnabled && !creditNotesEnabled && !_canVoid) {
           return const SizedBox.shrink();
         }
 
         return PopupMenuButton<String>(
-          tooltip: 'Devoluciones y notas de crédito',
+          tooltip: 'Correcciones y descarte',
           onSelected: _open,
           itemBuilder: (context) => [
+            if (_canVoid)
+              const PopupMenuItem<String>(
+                value: 'void',
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.delete_sweep_outlined),
+                  title: Text('Descartar factura'),
+                  subtitle: Text('Anula y revierte una venta no realizada'),
+                ),
+              ),
             if (returnsEnabled)
               const PopupMenuItem<String>(
                 value: 'return',
@@ -205,6 +285,119 @@ class _SalesCorrectionsMenuState extends State<SalesCorrectionsMenu> {
                 ),
         );
       },
+    );
+  }
+}
+
+class _DiscardSalesInvoiceDialog extends StatefulWidget {
+  const _DiscardSalesInvoiceDialog({required this.invoiceNumber});
+
+  final String invoiceNumber;
+
+  @override
+  State<_DiscardSalesInvoiceDialog> createState() =>
+      _DiscardSalesInvoiceDialogState();
+}
+
+class _DiscardSalesInvoiceDialogState
+    extends State<_DiscardSalesInvoiceDialog> {
+  final TextEditingController _reasonController = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    final reason = _reasonController.text.trim();
+    if (reason.isEmpty) {
+      setState(() => _error = 'Indica el motivo del descarte.');
+      return;
+    }
+    Navigator.of(context).pop(reason);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Descartar factura ${widget.invoiceNumber}'),
+      content: SizedBox(
+        width: 480,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Usa esta acción cuando la venta nunca ocurrió, por ejemplo una factura de prueba o creada por error.',
+            ),
+            const SizedBox(height: 12),
+            const _DiscardEffectRow(
+              icon: Icons.inventory_2_outlined,
+              text: 'El stock descontado volverá automáticamente.',
+            ),
+            const _DiscardEffectRow(
+              icon: Icons.account_balance_outlined,
+              text: 'El asiento se revertirá conservando su huella.',
+            ),
+            const _DiscardEffectRow(
+              icon: Icons.filter_alt_outlined,
+              text: 'La factura quedará en el filtro Anuladas.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _reasonController,
+              autofocus: true,
+              minLines: 2,
+              maxLines: 4,
+              decoration: InputDecoration(
+                labelText: 'Motivo obligatorio',
+                hintText: 'Ej.: factura de prueba, la venta no ocurrió',
+                errorText: _error,
+                border: const OutlineInputBorder(),
+              ),
+              onChanged: (_) {
+                if (_error != null) setState(() => _error = null);
+              },
+              onSubmitted: (_) => _confirm(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton.icon(
+          onPressed: _confirm,
+          icon: const Icon(Icons.delete_sweep_outlined),
+          label: const Text('Descartar y revertir'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DiscardEffectRow extends StatelessWidget {
+  const _DiscardEffectRow({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text)),
+        ],
+      ),
     );
   }
 }

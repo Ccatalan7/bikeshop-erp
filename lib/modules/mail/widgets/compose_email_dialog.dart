@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import '../providers/email_provider.dart';
 import '../providers/mail_account_manager.dart';
 
 bool isValidMailRecipientList(String value, {bool allowEmpty = false}) {
@@ -39,6 +42,18 @@ class ComposeEmailDialog extends StatefulWidget {
   State<ComposeEmailDialog> createState() => _ComposeEmailDialogState();
 }
 
+class _ComposeSenderOption {
+  final EmailProvider provider;
+  final EmailSenderIdentity identity;
+
+  const _ComposeSenderOption({
+    required this.provider,
+    required this.identity,
+  });
+
+  String get key => '${provider.providerId}:${identity.normalizedAddress}';
+}
+
 class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
   final _formKey = GlobalKey<FormState>();
   final _toController = TextEditingController();
@@ -47,7 +62,7 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
   final _subjectController = TextEditingController();
   final _bodyController = TextEditingController();
 
-  String? _selectedProviderId;
+  String? _selectedSenderKey;
   bool _isSending = false;
   bool _showCc = false;
 
@@ -63,16 +78,8 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
       _subjectController.text = widget.replySubject!;
     }
 
-    // Default to first connected provider
-    final connected = widget.manager.connectedProviders;
-    if (connected.isNotEmpty) {
-      final requestedProvider = widget.initialProviderId;
-      _selectedProviderId = connected.any(
-        (provider) => provider.providerId == requestedProvider,
-      )
-          ? requestedProvider
-          : connected.first.providerId;
-    }
+    _syncSelectedSender(preserveCurrent: false);
+    unawaited(_refreshSenderOptions());
 
     _toController.addListener(_onDraftChanged);
     _ccController.addListener(_onDraftChanged);
@@ -83,6 +90,74 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
 
   void _onDraftChanged() {
     if (mounted) setState(() {});
+  }
+
+  List<_ComposeSenderOption> get _senderOptions {
+    final options = <_ComposeSenderOption>[];
+    final seen = <String>{};
+    for (final provider in widget.manager.connectedProviders) {
+      for (final identity in provider.senderIdentities) {
+        final option = _ComposeSenderOption(
+          provider: provider,
+          identity: identity,
+        );
+        if (seen.add(option.key)) options.add(option);
+      }
+    }
+    return options;
+  }
+
+  _ComposeSenderOption? get _selectedSender {
+    final selectedKey = _selectedSenderKey;
+    if (selectedKey == null) return null;
+    for (final option in _senderOptions) {
+      if (option.key == selectedKey) return option;
+    }
+    return null;
+  }
+
+  void _syncSelectedSender({bool preserveCurrent = true}) {
+    final options = _senderOptions;
+    if (preserveCurrent &&
+        options.any((option) => option.key == _selectedSenderKey)) {
+      return;
+    }
+
+    final requestedProviderId = widget.initialProviderId;
+    if (requestedProviderId != null) {
+      final requestedProvider = widget.manager.getProvider(requestedProviderId);
+      final preferredAddress =
+          requestedProvider?.defaultSenderIdentity?.normalizedAddress;
+      for (final option in options) {
+        if (option.provider.providerId == requestedProviderId &&
+            (preferredAddress == null ||
+                option.identity.normalizedAddress == preferredAddress)) {
+          _selectedSenderKey = option.key;
+          return;
+        }
+      }
+      for (final option in options) {
+        if (option.provider.providerId == requestedProviderId) {
+          _selectedSenderKey = option.key;
+          return;
+        }
+      }
+    }
+
+    _selectedSenderKey = options.isEmpty ? null : options.first.key;
+  }
+
+  Future<void> _refreshSenderOptions() async {
+    try {
+      await widget.manager.refreshSenderIdentities();
+    } catch (_) {
+      // The provider keeps the authenticated mailbox as its fail-closed
+      // fallback, so composing remains available without exposing stale aliases.
+    } finally {
+      if (mounted) {
+        setState(() => _syncSelectedSender());
+      }
+    }
   }
 
   @override
@@ -97,7 +172,8 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
 
   Future<void> _send() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedProviderId == null) return;
+    final sender = _selectedSender;
+    if (sender == null) return;
 
     setState(() => _isSending = true);
 
@@ -109,10 +185,11 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
       }
 
       final success = await widget.manager.sendEmail(
-        _selectedProviderId!,
+        sender.provider.providerId,
         to: _toController.text.trim(),
         subject: _subjectController.text.trim(),
         content: content,
+        fromAddress: sender.identity.address,
         cc: _ccController.text.trim().isNotEmpty
             ? _ccController.text.trim()
             : null,
@@ -148,7 +225,7 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
 
   bool get _canSend =>
       !_isSending &&
-      _selectedProviderId != null &&
+      _selectedSender != null &&
       isValidMailRecipientList(_toController.text) &&
       isValidMailRecipientList(_ccController.text, allowEmpty: true) &&
       isValidMailRecipientList(_bccController.text, allowEmpty: true) &&
@@ -203,7 +280,12 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final connected = widget.manager.connectedProviders;
+    final senderOptions = _senderOptions;
+    final selectedSenderKey = senderOptions.any(
+      (option) => option.key == _selectedSenderKey,
+    )
+        ? _selectedSenderKey
+        : null;
 
     return Dialog(
       child: Container(
@@ -272,28 +354,43 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
                           ),
                           Expanded(
                             child: DropdownButtonFormField<String>(
-                              initialValue: _selectedProviderId,
+                              key: ValueKey(
+                                'mail-from-$selectedSenderKey-${senderOptions.length}',
+                              ),
+                              initialValue: selectedSenderKey,
+                              isExpanded: true,
                               decoration: const InputDecoration(
                                 isDense: true,
                                 border: OutlineInputBorder(),
                                 contentPadding: EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 8),
                               ),
-                              items: connected
-                                  .map((p) => DropdownMenuItem(
-                                        value: p.providerId,
+                              hint: const Text('Sin remitentes autorizados'),
+                              items: senderOptions
+                                  .map((option) => DropdownMenuItem(
+                                        value: option.key,
                                         child: Row(
                                           children: [
-                                            _providerIcon(p.providerId),
+                                            _providerIcon(
+                                              option.provider.providerId,
+                                            ),
                                             const SizedBox(width: 8),
-                                            Text(p.accountEmail ??
-                                                p.displayName),
+                                            Expanded(
+                                              child: Text(
+                                                option.identity.menuLabel,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
                                           ],
                                         ),
                                       ))
                                   .toList(),
-                              onChanged: (value) =>
-                                  setState(() => _selectedProviderId = value),
+                              onChanged: senderOptions.isEmpty
+                                  ? null
+                                  : (value) => setState(
+                                        () => _selectedSenderKey = value,
+                                      ),
                             ),
                           ),
                         ],

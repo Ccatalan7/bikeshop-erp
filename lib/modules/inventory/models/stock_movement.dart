@@ -66,6 +66,11 @@ class StockMovement {
   final String? operationId;
   final String? sourceDocumentType;
   final String? sourceDocumentId;
+  final String? triggerOperationId;
+  final String? triggerAction;
+  final String? triggerSourceChannel;
+  final String? triggerActorId;
+  final String? triggerReason;
   final int evidenceStockBefore;
   final int evidenceStockAfter;
   final String evidenceBalanceProvenance;
@@ -100,6 +105,11 @@ class StockMovement {
     this.operationId,
     this.sourceDocumentType,
     this.sourceDocumentId,
+    this.triggerOperationId,
+    this.triggerAction,
+    this.triggerSourceChannel,
+    this.triggerActorId,
+    this.triggerReason,
     required this.evidenceStockBefore,
     required this.evidenceStockAfter,
     required this.evidenceBalanceProvenance,
@@ -145,6 +155,11 @@ class StockMovement {
       operationId: json['operation_id']?.toString(),
       sourceDocumentType: json['source_document_type'] as String?,
       sourceDocumentId: json['source_document_id']?.toString(),
+      triggerOperationId: json['trigger_operation_id']?.toString(),
+      triggerAction: json['trigger_action']?.toString(),
+      triggerSourceChannel: json['trigger_source_channel']?.toString(),
+      triggerActorId: json['trigger_actor_id']?.toString(),
+      triggerReason: json['trigger_reason']?.toString(),
       evidenceStockBefore: (json['evidence_stock_before'] as num?)?.toInt() ??
           (json['stock_before'] as num?)?.toInt() ??
           0,
@@ -196,6 +211,11 @@ class StockMovement {
     String? operationId,
     String? sourceDocumentType,
     String? sourceDocumentId,
+    String? triggerOperationId,
+    String? triggerAction,
+    String? triggerSourceChannel,
+    String? triggerActorId,
+    String? triggerReason,
     int? evidenceStockBefore,
     int? evidenceStockAfter,
     String? evidenceBalanceProvenance,
@@ -230,6 +250,11 @@ class StockMovement {
       operationId: operationId ?? this.operationId,
       sourceDocumentType: sourceDocumentType ?? this.sourceDocumentType,
       sourceDocumentId: sourceDocumentId ?? this.sourceDocumentId,
+      triggerOperationId: triggerOperationId ?? this.triggerOperationId,
+      triggerAction: triggerAction ?? this.triggerAction,
+      triggerSourceChannel: triggerSourceChannel ?? this.triggerSourceChannel,
+      triggerActorId: triggerActorId ?? this.triggerActorId,
+      triggerReason: triggerReason ?? this.triggerReason,
       evidenceStockBefore: evidenceStockBefore ?? this.evidenceStockBefore,
       evidenceStockAfter: evidenceStockAfter ?? this.evidenceStockAfter,
       evidenceBalanceProvenance:
@@ -498,7 +523,9 @@ class StockMovement {
       case 'purchase_invoice_reversal':
         return 'Reversión de compra';
       case 'sales_invoice_reversal':
-        return 'Reversión de venta';
+        return triggerAction == 'void'
+            ? 'Descarte de factura'
+            : 'Reversión de venta';
       case 'stock_adjustment':
         return 'Ajuste de Stock';
       case 'ecommerce':

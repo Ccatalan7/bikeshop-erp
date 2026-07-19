@@ -42,6 +42,11 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Sync public SEO settings before build
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: bash scripts/sync_seo_index.sh
+
       - name: Build storefront release
         run: |
           flutter build web --release --pwa-strategy=none \

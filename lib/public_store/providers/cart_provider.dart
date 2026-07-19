@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../shared/models/product.dart';
+import '../models/storefront_tax_summary.dart';
 import '../services/meta_pixel_service.dart';
 
 class CartItem {
@@ -12,6 +13,13 @@ class CartItem {
   });
 
   double get subtotal => product.price * quantity;
+
+  StorefrontTaxLineInput get taxInput => StorefrontTaxLineInput(
+        label: product.name,
+        grossUnitPrice: product.price,
+        quantity: quantity,
+        taxRate: product.taxRate,
+      );
 }
 
 class CartProvider with ChangeNotifier {
@@ -24,12 +32,28 @@ class CartProvider with ChangeNotifier {
   /// Total amount (what customer pays) - prices already INCLUDE IVA
   double get total => _items.fold(0.0, (sum, item) => sum + item.subtotal);
 
-  /// Net amount (subtotal without IVA) - extracted from total
-  /// Since prices include IVA: net = total / 1.19
-  double get subtotal => total / 1.19;
+  /// Product-derived, line-by-line fiscal breakdown. Payment method never
+  /// participates in tax classification.
+  StorefrontTaxSummary get taxSummary => StorefrontTaxSummary.calculate(
+        _items.map((item) => item.taxInput),
+      );
 
-  /// IVA amount extracted from total (19% of net, or total - net)
-  double get ivaAmount => total - subtotal;
+  bool get hasValidTaxClassification => taxSummary.isValid;
+
+  String? get taxCheckoutBlockMessage => taxSummary.checkoutBlockMessage;
+
+  /// Net amount extracted from affected gross lines and preserved as gross for
+  /// exempt lines. Invalid carts return zero and are blocked before checkout.
+  double get subtotal {
+    final summary = taxSummary;
+    return summary.isValid ? summary.netAmount.toDouble() : 0;
+  }
+
+  /// IVA extracted per affected line using whole-CLP rounding.
+  double get ivaAmount {
+    final summary = taxSummary;
+    return summary.isValid ? summary.taxAmount.toDouble() : 0;
+  }
 
   bool get isEmpty => _items.isEmpty;
 

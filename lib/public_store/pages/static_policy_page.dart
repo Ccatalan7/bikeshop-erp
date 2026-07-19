@@ -515,7 +515,7 @@ class _PolicyMeta {
           color: PublicStoreTheme.primaryBlue,
           chips: ['Viña del Mar', 'Tienda física', 'Taller'],
           fallbackBody:
-              'Viñabike es una tienda y taller de bicicletas en Viña del Mar. Vendemos bicicletas, repuestos y accesorios, y realizamos mantenciones y reparaciones.',
+              'Viñabike es el nombre comercial de NEWEN SpA, RUT 77.541.999-7, con domicilio en Álvarez 32, Local 17, Viña del Mar. Vendemos bicicletas, repuestos y accesorios, y realizamos mantenciones y reparaciones.',
         );
       case 'envios':
         return const _PolicyMeta(
@@ -526,7 +526,7 @@ class _PolicyMeta {
           color: Color(0xFF2E7D32),
           chips: ['Chile', '3-12 días hábiles', 'Costo según pedido'],
           fallbackBody:
-              'Despachamos a Chile continental y ofrecemos retiro en tienda en Álvarez 32, Local 17, Viña del Mar. Los costos de envío se calculan según destino, tamaño y peso del pedido durante el checkout.',
+              'Despachamos a Chile continental en 3 a 12 días hábiles: \$6.990 hasta \$29.999; \$8.990 entre \$30.000 y \$79.999; \$11.990 entre \$80.000 y \$149.999; y \$14.990 desde \$150.000. El checkout muestra y suma el costo exacto antes de pagar. El retiro en Álvarez 32, Local 17, Viña del Mar no tiene costo.',
         );
       case 'devoluciones':
         return const _PolicyMeta(
@@ -537,7 +537,7 @@ class _PolicyMeta {
           color: PublicStoreTheme.primaryBlue,
           chips: ['10 días', 'Cambios disponibles', 'Soporte directo'],
           fallbackBody:
-              'Puedes solicitar devolución dentro de 10 días desde la recepción del producto. Para iniciar el proceso, escribe a contacto@vinabike.cl con tu número de pedido.',
+              'En compras a distancia puedes ejercer el retracto dentro de 10 días desde la recepción, antes de usar el producto y devolviéndolo en buen estado. Si no recibes confirmación escrita, el plazo legal puede extenderse a 90 días. La garantía legal se mantiene y una oferta o liquidación no la elimina. Para iniciar el proceso escribe a ventas@vinabike.cl con tu número de pedido.',
         );
       case 'terminos':
         return const _PolicyMeta(
@@ -548,7 +548,7 @@ class _PolicyMeta {
           color: Color(0xFFB45309),
           chips: ['CLP', 'Stock sujeto a disponibilidad', 'Compra segura'],
           fallbackBody:
-              'Los precios se publican en pesos chilenos (CLP). La disponibilidad de productos está sujeta a stock. Las compras se confirman una vez validado el pago y los datos del pedido.',
+              'Este sitio es operado por NEWEN SpA, RUT 77.541.999-7, bajo el nombre comercial Viñabike. Los precios se publican en pesos chilenos (CLP) e incluyen los impuestos informados. Antes de confirmar mostramos productos, despacho y total; la compra se confirma una vez validado el pago y el stock reservado.',
         );
       case 'privacidad':
         return const _PolicyMeta(

@@ -1,5 +1,62 @@
 import 'package:flutter/foundation.dart';
 
+/// A provider-confirmed address that can be used in the From field.
+///
+/// This contains presentation metadata only. OAuth credentials remain owned by
+/// the server-side provider connection.
+@immutable
+class EmailSenderIdentity {
+  final String address;
+  final String? displayName;
+
+  const EmailSenderIdentity({
+    required this.address,
+    this.displayName,
+  });
+
+  String get normalizedAddress => address.trim().toLowerCase();
+
+  String get menuLabel {
+    final name = displayName?.trim();
+    if (name == null ||
+        name.isEmpty ||
+        name.toLowerCase() == normalizedAddress) {
+      return address;
+    }
+    return '$name · $address';
+  }
+}
+
+/// Resolves a requested sender against provider-confirmed identities.
+///
+/// The canonical address returned by the provider is preserved in the result;
+/// callers never pass arbitrary user input through to a mail API.
+EmailSenderIdentity? resolveEmailSenderIdentity(
+  Iterable<EmailSenderIdentity> identities, {
+  String? requestedAddress,
+  String? defaultAddress,
+}) {
+  final available = identities.toList(growable: false);
+  if (available.isEmpty) return null;
+
+  final requested = requestedAddress?.trim().toLowerCase();
+  if (requested != null && requested.isNotEmpty) {
+    for (final identity in available) {
+      if (identity.normalizedAddress == requested) return identity;
+    }
+    return null;
+  }
+
+  final preferred = defaultAddress?.trim().toLowerCase();
+  if (preferred != null && preferred.isNotEmpty) {
+    for (final identity in available) {
+      if (identity.normalizedAddress == preferred) return identity;
+    }
+  }
+
+  return available.first;
+}
+
 /// Provider-neutral attachment metadata for an email.
 class EmailAttachment {
   final String id;
@@ -160,6 +217,34 @@ abstract class EmailProvider with ChangeNotifier {
   /// The connected email address (null if not authenticated)
   String? get accountEmail;
 
+  /// Provider-confirmed identities available for the From field.
+  ///
+  /// Providers with one mailbox inherit the connected account as their only
+  /// identity. Providers that support aliases or group senders can override
+  /// this with the addresses returned by their own API.
+  List<EmailSenderIdentity> get senderIdentities {
+    final address = accountEmail?.trim();
+    if (address == null || address.isEmpty) {
+      return const <EmailSenderIdentity>[];
+    }
+    return <EmailSenderIdentity>[EmailSenderIdentity(address: address)];
+  }
+
+  EmailSenderIdentity? get defaultSenderIdentity => resolveEmailSenderIdentity(
+        senderIdentities,
+        defaultAddress: accountEmail,
+      );
+
+  /// Refreshes From identities from the provider when it supports aliases.
+  Future<void> refreshSenderIdentities() async {}
+
+  EmailSenderIdentity? resolveSenderIdentity(String? requestedAddress) =>
+      resolveEmailSenderIdentity(
+        senderIdentities,
+        requestedAddress: requestedAddress,
+        defaultAddress: accountEmail,
+      );
+
   /// Whether the user is authenticated with this provider
   bool get isAuthenticated;
 
@@ -225,6 +310,7 @@ abstract class EmailProvider with ChangeNotifier {
     required String to,
     required String subject,
     required String content,
+    String? fromAddress,
     String? cc,
     String? bcc,
   });

@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/constants/storage_constants.dart';
+import '../../../shared/models/product_tax_treatment.dart';
 import '../../../shared/models/stock_adjustment_origin.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
@@ -279,9 +280,12 @@ class _ProductFormPageState extends State<ProductFormPage>
   String? _selectedBrandId;
   ProductBrand? _selectedBrand;
   bool _isActive = true;
-  bool _isPublished = true;
+  bool _isPublished = false;
   bool _isGoogleMerchant = false;
   bool _isWhatsappCatalog = false;
+  ProductTaxTreatment? _selectedTaxTreatment;
+  double? _unrecognizedStoredTaxRate;
+  bool _showTaxTreatmentError = false;
   ProductType _selectedProductType = ProductType.product;
   PurchaseTreatment _selectedPurchaseTreatment = PurchaseTreatment.inventory;
 
@@ -1082,6 +1086,13 @@ class _ProductFormPageState extends State<ProductFormPage>
         _selectedPurchaseTreatment = product.purchaseTreatment;
         _isActive = product.isActive;
         _isPublished = product.isPublished;
+        _selectedTaxTreatment =
+            productTaxTreatmentFromStoredRate(product.taxRate);
+        _unrecognizedStoredTaxRate =
+            product.taxRate != null && _selectedTaxTreatment == null
+                ? product.taxRate
+                : null;
+        _showTaxTreatmentError = false;
         _isGoogleMerchant = product.isGoogleMerchant;
         _isWhatsappCatalog = product.isWhatsappCatalog;
         _imageUrl = product.imageUrl;
@@ -4541,9 +4552,35 @@ class _ProductFormPageState extends State<ProductFormPage>
     });
   }
 
+  bool get _hasTaxClassification => _selectedTaxTreatment != null;
+
+  void _showTaxClassificationRequired({
+    String message =
+        'Selecciona si el producto es afecto a IVA 19% o exento antes de publicarlo.',
+  }) {
+    setState(() => _showTaxTreatmentError = true);
+    _tabController.animateTo(0);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.orange.shade800,
+        ),
+      );
+  }
+
   bool get _isChildProduct => _existingProduct?.parentSetId != null;
 
   Future<void> _saveProduct() async {
+    if (!_hasTaxClassification && (_isPublished || _isGoogleMerchant)) {
+      _showTaxClassificationRequired(
+        message:
+            'Para mantener la publicación web o Merchant debes definir IVA 19% o Exento. También puedes despublicar y guardar sin clasificar.',
+      );
+      return;
+    }
+
     if (!(_formKey.currentState?.validate() ?? false)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -4689,6 +4726,7 @@ class _ProductFormPageState extends State<ProductFormPage>
           : double.tryParse(rawWhatsappCatalogPrice.replaceAll(',', '.'));
       final cost =
           double.tryParse(_costController.text.replaceAll(',', '.')) ?? 0;
+      final normalizedTaxRate = _selectedTaxTreatment?.normalizedRate;
       final tracksInventory = _tracksInventoryInForm;
       final inventoryQty = tracksInventory
           ? (_existingProduct != null
@@ -4781,6 +4819,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                 : _gtinController.text.trim(),
             price: price,
             cost: cost,
+            taxRate: normalizedTaxRate,
             inventoryQty: inventoryQty,
             minStockLevel: minStockLevel,
             maxStockLevel: maxStockLevel,
@@ -4855,6 +4894,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         gtinHasValue: true,
         price: price,
         cost: cost,
+        taxRate: normalizedTaxRate,
         inventoryQty: inventoryQty,
         minStockLevel: minStockLevel,
         maxStockLevel: maxStockLevel,
@@ -5049,6 +5089,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                 : '${parentProduct.name} - ${component.label}',
             price: component.price,
             cost: component.cost,
+            taxRate: parentProduct.taxRate,
             componentLabel: component.label,
             componentPosition: component.position,
           ));
@@ -5067,6 +5108,7 @@ class _ProductFormPageState extends State<ProductFormPage>
             brand: parentProduct.brand,
             price: component.price,
             cost: component.cost,
+            taxRate: parentProduct.taxRate,
             inventoryQty: 0, // Components start with 0 stock
             minStockLevel: parentProduct.minStockLevel,
             imageUrl: parentProduct.imageUrl,
@@ -8370,6 +8412,55 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   // Re-reading code... I will replace _buildHeader, _buildPricingFields, and _buildInventoryFields.
 
+  Widget _buildTaxTreatmentField(ThemeData theme) {
+    final selected = _selectedTaxTreatment;
+    final helperText = selected?.description ??
+        (_unrecognizedStoredTaxRate != null
+            ? 'El valor guardado (${_unrecognizedStoredTaxRate!.toStringAsFixed(4)}) no corresponde a IVA 19% ni exento. Debes reclasificarlo.'
+            : 'Requerido para publicar en web o Google Merchant. Un borrador despublicado puede quedar sin clasificar.');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Tratamiento tributario *',
+          style: theme.textTheme.labelMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<ProductTaxTreatment>(
+          initialValue: selected,
+          isExpanded: true,
+          decoration: InputDecoration(
+            hintText: 'Selecciona el tratamiento tributario',
+            helperText: helperText,
+            helperMaxLines: 2,
+            errorText: _showTaxTreatmentError && selected == null
+                ? 'Selecciona una clasificación tributaria.'
+                : null,
+          ),
+          items: ProductTaxTreatment.values
+              .map(
+                (treatment) => DropdownMenuItem<ProductTaxTreatment>(
+                  value: treatment,
+                  child: Text(treatment.label),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: (value) {
+            setState(() {
+              _selectedTaxTreatment = value;
+              _showTaxTreatmentError = false;
+              if (value != null) _unrecognizedStoredTaxRate = null;
+            });
+          },
+        ),
+      ],
+    );
+  }
+
   List<Widget> _buildPricingFields(ThemeData theme) {
     return [
       LayoutBuilder(builder: (context, constraints) {
@@ -8438,6 +8529,8 @@ class _ProductFormPageState extends State<ProductFormPage>
                     .toList())
             : Row(children: children);
       }),
+      const SizedBox(height: 16),
+      _buildTaxTreatmentField(theme),
       const SizedBox(height: 16),
       Container(
         padding: const EdgeInsets.all(16),
@@ -8614,6 +8707,69 @@ class _ProductFormPageState extends State<ProductFormPage>
     ];
   }
 
+  Widget _buildTaxPublicationWarning(ThemeData theme) {
+    final currentlyPublished = _isActive && _isPublished;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        border: Border(
+          left: BorderSide(color: Colors.amber.shade800, width: 3),
+          top: BorderSide(color: Colors.amber.shade200),
+          right: BorderSide(color: Colors.amber.shade200),
+          bottom: BorderSide(color: Colors.amber.shade200),
+        ),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(
+              Icons.warning_amber_rounded,
+              size: 19,
+              color: Colors.amber.shade900,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Clasificación tributaria pendiente',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.amber.shade900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  currentlyPublished
+                      ? 'Este registro figura publicado. Clasifícalo antes de volver a guardar o despublícalo ahora.'
+                      : 'La publicación web permanece bloqueada hasta elegir IVA 19% o Exento en Detalles Generales.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => _showTaxClassificationRequired(
+              message:
+                  'Completa el tratamiento tributario en Detalles Generales.',
+            ),
+            child: const Text('Clasificar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   List<Widget> _buildWebsiteGeneralFields(ThemeData theme) {
     return [
       Text(
@@ -8625,6 +8781,10 @@ class _ProductFormPageState extends State<ProductFormPage>
         ),
       ),
       const SizedBox(height: 16),
+      if (!_hasTaxClassification) ...[
+        _buildTaxPublicationWarning(theme),
+        const SizedBox(height: 12),
+      ],
       // Toggle: Published on Website (requires is_active)
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
@@ -8633,24 +8793,39 @@ class _ProductFormPageState extends State<ProductFormPage>
               ? 'Publicado en el catálogo de servicios'
               : 'Publicado en la tienda online',
           style: TextStyle(
-            color: _isActive ? null : theme.disabledColor,
+            color: _isActive && (_hasTaxClassification || _isPublished)
+                ? null
+                : theme.disabledColor,
           ),
         ),
         subtitle: Text(
           _isActive
-              ? (_isServiceForm
-                  ? 'Muestra este servicio en la web pública.'
-                  : 'Muestra este producto en el catálogo web.')
+              ? (!_hasTaxClassification
+                  ? (_isPublished
+                      ? 'Publicado sin clasificación tributaria. Clasifícalo o despublícalo.'
+                      : 'Requiere una clasificación tributaria antes de publicar.')
+                  : (_isServiceForm
+                      ? 'Muestra este servicio en la web pública.'
+                      : 'Muestra este producto en el catálogo web.'))
               : (_isServiceForm
                   ? 'Requiere que el servicio esté activo.'
                   : 'Requiere que el producto esté activo.'),
           style: TextStyle(
-            color: _isActive ? null : theme.disabledColor,
+            color: _isActive && (_hasTaxClassification || _isPublished)
+                ? null
+                : theme.disabledColor,
           ),
         ),
         value: _isActive && _isPublished,
         onChanged: _isActive
             ? (value) {
+                if (value && !_hasTaxClassification) {
+                  _showTaxClassificationRequired(
+                    message:
+                        'No se puede publicar sin definir IVA 19% o Exento.',
+                  );
+                  return;
+                }
                 setState(() {
                   _isPublished = value;
                   // CASCADE: If unpublishing, turn off Google Merchant
@@ -9290,14 +9465,27 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
               ? 'Requiere que el producto esté activo.'
               : !_isPublished
                   ? 'Requiere que el producto esté publicado.'
-                  : 'Lo añade al feed XML que lee Google Merchant.',
+                  : !_hasTaxClassification
+                      ? 'Requiere clasificar el tratamiento tributario.'
+                      : 'Lo añade al feed XML que lee Google Merchant.',
           style: TextStyle(
-            color: (_isActive && _isPublished) ? null : theme.disabledColor,
+            color: (_isActive && _isPublished && _hasTaxClassification)
+                ? null
+                : theme.disabledColor,
           ),
         ),
         value: _isActive && _isPublished && _isGoogleMerchant,
         onChanged: (_isActive && _isPublished)
-            ? (value) => setState(() => _isGoogleMerchant = value)
+            ? (value) {
+                if (value && !_hasTaxClassification) {
+                  _showTaxClassificationRequired(
+                    message:
+                        'Google Merchant requiere clasificar IVA 19% o Exento.',
+                  );
+                  return;
+                }
+                setState(() => _isGoogleMerchant = value);
+              }
             : null,
       ),
       const SizedBox(height: 16),
@@ -9309,6 +9497,11 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
             ok: _isActive && _isPublished && _isGoogleMerchant,
             label: 'En feed',
             detail: 'Debe estar publicado y marcado para Shopping.',
+          ),
+          (
+            ok: _hasTaxClassification,
+            label: 'Tratamiento tributario',
+            detail: 'Debe estar clasificado como IVA 19% o Exento.',
           ),
           (
             ok: _effectiveMerchantTitle.length >= 10,
@@ -10264,8 +10457,8 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
       sitemap?['serviceAccountEmail']?.toString(),
     ]);
     final searchConsoleUsesServiceAccount = serviceAccountAccessRequired ||
-            searchConsole?['authSource'] == 'service_account' ||
-            sitemap?['authSource'] == 'service_account';
+        searchConsole?['authSource'] == 'service_account' ||
+        sitemap?['authSource'] == 'service_account';
     final searchConsoleHasConnection =
         searchConsole?['configured'] == true || sitemap?['configured'] == true;
 

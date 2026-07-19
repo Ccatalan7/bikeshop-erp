@@ -25,7 +25,11 @@ SUPABASE_URL="https://xzdvtzdqjeyqxnkqprtf.supabase.co"
 TENANT_ID="5443b130-cc28-45af-a420-cd500b288890"  # Viñabike production
 
 resolve_supabase_api_key() {
-  local key="${SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_ANON_KEY:-}}"
+  # CI already owns the independently managed secret key for snapshot
+  # generation. Accept it as the final non-interactive fallback so the base
+  # HTML is hydrated before Flutter copies web/index.html into the release.
+  # The value is never printed and this request reads only storefront settings.
+  local key="${SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_ANON_KEY:-${SUPABASE_SECRET_KEY:-}}}"
 
   if [[ -n "$key" ]]; then
     SUPABASE_API_KEY="$key"
