@@ -4,7 +4,9 @@
 -- PUBLIC EXECUTE remains effective where it already exists; this migration
 -- instead makes that inherited privilege unreachable by sealing the role,
 -- removes every explicit/default routine grant, and preserves every other
--- grantee byte-for-byte.
+-- grantee byte-for-byte. Supabase PostgreSQL 17 retains one platform-owned
+-- administrative edge from this role to postgres; it is accepted only when
+-- both SET and INHERIT are false, so it cannot assume or inherit the identity.
 
 begin;
 
@@ -15,6 +17,7 @@ do $migration$
 declare
   v_diagnostic_role oid;
   v_membership record;
+  v_routine record;
   v_default_acl record;
   v_routine_acl_before text;
   v_routine_acl_after text;
@@ -83,36 +86,54 @@ begin
   cross join lateral aclexplode(default_acl.defaclacl) expanded_acl
   where expanded_acl.grantee <> v_diagnostic_role;
 
-  -- Membership in either direction could make the sealed identity assumable
-  -- or let it inherit another role. RESTRICT deliberately fails if a dependent
-  -- grant exists instead of silently changing another role's privilege.
+  -- Remove every role inherited by the diagnostic identity. PostgreSQL 17
+  -- records the original grantor, so use that exact grantor explicitly.
   for v_membership in
     select granted_role.rolname as granted_role_name,
            member_role.rolname as member_role_name,
-           membership.roleid,
-           membership.member
+           grantor_role.rolname as grantor_role_name
     from pg_auth_members membership
     join pg_roles granted_role on granted_role.oid = membership.roleid
     join pg_roles member_role on member_role.oid = membership.member
+    join pg_roles grantor_role on grantor_role.oid = membership.grantor
     where membership.member = v_diagnostic_role
-       or membership.roleid = v_diagnostic_role
   loop
     execute format(
-      'revoke %I from %I restrict',
+      'revoke %I from %I granted by %I restrict',
       v_membership.granted_role_name,
-      v_membership.member_role_name
+      v_membership.member_role_name,
+      v_membership.grantor_role_name
     );
   end loop;
 
-  execute 'alter role codex_test_runner '
-    || 'nosuperuser nocreatedb nocreaterole noinherit nologin '
-    || 'noreplication nobypassrls';
+  -- Hosted postgres is deliberately not SUPERUSER. Do not issue redundant
+  -- NOSUPERUSER/NOREPLICATION/NOBYPASSRLS clauses, which PostgreSQL reserves
+  -- for a real superuser; the invariant below still fails closed if any such
+  -- attribute were ever enabled.
+  execute 'alter role codex_test_runner noinherit nologin';
   execute 'alter role codex_test_runner password null';
 
   -- RESTRICT is intentional: codex_test_runner must not have delegated grants,
   -- and a surprise dependency must abort rather than revoke another grantee.
-  execute 'revoke all privileges on all routines in schema public '
-    || 'from codex_test_runner restrict';
+  for v_routine in
+    select distinct procedure_row.oid::regprocedure::text as signature
+    from pg_proc procedure_row
+    join pg_namespace namespace_row
+      on namespace_row.oid = procedure_row.pronamespace
+    cross join lateral aclexplode(
+      coalesce(
+        procedure_row.proacl,
+        acldefault('f', procedure_row.proowner)
+      )
+    ) expanded_acl
+    where namespace_row.nspname = 'public'
+      and expanded_acl.grantee = v_diagnostic_role
+  loop
+    execute format(
+      'revoke all privileges on routine %s from codex_test_runner restrict',
+      v_routine.signature
+    );
+  end loop;
 
   -- Remove the accidental grant from every function default-ACL owner/schema
   -- that currently contains it. Usually this is postgres/public; enumerating
@@ -148,10 +169,22 @@ begin
   if exists (
     select 1
     from pg_auth_members membership
+    join pg_roles member_role on member_role.oid = membership.member
+    join pg_roles grantor_role on grantor_role.oid = membership.grantor
     where membership.member = v_diagnostic_role
-       or membership.roleid = v_diagnostic_role
+       or (
+         membership.roleid = v_diagnostic_role
+         and not (
+           member_role.rolname = 'postgres'
+           and member_role.rolcreaterole
+           and grantor_role.rolname = 'supabase_admin'
+           and membership.admin_option
+           and not membership.inherit_option
+           and not membership.set_option
+         )
+       )
   ) then
-    raise exception 'Diagnostic role still has a role membership'
+    raise exception 'Diagnostic role still has an inheritable or assumable membership'
       using errcode = '42501';
   end if;
 

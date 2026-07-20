@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -460,25 +461,36 @@ class _CustomerChatViewState extends State<CustomerChatView> {
               child: Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: InputDecoration(
-                        hintText: isPending
-                            ? 'Agregar más información...'
-                            : 'Escribe un mensaje...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide.none,
+                    child: CallbackShortcuts(
+                      bindings: {
+                        const SingleActivator(LogicalKeyboardKey.enter): () =>
+                            unawaited(_sendMessage()),
+                        const SingleActivator(LogicalKeyboardKey.numpadEnter):
+                            () => unawaited(_sendMessage()),
+                      },
+                      child: TextField(
+                        controller: _messageController,
+                        minLines: 1,
+                        maxLines: 5,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        decoration: InputDecoration(
+                          hintText: isPending
+                              ? 'Agregar más información...'
+                              : 'Escribe un mensaje...',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey[100],
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 10,
+                          ),
                         ),
-                        filled: true,
-                        fillColor: Colors.grey[100],
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 10,
-                        ),
+                        textCapitalization: TextCapitalization.sentences,
                       ),
-                      textCapitalization: TextCapitalization.sentences,
-                      onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -833,7 +845,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
       ),
     );
     final entry = _AttachmentUrlCacheEntry(
-      future: _attachmentService.createRuntimeSignedUrl(message),
+      future: _attachmentService.createCachedPreviewSignedUrl(message),
       refreshAt: refreshAt,
     );
     _attachmentUrlCache[message.id] = entry;

@@ -35990,8 +35990,13 @@ grant select on public.stock_movements_ledger_view to authenticated;
 -- mutations while preserving database-trigger behavior.
 \ir ../migrations/20260719215000_harden_expense_journal_rpc_tenant_scope.sql
 -- The production diagnostic reader is sealed as NOLOGIN with no password or
--- memberships. It retains table SELECT evidence only; explicit/default routine
--- execution is removed without changing any other grantee's ACL.
+-- inheritable/settable memberships. It retains table SELECT evidence only;
+-- explicit/default routine execution is removed without changing any other
+-- grantee's ACL. A Supabase-owned non-SET/non-INHERIT admin edge may remain.
 \ir ../migrations/20260719216000_harden_diagnostic_role_identity_acl.sql
+-- Finalize the complete expense journal RPC boundary under a fresh immutable
+-- version. This also makes payment-journal cleanup safe when an expense DELETE
+-- cascades over payments after the parent row is no longer visible.
+\ir ../migrations/20260719217000_finalize_expense_journal_rpc_hardening.sql
 
 commit;

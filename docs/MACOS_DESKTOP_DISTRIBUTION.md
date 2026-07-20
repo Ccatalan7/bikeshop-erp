@@ -122,14 +122,18 @@ Ctrl+Shift+B -> Publish macOS Update (all changes)
 
 It runs `scripts/publish_macos_update.sh`, which stays on the current authorized
 branch and stages pending Source Control changes. Before any commit or push, it
-runs the same release-integrity commands used by CI: clean Node dependency
+renders the staged Git tree into an isolated temporary directory and runs the
+same release-integrity commands used by CI there: clean Node dependency
 installation, spreadsheet-engine generation, Flutter dependency resolution,
-analyzer, the complete Flutter test suite, and the ERP web release build. It
-also refuses publication if tracked or untracked Source Control changes appear
-while that preflight is running. Only after that exact snapshot passes does it
-commit when needed, push, dispatch `.github/workflows/macos-release.yml` with
-`publish_release=true`, wait for the guarded workflow, and verify the published
-assets.
+analyzer, the complete Flutter test suite, and the ERP web release build. The
+snapshot is immutable, so another agent may continue editing ordinary working
+files without changing or invalidating the release under test; those later
+edits remain pending for the next update. The task stops only if another process
+explicitly changes the staged index during the preflight. After the exact staged
+snapshot passes, the temporary directory is removed and the task commits when
+needed, pushes, dispatches `.github/workflows/macos-release.yml` with
+`publish_release=true`, waits for the guarded workflow, and verifies the
+published assets.
 
 If the local preflight fails, the task stops before commit, push, or workflow
 dispatch. Fix the reported failure and run the same task again; no partial

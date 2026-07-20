@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -4699,7 +4699,9 @@ class _ChatWindowState extends State<ChatWindow> {
   Future<String?> _resolveWhatsAppMediaUrl(Message message) async {
     try {
       if (MessagingAttachmentService.hasPrivateReference(message)) {
-        return _messagingAttachmentService.createRuntimeSignedUrl(message);
+        return _messagingAttachmentService.createCachedPreviewSignedUrl(
+          message,
+        );
       }
 
       final response = await Supabase.instance.client.functions.invoke(
@@ -7306,37 +7308,48 @@ class _ChatWindowState extends State<ChatWindow> {
             Expanded(
               child: CompositedTransformTarget(
                 link: _layerLink,
-                child: TextField(
-                  controller: _messageController,
-                  focusNode: _focusNode,
-                  minLines: 1,
-                  maxLines: 5,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: InputDecoration(
-                    hintText: 'Escribe un mensaje... (# para ref)',
-                    filled: true,
-                    fillColor: colorScheme.surfaceContainerLowest,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 11,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(11),
-                      borderSide: BorderSide(color: colorScheme.outlineVariant),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(11),
-                      borderSide: BorderSide(color: colorScheme.outlineVariant),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(11),
-                      borderSide: BorderSide(
-                        color: colorScheme.primary,
-                        width: 1.4,
+                child: CallbackShortcuts(
+                  bindings: {
+                    const SingleActivator(LogicalKeyboardKey.enter): () =>
+                        unawaited(_sendComposer()),
+                    const SingleActivator(LogicalKeyboardKey.numpadEnter): () =>
+                        unawaited(_sendComposer()),
+                  },
+                  child: TextField(
+                    controller: _messageController,
+                    focusNode: _focusNode,
+                    minLines: 1,
+                    maxLines: 5,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      hintText: 'Escribe un mensaje... (# para ref)',
+                      filled: true,
+                      fillColor: colorScheme.surfaceContainerLowest,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 11,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(11),
+                        borderSide:
+                            BorderSide(color: colorScheme.outlineVariant),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(11),
+                        borderSide:
+                            BorderSide(color: colorScheme.outlineVariant),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(11),
+                        borderSide: BorderSide(
+                          color: colorScheme.primary,
+                          width: 1.4,
+                        ),
                       ),
                     ),
                   ),
-                  onSubmitted: (_) => _sendComposer(),
                 ),
               ),
             ),

@@ -37,15 +37,24 @@ select is(
   0,
   'diagnostic role inherits no role membership'
 );
-select is(
-  (
-    select count(*)::integer
+select ok(
+  not exists (
+    select 1
     from pg_auth_members membership
-    join pg_roles role on role.oid = membership.roleid
-    where role.rolname = 'codex_test_runner'
+    join pg_roles diagnostic_role on diagnostic_role.oid = membership.roleid
+    join pg_roles member_role on member_role.oid = membership.member
+    join pg_roles grantor_role on grantor_role.oid = membership.grantor
+    where diagnostic_role.rolname = 'codex_test_runner'
+      and not (
+        member_role.rolname = 'postgres'
+        and member_role.rolcreaterole
+        and grantor_role.rolname = 'supabase_admin'
+        and membership.admin_option
+        and not membership.inherit_option
+        and not membership.set_option
+      )
   ),
-  0,
-  'no other role can assume the diagnostic role'
+  'no role can inherit or set the diagnostic identity'
 );
 
 select is(

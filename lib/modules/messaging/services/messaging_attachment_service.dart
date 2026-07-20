@@ -377,6 +377,16 @@ class _MessagingAttachmentPublishReadbackResult {
   final Object? error;
 }
 
+class _MessagingPreviewUrlCacheEntry {
+  const _MessagingPreviewUrlCacheEntry({
+    required this.future,
+    required this.refreshAt,
+  });
+
+  final Future<String?> future;
+  final DateTime refreshAt;
+}
+
 /// Canonical client boundary for private messaging attachments.
 ///
 /// New attachment messages store only an immutable object reference. Public or
@@ -394,6 +404,9 @@ class MessagingAttachmentService {
   static const int maxTextBytes = 2 * _mib;
   static const int maxAudioVideoBytes = 16 * _mib;
   static const int signedUrlLifetimeSeconds = 300;
+  static const int _previewUrlCacheLimit = 256;
+  static final Map<String, _MessagingPreviewUrlCacheEntry> _previewUrlCache =
+      {};
 
   static const Map<String, String> _contentTypeByExtension = {
     'jpg': 'image/jpeg',
@@ -647,6 +660,56 @@ class MessagingAttachmentService {
           path,
           signedUrlLifetimeSeconds,
         );
+  }
+
+  /// Reuses one short-lived URL across chat remounts. Explicit opens still
+  /// call [createRuntimeSignedUrl] and always mint fresh authorization.
+  Future<String?> createCachedPreviewSignedUrl(Message message) {
+    if (!hasPrivateReference(message)) return Future.value(null);
+    final path = storagePath(message)!;
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) {
+      return createRuntimeSignedUrl(message);
+    }
+
+    final now = DateTime.now();
+    _previewUrlCache.removeWhere(
+      (_, entry) => !now.isBefore(entry.refreshAt),
+    );
+    final cacheKey = '$userId::$path';
+    final cached = _previewUrlCache[cacheKey];
+    if (cached != null) return cached.future;
+
+    late final Future<String?> future;
+    future = (() async {
+      try {
+        final url = await createRuntimeSignedUrl(message);
+        if (url == null || url.isEmpty) {
+          final current = _previewUrlCache[cacheKey];
+          if (identical(current?.future, future)) {
+            _previewUrlCache.remove(cacheKey);
+          }
+        }
+        return url;
+      } catch (_) {
+        final current = _previewUrlCache[cacheKey];
+        if (identical(current?.future, future)) {
+          _previewUrlCache.remove(cacheKey);
+        }
+        rethrow;
+      }
+    })();
+
+    if (_previewUrlCache.length >= _previewUrlCacheLimit) {
+      _previewUrlCache.remove(_previewUrlCache.keys.first);
+    }
+    _previewUrlCache[cacheKey] = _MessagingPreviewUrlCacheEntry(
+      future: future,
+      refreshAt: now.add(
+        const Duration(seconds: signedUrlLifetimeSeconds - 30),
+      ),
+    );
+    return future;
   }
 
   static String? attachmentId(Message message) =>

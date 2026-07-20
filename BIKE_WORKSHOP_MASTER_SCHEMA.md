@@ -1995,6 +1995,13 @@ tenant and uses the immutable expense UUID/source-document identity for cleanup
 after source deletion. Trigger-driven
 cleanup may finish after an `expense_payments` source row has already been
 deleted; this narrow trigger exception grants no direct employee mutation path.
+Deleting a parent expense is also safe when it still owns live payments: the
+payment row trigger proves `OLD.tenant_id`, skips total recalculation only after
+the exact parent has disappeared, and removes the UUID-linked payment journal
+through an owner-only implementation. This convergence is recorded by
+`20260719217000_finalize_expense_journal_rpc_hardening.sql`; the fresh version
+is deliberate because an earlier production migration record existed before
+the final RPC/ACL state had converged.
 
 ## Recent Continuity Note (2026-07-15)
 
@@ -2473,9 +2480,12 @@ Import action and direct product writer were retired rather than relying on the
 legacy generic session capability.
 
 The production-only `codex_test_runner` identity is a sealed diagnostic reader,
-not an application role: it is `NOLOGIN`, has no password, memberships,
-privileged role attributes, mutation grants, explicit routine execution or
-future-function default grant. Existing table `SELECT` evidence is preserved.
+not an application role: it is `NOLOGIN`, has no password, inheritable or
+settable memberships, privileged role attributes, mutation grants, explicit
+routine execution or future-function default grant. Existing table `SELECT`
+evidence is preserved. Supabase PostgreSQL 17 may retain one platform-owned
+administrative edge to `postgres`; it is accepted only with both `SET=false`
+and `INHERIT=false`, so it cannot assume or inherit the diagnostic identity.
 Where old routines still expose `EXECUTE` to PostgreSQL `PUBLIC`, that additive
 privilege is documented as unreachable through this sealed identity and must be
 retired only through a separate per-routine allowlist audit; it is not a reason

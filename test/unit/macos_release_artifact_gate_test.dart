@@ -181,7 +181,19 @@ void main() {
   test('developer helper verifies the exact local snapshot before publication',
       () {
     final stage = publishHelper.indexOf('git add -A');
-    final npmInstall = publishHelper.indexOf('npm ci', stage);
+    final writeSnapshot = publishHelper.indexOf(
+      'snapshot_tree="\$(git write-tree)"',
+      stage,
+    );
+    final createTemporaryDirectory = publishHelper.indexOf(
+      'snapshot_root="\$(mktemp -d',
+      writeSnapshot,
+    );
+    final exportSnapshot = publishHelper.indexOf(
+      'git archive "\$snapshot_tree" | tar -x -C "\$snapshot_root"',
+      createTemporaryDirectory,
+    );
+    final npmInstall = publishHelper.indexOf('npm ci', exportSnapshot);
     final spreadsheetBuild = publishHelper.indexOf(
       'npm run build:spreadsheet-engine',
       npmInstall,
@@ -199,28 +211,39 @@ void main() {
       '"\$flutter_bin" build web --release --no-wasm-dry-run',
       tests,
     );
-    final snapshotGuard = publishHelper.indexOf(
-      'if ! git diff --quiet',
+    final readCurrentIndex = publishHelper.indexOf(
+      'current_index_tree="\$(git write-tree)"',
       webBuild,
     );
-    final commit = publishHelper.indexOf('git commit -m', snapshotGuard);
+    final snapshotGuard = publishHelper.indexOf(
+      'if [[ "\$current_index_tree" != "\$snapshot_tree" ]]',
+      readCurrentIndex,
+    );
+    final cleanup = publishHelper.indexOf('cleanup_snapshot', snapshotGuard);
+    final commit = publishHelper.indexOf('git commit -m', cleanup);
     final push = publishHelper.indexOf('git push origin', commit);
     final dispatch = publishHelper.indexOf('gh workflow run', push);
 
     expect(stage, greaterThanOrEqualTo(0));
-    expect(npmInstall, greaterThan(stage));
+    expect(writeSnapshot, greaterThan(stage));
+    expect(createTemporaryDirectory, greaterThan(writeSnapshot));
+    expect(exportSnapshot, greaterThan(createTemporaryDirectory));
+    expect(npmInstall, greaterThan(exportSnapshot));
     expect(spreadsheetBuild, greaterThan(npmInstall));
     expect(flutterDependencies, greaterThan(spreadsheetBuild));
     expect(analyzer, greaterThan(flutterDependencies));
     expect(tests, greaterThan(analyzer));
     expect(webBuild, greaterThan(tests));
-    expect(snapshotGuard, greaterThan(webBuild));
+    expect(readCurrentIndex, greaterThan(webBuild));
+    expect(snapshotGuard, greaterThan(readCurrentIndex));
+    expect(cleanup, greaterThan(snapshotGuard));
     expect(commit, greaterThan(snapshotGuard));
     expect(push, greaterThan(commit));
     expect(dispatch, greaterThan(push));
+    expect(publishHelper, isNot(contains('if ! git diff --quiet')));
     expect(
       publishHelper,
-      contains('git ls-files --others --exclude-standard'),
+      isNot(contains('git ls-files --others --exclude-standard')),
     );
     expect(
       publishHelper,

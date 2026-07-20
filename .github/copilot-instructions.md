@@ -6109,9 +6109,11 @@ Copilot must:
 > explain the superseded design only and must not be copied into new code.
 >
 > `codex_test_runner` is a production-only, sealed diagnostic reader. It must
-> remain `NOLOGIN`, passwordless, membership-free and without privileged role
-> attributes, mutation grants, explicit routine execution or a future-function
-> default grant. Preserve its intentional table `SELECT` evidence. PostgreSQL
+> remain `NOLOGIN`, passwordless, without inheritable/settable memberships or
+> privileged role attributes, mutation grants, explicit routine execution or a
+> future-function default grant. Preserve its intentional table `SELECT`
+> evidence. A Supabase-owned `codex_test_runner -> postgres` administration
+> edge is allowed only with `SET=false` and `INHERIT=false`. PostgreSQL
 > `PUBLIC` execution is additive and cannot be denied to one role; retire such
 > grants only through a separate per-routine allowlist audit, never by inventing
 > broad replacement grants for API roles.

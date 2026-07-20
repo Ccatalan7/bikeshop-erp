@@ -74,6 +74,7 @@ fi
 step 'Staging current Source Control changes'
 git add -A
 staged_files="$(git diff --cached --name-only)"
+snapshot_tree="$(git write-tree)"
 if [[ -n "$staged_files" ]]; then
   if [[ -z "$MESSAGE" ]]; then
     MESSAGE="chore: publish macOS update $(date '+%Y-%m-%d %H:%M')"
@@ -91,31 +92,41 @@ if [[ "$REQUIRE_CONFIRMATION" == 'YES' ]]; then
   fi
 fi
 
-step 'Running the local release integrity preflight'
-npm ci
-npm run build:spreadsheet-engine
-"$flutter_bin" pub get
-"$flutter_bin" analyze --no-fatal-infos --no-fatal-warnings lib test
-"$flutter_bin" test
-"$flutter_bin" build web --release --no-wasm-dry-run \
-  --dart-define=STORE_PERF_LOGS=true \
-  -t lib/main.dart \
-  -o build/web_erp
+snapshot_root="$(mktemp -d "${TMPDIR:-/tmp}/vinabike-macos-preflight.XXXXXX")"
+cleanup_snapshot() {
+  if [[ -n "${snapshot_root:-}" && -d "$snapshot_root" ]]; then
+    rm -rf -- "$snapshot_root"
+  fi
+}
+trap cleanup_snapshot EXIT
 
-if ! git diff --quiet; then
-  echo 'Tracked files changed while the release preflight was running.' >&2
-  echo 'Nothing was committed, pushed, or published. Review these files and run the task again:' >&2
-  git status --short >&2
+step "Exporting immutable staged snapshot $snapshot_tree"
+git archive "$snapshot_tree" | tar -x -C "$snapshot_root"
+
+step 'Running the local release integrity preflight on the staged snapshot'
+(
+  cd "$snapshot_root"
+  npm ci
+  npm run build:spreadsheet-engine
+  "$flutter_bin" pub get
+  "$flutter_bin" analyze --no-fatal-infos --no-fatal-warnings lib test
+  "$flutter_bin" test
+  "$flutter_bin" build web --release --no-wasm-dry-run \
+    --dart-define=STORE_PERF_LOGS=true \
+    -t lib/main.dart \
+    -o build/web_erp
+)
+
+current_index_tree="$(git write-tree)"
+if [[ "$current_index_tree" != "$snapshot_tree" ]]; then
+  echo 'The staged snapshot changed while the release preflight was running.' >&2
+  echo 'Nothing was committed, pushed, or published. Finish the staging operation and run the task again:' >&2
+  git diff --cached --name-status >&2
   exit 1
 fi
 
-new_untracked_files="$(git ls-files --others --exclude-standard)"
-if [[ -n "$new_untracked_files" ]]; then
-  echo 'New untracked files appeared while the release preflight was running.' >&2
-  echo 'Nothing was committed, pushed, or published. Review these files and run the task again:' >&2
-  printf '%s\n' "$new_untracked_files" >&2
-  exit 1
-fi
+cleanup_snapshot
+trap - EXIT
 
 if [[ -n "$staged_files" ]]; then
   step 'Committing staged changes'
