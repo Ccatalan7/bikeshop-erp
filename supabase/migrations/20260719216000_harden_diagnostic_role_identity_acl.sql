@@ -1,5 +1,3 @@
--- Deployment status: NOT DEPLOYED.
---
 -- codex_test_runner is a database-diagnostic reader, not an application/API
 -- identity. Historical default privileges accidentally made it login-capable
 -- and granted it EXECUTE on public routines. PostgreSQL has no deny ACL, so
@@ -193,6 +191,7 @@ begin
       and (
         role.rolcanlogin
         or role.rolsuper
+        or role.rolinherit
         or role.rolcreatedb
         or role.rolcreaterole
         or role.rolreplication

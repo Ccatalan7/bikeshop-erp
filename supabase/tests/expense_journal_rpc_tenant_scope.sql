@@ -2,7 +2,7 @@ begin;
 
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
-select plan(38);
+select plan(44);
 
 select has_function(
   'public',
@@ -17,6 +17,14 @@ select function_privs_are(
   current_user,
   array['EXECUTE'],
   'tenant assertion is executable only by its owner'
+);
+select function_privs_are(
+  'public',
+  'assert_expense_deleted_source_operation',
+  array['text', 'uuid', 'text', 'text'],
+  current_user,
+  array['EXECUTE'],
+  'deleted-source operation proof is executable only by its owner'
 );
 
 select ok(
@@ -36,7 +44,8 @@ select ok(
       'public.create_expense_journal_entry_untraced(uuid)'::regprocedure,
       'public.delete_expense_journal_entry_untraced(uuid)'::regprocedure,
       'public.create_expense_payment_journal_entry_untraced(uuid)'::regprocedure,
-      'public.delete_expense_payment_journal_entry_untraced(uuid)'::regprocedure
+      'public.delete_expense_payment_journal_entry_untraced(uuid)'::regprocedure,
+      'public.handle_expense_line_change()'::regprocedure
     )
       and acl.privilege_type = 'EXECUTE'
       and (acl.grantee = 0 or acl.grantee <> function_row.proowner)
@@ -428,6 +437,35 @@ select throws_ok(
   'Expense not found or access denied',
   'tenant A cannot recalculate totals for tenant B expense'
 );
+
+reset role;
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '9a215000-0000-4000-8000-000000000091',
+    'role', 'service_role'
+  )::text,
+  true
+);
+set local role authenticated;
+select throws_ok(
+  $$select public.recalculate_expense_totals(
+      '9a215000-0000-4000-8000-000000000201'
+    )$$,
+  '42501',
+  'Expense not found or access denied',
+  'authenticated database role cannot forge service_role through JWT claims'
+);
+reset role;
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '9a215000-0000-4000-8000-000000000091',
+    'role', 'authenticated'
+  )::text,
+  true
+);
+set local role authenticated;
 select throws_ok(
   $$select public.rebuild_expense_journal_entry(
       '9a215000-0000-4000-8000-000000000999'
@@ -446,6 +484,31 @@ select throws_ok(
 );
 
 reset role;
+
+set local role service_role;
+select throws_ok(
+  $$select public.create_expense_payment_journal_entry(
+      '9a215000-0000-4000-8000-000000000204'
+    )$$,
+  '23503',
+  'Expense payment parent is missing',
+  'payment journal creation rejects a parent expense from another tenant'
+);
+reset role;
+
+select is(
+  (
+    select count(*)::integer
+    from public.journal_entries entry
+    where entry.source_module = 'expense_payments'
+      and (
+        entry.source_reference = '9a215000-0000-4000-8000-000000000204'
+        or entry.source_document_id = '9a215000-0000-4000-8000-000000000204'
+      )
+  ),
+  0,
+  'rejected cross-tenant payment creates no journal'
+);
 
 select is(
   (
@@ -579,14 +642,11 @@ select ok(
 set local role authenticated;
 select lives_ok(
   $$insert into public.expense_payments (
-      id, tenant_id, expense_id, payment_method_id, payment_account_id,
-      amount, payment_date, reference
+      id, tenant_id, expense_id, amount, payment_date, reference
     ) values (
       '9a215000-0000-4000-8000-000000000103',
       '9a215000-0000-4000-8000-000000000001',
       '9a215000-0000-4000-8000-000000000101',
-      '9a215000-0000-4000-8000-000000000020',
-      '9a215000-0000-4000-8000-000000000010',
       400,
       '2026-07-19 13:00:00+00',
       'Trigger compatibility fixture'
@@ -607,6 +667,23 @@ select ok(
        and sum(line.debit_amount) = 400
   ),
   'payment trigger creates one balanced own-tenant payment journal'
+);
+select ok(
+  exists (
+    select 1
+    from public.journal_entries entry
+    join public.journal_lines line on line.entry_id = entry.id
+    join public.accounts account
+      on account.id = line.account_id
+     and account.tenant_id = line.tenant_id
+    where entry.source_module = 'expense_payments'
+      and entry.source_document_id = '9a215000-0000-4000-8000-000000000103'
+      and entry.tenant_id = '9a215000-0000-4000-8000-000000000001'
+      and line.credit_amount = 400
+      and account.tenant_id = '9a215000-0000-4000-8000-000000000001'
+      and account.code = '1101'
+  ),
+  'payment fallback selects account 1101 from the payment tenant only'
 );
 
 set local role authenticated;

@@ -53,6 +53,12 @@ node_modules/
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+# Local caches produced by standalone Dart/Flutter tooling and CocoaPods.
+# These are machine-specific and can contain thousands of analyzer artifacts.
+/.dart-tool/
+/.dartServer/
+/.cocoapods/
+/.flutter
 .flutter-plugins-dependencies
 .flutter-plugins
 .pub-cache/

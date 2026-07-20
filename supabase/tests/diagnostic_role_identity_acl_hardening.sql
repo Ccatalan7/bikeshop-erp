@@ -3,13 +3,15 @@ begin;
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
 
-select plan(26);
+select plan(27);
 
 select has_role('codex_test_runner', 'diagnostic role remains available for controlled read-only inspection');
 
 select ok(not rolcanlogin, 'diagnostic role cannot log in')
 from pg_roles where rolname = 'codex_test_runner';
 select ok(not rolsuper, 'diagnostic role is not superuser')
+from pg_roles where rolname = 'codex_test_runner';
+select ok(not rolinherit, 'diagnostic role cannot inherit privileges')
 from pg_roles where rolname = 'codex_test_runner';
 select ok(not rolcreatedb, 'diagnostic role cannot create databases')
 from pg_roles where rolname = 'codex_test_runner';

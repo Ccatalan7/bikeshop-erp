@@ -211,6 +211,9 @@ begin
     );
   end if;
 
+  select null::uuid as id, null::text as code, null::text as name
+    into v_cash_account;
+
   if v_payment.payment_account_id is not null then
     select account.id, account.code, account.name
       into v_cash_account
@@ -592,6 +595,45 @@ begin
 end;
 $$;
 
+-- During an expense DELETE, PostgreSQL may run cascading expense_lines
+-- triggers after the parent trace has completed and cleared its transaction
+-- context. There is nothing left to recalculate in that case, so return before
+-- invoking any missing-source SECURITY DEFINER command. Existing parents keep
+-- the established recalculate-then-rebuild behavior.
+create or replace function public.handle_expense_line_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_expense_id uuid;
+  v_posting_status text;
+begin
+  v_expense_id := case
+    when TG_OP = 'DELETE' then OLD.expense_id
+    else NEW.expense_id
+  end;
+
+  select expense.posting_status
+    into v_posting_status
+    from public.expenses expense
+   where expense.id = v_expense_id;
+
+  if not found then
+    return case when TG_OP = 'DELETE' then OLD else NEW end;
+  end if;
+
+  perform public.recalculate_expense_totals(v_expense_id);
+
+  if lower(coalesce(v_posting_status, 'draft')) = 'posted' then
+    perform public.create_expense_journal_entry(v_expense_id);
+  end if;
+
+  return case when TG_OP = 'DELETE' then OLD else NEW end;
+end;
+$$;
+
 comment on function public.assert_expense_rpc_tenant(uuid) is
   'Owner-only tenant assertion used before any SECURITY DEFINER expense journal mutation.';
 comment on function public.assert_expense_deleted_source_operation(text, uuid, text, text) is
@@ -628,6 +670,7 @@ begin
       ('public.delete_expense_journal_entry_untraced(uuid)', false, false),
       ('public.create_expense_payment_journal_entry_untraced(uuid)', false, false),
       ('public.delete_expense_payment_journal_entry_untraced(uuid)', false, false),
+      ('public.handle_expense_line_change()', false, false),
       ('public.create_expense_journal_entry(uuid)', true, false),
       ('public.delete_expense_journal_entry(uuid)', true, false),
       ('public.create_expense_payment_journal_entry(uuid)', true, false),
@@ -701,7 +744,8 @@ begin
       'public.create_expense_journal_entry_untraced(uuid)'::regprocedure,
       'public.delete_expense_journal_entry_untraced(uuid)'::regprocedure,
       'public.create_expense_payment_journal_entry_untraced(uuid)'::regprocedure,
-      'public.delete_expense_payment_journal_entry_untraced(uuid)'::regprocedure
+      'public.delete_expense_payment_journal_entry_untraced(uuid)'::regprocedure,
+      'public.handle_expense_line_change()'::regprocedure
     )
       and acl.privilege_type = 'EXECUTE'
       and (acl.grantee = 0 or acl.grantee <> function_row.proowner)
