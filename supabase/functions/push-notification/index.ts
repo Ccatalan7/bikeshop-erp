@@ -1,288 +1,389 @@
-
-import { createClient } from 'npm:@supabase/supabase-js@2'
-import { JWT } from 'npm:google-auth-library'
-import { pushWebhookAuthorized } from '../_shared/push_notification_auth.ts'
+import { createClient } from "@supabase/supabase-js";
+import { JWT } from "google-auth-library";
+import { pushWebhookAuthorized } from "../_shared/push_notification_auth.ts";
+import {
+  buildMessagingPushData,
+  isSilentMessagingRow,
+  resolveMessagingRecipientIds,
+} from "./recipient_policy.ts";
+import type { PushConversation, PushMessageRecord, PushParticipant } from "./recipient_policy.ts";
 
 interface NotificationPayload {
-    type: 'INSERT'
-    table: 'messages'
-    record: {
-        id: string
-        conversation_id: string
-        sender_id: string | null
-        content: string | null
-        type: string | null
-        external_provider?: string | null
-        message_direction?: string | null
-        created_at: string
-    }
-    schema: 'public'
+  type: "INSERT";
+  table: "messages";
+  record: PushMessageRecord;
+  schema: "public";
 }
 
-console.log("Push Notification Function Initialized")
+interface TenantMemberRow {
+  user_id?: string | null;
+  auth_user_id?: string | null;
+  name?: string | null;
+}
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function cleanText(value: unknown, fallback: string) {
+  if (typeof value !== "string") return fallback;
+  const clean = value.replaceAll(/[\r\n\t]+/g, " ").trim().slice(0, 120);
+  return clean || fallback;
+}
+
+function messageBody(record: PushMessageRecord) {
+  if (record.type === "text" || record.type === "action_request") {
+    return cleanText(record.content, "Nuevo mensaje");
+  }
+  if (record.type === "image") return "Imagen adjunta";
+  if (record.type === "file") return "Archivo adjunto";
+  return "Nuevo mensaje";
+}
+
+function metadataRecord(value: unknown): Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+async function resolveSenderName(params: {
+  supabase: ReturnType<typeof createClient>;
+  record: PushMessageRecord;
+  conversation: PushConversation;
+  activeStaffUserIds: Set<string>;
+  customerNamesByUserId: Map<string, string>;
+}) {
+  const { supabase, record, conversation } = params;
+  const metadata = metadataRecord(record.metadata);
+
+  if (!record.sender_id) {
+    if (record.external_provider === "whatsapp") {
+      return cleanText(metadata.contact_name, "WhatsApp");
+    }
+    return "Cliente";
+  }
+
+  const customerName = params.customerNamesByUserId.get(record.sender_id);
+  if (customerName) return cleanText(customerName, "Cliente");
+
+  if (!params.activeStaffUserIds.has(record.sender_id)) return "Cliente";
+
+  try {
+    const { data: rawUserProfile } = await supabase
+      .from("user_profiles")
+      .select("employee_id")
+      .eq("user_id", record.sender_id)
+      .eq("tenant_id", conversation.tenant_id)
+      .or("is_active.eq.true,is_active.is.null")
+      .maybeSingle();
+    const userProfile = rawUserProfile as
+      | { employee_id?: string | null }
+      | null;
+
+    if (userProfile?.employee_id) {
+      const { data: rawEmployee } = await supabase
+        .from("employees")
+        .select("first_name, last_name")
+        .eq("id", userProfile.employee_id)
+        .eq("tenant_id", conversation.tenant_id)
+        .eq("status", "active")
+        .maybeSingle();
+      const employee = rawEmployee as {
+        first_name?: string | null;
+        last_name?: string | null;
+      } | null;
+
+      if (employee) {
+        const fullName = `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim();
+        if (fullName) return cleanText(fullName, "Equipo Viñabike");
+      }
+    }
+  } catch (error) {
+    console.error("Sender display-name lookup failed", error);
+  }
+
+  return "Equipo Viñabike";
+}
+
+console.log("Push Notification Function Initialized");
 
 Deno.serve(async (req) => {
-    if (req.method !== 'POST') {
-        return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' },
-        })
-    }
+  if (req.method !== "POST") {
+    return jsonResponse({ error: "Method not allowed" }, 405);
+  }
 
-    const webhookSecret = Deno.env.get('PUSH_NOTIFICATION_WEBHOOK_SECRET')
-    if (!pushWebhookAuthorized(req.headers, webhookSecret)) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-            status: 401,
-            headers: { 'Content-Type': 'application/json' },
-        })
-    }
+  const webhookSecret = Deno.env.get("PUSH_NOTIFICATION_WEBHOOK_SECRET");
+  if (!pushWebhookAuthorized(req.headers, webhookSecret)) {
+    return jsonResponse({ error: "Unauthorized" }, 401);
+  }
 
-    let payload: NotificationPayload
+  let payload: NotificationPayload;
+  try {
+    payload = await req.json();
+  } catch (_) {
+    return jsonResponse({ error: "Invalid JSON body" }, 400);
+  }
+
+  if (payload.type !== "INSERT" || payload.table !== "messages") {
+    return jsonResponse({ message: "Ignored non-message insert" });
+  }
+
+  const record = payload.record;
+  if (!record?.id || !record.conversation_id) {
+    return jsonResponse({
+      error: "Message id and conversation_id are required",
+    }, 400);
+  }
+  if (isSilentMessagingRow(record)) {
+    return jsonResponse({
+      message: "Ignored silent messaging row",
+      message_id: record.id,
+    });
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    return jsonResponse({
+      error: "Supabase service configuration is incomplete",
+    }, 500);
+  }
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+  // The parent conversation is the authoritative tenant boundary. Never fan
+  // out using a tenant or participant list supplied by the webhook payload.
+  const { data: rawConversation, error: conversationError } = await supabase
+    .from("conversations")
+    .select("id, tenant_id, type, channel")
+    .eq("id", record.conversation_id)
+    .maybeSingle();
+
+  if (conversationError) {
+    console.error("Conversation scope lookup failed", conversationError);
+    return jsonResponse({ error: "Could not resolve conversation scope" }, 500);
+  }
+  if (
+    !rawConversation?.tenant_id ||
+    !["internal", "support"].includes(rawConversation.type)
+  ) {
+    return jsonResponse({
+      message: "Ignored invalid conversation scope",
+      message_id: record.id,
+    });
+  }
+
+  const conversation = rawConversation as PushConversation;
+  if (record.tenant_id != null && record.tenant_id !== conversation.tenant_id) {
+    console.error("Rejected cross-tenant message webhook", {
+      message_id: record.id,
+      conversation_id: record.conversation_id,
+    });
+    return jsonResponse({
+      message: "Ignored tenant mismatch",
+      message_id: record.id,
+    });
+  }
+
+  const [participantResult, staffResult, customerResult] = await Promise.all([
+    supabase
+      .from("conversation_participants")
+      .select("user_id, tenant_id")
+      .eq("conversation_id", conversation.id)
+      .eq("tenant_id", conversation.tenant_id),
+    supabase
+      .from("user_profiles")
+      .select("user_id")
+      .eq("tenant_id", conversation.tenant_id)
+      // Historical memberships may predate the nullable flag. Match the
+      // database authorization helpers, where NULL still means active.
+      .or("is_active.eq.true,is_active.is.null"),
+    supabase
+      .from("customers")
+      .select("auth_user_id, name")
+      .eq("tenant_id", conversation.tenant_id)
+      .or("is_active.eq.true,is_active.is.null")
+      .not("auth_user_id", "is", null),
+  ]);
+
+  const membershipError = participantResult.error ?? staffResult.error ??
+    customerResult.error;
+  if (membershipError) {
+    console.error("Tenant recipient lookup failed", membershipError);
+    return jsonResponse(
+      { error: "Could not resolve notification recipients" },
+      500,
+    );
+  }
+
+  const participants = (participantResult.data ?? []) as PushParticipant[];
+  const activeStaffUserIds = ((staffResult.data ?? []) as TenantMemberRow[])
+    .map((row) => row.user_id)
+    .filter((userId): userId is string => Boolean(userId));
+  const activeCustomers = (customerResult.data ?? []) as TenantMemberRow[];
+  const activeCustomerUserIds = activeCustomers
+    .map((row) => row.auth_user_id)
+    .filter((userId): userId is string => Boolean(userId));
+
+  const recipientIds = resolveMessagingRecipientIds({
+    record,
+    conversation,
+    participants,
+    activeStaffUserIds,
+    activeCustomerUserIds,
+  });
+  if (recipientIds.length === 0) {
+    return jsonResponse({
+      message: "No eligible recipients",
+      message_id: record.id,
+    });
+  }
+
+  const { data: tokens, error: tokenError } = await supabase
+    .from("user_fcm_tokens")
+    .select("fcm_token, user_id")
+    .in("user_id", recipientIds);
+
+  if (tokenError) {
+    console.error("FCM token lookup failed", tokenError);
+    return jsonResponse(
+      { error: "Could not resolve notification devices" },
+      500,
+    );
+  }
+  if (!tokens?.length) {
+    return jsonResponse({
+      message: "Eligible recipients have no registered devices",
+      message_id: record.id,
+      recipient_count: recipientIds.length,
+    });
+  }
+
+  const customerNamesByUserId = new Map(
+    activeCustomers.flatMap((row) =>
+      row.auth_user_id && row.name ? [[row.auth_user_id, row.name] as const] : []
+    ),
+  );
+  const senderName = await resolveSenderName({
+    supabase,
+    record,
+    conversation,
+    activeStaffUserIds: new Set(activeStaffUserIds),
+    customerNamesByUserId,
+  });
+  const body = messageBody(record);
+  const data = buildMessagingPushData(record, senderName, body);
+
+  let accessToken: string;
+  try {
+    accessToken = await getAccessToken();
+  } catch (error) {
+    console.error("Firebase authorization failed", error);
+    return jsonResponse(
+      { error: "Could not authorize Firebase delivery" },
+      500,
+    );
+  }
+
+  const results = await Promise.all(tokens.map(async (tokenRow) => {
     try {
-        payload = await req.json()
-    } catch (_) {
-        return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' },
-        })
-    }
-
-    // Only handle inserts
-    if (payload.type !== 'INSERT') {
-        return new Response(JSON.stringify({ message: 'Ignore non-insert' }), { headers: { 'Content-Type': 'application/json' } })
-    }
-
-    const supabase = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
-
-    const { record } = payload
-
-    // DEBUG: Log incoming message details
-    console.log("📩 Message received:", {
-        conversation_id: record.conversation_id,
-        sender_id: record.sender_id,
-        content_preview: record.content?.substring(0, 50)
-    })
-
-    const isExternalInbound = !record.sender_id && record.message_direction === 'inbound'
-
-    // 1. Get recipients (other participants). External inbound messages such as
-    // WhatsApp rows do not have an auth sender_id, so applying neq(null) breaks
-    // the PostgREST UUID filter and prevents FCM from being sent.
-    let participantsQuery = supabase
-        .from('conversation_participants')
-        .select('user_id')
-        .eq('conversation_id', record.conversation_id)
-
-    if (record.sender_id) {
-        participantsQuery = participantsQuery.neq('user_id', record.sender_id) // Exclude internal sender
-    }
-
-    const { data: participants, error: pError } = await participantsQuery
-
-    console.log("👥 Participants query result:", { participants, error: pError })
-
-    if (pError || !participants || participants.length === 0) {
-        console.error("No participants found or error", pError)
-        return new Response(JSON.stringify({ message: 'No recipients' }), { headers: { 'Content-Type': 'application/json' } })
-    }
-
-    const recipientIds = participants.map(p => p.user_id)
-    console.log("📋 Recipient IDs to notify:", recipientIds)
-
-    // 2. Get FCM tokens for recipients
-    const { data: tokens, error: tError } = await supabase
-        .from('user_fcm_tokens')
-        .select('fcm_token, user_id')
-        .in('user_id', recipientIds)
-
-    console.log("🔑 Token query result:", {
-        tokenCount: tokens?.length || 0,
-        error: tError,
-        userIds: tokens?.map(t => t.user_id)
-    })
-
-    if (tError || !tokens || tokens.length === 0) {
-        console.log("❌ No FCM tokens found for recipients:", recipientIds)
-        return new Response(JSON.stringify({ message: 'No tokens found' }), { headers: { 'Content-Type': 'application/json' } })
-    }
-
-    // 3. Get Sender info (for notification title)
-    // sender_id is the auth.users.id, not user_profiles.id
-    // We need to join user_profiles → employees to get the name
-    let senderName = isExternalInbound && record.external_provider === 'whatsapp'
-        ? 'WhatsApp'
-        : 'Usuario'
-
-    if (record.sender_id) {
-        try {
-            console.log("Looking up sender for user_id:", record.sender_id)
-
-            // First try: Get employee via user_profiles.employee_id
-            const { data: userProfile, error: profileError } = await supabase
-                .from('user_profiles')
-                .select('employee_id')
-                .eq('user_id', record.sender_id)
-                .maybeSingle()
-
-            console.log("User profile lookup:", { userProfile, error: profileError })
-
-            if (userProfile?.employee_id) {
-                // Get employee name
-                const { data: employee } = await supabase
-                    .from('employees')
-                    .select('first_name, last_name')
-                    .eq('id', userProfile.employee_id)
-                    .maybeSingle()
-
-                console.log("Employee lookup:", employee)
-
-                if (employee) {
-                    senderName = `${employee.first_name} ${employee.last_name}`.trim()
-                }
-            }
-
-            // Fallback: Try auth.users metadata or email
-            if (senderName === "Usuario") {
-                console.log("No employee found, trying auth.users...")
-                // Use Supabase Admin API to get user info
-                const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(record.sender_id)
-
-                console.log("Auth user lookup:", { authUser: authUser?.user?.email, error: authError })
-
-                if (authUser?.user) {
-                    // Try metadata first (might have display_name or full_name)
-                    const metadata = authUser.user.user_metadata
-                    if (metadata?.full_name) {
-                        senderName = metadata.full_name
-                    } else if (metadata?.name) {
-                        senderName = metadata.name
-                    } else if (authUser.user.email) {
-                        // Use email username as fallback
-                        senderName = authUser.user.email.split('@')[0]
-                    }
-                }
-            }
-
-            if (senderName === "Usuario") {
-                console.log("No name found anywhere, using fallback")
-            }
-        } catch (e) {
-            console.error("Error fetching sender:", e)
-        }
-    }
-
-    console.log("Final senderName:", senderName)
-
-    const messageBody = record.type === 'text' ? (record.content || '') : '📷 Imagen adjunta'
-    const senderIdForPayload = record.sender_id || 'external_whatsapp'
-    const messageTypeForPayload = record.type || 'text'
-    const contentForPayload = record.content || ''
-
-    // 4. Send Notifications via FCM (DATA-ONLY for custom handling)
-    const accessToken = await getAccessToken()
-
-    const promises = tokens.map(async (t) => {
-        try {
-            const res = await fetch(`https://fcm.googleapis.com/v1/projects/${Deno.env.get('FIREBASE_PROJECT_ID')}/messages:send`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${accessToken}`,
+      const response = await fetch(
+        `https://fcm.googleapis.com/v1/projects/${
+          Deno.env.get("FIREBASE_PROJECT_ID")
+        }/messages:send`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            message: {
+              token: tokenRow.fcm_token,
+              data,
+              android: {
+                priority: "high",
+                notification: {
+                  title: senderName,
+                  body,
+                  channel_id: "chat_messages",
+                  tag: record.conversation_id,
                 },
-                body: JSON.stringify({
-                    message: {
-                        token: t.fcm_token,
-                        // DATA-ONLY payload - prevents FCM auto-display, lets our code handle it
-                        // This prevents duplicate notifications on web
-                        data: {
-                            id: record.id,
-                            message_id: record.id,
-                            conversation_id: record.conversation_id,
-                            sender_id: senderIdForPayload,
-                            sender_name: senderName,
-                            title: senderName,
-                            body: messageBody,
-                            type: messageTypeForPayload,
-                            content: contentForPayload,
-                            created_at: record.created_at,
-                            message_direction: record.message_direction ?? '',
-                            external_provider: record.external_provider ?? '',
-                            route: `/chat?conversation=${record.conversation_id}`,
-                            click_action: 'FLUTTER_NOTIFICATION_CLICK',
-                        },
-                        // Android-specific: high priority for background wake + custom channel
-                        android: {
-                            priority: 'high',
-                            // Include notification for Android since native app handles it
-                            notification: {
-                                title: senderName,
-                                body: messageBody,
-                                channel_id: 'chat_messages',
-                                tag: record.conversation_id,
-                            },
-                        },
-                        // iOS-specific
-                        apns: {
-                            payload: {
-                                aps: {
-                                    contentAvailable: true,
-                                    mutableContent: true,
-                                    alert: {
-                                        title: senderName,
-                                        body: messageBody
-                                    },
-                                    threadId: record.conversation_id,
-                                }
-                            }
-                        },
-                        // Web-specific: include notification here (not at top level) to prevent duplicate
-                        webpush: {
-                            headers: {
-                                Urgency: 'high'
-                            },
-                            notification: {
-                                title: senderName,
-                                body: messageBody,
-                                icon: '/icons/Icon-192.png',
-                                badge: '/icons/Icon-192.png',
-                                tag: record.conversation_id,
-                                renotify: true
-                            },
-                            fcm_options: {
-                                link: `/chat?conversation=${record.conversation_id}`
-                            }
-                        }
-                    }
-                })
-            })
-            const json = await res.json()
-            console.log("FCM Response", json)
-        } catch (e) {
-            console.error("Error sending FCM", e)
-        }
-    })
-
-    await Promise.all(promises)
-
-    return new Response(JSON.stringify({ message: 'Notifications sent' }), { headers: { 'Content-Type': 'application/json' } })
-})
-
-// Helper to get Google Auth Token
-async function getAccessToken() {
-    const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') || '{}')
-    if (!serviceAccount.private_key) {
-        throw new Error("FIREBASE_SERVICE_ACCOUNT secret is missing or invalid")
+              },
+              apns: {
+                payload: {
+                  aps: {
+                    contentAvailable: true,
+                    mutableContent: true,
+                    alert: { title: senderName, body },
+                    threadId: record.conversation_id,
+                  },
+                },
+              },
+              webpush: {
+                headers: { Urgency: "high" },
+                notification: {
+                  title: senderName,
+                  body,
+                  icon: "/icons/Icon-192.png",
+                  badge: "/icons/Icon-192.png",
+                  tag: record.conversation_id,
+                  renotify: true,
+                },
+                fcm_options: {
+                  link: `/chat?conversation=${record.conversation_id}`,
+                },
+              },
+            },
+          }),
+        },
+      );
+      if (!response.ok) {
+        console.error("FCM delivery rejected", {
+          message_id: record.id,
+          status: response.status,
+        });
+      }
+      return response.ok;
+    } catch (error) {
+      console.error("FCM delivery failed", error);
+      return false;
     }
+  }));
 
-    const client = new JWT({
-        email: serviceAccount.client_email,
-        key: serviceAccount.private_key,
-        scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
-    })
+  const delivered = results.filter((result) => result).length;
+  return jsonResponse({
+    message: delivered === results.length
+      ? "Notifications sent"
+      : "Notification delivery incomplete",
+    message_id: record.id,
+    conversation_id: record.conversation_id,
+    recipient_count: recipientIds.length,
+    device_count: tokens.length,
+    delivered,
+    failed: results.length - delivered,
+  }, delivered > 0 ? 200 : 502);
+});
 
-    const res = await client.authorize()
-    return res.access_token
+async function getAccessToken() {
+  const serviceAccount = JSON.parse(
+    Deno.env.get("FIREBASE_SERVICE_ACCOUNT") || "{}",
+  );
+  if (!serviceAccount.private_key) {
+    throw new Error("FIREBASE_SERVICE_ACCOUNT secret is missing or invalid");
+  }
+
+  const client = new JWT({
+    email: serviceAccount.client_email,
+    key: serviceAccount.private_key,
+    scopes: ["https://www.googleapis.com/auth/firebase.messaging"],
+  });
+
+  const result = await client.authorize();
+  if (!result.access_token) {
+    throw new Error("Firebase authorization returned no access token");
+  }
+  return result.access_token;
 }

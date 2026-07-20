@@ -44,16 +44,16 @@ class ChatThreadList extends StatelessWidget {
           background: Container(
             alignment: Alignment.centerRight,
             padding: const EdgeInsets.only(right: 20),
-            color: Colors.red,
-            child: const Icon(Icons.delete, color: Colors.white),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            child: const Icon(Icons.archive_outlined, color: Colors.white),
           ),
           confirmDismiss: (direction) async {
             return await showDialog<bool>(
                   context: context,
                   builder: (context) => AlertDialog(
-                    title: const Text('Eliminar conversación'),
+                    title: const Text('Archivar conversación'),
                     content: Text(
-                      '¿Estás seguro de que deseas eliminar esta conversación con ${provider.getChatTitle(conversation)}?\n\nSe eliminarán todos los mensajes permanentemente.',
+                      'La conversación con ${provider.getChatTitle(conversation)} pasará al historial. Los mensajes y vínculos se conservarán.',
                     ),
                     actions: [
                       TextButton(
@@ -62,9 +62,7 @@ class ChatThreadList extends StatelessWidget {
                       ),
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(true),
-                        style:
-                            TextButton.styleFrom(foregroundColor: Colors.red),
-                        child: const Text('Eliminar'),
+                        child: const Text('Archivar'),
                       ),
                     ],
                   ),
@@ -72,11 +70,11 @@ class ChatThreadList extends StatelessWidget {
                 false;
           },
           onDismissed: (direction) async {
-            final success = await provider.deleteConversation(conversation.id);
+            final success = await provider.archiveConversation(conversation.id);
             if (context.mounted && !success) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Error al eliminar la conversación'),
+                  content: Text('Error al archivar la conversación'),
                   backgroundColor: Colors.red,
                 ),
               );

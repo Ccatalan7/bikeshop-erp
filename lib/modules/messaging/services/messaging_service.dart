@@ -6,13 +6,73 @@ import '../models/conversation_context_hint.dart';
 import '../models/message.dart';
 import '../utils/conversation_activity.dart';
 import '../utils/whatsapp_message_filters.dart';
+import 'messaging_attachment_service.dart';
+import 'messaging_command_idempotency_store.dart';
 // For VoidCallback
 
+class MessageReceiptRealtimeUpdate {
+  final String conversationId;
+  final String messageId;
+  final String externalStatus;
+
+  const MessageReceiptRealtimeUpdate({
+    required this.conversationId,
+    required this.messageId,
+    required this.externalStatus,
+  });
+}
+
+class MessageHistoryPage {
+  final List<Message> messages;
+  final bool hasMore;
+  final int? nextBeforeSequence;
+
+  const MessageHistoryPage({
+    required this.messages,
+    required this.hasMore,
+    required this.nextBeforeSequence,
+  });
+}
+
 class MessagingService {
+  static const int recentMessageStreamLimit = 250;
+  static const int historyPageSize = 100;
+
+  static final MessagingCommandIdempotencyStore _commandIdempotencyStore =
+      MessagingCommandIdempotencyStore();
+
   final SupabaseClient _client = Supabase.instance.client;
 
   /// Get current user ID
   String? get currentUserId => _client.auth.currentUser?.id;
+
+  Future<void> _assertMessagingCommandSession({
+    required String expectedUserId,
+    required String expectedTenantId,
+  }) async {
+    if (currentUserId != expectedUserId) {
+      throw Exception('La sesión cambió antes de completar la operación');
+    }
+
+    final activeTenantId = await TenantService().getTenantId();
+    if (currentUserId != expectedUserId || activeTenantId != expectedTenantId) {
+      throw Exception(
+          'El tenant activo cambió antes de completar la operación');
+    }
+  }
+
+  (String?, String?) _normalizedContextPair(
+    String? contextType,
+    String? contextId,
+  ) {
+    final normalizedType = _normalizeConversationContextType(contextType);
+    final normalizedId = _text(contextId);
+    if ((normalizedType == null) != (normalizedId == null)) {
+      throw Exception(
+          'El tipo y el identificador de contexto son inseparables');
+    }
+    return (normalizedType, normalizedId);
+  }
 
   String _normalizeWhatsAppPhone(String phone) {
     var cleaned = phone.replaceAll(RegExp(r'[^0-9]'), '');
@@ -919,37 +979,6 @@ class MessagingService {
     }
   }
 
-  Future<void> _setPrimaryConversationContext({
-    required String conversationId,
-    required String contextType,
-    required String contextId,
-    required String userId,
-    String? tenantId,
-  }) async {
-    await _client
-        .from('conversation_contexts')
-        .update({'is_primary': false}).eq('conversation_id', conversationId);
-
-    await _client.from('conversation_contexts').upsert(
-      {
-        'conversation_id': conversationId,
-        'context_type': contextType,
-        'context_id': contextId,
-        'is_primary': true,
-        'added_by': userId,
-        if (tenantId != null) 'tenant_id': tenantId,
-      },
-      onConflict: 'conversation_id,context_type,context_id',
-    );
-  }
-
-  Future<void> _clearConversationContexts(String conversationId) async {
-    await _client
-        .from('conversation_contexts')
-        .delete()
-        .eq('conversation_id', conversationId);
-  }
-
   Future<Set<String>> getConversationIdsForContext({
     required String contextType,
     required String contextId,
@@ -989,15 +1018,19 @@ class MessagingService {
     final conversationSelect = includeContextHints
         ? '*, conversation_participants(user_id), conversation_contexts(*)'
         : '''
-          id, type, channel, status, title, context_type, context_id,
-          updated_at, last_message_at, staff_last_read_at, created_by,
+          id, type, channel, is_group, counterparty_type, status, title,
+          context_type, context_id,
+          updated_at, last_message_at, staff_last_read_at,
+          staff_last_read_message_sequence, created_by,
           conversation_participants(user_id)
         ''';
     final internalConversationSelect = includeContextHints
         ? '*, conversation_participants!inner(user_id), conversation_contexts(*)'
         : '''
-          id, type, channel, status, title, context_type, context_id,
-          updated_at, last_message_at, staff_last_read_at, created_by,
+          id, type, channel, is_group, counterparty_type, status, title,
+          context_type, context_id,
+          updated_at, last_message_at, staff_last_read_at,
+          staff_last_read_message_sequence, created_by,
           conversation_participants!inner(user_id)
         ''';
 
@@ -1247,6 +1280,8 @@ class MessagingService {
               : 0;
       if (latestMessage != null) {
         final lastMessage = latestMessage;
+        json['last_message_id'] = lastMessage['id'];
+        json['last_message_sequence'] = lastMessage['message_sequence'];
         json['last_message_content'] = lastMessage['content'];
         json['last_message_type'] = lastMessage['type'];
         json['last_message_metadata'] = lastMessage['metadata'];
@@ -1288,9 +1323,10 @@ class MessagingService {
       final rows = await _client
           .from('messages')
           .select(
-            'id, conversation_id, content, type, sender_id, created_at, metadata, message_direction, external_status',
+            'id, conversation_id, content, type, sender_id, created_at, message_sequence, metadata, message_direction, external_status',
           )
           .inFilter('conversation_id', conversationIds.toList())
+          .order('message_sequence', ascending: false)
           .order('created_at', ascending: false)
           .limit(limit);
 
@@ -1448,17 +1484,18 @@ class MessagingService {
   }
 
   /// Mark a conversation as read for the current user
-  Future<void> markAsRead(String conversationId) async {
-    final userId = currentUserId;
-    if (userId == null) return;
-
-    await _addCurrentUserAsParticipant(
-      conversationId: conversationId,
-      userId: userId,
-    );
+  Future<void> markAsRead(
+    String conversationId, {
+    required String readThroughMessageId,
+  }) async {
+    if (currentUserId == null) throw Exception('Not authenticated');
+    if (conversationId.trim().isEmpty || readThroughMessageId.trim().isEmpty) {
+      throw Exception('La evidencia de lectura está incompleta');
+    }
 
     await _client.rpc('mark_conversation_read', params: {
       'p_conversation_id': conversationId,
+      'p_read_through_message_id': readThroughMessageId,
     });
   }
 
@@ -1489,6 +1526,7 @@ class MessagingService {
           .from('messages')
           .select()
           .eq('conversation_id', conversationId)
+          .order('message_sequence', ascending: true)
           .order('created_at', ascending: true),
       _client
           .from('whatsapp_conversation_bindings')
@@ -1525,7 +1563,13 @@ class MessagingService {
       return type == 'image' ||
           type == 'file' ||
           (metadata is Map &&
-              ['url', 'media_url', 'documentUrl', 'document_url'].any(
+              [
+                'attachment_id',
+                'url',
+                'media_url',
+                'documentUrl',
+                'document_url'
+              ].any(
                 (key) => metadata.containsKey(key),
               ));
     }).length;
@@ -1533,28 +1577,51 @@ class MessagingService {
         .map((message) {
           final metadata = message['metadata'];
           if (metadata is! Map) return null;
-          final url = metadata['url'] ??
-              metadata['media_url'] ??
-              metadata['documentUrl'] ??
-              metadata['document_url'] ??
-              (message['type'] == 'image' || message['type'] == 'file'
-                  ? message['content']
-                  : null);
-          if (url == null || url.toString().trim().isEmpty) return null;
-          return <String, dynamic>{
+          final attachmentId = metadata['attachment_id']?.toString().trim();
+          final storageBucket =
+              metadata['storage_bucket'] ?? metadata['storageBucket'];
+          final storagePath =
+              metadata['storage_path'] ?? metadata['storagePath'];
+          final manifest = <String, dynamic>{
             'message_id': message['id'],
             'created_at': message['created_at'],
             'type': message['type'],
-            'url': url,
             'filename': metadata['filename'] ??
                 metadata['documentFilename'] ??
                 metadata['document_filename'],
             'content_type': metadata['contentType'] ?? metadata['content_type'],
             'size_bytes': metadata['sizeBytes'] ?? metadata['size_bytes'],
-            'storage_bucket':
-                metadata['storageBucket'] ?? metadata['storage_bucket'],
-            'storage_path': metadata['storagePath'] ?? metadata['storage_path'],
+            if (attachmentId != null && attachmentId.isNotEmpty)
+              'attachment_id': attachmentId,
+            if (storageBucket != null) 'storage_bucket': storageBucket,
+            if (storagePath != null) 'storage_path': storagePath,
           };
+
+          if (attachmentId != null &&
+              attachmentId.isNotEmpty &&
+              storageBucket == MessagingAttachmentService.bucketName &&
+              storagePath != null) {
+            return manifest;
+          }
+
+          final legacyCandidates = [
+            metadata['url'],
+            metadata['media_url'],
+            metadata['documentUrl'],
+            metadata['document_url'],
+            if (message['type'] == 'image' || message['type'] == 'file')
+              message['content'],
+          ];
+          final expectedHost = Uri.tryParse(_client.storage.url)?.host;
+          for (final candidate in legacyCandidates) {
+            if (MessagingAttachmentService.isTrustedLegacyPublicUrl(
+              candidate?.toString(),
+              expectedStorageHost: expectedHost,
+            )) {
+              return {...manifest, 'legacy_url': candidate};
+            }
+          }
+          return null;
         })
         .whereType<Map<String, dynamic>>()
         .toList();
@@ -1590,11 +1657,149 @@ class MessagingService {
         .from('messages')
         .stream(primaryKey: ['id'])
         .eq('conversation_id', conversationId)
-        .order('created_at', ascending: true)
-        .map((data) => data
-            .map((json) => Message.fromJson(json, currentUserId: currentUserId))
-            .where((message) => !isUnsupportedWhatsAppCompanionMessage(message))
-            .toList());
+        .order('message_sequence', ascending: false)
+        .limit(recentMessageStreamLimit)
+        .map((data) {
+          final messages = data
+              .map((json) =>
+                  Message.fromJson(json, currentUserId: currentUserId))
+              .where(
+                  (message) => !isUnsupportedWhatsAppCompanionMessage(message))
+              .toList()
+            ..sort(compareMessageTimelineOrder);
+          return messages;
+        });
+  }
+
+  /// Reads one immutable page immediately before [beforeSequence]. Realtime
+  /// continues to own the latest page; callers merge this older snapshot into
+  /// their current timeline so a late response can never replace live rows.
+  Future<MessageHistoryPage> getMessagesBefore(
+    String conversationId, {
+    required int beforeSequence,
+    int limit = historyPageSize,
+  }) async {
+    final safeLimit = limit.clamp(1, 200);
+    final response = await _client
+        .from('messages')
+        .select()
+        .eq('conversation_id', conversationId)
+        .lt('message_sequence', beforeSequence)
+        .order('message_sequence', ascending: false)
+        .limit(safeLimit + 1);
+    final rows = response as List<dynamic>;
+    final hasMore = rows.length > safeLimit;
+    final pageRows = rows.take(safeLimit).toList(growable: false);
+    int? nextBeforeSequence;
+    for (final row in pageRows) {
+      final value = (row as Map)['message_sequence'];
+      final sequence = value is int
+          ? value
+          : value is num
+              ? value.toInt()
+              : int.tryParse(value?.toString() ?? '');
+      if (sequence != null &&
+          (nextBeforeSequence == null || sequence < nextBeforeSequence)) {
+        nextBeforeSequence = sequence;
+      }
+    }
+    final messages = pageRows
+        .map((row) => Message.fromJson(
+              Map<String, dynamic>.from(row as Map),
+              currentUserId: currentUserId,
+            ))
+        .where((message) => !isUnsupportedWhatsAppCompanionMessage(message))
+        .toList()
+      ..sort(compareMessageTimelineOrder);
+
+    return MessageHistoryPage(
+      messages: messages,
+      hasMore: hasMore,
+      nextBeforeSequence: nextBeforeSequence,
+    );
+  }
+
+  /// Lightweight initial page used to warm the inbox before a thread opens.
+  /// The live stream remains authoritative once the conversation is visible.
+  Future<List<Message>> getRecentMessages(
+    String conversationId, {
+    int limit = 60,
+  }) async {
+    final safeLimit = limit.clamp(1, 100);
+    final response = await _client
+        .from('messages')
+        .select()
+        .eq('conversation_id', conversationId)
+        .order('message_sequence', ascending: false)
+        .order('created_at', ascending: false)
+        .limit(safeLimit);
+    final messages = (response as List<dynamic>)
+        .map((row) => Message.fromJson(
+              Map<String, dynamic>.from(row as Map),
+              currentUserId: currentUserId,
+            ))
+        .where((message) => !isUnsupportedWhatsAppCompanionMessage(message))
+        .toList()
+      ..sort(compareMessageTimelineOrder);
+    return messages;
+  }
+
+  /// Reads only the messages whose provider evidence changed. RLS remains the
+  /// tenant/user authorization boundary for the returned rows.
+  Future<Map<String, Message>> getMessagesByIds(
+    Iterable<String> messageIds,
+  ) async {
+    final ids = messageIds.where((id) => id.isNotEmpty).toSet();
+    if (ids.isEmpty) return const {};
+
+    final response = await _client
+        .from('messages')
+        .select()
+        .inFilter('id', ids.toList(growable: false));
+    final messages = <String, Message>{};
+    for (final row in response as List<dynamic>) {
+      final message = Message.fromJson(
+        Map<String, dynamic>.from(row as Map),
+        currentUserId: currentUserId,
+      );
+      if (isUnsupportedWhatsAppCompanionMessage(message)) continue;
+      messages[message.id] = message;
+    }
+    return messages;
+  }
+
+  /// Resolves the authoritative latest row for each affected conversation
+  /// without reloading unrelated inbox rows or their context enrichment.
+  Future<Map<String, Message>> getLatestMessagesForConversations(
+    Iterable<String> conversationIds,
+  ) async {
+    final ids = conversationIds.where((id) => id.isNotEmpty).toSet();
+    if (ids.isEmpty) return const {};
+
+    final rows = await Future.wait(
+      ids.map(
+        (conversationId) => _client
+            .from('messages')
+            .select()
+            .eq('conversation_id', conversationId)
+            .order('message_sequence', ascending: false)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle(),
+      ),
+    );
+
+    final latest = <String, Message>{};
+    for (final row in rows) {
+      if (row == null) continue;
+      final message = Message.fromJson(
+        Map<String, dynamic>.from(row),
+        currentUserId: currentUserId,
+      );
+      if (isUnsupportedWhatsAppCompanionMessage(message)) continue;
+      latest[message.conversationId] = message;
+    }
+    return latest;
   }
 
   /// Send a message
@@ -1650,48 +1855,51 @@ class MessagingService {
     }
 
     final normalizedPhone = _normalizeWhatsAppPhone(phoneNumber);
-    final normalizedContextType =
-        _normalizeConversationContextType(contextType);
-    final result = await _client.rpc(
-      'ensure_whatsapp_conversation_binding',
-      params: {
-        'p_tenant_id': tenantId,
-        'p_channel_id': channel['id'],
-        'p_wa_id': normalizedPhone,
-        'p_phone_number': normalizedPhone,
-        'p_contact_name': contactName,
-        'p_customer_id': customerId,
-        'p_context_type': normalizedContextType,
-        'p_context_id': contextId,
-      },
-    );
-
-    final data = Map<String, dynamic>.from(result as Map);
-    final conversationId = data['conversation_id']?.toString();
-    if (conversationId == null || conversationId.isEmpty) {
-      throw Exception('No se pudo abrir la conversación de WhatsApp');
-    }
-
-    await _client.from('conversations').update({
-      'channel': 'whatsapp',
-      'status': 'active',
-      'accepted_by': userId,
-      'accepted_at': DateTime.now().toIso8601String(),
-      if (normalizedContextType != null && contextId != null) ...{
-        'context_type': normalizedContextType,
-        'context_id': contextId,
-      },
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', conversationId);
-
-    await _addCurrentUserAsParticipant(
-      conversationId: conversationId,
+    final normalizedContactName = contactName.trim();
+    final normalizedCustomerId = _text(customerId);
+    final (normalizedContextType, normalizedContextId) =
+        _normalizedContextPair(contextType, contextId);
+    final fingerprintParts = <Object?>[
+      channel['id']?.toString(),
+      normalizedPhone,
+      normalizedContactName,
+      normalizedCustomerId,
+      normalizedContextType,
+      normalizedContextId,
+    ];
+    return _commandIdempotencyStore.execute(
+      namespace: MessagingCommandNamespace.whatsappSupportOpen,
       userId: userId,
       tenantId: tenantId,
-      role: 'admin',
-    );
+      fingerprintParts: fingerprintParts,
+      command: (commandKey) async {
+        await _assertMessagingCommandSession(
+          expectedUserId: userId,
+          expectedTenantId: tenantId,
+        );
+        final result = await _client.rpc(
+          'open_whatsapp_support_conversation',
+          params: {
+            'p_tenant_id': tenantId,
+            'p_channel_id': channel['id'],
+            'p_wa_id': normalizedPhone,
+            'p_phone_number': normalizedPhone,
+            'p_contact_name': normalizedContactName,
+            'p_customer_id': normalizedCustomerId,
+            'p_context_type': normalizedContextType,
+            'p_context_id': normalizedContextId,
+            'p_idempotency_key': commandKey,
+          },
+        );
 
-    return conversationId;
+        final data = Map<String, dynamic>.from(result as Map);
+        final conversationId = data['conversation_id']?.toString();
+        if (conversationId == null || conversationId.isEmpty) {
+          throw Exception('No se pudo abrir la conversación de WhatsApp');
+        }
+        return conversationId;
+      },
+    );
   }
 
   /// Resolve the customer contact directly from a business context before a
@@ -1793,13 +2001,22 @@ class MessagingService {
   }
 
   /// Listen for messaging changes that can affect inbox order or unread badges.
-  RealtimeChannel subscribeToConversationsUpdates(VoidCallback onUpdate) {
+  RealtimeChannel subscribeToConversationsUpdates(
+    VoidCallback onUpdate, {
+    ValueChanged<MessageReceiptRealtimeUpdate>? onMessageReceiptUpdate,
+  }) {
     final channelName =
         'public:messaging-inbox-${DateTime.now().microsecondsSinceEpoch}';
     void handleChange(PostgresChangePayload payload) {
-      if (_shouldRefreshInboxForRealtimePayload(payload)) {
-        onUpdate();
+      final receiptUpdate = _messageReceiptUpdate(payload);
+      if (receiptUpdate != null) {
+        onMessageReceiptUpdate?.call(receiptUpdate);
+        return;
       }
+      // Every other mutation may change lifecycle, participants, context,
+      // ordering or unread evidence. ChatProvider coalesces this authoritative
+      // refresh, so no state-bearing UPDATE is silently discarded here.
+      onUpdate();
     }
 
     return _client
@@ -1825,156 +2042,190 @@ class MessagingService {
         .subscribe();
   }
 
-  bool _shouldRefreshInboxForRealtimePayload(PostgresChangePayload payload) {
-    if (payload.eventType != PostgresChangeEvent.update) return true;
+  MessageReceiptRealtimeUpdate? _messageReceiptUpdate(
+    PostgresChangePayload payload,
+  ) {
+    if (payload.table != 'messages' ||
+        payload.eventType != PostgresChangeEvent.update) {
+      return null;
+    }
 
-    // Message inserts/deletes can affect inbox order and previews. Updates on
-    // messages, conversations, and participants are normally delivery/read
-    // status or last-message timestamp maintenance. Those do not need a second
-    // full inbox reload after the message insert already refreshed the row.
-    return switch (payload.table) {
-      'messages' || 'conversations' || 'conversation_participants' => false,
-      _ => true,
-    };
+    final record = payload.newRecord;
+    final messageId = _text(record['id']);
+    final conversationId = _text(record['conversation_id']);
+    final externalStatus = _text(record['external_status']);
+    if (messageId == null || conversationId == null || externalStatus == null) {
+      return null;
+    }
+
+    return MessageReceiptRealtimeUpdate(
+      conversationId: conversationId,
+      messageId: messageId,
+      externalStatus: externalStatus,
+    );
   }
 
-  /// Create a new "Support" conversation (for Customer Portal)
-  Future<String> createSupportTicket({
-    required String title,
+  /// Watches canonical conversation lifecycle changes, including status
+  /// transitions that the high-volume employee inbox listener intentionally
+  /// coalesces. RLS remains the authority over which rows a customer can see.
+  RealtimeChannel subscribeToConversationLifecycleUpdates(
+    VoidCallback onUpdate, {
+    String? conversationId,
+  }) {
+    final channel = _client.channel(
+      'public:conversation-lifecycle-${DateTime.now().microsecondsSinceEpoch}',
+    );
+    final normalizedId = conversationId?.trim();
+
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'conversations',
+      filter: normalizedId == null || normalizedId.isEmpty
+          ? null
+          : PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'id',
+              value: normalizedId,
+            ),
+      callback: (_) => onUpdate(),
+    );
+    return channel.subscribe();
+  }
+
+  Future<String> _createStaffSupportConversation({
+    String? title,
+    String? customerUserId,
     String? contextType,
     String? contextId,
   }) async {
     final userId = currentUserId;
     if (userId == null) throw Exception('Not authenticated');
-    final normalizedContextType = _normalizeConversationContextType(
-      contextType,
-    );
-
-    // 1. Create Conversation
-    final conversation = await _client
-        .from('conversations')
-        .insert({
-          'type': 'support',
-          'channel': 'website_portal',
-          'title': title,
-          'context_type': normalizedContextType,
-          'context_id': contextId,
-          'last_message_at': DateTime.now().toIso8601String(),
-        })
-        .select()
-        .single();
-
-    final conversationId = conversation['id'];
-
-    // 2. Add creator as participant
-    await _client.from('conversation_participants').insert({
-      'conversation_id': conversationId,
-      'user_id': userId,
-      'role': 'admin', // Creator is admin of the thread
-    });
-
-    if (normalizedContextType != null && contextId != null) {
-      await _setPrimaryConversationContext(
-        conversationId: conversationId,
-        contextType: normalizedContextType,
-        contextId: contextId,
-        userId: userId,
-      );
+    final tenantId = (await TenantService().getTenantId())?.trim();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw Exception('No se pudo determinar el tenant activo');
     }
+    final normalizedTitle = _text(title);
+    final normalizedCustomerUserId = _text(customerUserId);
+    final (normalizedContextType, normalizedContextId) =
+        _normalizedContextPair(contextType, contextId);
 
-    return conversationId;
+    return _commandIdempotencyStore.execute(
+      namespace: MessagingCommandNamespace.staffSupportCreate,
+      userId: userId,
+      tenantId: tenantId,
+      fingerprintParts: [
+        normalizedTitle,
+        normalizedCustomerUserId,
+        normalizedContextType,
+        normalizedContextId,
+      ],
+      command: (commandKey) async {
+        await _assertMessagingCommandSession(
+          expectedUserId: userId,
+          expectedTenantId: tenantId,
+        );
+        final result = await _client.rpc(
+          'create_staff_support_conversation',
+          params: {
+            'p_tenant_id': tenantId,
+            'p_title': normalizedTitle,
+            'p_customer_user_id': normalizedCustomerUserId,
+            'p_context_type': normalizedContextType,
+            'p_context_id': normalizedContextId,
+            'p_idempotency_key': commandKey,
+          },
+        );
+        if (result is! Map) {
+          throw Exception('El servidor no confirmó el chat de soporte');
+        }
+        final data = Map<String, dynamic>.from(result);
+        final conversationId = _text(data['conversation_id']);
+        if (conversationId == null || data['status'] != 'active') {
+          throw Exception('El servidor no confirmó el chat de soporte');
+        }
+        return conversationId;
+      },
+    );
+  }
+
+  Future<String> _createStaffInternalConversation({
+    required List<String> participantIds,
+    required bool isGroup,
+    String? title,
+  }) async {
+    final userId = currentUserId;
+    if (userId == null) throw Exception('Not authenticated');
+    final tenantId = (await TenantService().getTenantId())?.trim();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw Exception('No se pudo determinar el tenant activo');
+    }
+    final normalizedParticipantIds = participantIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty && id != userId)
+        .toSet()
+        .toList()
+      ..sort();
+    final normalizedTitle = _text(title);
+
+    return _commandIdempotencyStore.execute(
+      namespace: MessagingCommandNamespace.staffInternalCreate,
+      userId: userId,
+      tenantId: tenantId,
+      fingerprintParts: [
+        isGroup,
+        normalizedTitle,
+        normalizedParticipantIds,
+      ],
+      command: (commandKey) async {
+        await _assertMessagingCommandSession(
+          expectedUserId: userId,
+          expectedTenantId: tenantId,
+        );
+        final result = await _client.rpc(
+          'create_staff_internal_conversation',
+          params: {
+            'p_tenant_id': tenantId,
+            'p_participant_ids': normalizedParticipantIds,
+            'p_title': normalizedTitle,
+            'p_is_group': isGroup,
+            'p_idempotency_key': commandKey,
+          },
+        );
+        if (result is! Map) {
+          throw Exception('El servidor no confirmó el chat interno');
+        }
+        final data = Map<String, dynamic>.from(result);
+        final conversationId = _text(data['conversation_id']);
+        if (conversationId == null ||
+            data['status'] != 'active' ||
+            data['is_group'] != isGroup) {
+          throw Exception('El servidor no confirmó el chat interno');
+        }
+        return conversationId;
+      },
+    );
+  }
+
+  /// Create a staff-owned support conversation with a deliverable recipient.
+  Future<String> createSupportTicket({
+    required String title,
+    String? contextType,
+    String? contextId,
+  }) async {
+    return _createStaffSupportConversation(
+      title: title,
+      contextType: contextType,
+      contextId: contextId,
+    );
   }
 
   /// Create or get existing "Internal" chat with another employee
   Future<String> createInternalChat(String otherUserId) async {
-    final userId = currentUserId;
-    if (userId == null) throw Exception('Not authenticated');
-
-    // First, try to find an existing 1:1 internal conversation between these two users
-    // We need to find a conversation where:
-    // - type = 'internal'
-    // - both users are participants
-    // - only these two users are participants (1:1 chat)
-
-    try {
-      // Get all internal conversations where current user is participant
-      final myConversations = await _client
-          .from('conversation_participants')
-          .select('conversation_id')
-          .eq('user_id', userId);
-
-      // Get all internal conversations where other user is participant
-      final otherConversations = await _client
-          .from('conversation_participants')
-          .select('conversation_id')
-          .eq('user_id', otherUserId);
-
-      // Find intersection
-      final myIds = (myConversations as List)
-          .map((c) => c['conversation_id'] as String)
-          .toSet();
-      final otherIds = (otherConversations as List)
-          .map((c) => c['conversation_id'] as String)
-          .toSet();
-      final commonIds = myIds.intersection(otherIds);
-
-      if (commonIds.isNotEmpty) {
-        // Check if any of these are internal 1:1 chats
-        for (final conversationId in commonIds) {
-          final conversation = await _client
-              .from('conversations')
-              .select('id, type')
-              .eq('id', conversationId)
-              .eq('type', 'internal')
-              .maybeSingle();
-
-          if (conversation != null) {
-            // Verify it's a 1:1 chat (only 2 participants)
-            final participants = await _client
-                .from('conversation_participants')
-                .select('user_id')
-                .eq('conversation_id', conversationId);
-
-            if ((participants as List).length == 2) {
-              // Found existing 1:1 chat, return it
-              return conversationId;
-            }
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Error checking existing conversations: $e');
-      // Continue to create new if check fails
-    }
-
-    // No existing chat found, create new one
-    final conversation = await _client
-        .from('conversations')
-        .insert({
-          'type': 'internal',
-          'channel': 'internal',
-          'last_message_at': DateTime.now().toIso8601String(),
-        })
-        .select()
-        .single();
-
-    final conversationId = conversation['id'];
-
-    // Add participants
-    await _client.from('conversation_participants').insert([
-      {
-        'conversation_id': conversationId,
-        'user_id': userId,
-        'role': 'admin',
-      },
-      {
-        'conversation_id': conversationId,
-        'user_id': otherUserId,
-        'role': 'member',
-      }
-    ]);
-
-    return conversationId;
+    return _createStaffInternalConversation(
+      participantIds: [otherUserId],
+      isGroup: false,
+    );
   }
 
   // ===========================================================================
@@ -1986,33 +2237,11 @@ class MessagingService {
     required List<String> participantIds,
     required String title,
   }) async {
-    final userId = currentUserId;
-    if (userId == null) throw Exception('Not authenticated');
-
-    // Create conversation
-    final conversation = await _client
-        .from('conversations')
-        .insert({
-          'type': 'internal',
-          'channel': 'internal',
-          'title': title,
-          'last_message_at': DateTime.now().toIso8601String(),
-        })
-        .select()
-        .single();
-
-    final conversationId = conversation['id'] as String;
-
-    // Add participants (Creator + others)
-    final participants = [
-      {'conversation_id': conversationId, 'user_id': userId, 'role': 'admin'},
-      ...participantIds.map((pid) =>
-          {'conversation_id': conversationId, 'user_id': pid, 'role': 'member'})
-    ];
-
-    await _client.from('conversation_participants').insert(participants);
-
-    return conversationId;
+    return _createStaffInternalConversation(
+      participantIds: participantIds,
+      title: title,
+      isGroup: true,
+    );
   }
 
   /// Create a new support chat initiated by Employee (Outbound)
@@ -2021,65 +2250,28 @@ class MessagingService {
     String? contextType,
     String? contextId,
   }) async {
-    final userId = currentUserId;
-    if (userId == null) throw Exception('Not authenticated');
-
-    // Create conversation
-    final conversation = await _client
-        .from('conversations')
-        .insert({
-          'type': 'support',
-          'channel': 'website_portal',
-          'status': 'active', // Active immediately as staff initiated it
-          'created_by': userId,
-          'accepted_by': userId, // Auto-accepted
-          'accepted_at': DateTime.now().toIso8601String(),
-          'last_message_at': DateTime.now().toIso8601String(),
-        })
-        .select()
-        .single();
-
-    final conversationId = conversation['id'] as String;
-
-    // Add participants: Employee and Customer
-    await _client.from('conversation_participants').insert([
-      {'conversation_id': conversationId, 'user_id': userId, 'role': 'admin'},
-      {
-        'conversation_id': conversationId,
-        'user_id': customerUserId,
-        'role': 'member'
-      }
-    ]);
-
-    // Add context if provided
-    if (contextType != null && contextId != null) {
-      await _client.from('conversation_contexts').insert({
-        'conversation_id': conversationId,
-        'context_type': contextType,
-        'context_id': contextId,
-        'is_primary': true,
-        'added_by': userId,
-      });
-    }
-
-    return conversationId;
+    return _createStaffSupportConversation(
+      customerUserId: customerUserId,
+      contextType: contextType,
+      contextId: contextId,
+    );
   }
 
-  /// Delete a conversation and all its messages
-  /// Uses RPC function for proper permission handling
-  Future<void> deleteConversation(String conversationId) async {
+  /// Archives a conversation while preserving its messages, participants,
+  /// provider receipts and workshop/accounting links as audit evidence.
+  Future<void> archiveConversation(String conversationId) async {
     final userId = currentUserId;
     if (userId == null) throw Exception('Not authenticated');
 
-    debugPrint('🗑️ Deleting conversation: $conversationId');
+    debugPrint('📦 Archiving conversation: $conversationId');
 
     try {
-      await _client.rpc('delete_conversation', params: {
+      await _client.rpc('archive_conversation', params: {
         'p_conversation_id': conversationId,
       });
-      debugPrint('✅ Conversation deleted successfully');
+      debugPrint('✅ Conversation archived successfully');
     } catch (e) {
-      debugPrint('❌ Error deleting conversation: $e');
+      debugPrint('❌ Error archiving conversation: $e');
       rethrow;
     }
   }
@@ -2093,30 +2285,18 @@ class MessagingService {
   }) async {
     final userId = currentUserId;
     if (userId == null) throw Exception('Not authenticated');
-    final normalizedContextType = _normalizeConversationContextType(
-      contextType,
-    );
+    final (normalizedContextType, normalizedContextId) =
+        _normalizedContextPair(contextType, contextId);
 
     debugPrint(
-        '🔗 Linking conversation $conversationId to $normalizedContextType/$contextId');
+        '🔗 Linking conversation $conversationId to $normalizedContextType/$normalizedContextId');
 
     try {
-      await _client.from('conversations').update({
-        'context_type': normalizedContextType,
-        'context_id': contextId,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', conversationId);
-
-      if (normalizedContextType != null && contextId != null) {
-        await _setPrimaryConversationContext(
-          conversationId: conversationId,
-          contextType: normalizedContextType,
-          contextId: contextId,
-          userId: userId,
-        );
-      } else {
-        await _clearConversationContexts(conversationId);
-      }
+      await _client.rpc('set_conversation_primary_context', params: {
+        'p_conversation_id': conversationId,
+        'p_context_type': normalizedContextType,
+        'p_context_id': normalizedContextId,
+      });
 
       debugPrint('✅ Conversation context updated successfully');
     } catch (e) {
@@ -2139,53 +2319,43 @@ class MessagingService {
   }) async {
     final userId = currentUserId;
     if (userId == null) throw Exception('Not authenticated');
-
-    // 1. Create conversation with 'pending' status
-    final conversation = await _client
-        .from('conversations')
-        .insert({
-          'type': 'support',
-          'channel': 'website_portal',
-          'status': 'pending',
-          'context_type': contextType,
-          'context_id': contextId,
-          'tenant_id': tenantId,
-          'created_by': userId, // Explicitly set for RLS
-          'last_message_at': DateTime.now().toIso8601String(),
-        })
-        .select()
-        .single();
-
-    final conversationId = conversation['id'] as String;
-
-    // 2. Add customer as participant
-    await _client.from('conversation_participants').insert({
-      'conversation_id': conversationId,
-      'user_id': userId,
-      'role': 'admin', // Customer is admin of their own request
-      'tenant_id': tenantId,
-    });
-
-    // 3. Add context if provided
-    if (contextType != null && contextId != null) {
-      await _client.from('conversation_contexts').insert({
-        'conversation_id': conversationId,
-        'context_type': contextType,
-        'context_id': contextId,
-        'is_primary': true,
-        'added_by': userId,
-        'tenant_id': tenantId,
-      });
-    }
-
-    // 4. Send the initial message
-    await _client.from('messages').insert({
-      'conversation_id': conversationId,
-      'sender_id': userId,
-      'content': initialMessage,
-      'type': 'text',
-      'tenant_id': tenantId,
-    });
+    final normalizedMessage = initialMessage.trim();
+    final normalizedTenantId = tenantId.trim();
+    final (normalizedContextType, normalizedContextId) =
+        _normalizedContextPair(contextType, contextId);
+    final fingerprintParts = <Object?>[
+      normalizedMessage,
+      normalizedContextType,
+      normalizedContextId,
+    ];
+    final conversationId = await _commandIdempotencyStore.execute(
+      namespace: MessagingCommandNamespace.customerSupportRequest,
+      userId: userId,
+      tenantId: normalizedTenantId,
+      fingerprintParts: fingerprintParts,
+      command: (commandKey) async {
+        await _assertMessagingCommandSession(
+          expectedUserId: userId,
+          expectedTenantId: normalizedTenantId,
+        );
+        final result = await _client.rpc(
+          'create_customer_support_request',
+          params: {
+            'p_tenant_id': normalizedTenantId,
+            'p_initial_message': normalizedMessage,
+            'p_context_type': normalizedContextType,
+            'p_context_id': normalizedContextId,
+            'p_idempotency_key': commandKey,
+          },
+        );
+        final data = Map<String, dynamic>.from(result as Map);
+        final conversationId = data['conversation_id']?.toString();
+        if (conversationId == null || conversationId.isEmpty) {
+          throw Exception('No se pudo crear la consulta de soporte');
+        }
+        return conversationId;
+      },
+    );
 
     debugPrint('✅ Created chat request: $conversationId');
     return conversationId;

@@ -134,11 +134,33 @@ create temporary table push_notification_request_snapshot (
 insert into push_notification_request_snapshot (queued_count)
 select count(*)::bigint from net.http_request_queue;
 
+insert into public.tenants (id, shop_name)
+values (
+  '9e240000-0000-4000-8000-000000000010',
+  'Push webhook security tenant'
+);
+
+insert into public.conversations (
+  id, tenant_id, type, channel, title, status, created_by
+) values (
+  '9e240000-0000-4000-8000-000000000011',
+  '9e240000-0000-4000-8000-000000000010',
+  'support',
+  'website_portal',
+  'Push webhook security conversation',
+  'active',
+  null
+);
+
 select lives_ok(
   $$
-    insert into public.messages (id, content)
+    insert into public.messages (
+      id, conversation_id, tenant_id, content
+    )
     values (
       '9e240000-0000-4000-8000-000000000001'::uuid,
+      '9e240000-0000-4000-8000-000000000011'::uuid,
+      '9e240000-0000-4000-8000-000000000010'::uuid,
       'Push webhook security pgTAP fixture'
     )
   $$,

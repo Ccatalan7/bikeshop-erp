@@ -1,0 +1,152 @@
+import 'message.dart';
+
+/// Provider-confirmed delivery state for an outbound WhatsApp message.
+///
+/// A later customer reply is deliberately not considered proof that an older
+/// message was read. Only the status persisted from the provider webhook may
+/// advance a message to [MessageDeliveryStage.read].
+enum MessageDeliveryStage {
+  none,
+  pending,
+  outcomeUnknown,
+  accepted,
+  sent,
+  delivered,
+  read,
+  failed,
+}
+
+class MessageDeliveryState {
+  const MessageDeliveryState({
+    required this.stage,
+    this.failureMessage,
+  });
+
+  final MessageDeliveryStage stage;
+  final String? failureMessage;
+
+  bool get isVisible => stage != MessageDeliveryStage.none;
+
+  static MessageDeliveryState fromMessage(Message message) {
+    return fromValues(
+      metadata: message.metadata,
+      explicitStatus: message.metadata['external_status']?.toString(),
+      isWhatsApp: _isWhatsAppMetadata(message.metadata),
+    );
+  }
+
+  static MessageDeliveryState fromConversationPreview({
+    required Map<String, dynamic> metadata,
+    required String? explicitStatus,
+    required bool isWhatsApp,
+  }) {
+    return fromValues(
+      metadata: metadata,
+      explicitStatus: explicitStatus,
+      isWhatsApp: isWhatsApp,
+    );
+  }
+
+  static MessageDeliveryState fromValues({
+    required Map<String, dynamic> metadata,
+    required String? explicitStatus,
+    required bool isWhatsApp,
+  }) {
+    if (!isWhatsApp) {
+      return const MessageDeliveryState(stage: MessageDeliveryStage.none);
+    }
+
+    final status = _strongestConfirmedStatus(metadata, explicitStatus);
+    if (status == null && metadata['pending'] == true) {
+      return const MessageDeliveryState(stage: MessageDeliveryStage.pending);
+    }
+    final stage = switch (status) {
+      'accepted' => MessageDeliveryStage.accepted,
+      'outcome_unknown' => MessageDeliveryStage.outcomeUnknown,
+      'sent' => MessageDeliveryStage.sent,
+      'delivered' => MessageDeliveryStage.delivered,
+      'read' => MessageDeliveryStage.read,
+      'failed' => MessageDeliveryStage.failed,
+      _ => MessageDeliveryStage.none,
+    };
+
+    return MessageDeliveryState(
+      stage: stage,
+      failureMessage: switch (stage) {
+        MessageDeliveryStage.failed => _failureMessage(metadata),
+        MessageDeliveryStage.outcomeUnknown =>
+          'Resultado incierto: verifica la conversación antes de reenviar.',
+        _ => null,
+      },
+    );
+  }
+
+  static bool _isWhatsAppMetadata(Map<String, dynamic> metadata) {
+    final provider = metadata['external_provider']?.toString().toLowerCase() ??
+        metadata['provider']?.toString().toLowerCase();
+    final channel = metadata['channel']?.toString().toLowerCase();
+    final externalId = metadata['external_message_id']?.toString();
+    return provider == 'whatsapp' ||
+        channel == 'whatsapp' ||
+        externalId?.startsWith('wamid.') == true;
+  }
+
+  static String? _strongestConfirmedStatus(
+    Map<String, dynamic> metadata,
+    String? explicitStatus,
+  ) {
+    final candidates = <String?>[
+      explicitStatus,
+      metadata['external_status']?.toString(),
+      metadata['whatsapp_status']?.toString(),
+    ];
+
+    String? strongestPositive;
+    var positiveRank = 0;
+    var hasFailure = false;
+    var hasUnknownOutcome = false;
+    for (final raw in candidates) {
+      final status = raw?.trim().toLowerCase();
+      if (status == null || status.isEmpty) continue;
+      if (status == 'failed') {
+        hasFailure = true;
+        continue;
+      }
+      if (status == 'outcome_unknown') {
+        hasUnknownOutcome = true;
+        continue;
+      }
+      final rank = switch (status) {
+        'accepted' => 1,
+        'sent' => 2,
+        'delivered' => 3,
+        'read' => 4,
+        _ => 0,
+      };
+      if (rank > positiveRank) {
+        positiveRank = rank;
+        strongestPositive = status;
+      }
+    }
+
+    // A late failure is valuable audit evidence, but it must not visually
+    // erase a delivery/read receipt that the provider already confirmed.
+    return strongestPositive ??
+        (hasFailure
+            ? 'failed'
+            : hasUnknownOutcome
+                ? 'outcome_unknown'
+                : null);
+  }
+
+  static String _failureMessage(Map<String, dynamic> metadata) {
+    final raw = metadata['external_error_message'] ??
+        metadata['error_message'] ??
+        metadata['error'];
+    final detail = raw?.toString().trim();
+    if (detail == null || detail.isEmpty) {
+      return 'WhatsApp no pudo entregar este mensaje.';
+    }
+    return 'WhatsApp no pudo entregar este mensaje: $detail';
+  }
+}

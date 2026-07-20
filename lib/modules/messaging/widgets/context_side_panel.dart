@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../bikeshop/models/bikeshop_models.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
 import '../../sales/models/sales_models.dart';
 import '../../sales/services/sales_service.dart';
-import '../../sales/widgets/sales_invoice_editor.dart';
+import '../../../shared/services/workspace_manager.dart';
 import '../utils/message_parser.dart'; // For ReferenceSegment
 
 class ContextSidePanel extends StatelessWidget {
@@ -88,8 +89,7 @@ class ContextSidePanel extends StatelessWidget {
       case RefType.job:
         return _JobPanel(jobNumber: activeReference!.id);
       case RefType.invoice:
-        return _InvoicePanel(
-            invoiceNumber: activeReference!.id, isExpanded: isExpanded);
+        return _InvoicePanel(invoiceNumber: activeReference!.id);
       default:
         return const Center(child: Text('Tipo de referencia desconocido'));
     }
@@ -121,21 +121,20 @@ class _JobPanel extends StatelessWidget {
           children: [
             _buildHeaderLink(
               context,
-              title: 'Job #${job.jobNumber ?? "..."}',
-              subtitle: 'Mecánica',
+              title: 'Trabajo ${job.jobNumber ?? "..."}',
+              subtitle: 'Resumen operativo · solo lectura',
               icon: Icons.build,
-              onTap: () {
-                // TODO: Navigation
-              },
+              onTap: job.id == null
+                  ? null
+                  : () => context
+                      .read<WorkspaceManager>()
+                      .openRouteInWorkspace('/taller/pegas/${job.id}'),
             ),
             const Divider(height: 32),
             _buildInfoRow('Estado', job.status.displayName, highlight: true),
             _buildInfoRow('Prioridad', job.priority.displayName),
             _buildInfoRow(
                 'Mecánico', job.assignedTechnicianName ?? 'Sin asignar'),
-            const SizedBox(height: 16),
-            _buildInfoRow('Cliente',
-                '...'), // Customer name not directly on job root sometimes, check models
             const SizedBox(height: 16),
             _buildSectionHeader('Finanzas'),
             _buildInfoRow('Total', '\$${job.totalCost.toStringAsFixed(0)}'),
@@ -149,9 +148,8 @@ class _JobPanel extends StatelessWidget {
 
 class _InvoicePanel extends StatelessWidget {
   final String invoiceNumber;
-  final bool isExpanded;
 
-  const _InvoicePanel({required this.invoiceNumber, this.isExpanded = false});
+  const _InvoicePanel({required this.invoiceNumber});
 
   Future<List<Invoice>> _fetchInvoice(BuildContext context) async {
     final service = context.read<SalesService>();
@@ -176,14 +174,138 @@ class _InvoicePanel extends StatelessWidget {
           return _buildErrorState('Comprobante #$invoiceNumber no encontrado');
         }
 
-        // Use the new SalesInvoiceEditor
-        // If expanded, use normal mode (isCompact: false) for full table view
-        return SalesInvoiceEditor(
-          invoiceId: invoice.id,
-          isCompact: !isExpanded,
-          onSaved: () {
-            // Optional: refresh parent or show toast
-          },
+        final invoiceId = invoice.id;
+        final status = _invoiceStatusLabel(invoice.status);
+        final colorScheme = Theme.of(context).colorScheme;
+
+        return ListView(
+          padding: const EdgeInsets.all(18),
+          children: [
+            _buildHeaderLink(
+              context,
+              title: 'Venta ${invoice.invoiceNumber}',
+              subtitle: 'Resumen contable · solo lectura',
+              icon: Icons.receipt_long_outlined,
+              onTap: invoiceId == null
+                  ? null
+                  : () => context
+                      .read<WorkspaceManager>()
+                      .openRouteInWorkspace('/sales/invoices/$invoiceId'),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              decoration: BoxDecoration(
+                color:
+                    colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _invoiceStatusIcon(invoice.status),
+                    size: 18,
+                    color: colorScheme.primary,
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      status,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            _buildSectionHeader('Documento'),
+            _buildInfoRow(
+              'Fecha',
+              DateFormat('dd/MM/yyyy').format(invoice.date),
+            ),
+            _buildInfoRow(
+              'Cliente',
+              invoice.customerName?.trim().isNotEmpty == true
+                  ? invoice.customerName!.trim()
+                  : 'Sin nombre',
+            ),
+            _buildInfoRow('Estado', status, highlight: true),
+            const SizedBox(height: 18),
+            _buildSectionHeader('Importes'),
+            _buildInfoRow('Total', _formatClp(invoice.total)),
+            _buildInfoRow('Pagado', _formatClp(invoice.paidAmount)),
+            _buildInfoRow(
+              'Saldo',
+              _formatClp(invoice.balance),
+              highlight: invoice.balance > 0,
+            ),
+            if (invoice.items.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              _buildSectionHeader('Items'),
+              ...invoice.items.take(6).map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${item.quantity.toStringAsFixed(item.quantity % 1 == 0 ? 0 : 1)}×',
+                            style: TextStyle(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              item.productName?.trim().isNotEmpty == true
+                                  ? item.productName!.trim()
+                                  : 'Item',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            _formatClp(item.lineTotal),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              if (invoice.items.length > 6)
+                Text(
+                  '+ ${invoice.items.length - 6} items en el registro completo',
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+            ],
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              onPressed: invoiceId == null
+                  ? null
+                  : () => context
+                      .read<WorkspaceManager>()
+                      .openRouteInWorkspace('/sales/invoices/$invoiceId'),
+              icon: const Icon(Icons.open_in_new_rounded, size: 18),
+              label: const Text('Abrir registro de venta'),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Este panel no edita el documento. Los cambios y correcciones se realizan en el módulo de Ventas.',
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontSize: 12,
+                height: 1.35,
+              ),
+            ),
+          ],
         );
       },
     );
@@ -224,7 +346,8 @@ Widget _buildHeaderLink(BuildContext context,
     {required String title,
     required String subtitle,
     required IconData icon,
-    required VoidCallback onTap}) {
+    required VoidCallback? onTap}) {
+  final colorScheme = Theme.of(context).colorScheme;
   return InkWell(
     onTap: onTap,
     borderRadius: BorderRadius.circular(8),
@@ -234,10 +357,10 @@ Widget _buildHeaderLink(BuildContext context,
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: Colors.blue[50],
+            color: colorScheme.primaryContainer.withValues(alpha: 0.7),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, color: Colors.blue[700]),
+          child: Icon(icon, color: colorScheme.onPrimaryContainer),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -252,11 +375,38 @@ Widget _buildHeaderLink(BuildContext context,
             ],
           ),
         ),
-        const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+        if (onTap != null)
+          Icon(
+            Icons.arrow_forward_ios,
+            size: 14,
+            color: colorScheme.onSurfaceVariant,
+          ),
       ],
     ),
   );
 }
+
+String _formatClp(double value) => NumberFormat.currency(
+      locale: 'es_CL',
+      symbol: r'$',
+      decimalDigits: 0,
+    ).format(value);
+
+String _invoiceStatusLabel(InvoiceStatus status) => switch (status) {
+      InvoiceStatus.draft => 'Borrador',
+      InvoiceStatus.sent => 'Enviada',
+      InvoiceStatus.confirmed => 'Confirmada',
+      InvoiceStatus.paid => 'Pagada',
+      InvoiceStatus.overdue => 'Vencida',
+      InvoiceStatus.cancelled => 'Anulada',
+    };
+
+IconData _invoiceStatusIcon(InvoiceStatus status) => switch (status) {
+      InvoiceStatus.paid => Icons.verified_rounded,
+      InvoiceStatus.cancelled => Icons.block_rounded,
+      InvoiceStatus.overdue => Icons.schedule_rounded,
+      _ => Icons.receipt_long_outlined,
+    };
 
 Widget _buildInfoRow(String label, String value, {bool highlight = false}) {
   return Padding(

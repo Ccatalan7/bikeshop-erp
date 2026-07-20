@@ -13,6 +13,13 @@ class EmailCacheService {
   Database? _database;
   bool _initialized = false;
 
+  /// Whether a session transition can safely decide the fate of persisted
+  /// mail data. Platforms without SQLite support have no local cache to leak;
+  /// supported platforms require an open database before a user scope may be
+  /// committed.
+  bool get isAvailableForSessionIsolation =>
+      !_supportsLocalCache || _database != null;
+
   bool get _supportsLocalCache {
     if (kIsWeb) return false;
 

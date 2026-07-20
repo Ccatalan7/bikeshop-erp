@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'customer_chat_context_support.dart';
 import 'customer_chat_context_panel.dart' deferred as context_panel;
 
 /// Deferred wrapper for CustomerChatContextPanel to avoid loading heavy
@@ -31,6 +32,9 @@ class _DeferredCustomerChatContextPanelState
 
   @override
   Widget build(BuildContext context) {
+    if (!CustomerChatContextSupport.supports(widget.contextType)) {
+      return const SizedBox.shrink();
+    }
     return FutureBuilder<void>(
       future: _libraryFuture,
       builder: (context, snapshot) {

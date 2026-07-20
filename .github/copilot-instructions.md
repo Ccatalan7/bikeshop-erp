@@ -6097,6 +6097,25 @@ Copilot must:
 
 # 📦 Import Services (CSV/Excel/Zoho) - Stock Tracking Pattern
 
+> **Security override (2026-07-19; this overrides every older example in this
+> section):** clients must never call `public.set_config` or
+> `public.import_product_with_context`. Both are owner-only legacy helpers, as
+> are `create_adhoc_item_for_task` and the invoice inventory consume/restore
+> functions. Product stock imports must call only the tenant-scoped,
+> idempotent, audit-linked `apply_product_import_stock` command. A new import
+> workflow that needs another aggregate mutation must introduce an equally
+> narrow canonical command and pgTAP contract; it must not expose a generic GUC
+> setter or a trigger helper. The historical template and Python example below
+> explain the superseded design only and must not be copied into new code.
+>
+> `codex_test_runner` is a production-only, sealed diagnostic reader. It must
+> remain `NOLOGIN`, passwordless, membership-free and without privileged role
+> attributes, mutation grants, explicit routine execution or a future-function
+> default grant. Preserve its intentional table `SELECT` evidence. PostgreSQL
+> `PUBLIC` execution is additive and cannot be denied to one role; retire such
+> grants only through a separate per-routine allowlist audit, never by inventing
+> broad replacement grants for API roles.
+
 **ALL import services that modify stock MUST use single-transaction RPC pattern.**
 
 ## ✅ Automatic Protection (Oct 28, 2025 → Enhanced Nov 8, 2025)

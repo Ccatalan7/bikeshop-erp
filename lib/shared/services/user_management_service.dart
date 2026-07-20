@@ -53,21 +53,21 @@ class UserManagementService {
     });
   }
 
-  Future<void> deleteCustomerAccount({
+  Future<Map<String, dynamic>> deleteCustomerAccount({
     required String customerId,
     bool deleteCustomerRecord = false,
   }) {
-    return _invokeAdminVoid({
+    return _invokeAdmin<Map<String, dynamic>>({
       'action': 'delete_customer_account',
       'customerId': customerId,
       'deleteCustomerRecord': deleteCustomerRecord,
     });
   }
 
-  Future<void> deleteWebsiteAuthAccount({
+  Future<Map<String, dynamic>> deleteWebsiteAuthAccount({
     required String authUserId,
   }) {
-    return _invokeAdminVoid({
+    return _invokeAdmin<Map<String, dynamic>>({
       'action': 'delete_customer_account',
       'userId': authUserId,
     });
@@ -188,8 +188,8 @@ class UserManagementService {
     });
   }
 
-  Future<void> deleteUser(String userId) {
-    return _invokeAdminVoid({
+  Future<Map<String, dynamic>> deleteUser(String userId) {
+    return _invokeAdmin<Map<String, dynamic>>({
       'action': 'delete_internal_account',
       'userId': userId,
     });

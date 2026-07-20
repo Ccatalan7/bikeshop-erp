@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'email_provider.dart';
 import 'gmail_provider.dart';
 import 'zoho_provider.dart';
 import '../services/email_cache_service.dart';
+import '../../../shared/services/mail_notification_gate.dart';
 
 /// Singleton manager for multiple email providers with unified inbox view.
 /// Persists across navigation to avoid refetching emails.
@@ -14,6 +16,7 @@ class MailAccountManager extends ChangeNotifier {
   static const int _searchWarmPageLimit = 5;
   static const int _searchWarmTargetResults = 25;
   static const Duration _startupStepTimeout = Duration(seconds: 8);
+  static const String _cacheUserScopePreference = 'mail_cache_user_scope';
 
   // Singleton pattern
   static MailAccountManager? _instance;
@@ -45,6 +48,7 @@ class MailAccountManager extends ChangeNotifier {
   DateTime? _lastFetch;
   Timer? _pollingTimer;
   Timer? _refreshDebounceTimer;
+  Future<void>? _refreshInboxFuture;
   final EmailCacheService _cache = EmailCacheService();
   final StreamController<Email> _newEmailController =
       StreamController<Email>.broadcast();
@@ -53,6 +57,13 @@ class MailAccountManager extends ChangeNotifier {
   RealtimeChannel? _pushChannel;
   bool _isPushEnabled = false;
   Future<void>? _initializingFuture;
+  String? _initializingUserId;
+  int? _initializingEpoch;
+  String? _sessionUserId;
+  bool _isSessionScopeReady = false;
+  int _lifecycleEpoch = 0;
+  Future<void>? _sessionTransitionFuture;
+  String? _pendingSessionUserId;
 
   /// Filter: null = all, 'gmail' = only gmail, 'zoho' = only zoho
   String? _providerFilter;
@@ -96,13 +107,74 @@ class MailAccountManager extends ChangeNotifier {
 
   /// Initialize manager and all providers
   Future<void> initialize() {
-    _initializingFuture ??= _initializeInternal().whenComplete(() {
-      _initializingFuture = null;
-    });
-    return _initializingFuture!;
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    return _initializeForUser(userId);
   }
 
-  Future<void> _initializeInternal() async {
+  Future<void> _initializeForUser(String? userId) async {
+    await prepareSession(userId);
+    if (userId == null ||
+        !_isSessionScopeReady ||
+        _sessionUserId != userId ||
+        Supabase.instance.client.auth.currentUser?.id != userId) {
+      return;
+    }
+    if (_isInitialized) return;
+
+    final epoch = _lifecycleEpoch;
+    final inFlight = _initializingFuture;
+    if (inFlight != null &&
+        _initializingUserId == userId &&
+        _initializingEpoch == epoch) {
+      return inFlight;
+    }
+
+    final operation = _initializeInternal(
+      expectedUserId: userId,
+      epoch: epoch,
+    );
+    _initializingFuture = operation;
+    _initializingUserId = userId;
+    _initializingEpoch = epoch;
+    return operation.whenComplete(() {
+      if (identical(_initializingFuture, operation)) {
+        _initializingFuture = null;
+        _initializingUserId = null;
+        _initializingEpoch = null;
+      }
+    });
+  }
+
+  Future<void> prepareSession(String? userId) {
+    if (_isSessionScopeReady &&
+        _sessionUserId == userId &&
+        _sessionTransitionFuture == null) {
+      return Future<void>.value();
+    }
+    final existing = _sessionTransitionFuture;
+    if (existing != null && _pendingSessionUserId == userId) return existing;
+
+    late final Future<void> operation;
+    operation = () async {
+      if (existing != null) await existing;
+      if (!_isSessionScopeReady || _sessionUserId != userId) {
+        await _resetInternal(nextUserId: userId);
+      }
+    }();
+    _sessionTransitionFuture = operation;
+    _pendingSessionUserId = userId;
+    return operation.whenComplete(() {
+      if (identical(_sessionTransitionFuture, operation)) {
+        _sessionTransitionFuture = null;
+        _pendingSessionUserId = null;
+      }
+    });
+  }
+
+  Future<void> _initializeInternal({
+    required String? expectedUserId,
+    required int epoch,
+  }) async {
     if (_isInitialized) {
       debugPrint('📧 [MailManager] Already initialized');
       return;
@@ -117,6 +189,7 @@ class MailAccountManager extends ChangeNotifier {
       action: _cache.initialize,
       timeout: const Duration(seconds: 3),
     );
+    if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
 
     // Ensure providers are registered
     if (_providers.isEmpty) {
@@ -135,6 +208,7 @@ class MailAccountManager extends ChangeNotifier {
         label: '${provider.providerId} provider',
         action: provider.initialize,
       );
+      if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
     }
     _isInitialized = true;
     notifyListeners();
@@ -142,15 +216,20 @@ class MailAccountManager extends ChangeNotifier {
     // Set up push notifications (instant updates)
     await _runStartupStep(
       label: 'push subscription',
-      action: _setupPushSubscription,
+      action: () => _setupPushSubscription(
+        epoch: epoch,
+        expectedUserId: expectedUserId,
+      ),
     );
+    if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
 
     // Keep polling as fallback (5 min instead of 3 min when push is enabled)
-    _startPolling();
+    _startPolling(epoch: epoch, expectedUserId: expectedUserId);
 
     // INSTANT LOAD: Load from SQLite cache first (no network wait)
     if (connectedProviders.isNotEmpty) {
       final cached = await _cache.getCachedEmails();
+      if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
       if (cached.isNotEmpty) {
         _unifiedEmails = cached;
         _lastFetch = DateTime.now();
@@ -159,7 +238,7 @@ class MailAccountManager extends ChangeNotifier {
         notifyListeners();
 
         // Then refresh in background
-        refreshInbox(background: true);
+        unawaited(refreshInbox(background: true));
       } else {
         // No cache, load normally (with loading indicator)
         await _runStartupStep(
@@ -167,10 +246,20 @@ class MailAccountManager extends ChangeNotifier {
           action: refreshInbox,
           timeout: const Duration(seconds: 12),
         );
+        if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
       }
     }
 
+    if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
     notifyListeners();
+  }
+
+  bool _isCurrentLifecycle(int epoch, String? expectedUserId) {
+    return _isSessionScopeReady &&
+        expectedUserId != null &&
+        epoch == _lifecycleEpoch &&
+        expectedUserId == _sessionUserId &&
+        Supabase.instance.client.auth.currentUser?.id == expectedUserId;
   }
 
   Future<void> _runStartupStep({
@@ -283,8 +372,33 @@ class MailAccountManager extends ChangeNotifier {
 
   /// Refresh inbox from all connected providers
   /// If background is true, don't show loading state (for background refresh)
-  Future<void> refreshInbox({bool background = false}) async {
+  Future<void> refreshInbox({bool background = false}) {
+    final inFlight = _refreshInboxFuture;
+    if (inFlight != null) return inFlight;
+
+    final epoch = _lifecycleEpoch;
+    final userId = _sessionUserId;
+    final operation = _refreshInbox(
+      background: background,
+      epoch: epoch,
+      expectedUserId: userId,
+    );
+    _refreshInboxFuture = operation;
+    return operation.whenComplete(() {
+      if (identical(_refreshInboxFuture, operation)) {
+        _refreshInboxFuture = null;
+      }
+    });
+  }
+
+  Future<void> _refreshInbox({
+    required bool background,
+    required int epoch,
+    required String? expectedUserId,
+  }) async {
+    if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
     final previousKeys = _unifiedEmails.map(_emailKey).toSet();
+    MailNotificationGate.shared.rememberInboxBaseline(previousKeys);
     final shouldNotifyNewMail = background && previousKeys.isNotEmpty;
 
     if (!background) {
@@ -307,6 +421,7 @@ class MailAccountManager extends ChangeNotifier {
             start: 0,
             knownEmails: knownEmails,
           );
+          if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
           allEmails.addAll(_mergeProviderEmails(provider.providerId, emails));
         } catch (e) {
           debugPrint('Error fetching ${provider.providerId} inbox: $e');
@@ -322,12 +437,17 @@ class MailAccountManager extends ChangeNotifier {
         allEmails.addAll(_unifiedEmails);
       }
 
+      if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
+
       _unifiedEmails = _dedupeAndSort(allEmails);
       _lastFetch = DateTime.now();
 
       if (shouldNotifyNewMail) {
         _emitNewEmailNotifications(_unifiedEmails, previousKeys);
       }
+      MailNotificationGate.shared.rememberInboxBaseline(
+        _unifiedEmails.map(_emailKey),
+      );
 
       if (failedProviders.isNotEmpty) {
         _error = _providerFailureMessage(
@@ -354,10 +474,13 @@ class MailAccountManager extends ChangeNotifier {
       // Save to SQLite cache for next app launch
       await _cache.cacheEmails(_unifiedEmails);
     } catch (e) {
+      if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
       _error = e.toString();
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_isCurrentLifecycle(epoch, expectedUserId)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -782,8 +905,13 @@ class MailAccountManager extends ChangeNotifier {
     if (newUnreadEmails.isEmpty) return;
 
     newUnreadEmails.sort((a, b) => b.receivedTime.compareTo(a.receivedTime));
-    for (final email in newUnreadEmails.take(3)) {
+    var emitted = 0;
+    for (final email in newUnreadEmails) {
+      final isFirstDiscovery =
+          MailNotificationGate.shared.claimInboxEvent(_emailKey(email));
+      if (!isFirstDiscovery || emitted >= 3) continue;
       _newEmailController.add(email);
+      emitted++;
     }
   }
 
@@ -961,44 +1089,119 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
     debugPrint('📧 [MailManager] dispose called (no-op for singleton)');
   }
 
-  /// Actually reset the manager (for logout, etc.)
-  void reset() {
-    _pollingTimer?.cancel();
-    _pollingTimer = null;
-    for (final provider in _providers) {
-      provider.removeListener(_onProviderChange);
+  /// Resets every user-scoped resource without closing the process-wide event
+  /// stream. A later authenticated shell can safely subscribe and initialize
+  /// the same singleton again.
+  Future<void> reset() => prepareSession(null);
+
+  Future<void> _resetInternal({required String? nextUserId}) async {
+    RealtimeChannel? pushChannel;
+    await MailSessionTransition.run(
+      nextUserId: nextUserId,
+      invalidateSession: () {
+        _lifecycleEpoch++;
+        _sessionUserId = null;
+        _isSessionScopeReady = false;
+        _pollingTimer?.cancel();
+        _pollingTimer = null;
+        _refreshDebounceTimer?.cancel();
+        _refreshDebounceTimer = null;
+        _refreshInboxFuture = null;
+        _initializingFuture = null;
+        _initializingUserId = null;
+        _initializingEpoch = null;
+        _isLoading = false;
+        _isLoadingMore = false;
+        for (final provider in _providers) {
+          provider.removeListener(_onProviderChange);
+        }
+        _providers.clear();
+        _unifiedEmails.clear();
+        _searchResults.clear();
+        _searchQuery = '';
+        _isSearching = false;
+        _searchRequestId++;
+        _selectedEmail = null;
+        _selectedProvider = null;
+        _selectedEmailError = null;
+        _isLoadingSelectedEmail = false;
+        _selectionRequestId++;
+        _providerFilter = null;
+        _error = null;
+        _isInitialized = false;
+        _lastFetch = null;
+        pushChannel = _pushChannel;
+        _pushChannel = null;
+        _isPushEnabled = false;
+        MailNotificationGate.shared.clearScope();
+        notifyListeners();
+      },
+      unsubscribeTransport: () async {
+        final channel = pushChannel;
+        if (channel == null) return;
+        await channel.unsubscribe().timeout(const Duration(seconds: 3));
+      },
+      invalidateCache: () => _invalidateCacheForSession(nextUserId),
+      commitSession: (userId) {
+        _sessionUserId = userId;
+        _isSessionScopeReady = true;
+      },
+      onTransportError: (error, _) {
+        debugPrint(
+          '📧 [MailManager] Push teardown skipped during session change: '
+          '$error',
+        );
+      },
+    );
+    notifyListeners();
+  }
+
+  Future<void> _invalidateCacheForSession(String? nextUserId) async {
+    await _cache.initialize();
+    if (!_cache.isAvailableForSessionIsolation) {
+      throw StateError(
+        'The local mail cache could not be opened for session isolation.',
+      );
     }
-    _providers.clear();
-    _unifiedEmails.clear();
-    _searchResults.clear();
-    _searchQuery = '';
-    _isSearching = false;
-    _searchRequestId++;
-    _selectedEmail = null;
-    _selectedProvider = null;
-    _isInitialized = false;
-    _lastFetch = null;
-    _pushChannel?.unsubscribe();
-    _pushChannel = null;
-    _isPushEnabled = false;
-    _newEmailController.close();
-    _instance = null;
+    final preferences = await SharedPreferences.getInstance();
+    final cachedUserId = preferences.getString(_cacheUserScopePreference);
+    if (nextUserId == null || cachedUserId != nextUserId) {
+      await _cache.clearCache();
+    }
+
+    final scopePersisted = nextUserId == null
+        ? await preferences.remove(_cacheUserScopePreference)
+        : await preferences.setString(
+            _cacheUserScopePreference,
+            nextUserId,
+          );
+    if (!scopePersisted) {
+      throw StateError('Could not persist the mail cache user scope.');
+    }
   }
 
   /// Set up realtime subscription to listen for push notifications
-  Future<void> _setupPushSubscription() async {
+  Future<void> _setupPushSubscription({
+    required int epoch,
+    required String? expectedUserId,
+  }) async {
     final supabase = Supabase.instance.client;
-    final userId = supabase.auth.currentUser?.id;
+    final userId = expectedUserId;
 
-    if (userId == null) {
+    if (userId == null || !_isCurrentLifecycle(epoch, expectedUserId)) {
       debugPrint('📧 [MailManager] No user ID, skipping push setup');
       return;
     }
 
     try {
       // Subscribe to changes on email_push_subscriptions for this user
-      _pushChannel?.unsubscribe();
-      _pushChannel = supabase
+      final previousChannel = _pushChannel;
+      _pushChannel = null;
+      if (previousChannel != null) await previousChannel.unsubscribe();
+      if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
+
+      late final RealtimeChannel channel;
+      channel = supabase
           .channel('email-push-$userId')
           .onPostgresChanges(
             event: PostgresChangeEvent.update,
@@ -1010,6 +1213,7 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
               value: userId,
             ),
             callback: (payload) {
+              if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
               debugPrint('📧 [MailManager] 🔔 Push notification received!');
               debugPrint('📧 [MailManager] Payload: ${payload.newRecord}');
 
@@ -1031,6 +1235,7 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
                   _refreshDebounceTimer!.cancel();
                 }
                 _refreshDebounceTimer = Timer(const Duration(seconds: 2), () {
+                  if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
                   debugPrint(
                       '📧 [MailManager] Debounce complete. Refreshing inbox...');
                   refreshInbox(background: true);
@@ -1040,6 +1245,12 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
           )
           .subscribe();
 
+      if (!_isCurrentLifecycle(epoch, expectedUserId)) {
+        await channel.unsubscribe();
+        return;
+      }
+      _pushChannel = channel;
+
       _isPushEnabled = true;
       debugPrint('📧 [MailManager] ✅ Push notification listener active');
 
@@ -1047,6 +1258,7 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
       for (final provider in connectedProviders) {
         if (provider is GmailProvider) {
           final success = await provider.setupPushNotifications();
+          if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
           debugPrint(
               '📧 [MailManager] Gmail push setup: ${success ? "✅" : "❌ (will use polling)"}');
         }
@@ -1058,7 +1270,10 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
     }
   }
 
-  void _startPolling() {
+  void _startPolling({
+    required int epoch,
+    required String? expectedUserId,
+  }) {
     _pollingTimer?.cancel();
     // Use 300s (5 min) polling as fallback when push is enabled
     // If push fails, this ensures we still get emails
@@ -1066,6 +1281,7 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
     debugPrint(
         '📧 [MailManager] Starting fallback polling (${pollInterval}s, push: $_isPushEnabled)');
     _pollingTimer = Timer.periodic(Duration(seconds: pollInterval), (_) async {
+      if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
       // Only refresh if we have listeners (Active UI)
       if (!hasListeners) return;
 
@@ -1073,5 +1289,40 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
       debugPrint('📧 [MailManager] Polling: Auto-refreshing inbox...');
       await refreshInbox(background: true);
     });
+  }
+}
+
+/// Coordinates the security boundary between two authenticated mail sessions.
+///
+/// The old scope is invalidated synchronously. Cache invalidation and transport
+/// teardown may then run concurrently, but the next scope is committed only
+/// after both have completed. Transport teardown is best-effort because every
+/// callback is independently guarded by the manager lifecycle epoch; cache
+/// invalidation remains mandatory and its failure keeps the manager closed.
+@visibleForTesting
+class MailSessionTransition {
+  const MailSessionTransition._();
+
+  static Future<void> run({
+    required String? nextUserId,
+    required VoidCallback invalidateSession,
+    required Future<void> Function() unsubscribeTransport,
+    required Future<void> Function() invalidateCache,
+    required ValueChanged<String?> commitSession,
+    void Function(Object error, StackTrace stackTrace)? onTransportError,
+  }) async {
+    invalidateSession();
+
+    final transportTeardown = () async {
+      try {
+        await unsubscribeTransport();
+      } catch (error, stackTrace) {
+        onTransportError?.call(error, stackTrace);
+      }
+    }();
+
+    await invalidateCache();
+    await transportTeardown;
+    commitSession(nextUserId);
   }
 }

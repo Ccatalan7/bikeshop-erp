@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -6,8 +8,8 @@ import '../../modules/messaging/services/messaging_service.dart';
 import '../services/customer_account_service.dart';
 import '../widgets/customer_portal_layout.dart';
 import '../widgets/customer_chat_view.dart';
+import '../widgets/customer_chat_context_support.dart';
 import '../widgets/deferred_customer_chat_context_panel.dart';
-import '../widgets/deferred_quote_review_panel.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 
 /// Unified customer chat page handling both list and detail views
@@ -30,13 +32,16 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
   bool _isLoading = true;
   String? _selectedConversationId;
   Map<String, dynamic>? _selectedConversation;
-  Widget? _customRightPanel; // For transient panels like Quote Review
+  RealtimeChannel? _conversationLifecycleChannel;
+  Timer? _conversationRefreshTimer;
+  int _conversationLoadEpoch = 0;
 
   @override
   void initState() {
     super.initState();
     _selectedConversationId = widget.initialConversationId;
     _loadConversations();
+    _subscribeToConversationLifecycle();
   }
 
   @override
@@ -50,11 +55,26 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
     }
   }
 
-  Future<void> _loadConversations() async {
-    setState(() => _isLoading = true);
+  void _subscribeToConversationLifecycle() {
+    final previous = _conversationLifecycleChannel;
+    if (previous != null) unawaited(previous.unsubscribe());
+    _conversationLifecycleChannel =
+        _messagingService.subscribeToConversationLifecycleUpdates(() {
+      _conversationRefreshTimer?.cancel();
+      _conversationRefreshTimer = Timer(
+        const Duration(milliseconds: 90),
+        () => unawaited(_loadConversations(showLoading: false)),
+      );
+    });
+  }
+
+  Future<void> _loadConversations({bool showLoading = true}) async {
+    if (!mounted) return;
+    final loadEpoch = ++_conversationLoadEpoch;
+    if (showLoading) setState(() => _isLoading = true);
     try {
       final conversations = await _messagingService.getCustomerConversations();
-      if (mounted) {
+      if (mounted && loadEpoch == _conversationLoadEpoch) {
         setState(() {
           _conversations = conversations;
           _isLoading = false;
@@ -68,8 +88,19 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && loadEpoch == _conversationLoadEpoch) {
+        setState(() => _isLoading = false);
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _conversationLoadEpoch += 1;
+    _conversationRefreshTimer?.cancel();
+    final channel = _conversationLifecycleChannel;
+    if (channel != null) unawaited(channel.unsubscribe());
+    super.dispose();
   }
 
   void _selectConversation(String? conversationId, {bool updateUrl = true}) {
@@ -97,19 +128,22 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
   @override
   Widget build(BuildContext context) {
     // Determine the right sidebar content
-    Widget? rightContent = _customRightPanel;
+    Widget? rightContent;
 
-    if (rightContent == null && _selectedConversationId != null) {
-      final contextType = _selectedConversation?['context_type'];
-      final contextId = _selectedConversation?['context_id'];
+    if (_selectedConversationId != null) {
+      final contextType =
+          _selectedConversation?['context_type']?.toString().trim();
+      final contextId = _selectedConversation?['context_id']?.toString().trim();
 
-      if (contextType != null && contextId != null) {
+      if (CustomerChatContextSupport.supports(contextType) &&
+          contextId != null &&
+          contextId.isNotEmpty) {
         // Show context panel (job/invoice details)
         rightContent = Container(
           key: ValueKey('context-$contextId'),
           padding: const EdgeInsets.only(top: 16),
           child: DeferredCustomerChatContextPanel(
-            contextType: contextType,
+            contextType: contextType!,
             contextId: contextId,
           ),
         );
@@ -129,14 +163,21 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
                     child: const Icon(Icons.support_agent, color: Colors.blue),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Soporte Vinabike',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        Text('Conversación activa',
-                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        const Text(
+                          'Soporte Vinabike',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          _conversationStatusLabel(
+                            _selectedConversation?['status']?.toString(),
+                          ),
+                          style:
+                              const TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
                       ],
                     ),
                   ),
@@ -148,7 +189,13 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
               const Text('Información',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 12),
-              _buildInfoRow(Icons.access_time, 'Estado', 'Activo'),
+              _buildInfoRow(
+                Icons.access_time,
+                'Estado',
+                _conversationStatusLabel(
+                  _selectedConversation?['status']?.toString(),
+                ),
+              ),
               _buildInfoRow(Icons.calendar_today, 'Iniciado', 'Hoy'),
             ],
           ),
@@ -243,7 +290,6 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
           Expanded(
             child: CustomerChatView(
               conversationId: _selectedConversationId!,
-              onShowQuote: _handleShowQuoteReview,
             ),
           ),
         ],
@@ -262,139 +308,39 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
       height: height,
       child: CustomerChatView(
         conversationId: _selectedConversationId!,
-        onShowQuote: _handleShowQuoteReview,
+        onInfoPressed: _showMobileContext,
       ),
     );
   }
 
-  void _handleShowQuoteReview(String invoiceId, String messageId) {
-    final isDesktop = MediaQuery.of(context).size.width > 900;
-
-    if (isDesktop) {
-      setState(() {
-        _customRightPanel = DeferredQuoteReviewPanel(
-          key: ValueKey('quote-$invoiceId'),
-          invoiceId: invoiceId,
-          messageId: messageId,
-          onClose: () => setState(() => _customRightPanel = null),
-          onApprove: () => _handleApproveQuote(invoiceId, messageId),
-          onRequestChanges: (feedback) =>
-              _handleRequestChanges(invoiceId, messageId, feedback),
-        );
-      });
-    } else {
-      // Mobile: Show Full Screen Modal
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        backgroundColor: Colors.white,
-        builder: (context) => DeferredQuoteReviewPanel(
-          invoiceId: invoiceId,
-          messageId: messageId,
-          onClose: () => Navigator.pop(context),
-          onApprove: () {
-            Navigator.pop(context); // Close modal first
-            _handleApproveQuote(invoiceId, messageId);
-          },
-          onRequestChanges: (feedback) {
-            Navigator.pop(context);
-            _handleRequestChanges(invoiceId, messageId, feedback);
-          },
+  void _showMobileContext() {
+    final contextType = _selectedConversation?['context_type']?.toString();
+    final contextId = _selectedConversation?['context_id']?.toString();
+    if (!CustomerChatContextSupport.supports(contextType) ||
+        contextId == null ||
+        contextId.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Este chat no tiene un resumen de cuenta disponible.',
+          ),
         ),
       );
+      return;
     }
-  }
 
-  Future<void> _handleApproveQuote(String invoiceId, String messageId) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      // 1. Update Invoice Status via RPC (Secure)
-      await supabase
-          .rpc('confirm_invoice_approval', params: {'p_invoice_id': invoiceId});
-
-      // Update local cache if needed (SalesService listeners should handle realtime, but force refresh is safer)
-      // await salesService.loadInvoices(forceRefresh: true); -- listeners will handle it via Realtime
-
-      // 2. Update Message Metadata via RPC (Secure)
-      await supabase.rpc('respond_to_action_request', params: {
-        'p_message_id': messageId,
-        'p_action_type': 'approve_quote',
-        'p_status': 'accepted',
-        'p_metadata_updates': {'target_id': invoiceId}
-      });
-
-      // Force refresh of messages to update UI state immediately
-      if (mounted) {
-        // UI logic for immediate refresh is handled by stream listeners
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Presupuesto aprobado correctamente'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        setState(() => _customRightPanel = null); // Close panel
-        // Trigger a refresh of the chat view if possible, or reliance on realtime
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  Future<void> _handleRequestChanges(
-      String invoiceId, String messageId, String feedback) async {
-    try {
-      final supabase = Supabase.instance.client;
-      final userId = supabase.auth.currentUser?.id;
-
-      // Send the feedback as a new text message
-      await supabase.from('messages').insert({
-        'conversation_id': _selectedConversationId,
-        'sender_id': userId,
-        'content': 'Solicito cambios en el presupuesto: $feedback',
-        'type': 'text',
-      });
-
-      // Update the action request status to 'declined' (or keep pending? user said "leave notes")
-      // If we decline, the button disappears. Maybe keep it pending but just send comments?
-      // The user said "leave notes to request... some changes".
-      // Usually that implies NOT approving yet.
-      // So status 'declined' (Rechazado) seems appropriate for "Request Changes".
-
-      await supabase.from('messages').update({
-        'metadata': {
-          'action_type': 'approve_quote',
-          'target_id': invoiceId,
-          'status':
-              'declined', // "Changes Requested" logic maps to declined for now
-          'responded_at': DateTime.now().toIso8601String(),
-        },
-      }).eq('id', messageId);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Solicitud de cambios enviada'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        setState(() => _customRightPanel = null);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => SizedBox(
+        height: MediaQuery.sizeOf(sheetContext).height * 0.88,
+        child: DeferredCustomerChatContextPanel(
+          contextType: contextType!,
+          contextId: contextId,
+        ),
+      ),
+    );
   }
 
   Widget _buildEmptyState() {
@@ -430,6 +376,16 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
         ],
       ),
     );
+  }
+
+  String _conversationStatusLabel(String? status) {
+    return switch (status?.trim().toLowerCase()) {
+      'pending' => 'Esperando al equipo',
+      'active' => 'Activa',
+      'resolved' || 'closed' || 'archived' => 'Archivada',
+      'rejected' => 'Cerrada',
+      _ => 'No disponible',
+    };
   }
 
   void _showNewChatDialog() {

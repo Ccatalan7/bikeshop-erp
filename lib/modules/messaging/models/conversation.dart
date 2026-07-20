@@ -4,6 +4,8 @@ class Conversation {
   final String id;
   final String type; // 'internal' or 'support'
   final String channel; // 'internal', 'website_portal', or 'whatsapp'
+  final bool isGroup; // Immutable shape for internal conversations
+  final String? counterpartyType; // 'internal', 'customer', or 'supplier'
   final String status; // 'pending', 'active', 'resolved', 'rejected'
   final String? title;
   final String? contextType;
@@ -11,6 +13,9 @@ class Conversation {
   final DateTime updatedAt;
   final DateTime? lastMessageAt;
   final DateTime? staffLastReadAt;
+  final int? staffLastReadMessageSequence;
+  final String? lastMessageId;
+  final int? lastMessageSequence;
   final String? lastMessageContent;
   final String? lastMessageType;
   final Map<String, dynamic> lastMessageMetadata;
@@ -27,6 +32,8 @@ class Conversation {
     required this.id,
     required this.type,
     required this.channel,
+    this.isGroup = false,
+    this.counterpartyType,
     this.status = 'active',
     this.title,
     this.contextType,
@@ -34,6 +41,9 @@ class Conversation {
     required this.updatedAt,
     this.lastMessageAt,
     this.staffLastReadAt,
+    this.staffLastReadMessageSequence,
+    this.lastMessageId,
+    this.lastMessageSequence,
     this.lastMessageContent,
     this.lastMessageType,
     this.lastMessageMetadata = const {},
@@ -61,18 +71,32 @@ class Conversation {
   static bool supportsContextPanel(String? contextType) {
     return contextType == 'job' ||
         contextType == 'invoice' ||
-        contextType == 'order';
+        contextType == 'order' ||
+        contextType == 'purchase_invoice' ||
+        contextType == 'supplier';
   }
 
   bool get isInternal => channel == 'internal' || type == 'internal';
   bool get isSupport => type == 'support';
   bool get isWhatsApp => channel == 'whatsapp';
   bool get isWebsitePortal => channel == 'website_portal';
-  bool get isSupplierConversation =>
-      contextType == 'supplier' ||
-      contextType == 'purchase_invoice' ||
-      contextHint?.hasSupplier == true ||
-      contextHint?.hasPurchaseInvoice == true;
+  String get effectiveCounterpartyType {
+    final stored = counterpartyType?.trim().toLowerCase();
+    if (stored == 'internal' || stored == 'customer' || stored == 'supplier') {
+      return stored!;
+    }
+    if (isInternal) return 'internal';
+    if (contextType == 'supplier' ||
+        contextType == 'purchase_invoice' ||
+        contextHint?.hasSupplier == true ||
+        contextHint?.hasPurchaseInvoice == true) {
+      return 'supplier';
+    }
+    return 'customer';
+  }
+
+  bool get isSupplierConversation => effectiveCounterpartyType == 'supplier';
+  bool get isCustomerConversation => effectiveCounterpartyType == 'customer';
   bool get hasLinkedContext => contextType != null && contextId != null;
   bool get hasDetectedContext => contextHint?.hasOperationalContext ?? false;
   bool get hasAnyContext =>
@@ -85,6 +109,8 @@ class Conversation {
     }
     if (contextHint?.hasJob == true) return 'job';
     if (contextHint?.hasInvoice == true) return 'invoice';
+    if (contextHint?.hasPurchaseInvoice == true) return 'purchase_invoice';
+    if (contextHint?.hasSupplier == true) return 'supplier';
     return contextType ?? contextHint?.effectiveContextType;
   }
 
@@ -96,6 +122,10 @@ class Conversation {
     }
     if (contextHint?.hasJob == true) return contextHint?.jobId;
     if (contextHint?.hasInvoice == true) return contextHint?.invoiceId;
+    if (contextHint?.hasPurchaseInvoice == true) {
+      return contextHint?.purchaseInvoiceId;
+    }
+    if (contextHint?.hasSupplier == true) return contextHint?.supplierId;
     return contextId ?? contextHint?.effectiveContextId;
   }
 
@@ -117,6 +147,13 @@ class Conversation {
   }
 
   factory Conversation.fromJson(Map<String, dynamic> json) {
+    int? intValue(dynamic value) => switch (value) {
+          int parsed => parsed,
+          num parsed => parsed.toInt(),
+          final raw when raw != null => int.tryParse(raw.toString()),
+          _ => null,
+        };
+
     var pIds = <String>[];
     if (json['conversation_participants'] != null) {
       pIds = (json['conversation_participants'] as List)
@@ -147,6 +184,8 @@ class Conversation {
       id: json['id'],
       type: type,
       channel: normalizeChannel(json['channel'], type),
+      isGroup: json['is_group'] == true,
+      counterpartyType: json['counterparty_type']?.toString(),
       status: json['status'] ?? 'active',
       title: json['title'],
       contextType: cType,
@@ -158,6 +197,10 @@ class Conversation {
       staffLastReadAt: json['staff_last_read_at'] != null
           ? DateTime.parse(json['staff_last_read_at'])
           : null,
+      staffLastReadMessageSequence:
+          intValue(json['staff_last_read_message_sequence']),
+      lastMessageId: json['last_message_id']?.toString(),
+      lastMessageSequence: intValue(json['last_message_sequence']),
       lastMessageContent: json['last_message_content']?.toString(),
       lastMessageType: json['last_message_type']?.toString(),
       lastMessageMetadata: Map<String, dynamic>.from(

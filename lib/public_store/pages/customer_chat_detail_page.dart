@@ -4,6 +4,7 @@ import '../../modules/messaging/services/messaging_service.dart';
 import '../widgets/customer_portal_layout.dart';
 import '../widgets/customer_inbox_list.dart';
 import '../widgets/customer_chat_view.dart';
+import '../widgets/customer_chat_context_support.dart';
 import '../widgets/deferred_customer_chat_context_panel.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 
@@ -60,9 +61,11 @@ class _CustomerChatDetailPageState extends State<CustomerChatDetailPage> {
   @override
   Widget build(BuildContext context) {
     // Determine context for side panel
-    final contextType = _conversation?['context_type'];
-    final contextId = _conversation?['context_id'];
-    final hasContext = contextType != null && contextId != null;
+    final contextType = _conversation?['context_type']?.toString().trim();
+    final contextId = _conversation?['context_id']?.toString().trim();
+    final hasContext = CustomerChatContextSupport.supports(contextType) &&
+        contextId != null &&
+        contextId.isNotEmpty;
 
     final title = _getTitle(contextType);
 
@@ -196,12 +199,8 @@ class _CustomerChatDetailPageState extends State<CustomerChatDetailPage> {
     switch (contextType) {
       case 'job':
         return 'Servicio Técnico';
-      case 'order':
-        return 'Pedido';
-      case 'bike':
-        return 'Mi Bicicleta';
       case 'invoice':
-        return 'Factura';
+        return 'Documento de venta';
       default:
         return 'Chat de Soporte';
     }

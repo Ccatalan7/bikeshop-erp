@@ -35964,5 +35964,34 @@ grant select on public.stock_movements_ledger_view to authenticated;
 -- receipt. Record and email it as explicitly non-fiscal; never weaken the
 -- separately verified SII voucher-as-boleta path.
 \ir ../migrations/20260718320000_produce_mercadopago_payment_voucher.sql
+-- Messaging access is tenant-scoped, internal chats are participant-scoped,
+-- webhook evidence is API-append-only, and provider status replay is monotonic.
+\ir ../migrations/20260719120000_harden_messaging_access.sql
+-- Messaging attachments use a private tenant/conversation registry, verified
+-- runtime signing and replay-safe publication; legacy public objects migrate
+-- through guarded service-only maintenance commands.
+\ir ../migrations/20260719163000_private_messaging_attachments.sql
+-- Read receipts are bounded by exact visible-message evidence; customer,
+-- staff-support, internal/group and WhatsApp creation are atomic/idempotent.
+-- Participant, customer-binding and retained-context identity stay immutable;
+-- unsafe legacy supplier recipient edges are removed with append-only audit.
+\ir ../migrations/20260719210000_atomic_messaging_commands.sql
+-- The retained primary context ledger is authoritative over the legacy scalar
+-- projection. Repair legacy drift without changing business timestamps, then
+-- enforce exact scalar/primary equivalence at transaction commit.
+\ir ../migrations/20260719213000_reconcile_conversation_context_projection.sql
+-- Legacy context/session and trigger helpers retain their definitions for
+-- owner-controlled SQL, but their effective ACLs contain no PUBLIC or named
+-- non-owner grantee. Product stock imports use the audited canonical command.
+\ir ../migrations/20260719214000_harden_legacy_internal_rpcs.sql
+-- The authenticated expense rebuild proves the source tenant before
+-- delegating to a retained owner-only implementation. Journal create/delete
+-- compatibility names are service/trigger-only, closing direct employee UUID
+-- mutations while preserving database-trigger behavior.
+\ir ../migrations/20260719215000_harden_expense_journal_rpc_tenant_scope.sql
+-- The production diagnostic reader is sealed as NOLOGIN with no password or
+-- memberships. It retains table SELECT evidence only; explicit/default routine
+-- execution is removed without changing any other grantee's ACL.
+\ir ../migrations/20260719216000_harden_diagnostic_role_identity_acl.sql
 
 commit;

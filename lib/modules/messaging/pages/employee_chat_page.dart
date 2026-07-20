@@ -12,6 +12,7 @@ import '../../messaging/widgets/new_chat_dialog.dart';
 import '../../messaging/widgets/context_side_panel.dart';
 import '../../messaging/widgets/chat_context_panel.dart';
 import '../../messaging/utils/conversation_activity.dart';
+import '../../messaging/utils/conversation_search.dart';
 import '../../messaging/utils/message_parser.dart';
 import '../../messaging/widgets/conversation_tile.dart';
 import '../../purchases/models/purchase_invoice.dart';
@@ -36,19 +37,23 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   static const Color _accentBlue = Color(0xFF093357);
 
   late TabController _tabController;
+  final TextEditingController _searchController = TextEditingController();
   ReferenceSegment? _activeReference;
   bool _isSidePanelExpanded = false;
   String? _closedContextConversationId;
   List<shared_supplier.Supplier> _supplierChatSuppliers = [];
-  List<PurchaseInvoice> _supplierChatInvoices = [];
+  Map<String, List<PurchaseInvoice>> _supplierInvoicesBySupplierId = const {};
   bool _isLoadingSupplierChats = false;
   bool _showOnlyActiveChats = true;
   String? _openingSupplierId;
+  String _searchTerm = '';
+  bool _isNarrowContextOverlayOpen = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _searchController.addListener(_handleSearchChanged);
     ConversationActivity.showOnlyActiveChats.addListener(
       _handleActiveModeChanged,
     );
@@ -64,8 +69,17 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     ConversationActivity.showOnlyActiveChats.removeListener(
       _handleActiveModeChanged,
     );
+    _searchController
+      ..removeListener(_handleSearchChanged)
+      ..dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _handleSearchChanged() {
+    final next = ConversationSearch.normalize(_searchController.text);
+    if (next == _searchTerm) return;
+    setState(() => _searchTerm = next);
   }
 
   void _loadConversations() {
@@ -144,7 +158,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           ..sort(
             (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
           );
-        _supplierChatInvoices = invoices;
+        _supplierInvoicesBySupplierId = _indexInvoicesBySupplier(invoices);
         _isLoadingSupplierChats = false;
       });
     } catch (error) {
@@ -200,6 +214,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     setState(() {
       _activeReference = null;
       _isSidePanelExpanded = false;
+      _isNarrowContextOverlayOpen = false;
     });
   }
 
@@ -207,12 +222,14 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     if (activeConversation == null) return;
     setState(() {
       _closedContextConversationId = activeConversation.id;
+      _isNarrowContextOverlayOpen = false;
     });
   }
 
-  void _reopenConversationContextPanel() {
+  void _reopenConversationContextPanel({required bool asOverlay}) {
     setState(() {
       _closedContextConversationId = null;
+      _isNarrowContextOverlayOpen = asOverlay;
     });
   }
 
@@ -269,11 +286,17 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         .where((conversation) =>
             !_showOnlyActiveChats ||
             ConversationActivity.isActiveConversation(conversation))
+        .where((conversation) =>
+            _matchesConversationSearch(provider, conversation))
         .length;
     final supplierEntryCount = _supplierChatEntries(
       supplierConversations,
       includeInactive: !_showOnlyActiveChats,
-    ).length;
+    ).where(_matchesSupplierEntrySearch).length;
+    final visibleInternalCount = internalConversations
+        .where((conversation) =>
+            _matchesConversationSearch(provider, conversation))
+        .length;
 
     // Find active conversation object
     Conversation? activeConversation;
@@ -303,7 +326,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       pendingCount,
       visibleCustomerCount,
       supplierEntryCount,
-      internalConversations.length,
+      visibleInternalCount,
     );
   }
 
@@ -329,7 +352,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 4),
-            child: _buildActiveModeToggleButton(),
+            child: _buildActivityModeMenu(compact: true),
           ),
           IconButton(
             icon: const Icon(Icons.add_comment_outlined),
@@ -373,14 +396,19 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Column(
         children: [
-          // Customer Tab
-          _buildCustomerList(provider, activeId, allConversations),
-          _buildSupplierList(provider, activeId, allConversations),
-          // Internal Tab
-          _buildInternalList(provider, activeId, allConversations),
+          _buildSearchField(horizontalPadding: 12, verticalPadding: 8),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildCustomerList(provider, activeId, allConversations),
+                _buildSupplierList(provider, activeId, allConversations),
+                _buildInternalList(provider, activeId, allConversations),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -400,131 +428,205 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     final colorScheme = theme.colorScheme;
     final hasConversationContext =
         activeConversation?.hasSupportedContextPanel ?? false;
-    final isConversationContextClosed = hasConversationContext &&
+    final isConversationContextManuallyClosed = hasConversationContext &&
         activeConversation?.id == _closedContextConversationId;
     final showConversationContextPanel =
-        hasConversationContext && !isConversationContextClosed;
+        hasConversationContext && !isConversationContextManuallyClosed;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
-      body: Row(
-        children: [
-          // Left Sidebar: Thread List
-          Container(
-            width: 360,
-            decoration: BoxDecoration(
-              border:
-                  Border(right: BorderSide(color: colorScheme.outlineVariant)),
-              color: colorScheme.surface,
-            ),
-            child: Column(
-              children: [
-                // Header
-                _buildMessagingHeader(
-                  pendingCount: pendingCount,
-                  activeCustomerCount: activeCustomerCount,
-                  supplierCount: supplierCount,
-                  internalCount: internalCount,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final sidebarWidth = (constraints.maxWidth * 0.3).clamp(380.0, 440.0);
+          final useContextOverlay = constraints.maxWidth < 1200;
+          final isContextClosedForChat = isConversationContextManuallyClosed ||
+              (useContextOverlay && !_isNarrowContextOverlayOpen);
+          final showReferenceOverlay = useContextOverlay &&
+              _activeReference != null &&
+              !_isSidePanelExpanded;
+          final showConversationOverlay = useContextOverlay &&
+              _activeReference == null &&
+              showConversationContextPanel &&
+              _isNarrowContextOverlayOpen;
+          final overlayWidth = (constraints.maxWidth - sidebarWidth)
+              .clamp(300.0, 360.0)
+              .toDouble();
+          return Row(
+            children: [
+              // Left Sidebar: Thread List
+              Container(
+                width: sidebarWidth,
+                decoration: BoxDecoration(
+                  border: Border(
+                      right: BorderSide(color: colorScheme.outlineVariant)),
+                  color: colorScheme.surface,
                 ),
-                // Tab Bar
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: colorScheme.outlineVariant),
+                child: Column(
+                  children: [
+                    // Header
+                    _buildMessagingHeader(
+                      pendingCount: pendingCount,
+                      activeCustomerCount: activeCustomerCount,
+                      supplierCount: supplierCount,
+                      internalCount: internalCount,
                     ),
-                  ),
-                  child: TabBar(
-                    controller: _tabController,
-                    labelColor: colorScheme.primary,
-                    unselectedLabelColor: colorScheme.onSurfaceVariant,
-                    indicatorSize: TabBarIndicatorSize.tab,
-                    tabs: [
-                      Tab(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('Clientes ($activeCustomerCount)'),
-                            if (pendingCount > 0) ...[
-                              const SizedBox(width: 8),
-                              _buildBadge(pendingCount),
-                            ],
-                          ],
+                    // Tab Bar
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(color: colorScheme.outlineVariant),
                         ),
                       ),
-                      Tab(text: 'Proveedores ($supplierCount)'),
-                      Tab(text: 'Equipo ($internalCount)'),
-                    ],
-                  ),
-                ),
-                // List Content
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildCustomerList(provider, activeId, allConversations),
-                      _buildSupplierList(provider, activeId, allConversations),
-                      _buildInternalList(provider, activeId, allConversations),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Center Content: Chat Window
-          if (!_isSidePanelExpanded)
-            Expanded(
-              child: activeConversation != null
-                  ? ChatWindow(
-                      conversation: activeConversation,
-                      isContextPanelClosed: isConversationContextClosed,
-                      onShowContextPanel: _reopenConversationContextPanel,
-                      onReferenceTap: (ref) {
-                        setState(() {
-                          _activeReference = ref;
-                          _isSidePanelExpanded = false;
-                        });
-                      },
-                    )
-                  : Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.chat_bubble_outline,
-                              size: 64,
-                              color: colorScheme.onSurfaceVariant
-                                  .withValues(alpha: 0.34)),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Selecciona una conversación',
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
+                      child: TabBar(
+                        controller: _tabController,
+                        labelColor: colorScheme.primary,
+                        unselectedLabelColor: colorScheme.onSurfaceVariant,
+                        indicatorSize: TabBarIndicatorSize.tab,
+                        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                        labelStyle: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        unselectedLabelStyle: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        tabs: [
+                          Tab(text: 'Clientes $activeCustomerCount'),
+                          Tab(text: 'Proveedores $supplierCount'),
+                          Tab(text: 'Equipo $internalCount'),
                         ],
                       ),
                     ),
-            ),
-
-          // Right Sidebar: Context Panel (Smart Features or Chat Context)
-          if (_activeReference != null)
-            Expanded(
-              child: ContextSidePanel(
-                activeReference: _activeReference,
-                onClose: _closeSidePanel,
-                onToggleExpand: _toggleSidePanelExpansion,
-                isExpanded: _isSidePanelExpanded,
+                    // List Content
+                    Expanded(
+                      child: TabBarView(
+                        controller: _tabController,
+                        children: [
+                          _buildCustomerList(
+                              provider, activeId, allConversations),
+                          _buildSupplierList(
+                              provider, activeId, allConversations),
+                          _buildInternalList(
+                              provider, activeId, allConversations),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            )
-          else if (activeConversation?.hasSupportedContextPanel == true &&
-              showConversationContextPanel)
-            ChatContextPanel(
-              contextType: activeConversation!.effectiveContextType!,
-              contextId: activeConversation.effectiveContextId!,
-              onClose: () => _closeConversationContextPanel(activeConversation),
-            ),
-        ],
+
+              // Center Content: Chat Window
+              if (!_isSidePanelExpanded)
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: activeConversation != null
+                            ? ChatWindow(
+                                conversation: activeConversation,
+                                isContextPanelClosed: isContextClosedForChat,
+                                onShowContextPanel: () =>
+                                    _reopenConversationContextPanel(
+                                  asOverlay: useContextOverlay,
+                                ),
+                                onReferenceTap: (ref) {
+                                  setState(() {
+                                    _activeReference = ref;
+                                    _isSidePanelExpanded = false;
+                                  });
+                                },
+                              )
+                            : Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.chat_bubble_outline,
+                                      size: 64,
+                                      color: colorScheme.onSurfaceVariant
+                                          .withValues(alpha: 0.34),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'Selecciona una conversación',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                      ),
+                      if (showReferenceOverlay || showConversationOverlay) ...[
+                        Positioned.fill(
+                          child: GestureDetector(
+                            onTap: showReferenceOverlay
+                                ? _closeSidePanel
+                                : () => _closeConversationContextPanel(
+                                      activeConversation,
+                                    ),
+                            child: ColoredBox(
+                              color: Colors.black.withValues(alpha: 0.12),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          bottom: 0,
+                          width: overlayWidth,
+                          child: Material(
+                            elevation: 4,
+                            color: colorScheme.surface,
+                            child: showReferenceOverlay
+                                ? ContextSidePanel(
+                                    activeReference: _activeReference,
+                                    onClose: _closeSidePanel,
+                                    onToggleExpand: _toggleSidePanelExpansion,
+                                    isExpanded: false,
+                                  )
+                                : ChatContextPanel(
+                                    contextType: activeConversation!
+                                        .effectiveContextType!,
+                                    contextId:
+                                        activeConversation.effectiveContextId!,
+                                    onClose: () =>
+                                        _closeConversationContextPanel(
+                                      activeConversation,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+              // Right Sidebar: Context Panel (Smart Features or Chat Context)
+              if (_activeReference != null &&
+                  (!useContextOverlay || _isSidePanelExpanded))
+                Expanded(
+                  child: ContextSidePanel(
+                    activeReference: _activeReference,
+                    onClose: _closeSidePanel,
+                    onToggleExpand: _toggleSidePanelExpansion,
+                    isExpanded: _isSidePanelExpanded,
+                  ),
+                )
+              else if (activeConversation?.hasSupportedContextPanel == true &&
+                  showConversationContextPanel &&
+                  !useContextOverlay)
+                ChatContextPanel(
+                  contextType: activeConversation!.effectiveContextType!,
+                  contextId: activeConversation.effectiveContextId!,
+                  onClose: () =>
+                      _closeConversationContextPanel(activeConversation),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -539,7 +641,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     final colorScheme = theme.colorScheme;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 10),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: colorScheme.outlineVariant)),
       ),
@@ -549,21 +651,35 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           Row(
             children: [
               Expanded(
-                child: Text(
-                  'Mensajería interna',
-                  style: TextStyle(
-                    color: colorScheme.onSurface,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Mensajes',
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$activeCustomerCount clientes · $supplierCount proveedores · $internalCount equipo'
+                      '${pendingCount > 0 ? ' · $pendingCount pendientes' : ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: _buildActiveModeToggleButton(),
-              ),
               IconButton(
-                icon: const Icon(Icons.add_comment_outlined),
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.add_comment_outlined, size: 19),
                 onPressed: () {
                   showDialog(
                     context: context,
@@ -573,60 +689,19 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                 tooltip: 'Nuevo chat',
               ),
               IconButton(
-                icon: const Icon(Icons.refresh),
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.refresh, size: 20),
                 onPressed: _loadConversations,
                 tooltip: 'Recargar',
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Equipo, chat web y WhatsApp separados por canal.',
-            style: TextStyle(
-              color: colorScheme.onSurfaceVariant,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(
-                child: _buildHeaderMetric(
-                  'Equipo',
-                  internalCount,
-                  Icons.people_outline,
-                ),
-              ),
+              Expanded(child: _buildSearchField()),
               const SizedBox(width: 8),
-              Expanded(
-                child: _buildHeaderMetric(
-                  'Clientes',
-                  activeCustomerCount,
-                  Icons.support_agent_outlined,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildHeaderMetric(
-                  'Proveedores',
-                  supplierCount,
-                  Icons.storefront_outlined,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _buildHeaderMetric(
-                  'Solicitudes',
-                  pendingCount,
-                  Icons.pending_actions_outlined,
-                  alert: pendingCount > 0,
-                ),
-              ),
+              _buildActivityModeMenu(),
             ],
           ),
         ],
@@ -634,58 +709,46 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     );
   }
 
-  Widget _buildActiveModeToggleButton() {
+  Widget _buildSearchField({
+    double horizontalPadding = 0,
+    double verticalPadding = 0,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final active = _showOnlyActiveChats;
-
-    return Tooltip(
-      waitDuration: const Duration(milliseconds: 1500),
-      message: active
-          ? 'Solo activos: muestra clientes y proveedores con trabajos, facturas o compras abiertas.'
-          : 'Historial completo: muestra también conversaciones y documentos cerrados.',
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: () => unawaited(_setShowOnlyActiveChats(!active)),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
-          width: 46,
-          height: 24,
-          padding: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            color: active
-                ? colorScheme.primary.withValues(alpha: 0.18)
-                : colorScheme.onSurfaceVariant.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: active
-                  ? colorScheme.primary.withValues(alpha: 0.45)
-                  : colorScheme.outlineVariant,
-            ),
-          ),
-          child: AnimatedAlign(
-            duration: const Duration(milliseconds: 160),
-            curve: Curves.easeOutCubic,
-            alignment: active ? Alignment.centerRight : Alignment.centerLeft,
-            child: Container(
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                color: active ? colorScheme.primary : colorScheme.surface,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.14),
-                    blurRadius: 3,
-                    offset: const Offset(0, 1),
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: verticalPadding,
+      ),
+      child: SizedBox(
+        height: 38,
+        child: TextField(
+          controller: _searchController,
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: colorScheme.surfaceContainerLowest,
+            prefixIcon: const Icon(Icons.search, size: 18),
+            suffixIcon: _searchTerm.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Limpiar búsqueda',
+                    icon: const Icon(Icons.close, size: 17),
+                    onPressed: _searchController.clear,
                   ),
-                ],
-              ),
-              child: Icon(
-                active ? Icons.filter_alt : Icons.history,
-                size: 12,
-                color: active ? colorScheme.onPrimary : colorScheme.onSurface,
-              ),
+            hintText: 'Nombre, teléfono, trabajo, bici o factura',
+            hintStyle: TextStyle(
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.72),
+              fontSize: 12,
+            ),
+            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(6),
+              borderSide: BorderSide(color: colorScheme.outlineVariant),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(6),
+              borderSide: BorderSide(color: colorScheme.outlineVariant),
             ),
           ),
         ),
@@ -693,59 +756,106 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     );
   }
 
-  Widget _buildHeaderMetric(
-    String label,
-    int value,
-    IconData icon, {
-    bool alert = false,
+  Widget _buildActivityModeMenu({bool compact = false}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return PopupMenuButton<bool>(
+      initialValue: _showOnlyActiveChats,
+      tooltip: 'Elegir alcance de la bandeja',
+      onSelected: (value) => unawaited(_setShowOnlyActiveChats(value)),
+      itemBuilder: (context) => [
+        _buildActivityMenuItem(
+          value: true,
+          icon: Icons.bolt_outlined,
+          label: 'Activos',
+          description: 'Trabajo operativo abierto',
+        ),
+        _buildActivityMenuItem(
+          value: false,
+          icon: Icons.history,
+          label: 'Historial',
+          description: 'Incluye conversaciones cerradas',
+        ),
+      ],
+      child: Container(
+        height: 38,
+        padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: colorScheme.outlineVariant),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _showOnlyActiveChats ? Icons.bolt_outlined : Icons.history,
+              size: 16,
+              color: colorScheme.primary,
+            ),
+            if (!compact) ...[
+              const SizedBox(width: 6),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 140),
+                child: Text(
+                  _showOnlyActiveChats ? 'Activos' : 'Historial',
+                  key: ValueKey(_showOnlyActiveChats),
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
+            Icon(
+              Icons.expand_more,
+              size: 16,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<bool> _buildActivityMenuItem({
+    required bool value,
+    required IconData icon,
+    required String label,
+    required String description,
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final color =
-        alert ? const Color(0xFFB45309) : colorScheme.onSurfaceVariant;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
-      decoration: BoxDecoration(
-        color: alert
-            ? color.withValues(alpha: 0.06)
-            : Color.alphaBlend(
-                colorScheme.primary.withValues(alpha: 0.035),
-                colorScheme.surface,
-              ),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: alert
-              ? color.withValues(alpha: 0.35)
-              : colorScheme.outlineVariant,
-        ),
-      ),
+    final selected = value == _showOnlyActiveChats;
+    return PopupMenuItem<bool>(
+      value: value,
+      height: 48,
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15, color: color),
-          const SizedBox(width: 6),
-          Text(
-            '$value',
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(width: 4),
+          Icon(icon, size: 18, color: colorScheme.primary),
+          const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Colors.grey[700],
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  description,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ),
+          if (selected) Icon(Icons.check, size: 17, color: colorScheme.primary),
         ],
       ),
     );
@@ -757,29 +867,27 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     // For internal tab, show filtered internal conversations
     final internalConvs = conversations
         .where((c) => c.type == 'internal')
+        .where((conversation) =>
+            _matchesConversationSearch(provider, conversation))
         .toList()
       ..sort(_compareConversations);
 
     if (internalConvs.isEmpty) {
       return _buildEmptyState(
         icon: Icons.people_outline,
-        title: 'Sin conversaciones internas',
-        subtitle: 'Inicia un chat con un compañero',
+        title: _searchTerm.isEmpty
+            ? 'Sin conversaciones internas'
+            : 'Sin coincidencias en equipo',
+        subtitle: _searchTerm.isEmpty
+            ? 'Inicia un chat con un compañero'
+            : 'Prueba con otro nombre, teléfono o mensaje',
       );
     }
 
     return ListView(
-      children: [
-        _buildListIntro(
-          title: 'Chats de equipo',
-          subtitle:
-              'Conversaciones internas entre colaboradores. No salen por WhatsApp.',
-          icon: Icons.people_outline,
-        ),
-        ...internalConvs.map(
-          (conv) => _buildConversationTile(provider, conv, activeId),
-        ),
-      ],
+      children: internalConvs
+          .map((conv) => _buildConversationTile(provider, conv, activeId))
+          .toList(),
     );
   }
 
@@ -792,16 +900,22 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
             !c.isSupplierConversation &&
             (!_showOnlyActiveChats ||
                 ConversationActivity.isActiveConversation(c)))
+        .where((conversation) =>
+            _matchesConversationSearch(provider, conversation))
         .toList()
       ..sort(_compareConversations);
 
     if (customerConvs.isEmpty) {
       return _buildEmptyState(
         icon: Icons.support_agent_outlined,
-        title: 'Sin conversaciones de clientes',
-        subtitle: _showOnlyActiveChats
-            ? 'No hay clientes con trabajos, facturas o solicitudes abiertas'
-            : 'Los contactos con clientes aparecerán aquí',
+        title: _searchTerm.isEmpty
+            ? 'Sin conversaciones de clientes'
+            : 'Sin coincidencias en clientes',
+        subtitle: _searchTerm.isNotEmpty
+            ? 'Prueba con otro nombre, teléfono, trabajo, bici o factura'
+            : _showOnlyActiveChats
+                ? 'No hay clientes con trabajos, facturas o solicitudes abiertas'
+                : 'Los contactos con clientes aparecerán aquí',
       );
     }
 
@@ -826,14 +940,11 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
 
     return ListView(
       children: [
-        _buildSupportOverview(customerConvs),
         // Pending Section
         if (pendingConvs.isNotEmpty)
           _buildSection(
             icon: Icons.pending_actions,
             title: 'Solicitudes pendientes',
-            subtitle:
-                'Solicitudes nuevas. Cada fila indica si viene de web o WhatsApp.',
             count: pendingConvs.length,
             color: const Color(0xFFB45309),
             conversations: pendingConvs,
@@ -846,7 +957,6 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           _buildSection(
             icon: Icons.phone_in_talk_outlined,
             title: 'WhatsApp',
-            subtitle: 'Mensajes que salen y entran por WhatsApp Cloud API.',
             count: whatsAppConvs.length,
             color: const Color(0xFF047857),
             conversations: whatsAppConvs,
@@ -859,7 +969,6 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           _buildSection(
             icon: Icons.language_outlined,
             title: 'Chat web',
-            subtitle: 'Conversaciones del cliente desde cuenta web o tienda.',
             count: websiteConvs.length,
             color: _accentBlue,
             conversations: websiteConvs,
@@ -872,7 +981,6 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           _buildSection(
             icon: Icons.check_circle,
             title: 'Resueltas',
-            subtitle: 'Historial cerrado, disponible para consulta.',
             count: resolvedConvs.length,
             color: Colors.grey,
             conversations: resolvedConvs,
@@ -892,7 +1000,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     final entries = _supplierChatEntries(
       supplierConvs,
       includeInactive: !_showOnlyActiveChats,
-    );
+    ).where(_matchesSupplierEntrySearch).toList();
 
     if (_isLoadingSupplierChats && entries.isEmpty) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
@@ -901,90 +1009,27 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     if (entries.isEmpty) {
       return _buildEmptyState(
         icon: Icons.storefront_outlined,
-        title: 'Sin chats de proveedores',
-        subtitle: _showOnlyActiveChats
-            ? 'No hay proveedores con chats o compras activas'
-            : 'Los proveedores con WhatsApp aparecerán aquí',
+        title: _searchTerm.isEmpty
+            ? 'Sin chats de proveedores'
+            : 'Sin coincidencias en proveedores',
+        subtitle: _searchTerm.isNotEmpty
+            ? 'Prueba con el proveedor, teléfono o número de compra'
+            : _showOnlyActiveChats
+                ? 'No hay proveedores con chats o compras activas'
+                : 'Los proveedores con WhatsApp aparecerán aquí',
       );
     }
 
     return ListView(
       children: [
-        _buildSupplierOverview(entries),
-        for (final entry in entries) _buildSupplierChatTile(entry, activeId),
-      ],
-    );
-  }
-
-  Widget _buildSupplierOverview(List<_SupplierChatEntry> entries) {
-    final activeInvoices = entries.fold<int>(
-      0,
-      (total, entry) => total + entry.activeInvoices.length,
-    );
-    final chats = entries.where((entry) => entry.conversation != null).length;
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          Theme.of(context).colorScheme.primary.withValues(alpha: 0.035),
-          Theme.of(context).colorScheme.surface,
-        ),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Bandeja de proveedores',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'WhatsApp de proveedores con compras activas y estado visible.',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _buildMiniMetric(
-                  'Proveedores',
-                  entries.length,
-                  Icons.storefront_outlined,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildMiniMetric(
-                  'Chats',
-                  chats,
-                  Icons.phone_in_talk_outlined,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildMiniMetric(
-                  'Compras',
-                  activeInvoices,
-                  Icons.receipt_long_outlined,
-                  alert: activeInvoices > 0,
-                ),
-              ),
-            ],
+        for (final entry in entries) ...[
+          _buildSupplierChatTile(entry, activeId),
+          Divider(
+            height: 1,
+            color: Theme.of(context).colorScheme.outlineVariant,
           ),
         ],
-      ),
+      ],
     );
   }
 
@@ -1002,6 +1047,34 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         _showOnlyActiveChats ? entry.activeInvoices : entry.invoices;
     final visibleInvoice =
         relevantInvoices.isEmpty ? null : relevantInvoices.first;
+
+    if (conversation != null) {
+      final provider = context.read<ChatProvider>();
+      return ConversationTile(
+        key: ValueKey(conversation.id),
+        conversation: conversation,
+        isActive: isSelected,
+        isMobile: MediaQuery.sizeOf(context).width < 900,
+        titleOverride: entry.supplier.name,
+        subtitle: '${entry.phone} · Proveedor WhatsApp',
+        operationalStatusLabel: visibleInvoice == null
+            ? null
+            : _supplierInvoiceOperationalLabel(visibleInvoice),
+        operationalStatusColor: visibleInvoice == null
+            ? null
+            : _purchaseInvoiceStatusColor(visibleInvoice.status),
+        secondaryContextLine: visibleInvoice == null
+            ? entry.phone
+            : _formatCLP(
+                visibleInvoice.balance > 0
+                    ? visibleInvoice.balance
+                    : visibleInvoice.total,
+              ),
+        onTap: () => _openSupplierChat(entry),
+        onArchive: () =>
+            _showArchiveConfirmation(context, provider, conversation),
+      );
+    }
 
     return Material(
       color: isSelected
@@ -1125,11 +1198,19 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     );
   }
 
+  String _supplierInvoiceOperationalLabel(PurchaseInvoice invoice) {
+    final number = invoice.invoiceNumber.isEmpty
+        ? invoice.supplierInvoiceNumber ?? 'Compra'
+        : invoice.invoiceNumber;
+    return '$number · ${invoice.status.displayName}';
+  }
+
   Future<void> _openSupplierChat(_SupplierChatEntry entry) async {
     final conversation = entry.conversation;
     if (conversation != null) {
       setState(() {
         _closedContextConversationId = null;
+        _isNarrowContextOverlayOpen = false;
         _activeReference = null;
         _isSidePanelExpanded = false;
       });
@@ -1294,11 +1375,22 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
 
   List<PurchaseInvoice> _supplierInvoices(String supplierId) {
     if (supplierId.isEmpty) return const [];
-    final invoices = _supplierChatInvoices
-        .where((invoice) => invoice.supplierId == supplierId)
-        .toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
-    return invoices;
+    return _supplierInvoicesBySupplierId[supplierId] ?? const [];
+  }
+
+  Map<String, List<PurchaseInvoice>> _indexInvoicesBySupplier(
+    List<PurchaseInvoice> invoices,
+  ) {
+    final index = <String, List<PurchaseInvoice>>{};
+    for (final invoice in invoices) {
+      final supplierId = invoice.supplierId;
+      if (supplierId == null || supplierId.isEmpty) continue;
+      index.putIfAbsent(supplierId, () => []).add(invoice);
+    }
+    for (final supplierInvoices in index.values) {
+      supplierInvoices.sort((a, b) => b.date.compareTo(a.date));
+    }
+    return index;
   }
 
   bool _isActivePurchaseInvoice(PurchaseInvoice invoice) {
@@ -1373,204 +1465,61 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     return '\$$formatted';
   }
 
-  Widget _buildListIntro({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          colorScheme.primary.withValues(alpha: 0.035),
-          colorScheme.surface,
-        ),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: colorScheme.primary),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: colorScheme.onSurface,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: colorScheme.onSurfaceVariant,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  bool _matchesConversationSearch(
+    ChatProvider provider,
+    Conversation conversation,
+  ) {
+    if (_searchTerm.isEmpty) return true;
+    final hint = conversation.contextHint;
+    return ConversationSearch.matches(_searchTerm, [
+      provider.getChatTitle(conversation),
+      conversation.title ?? '',
+      conversation.creatorName ?? '',
+      conversation.channelLabel,
+      conversation.lastMessageContent ?? '',
+      conversation.contextType ?? '',
+      conversation.contextId ?? '',
+      hint?.customerName ?? '',
+      hint?.phone ?? '',
+      hint?.jobNumber ?? '',
+      hint?.jobStatus ?? '',
+      hint?.bikeName ?? '',
+      hint?.invoiceNumber ?? '',
+      hint?.invoiceStatus ?? '',
+      hint?.supplierName ?? '',
+      hint?.supplierPhone ?? '',
+      hint?.purchaseInvoiceNumber ?? '',
+      hint?.purchaseInvoiceStatus ?? '',
+      _getSubtitle(conversation),
+    ]);
   }
 
-  Widget _buildSupportOverview(List<Conversation> conversations) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final orderContexts = conversations
-        .where((conversation) => conversation.contextType == 'order')
-        .length;
-    final webConversations = conversations
-        .where((conversation) => conversation.isWebsitePortal)
-        .length;
-    final whatsAppConversations =
-        conversations.where((conversation) => conversation.isWhatsApp).length;
-    final unread = conversations.fold<int>(
-      0,
-      (sum, conversation) => sum + conversation.unreadCount,
-    );
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          colorScheme.primary.withValues(alpha: 0.035),
-          colorScheme.surface,
-        ),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant),
+  bool _matchesSupplierEntrySearch(_SupplierChatEntry entry) {
+    if (_searchTerm.isEmpty) return true;
+    final supplier = entry.supplier;
+    return ConversationSearch.matches(_searchTerm, [
+      supplier.name,
+      supplier.legalName ?? '',
+      supplier.tradeName ?? '',
+      supplier.contactPerson ?? '',
+      supplier.salesRepName ?? '',
+      supplier.email ?? '',
+      supplier.salesRepEmail ?? '',
+      supplier.phone ?? '',
+      supplier.salesRepPhone ?? '',
+      supplier.rut ?? '',
+      entry.phone,
+      entry.conversation?.lastMessageContent ?? '',
+      ...entry.invoices.expand(
+        (invoice) => [invoice.invoiceNumber, invoice.status.displayName],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Bandeja de clientes',
-            style: TextStyle(
-              color: colorScheme.onSurface,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Chat web y WhatsApp viven separados para no mezclar canales ni permisos de envío.',
-            style: TextStyle(
-              color: colorScheme.onSurfaceVariant,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _buildMiniMetric(
-                  'Web',
-                  webConversations,
-                  Icons.language_outlined,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildMiniMetric(
-                  'WhatsApp',
-                  whatsAppConversations,
-                  Icons.phone_in_talk_outlined,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildMiniMetric(
-                  'Pedidos',
-                  orderContexts,
-                  Icons.receipt_long_outlined,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _buildMiniMetric(
-                  'Sin leer',
-                  unread,
-                  Icons.mark_chat_unread_outlined,
-                  alert: unread > 0,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMiniMetric(
-    String label,
-    int value,
-    IconData icon, {
-    bool alert = false,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final color =
-        alert ? const Color(0xFFB45309) : colorScheme.onSurfaceVariant;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 15, color: color),
-          const SizedBox(width: 6),
-          Text(
-            '$value',
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: colorScheme.onSurfaceVariant,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    ]);
   }
 
   /// Build a section header with conversations
   Widget _buildSection({
     required IconData icon,
     required String title,
-    required String subtitle,
     required int count,
     required Color color,
     required List<Conversation> conversations,
@@ -1584,61 +1533,39 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          margin: const EdgeInsets.only(top: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: colorScheme.surface,
+            color: Color.alphaBlend(
+              color.withValues(alpha: 0.035),
+              colorScheme.surface,
+            ),
             border: Border(
-              top: BorderSide(color: colorScheme.outlineVariant),
               bottom: BorderSide(color: colorScheme.outlineVariant),
-              left: BorderSide(color: color, width: 3),
             ),
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, size: 16, color: color),
+              Icon(icon, size: 15, color: color),
               const SizedBox(width: 8),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: color,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSurface,
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '$count',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
+              Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -1665,34 +1592,44 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     final isSelected = conv.id == activeId;
     final isMobile = MediaQuery.of(context).size.width < 900;
 
-    return ConversationTile(
-      conversation: conv,
-      isActive: isSelected,
-      isMobile: isMobile,
-      subtitle: _getSubtitle(conv),
-      onTap: () {
-        if (conv.id != activeId) {
-          setState(() {
-            _closedContextConversationId = null;
-            _activeReference = null;
-            _isSidePanelExpanded = false;
-          });
-        }
-        context.read<ChatProvider>().setActiveConversation(conv.id);
-        if (isMobile) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ChatWindow(conversation: conv),
-            ),
-          );
-        }
-      },
-      onDelete: () => _showDeleteConfirmation(context, provider, conv),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ConversationTile(
+          conversation: conv,
+          isActive: isSelected,
+          isMobile: isMobile,
+          subtitle: _getSubtitle(conv),
+          onTap: () {
+            if (conv.id != activeId) {
+              setState(() {
+                _closedContextConversationId = null;
+                _isNarrowContextOverlayOpen = false;
+                _activeReference = null;
+                _isSidePanelExpanded = false;
+              });
+            }
+            context.read<ChatProvider>().setActiveConversation(conv.id);
+            if (isMobile) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ChatWindow(conversation: conv),
+                ),
+              );
+            }
+          },
+          onArchive: () => _showArchiveConfirmation(context, provider, conv),
+        ),
+        Divider(
+          height: 1,
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
+      ],
     );
   }
 
-  Future<bool> _showDeleteConfirmation(
+  Future<bool> _showArchiveConfirmation(
     BuildContext context,
     ChatProvider provider,
     Conversation conv,
@@ -1700,9 +1637,9 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('¿Eliminar chat?'),
+        title: const Text('¿Archivar chat?'),
         content: Text(
-          'Estás a punto de eliminar el chat con "${provider.getChatTitle(conv)}". Esta acción no se puede deshacer.',
+          'El chat con "${provider.getChatTitle(conv)}" pasará al historial. Sus mensajes, vínculos y estados de entrega se conservarán.',
         ),
         actions: [
           TextButton(
@@ -1711,15 +1648,14 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Eliminar'),
+            child: const Text('Archivar'),
           ),
         ],
       ),
     );
 
     if (confirmed == true) {
-      await provider.deleteConversation(conv.id);
+      await provider.archiveConversation(conv.id);
       return true;
     }
     return false;

@@ -316,7 +316,7 @@ class _BusinessHoursSettingsPageState extends State<BusinessHoursSettingsPage> {
 
   void _appendMetaResults(List<_PublishResult> results, dynamic responseData) {
     final data = responseData is Map
-        ? Map<String, dynamic>.from(responseData as Map)
+        ? Map<String, dynamic>.from(responseData)
         : const <String, dynamic>{};
     final items = data['results'];
     if (items is! List) {
@@ -370,7 +370,7 @@ class _BusinessHoursSettingsPageState extends State<BusinessHoursSettingsPage> {
     if (value == null) return 'No se pudo publicar el horario.';
     if (value is String) return value;
     if (value is Map) {
-      final map = Map<String, dynamic>.from(value as Map);
+      final map = Map<String, dynamic>.from(value);
       final error = map['error'];
       if (error is String && error.trim().isNotEmpty) return error.trim();
       if (error is Map) {

@@ -47,6 +47,15 @@ class OnlineOrderOfficialDocument {
       status == 'approved' &&
       paymentOperationId?.trim().isNotEmpty == true;
 
+  /// Provider payment evidence. It is useful and may be opened from the order
+  /// inspector, but it is deliberately not presented as a Chilean tax document.
+  bool get isMercadoPagoPaymentReceipt =>
+      documentKind == 'mercadopago_payment_voucher' &&
+      provider == 'mercadopago' &&
+      fiscalValidity == 'not_a_tax_document' &&
+      status == 'approved' &&
+      paymentOperationId?.trim().isNotEmpty == true;
+
   bool get isOfficialChileanDte =>
       documentKind == 'tax_document' &&
       fiscalValidity == 'official_chilean_dte' &&
@@ -67,11 +76,14 @@ class OnlineOrderOfficialDocument {
   bool get hasVerifiedFiscalShape =>
       isMercadoPagoVoucherValidAsBoleta || isOfficialChileanDte;
 
+  bool get hasVerifiableArtifactShape =>
+      hasVerifiedFiscalShape || isMercadoPagoPaymentReceipt;
+
   /// An artifact is actionable only when both its fiscal shape and immutable
   /// content fingerprint are complete, and its address is an HTTPS URL without
   /// embedded user-info. HTTP, URL user-info and malformed hashes fail closed.
   Uri? get verifiedArtifactUri {
-    if (!hasVerifiedFiscalShape ||
+    if (!hasVerifiableArtifactShape ||
         !RegExp(r'^[0-9a-f]{64}$').hasMatch(artifactSha256)) {
       return null;
     }
@@ -90,6 +102,9 @@ class OnlineOrderOfficialDocument {
   }
 
   String get displayLabel {
+    if (isMercadoPagoPaymentReceipt) {
+      return 'Comprobante de pago Mercado Pago (no tributario)';
+    }
     if (isMercadoPagoVoucherValidAsBoleta) {
       return 'Voucher Mercado Pago válido como boleta';
     }
@@ -99,7 +114,7 @@ class OnlineOrderOfficialDocument {
   }
 
   String get referenceLabel {
-    if (isMercadoPagoVoucherValidAsBoleta) {
+    if (isMercadoPagoVoucherValidAsBoleta || isMercadoPagoPaymentReceipt) {
       return 'Operación ${paymentOperationId!}';
     }
     if (folio?.trim().isNotEmpty == true) return 'Folio ${folio!.trim()}';

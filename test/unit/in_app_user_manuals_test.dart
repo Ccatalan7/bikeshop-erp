@@ -61,12 +61,25 @@ void main() {
     expect(jobs, contains('Presupuesto y cotización'));
     expect(jobs, contains('Lectura de tiempos y métricas'));
     expect(jobs, contains('Rutina recomendada'));
+    expect(jobs, contains('Selector Estado'));
+    expect(jobs, contains('ítems del trabajo'));
+    expect(jobs, isNot(contains('número de serie')));
+    expect(jobs, contains('`Cubierto` queda bloqueado'));
+    expect(jobs, contains('REINTENTAR desde el mismo aviso'));
+    expect(jobs, contains('copia al portapapeles, en formato CSV'));
 
     expect(website, contains('```flow'));
     expect(website, contains('Mercado Pago'));
     expect(website, contains('Correcciones y excepciones'));
     expect(website, contains('Emails y documentos'));
     expect(website, contains('Google Merchant'));
+    expect(website, contains('sin descontar stock'));
+    expect(website, contains('seguimiento no generan una reserva física'));
+    expect(website, contains('no es boleta ni factura'));
+    expect(website, contains('el ERP actual no la emite'));
+    expect(website, contains('no ofrece una acción de sustitución'));
+    expect(website, contains('**Listo para retiro**, seguido de'));
+    expect(website, contains('**Enviado**, seguido de'));
   });
 
   test('canonical registries keep the in-product documentation contract', () {

@@ -35,6 +35,24 @@ interface CallerContext {
   permissions: Record<string, unknown>
 }
 
+export interface MessagingDeletionEvidence {
+  hasEvidence: boolean
+  sources: string[]
+}
+
+export interface AccountDeletionResult {
+  success: true
+  authDeleted: boolean
+  authBanned: boolean
+  authDetachedOnly: boolean
+  accountDeactivated: boolean
+  preservedForMessagingHistory: boolean
+  outcome: 'auth_deleted' | 'deactivated_preserved_messaging_history'
+  messagingEvidence: string[]
+}
+
+export type AccountDeletionScope = 'internal' | 'customer' | 'orphan'
+
 const rolePermissions: Record<string, Record<string, boolean>> = {
   admin: {
     access_pos: true,
@@ -83,7 +101,7 @@ const rolePermissions: Record<string, Record<string, boolean>> = {
   },
 }
 
-Deno.serve(async (req) => {
+export async function handler(req: Request) {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -153,7 +171,11 @@ Deno.serve(async (req) => {
     console.error('admin-user-management error', error)
     return json({ error: toErrorMessage(error) }, 500)
   }
-})
+}
+
+if (import.meta.main) {
+  Deno.serve(handler)
+}
 
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
@@ -576,11 +598,22 @@ async function deleteInternalAccount(serviceClient: SupabaseClient, caller: Call
 
   await assertStaffInTenant(serviceClient, caller.tenantId, userId)
 
+  const messagingEvidence = await getMessagingDeletionEvidence(serviceClient, userId)
+  if (messagingEvidence.hasEvidence) {
+    const deactivation = await deactivateAccountPreservingMessagingHistory(
+      serviceClient,
+      caller.tenantId,
+      userId,
+      'internal',
+    )
+    return preservedMessagingHistoryResult(messagingEvidence, deactivation.authBanned)
+  }
+
   await serviceClient.from('employees').update({ user_id: null }).eq('user_id', userId).eq('tenant_id', caller.tenantId)
   const { error } = await serviceClient.auth.admin.deleteUser(userId)
   if (error) throw error
 
-  return { success: true }
+  return hardDeletedAccountResult()
 }
 
 async function createWorkerPortalAccount(
@@ -960,14 +993,19 @@ async function deleteCustomerAccount(serviceClient: SupabaseClient, caller: Call
     return { success: true, authDeleted: false, authDetachedOnly: true }
   }
 
-  const isStaffUser = await isStaffUserInTenant(serviceClient, caller.tenantId, authUserId)
-  if (!isStaffUser) {
-    await clearCustomerAuthReferencesForDelete(
+  const messagingEvidence = await getMessagingDeletionEvidence(serviceClient, authUserId)
+  if (messagingEvidence.hasEvidence) {
+    const deactivation = await deactivateAccountPreservingMessagingHistory(
       serviceClient,
       caller.tenantId,
       authUserId,
+      'customer',
     )
+    return preservedMessagingHistoryResult(messagingEvidence, deactivation.authBanned)
+  }
 
+  const isStaffUser = await isStaffUserInTenant(serviceClient, caller.tenantId, authUserId)
+  if (!isStaffUser) {
     const { error } = await serviceClient.auth.admin.deleteUser(authUserId)
     if (error) {
       console.warn('Unable to hard-delete customer auth user', authUserId, error.message)
@@ -983,7 +1021,7 @@ async function deleteCustomerAccount(serviceClient: SupabaseClient, caller: Call
       if (customerDeleteError) throw customerDeleteError
     }
 
-    return { success: true, authDeleted: true, authDetachedOnly: false }
+    return hardDeletedAccountResult()
   }
 
   if (body.deleteCustomerRecord === true) {
@@ -1026,48 +1064,204 @@ async function deleteOrphanWebsiteAuthAccount(serviceClient: SupabaseClient, cal
     throw new Error('Esta cuenta web ya tiene ficha CRM. Elimínala desde el cliente vinculado.')
   }
 
-  await clearCustomerAuthReferencesForDelete(
-    serviceClient,
-    caller.tenantId,
-    authUserId,
-  )
+  const messagingEvidence = await getMessagingDeletionEvidence(serviceClient, authUserId)
+  if (messagingEvidence.hasEvidence) {
+    const deactivation = await deactivateAccountPreservingMessagingHistory(
+      serviceClient,
+      caller.tenantId,
+      authUserId,
+      'orphan',
+    )
+    return preservedMessagingHistoryResult(messagingEvidence, deactivation.authBanned)
+  }
 
   const { error } = await serviceClient.auth.admin.deleteUser(authUserId)
   if (error) throw new Error(`No se pudo eliminar el usuario Auth del cliente: ${error.message}`)
-  return { success: true, authDeleted: true, authDetachedOnly: false }
+  return hardDeletedAccountResult()
 }
 
-async function clearCustomerAuthReferencesForDelete(
+export async function getMessagingDeletionEvidence(
+  serviceClient: SupabaseClient,
+  userId: string,
+): Promise<MessagingDeletionEvidence> {
+  // Auth users are global. An administrator must not hard-delete the identity
+  // when any tenant still retains messaging authorship or membership evidence.
+  const checks = [
+    {
+      source: 'conversations',
+      query: serviceClient
+        .from('conversations')
+        .select('id')
+        .or(`created_by.eq.${userId},accepted_by.eq.${userId},resolved_by.eq.${userId}`),
+    },
+    {
+      source: 'conversation_participants',
+      query: serviceClient
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', userId),
+    },
+    {
+      source: 'conversation_contexts',
+      query: serviceClient
+        .from('conversation_contexts')
+        .select('id')
+        .eq('added_by', userId),
+    },
+    {
+      source: 'messages',
+      query: serviceClient
+        .from('messages')
+        .select('id')
+        .eq('sender_id', userId),
+    },
+    {
+      source: 'messaging_attachments',
+      query: serviceClient
+        .from('messaging_attachments')
+        .select('id')
+        .eq('created_by', userId),
+    },
+    {
+      source: 'messaging_command_receipts',
+      query: serviceClient
+        .from('messaging_command_receipts')
+        .select('id')
+        .eq('actor_id', userId),
+    },
+    {
+      source: 'messaging_participant_reconciliation_audit',
+      query: serviceClient
+        .from('messaging_participant_reconciliation_audit')
+        .select('id')
+        .eq('user_id', userId),
+    },
+  ]
+
+  const results = await Promise.all(checks.map(async ({ source, query }) => {
+    const { data, error } = await query.limit(1)
+    if (error) {
+      throw new Error(
+        `No se pudo verificar el historial de mensajeria (${source}): ${toErrorMessage(error)}`,
+      )
+    }
+    return { source, found: Array.isArray(data) && data.length > 0 }
+  }))
+
+  const sources = results
+    .filter((result) => result.found)
+    .map((result) => result.source)
+
+  return { hasEvidence: sources.length > 0, sources }
+}
+
+export async function deactivateAccountPreservingMessagingHistory(
   serviceClient: SupabaseClient,
   tenantId: string,
   userId: string,
+  scope: AccountDeletionScope,
 ) {
-  const operations = [
-    serviceClient
-      .from('conversations')
-      .update({ created_by: null })
+  const updatedAt = new Date().toISOString()
+  const operations = []
+  if (scope === 'internal') {
+    operations.push(serviceClient
+      .from('user_profiles')
+      .update({ is_active: false, updated_at: updatedAt })
       .eq('tenant_id', tenantId)
-      .eq('created_by', userId),
-    serviceClient
-      .from('conversations')
-      .update({ accepted_by: null })
+      .eq('user_id', userId))
+  } else if (scope === 'customer') {
+    operations.push(serviceClient
+      .from('customers')
+      .update({ is_active: false, updated_at: updatedAt })
       .eq('tenant_id', tenantId)
-      .eq('accepted_by', userId),
-    serviceClient
-      .from('conversation_contexts')
-      .update({ added_by: null })
-      .eq('tenant_id', tenantId)
-      .eq('added_by', userId),
-    serviceClient
-      .from('messages')
-      .update({ sender_id: null })
-      .eq('tenant_id', tenantId)
-      .eq('sender_id', userId),
-  ]
+      .eq('auth_user_id', userId))
+  }
 
   const results = await Promise.all(operations)
   for (const result of results) {
     if (result.error) throw result.error
+  }
+
+  const authBanned = !await hasActiveAccountMembership(serviceClient, userId)
+  if (authBanned) {
+    const { error: authError } = await serviceClient.auth.admin.updateUserById(userId, {
+      ban_duration: '876600h',
+    })
+    if (authError) {
+      throw new Error(`No se pudo suspender el usuario Auth: ${toErrorMessage(authError)}`)
+    }
+  }
+
+  return { authBanned }
+}
+
+async function hasActiveAccountMembership(serviceClient: SupabaseClient, userId: string) {
+  const checks = [
+    {
+      source: 'user_profiles',
+      query: serviceClient
+        .from('user_profiles')
+        .select('id')
+        .eq('user_id', userId)
+        .or('is_active.eq.true,is_active.is.null'),
+    },
+    {
+      source: 'customers',
+      query: serviceClient
+        .from('customers')
+        .select('id')
+        .eq('auth_user_id', userId)
+        .eq('is_active', true),
+    },
+    {
+      source: 'employee_portal_accounts',
+      query: serviceClient
+        .from('employee_portal_accounts')
+        .select('id')
+        .eq('auth_user_id', userId)
+        .eq('is_active', true),
+    },
+  ]
+
+  const results = await Promise.all(checks.map(async ({ source, query }) => {
+    const { data, error } = await query.limit(1)
+    if (error) {
+      throw new Error(
+        `No se pudo verificar el acceso activo restante (${source}): ${toErrorMessage(error)}`,
+      )
+    }
+    return Array.isArray(data) && data.length > 0
+  }))
+
+  return results.some(Boolean)
+}
+
+export function preservedMessagingHistoryResult(
+  evidence: MessagingDeletionEvidence,
+  authBanned: boolean,
+): AccountDeletionResult {
+  return {
+    success: true,
+    authDeleted: false,
+    authBanned,
+    authDetachedOnly: false,
+    accountDeactivated: true,
+    preservedForMessagingHistory: true,
+    outcome: 'deactivated_preserved_messaging_history',
+    messagingEvidence: [...evidence.sources],
+  }
+}
+
+export function hardDeletedAccountResult(): AccountDeletionResult {
+  return {
+    success: true,
+    authDeleted: true,
+    authBanned: false,
+    authDetachedOnly: false,
+    accountDeactivated: false,
+    preservedForMessagingHistory: false,
+    outcome: 'auth_deleted',
+    messagingEvidence: [],
   }
 }
 

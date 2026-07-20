@@ -560,29 +560,32 @@ class _ContextSelectionDialogState extends State<ContextSelectionDialog> {
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey),
                   ))
-                : ListView(
-                    children: [
-                      RadioListTile<ChatContextOption?>(
-                        title: const Text('Chat General (Sin contexto)'),
-                        value: null,
-                        groupValue: _selectedOption,
-                        onChanged: (val) =>
-                            setState(() => _selectedOption = val),
-                      ),
-                      const Divider(),
-                      ..._options.map((opt) => RadioListTile<ChatContextOption>(
-                            title: Text(opt.label),
-                            subtitle: Text(opt.subtitle),
+                : RadioGroup<ChatContextOption?>(
+                    groupValue: _selectedOption,
+                    onChanged: (value) =>
+                        setState(() => _selectedOption = value),
+                    child: ListView(
+                      children: [
+                        const RadioListTile<ChatContextOption?>(
+                          title: Text('Chat General (Sin contexto)'),
+                          value: null,
+                        ),
+                        const Divider(),
+                        ..._options.map(
+                          (option) => RadioListTile<ChatContextOption?>(
+                            title: Text(option.label),
+                            subtitle: Text(option.subtitle),
                             secondary: Icon(
-                              opt.type == 'job' ? Icons.build : Icons.receipt,
+                              option.type == 'job'
+                                  ? Icons.build
+                                  : Icons.receipt,
                               color: Colors.grey,
                             ),
-                            value: opt,
-                            groupValue: _selectedOption,
-                            onChanged: (val) =>
-                                setState(() => _selectedOption = val),
-                          )),
-                    ],
+                            value: option,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
       ),
       actions: [

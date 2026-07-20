@@ -5,6 +5,7 @@ import '../../modules/bikeshop/models/bikeshop_models.dart';
 import '../../modules/bikeshop/services/bikeshop_service.dart';
 import '../../modules/sales/models/sales_models.dart';
 import '../../modules/sales/services/sales_service.dart';
+import 'customer_chat_context_support.dart';
 
 class CustomerChatContextPanel extends StatelessWidget {
   final String contextType;
@@ -18,6 +19,9 @@ class CustomerChatContextPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!CustomerChatContextSupport.supports(contextType)) {
+      return const SizedBox.shrink();
+    }
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -47,7 +51,7 @@ class CustomerChatContextPanel extends StatelessWidget {
         icon = Icons.build_circle_outlined;
         break;
       case 'invoice':
-        title = 'Presupuesto / Factura';
+        title = 'Documento de venta';
         icon = Icons.receipt_long;
         break;
     }
@@ -80,9 +84,7 @@ class CustomerChatContextPanel extends StatelessWidget {
       case 'invoice':
         return _InvoiceDetails(invoiceId: contextId);
       default:
-        return Center(
-          child: Text('Contexto no soportado: $contextType'),
-        );
+        return const SizedBox.shrink();
     }
   }
 }
@@ -158,11 +160,43 @@ class _JobDetails extends StatelessWidget {
                 style: TextStyle(color: Colors.grey[700], fontSize: 13),
               ),
             ),
+            if (job.isQuotationWorkflow) ...[
+              const SizedBox(height: 24),
+              _buildSectionTitle(job.proposalDocumentLabel),
+              _buildInfoRow(
+                'Decisión',
+                (job.quotationStatus ?? QuotationStatus.pending).displayName,
+              ),
+              _buildInfoRow('Servicios', _formatCurrency(job.laborCost)),
+              _buildInfoRow(
+                'Repuestos y productos',
+                _formatCurrency(job.partsCost),
+              ),
+              _buildInfoRow(
+                'Total',
+                _formatCurrency(
+                  job.totalCost > 0
+                      ? job.totalCost
+                      : job.estimatedCost > 0
+                          ? job.estimatedCost
+                          : job.finalCost,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'La decisión se registra desde la solicitud del chat y queda vinculada al historial del trabajo.',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              ),
+            ],
             if (job.invoiceId != null) ...[
               const SizedBox(height: 24),
               const Divider(),
               const SizedBox(height: 16),
-              _buildSectionTitle('Presupuesto'),
+              _buildSectionTitle('Venta vinculada'),
               _InvoiceMiniSummary(invoiceId: job.invoiceId!),
             ],
           ],
@@ -218,11 +252,14 @@ class _InvoiceDetails extends StatelessWidget {
                 ? Colors.purple
                 : Colors.orange);
 
-        final statusLabel = invoice.status == InvoiceStatus.confirmed
-            ? 'CONFIRMADO'
-            : (invoice.status == InvoiceStatus.paid
-                ? 'PAGADO'
-                : 'BORRADOR / ENVIADO');
+        final statusLabel = switch (invoice.status) {
+          InvoiceStatus.draft => 'BORRADOR',
+          InvoiceStatus.sent => 'EMITIDA',
+          InvoiceStatus.confirmed => 'CONFIRMADA',
+          InvoiceStatus.paid => 'PAGADA',
+          InvoiceStatus.overdue => 'VENCIDA',
+          InvoiceStatus.cancelled => 'ANULADA',
+        };
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,24 +311,15 @@ class _InvoiceDetails extends StatelessWidget {
                         fontSize: 20, fontWeight: FontWeight.bold)),
               ],
             ),
-            if (invoice.status == InvoiceStatus.sent) ...[
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () {
-                    // TODO: Trigger confirm action via Notification or Chat Action
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text('Por favor confirma en el chat.')));
-                  },
-                  icon: const Icon(Icons.check),
-                  label: const Text('CONFIRMAR PRESUPUESTO'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                ),
+            const SizedBox(height: 16),
+            Text(
+              'Este documento refleja la venta. Las decisiones de presupuesto se registran en el trabajo vinculado, no cambiando el estado de la venta.',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 12,
+                height: 1.35,
               ),
-            ]
+            ),
           ],
         );
       },
@@ -314,9 +342,9 @@ class _InvoiceMiniSummary extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.blue[50],
+            color: Colors.grey[50],
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.blue[100]!),
+            border: Border.all(color: Colors.grey[200]!),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -324,9 +352,9 @@ class _InvoiceMiniSummary extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Total Presupuestado',
+                  const Text('Total venta',
                       style: TextStyle(
-                          color: Colors.blue,
+                          color: Colors.black54,
                           fontSize: 12,
                           fontWeight: FontWeight.bold)),
                   Text('\$${invoice.total.toStringAsFixed(0)}',
@@ -335,7 +363,7 @@ class _InvoiceMiniSummary extends StatelessWidget {
                 ],
               ),
               if (invoice.status == InvoiceStatus.sent)
-                Icon(Icons.pending, color: Colors.blue[300]),
+                Icon(Icons.schedule_outlined, color: Colors.grey[500]),
               if (invoice.status == InvoiceStatus.confirmed)
                 const Icon(Icons.check_circle, color: Colors.green),
             ],
@@ -347,6 +375,12 @@ class _InvoiceMiniSummary extends StatelessWidget {
 }
 
 // Helpers
+
+String _formatCurrency(double amount) => NumberFormat.currency(
+      locale: 'es_CL',
+      symbol: r'$',
+      decimalDigits: 0,
+    ).format(amount);
 
 Widget _buildSectionTitle(String title) {
   return Padding(

@@ -519,7 +519,8 @@ class _RightToolbarState extends State<RightToolbar> {
         : isDark
             ? const Color(0xFF2E2E2E)
             : const Color(0xFFDDE0E4);
-    final useSidebarPalette = tool == ToolbarTool.messages &&
+    final useSidebarPalette = (tool == ToolbarTool.messages ||
+            tool == ToolbarTool.supplierMessages) &&
         appearanceService.messagingUsesSidebarPalette;
     final panelTheme =
         useSidebarPalette ? buildSidebarPaletteTheme(theme, palette) : theme;

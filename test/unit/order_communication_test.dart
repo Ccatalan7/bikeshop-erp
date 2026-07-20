@@ -43,4 +43,23 @@ void main() {
     expect(communication.isDryRun, isTrue);
     expect(communication.needsAttention, isTrue);
   });
+
+  test('labels the non-fiscal Mercado Pago receipt email precisely', () {
+    final communication = OrderCommunication.fromJson({
+      'id': 'outbox-3',
+      'order_id': 'order-1',
+      'message_kind': 'mercadopago_payment_voucher_available',
+      'recipient_email': 'customer@example.invalid',
+      'subject': 'Comprobante disponible',
+      'delivery_mode': 'send',
+      'state': 'delivered',
+      'attempt_count': 1,
+      'created_at': '2026-07-18T18:00:00.000Z',
+    });
+
+    expect(
+      communication.messageLabel,
+      'Comprobante de pago Mercado Pago disponible',
+    );
+  });
 }

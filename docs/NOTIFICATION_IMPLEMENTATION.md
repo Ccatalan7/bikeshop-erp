@@ -2,7 +2,7 @@
 
 > **Purpose**: Comprehensive documentation for AI agents and developers to understand, maintain, and extend the push notification system.
 > 
-> **Last Updated**: 2025-12-29
+> **Last Updated**: 2026-07-19
 > **Repository**: `/Users/Claudio/Dev/bikeshop-erp`
 
 ---
@@ -19,6 +19,71 @@
 ---
 
 ## Architecture Overview
+
+### Stable owner and identity scope (current contract)
+
+`_WorkspaceDeepLinkBridge` in `lib/main.dart` is the only foreground owner for
+chat, mail and `erp_notifications` presentation. A routed `MainLayout` is only
+a visual consumer of the shared counters/feed; it must not create Realtime
+channels, polling timers or top-alert overlays. This matters because GoRouter
+and the workspace `IndexedStack` legitimately retain several routed layouts.
+
+The stable owner performs this sequence on every authenticated session:
+
+1. resolve the exact Supabase user and tenant;
+2. activate `ChatNotificationGate`, `MailNotificationGate` and
+   `ErpNotificationGate` with that `user + tenant` scope;
+3. clear the previous `NotificationService` projection before loading data;
+4. load existing rows as a baseline without presenting them;
+5. start exactly one tenant-filtered Realtime channel and one bounded polling
+   fallback;
+6. discard every late async result whose lifecycle epoch or scope no longer
+   matches.
+
+On logout, user switch or disposal of the authenticated shell, the epoch is
+invalidated before asynchronous teardown. Timers and channels are cancelled,
+all gates fail closed, shared badges/feed are cleared, and
+`MailAccountManager` resets its user-scoped providers/cache without closing
+its process-wide `newEmailStream`. A new shell can therefore subscribe to the
+same singleton without inheriting a zombie listener or a previous user's mail.
+During a user transition the manager first publishes a closed, unready scope;
+the next user is committed only after best-effort channel teardown and
+mandatory cache initialization/invalidation succeed. A cache failure therefore
+cannot expose or relabel the previous user's stored inbox.
+
+```mermaid
+flowchart LR
+    A["Supabase auth user"] --> B["Resolve tenant"]
+    B --> C["Activate user + tenant scope"]
+    C --> D["Seed existing rows as baseline"]
+    D --> E["One Realtime channel"]
+    D --> F["One polling fallback"]
+    E --> G["Stable shell alert"]
+    F --> G
+    G --> H["Shared feed and badges"]
+    I["Logout / user switch / shell dispose"] --> J["Increment epoch and cancel"]
+    J --> C
+```
+
+### Idempotency rules
+
+- FCM history notifications for mail are wake-up signals only. The provider
+  message ID discovered by `MailAccountManager` is the evidence for a new-mail
+  alert.
+- Chat presentation uses the immutable message ID. Opening a module or
+  rebuilding a route never resets that memory.
+- On Android/iOS, a background message has exactly one presentation owner: the
+  native FCM/APNs alert included by `push-notification`. The Dart background
+  isolate never creates a second local notification; foreground presentation
+  continues through the stable workspace owner and its scoped gate.
+- ERP rows use their immutable `erp_notifications.id`. Rows present at initial
+  load remain visible but are never re-announced; only a first discovery in the
+  active identity scope is eligible.
+- All three gates reject claims before a valid scope is active.
+- `NotificationService.loadNotifications` and
+  `loadOnlineOrderAlerts` read back their generation after I/O before changing
+  a notifier, preventing a late response from the previous tenant from
+  replacing the current feed.
 
 ### Technology Stack
 
@@ -102,6 +167,22 @@ sequenceDiagram
 #### 1.2 Notification Grouping (WhatsApp-style)
 
 **Edge Function** [`supabase/functions/push-notification/index.ts`](file:///Users/Claudio/Dev/bikeshop-erp/supabase/functions/push-notification/index.ts):
+
+The database conversation is the authoritative tenant boundary for every
+message push. Recipient selection follows one shared contract:
+
+- inbound support/WhatsApp messages notify every active `user_profiles` staff
+  member in that conversation's tenant, even when the worker was not added as
+  an individual conversation participant;
+- internal chat messages notify only active staff who are explicit participants
+  of that same-tenant conversation;
+- staff replies in support conversations remain participant-only so customer
+  devices can receive their reply without broadcasting it to unrelated users;
+- the sender, foreign-tenant memberships, inactive users, system messages and
+  unsupported WhatsApp companion rows are always excluded;
+- FCM `id` and `message_id` both carry the immutable database message UUID and
+  `conversation_id` carries the canonical thread UUID for client deduplication
+  and deep linking.
 
 ```typescript
 android: {
@@ -224,6 +305,22 @@ messaging.onBackgroundMessage((payload) => {
   // Do NOT call showNotification here
 });
 ```
+
+---
+
+### Problem 4b: Duplicate Notifications on Mobile Background
+
+**Symptom**: Android/iOS could show the provider alert and a second local alert
+for the same message.
+
+**Root Cause**: The Edge payload already includes an Android/APNs notification,
+while the Dart background handler passed the same event to the local
+notification presenter.
+
+**Solution Applied**: Native FCM/APNs owns background presentation. The Dart
+handler initializes Firebase but does not call `handleIncomingMessage`; the
+authoritative conversation is refreshed when the app resumes. Foreground
+messages still use the single scoped in-app owner.
 
 ---
 

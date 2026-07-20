@@ -370,6 +370,11 @@ allow_dynamic_registration = false
 # Google redirects the browser back here without a Supabase Authorization header.
 verify_jwt = false
 
+[functions.admin-user-management]
+# Account administration is an authenticated ERP-only surface. The function
+# also revalidates tenant-scoped administrative permission before any mutation.
+verify_jwt = true
+
 [functions.gmail-oauth]
 # Gmail redirects the browser back here without a Supabase Authorization header.
 verify_jwt = false
@@ -385,6 +390,16 @@ verify_jwt = false
 [functions.whatsapp-send]
 # The send function decodes the Supabase JWT after gateway verification to avoid
 # an extra Auth API round trip on every message send.
+verify_jwt = true
+
+[functions.whatsapp-webhook]
+# Meta cannot attach a Supabase JWT. Authenticity is enforced with the raw-body
+# x-hub-signature-256 HMAC before any payload is processed.
+verify_jwt = false
+
+[functions.whatsapp-media]
+# Media hydration is available only to an authenticated user who can read the
+# referenced message through the canonical messaging RLS policy.
 verify_jwt = true
 
 [functions.whatsapp-catalog-sync]

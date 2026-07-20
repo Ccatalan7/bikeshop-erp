@@ -8,6 +8,8 @@ void main() {
   late String tile;
   late String customerPanel;
   late String supplierPanel;
+  late String customerChat;
+  late String customerHub;
   late String registry;
 
   setUpAll(() {
@@ -25,6 +27,12 @@ void main() {
     ).readAsStringSync();
     supplierPanel = File(
       'lib/shared/widgets/quick_supplier_messages_panel.dart',
+    ).readAsStringSync();
+    customerChat = File(
+      'lib/public_store/widgets/customer_chat_view.dart',
+    ).readAsStringSync();
+    customerHub = File(
+      'lib/public_store/pages/customer_chat_hub_page.dart',
     ).readAsStringSync();
     registry = File(
       'docs/architecture/canonical-ui-surfaces.md',
@@ -76,5 +84,39 @@ void main() {
     expect(registry, contains('Right-toolbar customer messages'));
     expect(registry, contains('Right-toolbar supplier messages'));
     expect(registry, contains('tenant-and-user-scoped'));
+  });
+
+  test('session switches invalidate every messaging cache and stale callback',
+      () {
+    expect(provider, contains('synchronizeSessionScope('));
+    expect(provider, contains('_invalidateSessionState('));
+    expect(provider, contains('_sessionEpoch += 1'));
+    expect(provider, contains('_messageCacheByConversation.clear()'));
+    expect(provider, contains('_optimisticMessages.clear()'));
+    expect(provider, contains('_isCurrentSession(operationEpoch)'));
+  });
+
+  test('prefetch cannot replace a newer realtime timeline', () {
+    expect(provider, contains('revisionAtRequest'));
+    expect(provider, contains('revisionNow == revisionAtRequest'));
+    expect(provider, contains('mergeMessageTimelinesMonotonically('));
+  });
+
+  test('customer conversation lifecycle is realtime and fail-closed', () {
+    expect(service, contains('subscribeToConversationLifecycleUpdates('));
+    expect(customerHub, contains('subscribeToConversationLifecycleUpdates(()'));
+    expect(customerChat,
+        contains('_messagingService.subscribeToConversationLifecycleUpdates('));
+    expect(customerChat, contains("status == 'loading'"));
+    expect(customerChat, contains("status == 'unavailable'"));
+    expect(customerChat, contains('if (!isClosed)'));
+  });
+
+  test('customer signed URL preview cache expires before server authorization',
+      () {
+    expect(customerChat, contains('signedUrlLifetimeSeconds - 30'));
+    expect(customerChat, contains('_attachmentUrlRefreshTimer'));
+    expect(customerChat, contains('entry.shouldRefresh'));
+    expect(customerChat, contains('createRuntimeSignedUrl(message)'));
   });
 }

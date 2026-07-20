@@ -401,15 +401,14 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
     );
   }
 
-  Future<void> _confirmDeleteConversation(Conversation conversation) async {
-    final theme = Theme.of(context);
+  Future<void> _confirmArchiveConversation(Conversation conversation) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Eliminar chat'),
+          title: const Text('Archivar chat'),
           content: Text(
-            'Esto eliminará la conversación "${conversation.title ?? conversation.channelLabel}" y sus mensajes. Esta acción no se puede deshacer.',
+            'La conversación "${conversation.title ?? conversation.channelLabel}" pasará al historial. Sus mensajes y vínculos se conservarán.',
           ),
           actions: [
             TextButton(
@@ -417,13 +416,9 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
               child: const Text('Cancelar'),
             ),
             FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: theme.colorScheme.error,
-                foregroundColor: theme.colorScheme.onError,
-              ),
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              icon: const Icon(Icons.delete_outline, size: 18),
-              label: const Text('Eliminar'),
+              icon: const Icon(Icons.archive_outlined, size: 18),
+              label: const Text('Archivar'),
             ),
           ],
         );
@@ -432,15 +427,15 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
 
     if (confirmed != true || !mounted) return;
 
-    await _deleteConversation(conversation);
+    await _archiveConversation(conversation);
   }
 
-  Future<void> _deleteConversation(Conversation conversation) async {
+  Future<void> _archiveConversation(Conversation conversation) async {
     setState(() => _deletingConversationIds.add(conversation.id));
     try {
       final messagingService =
           Provider.of<MessagingService>(context, listen: false);
-      await messagingService.deleteConversation(conversation.id);
+      await messagingService.archiveConversation(conversation.id);
       if (!mounted) return;
 
       _safeSetState(() {
@@ -726,7 +721,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
                         ),
                       ),
                     IconButton(
-                      tooltip: 'Eliminar chat',
+                      tooltip: 'Archivar chat',
                       visualDensity: VisualDensity.compact,
                       icon: isDeleting
                           ? const SizedBox(
@@ -734,10 +729,10 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
                               height: 16,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Icon(Icons.delete_outline, size: 18),
+                          : const Icon(Icons.archive_outlined, size: 18),
                       onPressed: isDeleting
                           ? null
-                          : () => _confirmDeleteConversation(conv),
+                          : () => _confirmArchiveConversation(conv),
                     ),
                   ],
                 ),
@@ -789,7 +784,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
                       _safeSetState(() => _activeConversation = null),
                 ),
               IconButton(
-                tooltip: 'Eliminar chat',
+                tooltip: 'Archivar chat',
                 visualDensity: VisualDensity.compact,
                 icon: isDeleting
                     ? const SizedBox(
@@ -797,10 +792,10 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.delete_outline, size: 18),
+                    : const Icon(Icons.archive_outlined, size: 18),
                 onPressed: isDeleting
                     ? null
-                    : () => _confirmDeleteConversation(activeConv),
+                    : () => _confirmArchiveConversation(activeConv),
               ),
             ],
           ),
@@ -823,6 +818,8 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
       id: conversation.id,
       type: conversation.type,
       channel: conversation.channel,
+      isGroup: conversation.isGroup,
+      counterpartyType: conversation.counterpartyType,
       status: conversation.status,
       title: conversation.title,
       contextType: conversation.contextType,
@@ -830,6 +827,9 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
       updatedAt: conversation.updatedAt,
       lastMessageAt: conversation.lastMessageAt,
       staffLastReadAt: conversation.staffLastReadAt,
+      staffLastReadMessageSequence: conversation.staffLastReadMessageSequence,
+      lastMessageId: conversation.lastMessageId,
+      lastMessageSequence: conversation.lastMessageSequence,
       lastMessageContent: conversation.lastMessageContent,
       lastMessageType: conversation.lastMessageType,
       lastMessageMetadata: conversation.lastMessageMetadata,

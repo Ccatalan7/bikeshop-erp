@@ -214,7 +214,16 @@ class FlowDiagram(Flowable):
             self.labels[index : index + row_size]
             for index in range(0, len(self.labels), row_size)
         ]
-        self.height = len(self.rows) * 24 * mm + max(0, len(self.rows) - 1) * 5 * mm
+        # Keep multi-step diagrams compact enough to remain paired with the
+        # explanation that follows. The previous 53 mm two-row block pushed a
+        # three-line explanation onto a new page and left an orphan diagram.
+        self.row_height = 18 * mm
+        self.row_gap = 3 * mm
+        self.box_height = 13.5 * mm
+        self.height = (
+            len(self.rows) * self.row_height
+            + max(0, len(self.rows) - 1) * self.row_gap
+        )
 
     def wrap(self, available_width: float, available_height: float) -> tuple[float, float]:
         self.width = available_width
@@ -222,21 +231,26 @@ class FlowDiagram(Flowable):
 
     def draw(self) -> None:
         canvas = self.canv
-        row_height = 24 * mm
-        row_gap = 5 * mm
+        row_height = self.row_height
+        row_gap = self.row_gap
         for row_index, row in enumerate(self.rows):
             count = len(row)
             arrow_gap = 8 * mm
             box_width = (self.width - arrow_gap * max(0, count - 1)) / max(1, count)
-            box_height = 17 * mm
-            y = self.height - (row_index + 1) * row_height - row_index * row_gap + 4 * mm
+            box_height = self.box_height
+            y = (
+                self.height
+                - (row_index + 1) * row_height
+                - row_index * row_gap
+                + 2.2 * mm
+            )
             for index, label in enumerate(row):
                 x = index * (box_width + arrow_gap)
                 canvas.setFillColor(SOFT)
                 canvas.setStrokeColor(LINE)
-                canvas.roundRect(x, y, box_width, box_height, 3 * mm, fill=1, stroke=1)
+                canvas.roundRect(x, y, box_width, box_height, 2.4 * mm, fill=1, stroke=1)
                 canvas.setFillColor(self.accent)
-                canvas.roundRect(x, y, 3 * mm, box_height, 3 * mm, fill=1, stroke=0)
+                canvas.roundRect(x, y, 2.6 * mm, box_height, 2.4 * mm, fill=1, stroke=0)
                 canvas.setFillColor(INK)
                 canvas.setFont("BarlowSemiBold", 8.2)
                 lines = _wrap_canvas_text(label, "BarlowSemiBold", 8.2, box_width - 10 * mm)
@@ -244,7 +258,7 @@ class FlowDiagram(Flowable):
                 start_y = y + box_height / 2 + (len(lines) - 1) * line_height / 2 - 3
                 for line_index, line in enumerate(lines[:3]):
                     canvas.drawCentredString(
-                        x + box_width / 2 + 1.5 * mm,
+                        x + box_width / 2 + 1.3 * mm,
                         start_y - line_index * line_height,
                         line,
                     )
@@ -265,15 +279,25 @@ class FlowDiagram(Flowable):
                     self.width - arrow_gap * max(0, next_count - 1)
                 ) / max(1, next_count)
                 next_first_x = next_box_width / 2
-                y1 = y - 1.5 * mm
-                y2 = y - row_gap - 2.5 * mm
+                y1 = y - 0.8 * mm
+                y2 = y - row_gap - 1.2 * mm
                 canvas.setStrokeColor(self.accent)
                 canvas.setLineWidth(1.1)
                 canvas.line(current_last_x, y1, current_last_x, y2)
                 canvas.line(current_last_x, y2, next_first_x, y2)
-                canvas.line(next_first_x, y2, next_first_x, y2 - 3 * mm)
-                canvas.line(next_first_x, y2 - 3 * mm, next_first_x - 2.2, y2 - 3 * mm + 3)
-                canvas.line(next_first_x, y2 - 3 * mm, next_first_x + 2.2, y2 - 3 * mm + 3)
+                canvas.line(next_first_x, y2, next_first_x, y2 - 1.7 * mm)
+                canvas.line(
+                    next_first_x,
+                    y2 - 1.7 * mm,
+                    next_first_x - 2.2,
+                    y2 - 1.7 * mm + 3,
+                )
+                canvas.line(
+                    next_first_x,
+                    y2 - 1.7 * mm,
+                    next_first_x + 2.2,
+                    y2 - 1.7 * mm + 3,
+                )
 
 
 def _wrap_canvas_text(text: str, font: str, size: float, max_width: float) -> list[str]:
@@ -322,7 +346,8 @@ class ManualDocTemplate(BaseDocTemplate):
 
     def _draw_page(self, canvas, document) -> None:
         canvas.saveState()
-        if document.page > 1:
+        page_number = canvas.getPageNumber()
+        if page_number > 1:
             canvas.setFillColor(NAVY)
             canvas.rect(0, A4[1] - 11 * mm, A4[0], 11 * mm, fill=1, stroke=0)
             canvas.setFillColor(WHITE)
@@ -340,7 +365,7 @@ class ManualDocTemplate(BaseDocTemplate):
         canvas.setFont("Barlow", 7.5)
         canvas.drawString(17 * mm, 7.5 * mm, "Manual interno · Viña Bike ERP")
         canvas.drawRightString(
-            A4[0] - 17 * mm, 7.5 * mm, f"Página {document.page}"
+            A4[0] - 17 * mm, 7.5 * mm, f"Página {page_number}"
         )
         canvas.restoreState()
 
@@ -405,6 +430,7 @@ def markdown_table(rows: list[list[str]], style_map) -> Table:
         widths = [37 * mm, 55 * mm, 84 * mm]
     else:
         widths = [176 * mm / columns] * columns
+    vertical_padding = 1.4 * mm if columns == 2 else 2.6 * mm
     data = []
     for row_index, row in enumerate(rows):
         style = style_map["table_header"] if row_index == 0 else style_map["table_body"]
@@ -415,8 +441,8 @@ def markdown_table(rows: list[list[str]], style_map) -> Table:
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 3 * mm),
         ("RIGHTPADDING", (0, 0), (-1, -1), 3 * mm),
-        ("TOPPADDING", (0, 0), (-1, -1), 2.6 * mm),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.6 * mm),
+        ("TOPPADDING", (0, 0), (-1, -1), vertical_padding),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), vertical_padding),
         ("LINEBELOW", (0, 0), (-1, -1), 0.45, LINE),
         ("BOX", (0, 0), (-1, -1), 0.6, LINE),
     ]
@@ -582,6 +608,10 @@ def parse_manual(source: Path, spec: ManualSpec) -> list[Flowable]:
         index += 1
 
     flush_paragraph()
+    # A trailing layout spacer can overflow an otherwise full last page and
+    # create a blank page that contains only header/footer furniture.
+    while story and isinstance(story[-1], Spacer):
+        story.pop()
     return story
 
 

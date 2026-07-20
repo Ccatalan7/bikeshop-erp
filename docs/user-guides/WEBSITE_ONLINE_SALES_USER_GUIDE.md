@@ -34,7 +34,7 @@ sin ser enviado a Merchant cuando le falta información obligatoria.
 ## 3. Qué ocurre cuando un cliente compra
 
 ```flow
-Catálogo -> Carrito -> Checkout seguro -> Reserva de stock -> Pago -> Venta ERP -> Preparación -> Entrega
+Catálogo -> Carrito -> Checkout seguro -> Pedido + reserva -> Validar pago y Venta ERP -> Preparación -> Entrega
 ```
 
 En el checkout el servidor vuelve a calcular productos, IVA, descuentos y
@@ -42,6 +42,8 @@ despacho. El pedido reserva las unidades con seguimiento sin descontar stock
 físico. La reserva se consume cuando la venta ERP se contabiliza y genera el
 movimiento de stock; se libera al cancelar o vencer. Servicios e ítems sin
 seguimiento no generan una reserva física.
+
+<!-- pagebreak -->
 
 ### Mercado Pago
 
@@ -68,18 +70,20 @@ para abrir el inspector sin perder el contexto.
 | Estado | Usa el chip para avanzar únicamente al siguiente estado permitido. |
 | Pago | Mercado Pago es automático; transferencia permite confirmación verificada. |
 | Venta ERP | Abre la venta que controla stock, IVA, pagos y contabilidad. |
-| Inspector > Documentos | Muestra evidencia fiscal verificable y el comprobante de Mercado Pago cuando está disponible. |
+| Inspector > Documentos | Muestra evidencia fiscal verificable y, cuando fue registrado y asociado al pedido, el comprobante de Mercado Pago. |
 | Inspector > Comunicaciones | Muestra entrega o rebote de emails; no reescribe el historial. |
 
 ### Flujo operativo
 
 ```flow
-Pendiente -> Confirmado -> En proceso -> Listo para retiro / Enviado -> Entregado
+Pendiente -> Confirmado -> En proceso -> Hito según modalidad -> Entregado
 ```
 
-El camino depende de `Retiro` o `Despacho`. Los estados terminales no vuelven
-hacia atrás mediante edición manual. Una devolución o cancelación pagada usa el
-flujo formal de corrección y reembolso.
+Desde `En proceso`, el camino exacto es **Listo para retiro**, seguido de
+**Entregado**, para **Retiro**; o **Enviado**, seguido de **Entregado**, para
+**Despacho**. Los estados terminales no vuelven hacia atrás mediante edición
+manual. Una devolución o cancelación pagada usa el flujo formal de corrección y
+reembolso.
 
 `Confirmado` indica que existe una venta ERP vinculada; no significa `Pagado`.
 En transferencias puede aparecer automáticamente. Antes de avanzar a **En
@@ -98,7 +102,7 @@ transportista y/o seguimiento: el sistema exige evidencia de despacho.
   efecto interno permitido. No vuelvas a cobrar.
 - **Sin stock al procesar:** no edites líneas ni stock manualmente. Revisa
   `Revisar/Conciliar` y resuelve mediante reposición o corrección/reembolso
-  formal. Una sustitución requiere acuerdo y registro separado.
+  formal. Pedidos online todavía no ofrece una acción de sustitución.
 - **Email rebotado:** usa teléfono u otro canal y conserva el rebote como
   evidencia. Pedidos online no permite reenviarlo a otro destinatario.
 
@@ -116,7 +120,9 @@ Evento del pedido -> Cola segura -> Resend -> Entrega / Rebote -> Evidencia en i
 - **Resumen del pedido:** informa productos y totales; no acredita pago ni es
   documento tributario.
 - **Comprobante de Mercado Pago:** acredita el pago; en la integración actual
-  no es boleta ni factura.
+  no es boleta ni factura. Si no aparece en Documentos, eso por sí solo no
+  demuestra que falte el pago: contrasta el chip Pago con la Venta ERP y abre
+  `Conciliar` si existe una diferencia.
 - **Boleta electrónica (DTE):** el ERP actual no la emite. Solo puede mostrarla
   si un emisor autorizado registra folio y artefacto oficial verificable.
 - **Venta ERP:** es respaldo interno y no constituye documento tributario.

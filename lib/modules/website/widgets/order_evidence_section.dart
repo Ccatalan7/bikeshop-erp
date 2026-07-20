@@ -254,7 +254,8 @@ class _OfficialDocumentRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _EvidenceIcon(
-                  icon: document.isMercadoPagoVoucherValidAsBoleta
+                  icon: document.isMercadoPagoVoucherValidAsBoleta ||
+                          document.isMercadoPagoPaymentReceipt
                       ? Icons.payments_outlined
                       : Icons.receipt_long_outlined,
                 ),
@@ -276,7 +277,8 @@ class _OfficialDocumentRow extends StatelessWidget {
           return Row(
             children: [
               _EvidenceIcon(
-                icon: document.isMercadoPagoVoucherValidAsBoleta
+                icon: document.isMercadoPagoVoucherValidAsBoleta ||
+                        document.isMercadoPagoPaymentReceipt
                     ? Icons.payments_outlined
                     : Icons.receipt_long_outlined,
               ),

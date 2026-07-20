@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'customer_chat_panel.dart';
+import 'customer_chat_surface.dart';
 
 class CustomerChatWidget extends StatefulWidget {
   final bool showContextPanel; // Whether to show side panel (desktop only?)
@@ -45,51 +45,9 @@ class _CustomerChatWidgetState extends State<CustomerChatWidget> {
                 ],
               ),
               clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  // Header handled by Panel or Custom here?
-                  // Let's add a custom header for the overlay with Close button
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    decoration: const BoxDecoration(
-                      color: Colors.black,
-                      border: Border(bottom: BorderSide(color: Colors.grey)),
-                    ),
-                    child: Row(
-                      children: [
-                        const CircleAvatar(
-                          radius: 14,
-                          backgroundColor: Colors.white,
-                          child: Icon(Icons.support_agent,
-                              size: 18, color: Colors.black),
-                        ),
-                        const SizedBox(width: 10),
-                        const Text(
-                          'Soporte Vinabike',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.close,
-                              color: Colors.white, size: 20),
-                          onPressed: () => setState(() => _isOpen = false),
-                          padding: EdgeInsets.zero,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: CustomerChatPanel(
-                      activeContext: widget.activeContext,
-                      compactMode: false,
-                    ),
-                  ),
-                ],
+              child: CustomerChatSurface(
+                activeContext: widget.activeContext,
+                onClose: () => setState(() => _isOpen = false),
               ),
             ),
 

@@ -8,8 +8,12 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
 import 'shared/services/notification_service.dart';
+import 'shared/services/mail_notification_gate.dart';
+import 'shared/services/chat_notification_gate.dart';
+import 'shared/services/erp_notification_gate.dart';
 
 import 'shared/themes/app_theme.dart';
 import 'shared/services/auth_service.dart';
@@ -54,6 +58,8 @@ import 'public_store/providers/cart_provider.dart';
 import 'public_store/providers/public_store_tenant_provider.dart';
 import 'modules/messaging/providers/chat_provider.dart';
 import 'modules/messaging/services/messaging_service.dart';
+import 'modules/mail/providers/email_provider.dart';
+import 'modules/mail/providers/mail_account_manager.dart';
 import 'public_store/services/customer_account_service.dart';
 import 'public_store/services/address_autocomplete_service.dart';
 import 'public_store/services/public_inventory_service.dart';
@@ -453,11 +459,18 @@ class VinabikeApp extends StatelessWidget {
 
         // Public store services
         ChangeNotifierProvider(create: (_) => CartProvider()),
-        ChangeNotifierProxyProvider<UserManagementService, ChatProvider>(
-          create: (context) =>
-              ChatProvider(context.read<UserManagementService>()),
-          update: (context, userService, previous) =>
-              previous ?? ChatProvider(userService),
+        ChangeNotifierProxyProvider2<UserManagementService, TenantService,
+            ChatProvider>(
+          create: (context) => ChatProvider(
+            context.read<UserManagementService>(),
+            context.read<TenantService>(),
+          ),
+          update: (context, userService, tenantService, previous) {
+            final provider =
+                previous ?? ChatProvider(userService, tenantService);
+            unawaited(provider.synchronizeSessionScope());
+            return provider;
+          },
         ),
         ChangeNotifierProvider(create: (_) => AddressAutocompleteService()),
         ChangeNotifierProvider(create: (_) => CustomerAccountService()),
@@ -834,13 +847,39 @@ class _WorkspaceDeepLinkBridge extends StatefulWidget {
 class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     with WidgetsBindingObserver {
   StreamSubscription<String>? _routeSubscription;
+  StreamSubscription<RemoteMessage>? _workspacePushSubscription;
+  StreamSubscription<Email>? _newEmailSubscription;
+  StreamSubscription<AuthState>? _authStateSubscription;
+  OverlayEntry? _workspaceAlertOverlay;
+  Timer? _workspaceAlertTimer;
+  Timer? _erpNotificationsRefreshTimer;
+  RealtimeChannel? _erpNotificationsChannel;
   late final WorkspaceManager _workspaceManager;
+  bool _isWorkspaceForeground = true;
+  bool _erpNotificationsRefreshInFlight = false;
+  int _notificationLifecycleEpoch = 0;
+  String? _notificationUserId;
 
   @override
   void initState() {
     super.initState();
     _workspaceManager = context.read<WorkspaceManager>();
     WidgetsBinding.instance.addObserver(this);
+
+    final notificationService = NotificationService();
+    notificationService.setForegroundPresentationPolicy(
+      this,
+      _shouldPresentForegroundMessage,
+    );
+    _workspacePushSubscription =
+        notificationService.messageStream.listen(_handleWorkspacePush);
+    _newEmailSubscription =
+        MailAccountManager.instance.newEmailStream.listen(_handleNewEmail);
+    _authStateSubscription = Supabase.instance.client.auth.onAuthStateChange
+        .listen(_handleNotificationAuthState);
+    _restartNotificationLifecycle(
+      Supabase.instance.client.auth.currentUser?.id,
+    );
 
     if (kIsWeb) return;
 
@@ -857,19 +896,635 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
 
   @override
   void dispose() {
+    _notificationLifecycleEpoch++;
+    _notificationUserId = null;
+    _erpNotificationsRefreshInFlight = false;
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_workspaceManager.flushBrowserSession());
     _routeSubscription?.cancel();
+    _workspacePushSubscription?.cancel();
+    _newEmailSubscription?.cancel();
+    _authStateSubscription?.cancel();
+    _workspaceAlertTimer?.cancel();
+    _workspaceAlertOverlay?.remove();
+    _erpNotificationsRefreshTimer?.cancel();
+    _erpNotificationsChannel?.unsubscribe();
+    _erpNotificationsChannel = null;
+    ChatNotificationGate.shared.clearScope();
+    MailNotificationGate.shared.clearScope();
+    ErpNotificationGate.shared.clearScope();
+    NotificationService().clearNotificationScope();
+    unawaited(MailAccountManager.instance.reset());
+    NotificationService().clearForegroundPresentationPolicy(this);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _isWorkspaceForeground = true;
+      context.read<ChatProvider>().setApplicationForeground(true);
+      unawaited(MailAccountManager.instance.backgroundRefresh());
+    }
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached ||
         state == AppLifecycleState.hidden) {
+      _isWorkspaceForeground = false;
+      context.read<ChatProvider>().setApplicationForeground(false);
       unawaited(_workspaceManager.flushBrowserSession());
+    }
+  }
+
+  bool _shouldPresentForegroundMessage(RemoteMessage message) {
+    if (!_isWorkspaceForeground) return true;
+
+    final data = message.data;
+    final isMailNotification = data['type'] == 'mail' ||
+        data['notification_type'] == 'mail' ||
+        data['route'] == '/mail';
+    if (isMailNotification) return true;
+    if (data['type']?.toString() == 'system') return false;
+
+    final route = data['route']?.toString();
+    final routeUri = route == null ? null : Uri.tryParse(route);
+    final conversationId = (data['conversation_id'] ??
+            data['chat_id'] ??
+            routeUri?.queryParameters['conversation'])
+        ?.toString()
+        .trim();
+    if (conversationId == null || conversationId.isEmpty) return true;
+
+    return !context.read<ChatProvider>().isConversationVisible(conversationId);
+  }
+
+  void _handleNotificationAuthState(AuthState state) {
+    final userId = state.session?.user.id;
+    if (userId == _notificationUserId && userId != null) return;
+    _restartNotificationLifecycle(userId);
+  }
+
+  void _restartNotificationLifecycle(String? userId) {
+    final epoch = ++_notificationLifecycleEpoch;
+    _notificationUserId = userId;
+    _erpNotificationsRefreshInFlight = false;
+    _erpNotificationsRefreshTimer?.cancel();
+    _erpNotificationsRefreshTimer = null;
+    final oldChannel = _erpNotificationsChannel;
+    _erpNotificationsChannel = null;
+    if (oldChannel != null) unawaited(oldChannel.unsubscribe());
+
+    ChatNotificationGate.shared.clearScope();
+    MailNotificationGate.shared.clearScope();
+    ErpNotificationGate.shared.clearScope();
+    NotificationService().clearNotificationScope();
+
+    if (userId == null) {
+      unawaited(MailAccountManager.instance.reset());
+      return;
+    }
+    unawaited(_initializeNotificationLifecycle(userId, epoch));
+  }
+
+  Future<void> _initializeNotificationLifecycle(
+    String userId,
+    int epoch,
+  ) async {
+    try {
+      await MailAccountManager.instance.prepareSession(userId);
+      if (!_isCurrentNotificationLifecycle(userId, epoch)) return;
+
+      final tenantId = await TenantService().getTenantId();
+      if (!_isCurrentNotificationLifecycle(userId, epoch) ||
+          tenantId == null ||
+          tenantId.isEmpty) {
+        return;
+      }
+
+      ChatNotificationGate.shared.activateScope(
+        userId: userId,
+        tenantId: tenantId,
+      );
+      MailNotificationGate.shared.activateScope(
+        userId: userId,
+        tenantId: tenantId,
+      );
+      ErpNotificationGate.shared.activateScope(
+        userId: userId,
+        tenantId: tenantId,
+      );
+      NotificationService().activateNotificationScope(
+        userId: userId,
+        tenantId: tenantId,
+      );
+
+      await MailAccountManager.instance.initialize();
+      if (!_isCurrentNotificationLifecycle(userId, epoch)) return;
+
+      await _refreshErpNotifications(
+        userId: userId,
+        tenantId: tenantId,
+        epoch: epoch,
+        seedBaseline: true,
+      );
+      if (!_isCurrentNotificationLifecycle(userId, epoch)) return;
+
+      _erpNotificationsRefreshTimer = Timer.periodic(
+        const Duration(seconds: 20),
+        (_) => unawaited(
+          _refreshErpNotifications(
+            userId: userId,
+            tenantId: tenantId,
+            epoch: epoch,
+          ),
+        ),
+      );
+      await _subscribeErpNotifications(
+        userId: userId,
+        tenantId: tenantId,
+        epoch: epoch,
+      );
+    } catch (error) {
+      debugPrint(
+        '🔔 [WorkspaceShell] Notification lifecycle initialization failed: $error',
+      );
+    }
+  }
+
+  bool _isCurrentNotificationLifecycle(String userId, int epoch) {
+    return mounted &&
+        epoch == _notificationLifecycleEpoch &&
+        _notificationUserId == userId &&
+        Supabase.instance.client.auth.currentUser?.id == userId;
+  }
+
+  Future<void> _subscribeErpNotifications({
+    required String userId,
+    required String tenantId,
+    required int epoch,
+  }) async {
+    if (!_isCurrentNotificationLifecycle(userId, epoch)) return;
+
+    final previousChannel = _erpNotificationsChannel;
+    _erpNotificationsChannel = null;
+    if (previousChannel != null) await previousChannel.unsubscribe();
+    if (!_isCurrentNotificationLifecycle(userId, epoch)) return;
+
+    late final RealtimeChannel channel;
+    channel = Supabase.instance.client
+        .channel('workspace-erp-notifications-$userId-$tenantId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'erp_notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'tenant_id',
+            value: tenantId,
+          ),
+          callback: (payload) => _handleErpNotificationRecord(
+            payload.newRecord,
+            userId: userId,
+            tenantId: tenantId,
+            epoch: epoch,
+            allowPresentation: true,
+          ),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'erp_notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'tenant_id',
+            value: tenantId,
+          ),
+          callback: (payload) => _handleErpNotificationRecord(
+            payload.newRecord,
+            userId: userId,
+            tenantId: tenantId,
+            epoch: epoch,
+            allowPresentation: false,
+          ),
+        )
+        .subscribe((status, error) {
+      if (!_isCurrentNotificationLifecycle(userId, epoch)) return;
+      if (status == RealtimeSubscribeStatus.subscribed) {
+        unawaited(
+          _refreshErpNotifications(
+            userId: userId,
+            tenantId: tenantId,
+            epoch: epoch,
+          ),
+        );
+      } else if (status == RealtimeSubscribeStatus.channelError ||
+          status == RealtimeSubscribeStatus.timedOut) {
+        debugPrint(
+          '🔔 [WorkspaceShell] ERP notifications realtime issue: $error',
+        );
+      }
+    });
+
+    if (!_isCurrentNotificationLifecycle(userId, epoch)) {
+      await channel.unsubscribe();
+      return;
+    }
+    _erpNotificationsChannel = channel;
+  }
+
+  Future<void> _refreshErpNotifications({
+    required String userId,
+    required String tenantId,
+    required int epoch,
+    bool seedBaseline = false,
+  }) async {
+    if (!_isCurrentNotificationLifecycle(userId, epoch) ||
+        _erpNotificationsRefreshInFlight) {
+      return;
+    }
+
+    _erpNotificationsRefreshInFlight = true;
+    try {
+      final notificationService = NotificationService();
+      final onlineOrderRows =
+          await notificationService.loadOnlineOrderAlerts(tenantId);
+      if (!_isCurrentNotificationLifecycle(userId, epoch)) return;
+      final rows = await notificationService.loadNotifications(tenantId);
+      if (!_isCurrentNotificationLifecycle(userId, epoch)) return;
+
+      final ids = [...onlineOrderRows, ...rows]
+          .map((row) => row['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .map((id) => 'erp:$id');
+      if (seedBaseline) {
+        ErpNotificationGate.shared.rememberBaseline(ids);
+        return;
+      }
+
+      Map<String, dynamic>? newestUnseen;
+      for (final row in rows.reversed) {
+        if (row['read_at'] != null) continue;
+        final id = row['id']?.toString() ?? '';
+        if (ErpNotificationGate.shared.claimPresentation('erp:$id')) {
+          newestUnseen = row;
+        }
+      }
+      if (newestUnseen != null) {
+        _presentErpNotification(newestUnseen);
+      }
+    } catch (error) {
+      debugPrint(
+          '🔔 [WorkspaceShell] ERP notifications refresh failed: $error');
+    } finally {
+      if (epoch == _notificationLifecycleEpoch) {
+        _erpNotificationsRefreshInFlight = false;
+      }
+    }
+  }
+
+  void _handleErpNotificationRecord(
+    Map<String, dynamic> record, {
+    required String userId,
+    required String tenantId,
+    required int epoch,
+    required bool allowPresentation,
+  }) {
+    if (!_isCurrentNotificationLifecycle(userId, epoch) ||
+        record['tenant_id']?.toString() != tenantId) {
+      return;
+    }
+
+    final notificationService = NotificationService();
+    notificationService.recordNotification(record);
+    final type = record['type']?.toString();
+    final id = record['id']?.toString() ?? '';
+    if (type == 'online_order_created') {
+      notificationService.recordOnlineOrderAlert(id, notification: record);
+    }
+    if (!allowPresentation || record['read_at'] != null) return;
+    if (!ErpNotificationGate.shared.claimPresentation('erp:$id')) return;
+    _presentErpNotification(record);
+  }
+
+  void _presentErpNotification(Map<String, dynamic> record) {
+    final type = record['type']?.toString();
+    final id = record['id']?.toString() ?? '';
+    final isMail = type == 'mail' ||
+        record['notification_type']?.toString() == 'mail' ||
+        record['route']?.toString() == '/mail';
+    if (isMail && !MailNotificationGate.shared.claimPresentation('erp:$id')) {
+      return;
+    }
+
+    _showWorkspaceAlert(
+      title: record['title']?.toString() ?? 'Nueva notificación',
+      body: record['body']?.toString() ?? '',
+      icon: _iconForErpNotification(type),
+      route: record['route']?.toString() ?? '/',
+      category:
+          isMail ? NotificationCategory.email : NotificationCategory.general,
+      suppressRoutePrefix: type == 'online_order_created'
+          ? '/website/orders'
+          : isMail
+              ? '/mail'
+              : null,
+      showSystemNotification: !_isWorkspaceForeground && !kIsWeb,
+      notificationId: 'erp:$id'.hashCode,
+    );
+  }
+
+  IconData _iconForErpNotification(String? type) {
+    switch (type) {
+      case 'mechanic_job_created':
+        return Icons.build_outlined;
+      case 'sales_payment_received':
+        return Icons.payments_outlined;
+      case 'online_order_created':
+        return Icons.shopping_cart_checkout_outlined;
+      case 'whatsapp_catalog_approved':
+        return Icons.verified_outlined;
+      case 'mail':
+        return Icons.email_outlined;
+      default:
+        return Icons.notifications_outlined;
+    }
+  }
+
+  void _handleWorkspacePush(RemoteMessage message) {
+    final data = message.data;
+    final isMailNotification = data['type'] == 'mail' ||
+        data['notification_type'] == 'mail' ||
+        data['route'] == '/mail';
+    if (isMailNotification) {
+      _handleMailPush(message);
+      return;
+    }
+
+    _handleChatPush(message);
+  }
+
+  void _handleChatPush(RemoteMessage message) {
+    if (!mounted) return;
+    final data = message.data;
+    if (data['type']?.toString() == 'system') return;
+
+    final route = data['route']?.toString();
+    final routeUri = route == null ? null : Uri.tryParse(route);
+    final conversationId = (data['conversation_id'] ??
+            data['chat_id'] ??
+            routeUri?.queryParameters['conversation'])
+        ?.toString()
+        .trim();
+    if (conversationId == null || conversationId.isEmpty) return;
+
+    final notificationService = NotificationService();
+    if (!notificationService
+        .notificationsEnabledFor(NotificationCategory.message)) {
+      return;
+    }
+
+    final createdAt = data['created_at']?.toString().trim() ?? '';
+    final content =
+        (data['content'] ?? data['body'] ?? message.notification?.body)
+                ?.toString()
+                .trim() ??
+            '';
+    final stableId = (data['id'] ?? data['message_id'] ?? message.messageId)
+        ?.toString()
+        .trim();
+    final eventKey = stableId?.isNotEmpty == true
+        ? 'message:$stableId'
+        : 'message:$conversationId:$createdAt:$content';
+    if (!ChatNotificationGate.shared.claimPresentation(eventKey)) return;
+
+    final chatProvider = context.read<ChatProvider>();
+    if (_isWorkspaceForeground &&
+        chatProvider.isConversationVisible(conversationId)) {
+      return;
+    }
+
+    var title = message.notification?.title?.trim();
+    for (final conversation in chatProvider.conversations) {
+      if (conversation.id == conversationId) {
+        title = chatProvider.getChatTitle(conversation);
+        break;
+      }
+    }
+    if (title == null || title.isEmpty || title == 'New Message') {
+      title = 'Nuevo mensaje';
+    }
+
+    final chatRoute = Uri(
+      path: '/chat',
+      queryParameters: {'conversation': conversationId},
+    ).toString();
+    _showWorkspaceAlert(
+      title: title,
+      body: content.isEmpty ? 'Nuevo mensaje recibido' : content,
+      icon: Icons.chat_bubble_outline_rounded,
+      route: chatRoute,
+      category: NotificationCategory.message,
+      showSystemNotification: !kIsWeb,
+      notificationId: eventKey.hashCode,
+    );
+  }
+
+  void _handleMailPush(RemoteMessage message) {
+    if (!mounted) return;
+    final data = message.data;
+    final isMailNotification = data['type'] == 'mail' ||
+        data['notification_type'] == 'mail' ||
+        data['route'] == '/mail';
+    if (!isMailNotification) return;
+
+    final notificationService = NotificationService();
+    if (!notificationService
+        .notificationsEnabledFor(NotificationCategory.email)) {
+      return;
+    }
+
+    final stableEventId = message.messageId?.trim().isNotEmpty == true
+        ? message.messageId!.trim()
+        : (data['history_id'] ?? data['message_id'] ?? data['notification_id'])
+            ?.toString()
+            .trim();
+    final provider = data['provider']?.toString().trim() ?? 'mail';
+    if (stableEventId != null &&
+        stableEventId.isNotEmpty &&
+        !MailNotificationGate.shared.claimPresentation(
+          'push:$provider:$stableEventId',
+        )) {
+      return;
+    }
+
+    // Gmail history pushes are wake-up signals, not proof that a new inbox
+    // message exists. The provider refresh is the authority and will emit a
+    // concrete provider/message ID only when it discovers a real new email.
+    unawaited(
+      MailAccountManager.instance.refreshInbox(background: true),
+    );
+  }
+
+  void _handleNewEmail(Email email) {
+    if (!mounted ||
+        !MailNotificationGate.shared.claimPresentation(
+          'inbox:${email.providerId}:${email.id}',
+        )) {
+      return;
+    }
+
+    final sender =
+        email.senderName.trim().isEmpty ? email.senderEmail : email.senderName;
+    final subject =
+        email.subject.trim().isEmpty ? '(sin asunto)' : email.subject.trim();
+    final body = sender.trim().isEmpty ? subject : '$sender - $subject';
+
+    _showWorkspaceAlert(
+      title: 'Nuevo correo',
+      body: body,
+      icon: Icons.email_outlined,
+      route: '/mail',
+      category: NotificationCategory.email,
+      suppressRoutePrefix: '/mail',
+      showSystemNotification: _usesDesktopLocalMailNotifications,
+      notificationId: '${email.providerId}:${email.id}'.hashCode,
+    );
+  }
+
+  bool get _usesDesktopLocalMailNotifications {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS;
+  }
+
+  void _showWorkspaceAlert({
+    required String title,
+    required String body,
+    required IconData icon,
+    required String route,
+    required NotificationCategory category,
+    String? suppressRoutePrefix,
+    bool showSystemNotification = false,
+    int? notificationId,
+  }) {
+    final notificationService = NotificationService();
+    final activeRoute = workspaceRoutePath(
+      _workspaceManager.activeWorkspace?.currentRoute ?? '',
+    );
+    if (!notificationService.notificationsEnabledFor(category) ||
+        (_isWorkspaceForeground &&
+            suppressRoutePrefix != null &&
+            activeRoute.startsWith(suppressRoutePrefix))) {
+      return;
+    }
+
+    _workspaceAlertTimer?.cancel();
+    _workspaceAlertOverlay?.remove();
+
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) return;
+
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (overlayContext) => Positioned(
+        top: 10,
+        left: 16,
+        right: 16,
+        child: Material(
+          color: Colors.transparent,
+          child: Center(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: -100, end: 0),
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.easeOutQuart,
+              builder: (context, offset, child) => Transform.translate(
+                offset: Offset(0, offset),
+                child: Opacity(
+                  opacity: (1 - (offset / -100)).clamp(0.0, 1.0),
+                  child: child,
+                ),
+              ),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 400),
+                decoration: BoxDecoration(
+                  color: Theme.of(overlayContext).colorScheme.inverseSurface,
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: InkWell(
+                  onTap: () {
+                    _workspaceManager.navigateActiveWorkspace(route);
+                    entry.remove();
+                    if (identical(_workspaceAlertOverlay, entry)) {
+                      _workspaceAlertOverlay = null;
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(30),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          icon,
+                          size: 18,
+                          color: Theme.of(overlayContext)
+                              .colorScheme
+                              .onInverseSurface,
+                        ),
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: Text(
+                            '$title: $body',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Theme.of(overlayContext)
+                                  .colorScheme
+                                  .onInverseSurface,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(entry);
+    _workspaceAlertOverlay = entry;
+    _workspaceAlertTimer = Timer(const Duration(seconds: 4), () {
+      if (!identical(_workspaceAlertOverlay, entry)) return;
+      entry.remove();
+      _workspaceAlertOverlay = null;
+    });
+
+    if (showSystemNotification) {
+      notificationService.playNotificationSound(
+        category: category,
+      );
+      notificationService.showLocalNotification(
+        title,
+        body,
+        notificationId: notificationId,
+        category: category,
+      );
     }
   }
 

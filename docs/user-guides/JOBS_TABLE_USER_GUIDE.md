@@ -9,8 +9,9 @@ consultar tiempos, abrir el documento comercial y entrar a la ficha completa.
 ## 1. Orientación rápida
 
 - **Buscar:** encuentra por número de trabajo, cliente, teléfono, bicicleta,
-  solicitud, notas o producto/servicio.
-- **Estado:** muestra un subconjunto operacional sin ocultar el historial.
+  solicitud, notas o ítems del trabajo.
+- **Selector Estado:** filtra los estados activos sin ocultar el historial; no
+  decide ni valida cuál debería ser el siguiente estado.
 - **Vista:** alterna entre tabla, calendario y otras vistas disponibles.
 - **Vencidos / Sin pagar:** filtros rápidos para priorizar atención.
 - **Personalizar columnas:** muestra solo la información necesaria para la tarea.
@@ -62,8 +63,9 @@ cuenta por cobrar. La conversión mantiene el mismo trabajo y su historial.
   permitidas para ese momento.
 - **Bicicleta:** abre directamente la ficha cuando existe una sola bicicleta.
 - **REVISAR MODO:** clasifica el registro como Bicicleta, Componente o Venta.
-- **Garantía:** registra `Cubierto` o `No cubierto`. Si existen pagos, revisa la
-  factura antes de marcar cubierto. El respaldo creado es interno, no tributario.
+- **Garantía:** registra `Cubierto` o `No cubierto`. Si existen pagos vigentes,
+  `Cubierto` queda bloqueado hasta revisar, reversar o reembolsar el pago desde
+  la factura. El respaldo creado es interno, no tributario.
 - **Exportar:** copia al portapapeles, en formato CSV, el conjunto filtrado o
   seleccionado.
 - **Selección múltiple:** aplica acciones masivas solo a filas compatibles.
@@ -121,3 +123,12 @@ los KPIs estratégicos.
 1. Revisa trabajos listos que aún no se entregan.
 2. Revisa saldos pendientes.
 3. Actualiza y confirma que no queden filas `REVISAR MODO`.
+
+## 8. Dónde resolver cada tarea
+
+| Necesitas | Acción correcta |
+|---|---|
+| Priorizar el día | Combina `Activos`, `Vencidos` o `Sin pagar` con la búsqueda. |
+| Registrar un hito | Usa el chip Estado; no edites el estado por fuera de la tabla. |
+| Revisar el respaldo comercial | Abre Factura, Presupuesto o Cotización desde su columna. |
+| Corregir el contenido del trabajo | Abre la fila y usa la ficha completa o el panel dividido. |

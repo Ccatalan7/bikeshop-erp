@@ -10,7 +10,7 @@ class SmartImportService extends ChangeNotifier {
   final TenantService _tenantService = TenantService();
 
   /// Import data with smart update/insert logic
-  /// 
+  ///
   /// [tableName] - Target table (e.g., 'products', 'customers')
   /// [records] - List of data maps to import
   /// [options] - Import configuration
@@ -19,6 +19,13 @@ class SmartImportService extends ChangeNotifier {
     required List<Map<String, dynamic>> records,
     required ImportOptions options,
   }) async {
+    if (tableName.trim().toLowerCase() == 'products') {
+      throw UnsupportedError(
+        'La importación de productos usa exclusivamente ProductImportService '
+        'y el comando trazable apply_product_import_stock.',
+      );
+    }
+
     debugPrint('🔄 Smart Import: $tableName (${records.length} records)');
     debugPrint('📋 Mode: ${options.mode.label}');
     debugPrint('🔍 Match Field: ${options.matchField}');
@@ -221,7 +228,7 @@ class SmartImportService extends ChangeNotifier {
 
     // Get fields to process
     final fieldsToCheck = options.fieldsToUpdate ?? imported.keys.toList();
-    
+
     debugPrint('🔧 _prepareUpdateData:');
     debugPrint('   Mode: ${options.mode}');
     debugPrint('   Fields to check: $fieldsToCheck');
@@ -242,11 +249,11 @@ class SmartImportService extends ChangeNotifier {
 
       final existingValue = existing[field];
       final importedValue = imported[field];
-      
+
       // Normalize values for comparison (handle type mismatches)
       final normalizedExisting = _normalizeValue(existingValue);
       final normalizedImported = _normalizeValue(importedValue);
-      
+
       debugPrint(
           '   🔍 $field: "$existingValue" → "$importedValue" (${normalizedExisting == normalizedImported ? "same" : "CHANGED"})');
 
@@ -275,7 +282,7 @@ class SmartImportService extends ChangeNotifier {
           break;
       }
     }
-    
+
     debugPrint('   📦 Final updateData: $updateData');
 
     return updateData;
@@ -284,29 +291,29 @@ class SmartImportService extends ChangeNotifier {
   /// Normalize value for comparison (handle type mismatches)
   dynamic _normalizeValue(dynamic value) {
     if (value == null) return null;
-    
+
     // Convert string representations to actual types
     if (value is String) {
       final trimmed = value.trim();
-      
+
       // Try to parse as boolean first (case-insensitive)
       final lowerValue = trimmed.toLowerCase();
       if (lowerValue == 'true') return true;
       if (lowerValue == 'false') return false;
-      
+
       // Try to parse as number
       final numValue = num.tryParse(trimmed);
       if (numValue != null) return numValue;
-      
+
       // Return trimmed string
       return trimmed;
     }
-    
+
     // Keep booleans as-is (don't convert to string)
     if (value is bool) {
       return value;
     }
-    
+
     return value;
   }
 
@@ -331,26 +338,26 @@ class SmartImportService extends ChangeNotifier {
   }) async {
     try {
       final client = Supabase.instance.client;
-      
+
       // Set session variables for the trigger to read
       await client.rpc('set_config', params: {
         'setting': 'app.stock_adjustment_context',
         'value': 'import',
         'is_local': true,
       });
-      
+
       await client.rpc('set_config', params: {
         'setting': 'app.import_reference',
         'value': reference,
         'is_local': true,
       });
-      
+
       await client.rpc('set_config', params: {
         'setting': 'app.import_reason',
         'value': reason,
         'is_local': true,
       });
-      
+
       debugPrint('📋 Import context set: $reference');
     } catch (e) {
       debugPrint('⚠️ Warning: Could not set import context: $e');
@@ -362,26 +369,26 @@ class SmartImportService extends ChangeNotifier {
   Future<void> _clearImportContext() async {
     try {
       final client = Supabase.instance.client;
-      
+
       // Reset session variables
       await client.rpc('set_config', params: {
         'setting': 'app.stock_adjustment_context',
         'value': '',
         'is_local': true,
       });
-      
+
       await client.rpc('set_config', params: {
         'setting': 'app.import_reference',
         'value': '',
         'is_local': true,
       });
-      
+
       await client.rpc('set_config', params: {
         'setting': 'app.import_reason',
         'value': '',
         'is_local': true,
       });
-      
+
       debugPrint('🧹 Import context cleared');
     } catch (e) {
       debugPrint('⚠️ Warning: Could not clear import context: $e');

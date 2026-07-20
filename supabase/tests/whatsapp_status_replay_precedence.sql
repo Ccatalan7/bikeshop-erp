@@ -1,6 +1,6 @@
 begin;
 
-select plan(7);
+select plan(9);
 
 insert into public.tenants (id, shop_name)
 values ('99999999-9999-4999-8999-999999999999', 'WhatsApp Status Test Tenant');
@@ -106,8 +106,25 @@ select is(
   public.record_whatsapp_message_status(
     'status-test-phone-number',
     'wamid.status-precedence-test',
+    'failed',
+    '{"status":"failed","timestamp":"102"}'::jsonb
+  )->>'status',
+  'delivered',
+  'a late failed webhook does not downgrade delivered evidence'
+);
+
+select is(
+  (select external_status from public.messages where id = '99999999-0003-4999-8999-999999999999'),
+  'delivered',
+  'message projection remains delivered after a late failed webhook'
+);
+
+select is(
+  public.record_whatsapp_message_status(
+    'status-test-phone-number',
+    'wamid.status-precedence-test',
     'read',
-    '{"status":"read","timestamp":"102"}'::jsonb
+    '{"status":"read","timestamp":"103"}'::jsonb
   )->>'status',
   'read',
   'read webhook upgrades delivered message to read'
@@ -118,7 +135,7 @@ select is(
     'status-test-phone-number',
     'wamid.status-precedence-test',
     'delivered',
-    '{"status":"delivered","timestamp":"103"}'::jsonb
+    '{"status":"delivered","timestamp":"104"}'::jsonb
   )->>'status',
   'read',
   'later delivered webhook does not downgrade read message'

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/user_management_service.dart';
@@ -9,6 +10,9 @@ import '../models/conversation_context_hint.dart';
 import '../models/message.dart';
 import '../services/conversation_context_hint_cache.dart';
 import '../services/messaging_service.dart';
+import '../utils/message_receipt_projection.dart';
+import '../utils/message_receipt_refresh_coalescer.dart';
+import '../utils/message_timeline_merge.dart';
 import '../../../shared/services/notification_service.dart';
 
 class ConversationDraft {
@@ -29,6 +33,7 @@ class _IncomingConversationPreview {
   final String? direction;
   final String? externalStatus;
   final DateTime createdAt;
+  final int? messageSequence;
   final DateTime receivedAt;
   final int unreadCount;
 
@@ -38,6 +43,7 @@ class _IncomingConversationPreview {
     required this.direction,
     required this.externalStatus,
     required this.createdAt,
+    required this.messageSequence,
     required this.receivedAt,
     required this.unreadCount,
   });
@@ -70,16 +76,32 @@ class ChatProvider extends ChangeNotifier {
   final ConversationContextHintCache _contextHintCache =
       ConversationContextHintCache();
   final UserManagementService? _userService;
+  final TenantService _tenantService;
+  late final MessageReceiptRefreshCoalescer _messageReceiptRefreshCoalescer;
 
   // State
   List<Conversation> _conversations = [];
   List<Message> _activeMessages = [];
+  final Map<String, List<Message>> _messageCacheByConversation = {};
+  final List<String> _messageCacheOrder = [];
+  final Map<Object, String> _conversationViewByOwner = {};
+  final List<Object> _visibleConversationOwnerOrder = [];
+  final Set<String> _prefetchedConversationIds = {};
+  final Map<String, int> _messageTimelineRevisionByConversation = {};
+  final Map<String, bool> _hasMoreMessagesByConversation = {};
+  final Map<String, bool> _loadingOlderMessagesByConversation = {};
+  final Map<String, String> _olderMessagesErrorByConversation = {};
+  final Map<String, String> _messageStreamErrorByConversation = {};
+  final Map<String, int> _historyLoadEpochByConversation = {};
+  final Map<String, int> _historyCursorByConversation = {};
   final Map<String, Message> _optimisticMessages = {};
   final Map<String, Map<String, dynamic>> _userCache = {}; // id -> user data
   final Map<String, ConversationDraft> _conversationDrafts = {};
   final Map<String, int> _conversationOpeningUnreadCounts = {};
   final Map<String, DateTime> _localReadAtByConversation = {};
+  final Map<String, int> _localReadMessageSequenceByConversation = {};
   final Map<String, DateTime> _lastReadSyncByConversation = {};
+  final Map<String, String> _lastReadSyncMessageIdByConversation = {};
   final Map<String, _IncomingConversationPreview>
       _incomingConversationPreviews = {};
   final Map<String, _OutgoingConversationPreview>
@@ -104,29 +126,76 @@ class ChatProvider extends ChangeNotifier {
   StreamSubscription? _messagesSubscription;
   RealtimeChannel? _conversationsSubscription;
   StreamSubscription? _notificationSubscription;
+  StreamSubscription<AuthState>? _authStateSubscription;
   Timer? _conversationsRefreshTimer;
   Timer? _conversationsFollowUpRefreshTimer;
   Timer? _messagesRetryTimer;
   Timer? _contextHintCachePersistTimer;
   int _messagesRetryAttempt = 0;
+  int _sessionEpoch = 0;
+  int _sessionResolutionEpoch = 0;
+  String? _sessionUserId;
+  String? _sessionTenantId;
+  bool _hasObservedSession = false;
+  bool _sessionReady = false;
+  bool _disposed = false;
+  bool _isApplicationForeground = true;
+  bool _awaitingForegroundFrame = false;
+  int _applicationForegroundEpoch = 0;
   static const int _maxMessageStreamRetryAttempts = 4;
+  static const int _recentMessageCacheLimit =
+      MessagingService.recentMessageStreamLimit;
+  static const String _missingHistoryCursorMessage =
+      'No pudimos ubicar el inicio de este historial.';
 
   // Getters
   List<Conversation> get conversations => _conversations;
   List<Message> get activeMessages => _mergedActiveMessages;
   bool get isLoading => _isLoading;
   String? get activeConversationId => _activeConversationId;
+  bool get isApplicationForeground => _isApplicationForeground;
 
-  List<Message> get _mergedActiveMessages {
-    final merged = <Message>[..._activeMessages];
+  bool hasMoreMessages(String conversationId) {
+    final known = _hasMoreMessagesByConversation[conversationId];
+    if (known != null) return known;
+    return (_messageCacheByConversation[conversationId]?.isNotEmpty ?? false);
+  }
+
+  bool isLoadingOlderMessages(String conversationId) =>
+      _loadingOlderMessagesByConversation[conversationId] ?? false;
+
+  String? olderMessagesErrorForConversation(String conversationId) =>
+      _olderMessagesErrorByConversation[conversationId];
+
+  String? messageStreamErrorForConversation(String conversationId) =>
+      _messageStreamErrorByConversation[conversationId];
+
+  List<Message> messagesForConversation(String conversationId) {
+    final cached = _messageCacheByConversation[conversationId] ?? const [];
+    final merged = <Message>[...cached];
     for (final message in _optimisticMessages.values) {
-      if (message.conversationId != _activeConversationId) continue;
+      if (message.conversationId != conversationId) continue;
       if (_hasMatchingServerMessage(message, merged)) continue;
       merged.add(message);
     }
-
-    merged.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    merged.sort(compareMessageTimelineOrder);
     return merged;
+  }
+
+  bool isConversationLoading(String conversationId) {
+    return _activeConversationId == conversationId && _isLoading;
+  }
+
+  bool isConversationVisible(String conversationId) {
+    if (!_isApplicationForeground || _awaitingForegroundFrame) return false;
+    if (_visibleConversationOwnerOrder.isEmpty) return false;
+    final foregroundOwner = _visibleConversationOwnerOrder.last;
+    return _conversationViewByOwner[foregroundOwner] == conversationId;
+  }
+
+  List<Message> get _mergedActiveMessages {
+    final activeId = _activeConversationId;
+    return activeId == null ? const [] : messagesForConversation(activeId);
   }
 
   bool _hasMatchingServerMessage(Message optimistic, List<Message> server) {
@@ -192,12 +261,6 @@ class ChatProvider extends ChangeNotifier {
     return '${value.substring(0, 8)}...${value.substring(value.length - 6)}';
   }
 
-  String _debugPreview(String content) {
-    final compact = content.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (compact.length <= 48) return compact;
-    return '${compact.substring(0, 48)}...';
-  }
-
   String _debugDuration(DateTime startedAt) {
     return '${DateTime.now().difference(startedAt).inMilliseconds}ms';
   }
@@ -233,6 +296,12 @@ class ChatProvider extends ChangeNotifier {
     final text = _textValue(value);
     if (text == null) return null;
     return DateTime.tryParse(text)?.toLocal();
+  }
+
+  int? _intValue(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
   }
 
   void _debugLogWhatsAppStatusChanges(List<Message> nextMessages) {
@@ -288,7 +357,7 @@ class ChatProvider extends ChangeNotifier {
       if (previousStatus == nextStatus) continue;
 
       debugPrint(
-        '🔎 [WhatsAppStatus] message=${_shortDebugId(message.id)} external=${_shortDebugId(externalMessageId)} client=${_shortDebugId(clientMessageId)} status=${previousStatus ?? 'none'}->$nextStatus created=${message.createdAt.toIso8601String()} text="${_debugPreview(message.content)}"',
+        '🔎 [WhatsAppStatus] message=${_shortDebugId(message.id)} external=${_shortDebugId(externalMessageId)} client=${_shortDebugId(clientMessageId)} status=${previousStatus ?? 'none'}->$nextStatus created=${message.createdAt.toIso8601String()}',
       );
     }
   }
@@ -308,21 +377,160 @@ class ChatProvider extends ChangeNotifier {
         return sum + c.unreadCount;
       });
 
-  ChatProvider([this._userService]) {
-    _contextHintCacheLoadFuture = _loadContextHintCache();
-    _loadUserCache();
-    _initConversationsListener();
+  ChatProvider([
+    this._userService,
+    TenantService? tenantService,
+  ]) : _tenantService = tenantService ?? TenantService() {
+    _messageReceiptRefreshCoalescer = MessageReceiptRefreshCoalescer(
+      onRefresh: _refreshMessageReceipts,
+    );
+    _authStateSubscription =
+        Supabase.instance.client.auth.onAuthStateChange.listen((state) {
+      final mustClearBeforeResolution =
+          state.event == AuthChangeEvent.signedOut ||
+              state.session?.user.id != _sessionUserId;
+      unawaited(
+        synchronizeSessionScope(
+          clearBeforeResolution: mustClearBeforeResolution,
+        ),
+      );
+    });
+    unawaited(synchronizeSessionScope());
   }
 
-  Future<void> _loadContextHintCache() async {
+  /// Synchronizes all in-memory messaging state with the authenticated user and
+  /// tenant. The provider deliberately survives route changes, so a session
+  /// boundary must invalidate every cache and every asynchronous callback.
+  Future<void> synchronizeSessionScope({
+    bool clearBeforeResolution = false,
+  }) async {
+    if (_disposed) return;
+
+    final resolutionEpoch = ++_sessionResolutionEpoch;
     final userId = _service.currentUserId;
-    final tenantService = TenantService();
+    final userChanged = !_hasObservedSession || _sessionUserId != userId;
+
+    if (userChanged || clearBeforeResolution) {
+      _invalidateSessionState(nextUserId: userId);
+    }
+    _hasObservedSession = true;
+
+    if (userId == null || userId.isEmpty) return;
+
     final tenantId =
-        tenantService.currentTenantId ?? await tenantService.getTenantId();
-    if (userId == null ||
-        userId.isEmpty ||
-        tenantId == null ||
-        tenantId.isEmpty) {
+        _tenantService.currentTenantId ?? await _tenantService.getTenantId();
+    if (_disposed ||
+        resolutionEpoch != _sessionResolutionEpoch ||
+        _service.currentUserId != userId) {
+      return;
+    }
+
+    final tenantChanged = _sessionReady && _sessionTenantId != tenantId;
+    if (tenantChanged) {
+      _invalidateSessionState(nextUserId: userId);
+    }
+    if (_sessionReady &&
+        _sessionUserId == userId &&
+        _sessionTenantId == tenantId) {
+      return;
+    }
+
+    _sessionUserId = userId;
+    _sessionTenantId = tenantId;
+    _sessionReady = true;
+    final epoch = _sessionEpoch;
+    _contextHintCacheLoadFuture = _loadContextHintCache(
+      epoch: epoch,
+      userId: userId,
+      tenantId: tenantId,
+    );
+    unawaited(_loadUserCache(epoch));
+    _initConversationsListener(epoch);
+  }
+
+  bool _isCurrentSession(int epoch) {
+    return !_disposed && _sessionReady && epoch == _sessionEpoch;
+  }
+
+  void _invalidateSessionState({required String? nextUserId}) {
+    _sessionEpoch += 1;
+    _sessionReady = false;
+    _sessionUserId = nextUserId;
+    _sessionTenantId = null;
+
+    _conversationsRefreshTimer?.cancel();
+    _conversationsFollowUpRefreshTimer?.cancel();
+    _messageReceiptRefreshCoalescer.clear();
+    _messagesRetryTimer?.cancel();
+    _contextHintCachePersistTimer?.cancel();
+    unawaited(_messagesSubscription?.cancel() ?? Future<void>.value());
+    unawaited(_notificationSubscription?.cancel() ?? Future<void>.value());
+    final conversationsSubscription = _conversationsSubscription;
+    if (conversationsSubscription != null) {
+      unawaited(conversationsSubscription.unsubscribe());
+    }
+    _messagesSubscription = null;
+    _notificationSubscription = null;
+    _conversationsSubscription = null;
+
+    final activeCompleter = _activeConversationLoadCompleter;
+    if (activeCompleter != null && !activeCompleter.isCompleted) {
+      activeCompleter.complete();
+    }
+    final pendingCompleter = _pendingConversationRefreshCompleter;
+    if (pendingCompleter != null && !pendingCompleter.isCompleted) {
+      pendingCompleter.complete();
+    }
+
+    _conversations = [];
+    _activeMessages = [];
+    _messageCacheByConversation.clear();
+    _messageCacheOrder.clear();
+    _messageTimelineRevisionByConversation.clear();
+    _hasMoreMessagesByConversation.clear();
+    _loadingOlderMessagesByConversation.clear();
+    _olderMessagesErrorByConversation.clear();
+    _messageStreamErrorByConversation.clear();
+    _historyLoadEpochByConversation.clear();
+    _historyCursorByConversation.clear();
+    _conversationViewByOwner.clear();
+    _visibleConversationOwnerOrder.clear();
+    _prefetchedConversationIds.clear();
+    _optimisticMessages.clear();
+    _userCache.clear();
+    _conversationDrafts.clear();
+    _conversationOpeningUnreadCounts.clear();
+    _localReadAtByConversation.clear();
+    _localReadMessageSequenceByConversation.clear();
+    _lastReadSyncByConversation.clear();
+    _lastReadSyncMessageIdByConversation.clear();
+    _incomingConversationPreviews.clear();
+    _outgoingConversationPreviews.clear();
+    _recentIncomingNotificationKeys.clear();
+    _recentIncomingNotificationKeyOrder.clear();
+    _cachedContextHints.clear();
+    _contextHintCacheTenantId = null;
+    _contextHintCacheUserId = null;
+    _activeConversationId = null;
+    _isLoading = false;
+    _isLoadingConversations = false;
+    _hasPendingConversationRefresh = false;
+    _pendingConversationRefreshNeedsContextHints = false;
+    _pendingConversationRefreshType = null;
+    _activeConversationLoadCompleter = null;
+    _pendingConversationRefreshCompleter = null;
+    _contextHintCacheLoadFuture = null;
+    _contextHintsRefreshFuture = null;
+    _messagesRetryAttempt = 0;
+    notifyListeners();
+  }
+
+  Future<void> _loadContextHintCache({
+    required int epoch,
+    required String userId,
+    required String? tenantId,
+  }) async {
+    if (tenantId == null || tenantId.isEmpty || !_isCurrentSession(epoch)) {
       return;
     }
 
@@ -332,6 +540,7 @@ class ChatProvider extends ChangeNotifier {
       tenantId: tenantId,
       userId: userId,
     );
+    if (!_isCurrentSession(epoch)) return;
     _cachedContextHints
       ..clear()
       ..addAll(cached);
@@ -346,11 +555,16 @@ class ChatProvider extends ChangeNotifier {
     final tenantId = _contextHintCacheTenantId;
     final userId = _contextHintCacheUserId;
     if (tenantId == null || userId == null) return;
+    final epoch = _sessionEpoch;
 
     _contextHintCachePersistTimer?.cancel();
     _contextHintCachePersistTimer = Timer(
       const Duration(milliseconds: 180),
-      () => unawaited(_persistContextHintCache(tenantId, userId)),
+      () {
+        if (_isCurrentSession(epoch)) {
+          unawaited(_persistContextHintCache(tenantId, userId));
+        }
+      },
     );
   }
 
@@ -370,12 +584,13 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// Load user cache for resolving names
-  Future<void> _loadUserCache() async {
+  Future<void> _loadUserCache(int epoch) async {
     if (_userService == null) return;
     try {
       // Check if we are an employee/admin before trying to fetch sensitive tenant users
       // This helper check prevents 400 errors for customers
       final users = await _userService.getTenantUsers();
+      if (!_isCurrentSession(epoch)) return;
       for (var u in users) {
         _userCache[u['id']] = u;
       }
@@ -388,18 +603,30 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// Initialize listener for conversation list updates
-  void _initConversationsListener() {
+  void _initConversationsListener(int epoch) {
+    if (!_isCurrentSession(epoch)) return;
     // Keep the first inbox pass focused on badges and previews. Context chips
     // are useful, but they should not block message delivery feedback.
     loadConversations(refreshContextHints: false);
 
-    _conversationsSubscription = _service.subscribeToConversationsUpdates(() {
-      _scheduleConversationRefresh(const Duration(milliseconds: 80));
-    });
+    _conversationsSubscription = _service.subscribeToConversationsUpdates(
+      () {
+        if (!_isCurrentSession(epoch)) return;
+        _scheduleConversationRefresh(const Duration(milliseconds: 80));
+      },
+      onMessageReceiptUpdate: (update) {
+        if (!_isCurrentSession(epoch)) return;
+        _messageReceiptRefreshCoalescer.schedule(
+          conversationId: update.conversationId,
+          messageId: update.messageId,
+        );
+      },
+    );
 
     // Also listen to NotificationService for realtime alerts (triggers badge update)
     _notificationSubscription = NotificationService().onMessageReceived.listen(
       (message) {
+        if (!_isCurrentSession(epoch)) return;
         applyIncomingNotification(message);
       },
     );
@@ -444,6 +671,7 @@ class ChatProvider extends ChangeNotifier {
       direction: _textValue(data['message_direction']),
       externalStatus: _textValue(data['external_status']),
       createdAt: createdAt,
+      messageSequence: _intValue(data['message_sequence']),
     );
 
     if (updated) {
@@ -474,9 +702,9 @@ class ChatProvider extends ChangeNotifier {
     required String content,
     required DateTime createdAt,
   }) {
-    final explicitId = message.messageId ??
-        _textValue(data['id']) ??
-        _textValue(data['message_id']);
+    final explicitId = _textValue(data['id']) ??
+        _textValue(data['message_id']) ??
+        message.messageId;
     if (explicitId != null && explicitId.isNotEmpty) return explicitId;
     return [
       conversationId,
@@ -504,6 +732,7 @@ class ChatProvider extends ChangeNotifier {
     required String? direction,
     required String? externalStatus,
     required DateTime createdAt,
+    required int? messageSequence,
   }) {
     final index = _conversations.indexWhere((c) => c.id == conversationId);
     if (index == -1) return false;
@@ -515,7 +744,7 @@ class ChatProvider extends ChangeNotifier {
         direction != 'outbound' &&
         !isCurrentUserSender;
     final shouldIncrementUnread =
-        isIncoming && _activeConversationId != conversationId;
+        isIncoming && !isConversationVisible(conversationId);
     final existingPreview = _incomingConversationPreviews[conversationId];
     final nextUnreadCount = shouldIncrementUnread
         ? _maxInt(
@@ -532,7 +761,9 @@ class ChatProvider extends ChangeNotifier {
 
     if (shouldIncrementUnread) {
       _localReadAtByConversation.remove(conversationId);
+      _localReadMessageSequenceByConversation.remove(conversationId);
       _lastReadSyncByConversation.remove(conversationId);
+      _lastReadSyncMessageIdByConversation.remove(conversationId);
       _outgoingConversationPreviews.remove(conversationId);
       _incomingConversationPreviews[conversationId] =
           _IncomingConversationPreview(
@@ -541,10 +772,11 @@ class ChatProvider extends ChangeNotifier {
         direction: nextDirection,
         externalStatus: externalStatus,
         createdAt: createdAt,
+        messageSequence: messageSequence,
         receivedAt: DateTime.now(),
         unreadCount: nextUnreadCount,
       );
-    } else if (_activeConversationId == conversationId || isCurrentUserSender) {
+    } else if (isConversationVisible(conversationId) || isCurrentUserSender) {
       _incomingConversationPreviews.remove(conversationId);
     }
 
@@ -552,6 +784,8 @@ class ChatProvider extends ChangeNotifier {
       id: old.id,
       type: old.type,
       channel: old.channel,
+      isGroup: old.isGroup,
+      counterpartyType: old.counterpartyType,
       status: old.status,
       title: old.title,
       contextType: old.contextType,
@@ -559,6 +793,9 @@ class ChatProvider extends ChangeNotifier {
       updatedAt: createdAt,
       lastMessageAt: createdAt,
       staffLastReadAt: old.staffLastReadAt,
+      staffLastReadMessageSequence: old.staffLastReadMessageSequence,
+      lastMessageId: old.lastMessageId,
+      lastMessageSequence: messageSequence ?? old.lastMessageSequence,
       lastMessageContent: content.isNotEmpty ? content : old.lastMessageContent,
       lastMessageType: messageType,
       lastMessageMetadata: old.lastMessageMetadata,
@@ -590,19 +827,130 @@ class ChatProvider extends ChangeNotifier {
     Duration delay = const Duration(milliseconds: 120),
     bool refreshContextHints = false,
   ]) {
+    final epoch = _sessionEpoch;
     _conversationsRefreshTimer?.cancel();
     _conversationsRefreshTimer = Timer(
       delay,
-      () => loadConversations(refreshContextHints: refreshContextHints),
+      () {
+        if (_isCurrentSession(epoch)) {
+          unawaited(
+            loadConversations(refreshContextHints: refreshContextHints),
+          );
+        }
+      },
     );
   }
 
   void _scheduleConversationFollowUpRefresh() {
+    final epoch = _sessionEpoch;
     _conversationsFollowUpRefreshTimer?.cancel();
     _conversationsFollowUpRefreshTimer = Timer(
       const Duration(milliseconds: 700),
-      () => loadConversations(refreshContextHints: false),
+      () {
+        if (_isCurrentSession(epoch)) {
+          unawaited(loadConversations(refreshContextHints: false));
+        }
+      },
     );
+  }
+
+  Future<void> _refreshMessageReceipts(
+    MessageReceiptRefreshBatch batch,
+  ) async {
+    final operationEpoch = _sessionEpoch;
+    if (!_isCurrentSession(operationEpoch) || batch.isEmpty) return;
+
+    final conversationIds = batch.keys.toSet();
+    final messageIds = batch.values.expand((ids) => ids).toSet();
+    final startedAt = DateTime.now();
+    _debugInboxSync(
+      'messageReceipts:start',
+      details: {
+        'conversations': conversationIds.length,
+        'messages': messageIds.length,
+      },
+    );
+
+    try {
+      final results = await Future.wait<dynamic>([
+        _service.getMessagesByIds(messageIds),
+        _service.getLatestMessagesForConversations(conversationIds),
+      ]);
+      if (!_isCurrentSession(operationEpoch)) return;
+
+      final refreshedMessages = results[0] as Map<String, Message>;
+      final latestMessages = results[1] as Map<String, Message>;
+      var changed = false;
+
+      for (final conversationId in conversationIds) {
+        final cached = _messageCacheByConversation[conversationId];
+        if (cached == null) continue;
+        final receiptRows = refreshedMessages.values.where(
+          (message) => message.conversationId == conversationId,
+        );
+        if (receiptRows.isEmpty) continue;
+        _debugLogWhatsAppStatusChanges(receiptRows.toList(growable: false));
+        final preserveFullHistory = _activeConversationId == conversationId;
+        _cacheMessages(
+          conversationId,
+          mergeMessageTimelinesMonotonically(
+            olderSnapshot: cached,
+            currentTimeline: receiptRows,
+            limit: preserveFullHistory ? null : _recentMessageCacheLimit,
+          ),
+          preserveFullHistory: preserveFullHistory,
+        );
+        changed = true;
+      }
+
+      if (refreshedMessages.isNotEmpty) {
+        _pruneConfirmedOptimisticMessages(refreshedMessages.values.toList());
+      }
+
+      for (final entry in latestMessages.entries) {
+        final conversationId = entry.key;
+        final latest = entry.value;
+        final index = _conversations.indexWhere(
+          (conversation) => conversation.id == conversationId,
+        );
+        if (index == -1) continue;
+
+        final old = _conversations[index];
+        _conversations[index] = projectLatestMessageReceipt(
+          old,
+          latest,
+        );
+
+        final preview = _outgoingConversationPreviews[conversationId];
+        final latestClientMessageId =
+            latest.metadata['client_message_id']?.toString();
+        if (preview != null &&
+            latestClientMessageId == preview.clientMessageId) {
+          _outgoingConversationPreviews.remove(conversationId);
+        }
+        changed = true;
+      }
+
+      if (changed) notifyListeners();
+      _debugInboxSync(
+        'messageReceipts:applied',
+        startedAt: startedAt,
+        details: {
+          'receiptRows': refreshedMessages.length,
+          'latestRows': latestMessages.length,
+          'changed': changed,
+        },
+      );
+    } catch (error) {
+      if (!_isCurrentSession(operationEpoch)) return;
+      _debugInboxSync(
+        'messageReceipts:error',
+        startedAt: startedAt,
+        details: {'error': error},
+      );
+      // A later receipt or opening the conversation will read the canonical
+      // server row. Do not replace this focused path with a high-volume reload.
+    }
   }
 
   /// Get display title for a conversation
@@ -656,6 +1004,7 @@ class ChatProvider extends ChangeNotifier {
     String title = 'Mensaje preparado',
     String subtitle = 'Nada se ha enviado todavía.',
   }) {
+    if (_disposed) return;
     final trimmed = draft.trim();
     if (trimmed.isEmpty) return;
     _conversationDrafts[conversationId] = ConversationDraft(
@@ -681,6 +1030,7 @@ class ChatProvider extends ChangeNotifier {
   }
 
   void clearConversationDraft(String conversationId) {
+    if (_disposed) return;
     if (_conversationDrafts.remove(conversationId) != null) {
       notifyListeners();
     }
@@ -692,6 +1042,9 @@ class ChatProvider extends ChangeNotifier {
     String? type,
     bool refreshContextHints = true,
   }) async {
+    final operationEpoch = _sessionEpoch;
+    if (!_isCurrentSession(operationEpoch)) return;
+
     // Don't set global loading here to avoid screen flickering on updates.
     if (_isLoadingConversations) {
       if (!_hasPendingConversationRefresh) {
@@ -739,6 +1092,7 @@ class ChatProvider extends ChangeNotifier {
       );
       await _contextHintCacheLoadFuture;
       final newConversations = await conversationsFuture;
+      if (!_isCurrentSession(operationEpoch)) return;
       if (refreshContextHints) {
         _replaceCachedContextHints(newConversations);
       }
@@ -761,8 +1115,11 @@ class ChatProvider extends ChangeNotifier {
       );
       notifyListeners();
 
-      if (_userCache.isEmpty) await _loadUserCache();
+      unawaited(_prefetchRecentConversations(operationEpoch));
+
+      if (_userCache.isEmpty) await _loadUserCache(operationEpoch);
     } catch (e) {
+      if (!_isCurrentSession(operationEpoch)) return;
       _debugInboxSync(
         'loadConversations:error',
         startedAt: startedAt,
@@ -770,41 +1127,85 @@ class ChatProvider extends ChangeNotifier {
       );
       debugPrint('❌ Error loading conversations: $e');
     } finally {
-      _isLoadingConversations = false;
-      if (identical(_activeConversationLoadCompleter, activeLoadCompleter)) {
-        _activeConversationLoadCompleter = null;
-      }
       if (!activeLoadCompleter.isCompleted) activeLoadCompleter.complete();
+      if (_isCurrentSession(operationEpoch)) {
+        _isLoadingConversations = false;
+        if (identical(_activeConversationLoadCompleter, activeLoadCompleter)) {
+          _activeConversationLoadCompleter = null;
+        }
 
-      if (_hasPendingConversationRefresh) {
-        _hasPendingConversationRefresh = false;
-        final pendingType = _pendingConversationRefreshType;
-        _pendingConversationRefreshType = null;
-        final pendingNeedsContextHints =
-            _pendingConversationRefreshNeedsContextHints;
-        _pendingConversationRefreshNeedsContextHints = false;
-        final pendingCompleter = _pendingConversationRefreshCompleter;
-        _pendingConversationRefreshCompleter = null;
-        _debugInboxSync(
-          'loadConversations:runQueued',
-          details: {
-            'type': pendingType ?? 'all',
-            'refreshContextHints': pendingNeedsContextHints,
-          },
-        );
-        unawaited(
-          Future<void>.delayed(const Duration(milliseconds: 80), () async {
-            try {
-              await loadConversations(
-                type: pendingType,
-                refreshContextHints: pendingNeedsContextHints,
-              );
-            } finally {
-              if (pendingCompleter != null && !pendingCompleter.isCompleted) {
-                pendingCompleter.complete();
+        if (_hasPendingConversationRefresh) {
+          _hasPendingConversationRefresh = false;
+          final pendingType = _pendingConversationRefreshType;
+          _pendingConversationRefreshType = null;
+          final pendingNeedsContextHints =
+              _pendingConversationRefreshNeedsContextHints;
+          _pendingConversationRefreshNeedsContextHints = false;
+          final pendingCompleter = _pendingConversationRefreshCompleter;
+          _pendingConversationRefreshCompleter = null;
+          _debugInboxSync(
+            'loadConversations:runQueued',
+            details: {
+              'type': pendingType ?? 'all',
+              'refreshContextHints': pendingNeedsContextHints,
+            },
+          );
+          unawaited(
+            Future<void>.delayed(const Duration(milliseconds: 80), () async {
+              try {
+                if (_isCurrentSession(operationEpoch)) {
+                  await loadConversations(
+                    type: pendingType,
+                    refreshContextHints: pendingNeedsContextHints,
+                  );
+                }
+              } finally {
+                if (pendingCompleter != null && !pendingCompleter.isCompleted) {
+                  pendingCompleter.complete();
+                }
               }
-            }
-          }),
+            }),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _prefetchRecentConversations(int operationEpoch) async {
+    if (!_isCurrentSession(operationEpoch)) return;
+    final candidates = _conversations
+        .where((conversation) =>
+            !_messageCacheByConversation.containsKey(conversation.id) &&
+            !_prefetchedConversationIds.contains(conversation.id))
+        .take(3)
+        .toList(growable: false);
+
+    for (final conversation in candidates) {
+      final revisionAtRequest =
+          _messageTimelineRevisionByConversation[conversation.id] ?? 0;
+      _prefetchedConversationIds.add(conversation.id);
+      try {
+        final messages = await _service.getRecentMessages(conversation.id);
+        if (!_isCurrentSession(operationEpoch)) return;
+        final revisionNow =
+            _messageTimelineRevisionByConversation[conversation.id] ?? 0;
+        if (messages.isNotEmpty &&
+            revisionNow == revisionAtRequest &&
+            _activeConversationId != conversation.id &&
+            !isConversationVisible(conversation.id)) {
+          final merged = mergeMessageTimelinesMonotonically(
+            olderSnapshot: messages,
+            currentTimeline:
+                _messageCacheByConversation[conversation.id] ?? const [],
+          );
+          _cacheMessages(conversation.id, merged);
+          notifyListeners();
+        }
+      } catch (error) {
+        if (!_isCurrentSession(operationEpoch)) return;
+        _prefetchedConversationIds.remove(conversation.id);
+        debugPrint(
+          '⚠️ Could not preload conversation ${conversation.id}: $error',
         );
       }
     }
@@ -829,11 +1230,15 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Future<void> _refreshConversationContextHints() async {
+    final operationEpoch = _sessionEpoch;
+    if (!_isCurrentSession(operationEpoch)) return;
     final activeConversationLoad = _activeConversationLoadCompleter?.future;
     if (activeConversationLoad != null) await activeConversationLoad;
+    if (!_isCurrentSession(operationEpoch)) return;
     if (_conversations.isEmpty) {
       await loadConversations(refreshContextHints: false);
     }
+    if (!_isCurrentSession(operationEpoch)) return;
 
     final snapshot = List<Conversation>.of(_conversations);
     if (snapshot.isEmpty) return;
@@ -846,6 +1251,7 @@ class ChatProvider extends ChangeNotifier {
 
     try {
       final hints = await _service.getConversationContextHints(snapshot);
+      if (!_isCurrentSession(operationEpoch)) return;
       var changed = false;
       _conversations = _conversations.map((conversation) {
         if (!snapshotIds.contains(conversation.id)) return conversation;
@@ -875,6 +1281,7 @@ class ChatProvider extends ChangeNotifier {
         details: {'rows': hints.length, 'changed': changed},
       );
     } catch (error) {
+      if (!_isCurrentSession(operationEpoch)) return;
       _debugInboxSync(
         'refreshContextHints:error',
         startedAt: startedAt,
@@ -931,6 +1338,8 @@ class ChatProvider extends ChangeNotifier {
       id: conversation.id,
       type: conversation.type,
       channel: conversation.channel,
+      isGroup: conversation.isGroup,
+      counterpartyType: conversation.counterpartyType,
       status: conversation.status,
       title: conversation.title,
       contextType: conversation.contextType,
@@ -938,6 +1347,9 @@ class ChatProvider extends ChangeNotifier {
       updatedAt: conversation.updatedAt,
       lastMessageAt: conversation.lastMessageAt,
       staffLastReadAt: conversation.staffLastReadAt,
+      staffLastReadMessageSequence: conversation.staffLastReadMessageSequence,
+      lastMessageId: conversation.lastMessageId,
+      lastMessageSequence: conversation.lastMessageSequence,
       lastMessageContent: conversation.lastMessageContent,
       lastMessageType: conversation.lastMessageType,
       lastMessageMetadata: conversation.lastMessageMetadata,
@@ -952,6 +1364,184 @@ class ChatProvider extends ChangeNotifier {
     );
   }
 
+  /// Suspends visible-thread ownership while the application is not in the
+  /// foreground. A resume waits for a rendered frame before reusing the last
+  /// host report, so background Realtime events can never be acknowledged as
+  /// read merely because an IndexedStack branch remains mounted.
+  void setApplicationForeground(bool isForeground) {
+    if (_disposed || _isApplicationForeground == isForeground) return;
+
+    _isApplicationForeground = isForeground;
+    final foregroundEpoch = ++_applicationForegroundEpoch;
+    if (!isForeground) {
+      _awaitingForegroundFrame = false;
+      notifyListeners();
+      return;
+    }
+
+    _awaitingForegroundFrame = true;
+    notifyListeners();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_disposed ||
+          !_isApplicationForeground ||
+          foregroundEpoch != _applicationForegroundEpoch) {
+        return;
+      }
+
+      _awaitingForegroundFrame = false;
+      notifyListeners();
+      final conversationId = _activeConversationId;
+      if (conversationId != null && isConversationVisible(conversationId)) {
+        _markActiveConversationReadIfNeeded(
+          conversationId,
+          _messageCacheByConversation[conversationId] ?? const [],
+        );
+      }
+    });
+  }
+
+  /// Registers a concrete timeline host. Only hosts reported as visible may
+  /// clear unread state or suppress an incoming notification. This is crucial
+  /// because workspace routers remain mounted inside an IndexedStack.
+  void updateConversationView({
+    required Object owner,
+    required String conversationId,
+    required bool visible,
+  }) {
+    final previousConversation = _conversationViewByOwner[owner];
+    _conversationViewByOwner[owner] = conversationId;
+    if (visible) {
+      if (_isApplicationForeground) {
+        _awaitingForegroundFrame = false;
+      }
+      _visibleConversationOwnerOrder
+        ..remove(owner)
+        ..add(owner);
+      if (_activeConversationId != conversationId ||
+          _messagesSubscription == null) {
+        setActiveConversation(conversationId);
+      } else {
+        _markActiveConversationReadIfNeeded(
+          conversationId,
+          _messageCacheByConversation[conversationId] ?? const [],
+        );
+      }
+      return;
+    }
+
+    final wasForeground = _visibleConversationOwnerOrder.isNotEmpty &&
+        identical(_visibleConversationOwnerOrder.last, owner);
+    _visibleConversationOwnerOrder.remove(owner);
+    if (wasForeground && _visibleConversationOwnerOrder.isNotEmpty) {
+      final restoredOwner = _visibleConversationOwnerOrder.last;
+      final restoredConversation = _conversationViewByOwner[restoredOwner];
+      if (restoredConversation != null) {
+        setActiveConversation(restoredConversation);
+      }
+    }
+    if (previousConversation != null &&
+        previousConversation != conversationId &&
+        !isConversationVisible(previousConversation)) {
+      _trimMessageCache();
+    }
+  }
+
+  void detachConversationView(Object owner) {
+    final conversationId = _conversationViewByOwner.remove(owner);
+    final wasForeground = _visibleConversationOwnerOrder.isNotEmpty &&
+        identical(_visibleConversationOwnerOrder.last, owner);
+    _visibleConversationOwnerOrder.remove(owner);
+    if (wasForeground && _visibleConversationOwnerOrder.isNotEmpty) {
+      final restoredOwner = _visibleConversationOwnerOrder.last;
+      final restoredConversation = _conversationViewByOwner[restoredOwner];
+      if (restoredConversation != null) {
+        setActiveConversation(restoredConversation);
+      }
+    }
+    if (conversationId != null &&
+        _activeConversationId == conversationId &&
+        !isConversationVisible(conversationId)) {
+      _messagesSubscription?.cancel();
+      _messagesSubscription = null;
+      _isLoading = false;
+      _compactConversationHistory(conversationId);
+    }
+    _trimMessageCache();
+  }
+
+  void _cacheMessages(
+    String conversationId,
+    List<Message> messages, {
+    bool preserveFullHistory = false,
+  }) {
+    final bounded =
+        !preserveFullHistory && messages.length > _recentMessageCacheLimit
+            ? messages.sublist(messages.length - _recentMessageCacheLimit)
+            : List<Message>.of(messages);
+    _messageCacheByConversation[conversationId] = bounded;
+    _messageTimelineRevisionByConversation[conversationId] =
+        (_messageTimelineRevisionByConversation[conversationId] ?? 0) + 1;
+    _messageCacheOrder
+      ..remove(conversationId)
+      ..add(conversationId);
+    if (_activeConversationId == conversationId) {
+      _activeMessages = bounded;
+    }
+    _trimMessageCache();
+  }
+
+  void _compactConversationHistory(String conversationId) {
+    final cached = _messageCacheByConversation[conversationId];
+    final truncated =
+        cached != null && cached.length > _recentMessageCacheLimit;
+    if (truncated) {
+      _messageCacheByConversation[conversationId] = cached.sublist(
+        cached.length - _recentMessageCacheLimit,
+      );
+    }
+    if (_activeConversationId == conversationId) {
+      _activeMessages =
+          _messageCacheByConversation[conversationId] ?? const <Message>[];
+    }
+    if (truncated) {
+      _hasMoreMessagesByConversation.remove(conversationId);
+      _historyCursorByConversation.remove(conversationId);
+    }
+    _loadingOlderMessagesByConversation.remove(conversationId);
+    _olderMessagesErrorByConversation.remove(conversationId);
+    _historyLoadEpochByConversation[conversationId] =
+        (_historyLoadEpochByConversation[conversationId] ?? 0) + 1;
+  }
+
+  void _trimMessageCache() {
+    const maxCachedConversations = 12;
+    while (_messageCacheOrder.length > maxCachedConversations) {
+      final candidate = _messageCacheOrder.first;
+      if (candidate == _activeConversationId ||
+          isConversationVisible(candidate)) {
+        _messageCacheOrder
+          ..removeAt(0)
+          ..add(candidate);
+        if (_messageCacheOrder.every(
+          (id) => id == _activeConversationId || isConversationVisible(id),
+        )) {
+          break;
+        }
+        continue;
+      }
+      _messageCacheOrder.removeAt(0);
+      _messageCacheByConversation.remove(candidate);
+      _messageTimelineRevisionByConversation.remove(candidate);
+      _prefetchedConversationIds.remove(candidate);
+      _hasMoreMessagesByConversation.remove(candidate);
+      _loadingOlderMessagesByConversation.remove(candidate);
+      _olderMessagesErrorByConversation.remove(candidate);
+      _messageStreamErrorByConversation.remove(candidate);
+      _historyLoadEpochByConversation.remove(candidate);
+      _historyCursorByConversation.remove(candidate);
+    }
+  }
+
   /// Open a conversation and subscribe to updates
   void setActiveConversation(String conversationId) {
     if (_activeConversationId == conversationId) {
@@ -963,10 +1553,15 @@ class ChatProvider extends ChangeNotifier {
       return;
     }
 
+    final previousConversationId = _activeConversationId;
+    if (previousConversationId != null) {
+      _compactConversationHistory(previousConversationId);
+    }
+
     _activeConversationId = conversationId;
-    _activeMessages = []; // Clear previous chat immediately
-    _optimisticMessages.clear();
-    _isLoading = true; // Show loader while stream connects
+    _activeMessages =
+        _messageCacheByConversation[conversationId] ?? <Message>[];
+    _isLoading = _activeMessages.isEmpty;
     notifyListeners();
 
     // Keep the unread badge until the visible message stream confirms the chat
@@ -980,10 +1575,6 @@ class ChatProvider extends ChangeNotifier {
       } else {
         _conversationOpeningUnreadCounts.remove(conversationId);
       }
-      _markConversationLocallyRead(
-        conversationId,
-        readAt: _conversationReadThroughAt(old),
-      );
     }
 
     // 1. Unsubscribe from old message stream
@@ -1003,6 +1594,12 @@ class ChatProvider extends ChangeNotifier {
     if (conversationId != null && _activeConversationId != conversationId) {
       return;
     }
+    final activeId = _activeConversationId;
+    if (activeId != null && isConversationVisible(activeId)) return;
+
+    if (activeId != null) {
+      _compactConversationHistory(activeId);
+    }
 
     _messagesRetryTimer?.cancel();
     _messagesRetryAttempt = 0;
@@ -1011,7 +1608,6 @@ class ChatProvider extends ChangeNotifier {
 
     _activeConversationId = null;
     _activeMessages = [];
-    _optimisticMessages.clear();
     _isLoading = false;
     if (notify) {
       notifyListeners();
@@ -1020,6 +1616,7 @@ class ChatProvider extends ChangeNotifier {
 
   void _subscribeToActiveMessages(String conversationId) {
     if (_activeConversationId != conversationId) return;
+    final operationEpoch = _sessionEpoch;
 
     _messagesRetryTimer?.cancel();
     _messagesSubscription?.cancel();
@@ -1027,62 +1624,218 @@ class ChatProvider extends ChangeNotifier {
     try {
       _messagesSubscription = _service.getMessagesStream(conversationId).listen(
         (messages) {
-          if (_activeConversationId != conversationId) return;
+          if (!_isCurrentSession(operationEpoch) ||
+              _activeConversationId != conversationId) {
+            return;
+          }
 
           _messagesRetryTimer?.cancel();
           _messagesRetryAttempt = 0;
           _debugLogWhatsAppStatusChanges(messages);
           _pruneConfirmedOptimisticMessages(messages);
-          _activeMessages = messages;
+          final cached =
+              _messageCacheByConversation[conversationId] ?? const <Message>[];
+          final merged = mergeMessageTimelinesMonotonically(
+            olderSnapshot: cached,
+            currentTimeline: messages,
+            limit: null,
+          );
+          final knownHasMore = _hasMoreMessagesByConversation[conversationId];
+          final oldestStreamSequence = oldestDurableMessageSequence(messages);
+          if (knownHasMore == null) {
+            final streamPageIsFull =
+                messages.length >= MessagingService.recentMessageStreamLimit;
+            _hasMoreMessagesByConversation[conversationId] =
+                streamPageIsFull && oldestStreamSequence != null;
+            if (streamPageIsFull && oldestStreamSequence == null) {
+              _olderMessagesErrorByConversation[conversationId] =
+                  _missingHistoryCursorMessage;
+            }
+          } else if (messages.length <
+              MessagingService.recentMessageStreamLimit) {
+            _hasMoreMessagesByConversation[conversationId] = false;
+          }
+          if (!_historyCursorByConversation.containsKey(conversationId) &&
+              oldestStreamSequence != null) {
+            _historyCursorByConversation[conversationId] = oldestStreamSequence;
+          }
+          if (oldestStreamSequence != null &&
+              _olderMessagesErrorByConversation[conversationId] ==
+                  _missingHistoryCursorMessage) {
+            _olderMessagesErrorByConversation.remove(conversationId);
+            _hasMoreMessagesByConversation[conversationId] =
+                messages.length >= MessagingService.recentMessageStreamLimit;
+          }
+          _messageStreamErrorByConversation.remove(conversationId);
+          _cacheMessages(
+            conversationId,
+            merged,
+            preserveFullHistory: true,
+          );
           _isLoading = false;
-          _markActiveConversationReadIfNeeded(conversationId, messages);
+          _markActiveConversationReadIfNeeded(conversationId, merged);
           notifyListeners();
         },
         onError: (error) {
-          _handleMessageStreamError(conversationId, error);
+          if (_isCurrentSession(operationEpoch)) {
+            _handleMessageStreamError(conversationId, error);
+          }
         },
       );
     } catch (error) {
-      _handleMessageStreamError(conversationId, error);
+      if (_isCurrentSession(operationEpoch)) {
+        _handleMessageStreamError(conversationId, error);
+      }
     }
+  }
+
+  /// Loads the next older immutable page without changing the selected chat.
+  /// A session, conversation or request-epoch change discards the late result.
+  Future<void> loadOlderMessages(String conversationId) async {
+    if (!_sessionReady || _activeConversationId != conversationId) return;
+    if (_loadingOlderMessagesByConversation[conversationId] == true ||
+        _hasMoreMessagesByConversation[conversationId] == false) {
+      return;
+    }
+
+    final current =
+        _messageCacheByConversation[conversationId] ?? const <Message>[];
+    if (current.isEmpty) return;
+
+    final beforeSequence = _historyCursorByConversation[conversationId] ??
+        oldestDurableMessageSequence(current);
+    if (beforeSequence == null) {
+      _hasMoreMessagesByConversation[conversationId] = false;
+      _olderMessagesErrorByConversation[conversationId] =
+          _missingHistoryCursorMessage;
+      notifyListeners();
+      return;
+    }
+
+    final operationEpoch = _sessionEpoch;
+    final requestEpoch =
+        (_historyLoadEpochByConversation[conversationId] ?? 0) + 1;
+    _historyLoadEpochByConversation[conversationId] = requestEpoch;
+    _loadingOlderMessagesByConversation[conversationId] = true;
+    _olderMessagesErrorByConversation.remove(conversationId);
+    notifyListeners();
+
+    try {
+      final page = await _service.getMessagesBefore(
+        conversationId,
+        beforeSequence: beforeSequence,
+      );
+      if (!_isCurrentSession(operationEpoch) ||
+          _activeConversationId != conversationId ||
+          _historyLoadEpochByConversation[conversationId] != requestEpoch) {
+        return;
+      }
+
+      final latestTimeline =
+          _messageCacheByConversation[conversationId] ?? const <Message>[];
+      final merged = mergeMessageTimelinesMonotonically(
+        olderSnapshot: page.messages,
+        currentTimeline: latestTimeline,
+        limit: null,
+      );
+      final nextCursor = page.nextBeforeSequence;
+      if (nextCursor != null) {
+        final currentCursor = _historyCursorByConversation[conversationId];
+        _historyCursorByConversation[conversationId] =
+            currentCursor == null || nextCursor < currentCursor
+                ? nextCursor
+                : currentCursor;
+      }
+      if (_hasMoreMessagesByConversation[conversationId] != false) {
+        _hasMoreMessagesByConversation[conversationId] =
+            page.hasMore && nextCursor != null && nextCursor < beforeSequence;
+      }
+      _cacheMessages(
+        conversationId,
+        merged,
+        preserveFullHistory: true,
+      );
+    } catch (error) {
+      if (!_isCurrentSession(operationEpoch) ||
+          _activeConversationId != conversationId ||
+          _historyLoadEpochByConversation[conversationId] != requestEpoch) {
+        return;
+      }
+      debugPrint('❌ Error loading older messages: $error');
+      _olderMessagesErrorByConversation[conversationId] =
+          'No pudimos cargar los mensajes anteriores.';
+    } finally {
+      if (_isCurrentSession(operationEpoch) &&
+          _historyLoadEpochByConversation[conversationId] == requestEpoch) {
+        _loadingOlderMessagesByConversation.remove(conversationId);
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> retryOlderMessages(String conversationId) {
+    _olderMessagesErrorByConversation.remove(conversationId);
+    _hasMoreMessagesByConversation[conversationId] = true;
+    return loadOlderMessages(conversationId);
+  }
+
+  void retryConversationMessages(String conversationId) {
+    if (_activeConversationId != conversationId) return;
+    _messagesRetryTimer?.cancel();
+    _messagesRetryAttempt = 0;
+    _messageStreamErrorByConversation.remove(conversationId);
+    _isLoading = messagesForConversation(conversationId).isEmpty;
+    notifyListeners();
+    _subscribeToActiveMessages(conversationId);
   }
 
   void _markActiveConversationReadIfNeeded(
     String conversationId,
     List<Message> messages,
   ) {
-    if (_activeConversationId != conversationId || messages.isEmpty) return;
+    if (_activeConversationId != conversationId ||
+        !isConversationVisible(conversationId) ||
+        messages.isEmpty) {
+      return;
+    }
 
-    final latestVisibleMessageAt =
+    final latestVisibleMessage =
         _latestVisibleMessageFromAnotherSender(messages);
-    if (latestVisibleMessageAt == null) return;
+    if (latestVisibleMessage == null) return;
 
     final lastSync = _lastReadSyncByConversation[conversationId];
-    if (lastSync != null && !latestVisibleMessageAt.isAfter(lastSync)) {
-      return;
+    if (lastSync != null) {
+      final latestAt = latestVisibleMessage.createdAt;
+      final alreadySyncedExactMessage =
+          _lastReadSyncMessageIdByConversation[conversationId] ==
+              latestVisibleMessage.id;
+      if (latestAt.isBefore(lastSync) ||
+          (latestAt.isAtSameMomentAs(lastSync) && alreadySyncedExactMessage)) {
+        return;
+      }
     }
 
     _markConversationReadAndRefresh(
       conversationId,
-      readThrough: latestVisibleMessageAt,
+      readThroughMessage: latestVisibleMessage,
       refreshAfter: false,
     );
   }
 
-  DateTime? _latestVisibleMessageFromAnotherSender(List<Message> messages) {
-    for (var index = messages.length - 1; index >= 0; index--) {
-      final message = messages[index];
-      if (message.type == 'system' || message.isMe) continue;
-      return message.createdAt;
-    }
-    return null;
+  Message? _latestVisibleMessageFromAnotherSender(List<Message> messages) {
+    return latestMessageByTimelineOrder(
+      messages.where((message) => message.type != 'system' && !message.isMe),
+    );
   }
 
   void _handleMessageStreamError(String conversationId, Object error) {
     if (_activeConversationId != conversationId) return;
+    final operationEpoch = _sessionEpoch;
 
     if (_messagesRetryAttempt >= _maxMessageStreamRetryAttempts) {
       debugPrint('❌ Error stream messages after retries: $error');
+      _messageStreamErrorByConversation[conversationId] =
+          'La conversación perdió conexión. Tus mensajes visibles se conservaron.';
       _isLoading = false;
       notifyListeners();
       return;
@@ -1095,12 +1848,13 @@ class ChatProvider extends ChangeNotifier {
       '($_messagesRetryAttempt/$_maxMessageStreamRetryAttempts): $error',
     );
 
-    _isLoading = _activeMessages.isEmpty;
+    _isLoading = messagesForConversation(conversationId).isEmpty;
     notifyListeners();
 
     _messagesRetryTimer?.cancel();
     _messagesRetryTimer = Timer(delay, () {
-      if (_activeConversationId == conversationId) {
+      if (_isCurrentSession(operationEpoch) &&
+          _activeConversationId == conversationId) {
         _subscribeToActiveMessages(conversationId);
       }
     });
@@ -1117,25 +1871,44 @@ class ChatProvider extends ChangeNotifier {
 
   void _markConversationReadAndRefresh(
     String conversationId, {
-    DateTime? readThrough,
+    required Message readThroughMessage,
     bool refreshAfter = true,
   }) {
-    final readMarker = readThrough ?? DateTime.now();
+    final operationEpoch = _sessionEpoch;
+    if (!_isCurrentSession(operationEpoch)) return;
+    final readMarker = readThroughMessage.createdAt;
+    final readThroughMessageId = readThroughMessage.id;
     _lastReadSyncByConversation[conversationId] = readMarker;
-    _markConversationLocallyRead(conversationId, readAt: readMarker);
+    _lastReadSyncMessageIdByConversation[conversationId] = readThroughMessageId;
+    _markConversationLocallyRead(
+      conversationId,
+      readAt: readMarker,
+      readThroughMessageSequence: readThroughMessage.messageSequence,
+    );
 
-    _service.markAsRead(conversationId).then((_) {
+    _service
+        .markAsRead(
+      conversationId,
+      readThroughMessageId: readThroughMessageId,
+    )
+        .then((_) {
+      if (!_isCurrentSession(operationEpoch)) return;
       if (refreshAfter) {
         loadConversations(refreshContextHints: false);
       } else {
         _scheduleConversationRefresh(const Duration(milliseconds: 120));
       }
     }).catchError((error) {
-      if (_lastReadSyncByConversation[conversationId] == readMarker) {
+      if (!_isCurrentSession(operationEpoch)) return;
+      if (_lastReadSyncByConversation[conversationId] == readMarker &&
+          _lastReadSyncMessageIdByConversation[conversationId] ==
+              readThroughMessageId) {
         _lastReadSyncByConversation.remove(conversationId);
+        _lastReadSyncMessageIdByConversation.remove(conversationId);
       }
       if (_localReadAtByConversation[conversationId] == readMarker) {
         _localReadAtByConversation.remove(conversationId);
+        _localReadMessageSequenceByConversation.remove(conversationId);
       }
       debugPrint('⚠️ Error marking conversation as read: $error');
       _scheduleConversationRefresh(const Duration(milliseconds: 250));
@@ -1152,8 +1925,16 @@ class ChatProvider extends ChangeNotifier {
         return conversation;
       }
 
+      final localReadSequence =
+          _localReadMessageSequenceByConversation[conversation.id];
+      final lastMessageSequence = conversation.lastMessageSequence;
       final lastActivity = conversation.lastMessageAt ?? conversation.updatedAt;
-      if (lastActivity.isAfter(localReadAt)) {
+      if (hasMessageAfterReadCursor(
+        latestSequence: lastMessageSequence,
+        readSequence: localReadSequence,
+        latestCreatedAt: lastActivity,
+        readCreatedAt: localReadAt,
+      )) {
         return conversation;
       }
 
@@ -1251,19 +2032,26 @@ class ChatProvider extends ChangeNotifier {
     Conversation conversation,
     _IncomingConversationPreview preview,
   ) {
-    if (_activeConversationId == conversation.id) return true;
+    if (isConversationVisible(conversation.id)) return true;
 
     final serverHasUnread = conversation.unreadCount > 0;
     final lastActivity = _conversationReadThroughAt(conversation);
+    final serverLastSequence = conversation.lastMessageSequence;
     final serverHasPreviewMessage =
-        lastActivity != null && !lastActivity.isBefore(preview.createdAt);
+        serverLastSequence != null && preview.messageSequence != null
+            ? serverLastSequence >= preview.messageSequence!
+            : lastActivity != null && !lastActivity.isBefore(preview.createdAt);
     if (serverHasUnread && serverHasPreviewMessage) return true;
 
     final staffLastReadAt = conversation.staffLastReadAt;
+    final staffLastReadSequence = conversation.staffLastReadMessageSequence;
     if (conversation.isSupport &&
         conversation.unreadCount == 0 &&
-        staffLastReadAt != null &&
-        staffLastReadAt.isAfter(preview.receivedAt)) {
+        ((staffLastReadSequence != null &&
+                preview.messageSequence != null &&
+                staffLastReadSequence >= preview.messageSequence!) ||
+            (staffLastReadAt != null &&
+                staffLastReadAt.isAfter(preview.receivedAt)))) {
       return true;
     }
 
@@ -1305,6 +2093,8 @@ class ChatProvider extends ChangeNotifier {
       id: old.id,
       type: old.type,
       channel: old.channel,
+      isGroup: old.isGroup,
+      counterpartyType: old.counterpartyType,
       status: old.status,
       title: old.title,
       contextType: old.contextType,
@@ -1316,6 +2106,9 @@ class ChatProvider extends ChangeNotifier {
               ? nextActivity
               : old.lastMessageAt,
       staffLastReadAt: old.staffLastReadAt,
+      staffLastReadMessageSequence: old.staffLastReadMessageSequence,
+      lastMessageId: old.lastMessageId,
+      lastMessageSequence: preview.messageSequence ?? old.lastMessageSequence,
       lastMessageContent:
           preview.content.isNotEmpty ? preview.content : old.lastMessageContent,
       lastMessageType: preview.messageType,
@@ -1346,6 +2139,8 @@ class ChatProvider extends ChangeNotifier {
       id: old.id,
       type: old.type,
       channel: old.channel,
+      isGroup: old.isGroup,
+      counterpartyType: old.counterpartyType,
       status: old.status,
       title: old.title,
       contextType: old.contextType,
@@ -1357,6 +2152,9 @@ class ChatProvider extends ChangeNotifier {
               ? nextActivity
               : old.lastMessageAt,
       staffLastReadAt: old.staffLastReadAt,
+      staffLastReadMessageSequence: old.staffLastReadMessageSequence,
+      lastMessageId: old.lastMessageId,
+      lastMessageSequence: old.lastMessageSequence,
       lastMessageContent: preview.content,
       lastMessageType: preview.messageType,
       lastMessageMetadata: preview.metadata,
@@ -1375,8 +2173,15 @@ class ChatProvider extends ChangeNotifier {
   void _markConversationLocallyRead(
     String conversationId, {
     DateTime? readAt,
+    int? readThroughMessageSequence,
   }) {
     _localReadAtByConversation[conversationId] = readAt ?? DateTime.now();
+    if (readThroughMessageSequence != null) {
+      _localReadMessageSequenceByConversation[conversationId] =
+          readThroughMessageSequence;
+    } else {
+      _localReadMessageSequenceByConversation.remove(conversationId);
+    }
     _incomingConversationPreviews.remove(conversationId);
     _clearLocalUnreadCount(conversationId);
   }
@@ -1404,12 +2209,17 @@ class ChatProvider extends ChangeNotifier {
       id: old.id,
       type: old.type,
       channel: old.channel,
+      isGroup: old.isGroup,
+      counterpartyType: old.counterpartyType,
       status: old.status,
       title: old.title,
       contextType: old.contextType,
       contextId: old.contextId,
       lastMessageAt: old.lastMessageAt,
       staffLastReadAt: old.staffLastReadAt,
+      staffLastReadMessageSequence: old.staffLastReadMessageSequence,
+      lastMessageId: old.lastMessageId,
+      lastMessageSequence: old.lastMessageSequence,
       lastMessageContent: old.lastMessageContent,
       lastMessageType: old.lastMessageType,
       lastMessageMetadata: old.lastMessageMetadata,
@@ -1427,11 +2237,14 @@ class ChatProvider extends ChangeNotifier {
 
   /// Create a new internal chat
   Future<void> createInternalChat(String otherUserId) async {
+    final operationEpoch = _sessionEpoch;
+    if (!_isCurrentSession(operationEpoch)) return;
     try {
       _isLoading = true;
       notifyListeners();
 
       final conversationId = await _service.createInternalChat(otherUserId);
+      if (!_isCurrentSession(operationEpoch)) return;
       // No need to manually load conversations, the realtime listener will pick it up
       setActiveConversation(conversationId);
     } catch (e) {
@@ -1440,7 +2253,7 @@ class ChatProvider extends ChangeNotifier {
     } finally {
       // _isLoading handled by stream listener in setActiveConversation
       // But if we fail before that:
-      if (_activeConversationId == null) {
+      if (_isCurrentSession(operationEpoch) && _activeConversationId == null) {
         _isLoading = false;
         notifyListeners();
       }
@@ -1449,6 +2262,8 @@ class ChatProvider extends ChangeNotifier {
 
   /// Create a new internal group chat
   Future<void> createGroupChat(List<String> userIds, String title) async {
+    final operationEpoch = _sessionEpoch;
+    if (!_isCurrentSession(operationEpoch)) return;
     try {
       _isLoading = true;
       notifyListeners();
@@ -1457,12 +2272,13 @@ class ChatProvider extends ChangeNotifier {
         participantIds: userIds,
         title: title,
       );
+      if (!_isCurrentSession(operationEpoch)) return;
       setActiveConversation(conversationId);
     } catch (e) {
       debugPrint('❌ Error creating group chat: $e');
       rethrow;
     } finally {
-      if (_activeConversationId == null) {
+      if (_isCurrentSession(operationEpoch) && _activeConversationId == null) {
         _isLoading = false;
         notifyListeners();
       }
@@ -1472,6 +2288,8 @@ class ChatProvider extends ChangeNotifier {
   /// Create a new support chat with a customer
   Future<void> createCustomerChat(String customerUserId,
       {String? contextType, String? contextId}) async {
+    final operationEpoch = _sessionEpoch;
+    if (!_isCurrentSession(operationEpoch)) return;
     try {
       _isLoading = true;
       notifyListeners();
@@ -1480,12 +2298,13 @@ class ChatProvider extends ChangeNotifier {
           customerUserId,
           contextType: contextType,
           contextId: contextId);
+      if (!_isCurrentSession(operationEpoch)) return;
       setActiveConversation(conversationId);
     } catch (e) {
       debugPrint('❌ Error creating customer chat: $e');
       rethrow;
     } finally {
-      if (_activeConversationId == null) {
+      if (_isCurrentSession(operationEpoch) && _activeConversationId == null) {
         _isLoading = false;
         notifyListeners();
       }
@@ -1500,6 +2319,8 @@ class ChatProvider extends ChangeNotifier {
     String? contextType,
     String? contextId,
   }) async {
+    final operationEpoch = _sessionEpoch;
+    if (!_isCurrentSession(operationEpoch)) return;
     try {
       _isLoading = true;
       notifyListeners();
@@ -1511,14 +2332,16 @@ class ChatProvider extends ChangeNotifier {
         contextType: contextType,
         contextId: contextId,
       );
+      if (!_isCurrentSession(operationEpoch)) return;
 
       await loadConversations(refreshContextHints: true);
+      if (!_isCurrentSession(operationEpoch)) return;
       setActiveConversation(conversationId);
     } catch (e) {
       debugPrint('❌ Error opening WhatsApp customer chat: $e');
       rethrow;
     } finally {
-      if (_activeConversationId == null) {
+      if (_isCurrentSession(operationEpoch) && _activeConversationId == null) {
         _isLoading = false;
         notifyListeners();
       }
@@ -1526,10 +2349,16 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// Send a message in the active conversation
-  Future<void> sendMessage(String content,
-      {String type = 'text', Map<String, dynamic>? metadata}) async {
-    final activeId = _activeConversationId;
-    if (activeId == null || content.trim().isEmpty) return;
+  Future<void> sendMessage(
+    String content, {
+    String type = 'text',
+    Map<String, dynamic>? metadata,
+    String? conversationId,
+  }) async {
+    final operationEpoch = _sessionEpoch;
+    if (!_isCurrentSession(operationEpoch)) return;
+    final targetConversationId = conversationId ?? _activeConversationId;
+    if (targetConversationId == null || content.trim().isEmpty) return;
     final sendStartedAt = DateTime.now();
 
     final tempId = 'temp-${DateTime.now().millisecondsSinceEpoch}';
@@ -1541,7 +2370,7 @@ class ChatProvider extends ChangeNotifier {
     // 1. Optimistic Update: Add message immediately
     final tempMessage = Message(
       id: tempId,
-      conversationId: activeId,
+      conversationId: targetConversationId,
       senderId: _service.currentUserId,
       content: content,
       type: type,
@@ -1552,18 +2381,18 @@ class ChatProvider extends ChangeNotifier {
 
     _debugInboxSync(
       'sendMessage:start',
-      conversationId: activeId,
+      conversationId: targetConversationId,
       messageId: tempId,
       details: {
         'type': type,
-        'text': _debugPreview(content),
+        'characterCount': content.length,
       },
     );
 
     final previousConversation = addOptimisticMessage(tempMessage);
     _debugInboxSync(
       'sendMessage:optimisticApplied',
-      conversationId: activeId,
+      conversationId: targetConversationId,
       messageId: tempId,
       startedAt: sendStartedAt,
       details: {'hadPreviousRow': previousConversation != null},
@@ -1571,14 +2400,14 @@ class ChatProvider extends ChangeNotifier {
 
     try {
       await _service.sendMessage(
-        conversationId: activeId,
+        conversationId: targetConversationId,
         content: content,
         type: type,
         metadata: messageMetadata,
       );
       _debugInboxSync(
         'sendMessage:serverDone',
-        conversationId: activeId,
+        conversationId: targetConversationId,
         messageId: tempId,
         startedAt: sendStartedAt,
       );
@@ -1586,16 +2415,22 @@ class ChatProvider extends ChangeNotifier {
     } catch (e) {
       _debugInboxSync(
         'sendMessage:error',
-        conversationId: activeId,
+        conversationId: targetConversationId,
         messageId: tempId,
         startedAt: sendStartedAt,
         details: {'error': e},
       );
       debugPrint('❌ Error sending message: $e');
-      // On error, remove the temp message
-      removeMessageById(tempId);
-      _restoreOutgoingMessagePreview(tempMessage, previousConversation);
-      // TODO: Show error toast
+      if (_isCurrentSession(operationEpoch)) {
+        // On error, remove the temp message only from the originating session.
+        removeMessageById(tempId);
+        _restoreOutgoingMessagePreview(tempMessage, previousConversation);
+      }
+      // The host owns the user-facing recovery affordance. Propagating the
+      // failure is essential: otherwise it clears the composer while the
+      // insert was rolled back and the user has no way to distinguish that
+      // from a committed message.
+      rethrow;
     }
   }
 
@@ -1624,6 +2459,7 @@ class ChatProvider extends ChangeNotifier {
 
     _incomingConversationPreviews.remove(message.conversationId);
     _localReadAtByConversation[message.conversationId] = message.createdAt;
+    _localReadMessageSequenceByConversation.remove(message.conversationId);
     _outgoingConversationPreviews[message.conversationId] =
         _OutgoingConversationPreview(
       clientMessageId: message.id,
@@ -1650,7 +2486,7 @@ class ChatProvider extends ChangeNotifier {
         'source': source,
         'type': message.type,
         'direction': direction,
-        'text': _debugPreview(message.content),
+        'characterCount': message.content.length,
       },
     );
     if (notify) notifyListeners();
@@ -1714,6 +2550,7 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Conversation? addOptimisticMessage(Message message) {
+    if (_disposed) return null;
     final startedAt = DateTime.now();
     _debugInboxSync(
       'optimisticMessage:add',
@@ -1728,15 +2565,7 @@ class ChatProvider extends ChangeNotifier {
     );
 
     Conversation? previousConversation;
-    if (_activeConversationId != message.conversationId) {
-      _debugInboxSync(
-        'optimisticMessage:skipBubbleInactive',
-        conversationId: message.conversationId,
-        messageId: message.id,
-      );
-    } else {
-      _optimisticMessages[message.id] = message;
-    }
+    _optimisticMessages[message.id] = message;
 
     if (message.isMe) {
       previousConversation = _applyOutgoingMessagePreview(
@@ -1758,7 +2587,14 @@ class ChatProvider extends ChangeNotifier {
   }
 
   void removeMessageById(String messageId) {
+    if (_disposed) return;
     final removedOptimistic = _optimisticMessages.remove(messageId) != null;
+    var removedCached = false;
+    for (final messages in _messageCacheByConversation.values) {
+      final previousLength = messages.length;
+      messages.removeWhere((message) => message.id == messageId);
+      removedCached |= messages.length != previousLength;
+    }
     final previousLength = _activeMessages.length;
     _activeMessages.removeWhere((message) => message.id == messageId);
     final restoredOutgoingPreview =
@@ -1773,6 +2609,7 @@ class ChatProvider extends ChangeNotifier {
       },
     );
     if (removedOptimistic ||
+        removedCached ||
         _activeMessages.length != previousLength ||
         restoredOutgoingPreview) {
       notifyListeners();
@@ -1783,8 +2620,7 @@ class ChatProvider extends ChangeNotifier {
     String messageId,
     Map<String, dynamic> metadataUpdates,
   ) {
-    final index =
-        _activeMessages.indexWhere((message) => message.id == messageId);
+    if (_disposed) return;
     final optimisticMessage = _optimisticMessages[messageId];
     if (optimisticMessage != null) {
       final updatedMetadata = Map<String, dynamic>.from(
@@ -1799,21 +2635,22 @@ class ChatProvider extends ChangeNotifier {
         type: optimisticMessage.type,
         metadata: updatedMetadata,
         createdAt: optimisticMessage.createdAt,
+        messageSequence: optimisticMessage.messageSequence,
         isMe: optimisticMessage.isMe,
       );
       notifyListeners();
       return;
     }
 
-    if (index == -1) {
-      return;
-    }
-
-    final existing = _activeMessages[index];
+    final cachedLocation = _cachedMessageLocation(messageId);
+    if (cachedLocation == null) return;
+    final messages = cachedLocation.$1;
+    final index = cachedLocation.$2;
+    final existing = messages[index];
     final updatedMetadata = Map<String, dynamic>.from(existing.metadata)
       ..addAll(metadataUpdates);
 
-    _activeMessages[index] = Message(
+    messages[index] = Message(
       id: existing.id,
       conversationId: existing.conversationId,
       senderId: existing.senderId,
@@ -1821,6 +2658,7 @@ class ChatProvider extends ChangeNotifier {
       type: existing.type,
       metadata: updatedMetadata,
       createdAt: existing.createdAt,
+      messageSequence: existing.messageSequence,
       isMe: existing.isMe,
     );
 
@@ -1832,8 +2670,7 @@ class ChatProvider extends ChangeNotifier {
     String? content,
     Map<String, dynamic>? metadataUpdates,
   }) {
-    final index =
-        _activeMessages.indexWhere((message) => message.id == messageId);
+    if (_disposed) return;
     final optimisticMessage = _optimisticMessages[messageId];
     if (optimisticMessage != null) {
       final updatedMetadata = Map<String, dynamic>.from(
@@ -1851,23 +2688,24 @@ class ChatProvider extends ChangeNotifier {
         type: optimisticMessage.type,
         metadata: updatedMetadata,
         createdAt: optimisticMessage.createdAt,
+        messageSequence: optimisticMessage.messageSequence,
         isMe: optimisticMessage.isMe,
       );
       notifyListeners();
       return;
     }
 
-    if (index == -1) {
-      return;
-    }
-
-    final existing = _activeMessages[index];
+    final cachedLocation = _cachedMessageLocation(messageId);
+    if (cachedLocation == null) return;
+    final messages = cachedLocation.$1;
+    final index = cachedLocation.$2;
+    final existing = messages[index];
     final updatedMetadata = Map<String, dynamic>.from(existing.metadata);
     if (metadataUpdates != null) {
       updatedMetadata.addAll(metadataUpdates);
     }
 
-    _activeMessages[index] = Message(
+    messages[index] = Message(
       id: existing.id,
       conversationId: existing.conversationId,
       senderId: existing.senderId,
@@ -1875,16 +2713,28 @@ class ChatProvider extends ChangeNotifier {
       type: existing.type,
       metadata: updatedMetadata,
       createdAt: existing.createdAt,
+      messageSequence: existing.messageSequence,
       isMe: existing.isMe,
     );
 
     notifyListeners();
   }
 
+  (List<Message>, int)? _cachedMessageLocation(String messageId) {
+    for (final messages in _messageCacheByConversation.values) {
+      final index = messages.indexWhere((message) => message.id == messageId);
+      if (index != -1) return (messages, index);
+    }
+    return null;
+  }
+
   /// Create a new support ticket
   Future<void> createTicket(String title) async {
+    final operationEpoch = _sessionEpoch;
+    if (!_isCurrentSession(operationEpoch)) return;
     try {
       final id = await _service.createSupportTicket(title: title);
+      if (!_isCurrentSession(operationEpoch)) return;
       setActiveConversation(id);
     } catch (e) {
       debugPrint('❌ Error creating ticket: $e');
@@ -1893,8 +2743,11 @@ class ChatProvider extends ChangeNotifier {
 
   /// Accept a pending chat request
   Future<void> acceptChatRequest(String conversationId) async {
+    final operationEpoch = _sessionEpoch;
+    if (!_isCurrentSession(operationEpoch)) return;
     try {
       await _service.acceptChatRequest(conversationId);
+      if (!_isCurrentSession(operationEpoch)) return;
       await loadConversations(); // Refresh to update status
     } catch (e) {
       debugPrint('❌ Error accepting chat request: $e');
@@ -1904,8 +2757,11 @@ class ChatProvider extends ChangeNotifier {
 
   /// Reject a pending chat request
   Future<void> rejectChatRequest(String conversationId, String reason) async {
+    final operationEpoch = _sessionEpoch;
+    if (!_isCurrentSession(operationEpoch)) return;
     try {
       await _service.rejectChatRequest(conversationId, reason);
+      if (!_isCurrentSession(operationEpoch)) return;
       await loadConversations(); // Refresh to update status
     } catch (e) {
       debugPrint('❌ Error rejecting chat request: $e');
@@ -1913,10 +2769,12 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  /// Delete a conversation
-  Future<bool> deleteConversation(String conversationId) async {
+  /// Archive a conversation without destroying messages or audit evidence.
+  Future<bool> archiveConversation(String conversationId) async {
+    final operationEpoch = _sessionEpoch;
+    if (!_isCurrentSession(operationEpoch)) return false;
     try {
-      // If deleting the active conversation, clear it first
+      // If archiving the active conversation, detach its live stream first.
       if (_activeConversationId == conversationId) {
         _messagesRetryTimer?.cancel();
         _messagesSubscription?.cancel();
@@ -1928,11 +2786,11 @@ class ChatProvider extends ChangeNotifier {
       _conversations.removeWhere((c) => c.id == conversationId);
       notifyListeners();
 
-      // Delete from server
-      await _service.deleteConversation(conversationId);
-      return true;
+      await _service.archiveConversation(conversationId);
+      return _isCurrentSession(operationEpoch);
     } catch (e) {
-      debugPrint('❌ Error deleting conversation: $e');
+      if (!_isCurrentSession(operationEpoch)) return false;
+      debugPrint('❌ Error archiving conversation: $e');
       // Reload to restore state on error
       await loadConversations();
       return false;
@@ -1941,13 +2799,17 @@ class ChatProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _sessionResolutionEpoch += 1;
     _conversationsRefreshTimer?.cancel();
     _conversationsFollowUpRefreshTimer?.cancel();
     _messagesRetryTimer?.cancel();
     _contextHintCachePersistTimer?.cancel();
+    _messageReceiptRefreshCoalescer.dispose();
     _messagesSubscription?.cancel();
     _conversationsSubscription?.unsubscribe();
     _notificationSubscription?.cancel();
+    _authStateSubscription?.cancel();
     super.dispose();
   }
 }

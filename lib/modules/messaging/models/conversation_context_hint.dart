@@ -132,7 +132,8 @@ class ConversationContextHint {
   bool get hasInvoice => invoiceId != null && invoiceId!.isNotEmpty;
   bool get hasPurchaseInvoice =>
       purchaseInvoiceId != null && purchaseInvoiceId!.isNotEmpty;
-  bool get hasOperationalContext => hasJob || hasInvoice || hasPurchaseInvoice;
+  bool get hasOperationalContext =>
+      hasJob || hasInvoice || hasPurchaseInvoice || hasSupplier;
 
   String? get customerLabel {
     final name = customerName?.trim();

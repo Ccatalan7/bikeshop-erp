@@ -1982,6 +1982,20 @@ Per-mechanic attribution is shown only when `mechanic_jobs.assigned_to` actually
 links to an active mechanic; otherwise the dashboard labels the result as a
 team-level reading.
 
+Expense accrual/payment journals share the same tenant boundary as the source
+expense. The legacy-compatible UUID entry points keep their public names, but
+only `rebuild_expense_journal_entry` and `recalculate_expense_totals` are
+executable by an authenticated client; both first prove the expense belongs to
+`user_tenant_id()` and return the same access-denied result for a missing or
+foreign UUID. The four create/delete
+compatibility names are service/trigger-only, and the retained accounting
+implementations, four untraced helpers and tenant assertion helper are
+owner-only. Journal replacement/deletion scopes a mutable `expense_number` by
+tenant and uses the immutable expense UUID/source-document identity for cleanup
+after source deletion. Trigger-driven
+cleanup may finish after an `expense_payments` source row has already been
+deleted; this narrow trigger exception grants no direct employee mutation path.
+
 ## Recent Continuity Note (2026-07-15)
 
 - workshop tax is now invoice-owned and employee-controlled only at the shared
@@ -2272,6 +2286,248 @@ but are not rendered as duplicate intake controls. Requested work belongs to
 Products and Services and technical findings belong to Diagnosis. This UI
 boundary changes no invoice, inventory, tax, journal, or historical-data
 ownership.
+
+### Messaging boundary for workshop proposals
+
+Messaging is a transport and presentation surface for a proposal decision; it
+is never the owner of that decision. An employee may send a structured
+approval request from any canonical chat host, and the message may carry the
+workshop job ID, display labels and its stable message ID for correlation. When
+the customer accepts or rejects, the authenticated client calls only the
+tenant-scoped `respond_to_action_request` database command. That command locks
+the action message; proves the exact customer, explicit participant,
+conversation, workshop job and tenant graph; and invokes
+`transition_mechanic_job_quotation` in the same transaction. The message UUID
+is the canonical quotation operation key, so a lost acknowledgement replays
+the same terminal receipt without rewriting its original response timestamp.
+A pending card is actionable only while its conversation is open and the
+linked quotation remains `pending` and unexpired; resolved/rejected threads,
+superseded decisions and expired proposals fail closed. The narrow
+transaction-local tenant capability used by this customer path is set only
+after the full ownership graph is proven, is cleared on success and exception,
+and is not executable or settable through any public RPC. The authoritative
+job projection plus append-only `mechanic_job_mode_events` remains the decision
+ledger.
+
+WhatsApp uses the same ownership boundary. `apply_whatsapp_job_action` is a
+service-role-only command that ignores caller-supplied payload as authority and
+locks the durable inbound webhook evidence. It proves the exact Meta message,
+active channel and conversation binding, tenant, customer, conversation/job
+context and sender. Every actionable outbound card has a server nonce and
+4-part token (`job:<job_id>:<action>:<revision_ms>`). An inbound reply must cite
+that outbound Meta message in `message.context.id`, match its job/action/nonce,
+and still be the newest pending card for the same action family. Legacy 3-part
+tokens are retained as read-only evidence. Quote decisions additionally
+require a current pending, unexpired quotation before invoking
+`transition_mechanic_job_quotation`. A deterministic operation key derived
+from `external_message_id`, plus an atomic receipt on the inbound message,
+makes a webhook retry safe after a lost acknowledgement.
+
+Delivery acknowledgement is a separate operational-status branch. Acceptance
+is allowed only for completed work and invokes the canonical
+`transition_mechanic_job_status` command, producing one append-only
+`mechanic_job_status_transition_events` receipt. A decline records the customer
+answer but does not move the job backwards. Neither branch writes
+`mechanic_jobs.status` directly, and the legacy invoice-approval shortcut
+remains unavailable.
+
+The same database transaction marks chat response metadata accepted or
+declined only after the canonical workshop command succeeds; any validation,
+quotation-transition, trigger or ledger failure rolls back both. If the caller
+loses the response, it retries the same message decision, and the operation
+receipt reconciles the already committed result without duplicating the event.
+The client must not call the quotation command separately before or after the
+message command, because that would split one customer decision across two
+acknowledgements.
+
+No messaging surface may approve or reject a proposal by mutating
+`sales_invoices.status`, creating a draft invoice, or treating an invoice as a
+quotation. A bike-backed `Servicio · Presupuesto` and a standalone
+`Cotización` belong to the workshop job until the separately authorized
+conversion command creates their one linked billable invoice. Invoice context
+in chat is limited to document, balance, payment and navigation information.
+A historical action message that contains only an invoice ID is read-only and
+must ask the employee to send a current job-backed request. Supplier chats are
+also outside customer workshop-action capabilities: sharing the chat renderer
+does not grant proposal, bicycle, customer-payment or service actions.
+
+Conversation visibility, unread counts and WhatsApp delivery receipts are
+operational communication evidence only. A visible host may mark its exact
+conversation read locally/server-side, while remote blue checks require an
+explicit provider `read` receipt. Neither a customer reply nor any chat receipt
+changes proposal, job, invoice, inventory, tax, payment or journal state. This
+boundary strengthens the existing workshop centralization, introduces no new
+bicycle-profile or diagnosis truth, and closes the former risk of using an
+invoice status as a shortcut for a proposal decision.
+
+Read evidence is exact and monotonic. Every message receives a server-generated
+`message_sequence`; participant and shared-support cursors store the sequence of
+the exact visible message UUID acknowledged through
+`mark_conversation_read(conversation_id, read_through_message_id)`. A timestamp,
+widget mount, route restoration or the legacy one-argument RPC is never allowed
+to advance the cursor. This keeps two messages with an identical `created_at`
+distinct and prevents an offstage or background window from clearing unread
+evidence. `ChatProvider` may acknowledge only while the application is in the
+foreground and the conversation owns the frontmost visible host token; it waits
+for the first resumed frame before becoming eligible again.
+
+Conversation counterparty capability is also durable rather than inferred from
+the latest participant. `counterparty_type` is fixed as `internal`, `customer`
+or `supplier` when the aggregate is created and cannot be rewritten to reuse a
+terminal thread for another capability. Customer identities and customer-only
+contexts are forbidden in supplier conversations even if a historical row was
+inserted incorrectly; internal conversations remain participant-only for reads,
+including for same-tenant staff. A resolved customer or supplier interaction is
+retained and later activity opens a fresh active conversation linked to that
+history.
+
+The aggregate commands `create_customer_support_request`,
+`create_staff_support_conversation`,
+`create_staff_internal_conversation`,
+`open_whatsapp_support_conversation` and
+`set_conversation_primary_context` own their complete graph changes in one
+transaction. Their operation keys are scoped to actor and payload and retain a
+durable receipt, so retry after a lost acknowledgement returns the committed
+conversation instead of duplicating it. Direct staff chats serialize on the
+canonical pair and reuse only an exact active two-person graph; groups persist
+immutable `conversations.is_group`, including a group with one invitee. Staff
+support fails closed unless a customer thread has an active same-tenant Auth
+recipient; supplier support never receives a customer identity. Authenticated
+clients cannot directly insert conversation or context rows. Context links are
+append-only audit history with at most one primary row; selecting or clearing
+the primary context updates the scalar conversation projection atomically and
+never deletes an old link. Reopening an already accepted WhatsApp case
+preserves the original `accepted_by` and matching `accepted_at` pair.
+
+The primary context ledger is also the authority during legacy reconciliation.
+If a retained primary row exists, it projects back to
+`conversations.context_type/context_id`; only a conversation with no primary
+may promote its exact complete scalar pair or append that pair with no invented
+actor. Other non-primary rows remain uninterpreted history, and reconciliation
+restores the conversation's original `updated_at` because a repair is not a
+business event. If that scalar references an entity that no longer exists in
+any tenant, the repair first copies its exact conversation, tenant, type, ID and
+original timestamp into owner-written append-only
+`messaging_context_projection_reconciliation_audit`, then clears the invalid
+active projection without inventing a ledger row. Its UUIDs are durable
+snapshots without cascading foreign keys, so that evidence survives later
+tenant, conversation, or entity purges. The service role may inspect this
+evidence but cannot insert, update or delete it. Cross-tenant references to an
+entity that still exists abort, and a capability-invalid context type aborts
+even when its target has disappeared; neither is classified as deleted history.
+Deferred constraint triggers on both
+representations then require null scalar plus no primary, or one exact
+same-tenant primary match, at transaction commit. This permits the canonical
+atomic context command while a partial or one-sided direct write fails closed.
+
+Legacy supplier conversations are reconciled before the stricter recipient
+projection becomes authoritative. A customer-only participant edge is first
+copied into service-only append-only
+`messaging_participant_reconciliation_audit`, including its original role,
+join/read evidence, reason and migration version, and only then removed. The
+conversation, messages, contexts, provider binding and remaining staff graph
+are untouched; the migration aborts unless the read-back invariant is zero.
+Admin account removal also preserves messaging authorship: if any global
+conversation, participant, context, message, attachment, command receipt or
+reconciliation audit references the Auth user, the requested tenant membership
+is deactivated instead of nulling history or deleting Auth. Global Auth is
+banned only when no other active staff, customer or worker membership remains.
+
+Customer-account context is fail-closed at the read-model boundary. The public
+chat currently advertises only customer-authorized job and invoice summaries;
+an order or bicycle context is not rendered as a detail panel merely because a
+conversation row carries that type. A future bicycle reader must consume the
+canonical `bikes` plus `bike_profiles` projection and remain read-only. It may
+not introduce a chat-local bicycle snapshot, technical profile, diagnosis or
+workshop mutation path.
+
+Shared-support unread projection includes authorized same-tenant staff even
+when they are not stored as explicit participants; internal unread remains
+participant-only. Message inserts canonicalize the tenant from the parent and
+the API-private timestamp trigger updates only that exact parent, so a customer
+or ordinary internal member can send without needing conversation-update
+privileges. Participant label lookup is authenticated and limited to users who
+share an already readable conversation graph; it is not an employee/customer
+directory and never exposes an email-derived fallback name. The generic
+`public.set_config` wrapper is unavailable to API roles, preventing callers
+from minting messaging/workshop session capabilities.
+
+That boundary is enforced against the complete effective function ACL, not
+only the familiar `anon`, `authenticated` and `service_role` names: hosted
+default-privilege grantees are removed dynamically as well. The legacy generic
+session wrapper, product-import wrapper, ad-hoc task helper and invoice stock
+consume/restore helpers remain installed only for owner-controlled SQL and
+trigger compatibility. Employee product stock imports use only the
+tenant-scoped, idempotent and auditable `apply_product_import_stock` command;
+anonymous execution remains forbidden.
+
+Expense accounting compatibility functions follow the same boundary. Their
+original journal implementations and four untraced helpers remain owner-only
+for triggers and recovery. The authenticated rebuild and total-recalculation
+wrappers first resolve the expense tenant and reject a foreign UUID; the four
+create/delete names are service/trigger-only. A mutable expense number never
+identifies a journal without the same tenant, while UUID/source-document
+cleanup remains available after the source row has disappeared. Product imports expose
+only `ProductImportService` and `apply_product_import_stock`; the routed Smart
+Import action and direct product writer were retired rather than relying on the
+legacy generic session capability.
+
+The production-only `codex_test_runner` identity is a sealed diagnostic reader,
+not an application role: it is `NOLOGIN`, has no password, memberships,
+privileged role attributes, mutation grants, explicit routine execution or
+future-function default grant. Existing table `SELECT` evidence is preserved.
+Where old routines still expose `EXECUTE` to PostgreSQL `PUBLIC`, that additive
+privilege is documented as unreachable through this sealed identity and must be
+retired only through a separate per-routine allowlist audit; it is not a reason
+to broaden or guess API grants here.
+
+Conversation cleanup is similarly non-destructive. `delete_conversation` is a
+retired RPC with no client/API execution grant. Authorized same-tenant support
+staff, or an admin participant in an internal thread, use the idempotent
+`archive_conversation` command; it writes `status = resolved`, immutable
+`resolved_at` / `resolved_by` evidence and one system resolution event while
+retaining messages, participants, contexts, WhatsApp receipts and every linked
+workshop/accounting record. Customers cannot archive a shared support trail,
+and a resolved conversation cannot be silently reopened by a direct row write.
+Archival also closes the write boundary: authenticated staff/customers cannot
+append text or action cards, reserve a new attachment, or finalize a still
+reserved upload in that conversation. A retry for an attachment that was
+already atomically published may return its existing receipt, but creates no
+new message.
+
+A service webhook has one narrow terminal exception for evidence retention.
+An authenticated Meta inbound message with an immutable external ID may be
+appended to its already resolved WhatsApp conversation so the provider event
+is not discarded; it does not change `status`, reopen actions, or permit an
+outbound send. Inbound media continues through the private attachment registry
+and attaches only to that provider message. Client-originated and service
+outbound messages remain rejected, and a later customer interaction that needs
+operational handling must begin a new active conversation rather than reviving
+the archived record.
+
+Messaging attachments use a separate private evidence boundary. A client may
+only reserve a bounded MIME/extension/size tuple for an open conversation it
+may write, upload the exact PII-free
+`tenant/conversation/attachment.extension` object, and publish it through the
+atomic attachment command after the stored size and MIME are verified. Message
+rows and exports retain the immutable attachment ID/bucket/path, never a public
+or signed URL. A five-minute signed URL is a runtime projection after the user
+again proves message visibility; previews regenerate it when opened/retried and
+must never copy it into `app_files.metadata`. WhatsApp outbound delivery returns
+success only when both the local durable message ID and Meta external message
+ID exist. Network or post-provider persistence ambiguity remains an explicit
+non-retryable `outcome_unknown` bubble until realtime evidence reconciles it;
+the UI cannot open a manual WhatsApp fallback or discard its private bytes.
+WhatsApp inbound media is ingested first and
+then hydrated into the same private registry; retries repair a committed
+registry-to-message reference instead of creating a second attachment. Legacy
+public `vinabike-assets/chat` and `whatsapp-media` paths are bounded one-shot
+migration input. Referenced bytes receive a private attachment receipt;
+unreferenced bytes receive a byte-identical hash-addressed private quarantine
+copy and a no-PII durable receipt before any public deletion. Arbitrary external
+URLs are never auto-fetched or auto-rendered. Failed and stale reservations are
+marked, and their bytes are reclaimed through the Storage API without deleting
+the retained audit row.
 
 - `component` means the customer left only the loose component (for example a
   wheel to build or convert to tubular). It is not merely a label for a part being repaired

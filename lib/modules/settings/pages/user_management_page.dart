@@ -829,16 +829,16 @@ class _UserManagementPageState extends State<UserManagementPage> {
               OutlinedButton.icon(
                 onPressed: _isActionRunning || isSelf
                     ? null
-                    : () => _confirmDanger(
-                          title: 'Eliminar cuenta interna',
+                    : () => _confirmAccountRemoval(
+                          title: 'Dar de baja cuenta interna',
                           message:
-                              'Esto elimina el acceso ERP de $email. Esta acción no se puede deshacer.',
-                          confirmLabel: 'Eliminar cuenta',
+                              'Se retirará el acceso ERP de $email. Si existe trazabilidad de mensajería, la identidad y su autoría se conservarán desactivadas para auditoría.',
+                          confirmLabel: 'Procesar baja',
                           action: () =>
                               _userService.deleteUser(user['id'].toString()),
                         ),
                 icon: const Icon(Icons.delete_outline, size: 18),
-                label: const Text('Eliminar'),
+                label: const Text('Dar de baja'),
               ),
             ],
           ),
@@ -973,14 +973,14 @@ class _UserManagementPageState extends State<UserManagementPage> {
               OutlinedButton.icon(
                 onPressed: _isActionRunning || !hasAuth || authUserId == null
                     ? null
-                    : () => _confirmDanger(
-                          title: 'Eliminar cuenta web',
+                    : () => _confirmAccountRemoval(
+                          title: 'Dar de baja cuenta web',
                           message: isWebsiteOnlyAuth
-                              ? 'Esto elimina el usuario de acceso web. No hay ficha CRM asociada a esta cuenta.'
+                              ? 'Se retirará el acceso web. Si existe trazabilidad de mensajería, la identidad se conservará desactivada para auditoría.'
                               : isSharedStaffAccount
                                   ? 'Esto solo desvincula este cliente del login interno ERP. No elimina ni restringe el usuario del equipo.'
-                                  : 'Esto elimina el usuario de acceso web, pero conserva el cliente CRM y su historial.',
-                          confirmLabel: 'Eliminar cuenta web',
+                                  : 'Se retirará el acceso web y se conservarán la ficha CRM y su historial. La identidad Auth sólo se elimina cuando no existe evidencia que deba auditarse.',
+                          confirmLabel: 'Procesar baja',
                           action: () => isWebsiteOnlyAuth
                               ? _userService.deleteWebsiteAuthAccount(
                                   authUserId: authUserId)
@@ -988,7 +988,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                                   customerId: customerId),
                         ),
                 icon: const Icon(Icons.delete_outline, size: 18),
-                label: const Text('Eliminar cuenta'),
+                label: const Text('Dar de baja'),
               ),
             ],
           ),
@@ -1834,6 +1834,69 @@ class _UserManagementPageState extends State<UserManagementPage> {
     if (confirmed == true) {
       await _runAction('Acción completada', action);
     }
+  }
+
+  Future<void> _confirmAccountRemoval({
+    required String title,
+    required String message,
+    required String confirmLabel,
+    required Future<Map<String, dynamic>> Function() action,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton.tonalIcon(
+            onPressed: () => Navigator.pop(context, true),
+            icon: const Icon(Icons.person_off_outlined, size: 18),
+            label: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    setState(() => _isActionRunning = true);
+    try {
+      final result = await action();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_accountRemovalResultMessage(result))),
+      );
+      await _loadData(silent: true);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isActionRunning = false);
+    }
+  }
+
+  String _accountRemovalResultMessage(Map<String, dynamic> result) {
+    if (result['outcome'] == 'deactivated_preserved_messaging_history') {
+      if (result['authBanned'] == true) {
+        return 'Acceso desactivado. La identidad y el historial de mensajería se conservaron para auditoría.';
+      }
+      return 'Membresía desactivada. La identidad sigue activa por otro acceso vigente y su historial quedó preservado.';
+    }
+    if (result['authDetachedOnly'] == true) {
+      return 'Login web desvinculado. El usuario interno y la ficha histórica se conservaron.';
+    }
+    if (result['outcome'] == 'auth_deleted' || result['authDeleted'] == true) {
+      return 'Cuenta eliminada correctamente.';
+    }
+    return 'Baja procesada correctamente.';
   }
 
   Future<void> _runAction(

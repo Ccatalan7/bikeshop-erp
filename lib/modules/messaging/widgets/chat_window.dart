@@ -10,25 +10,27 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../bikeshop/models/bikeshop_models.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
 import '../../sales/services/sales_service.dart';
-import '../../sales/models/sales_models.dart';
 import '../../website/services/website_service.dart';
 import '../models/conversation.dart';
+import '../models/conversation_smart_action_capabilities.dart';
 import '../services/messaging_service.dart';
+import '../services/messaging_attachment_service.dart';
 import '../models/message.dart';
+import '../models/message_delivery_state.dart';
 import '../models/autocomplete_suggestion.dart';
 import 'parsed_message_text.dart';
 import '../providers/chat_provider.dart';
 import '../utils/message_parser.dart';
 import 'assign_context_dialog.dart';
 import 'chat_attachment_viewer.dart';
+import 'message_delivery_indicator.dart';
 import '../../storage/models/app_stored_file.dart';
 import '../../../shared/services/whatsapp_service.dart';
-import '../../../shared/services/database_service.dart';
 import '../../../shared/services/route_share_service.dart';
 import '../../../shared/services/workspace_manager.dart';
-import '../../../shared/utils/invoice_pdf_generator.dart';
 import '../../../shared/utils/file_download.dart';
 import '../models/conversation_context_hint.dart';
 
@@ -59,21 +61,39 @@ class _UnreadMessagesMarker {
   const _UnreadMessagesMarker(this.count);
 }
 
+class _TimelineDaySeparator {
+  final DateTime day;
+
+  const _TimelineDaySeparator(this.day);
+}
+
+class _MessageGrouping {
+  final bool withPrevious;
+  final bool withNext;
+
+  const _MessageGrouping({
+    this.withPrevious = false,
+    this.withNext = false,
+  });
+}
+
 enum _ChatInfoSection { info, media, workflow, backup }
 
 class _ChatAttachment {
   final Message message;
-  final String url;
+  final String? url;
   final String name;
   final String extension;
   final bool isImage;
+  final bool isExternal;
 
   const _ChatAttachment({
     required this.message,
-    required this.url,
+    this.url,
     required this.name,
     required this.extension,
     required this.isImage,
+    this.isExternal = false,
   });
 }
 
@@ -83,6 +103,11 @@ class _PendingChatAttachment {
   final Uint8List bytes;
   final String extension;
   final bool isImage;
+  final bool outcomeUnknown;
+  final ReservedMessagingAttachment? reservation;
+  final bool retryUpload;
+  final bool canRetrySafely;
+  final String? replayCaption;
 
   const _PendingChatAttachment({
     required this.id,
@@ -90,7 +115,73 @@ class _PendingChatAttachment {
     required this.bytes,
     required this.extension,
     required this.isImage,
+    this.outcomeUnknown = false,
+    this.reservation,
+    this.retryUpload = false,
+    this.canRetrySafely = false,
+    this.replayCaption,
   });
+
+  _PendingChatAttachment markOutcomeUnknown(
+    _AttachmentDispatchResult result,
+  ) =>
+      _PendingChatAttachment(
+        id: id,
+        fileName: fileName,
+        bytes: bytes,
+        extension: extension,
+        isImage: isImage,
+        outcomeUnknown: true,
+        reservation: result.reservation,
+        retryUpload: result.retryUpload,
+        canRetrySafely: result.canRetrySafely,
+        replayCaption: result.replayCaption,
+      );
+
+  _PendingChatAttachment resetForNewAttempt() => _PendingChatAttachment(
+        id: id,
+        fileName: fileName,
+        bytes: bytes,
+        extension: extension,
+        isImage: isImage,
+      );
+}
+
+enum _AttachmentDispatchOutcome { confirmed, rejected, outcomeUnknown }
+
+class _AttachmentDispatchResult {
+  const _AttachmentDispatchResult._({
+    required this.outcome,
+    this.reservation,
+    this.retryUpload = false,
+    this.canRetrySafely = false,
+    this.replayCaption,
+  });
+
+  const _AttachmentDispatchResult.confirmed()
+      : this._(outcome: _AttachmentDispatchOutcome.confirmed);
+
+  const _AttachmentDispatchResult.rejected()
+      : this._(outcome: _AttachmentDispatchOutcome.rejected);
+
+  const _AttachmentDispatchResult.outcomeUnknown({
+    required ReservedMessagingAttachment reservation,
+    required bool retryUpload,
+    required bool canRetrySafely,
+    String? replayCaption,
+  }) : this._(
+          outcome: _AttachmentDispatchOutcome.outcomeUnknown,
+          reservation: reservation,
+          retryUpload: retryUpload,
+          canRetrySafely: canRetrySafely,
+          replayCaption: replayCaption,
+        );
+
+  final _AttachmentDispatchOutcome outcome;
+  final ReservedMessagingAttachment? reservation;
+  final bool retryUpload;
+  final bool canRetrySafely;
+  final String? replayCaption;
 }
 
 class _RouteSharePreview {
@@ -131,9 +222,14 @@ class ChatWindow extends StatefulWidget {
 
 class _ChatWindowState extends State<ChatWindow> {
   static const Color _accentBlue = Color(0xFF093357);
-  static const Duration _whatsAppMinimumClockDwell =
-      Duration(milliseconds: 240);
-  static const Duration _whatsAppInferredReadWindow = Duration(hours: 24);
+  static const String _pendingAttachmentMutationBlockedMessage =
+      'WhatsApp aún no confirma este adjunto. Conservamos la misma reserva '
+      'para evitar un envío duplicado; los controles se habilitarán cuando '
+      'llegue la confirmación.';
+  static final RegExp _durableMessageIdPattern = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+    caseSensitive: false,
+  );
   static const String _googleMapsReviewUrl =
       'https://g.page/r/CYVszP1uXQfgEBM/review';
   static final List<_EmojiGroup> _emojiGroups = [
@@ -270,7 +366,10 @@ class _ChatWindowState extends State<ChatWindow> {
   final FocusNode _emojiSearchFocusNode = FocusNode();
   final TextEditingController _emojiSearchController = TextEditingController();
   final MessagingService _messagingService = MessagingService();
+  final Object _conversationViewOwner = Object();
   ChatProvider? _chatProvider;
+  String? _reportedConversationId;
+  bool? _reportedConversationVisibility;
   bool _isSendingMessage = false;
   bool _isEmojiPickerOpen = false;
   OverlayEntry? _emojiOverlayEntry;
@@ -294,13 +393,15 @@ class _ChatWindowState extends State<ChatWindow> {
   bool _isExportingChatArchive = false;
   bool _isDraggingAttachment = false;
   bool _isSendingPendingAttachments = false;
+  bool _pendingAttachmentReconciliationScheduled = false;
+  bool _showJumpToLatest = false;
+  bool _historyAutoLoadScheduled = false;
   final List<_PendingChatAttachment> _pendingAttachments = [];
+  final Map<String, List<_PendingChatAttachment>>
+      _pendingAttachmentDraftsByConversation = {};
   int _pendingAttachmentSerial = 0;
   _ChatInfoSection _selectedChatInfoSection = _ChatInfoSection.info;
-  final GlobalKey _smartActionsButtonKey = GlobalKey();
-  final GlobalKey _emojiButtonKey = GlobalKey();
-  final GlobalKey _attachmentButtonKey = GlobalKey();
-  final GlobalKey _templateButtonKey = GlobalKey();
+  final GlobalKey _composerActionsButtonKey = GlobalKey();
   Timer? _serviceWindowTicker;
   Future<Map<String, dynamic>?>? _whatsAppContactFuture;
   String? _whatsAppContactFutureConversationId;
@@ -310,15 +411,132 @@ class _ChatWindowState extends State<ChatWindow> {
   // Cache futures so FutureBuilder doesn't re-fire on every rebuild.
   final Map<String, Future<Map<String, dynamic>?>> _senderInfoFutureCache = {};
   final Map<String, Future<String?>> _whatsAppMediaFutureCache = {};
+  final MessagingAttachmentService _messagingAttachmentService =
+      MessagingAttachmentService();
 
   bool get _isWhatsAppConversation => widget.conversation.isWhatsApp;
+
+  bool get _hasBlockingOutcomeUnknownAttachment => _pendingAttachments.any(
+        (attachment) => attachment.outcomeUnknown && !attachment.canRetrySafely,
+      );
+
+  void _showPendingAttachmentMutationBlocked() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text(_pendingAttachmentMutationBlockedMessage),
+        ),
+      );
+  }
+
+  bool _guardPendingAttachmentMutation() {
+    if (!_hasBlockingOutcomeUnknownAttachment) return false;
+    _showPendingAttachmentMutationBlocked();
+    return true;
+  }
+
+  bool _isDurableAttachmentMessage(
+    Message message,
+    String attachmentId,
+  ) {
+    if (message.conversationId != widget.conversation.id ||
+        !_durableMessageIdPattern.hasMatch(message.id)) {
+      return false;
+    }
+    return MessagingAttachmentService.attachmentId(message) == attachmentId;
+  }
+
+  void _schedulePendingAttachmentReconciliation(List<Message> messages) {
+    if (_pendingAttachmentReconciliationScheduled ||
+        !_hasBlockingOutcomeUnknownAttachment) {
+      return;
+    }
+    final resolvedReservationIds = _pendingAttachments
+        .where(
+          (attachment) =>
+              attachment.outcomeUnknown &&
+              !attachment.canRetrySafely &&
+              attachment.reservation != null &&
+              messages.any(
+                (message) => _isDurableAttachmentMessage(
+                  message,
+                  attachment.reservation!.id,
+                ),
+              ),
+        )
+        .map((attachment) => attachment.reservation!.id)
+        .toSet();
+    if (resolvedReservationIds.isEmpty) return;
+
+    _pendingAttachmentReconciliationScheduled = true;
+    final conversationId = widget.conversation.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pendingAttachmentReconciliationScheduled = false;
+      if (!mounted || widget.conversation.id != conversationId) return;
+      final before = _pendingAttachments.length;
+      setState(() {
+        _pendingAttachments.removeWhere(
+          (attachment) =>
+              attachment.reservation != null &&
+              resolvedReservationIds.contains(attachment.reservation!.id),
+        );
+      });
+      if (before != _pendingAttachments.length) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Adjunto confirmado por WhatsApp. La reserva quedó reconciliada.',
+              ),
+            ),
+          );
+      }
+    });
+  }
 
   String? get _effectiveContextType => widget.conversation.effectiveContextType;
 
   String? get _effectiveContextId => widget.conversation.effectiveContextId;
 
+  ConversationSmartActionCapabilities get _smartActionCapabilities =>
+      ConversationSmartActionCapabilities.fromConversation(
+        widget.conversation,
+      );
+
   bool get _canUseSmartActions =>
-      widget.conversation.isSupport && !widget.conversation.isInternal;
+      _smartActionCapabilities.isEligibleCustomerConversation;
+
+  String? get _canonicalContextRoute {
+    final contextId = _effectiveContextId;
+    if (contextId == null || contextId.isEmpty) return null;
+    return switch (_effectiveContextType) {
+      'job' => '/taller/pegas/$contextId',
+      'invoice' => '/sales/invoices/$contextId',
+      'order' || 'online_order' => '/website/orders',
+      'purchase_invoice' => '/purchases/$contextId',
+      'supplier' => '/purchases/suppliers/$contextId/edit',
+      _ => null,
+    };
+  }
+
+  bool get _canOpenCurrentContext =>
+      widget.conversation.hasSupportedContextPanel &&
+      (widget.onShowContextPanel != null || _canonicalContextRoute != null);
+
+  void _openCurrentContext() {
+    final showPanel = widget.onShowContextPanel;
+    if (showPanel != null) {
+      showPanel();
+      return;
+    }
+    final route = _canonicalContextRoute;
+    if (route != null) {
+      context.read<WorkspaceManager>().openRouteInWorkspace(route);
+    }
+  }
 
   bool get _canStartWhatsAppFromConversation =>
       widget.conversation.isSupport && widget.conversation.isWebsitePortal;
@@ -372,49 +590,6 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  Future<void> _markWhatsAppOptimisticAcceptedAfterClock({
-    required ChatProvider chatProvider,
-    required String optimisticMessageId,
-    required DateTime sendStartedAt,
-    required String source,
-    required bool Function() shouldMarkAccepted,
-  }) async {
-    final elapsed = DateTime.now().difference(sendStartedAt);
-    final remaining = _whatsAppMinimumClockDwell - elapsed;
-    if (remaining > Duration.zero) {
-      await Future.delayed(remaining);
-    }
-
-    if (!shouldMarkAccepted()) {
-      _debugLogWhatsAppSend(
-        optimisticMessageId,
-        'optimistic_status_accepted_skipped',
-        sendStartedAt,
-        {
-          'source': source,
-        },
-      );
-      return;
-    }
-
-    chatProvider.updateMessageMetadataById(
-      optimisticMessageId,
-      {
-        'pending': false,
-        'external_status': 'accepted',
-        'server_ack_optimistic': true,
-      },
-    );
-    _debugLogWhatsAppSend(
-      optimisticMessageId,
-      'optimistic_status_accepted',
-      sendStartedAt,
-      {
-        'source': source,
-      },
-    );
-  }
-
   void _syncServiceWindowTicker() {
     _serviceWindowTicker?.cancel();
     _serviceWindowTicker = null;
@@ -438,12 +613,31 @@ class _ChatWindowState extends State<ChatWindow> {
   void didUpdateWidget(covariant ChatWindow oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.conversation.id != widget.conversation.id) {
+      // Attachment reservations are conversation-scoped. Never carry a
+      // pending or outcome-unknown reservation into another chat.
+      if (_pendingAttachments.isEmpty) {
+        _pendingAttachmentDraftsByConversation.remove(
+          oldWidget.conversation.id,
+        );
+      } else {
+        _pendingAttachmentDraftsByConversation[oldWidget.conversation.id] =
+            List<_PendingChatAttachment>.from(_pendingAttachments);
+      }
+      final nextAttachmentDraft = _pendingAttachmentDraftsByConversation.remove(
+        widget.conversation.id,
+      );
+      _pendingAttachments
+        ..clear()
+        ..addAll(nextAttachmentDraft ?? const <_PendingChatAttachment>[]);
+      _isSendingPendingAttachments = false;
       _senderInfoFutureCache.clear();
+      _whatsAppMediaFutureCache.clear();
       _clearWhatsAppContactCache();
       _removeEmojiOverlay();
       _removeComposerMenuOverlay(notify: false);
       _showAutomaticMessagesPanel = false;
       _showChatInfoPanel = false;
+      _historyAutoLoadScheduled = false;
       _selectedChatInfoSection = _ChatInfoSection.info;
       _syncServiceWindowTicker();
       _captureOpeningUnreadCount();
@@ -455,6 +649,7 @@ class _ChatWindowState extends State<ChatWindow> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_handleTimelineScroll);
     _captureOpeningUnreadCount();
     _loadMessages();
     _applyPendingDraft();
@@ -464,10 +659,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
   @override
   void dispose() {
-    _chatProvider?.clearActiveConversation(
-      conversationId: widget.conversation.id,
-      notify: false,
-    );
+    _chatProvider?.detachConversationView(_conversationViewOwner);
     _removeEmojiOverlay();
     _removeComposerMenuOverlay(notify: false);
     _removeOverlay();
@@ -475,6 +667,7 @@ class _ChatWindowState extends State<ChatWindow> {
     _debounce?.cancel();
     _messageController.removeListener(_onTextChanged);
     _messageController.dispose();
+    _scrollController.removeListener(_handleTimelineScroll);
     _scrollController.dispose();
     _emojiScrollController.dispose();
     _focusNode.dispose();
@@ -513,13 +706,14 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Future<void> _search(String query) async {
     final suggestions = <AutocompleteSuggestion>[];
+    final bikeshopService = context.read<BikeshopService>();
+    final salesService = context.read<SalesService>();
 
     try {
       if (query.isEmpty || query.toUpperCase().startsWith('J')) {
         final term =
             query.toUpperCase().replaceAll('JOB-', '').replaceAll('JOB', '');
-        final jobs =
-            await context.read<BikeshopService>().getJobs(searchTerm: term);
+        final jobs = await bikeshopService.getJobs(searchTerm: term);
         suggestions.addAll(jobs.take(3).map((job) => AutocompleteSuggestion(
               id: 'JOB-${job.jobNumber}',
               title: 'Job #${job.jobNumber ?? "N/A"}',
@@ -532,7 +726,7 @@ class _ChatWindowState extends State<ChatWindow> {
       if (query.isEmpty || query.toUpperCase().startsWith('I')) {
         final term =
             query.toUpperCase().replaceAll('INV-', '').replaceAll('INV', '');
-        final invoices = context.read<SalesService>().searchInvoices(term);
+        final invoices = salesService.searchInvoices(term);
         suggestions
             .addAll(invoices.take(3).map((invoice) => AutocompleteSuggestion(
                   id: 'INV-${invoice.invoiceNumber}',
@@ -1002,8 +1196,16 @@ class _ChatWindowState extends State<ChatWindow> {
       if (!mounted) return;
 
       final provider = context.read<ChatProvider>();
-      provider.setActiveConversation(widget.conversation.id);
-      final count = provider.takeOpeningUnreadCount(widget.conversation.id);
+      final visible = _isConversationHostVisible(context, listen: false);
+      provider.updateConversationView(
+        owner: _conversationViewOwner,
+        conversationId: widget.conversation.id,
+        visible: visible,
+      );
+      _reportedConversationId = widget.conversation.id;
+      _reportedConversationVisibility = visible;
+      final count =
+          visible ? provider.takeOpeningUnreadCount(widget.conversation.id) : 0;
       if (_openingUnreadCount == 0 && count > 0 && mounted) {
         setState(() {
           _openingUnreadConversationId = widget.conversation.id;
@@ -1013,11 +1215,64 @@ class _ChatWindowState extends State<ChatWindow> {
     });
   }
 
+  bool _isConversationHostVisible(
+    BuildContext context, {
+    bool listen = true,
+  }) {
+    try {
+      final workspace = Provider.of<Workspace>(context, listen: false);
+      final manager = Provider.of<WorkspaceManager>(context, listen: listen);
+      return manager.activeWorkspace?.id == workspace.id;
+    } catch (_) {
+      // Public/customer portal hosts do not live inside a desktop workspace.
+      return true;
+    }
+  }
+
+  void _reportConversationHostVisibility(
+    ChatProvider provider,
+    bool visible,
+  ) {
+    if (_reportedConversationId == widget.conversation.id &&
+        _reportedConversationVisibility == visible) {
+      return;
+    }
+    _reportedConversationId = widget.conversation.id;
+    _reportedConversationVisibility = visible;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      provider.updateConversationView(
+        owner: _conversationViewOwner,
+        conversationId: widget.conversation.id,
+        visible: visible,
+      );
+      if (visible) {
+        final count = provider.takeOpeningUnreadCount(widget.conversation.id);
+        if (_openingUnreadCount == 0 && count > 0 && mounted) {
+          setState(() {
+            _openingUnreadConversationId = widget.conversation.id;
+            _openingUnreadCount = count;
+          });
+        }
+      }
+    });
+  }
+
   List<Object> _buildTimelineItems(List<Message> messages) {
     final markerMessageId = _unreadMarkerBeforeMessageId(messages);
     final items = <Object>[];
+    DateTime? previousDay;
 
     for (final message in messages) {
+      final day = DateTime(
+        message.createdAt.year,
+        message.createdAt.month,
+        message.createdAt.day,
+      );
+      if (previousDay == null || day != previousDay) {
+        items.add(_TimelineDaySeparator(day));
+        previousDay = day;
+      }
       if (message.id == markerMessageId) {
         items.add(_UnreadMessagesMarker(_openingUnreadCount));
       }
@@ -1025,6 +1280,55 @@ class _ChatWindowState extends State<ChatWindow> {
     }
 
     return items;
+  }
+
+  void _handleTimelineScroll() {
+    if (!_scrollController.hasClients) return;
+    _requestOlderMessagesIfAtStart();
+    final shouldShow = _scrollController.offset > 180;
+    if (shouldShow == _showJumpToLatest || !mounted) return;
+    setState(() => _showJumpToLatest = shouldShow);
+  }
+
+  void _requestOlderMessagesIfAtStart() {
+    if (!_scrollController.hasClients) return;
+    final provider = _chatProvider;
+    if (provider == null) return;
+    final conversationId = widget.conversation.id;
+    final position = _scrollController.position;
+    final distanceToOldest = position.maxScrollExtent - position.pixels;
+    if (distanceToOldest > 180 ||
+        !provider.hasMoreMessages(conversationId) ||
+        provider.isLoadingOlderMessages(conversationId) ||
+        provider.olderMessagesErrorForConversation(conversationId) != null) {
+      return;
+    }
+    unawaited(provider.loadOlderMessages(conversationId));
+  }
+
+  void _scheduleOlderMessagesIfAtStart(ChatProvider provider) {
+    final conversationId = widget.conversation.id;
+    if (_historyAutoLoadScheduled ||
+        !provider.hasMoreMessages(conversationId) ||
+        provider.isLoadingOlderMessages(conversationId) ||
+        provider.olderMessagesErrorForConversation(conversationId) != null) {
+      return;
+    }
+    _historyAutoLoadScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _historyAutoLoadScheduled = false;
+      if (!mounted || widget.conversation.id != conversationId) return;
+      _requestOlderMessagesIfAtStart();
+    });
+  }
+
+  Future<void> _jumpToLatest() async {
+    if (!_scrollController.hasClients) return;
+    await _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   String? _unreadMarkerBeforeMessageId(List<Message> messages) {
@@ -1088,7 +1392,7 @@ class _ChatWindowState extends State<ChatWindow> {
       // re-engagement code from Graph and fall back to a template anyway.
       final lastInboundAt = _resolveLastInboundAt(
         null,
-        chatProvider.activeMessages,
+        chatProvider.messagesForConversation(widget.conversation.id),
       );
       if (!_isWhatsAppServiceWindowOpen(lastInboundAt)) {
         _showWhatsAppTemplatePicker(pendingText: pendingText);
@@ -1154,12 +1458,26 @@ class _ChatWindowState extends State<ChatWindow> {
       if (mounted) {
         setState(() => _isSendingMessage = false);
       }
+      final dispatchContext = context;
+      final dispatchConversationId = widget.conversation.id;
+      final dispatchContextType = _effectiveContextType;
+      final dispatchContextId = _effectiveContextId;
+      final contactFuture = _getWhatsAppContactFuture();
+      final messageSnapshot = chatProvider.messagesForConversation(
+        dispatchConversationId,
+      );
       unawaited(_dispatchWhatsAppSend(
         chatProvider: chatProvider,
         optimisticMessageId: optimisticMessageId,
         pendingText: pendingText,
         messageMetadata: messageMetadata,
         sendStartedAt: sendStartedAt,
+        fallbackContext: dispatchContext,
+        conversationId: dispatchConversationId,
+        contextType: dispatchContextType,
+        contextId: dispatchContextId,
+        contactFuture: contactFuture,
+        messageSnapshot: messageSnapshot,
       ));
       return;
     } catch (e) {
@@ -1187,11 +1505,17 @@ class _ChatWindowState extends State<ChatWindow> {
     required String pendingText,
     required Map<String, dynamic> messageMetadata,
     required DateTime sendStartedAt,
+    required BuildContext fallbackContext,
+    required String conversationId,
+    required String? contextType,
+    required String? contextId,
+    required Future<Map<String, dynamic>?> contactFuture,
+    required List<Message> messageSnapshot,
   }) async {
     final whatsappService = WhatsAppService();
     try {
       final contactWaitStartedAt = DateTime.now();
-      final contact = await _getWhatsAppContactFuture();
+      final contact = await contactFuture;
       _debugLogWhatsAppSend(
         optimisticMessageId,
         'contact_ready',
@@ -1205,7 +1529,7 @@ class _ChatWindowState extends State<ChatWindow> {
       final phone = contact?['phone']?.toString();
       final lastInboundAt = _resolveLastInboundAt(
         contact,
-        chatProvider.activeMessages,
+        messageSnapshot,
       );
 
       if (phone == null || phone.isEmpty) {
@@ -1233,63 +1557,64 @@ class _ChatWindowState extends State<ChatWindow> {
         },
       );
 
-      var sendCompleted = false;
-      bool? sendResult;
-      final sendFuture = whatsappService
-          .sendMessage(
-        context: context,
+      final receipt = await whatsappService.sendMessage(
+        context: fallbackContext.mounted ? fallbackContext : null,
         customerPhone: phone,
         message: pendingText,
         contactName: contact?['name']?.toString(),
-        conversationId: widget.conversation.id,
-        contextType: _effectiveContextType,
-        contextId: _effectiveContextId,
+        conversationId: conversationId,
+        contextType: contextType,
+        contextId: contextId,
         lastInboundAt: lastInboundAt,
         clientMessageId: optimisticMessageId,
         metadata: messageMetadata,
-      )
-          .then(
-        (value) {
-          sendCompleted = true;
-          sendResult = value;
-          return value;
-        },
-        onError: (Object error, StackTrace stackTrace) {
-          sendCompleted = true;
-          Error.throwWithStackTrace(error, stackTrace);
-        },
       );
-
-      await _markWhatsAppOptimisticAcceptedAfterClock(
-        chatProvider: chatProvider,
-        optimisticMessageId: optimisticMessageId,
-        sendStartedAt: sendStartedAt,
-        source: 'cloud_request_started_after_clock',
-        shouldMarkAccepted: () => !sendCompleted || sendResult == true,
-      );
-
-      final success =
-          sendCompleted && sendResult != null ? sendResult! : await sendFuture;
       _debugLogWhatsAppSend(
         optimisticMessageId,
         'cloud_request_done',
         sendStartedAt,
         {
-          'success': success,
-          'delivery': whatsappService.lastDeliveryMethod.name,
-          'external': whatsappService.lastExternalMessageId,
-          'error': whatsappService.lastErrorCode,
+          'success': receipt.isSuccess,
+          'delivery': receipt.deliveryMethod.name,
+          'external': receipt.externalMessageId,
+          'error': receipt.errorCode,
         },
       );
 
-      if (!success) {
+      if (!receipt.isSuccess) {
+        if (receipt.unsafeToFallback) {
+          chatProvider.updateMessageMetadataById(
+            optimisticMessageId,
+            {
+              'pending': false,
+              'external_status': 'outcome_unknown',
+              'whatsapp_status': 'outcome_unknown',
+              'outcome_unknown': true,
+              'retry_disabled': true,
+              'server_ack_optimistic': false,
+              if (receipt.messageId != null)
+                'server_message_id': receipt.messageId,
+              if (receipt.externalMessageId != null)
+                'external_message_id': receipt.externalMessageId,
+            },
+          );
+          // Keep the optimistic row: the active realtime subscription can
+          // still reconcile a late durable/provider receipt.
+          if (mounted) {
+            _showErrorSnackBar(
+              context,
+              'Resultado incierto: verifica la conversación antes de reenviar.',
+            );
+          }
+          return;
+        }
         _debugLogWhatsAppSend(
           optimisticMessageId,
           'failed_cloud_or_fallback',
           sendStartedAt,
           {
-            'delivery': whatsappService.lastDeliveryMethod.name,
-            'error': whatsappService.lastErrorCode,
+            'delivery': receipt.deliveryMethod.name,
+            'error': receipt.errorCode,
           },
         );
         chatProvider.updateMessageMetadataById(
@@ -1298,10 +1623,14 @@ class _ChatWindowState extends State<ChatWindow> {
             'pending': false,
             'external_status': 'failed',
             'server_ack_optimistic': false,
+            if (receipt.messageId != null)
+              'server_message_id': receipt.messageId,
+            if (receipt.externalMessageId != null)
+              'external_message_id': receipt.externalMessageId,
             'whatsapp_status_payload': {
               'errors': [
                 {
-                  'message': whatsappService.lastErrorRequiresServerFix
+                  'message': receipt.errorRequiresServerFix
                       ? 'Meta rechazó el envío porque el token de WhatsApp Cloud API expiró. Hay que actualizar WHATSAPP_ACCESS_TOKEN en Supabase.'
                       : 'No se pudo enviar el mensaje por WhatsApp',
                 },
@@ -1316,7 +1645,7 @@ class _ChatWindowState extends State<ChatWindow> {
               offset: _messageController.text.length,
             );
           }
-          final errorMessage = whatsappService.lastErrorRequiresServerFix
+          final errorMessage = receipt.errorRequiresServerFix
               ? 'Meta rechazó el envío porque el token de WhatsApp Cloud API expiró. Hay que actualizar WHATSAPP_ACCESS_TOKEN en Supabase.'
               : 'No se pudo enviar el mensaje por WhatsApp';
           _showErrorSnackBar(context, errorMessage);
@@ -1324,30 +1653,30 @@ class _ChatWindowState extends State<ChatWindow> {
         return;
       }
 
-      if (whatsappService.lastDeliveryMethod ==
-          WhatsAppDeliveryMethod.cloudApi) {
-        if (whatsappService.lastUsedFirstContactTemplate) {
+      if (receipt.deliveryMethod == WhatsAppDeliveryMethod.cloudApi) {
+        if (receipt.usedFirstContactTemplate) {
           chatProvider.setConversationDraft(
-            widget.conversation.id,
+            conversationId,
             pendingText,
             title: 'Mensaje pendiente de ventana WhatsApp',
             subtitle:
                 'Se envió la plantilla aprobada. Cuando el cliente responda, puedes enviar este texto.',
           );
         } else {
-          chatProvider.clearConversationDraft(widget.conversation.id);
+          chatProvider.clearConversationDraft(conversationId);
         }
         chatProvider.updateMessageById(
           optimisticMessageId,
-          content: whatsappService.lastResolvedMessageText ?? pendingText,
+          content: receipt.resolvedMessageText ?? pendingText,
           metadataUpdates: {
+            // A 2xx is returned only after Meta supplied an external id and
+            // the ERP message was durably persisted.
             'pending': false,
+            'server_ack_durable': true,
+            'server_message_id': receipt.messageId,
             'external_status': 'accepted',
-            'server_ack_optimistic': false,
-            if (whatsappService.lastExternalMessageId != null)
-              'external_message_id': whatsappService.lastExternalMessageId,
-            if (whatsappService.lastUsedFirstContactTemplate)
-              'template_used': true,
+            'external_message_id': receipt.externalMessageId,
+            if (receipt.usedFirstContactTemplate) 'template_used': true,
           },
         );
         _debugLogWhatsAppSend(
@@ -1355,21 +1684,21 @@ class _ChatWindowState extends State<ChatWindow> {
           'cloud_ack_confirmed',
           sendStartedAt,
           {
-            'external': whatsappService.lastExternalMessageId,
-            'template': whatsappService.lastUsedFirstContactTemplate,
+            'external': receipt.externalMessageId,
+            'template': receipt.usedFirstContactTemplate,
           },
         );
 
-        if (whatsappService.lastUsedFirstContactTemplate && mounted) {
+        if (receipt.usedFirstContactTemplate && mounted) {
           _showWhatsAppResultSnackbar(
             context: context,
-            deliveryMethod: whatsappService.lastDeliveryMethod,
+            deliveryMethod: receipt.deliveryMethod,
             successMessage:
                 'Meta pidió plantilla para abrir o reabrir la ventana de WhatsApp. Se envió la plantilla aprobada.',
             fallbackMessage: 'WhatsApp abierto con el mensaje prellenado',
           );
         }
-      } else if (whatsappService.lastDeliveryMethod ==
+      } else if (receipt.deliveryMethod ==
           WhatsAppDeliveryMethod.manualFallback) {
         chatProvider.removeMessageById(optimisticMessageId);
         if (mounted) {
@@ -1378,7 +1707,7 @@ class _ChatWindowState extends State<ChatWindow> {
           }
           _showWhatsAppResultSnackbar(
             context: context,
-            deliveryMethod: whatsappService.lastDeliveryMethod,
+            deliveryMethod: receipt.deliveryMethod,
             successMessage: 'Mensaje enviado por WhatsApp Cloud API',
             fallbackMessage: 'WhatsApp abierto con el mensaje prellenado',
           );
@@ -1420,7 +1749,7 @@ class _ChatWindowState extends State<ChatWindow> {
     try {
       final provider = ctx.read<ChatProvider>();
       await provider.acceptChatRequest(widget.conversation.id);
-      if (mounted) {
+      if (ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
           const SnackBar(
             content: Text('Chat aceptado. Ahora puedes responder.'),
@@ -1429,7 +1758,7 @@ class _ChatWindowState extends State<ChatWindow> {
         );
       }
     } catch (e) {
-      if (mounted) {
+      if (ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
@@ -1473,7 +1802,7 @@ class _ChatWindowState extends State<ChatWindow> {
                   widget.conversation.id,
                   reasonController.text.trim(),
                 );
-                if (mounted) {
+                if (ctx.mounted) {
                   ScaffoldMessenger.of(ctx).showSnackBar(
                     const SnackBar(
                       content: Text('Solicitud rechazada'),
@@ -1482,7 +1811,7 @@ class _ChatWindowState extends State<ChatWindow> {
                   );
                 }
               } catch (e) {
-                if (mounted) {
+                if (ctx.mounted) {
                   ScaffoldMessenger.of(ctx).showSnackBar(
                     SnackBar(
                         content: Text('Error: $e'),
@@ -1499,10 +1828,10 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  void _showAttachmentOptions() {
+  void _showAttachmentOptions({GlobalKey? anchorKey}) {
     _toggleComposerMenu(
       name: 'attachments',
-      anchorKey: _attachmentButtonKey,
+      anchorKey: anchorKey ?? _composerActionsButtonKey,
       width: 330,
       estimatedHeight: kIsWeb ? 210 : 260,
       panelBuilder: (overlayContext) => _buildComposerPopoverPanel(
@@ -1550,6 +1879,7 @@ class _ChatWindowState extends State<ChatWindow> {
   /// Pick files into the composer preview before sending.
   Future<void> _pickAndSendFile(String choice) async {
     if (!mounted) return;
+    if (_guardPendingAttachmentMutation()) return;
 
     try {
       if (choice == 'camera') {
@@ -1580,12 +1910,24 @@ class _ChatWindowState extends State<ChatWindow> {
             'jpeg',
             'gif',
             'webp',
+            'mp4',
+            '3gp',
+            'mp3',
+            'ogg',
+            'm4a',
+            'aac',
           ],
           withData: true,
         );
         if (result == null || result.files.isEmpty) return;
         final attachments = <_PendingChatAttachment>[];
-        for (final file in result.files) {
+        for (final file in result.files.take(
+          MessagingAttachmentService.maxAttachmentsPerBatch,
+        )) {
+          MessagingAttachmentService.validateBeforeRead(
+            fileName: file.name,
+            sizeBytes: file.size,
+          );
           final pickedBytes = file.bytes;
           if (pickedBytes == null || pickedBytes.isEmpty) continue;
           attachments.add(
@@ -1614,20 +1956,30 @@ class _ChatWindowState extends State<ChatWindow> {
     setState(() {
       _isDraggingAttachment = false;
     });
+    if (_guardPendingAttachmentMutation()) return;
 
     await _queueXFiles(files);
   }
 
   Future<void> _queueXFiles(List<XFile> files) async {
+    if (_guardPendingAttachmentMutation()) return;
     final attachments = <_PendingChatAttachment>[];
-    for (final file in files) {
+    for (final file in files.take(
+      MessagingAttachmentService.maxAttachmentsPerBatch,
+    )) {
       try {
+        final fileName = _droppedFileName(file);
+        final sizeBytes = await file.length();
+        MessagingAttachmentService.validateBeforeRead(
+          fileName: fileName,
+          sizeBytes: sizeBytes,
+        );
         final bytes = await file.readAsBytes();
         if (!mounted) return;
         if (bytes.isEmpty) continue;
         attachments.add(
           _buildPendingAttachment(
-            fileName: _droppedFileName(file),
+            fileName: fileName,
             bytes: bytes,
           ),
         );
@@ -1647,8 +1999,18 @@ class _ChatWindowState extends State<ChatWindow> {
 
   void _addPendingAttachments(List<_PendingChatAttachment> attachments) {
     if (attachments.isEmpty || !mounted) return;
+    if (_guardPendingAttachmentMutation()) return;
+    final available = MessagingAttachmentService.maxAttachmentsPerBatch -
+        _pendingAttachments.length;
+    if (available <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Puedes enviar hasta 8 adjuntos por vez.')),
+      );
+      return;
+    }
     setState(() {
-      _pendingAttachments.addAll(attachments);
+      _pendingAttachments.addAll(attachments.take(available));
       _isEmojiPickerOpen = false;
     });
     _restoreComposerFocus();
@@ -1658,8 +2020,12 @@ class _ChatWindowState extends State<ChatWindow> {
     required String fileName,
     required Uint8List bytes,
   }) {
-    final ext = _resolveFileExtension(fileName);
-    final isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(ext);
+    final validation = MessagingAttachmentService.validateBeforeRead(
+      fileName: fileName,
+      sizeBytes: bytes.length,
+    );
+    final ext = validation.extension;
+    final isImage = validation.contentType.startsWith('image/');
     _pendingAttachmentSerial += 1;
     return _PendingChatAttachment(
       id: 'pending-${DateTime.now().microsecondsSinceEpoch}-$_pendingAttachmentSerial',
@@ -1671,6 +2037,16 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   void _removePendingAttachment(String id) {
+    final attachment =
+        _pendingAttachments.cast<_PendingChatAttachment?>().firstWhere(
+              (item) => item?.id == id,
+              orElse: () => null,
+            );
+    if (attachment?.outcomeUnknown == true &&
+        attachment?.canRetrySafely == false) {
+      _showPendingAttachmentMutationBlocked();
+      return;
+    }
     setState(() {
       _pendingAttachments.removeWhere((attachment) => attachment.id == id);
     });
@@ -1678,11 +2054,16 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   void _clearPendingAttachments() {
+    if (_guardPendingAttachmentMutation()) return;
     setState(() => _pendingAttachments.clear());
     _restoreComposerFocus();
   }
 
   Future<void> _sendComposer() async {
+    if (_hasBlockingOutcomeUnknownAttachment) {
+      _showPendingAttachmentMutationBlocked();
+      return;
+    }
     if (_pendingAttachments.isNotEmpty) {
       await _sendPendingAttachments();
       return;
@@ -1692,6 +2073,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Future<void> _sendPendingAttachments() async {
     if (_pendingAttachments.isEmpty || _isSendingPendingAttachments) return;
+    if (_guardPendingAttachmentMutation()) return;
 
     final caption = _messageController.text.trim();
     final attachments = List<_PendingChatAttachment>.from(_pendingAttachments);
@@ -1717,17 +2099,44 @@ class _ChatWindowState extends State<ChatWindow> {
       ),
     );
 
-    final failed = <_PendingChatAttachment>[];
+    final unresolved = <_PendingChatAttachment>[];
+    var rejectedCount = 0;
+    var unknownCount = 0;
     for (var i = 0; i < attachments.length; i += 1) {
       final attachment = attachments[i];
-      final sent = await _sendAttachmentBytes(
+      final result = await _sendAttachmentBytes(
         fileName: attachment.fileName,
         bytes: attachment.bytes,
         showUploadingSnackBar: false,
-        caption: i == 0 && caption.isNotEmpty ? caption : null,
+        caption: attachment.outcomeUnknown
+            ? attachment.replayCaption
+            : i == 0 && caption.isNotEmpty
+                ? caption
+                : null,
+        existingReservation: attachment.reservation,
+        retryUpload: attachment.retryUpload,
       );
-      if (!sent) failed.add(attachment);
+      switch (result.outcome) {
+        case _AttachmentDispatchOutcome.confirmed:
+          break;
+        case _AttachmentDispatchOutcome.rejected:
+          // A confirmed rejection can start over with a fresh reservation on
+          // the next explicit user attempt. Never reuse the failed row.
+          unresolved.add(attachment.resetForNewAttempt());
+          rejectedCount += 1;
+          break;
+        case _AttachmentDispatchOutcome.outcomeUnknown:
+          unresolved.add(attachment.markOutcomeUnknown(result));
+          // Stop the batch after an ambiguous provider result. The remaining
+          // files were never attempted and stay in the composer. A native
+          // attachment keeps its exact reservation for an idempotent replay;
+          // provider sends remain blocked from blind retries.
+          unresolved.addAll(attachments.skip(i + 1));
+          unknownCount += 1;
+          break;
+      }
       if (!mounted) return;
+      if (result.outcome == _AttachmentDispatchOutcome.outcomeUnknown) break;
     }
 
     if (!mounted) return;
@@ -1736,23 +2145,28 @@ class _ChatWindowState extends State<ChatWindow> {
       _isSendingPendingAttachments = false;
       _pendingAttachments
         ..clear()
-        ..addAll(failed);
-      if (failed.isEmpty) {
+        ..addAll(unresolved);
+      if (unresolved.isEmpty) {
         _messageController.clear();
       }
     });
 
-    if (failed.isEmpty) {
+    if (unresolved.isEmpty) {
       _restoreComposerFocus();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            failed.length == 1
-                ? 'No se pudo enviar 1 adjunto.'
-                : 'No se pudieron enviar ${failed.length} adjuntos.',
-          ),
-          backgroundColor: Colors.red,
+          content: Text(unknownCount > 0
+              ? unresolved.any(
+                  (attachment) =>
+                      attachment.outcomeUnknown && attachment.canRetrySafely,
+                )
+                  ? 'No llegó la confirmación. El adjunto conserva su reserva y puede reintentarse sin duplicarlo.'
+                  : 'Hay $unknownCount adjunto(s) con resultado incierto. Verifica antes de quitarlos o reenviar.'
+              : rejectedCount == 1
+                  ? 'No se pudo enviar 1 adjunto.'
+                  : 'No se pudieron enviar $rejectedCount adjuntos.'),
+          backgroundColor: unknownCount > 0 ? null : Colors.red,
         ),
       );
     }
@@ -1766,195 +2180,223 @@ class _ChatWindowState extends State<ChatWindow> {
     return 'archivo';
   }
 
-  Future<bool> _sendAttachmentBytes({
+  Future<_AttachmentDispatchResult> _sendAttachmentBytes({
     required String fileName,
     required Uint8List bytes,
     bool showUploadingSnackBar = true,
     String? caption,
+    ReservedMessagingAttachment? existingReservation,
+    bool retryUpload = false,
   }) async {
-    if (!mounted || bytes.isEmpty) return false;
+    if (!mounted || bytes.isEmpty) {
+      return const _AttachmentDispatchResult.rejected();
+    }
+
+    final fallbackContext = context;
+    final conversationId = widget.conversation.id;
+    final isWhatsAppConversation = _isWhatsAppConversation;
+    final chatProvider = context.read<ChatProvider>();
+    final contextType = _effectiveContextType;
+    final contextId = _effectiveContextId;
+    final contactFuture =
+        isWhatsAppConversation ? _getWhatsAppContactFuture() : null;
+    final cleanCaption = caption?.trim();
+    final MessagingAttachmentValidation validation;
+    try {
+      validation = MessagingAttachmentService.validateBeforeRead(
+        fileName: fileName,
+        sizeBytes: bytes.length,
+      );
+    } catch (error) {
+      _showErrorSnackBar(context, 'No se puede adjuntar el archivo: $error');
+      return const _AttachmentDispatchResult.rejected();
+    }
+
+    if (showUploadingSnackBar) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(children: [
+            SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white)),
+            SizedBox(width: 12),
+            Text('Subiendo archivo...'),
+          ]),
+          duration: Duration(seconds: 60),
+        ),
+      );
+    }
+
+    ReservedMessagingAttachment reservation;
+    if (existingReservation != null) {
+      final reservationMatches =
+          existingReservation.conversationId == conversationId &&
+              existingReservation.sizeBytes == bytes.length &&
+              existingReservation.contentType == validation.contentType;
+      if (!reservationMatches) {
+        if (showUploadingSnackBar && fallbackContext.mounted) {
+          ScaffoldMessenger.of(fallbackContext).hideCurrentSnackBar();
+        }
+        _showErrorSnackBar(
+          context,
+          'La reserva del adjunto ya no coincide con esta conversación.',
+        );
+        return const _AttachmentDispatchResult.rejected();
+      }
+      reservation = existingReservation;
+    } else {
+      try {
+        reservation = await _messagingAttachmentService.reserve(
+          conversationId: conversationId,
+          fileName: fileName,
+          sizeBytes: bytes.length,
+        );
+      } catch (error) {
+        if (showUploadingSnackBar && fallbackContext.mounted) {
+          ScaffoldMessenger.of(fallbackContext).hideCurrentSnackBar();
+        }
+        if (mounted) {
+          _showErrorSnackBar(
+            context,
+            'No se pudo reservar el adjunto: $error',
+          );
+        }
+        return const _AttachmentDispatchResult.rejected();
+      }
+    }
+
+    if (existingReservation == null || retryUpload) {
+      try {
+        await _messagingAttachmentService.upload(
+          reservation,
+          bytes,
+          acceptExistingObject: existingReservation != null,
+        );
+      } catch (error) {
+        if (showUploadingSnackBar && fallbackContext.mounted) {
+          ScaffoldMessenger.of(fallbackContext).hideCurrentSnackBar();
+        }
+        if (MessagingAttachmentService.isUploadOutcomeAmbiguous(error)) {
+          if (mounted) {
+            _showErrorSnackBar(
+              context,
+              'No llegó la confirmación de carga. Se conserva la misma reserva para un reintento seguro.',
+            );
+          }
+          return _AttachmentDispatchResult.outcomeUnknown(
+            reservation: reservation,
+            retryUpload: true,
+            canRetrySafely: !isWhatsAppConversation,
+            replayCaption: cleanCaption,
+          );
+        }
+        await _messagingAttachmentService.fail(
+          reservation,
+          code: 'flutter_upload_rejected',
+        );
+        if (mounted) {
+          _showErrorSnackBar(context, 'La carga del adjunto fue rechazada.');
+        }
+        return const _AttachmentDispatchResult.rejected();
+      }
+    }
+
+    if (showUploadingSnackBar && fallbackContext.mounted) {
+      ScaffoldMessenger.of(fallbackContext).hideCurrentSnackBar();
+    }
+
+    final msgType =
+        validation.contentType.startsWith('image/') ? 'image' : 'file';
+    final metadata = {
+      ...reservation.messageMetadata,
+      if (cleanCaption != null && cleanCaption.isNotEmpty)
+        'caption': cleanCaption,
+    };
+
+    if (isWhatsAppConversation) {
+      final outcome = await _sendWhatsAppAttachment(
+        chatProvider: chatProvider,
+        reservation: reservation,
+        fileName: fileName,
+        messageType: msgType,
+        metadata: metadata,
+        caption: cleanCaption,
+        fallbackContext: fallbackContext.mounted ? fallbackContext : null,
+        conversationId: conversationId,
+        contextType: contextType,
+        contextId: contextId,
+        contactFuture: contactFuture!,
+      );
+      switch (outcome) {
+        case _AttachmentDispatchOutcome.confirmed:
+          return const _AttachmentDispatchResult.confirmed();
+        case _AttachmentDispatchOutcome.rejected:
+          return const _AttachmentDispatchResult.rejected();
+        case _AttachmentDispatchOutcome.outcomeUnknown:
+          return _AttachmentDispatchResult.outcomeUnknown(
+            reservation: reservation,
+            retryUpload: false,
+            canRetrySafely: false,
+            replayCaption: cleanCaption,
+          );
+      }
+    }
 
     try {
-      if (showUploadingSnackBar) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(children: [
-              SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white)),
-              SizedBox(width: 12),
-              Text('Subiendo archivo...'),
-            ]),
-            duration: Duration(seconds: 60),
-          ),
+      await _messagingAttachmentService.publish(
+        reservation: reservation,
+        caption: cleanCaption,
+      );
+      return const _AttachmentDispatchResult.confirmed();
+    } on MessagingAttachmentPublishOutcomeUnknown {
+      if (mounted) {
+        _showErrorSnackBar(
+          context,
+          'No llegó la confirmación de envío. El adjunto conserva su reserva y puede reintentarse sin duplicarlo.',
         );
       }
-
-      // Determine file type and MIME
-      final ext = _resolveFileExtension(fileName);
-      final isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(ext);
-      final contentType = _contentTypeForExtension(ext);
-      final safeFileName = _safeStorageFileName(
-        fileName,
-        fallbackExtension: ext,
+      return _AttachmentDispatchResult.outcomeUnknown(
+        reservation: reservation,
+        retryUpload: false,
+        canRetrySafely: true,
+        replayCaption: cleanCaption,
       );
-
-      final storagePath =
-          'chat/${widget.conversation.id}/${DateTime.now().millisecondsSinceEpoch}_$safeFileName';
-
-      // Upload to Supabase Storage (vinabike-assets bucket)
-      final supabase = Supabase.instance.client;
-      await supabase.storage.from('vinabike-assets').uploadBinary(
-            storagePath,
-            bytes,
-            fileOptions: FileOptions(contentType: contentType),
-          );
-
-      // Get public URL
-      final publicUrl =
-          supabase.storage.from('vinabike-assets').getPublicUrl(storagePath);
-
-      if (!mounted) return false;
-
-      // Dismiss loading snackbar
-      if (showUploadingSnackBar) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      }
-
-      // Determine message type
-      final msgType = isImage ? 'image' : 'file';
-      final cleanCaption = caption?.trim();
-      final metadata = {
-        'url': publicUrl,
-        'filename': fileName,
-        'originalFilename': fileName,
-        'storageFilename': safeFileName,
-        'extension': ext,
-        'contentType': contentType,
-        'content_type': contentType,
-        'sizeBytes': bytes.length,
-        'storageBucket': 'vinabike-assets',
-        'storagePath': storagePath,
-        if (cleanCaption != null && cleanCaption.isNotEmpty)
-          'caption': cleanCaption,
-      };
-
-      if (_isWhatsAppConversation) {
-        _sendWhatsAppAttachment(
-          chatProvider: context.read<ChatProvider>(),
-          publicUrl: publicUrl,
-          fileName: fileName,
-          messageType: msgType,
-          metadata: metadata,
-          caption: cleanCaption,
-        );
-        return true;
-      }
-
-      // Send as file message
-      await context.read<ChatProvider>().sendMessage(
-            publicUrl,
-            type: msgType,
-            metadata: metadata,
-          );
-      return true;
-    } catch (e) {
-      if (!mounted) return false;
-      if (showUploadingSnackBar) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Error al subir archivo: $e'),
-            backgroundColor: Colors.red),
+    } on MessagingAttachmentPublishRejected catch (error) {
+      await _messagingAttachmentService.fail(
+        reservation,
+        code: error.failureCode,
       );
-      return false;
+      if (mounted) {
+        _showErrorSnackBar(context, 'El envío del adjunto fue rechazado.');
+      }
+      return const _AttachmentDispatchResult.rejected();
+    } catch (_) {
+      // A non-contract exception after publish started is never evidence that
+      // the transaction rolled back. Preserve the reservation for read-back
+      // or exact replay instead of failing/deleting it.
+      return _AttachmentDispatchResult.outcomeUnknown(
+        reservation: reservation,
+        retryUpload: false,
+        canRetrySafely: true,
+        replayCaption: cleanCaption,
+      );
     }
   }
 
-  String _resolveFileExtension(String fileName) {
-    final normalizedName = fileName.trim().split(RegExp(r'[\\/]')).last;
-    final dotIndex = normalizedName.lastIndexOf('.');
-    if (dotIndex <= 0 || dotIndex == normalizedName.length - 1) {
-      return '';
-    }
-    return normalizedName.substring(dotIndex + 1).toLowerCase();
-  }
-
-  String _safeStorageFileName(
-    String fileName, {
-    String fallbackExtension = '',
-  }) {
-    final originalName = fileName.trim().split(RegExp(r'[\\/]')).last;
-    final candidate = originalName.isEmpty ? 'archivo' : originalName;
-    var cleaned = candidate
-        .replaceAll(RegExp(r'\s+'), '_')
-        .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '_')
-        .replaceAll(RegExp(r'_+'), '_')
-        .replaceAll(RegExp(r'^[._-]+'), '')
-        .replaceAll(RegExp(r'[._-]+$'), '');
-
-    if (cleaned.isEmpty) {
-      cleaned = 'archivo';
-    }
-
-    final cleanedExtension = _resolveFileExtension(cleaned);
-    if (cleanedExtension.isEmpty && fallbackExtension.isNotEmpty) {
-      cleaned = '$cleaned.$fallbackExtension';
-    }
-
-    if (cleaned.length <= 96) {
-      return cleaned;
-    }
-
-    final extension = _resolveFileExtension(cleaned);
-    if (extension.isEmpty) {
-      return cleaned.substring(0, 96);
-    }
-
-    final suffix = '.$extension';
-    final baseLength = 96 - suffix.length;
-    final safeBaseLength = baseLength.clamp(1, cleaned.length).toInt();
-    return '${cleaned.substring(0, safeBaseLength)}$suffix';
-  }
-
-  String _contentTypeForExtension(String extension) {
-    switch (extension) {
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      case 'gif':
-        return 'image/gif';
-      case 'webp':
-        return 'image/webp';
-      case 'pdf':
-        return 'application/pdf';
-      case 'doc':
-        return 'application/msword';
-      case 'docx':
-        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      case 'xls':
-        return 'application/vnd.ms-excel';
-      case 'xlsx':
-        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      case 'txt':
-        return 'text/plain';
-      default:
-        return 'application/octet-stream';
-    }
-  }
-
-  void _sendWhatsAppAttachment({
+  Future<_AttachmentDispatchOutcome> _sendWhatsAppAttachment({
     required ChatProvider chatProvider,
-    required String publicUrl,
+    required ReservedMessagingAttachment reservation,
     required String fileName,
     required String messageType,
     required Map<String, dynamic> metadata,
     String? caption,
+    required BuildContext? fallbackContext,
+    required String conversationId,
+    required String? contextType,
+    required String? contextId,
+    required Future<Map<String, dynamic>?> contactFuture,
   }) {
     final optimisticMessageId =
         'temp-wa-file-${DateTime.now().millisecondsSinceEpoch}';
@@ -1974,7 +2416,8 @@ class _ChatWindowState extends State<ChatWindow> {
         id: optimisticMessageId,
         conversationId: widget.conversation.id,
         senderId: _messagingService.currentUserId,
-        content: publicUrl,
+        content:
+            caption?.trim().isNotEmpty == true ? caption!.trim() : fileName,
         type: messageType,
         metadata: optimisticMetadata,
         createdAt: DateTime.now(),
@@ -1982,32 +2425,46 @@ class _ChatWindowState extends State<ChatWindow> {
       ),
     );
 
-    unawaited(_dispatchWhatsAppAttachment(
+    return _dispatchWhatsAppAttachment(
       chatProvider: chatProvider,
       optimisticMessageId: optimisticMessageId,
-      publicUrl: publicUrl,
+      reservation: reservation,
       fileName: fileName,
       messageType: messageType,
       metadata: sendMetadata,
       caption: caption,
-    ));
+      fallbackContext: fallbackContext,
+      conversationId: conversationId,
+      contextType: contextType,
+      contextId: contextId,
+      contactFuture: contactFuture,
+    );
   }
 
-  Future<void> _dispatchWhatsAppAttachment({
+  Future<_AttachmentDispatchOutcome> _dispatchWhatsAppAttachment({
     required ChatProvider chatProvider,
     required String optimisticMessageId,
-    required String publicUrl,
+    required ReservedMessagingAttachment reservation,
     required String fileName,
     required String messageType,
     required Map<String, dynamic> metadata,
     String? caption,
+    required BuildContext? fallbackContext,
+    required String conversationId,
+    required String? contextType,
+    required String? contextId,
+    required Future<Map<String, dynamic>?> contactFuture,
   }) async {
     final whatsappService = WhatsAppService();
     try {
-      final contact = await _getWhatsAppContactFuture();
+      final contact = await contactFuture;
       final phone = contact?['phone']?.toString();
 
       if (phone == null || phone.isEmpty) {
+        await _messagingAttachmentService.fail(
+          reservation,
+          code: 'whatsapp_conversation_phone_missing',
+        );
         chatProvider.removeMessageById(optimisticMessageId);
         if (mounted) {
           _showErrorSnackBar(
@@ -2015,71 +2472,101 @@ class _ChatWindowState extends State<ChatWindow> {
             'La conversación de WhatsApp no tiene un teléfono asociado.',
           );
         }
-        return;
+        return _AttachmentDispatchOutcome.rejected;
       }
 
-      if (!mounted) {
-        chatProvider.removeMessageById(optimisticMessageId);
-        return;
-      }
-
-      final success = await whatsappService.sendAttachment(
-        context: context,
+      final receipt = await whatsappService.sendAttachment(
+        context: fallbackContext?.mounted == true ? fallbackContext : null,
         customerPhone: phone,
-        mediaUrl: publicUrl,
+        attachmentId: reservation.id,
         filename: fileName,
         messageType: messageType,
         caption: caption,
         contactName: contact?['name']?.toString(),
-        conversationId: widget.conversation.id,
+        conversationId: conversationId,
         customerId: contact?['customer_id']?.toString(),
-        contextType: _effectiveContextType,
-        contextId: _effectiveContextId,
+        contextType: contextType,
+        contextId: contextId,
         clientMessageId: optimisticMessageId,
         metadata: metadata,
       );
 
-      if (!success) {
+      if (!receipt.isSuccess) {
+        if (receipt.unsafeToFallback) {
+          chatProvider.updateMessageMetadataById(
+            optimisticMessageId,
+            {
+              'pending': false,
+              'external_status': 'outcome_unknown',
+              'whatsapp_status': 'outcome_unknown',
+              'outcome_unknown': true,
+              'retry_disabled': true,
+              if (receipt.messageId != null)
+                'server_message_id': receipt.messageId,
+              if (receipt.externalMessageId != null)
+                'external_message_id': receipt.externalMessageId,
+            },
+          );
+          // Keep the optimistic row for realtime reconciliation.
+          if (mounted) {
+            _showErrorSnackBar(
+              context,
+              'Resultado incierto: verifica la conversación antes de reenviar el archivo.',
+            );
+          }
+          return _AttachmentDispatchOutcome.outcomeUnknown;
+        }
+        await _messagingAttachmentService.fail(
+          reservation,
+          code: 'whatsapp_send_rejected',
+        );
         chatProvider.removeMessageById(optimisticMessageId);
         if (mounted) {
-          final errorMessage = whatsappService.lastErrorRequiresServerFix
+          final errorMessage = receipt.errorRequiresServerFix
               ? 'Meta rechazó el envío porque el token de WhatsApp Cloud API expiró. Hay que actualizar WHATSAPP_ACCESS_TOKEN en Supabase.'
-              : whatsappService.lastErrorRequiresCustomerReply
+              : receipt.errorRequiresCustomerReply
                   ? 'Meta no permite enviar archivos fuera de la ventana de 24 horas. Envía una plantilla y espera respuesta del cliente antes de compartir la imagen.'
                   : 'No se pudo enviar el archivo por WhatsApp';
           _showErrorSnackBar(context, errorMessage);
         }
-        return;
+        return _AttachmentDispatchOutcome.rejected;
       }
 
-      if (whatsappService.lastDeliveryMethod ==
-          WhatsAppDeliveryMethod.cloudApi) {
+      if (receipt.deliveryMethod == WhatsAppDeliveryMethod.cloudApi) {
         chatProvider.updateMessageById(
           optimisticMessageId,
           metadataUpdates: {
+            // A 2xx includes the durable ERP and Meta receipts.
             'pending': false,
+            'server_ack_durable': true,
+            'server_message_id': receipt.messageId,
             'external_status': 'accepted',
-            if (whatsappService.lastExternalMessageId != null)
-              'external_message_id': whatsappService.lastExternalMessageId,
+            'external_message_id': receipt.externalMessageId,
           },
         );
-      } else if (whatsappService.lastDeliveryMethod ==
+      } else if (receipt.deliveryMethod ==
           WhatsAppDeliveryMethod.manualFallback) {
         chatProvider.removeMessageById(optimisticMessageId);
         if (mounted) {
           _showWhatsAppResultSnackbar(
             context: context,
-            deliveryMethod: whatsappService.lastDeliveryMethod,
+            deliveryMethod: receipt.deliveryMethod,
             successMessage: 'Archivo enviado por WhatsApp Cloud API',
             fallbackMessage: 'WhatsApp abierto con el archivo como enlace',
           );
         }
       }
+      return _AttachmentDispatchOutcome.confirmed;
     } catch (e) {
+      await _messagingAttachmentService.fail(
+        reservation,
+        code: 'whatsapp_send_exception',
+      );
       chatProvider.removeMessageById(optimisticMessageId);
       if (mounted) {
         _showErrorSnackBar(context, 'No se pudo enviar el archivo: $e');
       }
+      return _AttachmentDispatchOutcome.rejected;
     }
   }
 
@@ -2088,11 +2575,30 @@ class _ChatWindowState extends State<ChatWindow> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final chatProvider = context.watch<ChatProvider>();
-    final messages = chatProvider.activeMessages;
+    final hostVisible = _isConversationHostVisible(context);
+    _reportConversationHostVisibility(chatProvider, hostVisible);
+    final messages =
+        chatProvider.messagesForConversation(widget.conversation.id);
+    _schedulePendingAttachmentReconciliation(messages);
     final timelineItems = _buildTimelineItems(messages);
-    final isLoading = chatProvider.isLoading;
+    final isLoading =
+        chatProvider.isConversationLoading(widget.conversation.id);
+    final streamError = chatProvider.messageStreamErrorForConversation(
+      widget.conversation.id,
+    );
+    final showHistoryBoundary = messages.isNotEmpty ||
+        chatProvider.isLoadingOlderMessages(widget.conversation.id) ||
+        chatProvider.olderMessagesErrorForConversation(
+              widget.conversation.id,
+            ) !=
+            null;
+    if (!_showChatInfoPanel && messages.isNotEmpty) {
+      _scheduleOlderMessagesIfAtStart(chatProvider);
+    }
     final pendingDraft =
         chatProvider.getConversationDraft(widget.conversation.id);
+    final canWriteConversation = widget.conversation.status == 'active' ||
+        widget.conversation.status == 'pending';
 
     final chatContent = Column(
       children: [
@@ -2105,6 +2611,13 @@ class _ChatWindowState extends State<ChatWindow> {
             widget.conversation.status == 'pending')
           _buildPendingRequestBanner(context),
 
+        if (streamError != null)
+          _buildMessageStreamErrorBanner(
+            context,
+            chatProvider,
+            streamError,
+          ),
+
         if (_showChatInfoPanel)
           Expanded(
             child: _buildChatInfoPanel(context, chatProvider, messages),
@@ -2116,44 +2629,120 @@ class _ChatWindowState extends State<ChatWindow> {
               color: _chatTimelineBackground(theme),
               child: isLoading && messages.isEmpty
                   ? const Center(child: CircularProgressIndicator())
-                  : ListView.builder(
-                      controller: _scrollController,
-                      reverse: true, // Start from bottom
-                      padding: const EdgeInsets.all(16),
-                      itemCount: timelineItems.length,
-                      itemBuilder: (context, index) {
-                        // Reverse index to show newest at bottom
-                        final item =
-                            timelineItems[timelineItems.length - 1 - index];
-                        if (item is _UnreadMessagesMarker) {
-                          return _buildUnreadMessagesMarker(item.count);
-                        }
+                  : Stack(
+                      children: [
+                        ListView.builder(
+                          controller: _scrollController,
+                          reverse: true,
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 22),
+                          itemCount: timelineItems.length +
+                              (showHistoryBoundary ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (showHistoryBoundary &&
+                                index == timelineItems.length) {
+                              return _buildHistoryBoundary(
+                                context,
+                                chatProvider,
+                                hasMessages: messages.isNotEmpty,
+                              );
+                            }
+                            final item =
+                                timelineItems[timelineItems.length - 1 - index];
+                            if (item is _UnreadMessagesMarker) {
+                              return _buildUnreadMessagesMarker(item.count);
+                            }
+                            if (item is _TimelineDaySeparator) {
+                              return _buildTimelineDaySeparator(
+                                context,
+                                item.day,
+                              );
+                            }
 
-                        final msg = item as Message;
-                        // Check continuity for bubble grouping (optional enhancement space)
-                        return _buildMessageBubble(context, msg, messages);
-                      },
+                            final msg = item as Message;
+                            return _buildMessageBubble(context, msg, messages);
+                          },
+                        ),
+                        Positioned(
+                          right: 14,
+                          bottom: 10,
+                          child: IgnorePointer(
+                            ignoring: !_showJumpToLatest,
+                            child: AnimatedScale(
+                              scale: _showJumpToLatest ? 1 : 0.82,
+                              duration: const Duration(milliseconds: 150),
+                              child: AnimatedOpacity(
+                                opacity: _showJumpToLatest ? 1 : 0,
+                                duration: const Duration(milliseconds: 150),
+                                child: Material(
+                                  color: colorScheme.surface,
+                                  elevation: 3,
+                                  shape: const CircleBorder(),
+                                  child: IconButton(
+                                    tooltip: 'Ir al mensaje más reciente',
+                                    onPressed: _jumpToLatest,
+                                    icon: const Icon(
+                                      Icons.keyboard_arrow_down_rounded,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
             ),
           ),
 
-          // Input
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              border:
-                  Border(top: BorderSide(color: colorScheme.outlineVariant)),
+          if (canWriteConversation)
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                border: Border(
+                  top: BorderSide(color: colorScheme.outlineVariant),
+                ),
+              ),
+              child: _buildComposer(context),
+            )
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest,
+                border: Border(
+                  top: BorderSide(color: colorScheme.outlineVariant),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.inventory_2_outlined,
+                    size: 18,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      'Conversación archivada. El historial se conserva como respaldo y ya no admite nuevos mensajes.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            child: _buildComposer(context),
-          ),
         ],
       ],
     );
 
     return DropTarget(
       onDragEntered: (_) {
-        if (!_showChatInfoPanel && !_isDraggingAttachment) {
+        if (!_hasBlockingOutcomeUnknownAttachment &&
+            !_showChatInfoPanel &&
+            !_isDraggingAttachment) {
           setState(() => _isDraggingAttachment = true);
         }
       },
@@ -2163,6 +2752,7 @@ class _ChatWindowState extends State<ChatWindow> {
         }
       },
       onDragDone: (details) {
+        if (_guardPendingAttachmentMutation()) return;
         unawaited(_queueDroppedFiles(details.files));
       },
       child: Stack(
@@ -2451,29 +3041,30 @@ class _ChatWindowState extends State<ChatWindow> {
             ),
           if (hasSupportedContextPanel &&
               widget.isContextPanelClosed &&
-              widget.onShowContextPanel != null)
+              _canOpenCurrentContext)
             IconButton(
               icon: Icon(
                 _contextIcon(contextType),
                 color: colorScheme.primary,
               ),
               tooltip: 'Mostrar detalles',
-              onPressed: widget.onShowContextPanel,
+              onPressed: _openCurrentContext,
             ),
-          IconButton(
-            icon: Icon(
-              hasContext ? Icons.link : Icons.link_off,
-              color: hasJobContext
-                  ? jobContextColor
-                  : hasContext
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant,
+          if (!conversation.isSupplierConversation)
+            IconButton(
+              icon: Icon(
+                hasContext ? Icons.link : Icons.link_off,
+                color: hasJobContext
+                    ? jobContextColor
+                    : hasContext
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+              ),
+              tooltip: hasContext
+                  ? '${conversation.hasLinkedContext ? 'Contexto vinculado' : 'Contexto detectado'}: ${_contextLabel(contextType)}'
+                  : 'Vincular contexto del chat',
+              onPressed: () => _showAssignContextDialog(context),
             ),
-            tooltip: hasContext
-                ? '${conversation.hasLinkedContext ? 'Contexto vinculado' : 'Contexto detectado'}: ${_contextLabel(contextType)}'
-                : 'Vincular contexto del chat',
-            onPressed: () => _showAssignContextDialog(context),
-          ),
           ...widget.headerActions,
         ],
       ),
@@ -2707,8 +3298,9 @@ class _ChatWindowState extends State<ChatWindow> {
       };
     }
 
+    final colorScheme = theme.colorScheme;
     return Container(
-      color: const Color(0xFFF8FAFC),
+      color: colorScheme.surfaceContainerLowest,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 720;
@@ -2738,7 +3330,7 @@ class _ChatWindowState extends State<ChatWindow> {
                   fileCount: fileCount,
                 ),
               ),
-              VerticalDivider(width: 1, color: Colors.grey[200]),
+              VerticalDivider(width: 1, color: colorScheme.outlineVariant),
               Expanded(child: contentForSection()),
             ],
           );
@@ -2755,8 +3347,9 @@ class _ChatWindowState extends State<ChatWindow> {
     required int mediaCount,
     required int fileCount,
   }) {
+    final colorScheme = theme.colorScheme;
     return Container(
-      color: Colors.white,
+      color: colorScheme.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -2782,13 +3375,13 @@ class _ChatWindowState extends State<ChatWindow> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
             ),
           ),
-          Divider(height: 1, color: Colors.grey[200]),
+          Divider(height: 1, color: colorScheme.outlineVariant),
           Padding(
             padding: const EdgeInsets.all(10),
             child: Column(
@@ -2837,6 +3430,7 @@ class _ChatWindowState extends State<ChatWindow> {
     required int mediaCount,
     required int fileCount,
   }) {
+    final colorScheme = theme.colorScheme;
     final items = [
       (_ChatInfoSection.info, Icons.info_outline, 'Info', null),
       (
@@ -2850,29 +3444,65 @@ class _ChatWindowState extends State<ChatWindow> {
     ];
 
     return Container(
-      height: 54,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      color: Colors.white,
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      color: colorScheme.surface,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, __) => const SizedBox(width: 2),
         itemBuilder: (context, index) {
           final item = items[index];
           final selected = _selectedChatInfoSection == item.$1;
-          return ChoiceChip(
-            selected: selected,
-            avatar: Icon(
-              item.$2,
-              size: 16,
-              color: selected ? _accentBlue : const Color(0xFF64748B),
+          return InkWell(
+            onTap: () => setState(() => _selectedChatInfoSection = item.$1),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 11),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: selected ? colorScheme.primary : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    item.$2,
+                    size: 16,
+                    color: selected
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    item.$3,
+                    style: TextStyle(
+                      color: selected
+                          ? colorScheme.primary
+                          : colorScheme.onSurface,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                  ),
+                  if (item.$4 != null) ...[
+                    const SizedBox(width: 5),
+                    Text(
+                      item.$4!,
+                      style: TextStyle(
+                        color: selected
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-            label: Text(
-              item.$4 == null ? item.$3 : '${item.$3} ${item.$4}',
-            ),
-            onSelected: (_) {
-              setState(() => _selectedChatInfoSection = item.$1);
-            },
           );
         },
       ),
@@ -2885,11 +3515,14 @@ class _ChatWindowState extends State<ChatWindow> {
     required String label,
     String? badge,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
     final selected = _selectedChatInfoSection == section;
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Material(
-        color: selected ? _accentBlue.withValues(alpha: 0.08) : Colors.white,
+        color: selected
+            ? colorScheme.primaryContainer.withValues(alpha: 0.62)
+            : colorScheme.surface,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
@@ -2901,7 +3534,9 @@ class _ChatWindowState extends State<ChatWindow> {
                 Icon(
                   icon,
                   size: 20,
-                  color: selected ? _accentBlue : const Color(0xFF64748B),
+                  color: selected
+                      ? colorScheme.onPrimaryContainer
+                      : colorScheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -2911,7 +3546,9 @@ class _ChatWindowState extends State<ChatWindow> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                      color: selected ? _accentBlue : const Color(0xFF334155),
+                      color: selected
+                          ? colorScheme.onPrimaryContainer
+                          : colorScheme.onSurface,
                     ),
                   ),
                 ),
@@ -2921,8 +3558,9 @@ class _ChatWindowState extends State<ChatWindow> {
                         const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
                       color: selected
-                          ? _accentBlue.withValues(alpha: 0.12)
-                          : const Color(0xFFF1F5F9),
+                          ? colorScheme.onPrimaryContainer
+                              .withValues(alpha: 0.1)
+                          : colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
@@ -2930,7 +3568,9 @@ class _ChatWindowState extends State<ChatWindow> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        color: selected ? _accentBlue : const Color(0xFF64748B),
+                        color: selected
+                            ? colorScheme.onPrimaryContainer
+                            : colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -2944,18 +3584,19 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Widget _buildChatInfoAvatar({required double size}) {
     final conversation = widget.conversation;
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: conversation.type == 'support'
-            ? _accentBlue.withValues(alpha: 0.09)
-            : const Color(0xFFF1F5F9),
+            ? colorScheme.primaryContainer
+            : colorScheme.surfaceContainerHighest,
         border: Border.all(
           color: conversation.isWhatsApp
               ? const Color(0xFF14B8A6).withValues(alpha: 0.42)
-              : Colors.white,
+              : colorScheme.outlineVariant,
           width: 1.5,
         ),
       ),
@@ -2966,8 +3607,8 @@ class _ChatWindowState extends State<ChatWindow> {
                 ? Icons.language_outlined
                 : Icons.groups_outlined,
         color: conversation.type == 'support'
-            ? _accentBlue
-            : const Color(0xFF64748B),
+            ? colorScheme.onPrimaryContainer
+            : colorScheme.onSurfaceVariant,
         size: size * 0.42,
       ),
     );
@@ -2990,32 +3631,24 @@ class _ChatWindowState extends State<ChatWindow> {
       subtitle: title,
       children: [
         Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: 18,
+          runSpacing: 9,
           children: [
-            _buildChatMetric(
-              theme,
-              icon: Icons.forum_outlined,
-              label: 'Mensajes',
-              value: '${messages.length}',
+            _buildChatStat(
+              Icons.forum_outlined,
+              '${messages.length} mensajes cargados',
             ),
-            _buildChatMetric(
-              theme,
-              icon: Icons.call_received_outlined,
-              label: 'Entrantes',
-              value: '$inboundCount',
+            _buildChatStat(
+              Icons.call_received_outlined,
+              '$inboundCount entrantes cargados',
             ),
-            _buildChatMetric(
-              theme,
-              icon: Icons.call_made_outlined,
-              label: 'Salientes',
-              value: '$outboundCount',
+            _buildChatStat(
+              Icons.call_made_outlined,
+              '$outboundCount salientes cargados',
             ),
-            _buildChatMetric(
-              theme,
-              icon: Icons.attach_file,
-              label: 'Archivos',
-              value: '${attachments.length}',
+            _buildChatStat(
+              Icons.attach_file,
+              '${attachments.length} archivos cargados',
             ),
           ],
         ),
@@ -3057,36 +3690,11 @@ class _ChatWindowState extends State<ChatWindow> {
           const SizedBox(height: 18),
           _buildOperationalContextCard(theme),
         ],
-        const SizedBox(height: 18),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            _buildInfoActionButton(
-              icon: Icons.attach_file,
-              label: 'Adjuntar',
-              onPressed: () => _pickAndSendFile('file'),
-            ),
-            _buildInfoActionButton(
-              icon: Icons.link,
-              label: 'Vincular',
-              onPressed: () => _showAssignContextDialog(context),
-            ),
-            if (_canStartWhatsAppFromConversation)
-              _buildInfoActionButton(
-                icon: Icons.phone_in_talk_outlined,
-                label: 'WhatsApp',
-                onPressed: () => _openWhatsAppConversationForCurrentContext(
-                  context,
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 14),
         Text(
-          subtitle,
+          '$subtitle · Las acciones están ordenadas en Gestión.',
           style: theme.textTheme.bodySmall?.copyWith(
-            color: const Color(0xFF64748B),
+            color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
       ],
@@ -3103,7 +3711,7 @@ class _ChatWindowState extends State<ChatWindow> {
     return _buildChatInfoContentShell(
       theme: theme,
       title: 'Multimedia y documentos',
-      subtitle: '${attachments.length} elementos guardados en el chat',
+      subtitle: '${attachments.length} elementos en los mensajes cargados',
       trailing: FilledButton.icon(
         onPressed: () => _pickAndSendFile('file'),
         icon: const Icon(Icons.add, size: 18),
@@ -3153,9 +3761,58 @@ class _ChatWindowState extends State<ChatWindow> {
   Widget _buildChatWorkflowSection(ThemeData theme) {
     final hasSupportedContextPanel =
         widget.conversation.hasSupportedContextPanel;
+    final smartActions = _smartActionCapabilities;
     final contextType = _effectiveContextType;
+    final hint = widget.conversation.contextHint;
+    final contextActionTitle = switch (contextType) {
+      'job' => hint?.jobNumber?.trim().isNotEmpty == true
+          ? 'Revisar trabajo ${hint!.jobNumber!.trim()}'
+          : 'Revisar trabajo vinculado',
+      'bike' => hint?.bikeName?.trim().isNotEmpty == true
+          ? 'Revisar bicicleta ${hint!.bikeName!.trim()}'
+          : 'Revisar bicicleta vinculada',
+      'invoice' => hint?.invoiceNumber?.trim().isNotEmpty == true
+          ? 'Revisar venta ${hint!.invoiceNumber!.trim()}'
+          : 'Revisar venta vinculada',
+      'purchase_invoice' =>
+        hint?.purchaseInvoiceNumber?.trim().isNotEmpty == true
+            ? 'Revisar compra ${hint!.purchaseInvoiceNumber!.trim()}'
+            : 'Revisar compra vinculada',
+      'supplier' => hint?.supplierLabel?.trim().isNotEmpty == true
+          ? 'Revisar proveedor ${hint!.supplierLabel!.trim()}'
+          : 'Revisar proveedor vinculado',
+      'order' || 'online_order' => 'Revisar pedido online',
+      _ => 'Revisar contexto operativo',
+    };
+    final contextActionSubtitle = switch (contextType) {
+      'job' => [
+          if (hint?.jobStatus?.trim().isNotEmpty == true)
+            hint!.jobStatus!.trim(),
+          if (hint?.bikeName?.trim().isNotEmpty == true) hint!.bikeName!.trim(),
+        ].join(' · '),
+      'invoice' => [
+          if (hint?.invoiceStatus?.trim().isNotEmpty == true)
+            hint!.invoiceStatus!.trim(),
+          if (hint?.invoiceBalance != null)
+            'Saldo ${_formatPanelCurrency(hint!.invoiceBalance)}',
+        ].join(' · '),
+      'purchase_invoice' => [
+          if (hint?.purchaseInvoiceStatus?.trim().isNotEmpty == true)
+            hint!.purchaseInvoiceStatus!.trim(),
+          if (hint?.purchaseInvoiceBalance != null)
+            'Saldo ${_formatPanelCurrency(hint!.purchaseInvoiceBalance)}',
+        ].join(' · '),
+      'supplier' => hint?.supplierPhone?.trim().isNotEmpty == true
+          ? hint!.supplierPhone!.trim()
+          : 'Ficha y abastecimiento del proveedor',
+      _ => 'Abrir sus datos sin abandonar la conversación',
+    };
     final canResolve = widget.conversation.type == 'support' &&
         widget.conversation.status == 'active';
+    final canSendOperationalActions =
+        smartActions.isEligibleCustomerConversation &&
+            (widget.conversation.status == 'active' ||
+                widget.conversation.status == 'pending');
 
     return _buildChatInfoContentShell(
       theme: theme,
@@ -3165,36 +3822,40 @@ class _ChatWindowState extends State<ChatWindow> {
         _buildPanelBlock(
           theme: theme,
           children: [
-            _buildManagementActionTile(
-              icon: Icons.link,
-              color: _accentBlue,
-              title: widget.conversation.hasLinkedContext
-                  ? 'Cambiar contexto'
-                  : widget.conversation.hasDetectedContext
-                      ? 'Confirmar contexto detectado'
-                      : 'Vincular contexto',
-              subtitle: _contextLabel(contextType) ??
-                  'Conecta este chat con cliente, trabajo, factura o pedido',
-              onTap: () => _showAssignContextDialog(context),
-            ),
-            if (hasSupportedContextPanel && widget.onShowContextPanel != null)
+            if (!widget.conversation.isSupplierConversation)
+              _buildManagementActionTile(
+                icon: Icons.link,
+                color: theme.colorScheme.primary,
+                title: widget.conversation.hasLinkedContext
+                    ? 'Cambiar contexto'
+                    : widget.conversation.hasDetectedContext
+                        ? 'Confirmar contexto detectado'
+                        : 'Vincular contexto',
+                subtitle: _contextLabel(contextType) ??
+                    'Conecta este chat con cliente, trabajo, factura o pedido',
+                onTap: () => _showAssignContextDialog(context),
+              ),
+            if (hasSupportedContextPanel && _canOpenCurrentContext)
               _buildManagementActionTile(
                 icon: _contextIcon(contextType),
-                color: const Color(0xFF2563EB),
-                title: widget.conversation.hasLinkedContext
-                    ? 'Abrir detalles vinculados'
-                    : 'Abrir contexto detectado',
-                subtitle: 'Revisa trabajo, factura o pedido sin salir del chat',
-                onTap: widget.onShowContextPanel!,
+                color: theme.colorScheme.primary,
+                title: contextActionTitle,
+                subtitle: contextActionSubtitle.isEmpty
+                    ? 'Abrir sus datos sin abandonar la conversación'
+                    : contextActionSubtitle,
+                onTap: _openCurrentContext,
               ),
-            if (_canUseSmartActions)
+            if (canSendOperationalActions)
               _buildManagementActionTile(
                 icon: Icons.flash_on,
-                color: const Color(0xFFD97706),
-                title: 'Acciones rápidas',
-                subtitle: widget.conversation.isWhatsApp
-                    ? 'Aprobaciones, pagos, entregas y mensajes automáticos'
-                    : 'Mensajes automáticos y preparación de atención',
+                color: theme.colorScheme.tertiary,
+                title: smartActions.hasInteractiveActions
+                    ? 'Preparar solicitud al cliente'
+                    : 'Mensajes para el cliente',
+                subtitle: smartActions.hasInteractiveActions
+                    ? 'Solo muestra acciones válidas para el contexto actual'
+                    : smartActions.explanation ??
+                        'Mensajes preparados con contexto del ERP',
                 onTap: () => _showSmartActions(context),
               ),
             if (_canStartWhatsAppFromConversation)
@@ -3236,7 +3897,7 @@ class _ChatWindowState extends State<ChatWindow> {
           children: [
             _buildInfoRowTile(
               icon: Icons.forum_outlined,
-              title: 'Mensajes en este chat',
+              title: 'Mensajes cargados',
               value: '${messages.length}',
             ),
             _buildInfoRowTile(
@@ -3272,7 +3933,7 @@ class _ChatWindowState extends State<ChatWindow> {
         Text(
           'El archivo JSON conserva conversación, participantes, vínculos ERP, mensajes, metadatos externos, estados WhatsApp y referencias a archivos.',
           style: theme.textTheme.bodySmall?.copyWith(
-            color: const Color(0xFF64748B),
+            color: theme.colorScheme.onSurfaceVariant,
             height: 1.35,
           ),
         ),
@@ -3312,7 +3973,7 @@ class _ChatWindowState extends State<ChatWindow> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: const Color(0xFF64748B),
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -3336,16 +3997,18 @@ class _ChatWindowState extends State<ChatWindow> {
     required ThemeData theme,
     required List<Widget> children,
   }) {
+    final colorScheme = theme.colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Column(
         children: [
           for (var index = 0; index < children.length; index++) ...[
-            if (index > 0) const Divider(height: 1, color: Color(0xFFE2E8F0)),
+            if (index > 0)
+              Divider(height: 1, color: colorScheme.outlineVariant),
             children[index],
           ],
         ],
@@ -3376,22 +4039,28 @@ class _ChatWindowState extends State<ChatWindow> {
       return const SizedBox.shrink();
     }
 
+    final colorScheme = theme.colorScheme;
     final statusColor = _colorFromHex(
       hint.jobStatusColor,
-      const Color(0xFF2563EB),
+      colorScheme.primary,
     );
     final invoiceSummary = [
       if (hint.invoiceStatus != null) hint.invoiceStatus!,
       if (hint.invoiceBalance != null)
         'Saldo ${_formatPanelCurrency(hint.invoiceBalance)}',
     ].join(' · ');
+    final purchaseInvoiceSummary = [
+      if (hint.purchaseInvoiceStatus != null) hint.purchaseInvoiceStatus!,
+      if (hint.purchaseInvoiceBalance != null)
+        'Saldo ${_formatPanelCurrency(hint.purchaseInvoiceBalance)}',
+    ].join(' · ');
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3431,7 +4100,7 @@ class _ChatWindowState extends State<ChatWindow> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: const Color(0xFF64748B),
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -3445,6 +4114,16 @@ class _ChatWindowState extends State<ChatWindow> {
               icon: Icons.person_outline,
               title: 'Cliente',
               value: hint.customerLabel!,
+            ),
+          if (hint.hasSupplier)
+            _buildOperationalContextRow(
+              icon: Icons.storefront_outlined,
+              title: 'Proveedor',
+              value: [
+                if (hint.supplierLabel != null) hint.supplierLabel!,
+                if (hint.supplierPhone?.trim().isNotEmpty == true)
+                  hint.supplierPhone!.trim(),
+              ].join(' · '),
             ),
           if (hint.hasJob)
             _buildOperationalContextRow(
@@ -3464,19 +4143,53 @@ class _ChatWindowState extends State<ChatWindow> {
                   ? _formatPanelCurrency(hint.invoiceTotal)
                   : invoiceSummary,
             ),
+          if (hint.hasPurchaseInvoice)
+            _buildOperationalContextRow(
+              icon: Icons.inventory_2_outlined,
+              title: hint.purchaseInvoiceLabel ?? 'Compra vinculada',
+              value: purchaseInvoiceSummary.isEmpty
+                  ? _formatPanelCurrency(hint.purchaseInvoiceTotal)
+                  : purchaseInvoiceSummary,
+              color: _purchaseInvoiceStatusColor(
+                hint.purchaseInvoiceStatus,
+              ),
+            ),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              if (widget.conversation.hasSupportedContextPanel &&
-                  widget.onShowContextPanel != null)
+              if (_canOpenCurrentContext)
                 FilledButton.icon(
-                  onPressed: widget.onShowContextPanel,
+                  onPressed: _openCurrentContext,
                   icon: const Icon(Icons.open_in_new, size: 16),
-                  label: const Text('Abrir panel'),
+                  label: Text(
+                    widget.onShowContextPanel != null
+                        ? 'Abrir panel'
+                        : 'Abrir registro',
+                  ),
                 ),
-              if (!widget.conversation.hasLinkedContext)
+              if (hint.hasPurchaseInvoice &&
+                  _effectiveContextType != 'purchase_invoice')
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      context.read<WorkspaceManager>().openRouteInWorkspace(
+                            '/purchases/${hint.purchaseInvoiceId!}',
+                          ),
+                  icon: const Icon(Icons.inventory_2_outlined, size: 16),
+                  label: const Text('Abrir compra'),
+                ),
+              if (hint.hasSupplier && _effectiveContextType != 'supplier')
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      context.read<WorkspaceManager>().openRouteInWorkspace(
+                            '/purchases/suppliers/${hint.supplierId!}/edit',
+                          ),
+                  icon: const Icon(Icons.storefront_outlined, size: 16),
+                  label: const Text('Abrir proveedor'),
+                ),
+              if (!widget.conversation.isSupplierConversation &&
+                  !widget.conversation.hasLinkedContext)
                 OutlinedButton.icon(
                   onPressed: () => _showAssignContextDialog(context),
                   icon: const Icon(Icons.link, size: 16),
@@ -3495,7 +4208,9 @@ class _ChatWindowState extends State<ChatWindow> {
     required String value,
     Color? color,
   }) {
-    final effectiveColor = color ?? const Color(0xFF64748B);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final effectiveColor = color ?? colorScheme.onSurfaceVariant;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -3511,9 +4226,9 @@ class _ChatWindowState extends State<ChatWindow> {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w800,
-                    color: Color(0xFF334155),
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 if (value.trim().isNotEmpty)
@@ -3521,9 +4236,9 @@ class _ChatWindowState extends State<ChatWindow> {
                     value,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: Color(0xFF64748B),
+                      color: colorScheme.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3535,57 +4250,22 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  Widget _buildChatMetric(
-    ThemeData theme, {
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Container(
-      width: 150,
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: _accentBlue.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: _accentBlue, size: 19),
+  Widget _buildChatStat(IconData icon, String label) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: colorScheme.onSurfaceVariant),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            color: colorScheme.onSurface,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: const Color(0xFF64748B),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -3615,17 +4295,18 @@ class _ChatWindowState extends State<ChatWindow> {
     required String title,
     required String value,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: const Color(0xFF64748B)),
+          Icon(icon, size: 20, color: colorScheme.onSurfaceVariant),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(
-                color: Color(0xFF334155),
+              style: TextStyle(
+                color: colorScheme.onSurface,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -3637,26 +4318,14 @@ class _ChatWindowState extends State<ChatWindow> {
               textAlign: TextAlign.right,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFF64748B),
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildInfoActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onPressed,
-  }) {
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
     );
   }
 
@@ -3692,7 +4361,7 @@ class _ChatWindowState extends State<ChatWindow> {
                     title,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w800,
-                      color: const Color(0xFF111827),
+                      color: theme.colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -3701,14 +4370,17 @@ class _ChatWindowState extends State<ChatWindow> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF64748B),
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 10),
-            const Icon(Icons.chevron_right, color: Color(0xFF94A3B8)),
+            Icon(
+              Icons.chevron_right,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ],
         ),
       ),
@@ -3719,7 +4391,7 @@ class _ChatWindowState extends State<ChatWindow> {
     return Text(
       title.toUpperCase(),
       style: theme.textTheme.labelSmall?.copyWith(
-        color: const Color(0xFF64748B),
+        color: theme.colorScheme.onSurfaceVariant,
         fontWeight: FontWeight.w900,
       ),
     );
@@ -3735,13 +4407,13 @@ class _ChatWindowState extends State<ChatWindow> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 42),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       child: Column(
         children: [
-          Icon(icon, size: 42, color: const Color(0xFF94A3B8)),
+          Icon(icon, size: 42, color: theme.colorScheme.onSurfaceVariant),
           const SizedBox(height: 12),
           Text(
             title,
@@ -3754,7 +4426,7 @@ class _ChatWindowState extends State<ChatWindow> {
             message,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: const Color(0xFF64748B),
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -3763,6 +4435,31 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   Widget _buildMediaTile(_ChatAttachment attachment) {
+    final colorScheme = Theme.of(context).colorScheme;
+    Widget buildPreview(String? url) {
+      if (url == null || url.isEmpty) {
+        return Container(
+          color: colorScheme.surfaceContainerHighest,
+          child: Icon(
+            attachment.isExternal
+                ? Icons.link_outlined
+                : Icons.image_not_supported_outlined,
+          ),
+        );
+      }
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          color: colorScheme.surfaceContainerHighest,
+          child: Icon(
+            Icons.broken_image_outlined,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: () => _openAttachmentViewer(attachment),
@@ -3771,14 +4468,16 @@ class _ChatWindowState extends State<ChatWindow> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.network(
-              attachment.url,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                color: const Color(0xFFE2E8F0),
-                child: const Icon(Icons.broken_image_outlined),
+            if (attachment.url != null || attachment.isExternal)
+              buildPreview(attachment.url)
+            else
+              FutureBuilder<String?>(
+                future: _whatsAppMediaFutureCache.putIfAbsent(
+                  attachment.message.id,
+                  () => _resolveWhatsAppMediaUrl(attachment.message),
+                ),
+                builder: (_, snapshot) => buildPreview(snapshot.data),
               ),
-            ),
             Positioned(
               left: 0,
               right: 0,
@@ -3815,12 +4514,12 @@ class _ChatWindowState extends State<ChatWindow> {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: _accentBlue.withValues(alpha: 0.08),
+                color: theme.colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
                 _getFileIcon(attachment.extension),
-                color: _accentBlue,
+                color: theme.colorScheme.onPrimaryContainer,
                 size: 21,
               ),
             ),
@@ -3841,14 +4540,18 @@ class _ChatWindowState extends State<ChatWindow> {
                   Text(
                     '${attachment.extension.toUpperCase()} · ${_formatPanelDate(attachment.message.createdAt)}',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF64748B),
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 10),
-            const Icon(Icons.open_in_new, size: 18, color: Color(0xFF94A3B8)),
+            Icon(
+              Icons.open_in_new,
+              size: 18,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ],
         ),
       ),
@@ -3866,13 +4569,18 @@ class _ChatWindowState extends State<ChatWindow> {
 
   _ChatAttachment? _attachmentFromMessage(Message message) {
     final url = _messageAttachmentUrl(message);
-    if (url == null) return null;
+    final hasPrivateReference =
+        MessagingAttachmentService.hasPrivateReference(message);
+    final hasRemoteMedia = _messageHasRemoteWhatsAppMedia(message);
+    final externalUrl =
+        _messagingAttachmentService.externalUrlCandidate(message);
 
     final metadata = message.metadata;
     final contentType = metadata['contentType']?.toString() ??
         metadata['content_type']?.toString() ??
         '';
-    final extension = _messageAttachmentExtension(message, url, contentType);
+    final extension =
+        _messageAttachmentExtension(message, url ?? '', contentType);
     final isImage = message.type == 'image' ||
         contentType.toLowerCase().startsWith('image/') ||
         ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(extension);
@@ -3885,11 +4593,14 @@ class _ChatWindowState extends State<ChatWindow> {
       'document_url',
       'storage_url',
       'public_url',
+      'attachment_id',
     ].any((key) => metadata.containsKey(key));
 
     if (message.type != 'image' &&
         message.type != 'file' &&
-        !hasAttachmentMetadata) {
+        !hasAttachmentMetadata &&
+        !hasPrivateReference &&
+        !hasRemoteMedia) {
       return null;
     }
 
@@ -3899,62 +4610,15 @@ class _ChatWindowState extends State<ChatWindow> {
       name: _messageAttachmentName(message, extension),
       extension: extension,
       isImage: isImage,
+      isExternal: url == null &&
+          !hasPrivateReference &&
+          !hasRemoteMedia &&
+          externalUrl != null,
     );
   }
 
   String? _messageAttachmentUrl(Message message) {
-    for (final key in [
-      'url',
-      'media_url',
-      'image_url',
-      'file_url',
-      'documentUrl',
-      'document_url',
-      'storage_url',
-      'public_url',
-      'whatsapp_media_url',
-      'download_url',
-    ]) {
-      final value = message.metadata[key]?.toString().trim();
-      if (value != null && value.startsWith('http')) return value;
-    }
-
-    final mediaMetadata = message.metadata['media'];
-    if (mediaMetadata is Map) {
-      for (final key in [
-        'url',
-        'media_url',
-        'image_url',
-        'file_url',
-        'documentUrl',
-        'document_url',
-      ]) {
-        final value = mediaMetadata[key]?.toString().trim();
-        if (value != null && value.startsWith('http')) return value;
-      }
-    }
-
-    final rawPayload = message.metadata['raw_payload'];
-    if (rawPayload is Map) {
-      final rawMedia = rawPayload['media'];
-      if (rawMedia is Map) {
-        for (final key in [
-          'url',
-          'media_url',
-          'image_url',
-          'file_url',
-          'documentUrl',
-          'document_url',
-        ]) {
-          final value = rawMedia[key]?.toString().trim();
-          if (value != null && value.startsWith('http')) return value;
-        }
-      }
-    }
-
-    final content = message.content.trim();
-    if (content.startsWith('http')) return content;
-    return null;
+    return _messagingAttachmentService.trustedLegacyPublicUrl(message);
   }
 
   bool _messageHasRemoteWhatsAppMedia(Message message) {
@@ -4034,6 +4698,10 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Future<String?> _resolveWhatsAppMediaUrl(Message message) async {
     try {
+      if (MessagingAttachmentService.hasPrivateReference(message)) {
+        return _messagingAttachmentService.createRuntimeSignedUrl(message);
+      }
+
       final response = await Supabase.instance.client.functions.invoke(
         'whatsapp-media',
         body: {'messageId': message.id},
@@ -4052,10 +4720,7 @@ class _ChatWindowState extends State<ChatWindow> {
       final metadataUpdates = Map<String, dynamic>.from(
         (data['metadata'] as Map?)?.cast<String, dynamic>() ?? const {},
       );
-      final resolvedUrl = data['url']?.toString().trim() ??
-          metadataUpdates['url']?.toString().trim() ??
-          metadataUpdates['media_url']?.toString().trim() ??
-          metadataUpdates['document_url']?.toString().trim();
+      final resolvedUrl = data['url']?.toString().trim();
 
       if (resolvedUrl == null || resolvedUrl.isEmpty) return null;
 
@@ -4231,6 +4896,49 @@ class _ChatWindowState extends State<ChatWindow> {
         ),
       ),
     );
+  }
+
+  Widget _buildExternalAttachmentMessage(Message message) {
+    return InkWell(
+      onTap: () => _openExternalAttachmentLink(message),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 260),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFCBD5E1)),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.link_outlined, color: Color(0xFF475569)),
+            SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                'Enlace externo no previsualizado · Toca para abrir',
+                style: TextStyle(
+                  color: Color(0xFF334155),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openExternalAttachmentLink(Message message) async {
+    final candidate = _messagingAttachmentService.externalUrlCandidate(message);
+    final uri = Uri.tryParse(candidate ?? '');
+    if (uri == null || !['https', 'http'].contains(uri.scheme)) return;
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
+        mounted) {
+      _showErrorSnackBar(context, 'No se pudo abrir el enlace externo.');
+    }
   }
 
   Widget _buildFileMessage(
@@ -4452,18 +5160,37 @@ class _ChatWindowState extends State<ChatWindow> {
         '';
   }
 
-  void _openAttachmentViewer(_ChatAttachment attachment) {
+  Future<void> _openAttachmentViewer(_ChatAttachment attachment) async {
     if (!mounted) return;
+    if (attachment.isExternal) {
+      await _openExternalAttachmentLink(attachment.message);
+      return;
+    }
+    // Signed URLs last only a few minutes. Always mint a fresh one for a
+    // private object when the user opens it; preview futures are not authority.
+    final resolvedUrl =
+        MessagingAttachmentService.hasPrivateReference(attachment.message)
+            ? await _resolveWhatsAppMediaUrl(attachment.message)
+            : attachment.url ??
+                await _whatsAppMediaFutureCache.putIfAbsent(
+                  attachment.message.id,
+                  () => _resolveWhatsAppMediaUrl(attachment.message),
+                );
+    if (!mounted) return;
+    if (resolvedUrl == null || resolvedUrl.isEmpty) {
+      _showErrorSnackBar(context, 'No se pudo autorizar este adjunto.');
+      return;
+    }
     ChatAttachmentViewer.show(
       context,
-      url: attachment.url,
+      url: resolvedUrl,
       fileName: attachment.name,
       extension: attachment.extension,
       contentType: _messageAttachmentContentType(attachment.message),
       isImage: attachment.isImage,
       fileContext: _attachmentFileContext(
         attachment.message,
-        url: attachment.url,
+        url: resolvedUrl,
         fileName: attachment.name,
         extension: attachment.extension,
         contentType: _messageAttachmentContentType(attachment.message),
@@ -4472,25 +5199,39 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  void _openMessageAttachmentViewer(Message message, String url) {
+  Future<void> _openMessageAttachmentViewer(
+    Message message,
+    String url,
+  ) async {
     if (!mounted) return;
 
+    final resolvedUrl = MessagingAttachmentService.hasPrivateReference(message)
+        ? await _resolveWhatsAppMediaUrl(message)
+        : url;
+    if (!mounted) return;
+    if (resolvedUrl == null || resolvedUrl.isEmpty) {
+      _whatsAppMediaFutureCache.remove(message.id);
+      _showErrorSnackBar(context, 'No se pudo renovar el acceso al adjunto.');
+      return;
+    }
+
     final contentType = _messageAttachmentContentType(message);
-    final extension = _messageAttachmentExtension(message, url, contentType);
+    final extension =
+        _messageAttachmentExtension(message, resolvedUrl, contentType);
     final isImage = message.type == 'image' ||
         contentType.toLowerCase().startsWith('image/') ||
         ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(extension);
 
     ChatAttachmentViewer.show(
       context,
-      url: url,
+      url: resolvedUrl,
       fileName: _messageAttachmentName(message, extension),
       extension: extension,
       contentType: contentType,
       isImage: isImage,
       fileContext: _attachmentFileContext(
         message,
-        url: url,
+        url: resolvedUrl,
         fileName: _messageAttachmentName(message, extension),
         extension: extension,
         contentType: contentType,
@@ -4541,6 +5282,8 @@ class _ChatWindowState extends State<ChatWindow> {
         metadata['storageBucket'] ?? metadata['storage_bucket'];
     final sourceStoragePath =
         metadata['storagePath'] ?? metadata['storage_path'];
+    final hasPrivateReference =
+        MessagingAttachmentService.hasPrivateReference(message);
 
     return AppFileContext(
       sourceType: isWhatsApp ? 'chat_whatsapp' : 'chat',
@@ -4564,7 +5307,9 @@ class _ChatWindowState extends State<ChatWindow> {
         'conversation_id': widget.conversation.id,
         'message_type': message.type,
         'message_created_at': message.createdAt.toIso8601String(),
-        'url': url,
+        if (!hasPrivateReference) 'url': url,
+        if (hasPrivateReference && metadata['attachment_id'] != null)
+          'source_attachment_id': metadata['attachment_id'],
         'filename': fileName,
         if (safeExtension != null) 'extension': safeExtension,
         if (safeContentType != null) 'content_type': safeContentType,
@@ -4730,6 +5475,145 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
+  Widget _buildTimelineDaySeparator(BuildContext context, DateTime day) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final label = day == today
+        ? 'Hoy'
+        : day == today.subtract(const Duration(days: 1))
+            ? 'Ayer'
+            : DateFormat('dd/MM/yyyy').format(day);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Expanded(child: Divider(color: colorScheme.outlineVariant)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(child: Divider(color: colorScheme.outlineVariant)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryBoundary(
+    BuildContext context,
+    ChatProvider provider, {
+    required bool hasMessages,
+  }) {
+    final conversationId = widget.conversation.id;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final error = provider.olderMessagesErrorForConversation(conversationId);
+
+    if (provider.isLoadingOlderMessages(conversationId)) {
+      return const SizedBox(
+        height: 44,
+        child: Center(
+          child: SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    if (error != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Flexible(
+              child: Text(
+                error,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: colorScheme.error,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            TextButton(
+              onPressed: () => provider.retryOlderMessages(conversationId),
+              child: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (provider.hasMoreMessages(conversationId)) {
+      return Center(
+        child: TextButton.icon(
+          onPressed: () => provider.loadOlderMessages(conversationId),
+          icon: const Icon(Icons.history_rounded, size: 17),
+          label: const Text('Cargar mensajes anteriores'),
+        ),
+      );
+    }
+
+    if (!hasMessages) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Text(
+        'Inicio de la conversación',
+        textAlign: TextAlign.center,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageStreamErrorBanner(
+    BuildContext context,
+    ChatProvider provider,
+    String message,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 7, 8, 7),
+      color: colorScheme.errorContainer,
+      child: Row(
+        children: [
+          Icon(
+            Icons.cloud_off_outlined,
+            size: 17,
+            color: colorScheme.onErrorContainer,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: colorScheme.onErrorContainer,
+                  ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => provider.retryConversationMessages(
+              widget.conversation.id,
+            ),
+            child: const Text('Reintentar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _buildConversationSubtitle(Conversation conversation) {
     final parts = <String>[conversation.channelLabel];
 
@@ -4745,6 +5629,8 @@ class _ChatWindowState extends State<ChatWindow> {
       'order' => 'Pedido web',
       'job' => 'Servicio técnico',
       'invoice' => 'Factura',
+      'purchase_invoice' => 'Compra',
+      'supplier' => 'Proveedor',
       'bike' => 'Bicicleta',
       'product' => 'Producto',
       'customer' => 'Cliente',
@@ -4757,6 +5643,8 @@ class _ChatWindowState extends State<ChatWindow> {
       'order' => Icons.shopping_cart_outlined,
       'job' => Icons.build_outlined,
       'invoice' => Icons.receipt_long_outlined,
+      'purchase_invoice' => Icons.inventory_2_outlined,
+      'supplier' => Icons.storefront_outlined,
       _ => Icons.article_outlined,
     };
   }
@@ -4851,6 +5739,16 @@ class _ChatWindowState extends State<ChatWindow> {
 
   /// Show dialog to link this conversation to a Job or Invoice
   void _showAssignContextDialog(BuildContext context) {
+    if (widget.conversation.isSupplierConversation) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'El contexto de proveedor se administra desde su ficha o documento de compra.',
+          ),
+        ),
+      );
+      return;
+    }
     showDialog(
       context: context,
       builder: (ctx) => AssignContextDialog(
@@ -4917,7 +5815,7 @@ class _ChatWindowState extends State<ChatWindow> {
     }
   }
 
-  void _showSmartActions(BuildContext context) {
+  void _showSmartActions(BuildContext context, {GlobalKey? anchorKey}) {
     if (!_canUseSmartActions) {
       _showErrorSnackBar(
         context,
@@ -4928,7 +5826,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
     _toggleComposerMenu(
       name: 'smart_actions',
-      anchorKey: _smartActionsButtonKey,
+      anchorKey: anchorKey ?? _composerActionsButtonKey,
       width: 460,
       estimatedHeight: _isWhatsAppConversation ? 560 : 400,
       panelBuilder: (overlayContext) => _buildSmartActionsPanel(
@@ -4943,6 +5841,7 @@ class _ChatWindowState extends State<ChatWindow> {
     required BuildContext parentContext,
   }) {
     final theme = Theme.of(overlayContext);
+    final smartActions = _smartActionCapabilities;
     final showingAutomaticMessages = _showAutomaticMessagesPanel;
     final panelHeight = _isWhatsAppConversation ? 560.0 : 400.0;
     final headerColor =
@@ -5078,51 +5977,71 @@ class _ChatWindowState extends State<ChatWindow> {
                           },
                         ),
                         const SizedBox(height: 12),
-                        if (_isWhatsAppConversation) ...[
+                        if (_isWhatsAppConversation &&
+                            smartActions.hasInteractiveActions) ...[
                           _buildPopoverSectionHeader(
                             'Solicitudes al cliente',
-                            'Acciones con respuesta o pago desde WhatsApp',
+                            'Disponibles según el contexto ERP vinculado',
                           ),
                           const SizedBox(height: 8),
-                          _buildCommandActionTile(
-                            icon: Icons.assignment_turned_in_outlined,
-                            color: const Color(0xFFD97706),
-                            title: 'Aprobación de presupuesto',
-                            subtitle:
-                                'Solicita aprobar o rechazar el presupuesto activo',
-                            badge: 'INTERACTIVO',
-                            onTap: () {
-                              _removeComposerMenuOverlay(notify: true);
-                              _sendActionRequest(
-                                  parentContext, 'approve_quote');
-                            },
-                          ),
-                          _buildCommandActionTile(
-                            icon: Icons.payments_outlined,
-                            color: const Color(0xFF059669),
-                            title: 'Solicitud de pago',
-                            subtitle:
-                                'Envía el botón de pago para la factura asociada',
-                            badge: 'COBRO',
-                            onTap: () {
-                              _removeComposerMenuOverlay(notify: true);
-                              _sendActionRequest(parentContext, 'pay_now');
-                            },
-                          ),
-                          _buildCommandActionTile(
-                            icon: Icons.inventory_2_outlined,
-                            color: const Color(0xFF2563EB),
-                            title: 'Confirmación de entrega',
-                            subtitle:
-                                'El cliente confirma recepción del producto o servicio',
-                            badge: 'ENTREGA',
-                            onTap: () {
-                              _removeComposerMenuOverlay(notify: true);
-                              _sendActionRequest(
-                                parentContext,
-                                'confirm_delivery',
-                              );
-                            },
+                          if (smartActions.canRequestQuoteApproval)
+                            _buildCommandActionTile(
+                              icon: Icons.assignment_turned_in_outlined,
+                              color: const Color(0xFFD97706),
+                              title: 'Aprobación de presupuesto',
+                              subtitle:
+                                  'Solicita aprobar o rechazar el presupuesto activo',
+                              badge: 'INTERACTIVO',
+                              onTap: () {
+                                _removeComposerMenuOverlay(notify: true);
+                                _sendActionRequest(
+                                  parentContext,
+                                  'approve_quote',
+                                );
+                              },
+                            ),
+                          if (smartActions.canRequestPayment)
+                            _buildCommandActionTile(
+                              icon: Icons.payments_outlined,
+                              color: const Color(0xFF059669),
+                              title: 'Solicitud de pago',
+                              subtitle:
+                                  'Envía el botón de pago para la venta asociada',
+                              badge: 'COBRO',
+                              onTap: () {
+                                _removeComposerMenuOverlay(notify: true);
+                                _sendActionRequest(parentContext, 'pay_now');
+                              },
+                            ),
+                          if (smartActions.canRequestDeliveryConfirmation)
+                            _buildCommandActionTile(
+                              icon: Icons.inventory_2_outlined,
+                              color: const Color(0xFF2563EB),
+                              title: 'Confirmación de entrega',
+                              subtitle:
+                                  'El cliente confirma recepción del producto o servicio',
+                              badge: 'ENTREGA',
+                              onTap: () {
+                                _removeComposerMenuOverlay(notify: true);
+                                _sendActionRequest(
+                                  parentContext,
+                                  'confirm_delivery',
+                                );
+                              },
+                            ),
+                          if (smartActions.explanation != null) ...[
+                            const SizedBox(height: 6),
+                            _buildSmartActionContextNotice(
+                              theme,
+                              smartActions.explanation!,
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                        ] else if (_isWhatsAppConversation) ...[
+                          _buildSmartActionContextNotice(
+                            theme,
+                            smartActions.explanation ??
+                                'Vincula un trabajo o una venta para habilitar solicitudes al cliente.',
                           ),
                           const SizedBox(height: 12),
                         ] else ...[
@@ -5130,22 +6049,6 @@ class _ChatWindowState extends State<ChatWindow> {
                           const SizedBox(height: 12),
                         ],
                         _buildAutomaticMessagesSection(theme),
-                        if (_isWhatsAppConversation) ...[
-                          const SizedBox(height: 10),
-                          _buildCommandActionTile(
-                            icon: Icons.history_toggle_off_outlined,
-                            color: const Color(0xFF64748B),
-                            title: 'Enviar presupuesto antiguo',
-                            subtitle:
-                                'Compatibilidad: actualiza estado y notifica',
-                            badge: 'LEGACY',
-                            compact: true,
-                            onTap: () {
-                              _removeComposerMenuOverlay(notify: true);
-                              _handleSendQuote(parentContext);
-                            },
-                          ),
-                        ],
                       ],
                     ],
                   ),
@@ -5202,6 +6105,38 @@ class _ChatWindowState extends State<ChatWindow> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSmartActionContextNotice(ThemeData theme, String message) {
+    final colorScheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.64),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline,
+            size: 18,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.35,
+              ),
             ),
           ),
         ],
@@ -5683,15 +6618,21 @@ class _ChatWindowState extends State<ChatWindow> {
       'share_kind': 'route',
       'route': link.route,
       'title': link.title,
-      'url': link.link,
-      'deep_link': link.uri.toString(),
-      if (link.webUri != null) 'web_link': link.webUri.toString(),
     };
   }
 
   /// Send an action request message to the customer
   Future<void> _sendActionRequest(
       BuildContext context, String actionType) async {
+    final smartActions = _smartActionCapabilities;
+    if (!smartActions.isEligibleCustomerConversation) {
+      _showErrorSnackBar(
+        context,
+        'Las solicitudes operativas solo se envían a conversaciones de clientes.',
+      );
+      return;
+    }
+
     if (!_isWhatsAppConversation) {
       _showErrorSnackBar(
         context,
@@ -5700,6 +6641,17 @@ class _ChatWindowState extends State<ChatWindow> {
       return;
     }
 
+    if (!smartActions.allows(actionType)) {
+      _showErrorSnackBar(
+        context,
+        smartActions.explanation ??
+            'La conversación no tiene el contexto necesario para esta solicitud.',
+      );
+      return;
+    }
+
+    final bikeshopService = context.read<BikeshopService>();
+    final salesService = context.read<SalesService>();
     final contextType = _effectiveContextType;
     final contextId = _effectiveContextId;
 
@@ -5712,6 +6664,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
     String? invoiceId;
     String? jobId;
+    MechanicJob? job;
     double? amount;
     String? actionTargetId;
     String? actionKind;
@@ -5719,13 +6672,14 @@ class _ChatWindowState extends State<ChatWindow> {
     if (contextType == 'job') {
       jobId = contextId;
       try {
-        final bikeshopService = context.read<BikeshopService>();
-        final job = await bikeshopService.getJobById(contextId);
+        job = await bikeshopService.getJobById(contextId);
         if (job?.invoiceId != null) {
           invoiceId = job?.invoiceId;
         }
       } catch (e) {
-        _showErrorSnackBar(context, 'Error al obtener datos del trabajo.');
+        if (context.mounted) {
+          _showErrorSnackBar(context, 'Error al obtener datos del trabajo.');
+        }
         return;
       }
     } else if (contextType == 'invoice') {
@@ -5735,7 +6689,6 @@ class _ChatWindowState extends State<ChatWindow> {
     // Get invoice amount for payment requests
     if (invoiceId != null && actionType == 'pay_now') {
       try {
-        final salesService = context.read<SalesService>();
         final invoice = await salesService.fetchInvoice(invoiceId);
         amount = invoice?.balance ?? invoice?.total ?? 0;
       } catch (e) {
@@ -5743,14 +6696,23 @@ class _ChatWindowState extends State<ChatWindow> {
       }
     }
 
+    if (!context.mounted) return;
+
     if (actionType == 'approve_quote' && jobId == null) {
-      if (invoiceId == null) {
-        _showErrorSnackBar(
-          context,
-          'No se encontró una factura asociada para solicitar la aprobación.',
-        );
-        return;
-      }
+      _showErrorSnackBar(
+        context,
+        'La aprobación requiere un presupuesto de taller asociado, no una factura.',
+      );
+      return;
+    }
+
+    if (actionType == 'approve_quote' &&
+        (job == null || !job.isQuotationWorkflow)) {
+      _showErrorSnackBar(
+        context,
+        'El trabajo asociado no tiene un presupuesto pendiente de decisión.',
+      );
+      return;
     }
 
     if (actionType == 'confirm_delivery' && jobId == null) {
@@ -5773,9 +6735,10 @@ class _ChatWindowState extends State<ChatWindow> {
     String content;
     switch (actionType) {
       case 'approve_quote':
-        content = 'Por favor revisa y aprueba el presupuesto adjunto.';
-        actionTargetId = invoiceId;
-        actionKind = 'invoice';
+        content =
+            'Por favor revisa y responde el ${job!.proposalDocumentLabelLower} de ${job.jobNumber}.';
+        actionTargetId = jobId;
+        actionKind = 'job';
         break;
       case 'pay_now':
         content = amount != null
@@ -5802,19 +6765,7 @@ class _ChatWindowState extends State<ChatWindow> {
     }
 
     try {
-      final whatsappService = WhatsAppService();
-
-      // For approve_quote, update invoice status to 'sent' first
-      if (actionType == 'approve_quote' && invoiceId != null) {
-        try {
-          final salesService = context.read<SalesService>();
-          await salesService.updateInvoiceStatus(invoiceId, InvoiceStatus.sent);
-        } catch (e) {
-          debugPrint('Error updating invoice status: $e');
-        }
-      }
-
-      final success = await _sendWhatsAppInteractiveRequest(
+      final receipt = await _sendWhatsAppInteractiveRequest(
         context: context,
         actionType: actionType,
         actionKind: actionKind,
@@ -5827,184 +6778,30 @@ class _ChatWindowState extends State<ChatWindow> {
         metadata: {
           'action_type': actionType,
           'target_id': actionTargetId,
-          'invoiceId': invoiceId,
+          if (invoiceId != null) 'invoiceId': invoiceId,
           if (jobId != null) 'jobId': jobId,
         },
       );
 
-      if (!success || !mounted) {
+      if (!receipt.isSuccess || !context.mounted) {
         return;
       }
 
-      if (mounted) {
-        _showWhatsAppResultSnackbar(
-          context: context,
-          deliveryMethod: whatsappService.lastDeliveryMethod,
-          successMessage: actionType == 'approve_quote'
-              ? 'Presupuesto enviado por WhatsApp Cloud API'
-              : 'Solicitud enviada por WhatsApp Cloud API',
-          fallbackMessage: actionType == 'approve_quote'
-              ? 'WhatsApp abierto con el presupuesto prellenado'
-              : 'WhatsApp abierto con la solicitud prellenada',
-        );
-      }
+      _showWhatsAppResultSnackbar(
+        context: context,
+        deliveryMethod: receipt.deliveryMethod,
+        successMessage: actionType == 'approve_quote'
+            ? 'Presupuesto enviado por WhatsApp Cloud API'
+            : 'Solicitud enviada por WhatsApp Cloud API',
+        fallbackMessage: actionType == 'approve_quote'
+            ? 'WhatsApp abierto con el presupuesto prellenado'
+            : 'WhatsApp abierto con la solicitud prellenada',
+      );
     } catch (e) {
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
-      }
-    }
-  }
-
-  Future<void> _handleSendQuote(BuildContext context) async {
-    if (!_isWhatsAppConversation) {
-      _showErrorSnackBar(
-        context,
-        'El envío de presupuesto por WhatsApp requiere una conversación de WhatsApp.',
-      );
-      return;
-    }
-
-    final contextType = _effectiveContextType;
-    final contextId = _effectiveContextId;
-
-    if (contextId == null) {
-      _showErrorSnackBar(
-          context, 'No hay contexto asociado a este chat (Job/Invoice).');
-      return;
-    }
-
-    String? jobId;
-    String? invoiceId;
-
-    if (contextType == 'job') {
-      jobId = contextId;
-      try {
-        final bikeshopService = context.read<BikeshopService>();
-        final job = await bikeshopService.getJobById(jobId);
-        invoiceId = job?.invoiceId;
-      } catch (e) {
-        _showErrorSnackBar(context, 'Error al obtener datos del trabajo.');
-        return;
-      }
-    } else if (contextType == 'invoice') {
-      invoiceId = contextId;
-    } else {
-      _showErrorSnackBar(
-        context,
-        'El envío de presupuesto por WhatsApp requiere una factura o trabajo asociado.',
-      );
-      return;
-    }
-
-    if (invoiceId == null) {
-      _showErrorSnackBar(
-        context,
-        'No se encontró una factura asociada para enviar el presupuesto.',
-      );
-      return;
-    }
-
-    // Confirm Action
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('¿Enviar Presupuesto?'),
-        content: const Text(
-            'Esto cambiará el estado de la factura a "Enviado" y enviará una tarjeta de confirmación al cliente.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Enviar')),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    try {
-      // 1. Update Invoice Status
-      await context
-          .read<SalesService>()
-          .updateInvoiceStatus(invoiceId, InvoiceStatus.sent);
-
-      // 2. Generate and Upload PDF
-      String? documentUrl;
-      String? documentFilename;
-      try {
-        final salesService = context.read<SalesService>();
-        final invoiceToPrint = await salesService.fetchInvoice(
-          invoiceId,
-          refresh: true,
-        );
-        if (invoiceToPrint != null) {
-          final resolvedBikeNames = await InvoicePdfGenerator.resolveBikeNames(
-              context, invoiceToPrint);
-          final pdfDoc = await InvoicePdfGenerator.generateInvoicePDF(
-              context, invoiceToPrint, resolvedBikeNames);
-          final pdfBytes = await pdfDoc.save();
-
-          final db = context.read<DatabaseService>();
-          final filename =
-              'presupuestos/presupuesto_${invoiceToPrint.invoiceNumber}_${DateTime.now().millisecondsSinceEpoch}.pdf';
-
-          await db.supabase.storage.from('vinabike-assets').uploadBinary(
-                filename,
-                pdfBytes,
-                fileOptions: const FileOptions(
-                    contentType: 'application/pdf', upsert: true),
-              );
-
-          documentUrl = db.supabase.storage
-              .from('vinabike-assets')
-              .getPublicUrl(filename);
-          documentFilename = 'Presupuesto_${invoiceToPrint.invoiceNumber}.pdf';
-        }
-      } catch (e) {
-        debugPrint('Error generating/uploading PDF for quote: $e');
-      }
-
-      final whatsappService = WhatsAppService();
-      final success = await _sendWhatsAppInteractiveRequest(
-        context: context,
-        actionType: 'approve_quote',
-        actionKind: 'invoice',
-        actionTargetId: invoiceId,
-        message:
-            '📋 Presupuesto enviado\nPor favor revisa y confirma los detalles para proceder.',
-        contextType: contextType,
-        contextId: contextId,
-        jobId: jobId,
-        markQuoteSent: true,
-        documentUrl: documentUrl,
-        documentFilename: documentFilename,
-        metadata: {
-          'action_type': 'approve_quote',
-          'target_id': invoiceId,
-          'invoiceId': invoiceId,
-          if (jobId != null) 'jobId': jobId,
-        },
-      );
-
-      if (!success || !mounted) {
-        return;
-      }
-
-      if (mounted) {
-        _showWhatsAppResultSnackbar(
-          context: context,
-          deliveryMethod: whatsappService.lastDeliveryMethod,
-          successMessage: 'Presupuesto enviado por WhatsApp Cloud API',
-          fallbackMessage: 'WhatsApp abierto con el presupuesto prellenado',
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        _showErrorSnackBar(context, 'Error al enviar presupuesto: $e');
       }
     }
   }
@@ -6096,7 +6893,7 @@ class _ChatWindowState extends State<ChatWindow> {
         : bindingInboundAt;
   }
 
-  Future<bool> _sendWhatsAppInteractiveRequest({
+  Future<WhatsAppSendReceipt> _sendWhatsAppInteractiveRequest({
     required BuildContext context,
     required String actionType,
     required String actionKind,
@@ -6118,6 +6915,7 @@ class _ChatWindowState extends State<ChatWindow> {
       );
     }
 
+    final conversationId = widget.conversation.id;
     final contact = await _resolveConversationWhatsAppContact();
     final phone = contact?['phone']?.toString();
 
@@ -6131,12 +6929,12 @@ class _ChatWindowState extends State<ChatWindow> {
     final whatsappService = WhatsAppService();
 
     return whatsappService.sendInteractiveAction(
-      context: context,
+      context: context.mounted ? context : null,
       customerPhone: phone,
       customerName: customerName == null || customerName.isEmpty
           ? 'Cliente'
           : customerName,
-      conversationId: widget.conversation.id,
+      conversationId: conversationId,
       customerId: customerId ?? contact?['customer_id']?.toString(),
       contextType: contextType,
       contextId: contextId,
@@ -6167,7 +6965,9 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   Widget _buildWhatsAppServiceWindowGauge(BuildContext context) {
-    final messages = context.watch<ChatProvider>().activeMessages;
+    final messages = context
+        .watch<ChatProvider>()
+        .messagesForConversation(widget.conversation.id);
 
     return FutureBuilder<Map<String, dynamic>?>(
       future: _getWhatsAppContactFuture(),
@@ -6238,10 +7038,13 @@ class _ChatWindowState extends State<ChatWindow> {
     return '${duration.inMinutes.clamp(0, 59)}m';
   }
 
-  void _showWhatsAppTemplatePicker({String? pendingText}) {
+  void _showWhatsAppTemplatePicker({
+    String? pendingText,
+    GlobalKey? anchorKey,
+  }) {
     _toggleComposerMenu(
       name: 'whatsapp_templates',
-      anchorKey: _templateButtonKey,
+      anchorKey: anchorKey ?? _composerActionsButtonKey,
       width: 420,
       estimatedHeight: 390,
       panelBuilder: (overlayContext) => _buildWhatsAppTemplatePanel(
@@ -6380,10 +7183,14 @@ class _ChatWindowState extends State<ChatWindow> {
     _removeComposerMenuOverlay(notify: true);
     final chatProvider = context.read<ChatProvider>();
     final whatsappService = WhatsAppService();
+    final conversationId = widget.conversation.id;
+    final contextType = _effectiveContextType;
+    final contextId = _effectiveContextId;
+    final contactFuture = _getWhatsAppContactFuture();
     setState(() => _isSendingMessage = true);
 
     try {
-      final contact = await _getWhatsAppContactFuture();
+      final contact = await contactFuture;
       final phone = contact?['phone']?.toString();
       final customerName = contact?['name']?.toString().trim();
 
@@ -6391,25 +7198,25 @@ class _ChatWindowState extends State<ChatWindow> {
         throw Exception('La conversación no tiene teléfono asociado.');
       }
 
-      final success = await whatsappService.sendTemplateMessage(
+      final receipt = await whatsappService.sendTemplateMessage(
         option: option,
         customerPhone: phone,
         customerName: customerName == null || customerName.isEmpty
             ? 'cliente'
             : customerName,
-        conversationId: widget.conversation.id,
-        contextType: _effectiveContextType,
-        contextId: _effectiveContextId,
+        conversationId: conversationId,
+        contextType: contextType,
+        contextId: contextId,
       );
 
-      if (!success) {
+      if (!receipt.isSuccess) {
         throw Exception('Meta rechazó la plantilla seleccionada.');
       }
 
       final pending = pendingText?.trim();
       if (pending != null && pending.isNotEmpty) {
         chatProvider.setConversationDraft(
-          widget.conversation.id,
+          conversationId,
           pending,
           title: 'Mensaje pendiente de ventana WhatsApp',
           subtitle:
@@ -6417,14 +7224,14 @@ class _ChatWindowState extends State<ChatWindow> {
         );
       }
 
+      if (!mounted) return;
       if (_messageController.text.trim() == pending) {
         _messageController.clear();
       }
 
-      if (!mounted) return;
       _showWhatsAppResultSnackbar(
         context: context,
-        deliveryMethod: whatsappService.lastDeliveryMethod,
+        deliveryMethod: receipt.deliveryMethod,
         successMessage: 'Plantilla enviada: ${option.label}',
         fallbackMessage: 'WhatsApp abierto con la plantilla prellenada',
       );
@@ -6447,6 +7254,10 @@ class _ChatWindowState extends State<ChatWindow> {
     BuildContext context, {
     required bool showSmartActions,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final hasBlockingOutcomeUnknownAttachment =
+        _hasBlockingOutcomeUnknownAttachment;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -6459,61 +7270,70 @@ class _ChatWindowState extends State<ChatWindow> {
           const SizedBox(height: 8),
         ],
         Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            if (showSmartActions)
-              KeyedSubtree(
-                key: _smartActionsButtonKey,
-                child: IconButton(
-                  icon: const Icon(Icons.flash_on, color: Colors.amber),
-                  tooltip: 'Acciones Rápidas',
-                  onPressed: () => _showSmartActions(context),
-                ),
-              ),
             KeyedSubtree(
-              key: _emojiButtonKey,
-              child: IconButton(
-                icon: Icon(
-                  _isEmojiPickerOpen
-                      ? Icons.keyboard_alt_outlined
-                      : Icons.emoji_emotions_outlined,
-                ),
-                tooltip: _isEmojiPickerOpen ? 'Cerrar emojis' : 'Emojis',
-                onPressed: _toggleEmojiPicker,
-              ),
-            ),
-            KeyedSubtree(
-              key: _attachmentButtonKey,
-              child: IconButton(
-                icon: const Icon(Icons.attach_file),
-                tooltip: 'Adjuntar',
-                onPressed: _showAttachmentOptions,
-              ),
-            ),
-            if (_isWhatsAppConversation)
-              KeyedSubtree(
-                key: _templateButtonKey,
+              key: _composerActionsButtonKey,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 1),
                 child: IconButton(
-                  icon: const Icon(Icons.dynamic_form_outlined),
-                  tooltip: 'Plantillas WhatsApp',
-                  onPressed: () => _showWhatsAppTemplatePicker(
-                    pendingText: _messageController.text.trim(),
+                  tooltip: hasBlockingOutcomeUnknownAttachment
+                      ? 'Esperando confirmación del adjunto'
+                      : 'Agregar al mensaje',
+                  onPressed: hasBlockingOutcomeUnknownAttachment
+                      ? null
+                      : () => _showComposerActionsMenu(
+                            context,
+                            showSmartActions: showSmartActions,
+                          ),
+                  style: IconButton.styleFrom(
+                    foregroundColor: colorScheme.onSurfaceVariant,
+                    backgroundColor: colorScheme.surfaceContainerHighest,
+                    minimumSize: const Size.square(42),
+                  ),
+                  icon: AnimatedRotation(
+                    turns: _activeComposerMenuName == 'composer_actions' ||
+                            _isEmojiPickerOpen
+                        ? 0.125
+                        : 0,
+                    duration: const Duration(milliseconds: 150),
+                    child: const Icon(Icons.add_rounded),
                   ),
                 ),
               ),
+            ),
+            const SizedBox(width: 8),
             Expanded(
               child: CompositedTransformTarget(
                 link: _layerLink,
                 child: TextField(
                   controller: _messageController,
                   focusNode: _focusNode,
-                  decoration: const InputDecoration(
+                  minLines: 1,
+                  maxLines: 5,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
                     hintText: 'Escribe un mensaje... (# para ref)',
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
+                    filled: true,
+                    fillColor: colorScheme.surfaceContainerLowest,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 11,
                     ),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(24)),
+                      borderRadius: BorderRadius.circular(11),
+                      borderSide: BorderSide(color: colorScheme.outlineVariant),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(11),
+                      borderSide: BorderSide(color: colorScheme.outlineVariant),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(11),
+                      borderSide: BorderSide(
+                        color: colorScheme.primary,
+                        width: 1.4,
+                      ),
                     ),
                   ),
                   onSubmitted: (_) => _sendComposer(),
@@ -6521,10 +7341,25 @@ class _ChatWindowState extends State<ChatWindow> {
               ),
             ),
             const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.send, color: Colors.blue),
-              onPressed:
-                  _isSendingPendingAttachments ? null : () => _sendComposer(),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.square(42),
+                maximumSize: const Size.square(42),
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(11),
+                ),
+              ),
+              onPressed: _isSendingPendingAttachments ||
+                      hasBlockingOutcomeUnknownAttachment
+                  ? null
+                  : () => _sendComposer(),
+              child: _isSendingPendingAttachments
+                  ? const SizedBox.square(
+                      dimension: 17,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send_rounded, size: 19),
             ),
           ],
         ),
@@ -6532,13 +7367,94 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
+  void _showComposerActionsMenu(
+    BuildContext parentContext, {
+    required bool showSmartActions,
+  }) {
+    final smartActions = _smartActionCapabilities;
+    _toggleComposerMenu(
+      name: 'composer_actions',
+      anchorKey: _composerActionsButtonKey,
+      width: 330,
+      estimatedHeight: _isWhatsAppConversation ? 330 : 275,
+      panelBuilder: (overlayContext) => _buildComposerPopoverPanel(
+        context: overlayContext,
+        icon: Icons.add_circle_outline_rounded,
+        iconColor: _accentBlue,
+        title: 'Agregar al mensaje',
+        children: [
+          _buildComposerPopoverAction(
+            icon: Icons.attach_file_rounded,
+            color: const Color(0xFF2563EB),
+            title: 'Foto o archivo',
+            subtitle: 'Previsualiza antes de enviar',
+            onTap: () => _showAttachmentOptions(
+              anchorKey: _composerActionsButtonKey,
+            ),
+          ),
+          _buildComposerPopoverAction(
+            icon: Icons.emoji_emotions_outlined,
+            color: const Color(0xFFD97706),
+            title: 'Emoji',
+            subtitle: 'Insertar en el punto del cursor',
+            onTap: _toggleEmojiPicker,
+          ),
+          if (showSmartActions)
+            _buildComposerPopoverAction(
+              icon: Icons.bolt_outlined,
+              color: const Color(0xFF7C3AED),
+              title: smartActions.hasInteractiveActions
+                  ? 'Solicitud al cliente'
+                  : 'Mensajes para el cliente',
+              subtitle: smartActions.hasInteractiveActions
+                  ? 'Acciones válidas para el contexto actual'
+                  : smartActions.explanation ??
+                      'Textos preparados usando datos del ERP',
+              onTap: () => _showSmartActions(
+                parentContext,
+                anchorKey: _composerActionsButtonKey,
+              ),
+            ),
+          if (_isWhatsAppConversation)
+            _buildComposerPopoverAction(
+              icon: Icons.dynamic_form_outlined,
+              color: const Color(0xFF0F766E),
+              title: 'Plantilla WhatsApp',
+              subtitle: 'Abrir o reabrir la ventana de 24 horas',
+              onTap: () => _showWhatsAppTemplatePicker(
+                pendingText: _messageController.text.trim(),
+                anchorKey: _composerActionsButtonKey,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPendingAttachmentTray(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final count = _pendingAttachments.length;
+    final hasOutcomeUnknown =
+        _pendingAttachments.any((attachment) => attachment.outcomeUnknown);
+    final hasBlockingOutcome = _hasBlockingOutcomeUnknownAttachment;
+    final hasReplaySafeOutcome = _pendingAttachments.any(
+      (attachment) => attachment.outcomeUnknown && attachment.canRetrySafely,
+    );
+    final blockedReservation = _pendingAttachments
+        .where(
+          (attachment) =>
+              attachment.outcomeUnknown && !attachment.canRetrySafely,
+        )
+        .firstOrNull
+        ?.reservation;
+    final blockedReservationId = blockedReservation?.id;
+    final reservationLabel = blockedReservationId?.substring(
+      blockedReservationId.length > 8 ? blockedReservationId.length - 8 : 0,
+    );
 
     return Container(
-      constraints: const BoxConstraints(maxHeight: 142),
+      constraints: BoxConstraints(maxHeight: hasBlockingOutcome ? 166 : 142),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
@@ -6558,18 +7474,59 @@ class _ChatWindowState extends State<ChatWindow> {
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: Text(
-                  count == 1 ? 'Adjunto listo' : '$count adjuntos listos',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hasBlockingOutcome
+                          ? 'Esperando confirmación de WhatsApp'
+                          : hasOutcomeUnknown
+                              ? hasReplaySafeOutcome
+                                  ? 'Sin confirmación · reintento seguro disponible'
+                                  : 'Resultado incierto'
+                              : count == 1
+                                  ? 'Adjunto listo'
+                                  : '$count adjuntos listos',
+                      key: ValueKey(hasOutcomeUnknown),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    if (hasBlockingOutcome) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Reserva${reservationLabel == null ? '' : ' · $reservationLabel'} conservada para evitar duplicados.',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
+              if (hasOutcomeUnknown)
+                Tooltip(
+                  message: hasBlockingOutcome
+                      ? _pendingAttachmentMutationBlockedMessage
+                      : hasReplaySafeOutcome
+                          ? 'Reutiliza la misma reserva sin crear otro mensaje'
+                          : 'Verifica el chat antes de reenviar',
+                  child: Icon(
+                    hasBlockingOutcome
+                        ? Icons.lock_clock_outlined
+                        : Icons.help_outline_rounded,
+                    size: 17,
+                    color: colorScheme.tertiary,
+                  ),
+                ),
               TextButton(
-                onPressed: _isSendingPendingAttachments
+                onPressed: _isSendingPendingAttachments || hasBlockingOutcome
                     ? null
                     : _clearPendingAttachments,
                 style: TextButton.styleFrom(
@@ -6610,6 +7567,8 @@ class _ChatWindowState extends State<ChatWindow> {
     final extensionLabel = attachment.extension.isEmpty
         ? 'ARCHIVO'
         : attachment.extension.toUpperCase();
+    final removalBlocked =
+        attachment.outcomeUnknown && !attachment.canRetrySafely;
 
     return SizedBox(
       width: 112,
@@ -6703,22 +7662,31 @@ class _ChatWindowState extends State<ChatWindow> {
           Positioned(
             top: -7,
             right: -7,
-            child: IgnorePointer(
-              ignoring: _isSendingPendingAttachments,
-              child: AnimatedOpacity(
-                opacity: _isSendingPendingAttachments ? 0.45 : 1,
-                duration: const Duration(milliseconds: 120),
-                child: Material(
-                  color: colorScheme.surface,
-                  shape: const CircleBorder(),
-                  elevation: 2,
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: () => _removePendingAttachment(attachment.id),
-                    child: const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: Icon(Icons.close, size: 14),
+            child: Tooltip(
+              message: removalBlocked
+                  ? _pendingAttachmentMutationBlockedMessage
+                  : 'Quitar adjunto',
+              child: IgnorePointer(
+                ignoring: _isSendingPendingAttachments || removalBlocked,
+                child: AnimatedOpacity(
+                  opacity:
+                      _isSendingPendingAttachments || removalBlocked ? 0.45 : 1,
+                  duration: const Duration(milliseconds: 120),
+                  child: Material(
+                    color: colorScheme.surface,
+                    shape: const CircleBorder(),
+                    elevation: 2,
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: () => _removePendingAttachment(attachment.id),
+                      child: SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: Icon(
+                          removalBlocked ? Icons.lock_outline : Icons.close,
+                          size: 14,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -6741,6 +7709,23 @@ class _ChatWindowState extends State<ChatWindow> {
                 ),
               ),
             ),
+          if (attachment.outcomeUnknown && !_isSendingPendingAttachments)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color:
+                        colorScheme.tertiaryContainer.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.help_outline_rounded,
+                    color: colorScheme.onTertiaryContainer,
+                    size: 24,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -6758,8 +7743,8 @@ class _ChatWindowState extends State<ChatWindow> {
     final overlayBox = Overlay.of(
       overlayContext,
     ).context.findRenderObject() as RenderBox?;
-    final buttonBox =
-        _emojiButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    final buttonBox = _composerActionsButtonKey.currentContext
+        ?.findRenderObject() as RenderBox?;
 
     final screenSize = MediaQuery.sizeOf(overlayContext);
     final panelWidth = screenSize.width < 430 ? screenSize.width - 24 : 390.0;
@@ -7338,6 +8323,41 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
+  _MessageGrouping _messageGroupingFor(
+    Message message,
+    List<Message> messages,
+  ) {
+    final index =
+        messages.indexWhere((candidate) => candidate.id == message.id);
+    if (index < 0) return const _MessageGrouping();
+    final previous = index > 0 ? messages[index - 1] : null;
+    final next = index + 1 < messages.length ? messages[index + 1] : null;
+    return _MessageGrouping(
+      withPrevious:
+          previous != null && _messagesBelongToSameGroup(previous, message),
+      withNext: next != null && _messagesBelongToSameGroup(message, next),
+    );
+  }
+
+  bool _messagesBelongToSameGroup(Message older, Message newer) {
+    if (older.type == 'system' ||
+        newer.type == 'system' ||
+        older.type == 'action_request' ||
+        newer.type == 'action_request') {
+      return false;
+    }
+    if (older.isMe != newer.isMe || older.senderId != newer.senderId) {
+      return false;
+    }
+    if (older.createdAt.year != newer.createdAt.year ||
+        older.createdAt.month != newer.createdAt.month ||
+        older.createdAt.day != newer.createdAt.day) {
+      return false;
+    }
+    final gap = newer.createdAt.difference(older.createdAt);
+    return !gap.isNegative && gap <= const Duration(minutes: 4);
+  }
+
   Widget _buildMessageBubble(
     BuildContext context,
     Message msg,
@@ -7347,6 +8367,7 @@ class _ChatWindowState extends State<ChatWindow> {
       builder: (context, constraints) {
         final isMe = msg.isMe;
         final senderId = msg.senderId;
+        final grouping = _messageGroupingFor(msg, messages);
         final bubbleMaxWidth =
             constraints.maxWidth > 0 ? constraints.maxWidth * 0.72 : 280.0;
 
@@ -7364,11 +8385,16 @@ class _ChatWindowState extends State<ChatWindow> {
               final mediaUrl = _messageAttachmentUrl(msg);
               if (mediaUrl != null) {
                 contentWidget = _buildImageMessage(context, msg, mediaUrl);
-              } else if (_messageHasRemoteWhatsAppMedia(msg)) {
+              } else if (MessagingAttachmentService.hasPrivateReference(msg) ||
+                  _messageHasRemoteWhatsAppMedia(msg)) {
                 contentWidget = _buildDeferredWhatsAppImageMessage(
                   context,
                   msg,
                 );
+              } else if (_messagingAttachmentService
+                      .externalUrlCandidate(msg) !=
+                  null) {
+                contentWidget = _buildExternalAttachmentMessage(msg);
               } else {
                 contentWidget = _buildImageUnavailableMessage(
                   title: 'Imagen sin archivo',
@@ -7381,9 +8407,14 @@ class _ChatWindowState extends State<ChatWindow> {
               final fileUrl = _messageAttachmentUrl(msg);
               if (fileUrl != null) {
                 contentWidget = _buildFileMessage(context, msg, fileUrl, isMe);
-              } else if (_messageHasRemoteWhatsAppMedia(msg)) {
+              } else if (MessagingAttachmentService.hasPrivateReference(msg) ||
+                  _messageHasRemoteWhatsAppMedia(msg)) {
                 contentWidget =
                     _buildDeferredWhatsAppFileMessage(context, msg, isMe);
+              } else if (_messagingAttachmentService
+                      .externalUrlCandidate(msg) !=
+                  null) {
+                contentWidget = _buildExternalAttachmentMessage(msg);
               } else {
                 contentWidget = _buildFileMessage(
                   context,
@@ -7394,7 +8425,8 @@ class _ChatWindowState extends State<ChatWindow> {
                 );
               }
             } else if (msg.type == 'action_request') {
-              // ACTION REQUEST - Interactive buttons for customers
+              // Staff see the request and its customer response, but never
+              // answer an action card on the customer's behalf.
               contentWidget = _buildActionRequestCard(context, msg, isMe);
             } else {
               // Text Message
@@ -7408,10 +8440,22 @@ class _ChatWindowState extends State<ChatWindow> {
             final bubbleDecoration = BoxDecoration(
               color: isMe ? const Color(0xFFD9FDD3) : Colors.white,
               borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(12),
-                topRight: const Radius.circular(12),
-                bottomLeft: Radius.circular(isMe ? 12 : 0),
-                bottomRight: Radius.circular(isMe ? 0 : 12),
+                topLeft: Radius.circular(grouping.withPrevious ? 5 : 12),
+                topRight: Radius.circular(grouping.withPrevious ? 5 : 12),
+                bottomLeft: Radius.circular(
+                  grouping.withNext
+                      ? 5
+                      : isMe
+                          ? 12
+                          : 2,
+                ),
+                bottomRight: Radius.circular(
+                  grouping.withNext
+                      ? 5
+                      : isMe
+                          ? 2
+                          : 12,
+                ),
               ),
               boxShadow: [
                 BoxShadow(
@@ -7424,24 +8468,32 @@ class _ChatWindowState extends State<ChatWindow> {
 
             if (!isMe) {
               // INCOMING MESSAGE
-              return SelectionContainer.disabled(
+              return SelectionArea(
                 child: Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
+                  padding: EdgeInsets.only(
+                    bottom: grouping.withNext ? 3 : 10,
+                  ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Avatar
-                      CircleAvatar(
-                        radius: 14,
-                        backgroundColor: Colors.grey[200],
-                        backgroundImage: senderAvatar != null
-                            ? NetworkImage(senderAvatar)
-                            : null,
-                        child: senderAvatar == null
-                            ? Icon(Icons.person,
-                                size: 16, color: Colors.grey[500])
-                            : null,
-                      ),
+                      if (grouping.withPrevious)
+                        const SizedBox(width: 28)
+                      else
+                        CircleAvatar(
+                          radius: 14,
+                          backgroundColor: Colors.grey[200],
+                          backgroundImage: senderAvatar != null
+                              ? NetworkImage(senderAvatar)
+                              : null,
+                          child: senderAvatar == null
+                              ? Icon(
+                                  Icons.person,
+                                  size: 16,
+                                  color: Colors.grey[500],
+                                )
+                              : null,
+                        ),
                       const SizedBox(width: 8),
 
                       // Bubble
@@ -7457,15 +8509,17 @@ class _ChatWindowState extends State<ChatWindow> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               // Sender Name (Colored)
-                              Text(
-                                senderName,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: _getNameColor(senderName),
+                              if (!grouping.withPrevious) ...[
+                                Text(
+                                  senderName,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: _getNameColor(senderName),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 2),
+                                const SizedBox(height: 2),
+                              ],
 
                               contentWidget,
 
@@ -7496,9 +8550,11 @@ class _ChatWindowState extends State<ChatWindow> {
             }
 
             // OUTGOING MESSAGE
-            return SelectionContainer.disabled(
+            return SelectionArea(
               child: Padding(
-                padding: const EdgeInsets.only(bottom: 10),
+                padding: EdgeInsets.only(
+                  bottom: grouping.withNext ? 3 : 10,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -7524,7 +8580,6 @@ class _ChatWindowState extends State<ChatWindow> {
                               child: _buildOutgoingMessageFooter(
                                 msg,
                                 timeStr,
-                                messages,
                               ),
                             ),
                           ],
@@ -7539,62 +8594,6 @@ class _ChatWindowState extends State<ChatWindow> {
         );
       },
     );
-  }
-
-  /// Handle customer response to action request
-  Future<void> _handleActionResponse(
-    BuildContext context,
-    String messageId,
-    String actionType,
-    String? targetId,
-    String response,
-  ) async {
-    try {
-      final supabase = Supabase.instance.client;
-
-      // Update the message metadata with the response
-      await supabase.from('messages').update({
-        'metadata': {
-          'status': response,
-          'responded_at': DateTime.now().toIso8601String(),
-        },
-      }).eq('id', messageId);
-
-      // If accepted, perform the action
-      if (response == 'accepted' && targetId != null) {
-        switch (actionType) {
-          case 'approve_quote':
-            // Update invoice status to confirmed
-            final salesService =
-                Provider.of<SalesService>(context, listen: false);
-            await salesService.updateInvoiceStatus(
-                targetId, InvoiceStatus.confirmed);
-            break;
-          case 'pay_now':
-            // Navigate to payment page or show payment dialog
-            // This would typically trigger a MercadoPago checkout
-            debugPrint('💳 Payment requested for invoice: $targetId');
-            break;
-        }
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                response == 'accepted' ? '✅ Acción completada' : 'Rechazado'),
-            backgroundColor:
-                response == 'accepted' ? Colors.green : Colors.orange,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
   }
 
   /// Get appropriate icon for file extension
@@ -7623,9 +8622,8 @@ class _ChatWindowState extends State<ChatWindow> {
   Widget _buildOutgoingMessageFooter(
     Message msg,
     String timeStr,
-    List<Message> messages,
   ) {
-    final statusIcon = _buildWhatsAppStatusIcon(msg, messages);
+    final deliveryState = MessageDeliveryState.fromMessage(msg);
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -7637,210 +8635,15 @@ class _ChatWindowState extends State<ChatWindow> {
             fontSize: 10,
           ),
         ),
-        if (statusIcon != null) ...[
+        if (deliveryState.isVisible) ...[
           const SizedBox(width: 4),
-          statusIcon,
+          MessageDeliveryIndicator(state: deliveryState, size: 14),
         ],
       ],
     );
   }
 
-  int _whatsAppStatusRank(String? status) {
-    switch (status?.toLowerCase()) {
-      case 'failed':
-        return 50;
-      case 'read':
-        return 40;
-      case 'delivered':
-        return 30;
-      case 'sent':
-        return 20;
-      case 'accepted':
-        return 10;
-      default:
-        return 0;
-    }
-  }
-
-  String? _strongestWhatsAppStatus(Map<String, dynamic> metadata) {
-    final statuses = [
-      metadata['external_status']?.toString().toLowerCase(),
-      metadata['whatsapp_status']?.toString().toLowerCase(),
-    ].whereType<String>().where((status) => status.isNotEmpty);
-
-    String? strongest;
-    for (final status in statuses) {
-      if (_whatsAppStatusRank(status) > _whatsAppStatusRank(strongest)) {
-        strongest = status;
-      }
-    }
-    return strongest;
-  }
-
-  bool _isWhatsAppMessage(Message msg) {
-    final metadata = msg.metadata;
-    return metadata['provider'] == 'whatsapp' ||
-        metadata['channel'] == 'whatsapp' ||
-        metadata['external_provider'] == 'whatsapp' ||
-        metadata['external_message_id']?.toString().startsWith('wamid.') ==
-            true;
-  }
-
-  bool _isInboundWhatsAppMessage(Message msg) {
-    if (!_isWhatsAppMessage(msg)) {
-      return false;
-    }
-
-    final direction =
-        msg.metadata['message_direction']?.toString().toLowerCase();
-    if (direction == 'inbound') {
-      return true;
-    }
-    if (direction == 'outbound') {
-      return false;
-    }
-
-    return !msg.isMe;
-  }
-
-  bool _isOutboundWhatsAppMessage(Message msg) {
-    if (!_isWhatsAppMessage(msg)) {
-      return false;
-    }
-
-    final direction =
-        msg.metadata['message_direction']?.toString().toLowerCase();
-    if (direction == 'outbound') {
-      return true;
-    }
-    if (direction == 'inbound') {
-      return false;
-    }
-
-    return msg.isMe;
-  }
-
-  bool _hasLaterInboundWhatsAppReplyInTurn(
-    Message msg,
-    List<Message> messages,
-  ) {
-    if (!_isOutboundWhatsAppMessage(msg)) {
-      return false;
-    }
-
-    final laterInboundMessages = messages
-        .where((candidate) =>
-            candidate.conversationId == msg.conversationId &&
-            _isInboundWhatsAppMessage(candidate) &&
-            candidate.createdAt.isAfter(msg.createdAt) &&
-            candidate.createdAt.difference(msg.createdAt) <=
-                _whatsAppInferredReadWindow)
-        .toList()
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-
-    return laterInboundMessages.isNotEmpty;
-  }
-
-  String? _effectiveWhatsAppStatus(Message msg, List<Message> messages) {
-    final externalStatus = _strongestWhatsAppStatus(msg.metadata);
-    if (externalStatus == 'failed' || externalStatus == 'read') {
-      return externalStatus;
-    }
-
-    if (_whatsAppStatusRank(externalStatus) >=
-            _whatsAppStatusRank('accepted') &&
-        _hasLaterInboundWhatsAppReplyInTurn(msg, messages)) {
-      return 'read';
-    }
-
-    return externalStatus;
-  }
-
-  Widget? _buildWhatsAppStatusIcon(Message msg, List<Message> messages) {
-    final metadata = msg.metadata;
-    final isWhatsAppMessage = _isWhatsAppMessage(msg);
-
-    if (!isWhatsAppMessage) {
-      return null;
-    }
-
-    if (metadata['pending'] == true) {
-      return Icon(
-        Icons.access_time_rounded,
-        size: 13,
-        color: Colors.grey[500],
-      );
-    }
-
-    final externalStatus = _effectiveWhatsAppStatus(msg, messages);
-
-    switch (externalStatus) {
-      case 'accepted':
-      case 'sent':
-        return Icon(
-          Icons.done_rounded,
-          size: 14,
-          color: Colors.grey[500],
-        );
-      case 'delivered':
-        return Icon(
-          Icons.done_all_rounded,
-          size: 14,
-          color: Colors.grey[500],
-        );
-      case 'read':
-        return const Icon(
-          Icons.done_all_rounded,
-          size: 14,
-          color: Colors.lightBlue,
-        );
-      case 'failed':
-        return Tooltip(
-          message: _whatsAppFailureMessage(metadata),
-          child: const Icon(
-            Icons.error_outline_rounded,
-            size: 13,
-            color: Colors.red,
-          ),
-        );
-      default:
-        return null;
-    }
-  }
-
-  String _whatsAppFailureMessage(Map<String, dynamic> metadata) {
-    final statusPayload = metadata['whatsapp_status_payload'];
-    if (statusPayload is Map) {
-      final errors = statusPayload['errors'];
-      if (errors is List && errors.isNotEmpty) {
-        final firstError = errors.first;
-        if (firstError is Map) {
-          final errorData = firstError['error_data'];
-          if (errorData is Map) {
-            final details = errorData['details']?.toString();
-            if (details != null && details.trim().isNotEmpty) {
-              return details;
-            }
-          }
-
-          final message = firstError['message']?.toString();
-          if (message != null && message.trim().isNotEmpty) {
-            return message;
-          }
-
-          final title = firstError['title']?.toString();
-          if (title != null && title.trim().isNotEmpty) {
-            return title;
-          }
-        }
-      }
-    }
-
-    return 'WhatsApp marcó este mensaje como fallido.';
-  }
-
   Widget _buildQuoteCard(BuildContext context, Message msg, bool isMe) {
-    final invoiceId = msg.metadata['invoiceId'];
     final isConfirmed = msg.metadata['status'] == 'confirmed';
 
     // High contrast colors for both sender (green bubble) and receiver (white bubble)
@@ -7907,21 +8710,27 @@ class _ChatWindowState extends State<ChatWindow> {
           ),
         ),
 
-        // Actions
+        // Legacy quote messages are intentionally read-only. A workshop
+        // decision must be sent as an action_request linked to a mechanic job
+        // so the audited quotation command owns the transition.
         if (!isMe && !isConfirmed)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () => _confirmQuote(context, invoiceId),
-                icon: const Icon(Icons.check, size: 16),
-                label: const Text('Confirmar Presupuesto'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
+            child: Row(
+              children: [
+                Icon(Icons.history, size: 15, color: Colors.grey[600]),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    'Mensaje histórico. La aprobación actual se registra desde la solicitud vinculada al trabajo.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      height: 1.3,
+                      color: Colors.grey[700],
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
 
@@ -7941,14 +8750,12 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Widget _buildActionRequestCard(BuildContext context, Message msg, bool isMe) {
     final actionType = msg.metadata['action_type'] as String? ?? 'unknown';
-    final targetId = msg.metadata['target_id'] as String?;
     final status = msg.metadata['status'] as String? ?? 'pending';
-    final amount = msg.metadata['amount'] as num?;
+    final responseNote = msg.metadata['response_note']?.toString().trim();
 
     // Determine card appearance based on action type
     IconData icon;
     String title;
-    String buttonLabel;
     Color accentColor;
 
     // Contrast Logic:
@@ -7974,16 +8781,12 @@ class _ChatWindowState extends State<ChatWindow> {
           title = 'Presupuesto Enviado';
           accentColor = Colors.orange;
         }
-        buttonLabel = 'Aprobar Presupuesto';
         // Use darker shade for icon to ensure visibility on light green
         iconColor = isMe ? Colors.black54 : accentColor;
         break;
       case 'pay_now':
         icon = Icons.payment;
         title = 'Solicitud de Pago';
-        buttonLabel = amount != null
-            ? 'Pagar \$${amount.toStringAsFixed(0)}'
-            : 'Pagar Ahora';
         accentColor = Colors.green;
         iconColor =
             isMe ? Colors.green[900]! : accentColor; // Visible green on green
@@ -7991,7 +8794,6 @@ class _ChatWindowState extends State<ChatWindow> {
       case 'confirm_delivery':
         icon = Icons.local_shipping;
         title = 'Confirmar Entrega';
-        buttonLabel = 'Confirmar Recepción';
         accentColor = Colors.blue;
         iconColor =
             isMe ? Colors.blue[900]! : accentColor; // Visible blue on green
@@ -7999,7 +8801,6 @@ class _ChatWindowState extends State<ChatWindow> {
       default:
         icon = Icons.help_outline;
         title = 'Acción Requerida';
-        buttonLabel = 'Ver Detalles';
         accentColor = Colors.grey;
         iconColor = Colors.grey[700]!;
     }
@@ -8087,31 +8888,44 @@ class _ChatWindowState extends State<ChatWindow> {
                 color: Colors.black87, fontSize: 13, height: 1.4),
           ),
         ),
-        // Action button (only if pending and viewer is not sender)
-        if (status == 'pending' && !isMe)
+        if (responseNote != null && responseNote.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.notes_outlined, size: 16),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    responseNote,
+                    style: const TextStyle(
+                      color: Colors.black87,
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (status == 'pending')
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: Row(
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _handleActionResponse(
-                        context, msg.id, actionType, targetId, 'declined'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.grey[700],
-                    ),
-                    child: const Text('Rechazar'),
-                  ),
-                ),
+                Icon(Icons.schedule_outlined, size: 16, color: accentColor),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: FilledButton(
-                    onPressed: () => _handleActionResponse(
-                        context, msg.id, actionType, targetId, 'accepted'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: accentColor,
+                  child: Text(
+                    isMe
+                        ? 'Esperando respuesta del cliente.'
+                        : 'Solicitud recibida. El equipo no puede responder en nombre del cliente.',
+                    style: const TextStyle(
+                      color: Colors.black54,
+                      fontSize: 12,
+                      height: 1.3,
                     ),
-                    child: Text(buttonLabel),
                   ),
                 ),
               ],
@@ -8119,30 +8933,5 @@ class _ChatWindowState extends State<ChatWindow> {
           ),
       ],
     );
-  }
-
-  Future<void> _confirmQuote(BuildContext context, String? invoiceId) async {
-    if (invoiceId == null) return;
-
-    try {
-      await context
-          .read<SalesService>()
-          .updateInvoiceStatus(invoiceId, InvoiceStatus.confirmed);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Presupuesto confirmado. ¡Gracias!'),
-              backgroundColor: Colors.green),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error al confirmar: $e'),
-              backgroundColor: Colors.red),
-        );
-      }
-    }
   }
 }

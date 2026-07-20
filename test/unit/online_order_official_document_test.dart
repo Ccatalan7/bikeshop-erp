@@ -42,6 +42,22 @@ void main() {
       expect(document.verifiedArtifactUri, isNotNull);
     });
 
+    test('opens a Mercado Pago receipt without presenting it as fiscal', () {
+      final document = OnlineOrderOfficialDocument.fromJson({
+        ..._voucherJson(),
+        'document_kind': 'mercadopago_payment_voucher',
+        'fiscal_validity': 'not_a_tax_document',
+      });
+
+      expect(document.isMercadoPagoPaymentReceipt, isTrue);
+      expect(document.hasVerifiedFiscalShape, isFalse);
+      expect(
+        document.displayLabel,
+        'Comprobante de pago Mercado Pago (no tributario)',
+      );
+      expect(document.verifiedArtifactUri, isNotNull);
+    });
+
     test('fails closed for non-HTTPS, credentialed or unhashed artifacts', () {
       for (final override in <Map<String, Object?>>[
         {'artifact_url': 'http://documents.example.test/voucher.pdf'},

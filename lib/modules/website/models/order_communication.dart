@@ -55,6 +55,8 @@ class OrderCommunication {
         'cancelled' => 'Pedido cancelado',
         'refund_completed' => 'Reembolso completado',
         'payment_voucher_available' => 'Voucher válido como boleta disponible',
+        'mercadopago_payment_voucher_available' =>
+          'Comprobante de pago Mercado Pago disponible',
         'tax_document_issued' => 'Documento tributario emitido',
         _ => messageKind,
       };

@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../services/customer_account_service.dart';
-import 'customer_chat_panel.dart';
+import 'customer_chat_surface.dart';
 import 'public_store_layout.dart';
 
 class CustomerPortalLayout extends StatelessWidget {
@@ -583,7 +583,7 @@ class _PortalSupportRail extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           child: const SizedBox(
             height: 330,
-            child: CustomerChatPanel(compactMode: true),
+            child: CustomerChatSurface(),
           ),
         ),
       ],

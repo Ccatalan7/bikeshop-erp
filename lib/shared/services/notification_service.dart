@@ -8,6 +8,9 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'chat_notification_gate.dart';
+import 'erp_notification_gate.dart';
+import 'mail_notification_gate.dart';
 import 'tenant_service.dart';
 
 /// Top-level function required by firebase_messaging for background handling.
@@ -17,16 +20,18 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Ensure Firebase is initialized (required for background isolate)
   await Firebase.initializeApp();
 
-  debugPrint('🔔 Background message received: ${message.messageId}');
-  debugPrint('🔔 Data: ${message.data}');
-
-  // Process the message using the singleton instance
-  // Note: In background, some services may not be available
-  try {
-    await NotificationService().handleIncomingMessage(message);
-  } catch (e) {
-    debugPrint('❌ Background handler error: $e');
+  if (kDebugMode) {
+    debugPrint(
+      '🔔 Background notification received; native FCM presentation retained '
+      'for ${message.messageId ?? 'unknown message'}',
+    );
   }
+
+  // push-notification sends a native Android/APNs alert. Firebase/OS presents
+  // that alert while the app is backgrounded. Creating another local
+  // notification from this isolate would display the same message twice and
+  // cannot apply the foreground conversation gate. Conversation state is
+  // refreshed from the authoritative store when the app resumes.
 }
 
 enum NotificationCategory {
@@ -340,11 +345,17 @@ class NotificationService {
   String? get fcmToken => _fcmToken;
 
   bool _isInitialized = false;
+  Future<void>? _initializingFuture;
+  StreamSubscription<AuthState>? _authStateSubscription;
+  StreamSubscription<String>? _tokenRefreshSubscription;
+  StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
+  StreamSubscription<RemoteMessage>? _openedAppSubscription;
   RealtimeChannel? _desktopMessagesChannel;
   Timer? _desktopMessagesRetryTimer;
   int _desktopMessagesRetryAttempt = 0;
   bool _desktopMessagesSetupInFlight = false;
   String? _desktopMessagesTenantId;
+  String? _desktopMessagesAuthUserId;
 
   // Cache for messaging style notifications to support grouping
   // Key: conversation_id (or sender_id if 1:1)
@@ -381,6 +392,8 @@ class NotificationService {
   String? _onlineOrderTenantId;
 
   final _messageStreamController = StreamController<RemoteMessage>.broadcast();
+  Object? _foregroundPresentationPolicyOwner;
+  bool Function(RemoteMessage message)? _foregroundPresentationPolicy;
 
   /// Stream of incoming messages (foreground & background)
   /// Listen to this to update UI badges or show in-app alerts
@@ -389,6 +402,38 @@ class NotificationService {
 
   // Deprecated getter, keeping for backward compatibility if needed, map to new stream
   Stream<RemoteMessage> get messageStream => _messageStreamController.stream;
+
+  /// Installs the process-level foreground presentation policy owned by the
+  /// stable workspace shell. Incoming events still reach [messageStream] so
+  /// providers can update unread state, but sounds and native banners may be
+  /// suppressed while the matching conversation is visibly open.
+  void setForegroundPresentationPolicy(
+    Object owner,
+    bool Function(RemoteMessage message) policy,
+  ) {
+    _foregroundPresentationPolicyOwner = owner;
+    _foregroundPresentationPolicy = policy;
+  }
+
+  void clearForegroundPresentationPolicy(Object owner) {
+    if (!identical(_foregroundPresentationPolicyOwner, owner)) return;
+    _foregroundPresentationPolicyOwner = null;
+    _foregroundPresentationPolicy = null;
+  }
+
+  bool shouldPresentForegroundMessage(RemoteMessage message) {
+    return _foregroundPresentationPolicy?.call(message) ?? true;
+  }
+
+  /// Whether the stable application shell owns foreground presentation.
+  ///
+  /// The service still publishes every event through [messageStream] so the
+  /// canonical inbox can reconcile unread state. When a shell owner is
+  /// installed, sounds, banners and local notifications must be emitted only
+  /// after that owner has applied its process-wide stable-event gate.
+  bool get hasForegroundPresentationOwner =>
+      _foregroundPresentationPolicyOwner != null &&
+      _foregroundPresentationPolicy != null;
 
   /// Stream for notification taps that require navigation (deep links)
   final _navigationStreamController = StreamController<String>.broadcast();
@@ -532,6 +577,8 @@ class NotificationService {
     String tenantId,
   ) async {
     if (tenantId.trim().isEmpty) return const [];
+    final generation = _notificationScopeGeneration;
+    if (_notificationScopeTenantId != tenantId) return const [];
     _onlineOrderTenantId = tenantId;
 
     try {
@@ -547,6 +594,10 @@ class NotificationService {
       final rows = (response as List<dynamic>)
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
+      if (generation != _notificationScopeGeneration ||
+          _notificationScopeTenantId != tenantId) {
+        return const [];
+      }
       _onlineOrderAlertRows
         ..clear()
         ..addAll(rows);
@@ -566,6 +617,12 @@ class NotificationService {
     String notificationId, {
     Map<String, dynamic>? notification,
   }) {
+    final notificationTenantId = notification?['tenant_id']?.toString();
+    if (_notificationScopeTenantId == null ||
+        (notificationTenantId != null &&
+            notificationTenantId != _notificationScopeTenantId)) {
+      return false;
+    }
     if (notificationId.trim().isEmpty ||
         !_seenOnlineOrderAlertIds.add(notificationId)) {
       return false;
@@ -669,6 +726,47 @@ class NotificationService {
   final ValueNotifier<int> unreadNotificationsCount = ValueNotifier<int>(0);
 
   String? _notificationsTenantId;
+  String? _notificationScopeKey;
+  String? _notificationScopeTenantId;
+  int _notificationScopeGeneration = 0;
+
+  /// Clears process-wide notification projections when the authenticated
+  /// user/tenant changes. The stable workspace shell calls this before loading
+  /// the new baseline, so old badges and previews can never leak across users.
+  void activateNotificationScope({
+    required String userId,
+    required String tenantId,
+  }) {
+    final nextScope = '${userId.trim()}:${tenantId.trim()}';
+    if (userId.trim().isEmpty || tenantId.trim().isEmpty) {
+      throw ArgumentError('Notification scope requires user and tenant IDs.');
+    }
+    if (_notificationScopeKey == nextScope) return;
+    _notificationScopeKey = nextScope;
+    _notificationScopeTenantId = tenantId.trim();
+    _notificationScopeGeneration++;
+    _clearUserScopedNotificationState();
+  }
+
+  void clearNotificationScope() {
+    _notificationScopeKey = null;
+    _notificationScopeTenantId = null;
+    _notificationScopeGeneration++;
+    _clearUserScopedNotificationState();
+  }
+
+  void _clearUserScopedNotificationState() {
+    _onlineOrderTenantId = null;
+    _onlineOrderAlertRows.clear();
+    _seenOnlineOrderAlertIds.clear();
+    onlineOrderAlertCount.value = 0;
+    _notificationsTenantId = null;
+    notificationsFeed.value = const [];
+    unreadNotificationsCount.value = 0;
+    _activeConversations.clear();
+    _senderNames.clear();
+    _lastHandledNotificationId = null;
+  }
 
   void _recomputeUnreadCount() {
     final now = DateTime.now();
@@ -689,6 +787,8 @@ class NotificationService {
   /// Load the latest notifications for the notifications center.
   Future<List<Map<String, dynamic>>> loadNotifications(String tenantId) async {
     if (tenantId.trim().isEmpty) return const [];
+    final generation = _notificationScopeGeneration;
+    if (_notificationScopeTenantId != tenantId) return const [];
     _notificationsTenantId = tenantId;
 
     try {
@@ -703,6 +803,10 @@ class NotificationService {
       final rows = (response as List<dynamic>)
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
+      if (generation != _notificationScopeGeneration ||
+          _notificationScopeTenantId != tenantId) {
+        return const [];
+      }
       notificationsFeed.value = rows;
       _recomputeUnreadCount();
       return rows;
@@ -715,7 +819,13 @@ class NotificationService {
   /// Insert/refresh a single notification row (used by realtime inserts).
   void recordNotification(Map<String, dynamic> notification) {
     final id = notification['id']?.toString();
-    if (id == null || id.isEmpty) return;
+    final tenantId = notification['tenant_id']?.toString();
+    if (id == null ||
+        id.isEmpty ||
+        _notificationScopeTenantId == null ||
+        tenantId != _notificationScopeTenantId) {
+      return;
+    }
 
     final current = List<Map<String, dynamic>>.from(notificationsFeed.value);
     final existingIndex =
@@ -820,7 +930,21 @@ class NotificationService {
     }
   }
 
-  Future<void> init() async {
+  Future<void> init() {
+    if (_isInitialized) return Future<void>.value();
+    final inFlight = _initializingFuture;
+    if (inFlight != null) return inFlight;
+
+    final operation = _initInternal();
+    _initializingFuture = operation;
+    return operation.whenComplete(() {
+      if (identical(_initializingFuture, operation)) {
+        _initializingFuture = null;
+      }
+    });
+  }
+
+  Future<void> _initInternal() async {
     if (_isInitialized) return;
 
     // Web: Skip FCM for now - causes service worker conflicts and permission violations
@@ -893,10 +1017,18 @@ class NotificationService {
     await _loadSettings();
 
     // Listen for auth changes to save token when user logs in
-    _supabase.auth.onAuthStateChange.listen((data) {
+    await _authStateSubscription?.cancel();
+    _authStateSubscription = _supabase.auth.onAuthStateChange.listen((data) {
       if (data.session != null && _fcmToken != null) {
         debugPrint('👤 [NotificationService] User logged in, saving token...');
         _saveTokenToDatabase(_fcmToken!);
+      }
+
+      if (data.event == AuthChangeEvent.signedOut) {
+        ChatNotificationGate.shared.clearScope();
+        MailNotificationGate.shared.clearScope();
+        ErpNotificationGate.shared.clearScope();
+        clearNotificationScope();
       }
 
       if (_usesDesktopRealtimeNotifications) {
@@ -964,33 +1096,29 @@ class NotificationService {
         );
       }
 
-      debugPrint('\n\n##################################################');
-      debugPrint('### FCM TOKEN: $_fcmToken');
-      debugPrint('##################################################\n\n');
-
       // 4. Save Token to Database
       if (_fcmToken != null) {
         await _saveTokenToDatabase(_fcmToken!);
       }
 
       // 5. Listen for token refreshes
-      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+      await _tokenRefreshSubscription?.cancel();
+      _tokenRefreshSubscription =
+          FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
         _saveTokenToDatabase(newToken);
       });
 
       // 6. Listen for Foreground Messages
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        debugPrint('Got a message whilst in the foreground!');
-        debugPrint('Message data: ${message.data}');
+      await _foregroundMessageSubscription?.cancel();
+      _foregroundMessageSubscription =
+          FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        if (kDebugMode) {
+          debugPrint('🔔 Foreground notification received');
+        }
 
         // Handle both notification+data and data-only messages
         final hasNotification = message.notification != null;
         final hasData = message.data.isNotEmpty;
-
-        if (hasNotification) {
-          debugPrint(
-              'Message also contained a notification: ${message.notification}');
-        }
 
         if (hasData || hasNotification) {
           final category = categoryForMessage(message);
@@ -998,7 +1126,9 @@ class NotificationService {
           // Notify in-app listeners (Snackbar)
           _messageStreamController.add(message);
 
-          if (notificationsEnabledFor(category)) {
+          if (!hasForegroundPresentationOwner &&
+              notificationsEnabledFor(category) &&
+              shouldPresentForegroundMessage(message)) {
             // Play sound and vibrate
             playNotificationSound(category: category);
             _triggerVibration();
@@ -1009,15 +1139,17 @@ class NotificationService {
       });
 
       // 7. Handle notification tap when app is in background (not terminated)
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        debugPrint('🔔 Notification tapped (background): ${message.data}');
+      await _openedAppSubscription?.cancel();
+      _openedAppSubscription =
+          FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        if (kDebugMode) debugPrint('🔔 Background notification opened');
         _handleNotificationTap(message);
       });
 
       // 8. Handle notification tap when app was terminated (cold start)
       FirebaseMessaging.instance.getInitialMessage().then((message) {
         if (message != null) {
-          debugPrint('🔔 Notification tapped (cold start): ${message.data}');
+          if (kDebugMode) debugPrint('🔔 Initial notification opened');
           // Delay slightly to ensure app is ready
           Future.delayed(const Duration(milliseconds: 500), () {
             _handleNotificationTap(message);
@@ -1032,12 +1164,19 @@ class NotificationService {
   /// Handle navigation when user taps a notification
   void _handleNotificationTap(RemoteMessage message) {
     // Prevent duplicate handling of the same notification
-    final messageId = message.messageId ?? message.data['conversation_id'];
-    if (messageId != null && messageId == _lastHandledNotificationId) {
+    final messageId =
+        (message.data['message_id'] ?? message.data['id'] ?? message.messageId)
+            ?.toString()
+            .trim();
+    if (messageId != null &&
+        messageId.isNotEmpty &&
+        messageId == _lastHandledNotificationId) {
       debugPrint('🔔 Already handled notification $messageId, skipping');
       return;
     }
-    _lastHandledNotificationId = messageId;
+    if (messageId != null && messageId.isNotEmpty) {
+      _lastHandledNotificationId = messageId;
+    }
 
     final route = message.data['route']?.toString();
     if (route != null && route.isNotEmpty) {
@@ -1097,14 +1236,18 @@ class NotificationService {
     }
 
     // Listen for foreground messages
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('🔔 Web foreground message: ${message.data}');
+    await _foregroundMessageSubscription?.cancel();
+    _foregroundMessageSubscription =
+        FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (kDebugMode) debugPrint('🔔 Web foreground notification received');
       _messageStreamController.add(message);
       // The in-app notification overlay will handle display
     });
 
     // Listen for token refresh
-    firebaseMessaging.onTokenRefresh.listen((newToken) {
+    await _tokenRefreshSubscription?.cancel();
+    _tokenRefreshSubscription =
+        firebaseMessaging.onTokenRefresh.listen((newToken) {
       debugPrint('🔄 Web FCM token refreshed');
       _fcmToken = newToken;
       _saveTokenToDatabase(newToken);
@@ -1165,6 +1308,8 @@ class NotificationService {
         ? cachedTenantId
         : await tenantService.getTenantId();
 
+    if (_supabase.auth.currentUser?.id != currentUser.id) return;
+
     if (tenantId == null || tenantId.isEmpty) {
       debugPrint('⚠️ Desktop message notifications waiting for tenant context');
       _scheduleDesktopMessageRealtimeReconnect('tenant context unavailable');
@@ -1173,7 +1318,8 @@ class NotificationService {
 
     if (!force &&
         _desktopMessagesChannel != null &&
-        _desktopMessagesTenantId == tenantId) {
+        _desktopMessagesTenantId == tenantId &&
+        _desktopMessagesAuthUserId == currentUser.id) {
       return;
     }
 
@@ -1186,7 +1332,7 @@ class NotificationService {
         await _teardownDesktopMessageRealtime(cancelRetry: false);
       }
 
-      if (_supabase.auth.currentUser == null) return;
+      if (_supabase.auth.currentUser?.id != currentUser.id) return;
 
       debugPrint(
           '🔔 Setting up tenant-filtered Realtime subscription for public:messages...');
@@ -1204,6 +1350,7 @@ class NotificationService {
               value: tenantId,
             ),
             callback: (payload) {
+              if (_supabase.auth.currentUser?.id != currentUser.id) return;
               final newMessage = payload.newRecord;
               final currentUserId = _supabase.auth.currentUser?.id;
               final senderId = newMessage['sender_id'];
@@ -1213,17 +1360,20 @@ class NotificationService {
               // 2. The sender is NOT us (incoming message)
               if (currentUserId != null && senderId != currentUserId) {
                 final content = newMessage['content'] ?? 'New Image';
-
-                // Notify in-app listeners (Desktop)
-                _messageStreamController.add(RemoteMessage(
+                final incomingMessage = RemoteMessage(
                   notification: RemoteNotification(
                     title: 'New Message',
                     body: content,
                   ),
                   data: newMessage,
-                ));
+                );
 
-                if (notificationsEnabledFor(NotificationCategory.message)) {
+                // Notify in-app listeners (Desktop)
+                _messageStreamController.add(incomingMessage);
+
+                if (!hasForegroundPresentationOwner &&
+                    notificationsEnabledFor(NotificationCategory.message) &&
+                    shouldPresentForegroundMessage(incomingMessage)) {
                   // Play sound and vibrate
                   playNotificationSound(
                     category: NotificationCategory.message,
@@ -1245,11 +1395,18 @@ class NotificationService {
 
       _desktopMessagesChannel = channel;
       _desktopMessagesTenantId = tenantId;
+      _desktopMessagesAuthUserId = currentUser.id;
     } catch (e) {
       debugPrint('⚠️ Desktop message notification realtime setup failed: $e');
       _scheduleDesktopMessageRealtimeReconnect('setup failed');
     } finally {
       _desktopMessagesSetupInFlight = false;
+      final activeUserId = _supabase.auth.currentUser?.id;
+      if (activeUserId != null &&
+          (_desktopMessagesChannel == null ||
+              _desktopMessagesAuthUserId != activeUserId)) {
+        unawaited(_setupDesktopMessageRealtime(force: true));
+      }
     }
   }
 
@@ -1346,6 +1503,7 @@ class NotificationService {
     final channel = _desktopMessagesChannel;
     _desktopMessagesChannel = null;
     _desktopMessagesTenantId = null;
+    _desktopMessagesAuthUserId = null;
     if (channel != null) {
       await channel.unsubscribe();
     }
@@ -1385,9 +1543,9 @@ class NotificationService {
         data['conversation_id'] ?? data['chat_id'] ?? 'general';
     final String senderId = data['sender_id'] ?? 'unknown_sender';
 
-    debugPrint(
-        '🔔 HandleIncomingMessage: conversationId=$conversationId, senderId=$senderId');
-    debugPrint('🔔 Raw Data: $data');
+    if (kDebugMode) {
+      debugPrint('🔔 Presenting a messaging notification');
+    }
 
     try {
       // Determine sender name from data (preferred) or cache or DB

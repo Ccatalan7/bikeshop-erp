@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/conversation.dart';
+import '../models/message_delivery_state.dart';
 import '../providers/chat_provider.dart';
 import '../../../shared/services/route_share_service.dart';
 import '../../../shared/services/image_service.dart';
+import 'message_delivery_indicator.dart';
 
 class ConversationTile extends StatefulWidget {
   final Conversation conversation;
@@ -12,9 +14,13 @@ class ConversationTile extends StatefulWidget {
   final bool isMobile;
   final bool isPinned;
   final String subtitle;
+  final String? titleOverride;
+  final String? operationalStatusLabel;
+  final Color? operationalStatusColor;
+  final String? secondaryContextLine;
   final VoidCallback onTap;
   final Future<void> Function()? onTogglePinned;
-  final Future<bool> Function() onDelete;
+  final Future<bool> Function() onArchive;
 
   const ConversationTile({
     super.key,
@@ -23,9 +29,13 @@ class ConversationTile extends StatefulWidget {
     required this.isMobile,
     this.isPinned = false,
     required this.subtitle,
+    this.titleOverride,
+    this.operationalStatusLabel,
+    this.operationalStatusColor,
+    this.secondaryContextLine,
     required this.onTap,
     this.onTogglePinned,
-    required this.onDelete,
+    required this.onArchive,
   });
 
   @override
@@ -63,11 +73,26 @@ class _ConversationTileState extends State<ConversationTile> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<ChatProvider>();
+    final projection =
+        context.select<ChatProvider, _ConversationTileProjection>(
+      (provider) {
+        var current = widget.conversation;
+        for (final conversation in provider.conversations) {
+          if (conversation.id == widget.conversation.id) {
+            current = conversation;
+            break;
+          }
+        }
+        return _ConversationTileProjection(
+          conversation: current,
+          title: provider.getChatTitle(current),
+        );
+      },
+    );
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final conv = widget.conversation;
-    final title = provider.getChatTitle(conv);
+    final conv = projection.conversation;
+    final title = widget.titleOverride ?? projection.title;
     final hasUnread = conv.unreadCount > 0;
     final isPending = conv.status == 'pending';
     final accentColor = _channelColor(conv, isPending);
@@ -178,26 +203,23 @@ class _ConversationTileState extends State<ConversationTile> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 5),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildAnimatedContextPills(
-                            conv,
-                            prominent: hasUnread,
-                          ),
-                        ),
-                        if (widget.isPinned) ...[
-                          const SizedBox(width: 6),
-                          Icon(
-                            Icons.push_pin,
-                            size: 12,
-                            color: colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.75),
-                          ),
+                    if (_hasContextSummary(conv) || widget.isPinned) ...[
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          Expanded(child: _buildAnimatedContextSummary(conv)),
+                          if (widget.isPinned) ...[
+                            const SizedBox(width: 6),
+                            Icon(
+                              Icons.push_pin,
+                              size: 12,
+                              color: colorScheme.onSurfaceVariant
+                                  .withValues(alpha: 0.75),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -214,12 +236,12 @@ class _ConversationTileState extends State<ConversationTile> {
         key: Key(conv.id),
         direction: DismissDirection.endToStart,
         background: Container(
-          color: Colors.red,
+          color: colorScheme.onSurfaceVariant,
           alignment: Alignment.centerRight,
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: const Icon(Icons.delete_outline, color: Colors.white),
+          child: const Icon(Icons.archive_outlined, color: Colors.white),
         ),
-        confirmDismiss: (_) => widget.onDelete(),
+        confirmDismiss: (_) => widget.onArchive(),
         child: content,
       );
     }
@@ -308,79 +330,90 @@ class _ConversationTileState extends State<ConversationTile> {
     );
   }
 
-  Widget _buildContextPills(
-    Conversation conv, {
-    bool prominent = false,
-  }) {
+  bool _hasContextSummary(Conversation conv) {
     final hint = conv.contextHint;
-    final items = <Widget>[];
-
-    if (hint?.hasJob == true) {
-      items.add(
-        _buildMiniContextPill(
-          label: [
-            hint!.jobNumber?.trim().isNotEmpty == true
-                ? hint.jobNumber!.trim()
-                : 'Trabajo',
-            if (hint.jobStatus?.trim().isNotEmpty == true)
-              hint.jobStatus!.trim(),
-          ].join(' · '),
-          color: _colorFromHex(hint.jobStatusColor, const Color(0xFF2563EB)),
-          prominent: true,
-        ),
-      );
-    }
-
-    if (hint?.bikeName?.trim().isNotEmpty == true) {
-      items.add(
-        _buildMiniContextPill(
-          label: hint!.bikeName!.trim(),
-          color: const Color(0xFF475569),
-          prominent: prominent,
-        ),
-      );
-    }
-
-    if (hint?.hasPurchaseInvoice == true) {
-      items.add(
-        _buildMiniContextPill(
-          label: [
-            hint!.purchaseInvoiceNumber?.trim().isNotEmpty == true
-                ? hint.purchaseInvoiceNumber!.trim()
-                : 'Compra',
-            if (hint.purchaseInvoiceStatus?.trim().isNotEmpty == true)
-              hint.purchaseInvoiceStatus!.trim(),
-          ].join(' · '),
-          color: _purchaseInvoiceStatusColor(hint.purchaseInvoiceStatus),
-          prominent: true,
-        ),
-      );
-    } else if (hint?.hasSupplier == true && items.isEmpty) {
-      items.add(
-        _buildMiniContextPill(
-          label: 'Proveedor',
-          color: const Color(0xFF7C3AED),
-          prominent: prominent,
-        ),
-      );
-    }
-
-    if (items.isNotEmpty) {
-      return Wrap(
-        spacing: 5,
-        runSpacing: 4,
-        children: items,
-      );
-    }
-
-    return const SizedBox.shrink();
+    return widget.operationalStatusLabel?.trim().isNotEmpty == true ||
+        widget.secondaryContextLine?.trim().isNotEmpty == true ||
+        hint?.hasJob == true ||
+        hint?.hasPurchaseInvoice == true ||
+        hint?.bikeName?.trim().isNotEmpty == true ||
+        hint?.hasSupplier == true;
   }
 
-  Widget _buildAnimatedContextPills(
-    Conversation conv, {
-    required bool prominent,
-  }) {
-    final signature = _contextPillSignature(conv);
+  Widget _buildContextSummary(Conversation conv) {
+    final hint = conv.contextHint;
+    var statusLabel = widget.operationalStatusLabel?.trim();
+    var statusColor = widget.operationalStatusColor;
+    var secondaryLine = widget.secondaryContextLine?.trim();
+
+    if ((statusLabel == null || statusLabel.isEmpty) && hint?.hasJob == true) {
+      statusLabel = [
+        hint!.jobNumber?.trim().isNotEmpty == true
+            ? hint.jobNumber!.trim()
+            : 'Trabajo',
+        if (hint.jobStatus?.trim().isNotEmpty == true) hint.jobStatus!.trim(),
+      ].join(' · ');
+      statusColor = _colorFromHex(
+        hint.jobStatusColor,
+        const Color(0xFF2563EB),
+      );
+    }
+
+    if ((statusLabel == null || statusLabel.isEmpty) &&
+        hint?.hasPurchaseInvoice == true) {
+      statusLabel = [
+        hint!.purchaseInvoiceNumber?.trim().isNotEmpty == true
+            ? hint.purchaseInvoiceNumber!.trim()
+            : 'Compra',
+        if (hint.purchaseInvoiceStatus?.trim().isNotEmpty == true)
+          hint.purchaseInvoiceStatus!.trim(),
+      ].join(' · ');
+      statusColor = _purchaseInvoiceStatusColor(hint.purchaseInvoiceStatus);
+    }
+
+    if (secondaryLine == null || secondaryLine.isEmpty) {
+      if (hint?.bikeName?.trim().isNotEmpty == true) {
+        secondaryLine = hint!.bikeName!.trim();
+      } else if (hint?.supplierLabel?.trim().isNotEmpty == true) {
+        secondaryLine = hint!.supplierLabel!.trim();
+      } else if (hint?.hasSupplier == true) {
+        secondaryLine = 'Proveedor';
+      }
+    }
+
+    final hasStatus = statusLabel != null && statusLabel.isNotEmpty;
+    final hasSecondary = secondaryLine != null && secondaryLine.isNotEmpty;
+    if (!hasStatus && !hasSecondary) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Row(
+      children: [
+        if (hasStatus)
+          _buildOperationalStatus(
+            label: statusLabel,
+            color: statusColor ?? colorScheme.primary,
+          ),
+        if (hasStatus && hasSecondary) const SizedBox(width: 7),
+        if (hasSecondary)
+          Expanded(
+            child: Text(
+              secondaryLine,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildAnimatedContextSummary(Conversation conv) {
+    final signature = _contextSummarySignature(conv);
     return AnimatedSize(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
@@ -409,42 +442,44 @@ class _ConversationTileState extends State<ConversationTile> {
         },
         child: KeyedSubtree(
           key: ValueKey(signature),
-          child: _buildContextPills(conv, prominent: prominent),
+          child: _buildContextSummary(conv),
         ),
       ),
     );
   }
 
-  String _contextPillSignature(Conversation conv) {
+  String _contextSummarySignature(Conversation conv) {
     final hint = conv.contextHint;
-    if (hint == null) return 'none';
     return [
-      hint.jobId,
-      hint.jobNumber,
-      hint.jobStatus,
-      hint.jobStatusColor,
-      hint.bikeId,
-      hint.bikeName,
-      hint.purchaseInvoiceId,
-      hint.purchaseInvoiceNumber,
-      hint.purchaseInvoiceStatus,
-      hint.supplierId,
-    ].map((value) => value?.trim() ?? '').join('|');
+      widget.operationalStatusLabel,
+      widget.operationalStatusColor?.toARGB32(),
+      widget.secondaryContextLine,
+      hint?.jobId,
+      hint?.jobNumber,
+      hint?.jobStatus,
+      hint?.jobStatusColor,
+      hint?.bikeId,
+      hint?.bikeName,
+      hint?.purchaseInvoiceId,
+      hint?.purchaseInvoiceNumber,
+      hint?.purchaseInvoiceStatus,
+      hint?.supplierId,
+      hint?.supplierName,
+    ].map((value) => value?.toString().trim() ?? '').join('|');
   }
 
-  Widget _buildMiniContextPill({
+  Widget _buildOperationalStatus({
     required String label,
     required Color color,
-    bool prominent = false,
   }) {
     final theme = Theme.of(context);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 160),
       curve: Curves.easeOutCubic,
-      constraints: const BoxConstraints(maxWidth: 178),
+      constraints: const BoxConstraints(maxWidth: 172),
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: prominent ? 0.13 : 0.07),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -522,63 +557,64 @@ class _ConversationTileState extends State<ConversationTile> {
           else
             const SizedBox(height: 18),
           const SizedBox(height: 4),
-          AnimatedOpacity(
-            duration: const Duration(milliseconds: 120),
-            opacity: menuVisible ? 1 : 0,
-            child: SizedBox(
-              width: 28,
-              height: 28,
-              child: PopupMenuButton<String>(
-                padding: EdgeInsets.zero,
-                tooltip: 'Opciones del chat',
-                icon: Icon(
-                  Icons.more_horiz,
-                  size: 18,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                splashRadius: 16,
-                onSelected: (value) {
-                  if (value == 'pin') {
-                    widget.onTogglePinned?.call();
-                  } else if (value == 'delete') {
-                    Future.delayed(
-                      const Duration(milliseconds: 80),
-                      widget.onDelete,
-                    );
-                  }
-                },
-                itemBuilder: (context) => [
-                  if (widget.onTogglePinned != null)
-                    PopupMenuItem<String>(
-                      value: 'pin',
+          IgnorePointer(
+            ignoring: !menuVisible,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 120),
+              opacity: menuVisible ? 1 : 0,
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: PopupMenuButton<String>(
+                  padding: EdgeInsets.zero,
+                  tooltip: 'Opciones del chat',
+                  icon: Icon(
+                    Icons.more_horiz,
+                    size: 18,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  splashRadius: 16,
+                  onSelected: (value) {
+                    if (value == 'pin') {
+                      widget.onTogglePinned?.call();
+                    } else if (value == 'archive') {
+                      Future.delayed(
+                        const Duration(milliseconds: 80),
+                        widget.onArchive,
+                      );
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    if (widget.onTogglePinned != null)
+                      PopupMenuItem<String>(
+                        value: 'pin',
+                        child: Row(
+                          children: [
+                            Icon(
+                              widget.isPinned
+                                  ? Icons.push_pin
+                                  : Icons.push_pin_outlined,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(widget.isPinned
+                                ? 'Desfijar chat'
+                                : 'Fijar chat'),
+                          ],
+                        ),
+                      ),
+                    const PopupMenuItem<String>(
+                      value: 'archive',
                       child: Row(
                         children: [
-                          Icon(
-                            widget.isPinned
-                                ? Icons.push_pin
-                                : Icons.push_pin_outlined,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                              widget.isPinned ? 'Desfijar chat' : 'Fijar chat'),
+                          Icon(Icons.archive_outlined, size: 18),
+                          SizedBox(width: 10),
+                          Text('Archivar chat'),
                         ],
                       ),
                     ),
-                  const PopupMenuItem<String>(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete_outline, color: Colors.red, size: 18),
-                        SizedBox(width: 10),
-                        Text(
-                          'Eliminar chat',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -588,18 +624,12 @@ class _ConversationTileState extends State<ConversationTile> {
   }
 
   Widget _buildDeliveryIcon(Conversation conv) {
-    final status = conv.lastMessageExternalStatus?.toLowerCase();
-    final isRead = status == 'read';
-    final isDelivered = status == 'delivered' || status == 'sent' || isRead;
-    return Icon(
-      isDelivered ? Icons.done_all : Icons.done,
-      size: 14,
-      color: isRead
-          ? const Color(0xFF0EA5E9)
-          : Theme.of(context)
-              .colorScheme
-              .onSurfaceVariant
-              .withValues(alpha: 0.7),
+    return MessageDeliveryIndicator(
+      state: MessageDeliveryState.fromConversationPreview(
+        metadata: conv.lastMessageMetadata,
+        explicitStatus: conv.lastMessageExternalStatus,
+        isWhatsApp: conv.isWhatsApp,
+      ),
     );
   }
 
@@ -683,4 +713,23 @@ class _ConversationTileState extends State<ConversationTile> {
     return '${words.first.characters.first}${words.last.characters.first}'
         .toUpperCase();
   }
+}
+
+class _ConversationTileProjection {
+  final Conversation conversation;
+  final String title;
+
+  const _ConversationTileProjection({
+    required this.conversation,
+    required this.title,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      other is _ConversationTileProjection &&
+      identical(other.conversation, conversation) &&
+      other.title == title;
+
+  @override
+  int get hashCode => Object.hash(identityHashCode(conversation), title);
 }

@@ -269,14 +269,20 @@ String getRouteTitle(String path) {
     }
     if (cleanPath.startsWith('/accounting/expenses/')) return 'Editar Gasto';
     if (cleanPath.startsWith('/hr/employees/')) return 'Editar Trabajador';
-    if (cleanPath.startsWith('/taller/pega/')) return 'Editar Trabajo';
+    if (cleanPath.startsWith('/taller/pegas/') ||
+        cleanPath.startsWith('/taller/pega/')) {
+      return 'Editar Trabajo';
+    }
   }
 
   // Handle detail views /clientes/:id → "Cliente"
   if (RegExp(r'^/clientes/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Cliente';
   }
-  if (RegExp(r'^/taller/pega/[^/]+$').hasMatch(cleanPath)) {
+  // `/taller/pegas/:id` is canonical. Keep the former singular spelling in
+  // this presentation helper so restored workspace history still gets a
+  // useful title even though new navigation always emits the canonical route.
+  if (RegExp(r'^/taller/pegas?/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Trabajo';
   }
   if (RegExp(r'^/sales/invoices/[^/]+$').hasMatch(cleanPath)) {

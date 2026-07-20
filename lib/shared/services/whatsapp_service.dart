@@ -6,13 +6,10 @@ import 'package:intl/intl.dart';
 import '../../modules/sales/models/sales_models.dart';
 import '../../modules/bikeshop/models/bikeshop_models.dart';
 import '../services/tenant_service.dart';
+import '../services/whatsapp_send_receipt.dart';
 import '../widgets/whatsapp_web_viewer.dart';
 
-enum WhatsAppDeliveryMethod {
-  cloudApi,
-  manualFallback,
-  failed,
-}
+export '../services/whatsapp_send_receipt.dart';
 
 enum WhatsAppTemplatePurpose {
   firstContact,
@@ -102,9 +99,6 @@ class WhatsAppService {
       icon: Icons.request_quote_outlined,
     ),
   ];
-  static const int _reengagementErrorCode = 131047;
-  static const int _expiredAccessTokenErrorCode = 190;
-
   factory WhatsAppService() => _instance;
   WhatsAppService._internal();
 
@@ -117,23 +111,6 @@ class WhatsAppService {
   );
 
   final _dateFormat = DateFormat('dd/MM/yyyy', 'es_CL');
-
-  WhatsAppDeliveryMethod _lastDeliveryMethod = WhatsAppDeliveryMethod.failed;
-  int? _lastErrorCode;
-  bool _lastUsedFirstContactTemplate = false;
-  String? _lastResolvedMessageText;
-  String? _lastExternalMessageId;
-
-  WhatsAppDeliveryMethod get lastDeliveryMethod => _lastDeliveryMethod;
-  int? get lastErrorCode => _lastErrorCode;
-  bool get lastUsedFirstContactTemplate => _lastUsedFirstContactTemplate;
-  String? get lastResolvedMessageText => _lastResolvedMessageText;
-  String? get lastExternalMessageId => _lastExternalMessageId;
-
-  bool get lastErrorRequiresServerFix =>
-      _lastErrorCode == _expiredAccessTokenErrorCode;
-  bool get lastErrorRequiresCustomerReply =>
-      _lastErrorCode == _reengagementErrorCode;
 
   /// Format Chilean phone number (remove spaces, dashes, +56 prefix)
   String _formatPhoneNumber(String phone) {
@@ -190,13 +167,6 @@ class WhatsAppService {
     };
   }
 
-  void _resetLastAttemptState({String? resolvedMessageText}) {
-    _lastErrorCode = null;
-    _lastUsedFirstContactTemplate = false;
-    _lastResolvedMessageText = resolvedMessageText;
-    _lastExternalMessageId = null;
-  }
-
   String? _extractExternalMessageId(dynamic data) {
     if (data is! Map<String, dynamic>) {
       return null;
@@ -222,6 +192,12 @@ class WhatsAppService {
     }
 
     return null;
+  }
+
+  String? _extractMessageId(dynamic data) {
+    if (data is! Map) return null;
+    final messageId = data['message_id']?.toString().trim();
+    return messageId == null || messageId.isEmpty ? null : messageId;
   }
 
   int? _extractErrorCode(dynamic data) {
@@ -252,8 +228,12 @@ class WhatsAppService {
     return null;
   }
 
-  bool _shouldSkipManualFallback() {
-    return _lastErrorCode == _expiredAccessTokenErrorCode;
+  bool _extractUnsafeToFallback(dynamic data) {
+    return isUnsafeWhatsAppManualFallback(data);
+  }
+
+  bool _shouldSkipManualFallback(WhatsAppSendReceipt receipt) {
+    return receipt.errorRequiresServerFix || receipt.unsafeToFallback;
   }
 
   bool _isCustomerServiceWindowOpen(DateTime? lastInboundAt) {
@@ -322,7 +302,10 @@ class WhatsAppService {
     }
   }
 
-  Future<bool> _sendViaCloud(Map<String, dynamic> body) async {
+  Future<WhatsAppSendReceipt> _sendViaCloud(
+    Map<String, dynamic> body, {
+    String? resolvedMessageText,
+  }) async {
     final stopwatch = Stopwatch()..start();
     final metadata = body['metadata'];
     final clientMessageId =
@@ -340,52 +323,100 @@ class WhatsAppService {
 
       final status = response.status;
       if (status >= 200 && status < 300) {
-        _lastErrorCode = null;
-        _lastDeliveryMethod = WhatsAppDeliveryMethod.cloudApi;
-        _lastExternalMessageId = _extractExternalMessageId(response.data);
-        debugPrint(
-          '✅ [WhatsAppService] cloud_invoke_done status=$status elapsed=${stopwatch.elapsedMilliseconds}ms client=$clientMessageId external=$_lastExternalMessageId',
+        if (!isDurableWhatsAppSendPayload(response.data)) {
+          final externalMessageId = _extractExternalMessageId(response.data);
+          debugPrint(
+            '❌ [WhatsAppService] cloud_invoke_malformed_success status=$status elapsed=${stopwatch.elapsedMilliseconds}ms client=$clientMessageId data=${response.data}',
+          );
+          return WhatsAppSendReceipt(
+            deliveryMethod: WhatsAppDeliveryMethod.failed,
+            resolvedMessageText: resolvedMessageText,
+            messageId: _extractMessageId(response.data),
+            externalMessageId: externalMessageId,
+            unsafeToFallback: true,
+          );
+        }
+        final receipt = parseDurableWhatsAppSendReceipt(
+          response.data,
+          resolvedMessageText: resolvedMessageText,
         );
-        return true;
+        debugPrint(
+          '✅ [WhatsAppService] cloud_invoke_done status=$status elapsed=${stopwatch.elapsedMilliseconds}ms client=$clientMessageId external=${receipt.externalMessageId}',
+        );
+        return receipt;
       }
 
-      _lastErrorCode = _extractErrorCode(response.data);
+      final errorCode = _extractErrorCode(response.data);
+      final externalMessageId = _extractExternalMessageId(response.data);
+      final unsafeToFallback = _extractUnsafeToFallback(response.data);
 
       debugPrint(
-        '❌ [WhatsAppService] cloud_invoke_failed status=$status elapsed=${stopwatch.elapsedMilliseconds}ms client=$clientMessageId error=$_lastErrorCode data=${response.data}',
+        '❌ [WhatsAppService] cloud_invoke_failed status=$status elapsed=${stopwatch.elapsedMilliseconds}ms client=$clientMessageId error=$errorCode data=${response.data}',
+      );
+      return WhatsAppSendReceipt(
+        deliveryMethod: WhatsAppDeliveryMethod.failed,
+        errorCode: errorCode,
+        resolvedMessageText: resolvedMessageText,
+        messageId: _extractMessageId(response.data),
+        externalMessageId: externalMessageId,
+        unsafeToFallback: unsafeToFallback,
+      );
+    } on FunctionException catch (error) {
+      stopwatch.stop();
+      final data = error.details;
+      final errorCode = _extractErrorCode(data);
+      final externalMessageId = _extractExternalMessageId(data);
+      final unsafeToFallback = _extractUnsafeToFallback(data);
+      debugPrint(
+        '❌ [WhatsAppService] cloud_invoke_failed status=${error.status} elapsed=${stopwatch.elapsedMilliseconds}ms client=$clientMessageId error=$errorCode',
+      );
+      return WhatsAppSendReceipt(
+        deliveryMethod: WhatsAppDeliveryMethod.failed,
+        errorCode: errorCode,
+        resolvedMessageText: resolvedMessageText,
+        messageId: _extractMessageId(data),
+        externalMessageId: externalMessageId,
+        unsafeToFallback: unsafeToFallback,
       );
     } catch (error) {
       stopwatch.stop();
-      _lastErrorCode = null;
       debugPrint(
         '❌ [WhatsAppService] cloud_invoke_error elapsed=${stopwatch.elapsedMilliseconds}ms client=$clientMessageId error=$error',
       );
+      return WhatsAppSendReceipt(
+        deliveryMethod: WhatsAppDeliveryMethod.failed,
+        resolvedMessageText: resolvedMessageText,
+        unsafeToFallback: true,
+      );
     }
-
-    return false;
   }
 
-  Future<bool> _sendWithFallback({
-    required BuildContext context,
+  Future<WhatsAppSendReceipt> _sendWithFallback({
+    BuildContext? context,
     required String phoneNumber,
     required String message,
     required Map<String, dynamic> cloudBody,
     bool allowManualFallback = true,
   }) async {
-    if (await _sendViaCloud(cloudBody)) {
-      return true;
+    final cloudReceipt = await _sendViaCloud(
+      cloudBody,
+      resolvedMessageText: message,
+    );
+    if (cloudReceipt.isSuccess) return cloudReceipt;
+
+    if (!allowManualFallback || _shouldSkipManualFallback(cloudReceipt)) {
+      return cloudReceipt;
     }
 
-    if (!allowManualFallback || _shouldSkipManualFallback()) {
-      _lastDeliveryMethod = WhatsAppDeliveryMethod.failed;
-      return false;
+    if (context == null || !context.mounted) {
+      return cloudReceipt;
     }
-
     final opened = await _openWhatsApp(context, phoneNumber, message);
-    _lastDeliveryMethod = opened
-        ? WhatsAppDeliveryMethod.manualFallback
-        : WhatsAppDeliveryMethod.failed;
-    return opened;
+    return cloudReceipt.copyWith(
+      deliveryMethod: opened
+          ? WhatsAppDeliveryMethod.manualFallback
+          : WhatsAppDeliveryMethod.failed,
+    );
   }
 
   /// Open WhatsApp with pre-filled message
@@ -410,6 +441,7 @@ class WhatsAppService {
       }
 
       // Open WhatsApp Web in WebView (desktop) or app (mobile)
+      if (!context.mounted) return false;
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -440,8 +472,8 @@ class WhatsAppService {
   }
 
   /// Send invoice via WhatsApp
-  Future<bool> sendInvoice({
-    required BuildContext context,
+  Future<WhatsAppSendReceipt> sendInvoice({
+    BuildContext? context,
     required String customerPhone,
     required String customerName,
     required Invoice invoice,
@@ -489,8 +521,8 @@ Por favor confirma para proceder con el trabajo. 🔧
   }
 
   /// Send payment confirmation receipt
-  Future<bool> sendPaymentReceipt({
-    required BuildContext context,
+  Future<WhatsAppSendReceipt> sendPaymentReceipt({
+    BuildContext? context,
     required String customerPhone,
     required String customerName,
     required Payment payment,
@@ -543,8 +575,8 @@ ${invoice.balance <= 0 ? '🎉 ¡Factura pagada completamente!' : '⚠️ Saldo 
   }
 
   /// Send mechanic job status update
-  Future<bool> sendJobStatusUpdate({
-    required BuildContext context,
+  Future<WhatsAppSendReceipt> sendJobStatusUpdate({
+    BuildContext? context,
     required String customerPhone,
     required String customerName,
     required MechanicJob job,
@@ -593,8 +625,8 @@ Viña Bike - Tu taller de confianza 🔧
   }
 
   /// Send bike ready for pickup notification
-  Future<bool> sendReadyForPickup({
-    required BuildContext context,
+  Future<WhatsAppSendReceipt> sendReadyForPickup({
+    BuildContext? context,
     required String customerPhone,
     required String customerName,
     required MechanicJob job,
@@ -648,8 +680,8 @@ Viña Bike
   }
 
   /// Send generic message
-  Future<bool> sendMessage({
-    required BuildContext context,
+  Future<WhatsAppSendReceipt> sendMessage({
+    BuildContext? context,
     required String customerPhone,
     required String message,
     String? contactName,
@@ -660,8 +692,6 @@ Viña Bike
     String? clientMessageId,
     Map<String, dynamic>? metadata,
   }) async {
-    _resetLastAttemptState(resolvedMessageText: message);
-
     final customerDisplayName =
         (contactName != null && contactName.trim().isNotEmpty)
             ? contactName.trim()
@@ -693,12 +723,15 @@ Viña Bike
       },
     };
 
-    if (await _sendViaCloud(cloudBody)) {
-      return true;
-    }
+    final cloudReceipt = await _sendViaCloud(
+      cloudBody,
+      resolvedMessageText: message,
+    );
+    if (cloudReceipt.isSuccess) return cloudReceipt;
+    var failureReceipt = cloudReceipt;
 
-    if (_lastErrorCode == _reengagementErrorCode) {
-      final templateSuccess = await sendFirstContactTemplate(
+    if (cloudReceipt.errorRequiresCustomerReply) {
+      final templateReceipt = await sendFirstContactTemplate(
         customerPhone: customerPhone,
         customerName: customerDisplayName,
         conversationId: conversationId,
@@ -707,24 +740,24 @@ Viña Bike
         clientMessageId: clientMessageId,
       );
 
-      if (templateSuccess) {
-        return true;
-      }
+      if (templateReceipt.isSuccess) return templateReceipt;
+      failureReceipt = templateReceipt;
     }
 
-    if (_shouldSkipManualFallback()) {
-      _lastDeliveryMethod = WhatsAppDeliveryMethod.failed;
-      return false;
+    if (_shouldSkipManualFallback(failureReceipt)) {
+      return failureReceipt;
     }
 
+    if (context == null || !context.mounted) return failureReceipt;
     final opened = await _openWhatsApp(context, customerPhone, message);
-    _lastDeliveryMethod = opened
-        ? WhatsAppDeliveryMethod.manualFallback
-        : WhatsAppDeliveryMethod.failed;
-    return opened;
+    return failureReceipt.copyWith(
+      deliveryMethod: opened
+          ? WhatsAppDeliveryMethod.manualFallback
+          : WhatsAppDeliveryMethod.failed,
+    );
   }
 
-  Future<bool> sendFirstContactTemplate({
+  Future<WhatsAppSendReceipt> sendFirstContactTemplate({
     required String customerPhone,
     required String customerName,
     String? agentName,
@@ -745,7 +778,7 @@ Viña Bike
     );
   }
 
-  Future<bool> sendTemplateMessage({
+  Future<WhatsAppSendReceipt> sendTemplateMessage({
     required WhatsAppTemplateOption option,
     required String customerPhone,
     required String customerName,
@@ -774,9 +807,7 @@ Viña Bike
             ? resolvedSenderLabel
             : businessName;
 
-    _resetLastAttemptState(resolvedMessageText: renderedMessage);
-
-    final success = await _sendViaCloud({
+    final receipt = await _sendViaCloud({
       'conversationId': conversationId,
       'phoneNumber': _formatPhoneNumber(customerPhone),
       'contactName': customerName,
@@ -808,21 +839,18 @@ Viña Bike
         'template_name': templateSettings.templateName,
         'template_language': templateSettings.templateLanguage,
       },
-    });
+    }, resolvedMessageText: renderedMessage);
 
-    if (success) {
-      _lastUsedFirstContactTemplate = true;
-    } else {
-      _lastDeliveryMethod = WhatsAppDeliveryMethod.failed;
-    }
-
-    return success;
+    return receipt.copyWith(
+      usedFirstContactTemplate: receipt.isSuccess &&
+          option.purpose == WhatsAppTemplatePurpose.firstContact,
+    );
   }
 
-  Future<bool> sendAttachment({
-    required BuildContext context,
+  Future<WhatsAppSendReceipt> sendAttachment({
+    BuildContext? context,
     required String customerPhone,
-    required String mediaUrl,
+    required String attachmentId,
     required String filename,
     required String messageType,
     String? caption,
@@ -838,15 +866,10 @@ Viña Bike
     final resolvedCaption = caption?.trim();
     final contentType = metadata?['contentType']?.toString() ??
         metadata?['content_type']?.toString();
-    final fallbackMessage = [
-      if (resolvedCaption != null && resolvedCaption.isNotEmpty)
-        resolvedCaption
-      else
-        'Te compartimos $filename:',
-      mediaUrl,
-    ].join('\n');
-
-    _resetLastAttemptState(resolvedMessageText: mediaUrl);
+    final fallbackMessage =
+        resolvedCaption != null && resolvedCaption.isNotEmpty
+            ? resolvedCaption
+            : 'Te compartimos $filename.';
 
     return _sendWithFallback(
       context: context,
@@ -861,8 +884,7 @@ Viña Bike
         'contextType': contextType,
         'contextId': contextId,
         'type': isImage ? 'image' : 'document',
-        if (isImage) 'mediaUrl': mediaUrl,
-        if (!isImage) 'documentUrl': mediaUrl,
+        'attachmentId': attachmentId,
         if (!isImage) 'documentFilename': filename,
         if (contentType != null && contentType.isNotEmpty)
           'contentType': contentType,
@@ -870,10 +892,6 @@ Viña Bike
           'caption': resolvedCaption,
         'metadata': {
           'source': 'flutter_erp',
-          'url': mediaUrl,
-          if (isImage) 'media_url': mediaUrl,
-          if (!isImage) 'documentUrl': mediaUrl,
-          if (!isImage) 'document_url': mediaUrl,
           'filename': filename,
           if (clientMessageId != null) 'client_message_id': clientMessageId,
           ...?metadata,
@@ -882,8 +900,8 @@ Viña Bike
     );
   }
 
-  Future<bool> sendInteractiveAction({
-    required BuildContext context,
+  Future<WhatsAppSendReceipt> sendInteractiveAction({
+    BuildContext? context,
     required String customerPhone,
     required String customerName,
     required String conversationId,

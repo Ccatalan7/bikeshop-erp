@@ -6,6 +6,7 @@ class Message {
   final String type; // 'text', 'image', 'file', 'system'
   final Map<String, dynamic> metadata;
   final DateTime createdAt;
+  final int? messageSequence;
   final bool isMe; // Helper for UI
 
   Message({
@@ -16,6 +17,7 @@ class Message {
     required this.type,
     required this.metadata,
     required this.createdAt,
+    this.messageSequence,
     this.isMe = false,
   });
 
@@ -48,7 +50,30 @@ class Message {
       type: json['type'] ?? 'text',
       metadata: metadata,
       createdAt: DateTime.parse(json['created_at']).toLocal(),
+      messageSequence: switch (json['message_sequence']) {
+        int value => value,
+        num value => value.toInt(),
+        final value when value != null => int.tryParse(value.toString()),
+        _ => null,
+      },
       isMe: currentUserId != null && json['sender_id'] == currentUserId,
     );
   }
+}
+
+/// Canonical order inside one conversation.
+///
+/// Server messages use their durable per-conversation sequence. Optimistic or
+/// legacy rows without one fall back deterministically to timestamp and ID.
+int compareMessageTimelineOrder(Message a, Message b) {
+  if (a.conversationId == b.conversationId &&
+      a.messageSequence != null &&
+      b.messageSequence != null) {
+    final sequenceOrder = a.messageSequence!.compareTo(b.messageSequence!);
+    if (sequenceOrder != 0) return sequenceOrder;
+  }
+
+  final timestampOrder = a.createdAt.compareTo(b.createdAt);
+  if (timestampOrder != 0) return timestampOrder;
+  return a.id.compareTo(b.id);
 }
