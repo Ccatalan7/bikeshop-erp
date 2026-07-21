@@ -5,6 +5,18 @@ select no_plan();
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
 
+-- A production-derived schema-only restore recreates public without restoring
+-- Supabase object ACLs. Normalize the production grants inside this rolled-back
+-- test before asserting them or switching roles.
+grant usage on schema public to authenticated;
+revoke all on function public.renew_online_order_inventory_reservations(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.renew_online_order_inventory_reservations(uuid)
+  to service_role;
+revoke all on public.online_order_inventory_reservations
+  from public, anon, authenticated, service_role;
+grant select on public.online_order_inventory_reservations to authenticated;
+
 select has_table(
   'public',
   'online_order_inventory_reservations',
@@ -25,6 +37,51 @@ select has_function(
   'get_online_order_inventory_reservation_deadline',
   array['uuid'],
   'payment providers have a narrow reservation deadline RPC'
+);
+select has_function(
+  'public',
+  'get_product_available_quantities',
+  array['uuid', 'uuid[]'],
+  'modern clients have a stable reservation-aware availability projection'
+);
+select ok(
+  has_function_privilege(
+    'authenticated',
+    'public.get_product_available_quantities(uuid,uuid[])',
+    'EXECUTE'
+  ),
+  'authenticated ERP clients can read tenant availability'
+);
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.get_product_available_quantities(uuid,uuid[])',
+    'EXECUTE'
+  ),
+  'service integrations can read tenant availability'
+);
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.get_product_available_quantities(uuid,uuid[])',
+    'EXECUTE'
+  ),
+  'anonymous callers cannot use the internal availability projection'
+);
+select is(
+  (select function_row.provolatile::text
+   from pg_proc function_row
+   where function_row.oid =
+     'public.get_product_available_quantities(uuid,uuid[])'::regprocedure),
+  's',
+  'availability projection is declared stable'
+);
+select ok(
+  (select function_row.prosecdef
+   from pg_proc function_row
+   where function_row.oid =
+     'public.get_product_available_quantities(uuid,uuid[])'::regprocedure),
+  'availability projection enforces tenant scope behind a security-definer boundary'
 );
 select ok(
   has_function_privilege(
@@ -151,6 +208,7 @@ select set_config(
   true
 );
 
+select set_config('app.product_set_composition_writer', 'migration', true);
 insert into public.products (
   id, tenant_id, name, sku, price, website_price, cost, tax_rate,
   product_type, is_service, purchase_treatment, track_stock,
@@ -198,7 +256,7 @@ values
     '9d290000-0000-4000-8000-000000000001',
     'Reservation set', 'RESERVE-SET-001',
     5000, 5000, 1800, 19, 'product', false, 'inventory', true,
-    2, 2, 0, 100, true, true, true, true
+    0, 0, 0, 100, true, true, true, true
   ),
   (
     '9d290000-0000-4000-8000-000000000016',
@@ -220,8 +278,30 @@ values
     'Mercado Pago reserved product', 'RESERVE-MP-001',
     1190, 1190, 500, 19, 'product', false, 'inventory', true,
     1, 1, 0, 100, true, true, true, false
+  ),
+  (
+    '9d290000-0000-4000-8000-000000000019',
+    '9d290000-0000-4000-8000-000000000001',
+    'Broken reservation set', 'RESERVE-BROKEN-SET',
+    5000, 5000, 1800, 19, 'product', false, 'inventory', true,
+    0, 0, 0, 100, true, true, true, true
   );
 
+select set_config('app.product_set_composition_writer', 'migration', true);
+update public.products
+set parent_set_id = '9d290000-0000-4000-8000-000000000015',
+    component_label = case id
+      when '9d290000-0000-4000-8000-000000000016'::uuid then 'Component one'
+      else 'Component two'
+    end,
+    component_position = case id
+      when '9d290000-0000-4000-8000-000000000016'::uuid then 1
+      else 2
+    end
+where id in (
+  '9d290000-0000-4000-8000-000000000016'::uuid,
+  '9d290000-0000-4000-8000-000000000017'::uuid
+);
 insert into public.product_set_components (
   tenant_id, set_product_id, component_product_id,
   component_label, component_position, quantity_in_set
@@ -239,6 +319,26 @@ values
     '9d290000-0000-4000-8000-000000000017',
     'Component two', 2, 1
   );
+select set_config('app.product_set_composition_writer', '', true);
+
+select throws_ok(
+  $$select * from public.get_product_available_quantities(
+    '9d290000-0000-4000-8000-000000000001',
+    array['9d290000-0000-4000-8000-000000000019'::uuid]
+  )$$,
+  '23514',
+  'Set product RESERVE-BROKEN-SET has no canonical components',
+  'availability projection fails closed for a set without a canonical map'
+);
+select throws_ok(
+  $$select * from public.get_product_available_quantities(
+    '9d290000-0000-4000-8000-000000000002',
+    array['9d290000-0000-4000-8000-000000000019'::uuid]
+  )$$,
+  '42501',
+  'Tenant availability access denied',
+  'availability projection cannot cross the authenticated tenant boundary'
+);
 
 create temp table online_inventory_test_ids (
   name text primary key,
@@ -283,6 +383,17 @@ select is(
   ),
   1,
   'availability subtracts the committed unit from physical stock'
+);
+select is(
+  (
+    select available_quantity
+    from public.get_product_available_quantities(
+      '9d290000-0000-4000-8000-000000000001',
+      array['9d290000-0000-4000-8000-000000000010'::uuid]
+    )
+  ),
+  1,
+  'stable availability projection returns ordinary stock after reservations'
 );
 select is(
   (
@@ -499,6 +610,31 @@ select is(
   'track_stock false products never invent physical stock reservations'
 );
 
+select is(
+  (
+    select stock_quantity
+    from public.get_public_products(
+      '9d290000-0000-4000-8000-000000000001',
+      null,
+      array['9d290000-0000-4000-8000-000000000015'::uuid],
+      null, null, null, true, 'name', 20, 0
+    )
+  ),
+  2,
+  'available-only catalog includes a virtual set using component availability'
+);
+select is(
+  (
+    select available_quantity
+    from public.get_product_available_quantities(
+      '9d290000-0000-4000-8000-000000000001',
+      array['9d290000-0000-4000-8000-000000000015'::uuid]
+    )
+  ),
+  2,
+  'stable availability projection derives complete sets from components'
+);
+
 insert into online_inventory_test_ids
 select 'set_order', public.create_public_online_order(
   jsonb_build_object(
@@ -548,6 +684,30 @@ select is(
   1,
   'set availability is the minimum remaining component bundle'
 );
+select is(
+  (
+    select stock_quantity
+    from public.get_public_products(
+      '9d290000-0000-4000-8000-000000000001',
+      null,
+      array['9d290000-0000-4000-8000-000000000015'::uuid],
+      null, null, null, true, 'name', 20, 0
+    )
+  ),
+  1,
+  'public set quantity follows remaining component bundles after reservation'
+);
+select is(
+  (
+    select available_quantity
+    from public.get_product_available_quantities(
+      '9d290000-0000-4000-8000-000000000001',
+      array['9d290000-0000-4000-8000-000000000015'::uuid]
+    )
+  ),
+  1,
+  'stable set availability follows component reservations'
+);
 select throws_ok(
   $$
     update public.product_set_components
@@ -555,9 +715,9 @@ select throws_ok(
      where set_product_id = '9d290000-0000-4000-8000-000000000015'
        and component_position = 1
   $$,
-  '23514',
-  'Set components are locked by an active online reservation',
-  'a live commitment freezes the set recipe used to price and reserve it'
+  '42501',
+  'Product set composition must be changed through save_product_set_aggregate',
+  'canonical set recipes cannot be edited directly while reservations exist'
 );
 select throws_ok(
   $$
@@ -911,10 +1071,8 @@ select set_config(
   '9d290000-0000-4000-8000-000000000098',
   true
 );
--- The production-derived schema-only restore deliberately recreates public
--- rather than restoring its ACL. Re-establish Supabase's standard schema
--- usage inside this rolled-back test so the assertion reaches table RLS.
-grant usage on schema public to authenticated;
+-- The production ACL normalized at the start lets this exercise table RLS,
+-- rather than failing first at schema/table privilege resolution.
 set local role authenticated;
 select is(
   (select count(*)::integer

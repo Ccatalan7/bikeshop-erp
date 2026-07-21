@@ -48,6 +48,8 @@ class WebsiteProductMediaItem {
     this.brand,
     this.categoryName,
     this.inventoryQty = 0,
+    this.isSet = false,
+    this.parentSetId,
     this.isActive = true,
     this.isPublished = false,
   });
@@ -58,9 +60,13 @@ class WebsiteProductMediaItem {
   final String? brand;
   final String? categoryName;
   final int inventoryQty;
+  final bool isSet;
+  final String? parentSetId;
   final bool isActive;
   final bool isPublished;
   final List<String> imageUrls;
+
+  int get availableStockQuantity => inventoryQty;
 
   String get searchableText => <String>[
         name,
@@ -86,6 +92,8 @@ class WebsiteProductMediaItem {
         'brand': brand,
         'categoryName': categoryName,
         'inventoryQty': inventoryQty,
+        'isSet': isSet,
+        'parentSetId': parentSetId,
         'isActive': isActive,
         'isPublished': isPublished,
         'imageIndex': imageIndex < 0 ? 0 : imageIndex,
@@ -132,6 +140,8 @@ class WebsiteProductMediaItem {
                 ((row['stock_quantity'] ?? row['inventory_qty']) as num?)
                         ?.round() ??
                     0,
+            isSet: row['is_set'] == true,
+            parentSetId: row['parent_set_id']?.toString(),
             isActive: row['is_active'] != false,
             isPublished: row['is_published'] == true,
             imageUrls: List<String>.unmodifiable(images),
@@ -227,6 +237,7 @@ class WebsiteMediaService {
         .from('products')
         .select(
           'id,name,sku,brand,category_name,stock_quantity,inventory_qty,'
+          'is_set,parent_set_id,'
           'is_active,is_published,image_url,image_url_optimized,image_urls,'
           'website_image_url,website_image_url_optimized,website_image_urls',
         )
@@ -234,11 +245,27 @@ class WebsiteMediaService {
         .order('name', ascending: true)
         .limit(2000);
 
-    return WebsiteProductMediaItem.fromRows(
-      (response as List)
-          .whereType<Map>()
-          .map((row) => Map<String, dynamic>.from(row)),
-    );
+    final rows = (response as List)
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
+    for (final row in rows.where((row) => row['is_set'] == true)) {
+      final preview = await _client.rpc(
+        'preview_product_stock_impact',
+        params: {'p_product_id': row['id'], 'p_quantity': 1},
+      );
+      final payload = preview is Map
+          ? Map<String, dynamic>.from(preview)
+          : preview is List && preview.length == 1 && preview.first is Map
+              ? Map<String, dynamic>.from(preview.first as Map)
+              : null;
+      final available = (payload?['available_quantity'] as num?)?.round();
+      if (available != null) {
+        row['inventory_qty'] = available;
+        row['stock_quantity'] = available;
+      }
+    }
+    return WebsiteProductMediaItem.fromRows(rows);
   }
 
   Future<WebsiteMediaAsset> uploadImage({

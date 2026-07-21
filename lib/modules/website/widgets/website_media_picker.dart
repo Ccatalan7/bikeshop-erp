@@ -625,18 +625,18 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
                     Row(
                       children: [
                         Icon(
-                          product.inventoryQty > 0
+                          product.availableStockQuantity > 0
                               ? Icons.inventory_2_outlined
                               : Icons.remove_shopping_cart_outlined,
                           size: 12,
-                          color: product.inventoryQty > 0
+                          color: product.availableStockQuantity > 0
                               ? Colors.green.shade700
                               : Colors.red.shade600,
                         ),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            'Stock ${product.inventoryQty}',
+                            'Stock ${product.availableStockQuantity}',
                             style: const TextStyle(
                               fontSize: 9.5,
                               color: Colors.black54,

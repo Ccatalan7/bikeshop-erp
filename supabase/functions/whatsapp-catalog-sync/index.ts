@@ -1,5 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  mergeCanonicalAvailableQuantities,
+  resolveAvailableProductQuantity,
+} from "../_shared/product_availability.ts";
 import { publicProductUrl } from "../_shared/product_url.ts";
 
 const corsHeaders = {
@@ -387,9 +391,7 @@ function buildCatalogProductPayload(product: JsonRecord) {
   const price = numberValue(product.whatsapp_catalog_price) ||
     numberValue(product.website_price) ||
     numberValue(product.price);
-  const stock = product.stock_quantity === null || product.stock_quantity === undefined
-    ? numberValue(product.inventory_qty)
-    : numberValue(product.stock_quantity);
+  const stock = resolveAvailableProductQuantity(product);
   const retailerId = catalogRetailerId(product);
 
   return {
@@ -1013,6 +1015,8 @@ serve(async (req: Request) => {
         "price",
         "inventory_qty",
         "stock_quantity",
+        "track_stock",
+        "is_set",
         "is_active",
         "is_published",
         "is_whatsapp_catalog",
@@ -1034,7 +1038,7 @@ serve(async (req: Request) => {
     if (error) throw error;
     if (!product) return jsonResponse({ error: "Product not found" }, 404);
 
-    const productRecord = product as unknown as JsonRecord;
+    let productRecord = product as unknown as JsonRecord;
     const productTenantId = stringValue(productRecord.tenant_id);
     const callerTenantId = await resolveCallerTenant(
       adminClient,
@@ -1046,6 +1050,17 @@ serve(async (req: Request) => {
     }
 
     canPersistFailure = true;
+    const { data: availabilityRows, error: availabilityError } = await adminClient
+      .rpc("get_product_available_quantities", {
+        p_tenant_id: productTenantId,
+        p_product_ids: [productId],
+      });
+    if (availabilityError) throw availabilityError;
+    productRecord = mergeCanonicalAvailableQuantities(
+      [productRecord],
+      (availabilityRows || []) as unknown as Array<Record<string, unknown>>,
+    )[0];
+
     const catalogId = await resolveCatalogId(adminClient, productTenantId);
 
     if (mode === "refresh") {

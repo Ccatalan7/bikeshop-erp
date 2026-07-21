@@ -4315,7 +4315,7 @@ class _PurchaseLineEntry {
                           Text('SKU: ${product.sku}'),
                           Text('Costo: \$${product.cost.toStringAsFixed(0)}'),
                           Text('Precio: \$${product.price.toStringAsFixed(0)}'),
-                          Text('Stock: ${product.stockQuantity}'),
+                          Text('Stock: ${product.availableStockQuantity}'),
                           if (product.description != null) ...[
                             const SizedBox(height: 16),
                             Text('Descripción:',
@@ -4709,26 +4709,30 @@ class _ProductSelectorState extends State<_ProductSelector> {
                                             vertical: 2,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: product.stockQuantity > 0
-                                                ? (isDark
-                                                    ? Colors.green[900]
-                                                    : Colors.green[100])
-                                                : (isDark
-                                                    ? Colors.red[900]
-                                                    : Colors.red[100]),
+                                            color:
+                                                product.availableStockQuantity >
+                                                        0
+                                                    ? (isDark
+                                                        ? Colors.green[900]
+                                                        : Colors.green[100])
+                                                    : (isDark
+                                                        ? Colors.red[900]
+                                                        : Colors.red[100]),
                                             borderRadius:
                                                 BorderRadius.circular(4),
                                           ),
                                           child: Text(
-                                            'Stock: ${product.stockQuantity}',
+                                            'Stock: ${product.availableStockQuantity}',
                                             style: TextStyle(
-                                              color: product.stockQuantity > 0
-                                                  ? (isDark
-                                                      ? Colors.green[300]
-                                                      : Colors.green[800])
-                                                  : (isDark
-                                                      ? Colors.red[300]
-                                                      : Colors.red[800]),
+                                              color:
+                                                  product.availableStockQuantity >
+                                                          0
+                                                      ? (isDark
+                                                          ? Colors.green[300]
+                                                          : Colors.green[800])
+                                                      : (isDark
+                                                          ? Colors.red[300]
+                                                          : Colors.red[800]),
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600,
                                             ),

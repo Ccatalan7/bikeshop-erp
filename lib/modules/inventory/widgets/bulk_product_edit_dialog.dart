@@ -207,35 +207,6 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       searchAliases: ['normal consumible taller compra inventario'],
     ),
     BulkCustomProductFieldDefinition(
-      key: 'is_set',
-      label: 'Es un Juego/Set',
-      group: BulkCustomProductFieldGroup.format,
-      type: BulkCustomProductFieldType.toggle,
-      helperText:
-          'Marca el producto como set. Los componentes se editan en la ficha individual.',
-      searchAliases: ['juego set paquete kit conjunto'],
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'set_type',
-      label: 'Tipo de Set',
-      group: BulkCustomProductFieldGroup.format,
-      type: BulkCustomProductFieldType.choice,
-      helperText: 'Al elegir un tipo, el producto queda marcado como set.',
-      choices: [
-        BulkCustomProductFieldChoice(value: 'pair', label: 'Par'),
-        BulkCustomProductFieldChoice(
-          value: 'frontRear',
-          label: 'Delantero/Trasero',
-        ),
-        BulkCustomProductFieldChoice(
-          value: 'leftRight',
-          label: 'Izquierdo/Derecho',
-        ),
-        BulkCustomProductFieldChoice(value: 'custom', label: 'Personalizado'),
-      ],
-      searchAliases: ['juego set tipo par delantero trasero izquierdo derecho'],
-    ),
-    BulkCustomProductFieldDefinition(
       key: 'category_id',
       label: 'Categoría',
       group: BulkCustomProductFieldGroup.classification,
@@ -4909,8 +4880,6 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       'description' => product.description,
       'product_type' => product.productType.name,
       'purchase_treatment' => product.purchaseTreatment.dbValue,
-      'is_set' => product.isSet,
-      'set_type' => product.setType,
       'category_id' => product.categoryId,
       'brand_id' => product.brandId,
       'model' => product.model,

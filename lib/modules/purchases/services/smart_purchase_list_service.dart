@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/smart_purchase_list_item.dart';
 
@@ -24,6 +25,7 @@ class SmartPurchaseListService extends ChangeNotifier {
   SmartPurchaseListService._internal();
 
   final DatabaseService _db = DatabaseService();
+  late final InventoryService _inventoryService = InventoryService(db: _db);
   final TenantService _tenantService = TenantService();
   final SupabaseClient _client = Supabase.instance.client;
 
@@ -150,9 +152,12 @@ class SmartPurchaseListService extends ChangeNotifier {
         .select('''
           *,
           products!smart_purchase_list_product_id_fkey(
+            id,
             category_id,
             track_stock,
             product_type,
+            is_set,
+            parent_set_id,
             product_categories!products_category_id_fkey(
               id,
               name,
@@ -172,19 +177,7 @@ class SmartPurchaseListService extends ChangeNotifier {
     final parseStartTime = DateTime.now();
     final items = response as List<dynamic>;
 
-    // Filter out services — they have no stock and should never be on the purchase list
-    _items = items
-        .where((json) {
-          final products = json['products'];
-          if (products == null) {
-            return true; // Keep if no product info (shouldn't happen)
-          }
-          final trackStock = products['track_stock'] as bool? ?? true;
-          final productType = products['product_type'] as String? ?? 'product';
-          return trackStock && productType != 'service';
-        })
-        .map((json) => SmartPurchaseListItem.fromJson(json))
-        .toList();
+    _items = await _normalizeItems(items);
 
     final parseDuration =
         DateTime.now().difference(parseStartTime).inMilliseconds;
@@ -263,24 +256,11 @@ class SmartPurchaseListService extends ChangeNotifier {
     try {
       switch (payload.eventType) {
         case PostgresChangeEvent.insert:
-          final newItem = SmartPurchaseListItem.fromJson(payload.newRecord);
-          _items.insert(0, newItem); // Add to top (highest priority)
-          debugPrint(
-              '➕ [REALTIME] Added item: ${newItem.productName} (${newItem.productSku})');
-          debugPrint('   Total items now: ${_items.length}');
+          unawaited(_upsertRealtimeItem(payload.newRecord));
           break;
 
         case PostgresChangeEvent.update:
-          final updatedItem = SmartPurchaseListItem.fromJson(payload.newRecord);
-          final index = _items.indexWhere((i) => i.id == updatedItem.id);
-          if (index >= 0) {
-            _items[index] = updatedItem;
-            debugPrint(
-                '🔄 [REALTIME] Updated item: ${updatedItem.productName} at index $index');
-          } else {
-            debugPrint(
-                '⚠️ [REALTIME] Item not found for update: ${updatedItem.id}');
-          }
+          unawaited(_upsertRealtimeItem(payload.newRecord));
           break;
 
         case PostgresChangeEvent.delete:
@@ -326,92 +306,117 @@ class SmartPurchaseListService extends ChangeNotifier {
       return;
     }
 
-    final newStock = payload.newRecord['inventory_qty'] as int? ??
-        payload.newRecord['stock_quantity'] as int? ??
-        0;
-    final minStock = payload.newRecord['min_stock_level'] as int? ?? 0;
-    final productName = payload.newRecord['name'] as String? ?? 'Unknown';
+    unawaited(_refreshProjectedStock(productId));
+  }
 
-    debugPrint('   Product: $productName ($productId)');
-    debugPrint('   Stock: $newStock, Min: $minStock');
+  Future<void> _refreshProjectedStock(String changedProductId) async {
+    final changed = await _inventoryService.getProductById(
+      changedProductId,
+      forceRefresh: true,
+    );
+    if (changed == null) return;
 
-    // Update cache
-    _productCache[productId] = payload.newRecord;
+    // Component movements change the sellable quantity of their parent set.
+    final targetId = changed.isSetComponent ? changed.parentSetId : changed.id;
+    if (targetId == null || targetId.isEmpty) return;
 
-    // If stock is now above minimum, remove pending items for this product
-    if (newStock > minStock) {
-      debugPrint(
-          '   ✓ Stock is above minimum - checking for items to remove...');
-      final removed = _items
-          .where((i) => i.productId == productId && i.status == 'pending')
-          .toList();
-      if (removed.isNotEmpty) {
-        final beforeCount = _items.length;
-        _items.removeWhere(
-            (i) => i.productId == productId && i.status == 'pending');
-        final afterCount = _items.length;
+    final target = targetId == changed.id
+        ? changed
+        : await _inventoryService.getProductById(targetId, forceRefresh: true);
+    if (target == null) return;
 
-        for (var item in removed) {
-          debugPrint(
-              '🗑️ [REALTIME] Auto-removed item: ${item.productName} (${item.productSku})');
-          debugPrint('   Reason: Stock restored ($newStock > $minStock)');
-        }
-        debugPrint('   Items before: $beforeCount, after: $afterCount');
-        debugPrint('📢 [REALTIME] Notifying listeners...');
-        notifyListeners();
-        debugPrint('✅ [REALTIME] Listeners notified');
-        return; // Exit early, no need to update
-      } else {
-        debugPrint('   ℹ️ No pending items found for this product');
-      }
-    } else {
-      debugPrint('   ℹ️ Stock still at/below minimum - no removal needed');
+    if (changed.isSetComponent) {
+      _items.removeWhere((item) => item.productId == changed.id);
     }
 
-    // Update any items using this product (if still in list)
-    bool updated = false;
-    for (var i = 0; i < _items.length; i++) {
-      if (_items[i].productId == productId) {
-        final item = _items[i];
-        _items[i] = SmartPurchaseListItem(
-          id: item.id,
-          productId: item.productId,
-          productName: payload.newRecord['name'] ?? item.productName,
-          productSku: payload.newRecord['sku'] ?? item.productSku,
-          supplierId: item.supplierId,
-          supplierName: item.supplierName,
-          suggestedQuantity: item.suggestedQuantity,
-          actualQuantity: item.actualQuantity,
-          status: item.status,
-          priority: item.priority,
-          rotationKpi: item.rotationKpi,
-          daysSinceLastPurchase: item.daysSinceLastPurchase,
-          currentStock: newStock,
-          minStockLevel: minStock,
-          stockAtOrder: item.stockAtOrder,
-          stockAtReceipt: item.stockAtReceipt,
-          avgDailyConsumption: item.avgDailyConsumption,
-          leadTimeDays: item.leadTimeDays,
-          estimatedStockoutDate: item.estimatedStockoutDate,
-          notes: item.notes,
-          addedBy: item.addedBy,
-          addedDate: item.addedDate,
-          orderedDate: item.orderedDate,
-          receivedDate: item.receivedDate,
-          linkedPurchaseInvoiceId: item.linkedPurchaseInvoiceId,
-          linkedExpenseId: item.linkedExpenseId,
-          createdAt: item.createdAt,
-          updatedAt: DateTime.now(), // Mark as updated
-        );
-        updated = true;
-        debugPrint(
-            '📦 Updated stock for ${item.productName}: $newStock / $minStock');
-      }
+    final available = target.availableStockQuantity;
+    _items = _items.map((item) {
+      if (item.productId != target.id) return item;
+      return item.copyWith(
+        productName: target.name,
+        productSku: target.sku,
+        currentStock: available,
+        minStockLevel: target.minStockLevel,
+        updatedAt: DateTime.now(),
+      );
+    }).toList(growable: false);
+
+    if (available > target.minStockLevel) {
+      _items.removeWhere(
+        (item) => item.productId == target.id && item.status == 'pending',
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<void> _upsertRealtimeItem(Map<String, dynamic> record) async {
+    final normalized = await _normalizeItems([record]);
+    final recordId = record['id']?.toString();
+    if (recordId == null) return;
+    if (normalized.isEmpty) {
+      _items.removeWhere((item) => item.id == recordId);
+      _debouncedNotify();
+      return;
     }
 
-    if (updated) {
-      notifyListeners();
+    final item = normalized.single;
+    _items.removeWhere(
+      (candidate) =>
+          candidate.id == item.id ||
+          (item.productId != null && candidate.productId == item.productId),
+    );
+    _items.insert(0, item);
+    _debouncedNotify();
+  }
+
+  Future<List<SmartPurchaseListItem>> _normalizeItems(
+    List<dynamic> rawRows,
+  ) async {
+    final rows = rawRows
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
+    final productIds = rows
+        .map((row) => row['product_id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final products = await _inventoryService.getProductsByIds(
+      productIds,
+      forceRefresh: true,
+    );
+    final byId = {for (final product in products) product.id: product};
+    final seenProductIds = <String>{};
+    final normalized = <SmartPurchaseListItem>[];
+
+    for (final row in rows) {
+      final productId = row['product_id']?.toString();
+      final product = productId == null ? null : byId[productId];
+      final joined = row['products'];
+      final joinedMap = joined is Map
+          ? Map<String, dynamic>.from(joined)
+          : const <String, dynamic>{};
+      final tracksStock = product?.tracksInventory ??
+          (joinedMap['track_stock'] as bool? ?? true);
+      final isService = product?.productType == ProductType.service ||
+          joinedMap['product_type'] == 'service';
+      final isComponent = product?.isSetComponent ??
+          ((joinedMap['parent_set_id']?.toString().isNotEmpty ?? false));
+      if (!tracksStock || isService || isComponent) continue;
+      if (productId != null && !seenProductIds.add(productId)) continue;
+
+      final item = SmartPurchaseListItem.fromJson(row);
+      normalized.add(
+        product == null
+            ? item
+            : item.copyWith(
+                productName: product.name,
+                productSku: product.sku,
+                currentStock: product.availableStockQuantity,
+                minStockLevel: product.minStockLevel,
+              ),
+      );
     }
+    return normalized;
   }
 
   /// Load items with filters (uses cached data + in-memory filtering)
@@ -441,10 +446,13 @@ class SmartPurchaseListService extends ChangeNotifier {
             .select('''
               *,
               products!smart_purchase_list_product_id_fkey(
+                id,
                 category_id,
                 purchase_treatment,
                 track_stock,
                 product_type,
+                is_set,
+                parent_set_id,
                 product_categories!products_category_id_fkey(
                   id,
                   name,
@@ -459,18 +467,7 @@ class SmartPurchaseListService extends ChangeNotifier {
 
         final items = response as List<dynamic>;
 
-        // Filter out services — they have no stock and should never be on the purchase list
-        _items = items
-            .where((json) {
-              final products = json['products'];
-              if (products == null) return true;
-              final trackStock = products['track_stock'] as bool? ?? true;
-              final productType =
-                  products['product_type'] as String? ?? 'product';
-              return trackStock && productType != 'service';
-            })
-            .map((json) => SmartPurchaseListItem.fromJson(json))
-            .toList();
+        _items = await _normalizeItems(items);
 
         debugPrint('✅ Loaded ${_items.length} items for status: $statusFilter');
       } catch (e) {
@@ -494,10 +491,13 @@ class SmartPurchaseListService extends ChangeNotifier {
             .select('''
               *,
               products!smart_purchase_list_product_id_fkey(
+                id,
                 category_id,
                 purchase_treatment,
                 track_stock,
                 product_type,
+                is_set,
+                parent_set_id,
                 product_categories!products_category_id_fkey(
                   id,
                   name,
@@ -511,18 +511,7 @@ class SmartPurchaseListService extends ChangeNotifier {
 
         final items = response as List<dynamic>;
 
-        // Filter out services — they have no stock and should never be on the purchase list
-        _items = items
-            .where((json) {
-              final products = json['products'];
-              if (products == null) return true;
-              final trackStock = products['track_stock'] as bool? ?? true;
-              final productType =
-                  products['product_type'] as String? ?? 'product';
-              return trackStock && productType != 'service';
-            })
-            .map((json) => SmartPurchaseListItem.fromJson(json))
-            .toList();
+        _items = await _normalizeItems(items);
 
         debugPrint('✅ Loaded ${_items.length} total items');
       } catch (e) {
@@ -628,6 +617,17 @@ class SmartPurchaseListService extends ChangeNotifier {
       final tenantId = await _tenantService.getTenantId();
       if (tenantId == null) return false;
 
+      final canonicalProduct = await _inventoryService.getProductById(
+        productId,
+        forceRefresh: true,
+      );
+      if (canonicalProduct == null ||
+          !canonicalProduct.isActive ||
+          !canonicalProduct.tracksInventory ||
+          canonicalProduct.isSetComponent) {
+        return false;
+      }
+
       // Check if product exists in list already (any active status)
       final existing = await _client
           .from('smart_purchase_list')
@@ -648,10 +648,8 @@ class SmartPurchaseListService extends ChangeNotifier {
             suppliers(id, name)
           ''').eq('tenant_id', tenantId).eq('id', productId).single();
 
-      final currentStock = product['inventory_qty'] as int? ??
-          product['stock_quantity'] as int? ??
-          0;
-      final minStock = product['min_stock_level'] as int? ?? 0;
+      final currentStock = canonicalProduct.availableStockQuantity;
+      final minStock = canonicalProduct.minStockLevel;
 
       debugPrint(
           '📦 Product: ${product['name']} | Stock: $currentStock / $minStock');
@@ -670,7 +668,7 @@ class SmartPurchaseListService extends ChangeNotifier {
       final suggestedQty = _calculateSuggestedQuantity(
         currentStock: currentStock,
         minStock: minStock,
-        maxStock: product['max_stock_level'] as int? ?? 100,
+        maxStock: canonicalProduct.maxStockLevel,
         avgDailyConsumption: metrics['avgDailyConsumption'],
         leadTimeDays: product['lead_time_days'] as int? ?? 0,
       );
@@ -730,11 +728,23 @@ class SmartPurchaseListService extends ChangeNotifier {
     String? linkedJobId,
     String? linkedJobNumber,
   }) async {
+    final canonicalProduct = product ??
+        (productId == null
+            ? null
+            : await _inventoryService.getProductById(productId));
+    if (canonicalProduct?.isSetComponent ?? false) {
+      throw StateError(
+        'Las piezas de un juego no se agregan automáticamente a la lista de compra. '
+        'Agrega el juego o vende/repón la pieza de forma individual.',
+      );
+    }
+
     try {
-      final resolvedProductId = productId ?? product?.id;
-      final resolvedSku = productSku ?? product?.sku;
-      final resolvedSupplierId = supplierId ?? product?.supplierId;
-      final resolvedSupplierName = supplierName ?? product?.supplierName;
+      final resolvedProductId = productId ?? canonicalProduct?.id;
+      final resolvedSku = productSku ?? canonicalProduct?.sku;
+      final resolvedSupplierId = supplierId ?? canonicalProduct?.supplierId;
+      final resolvedSupplierName =
+          supplierName ?? canonicalProduct?.supplierName;
 
       final data = {
         'product_id': resolvedProductId,
@@ -743,15 +753,16 @@ class SmartPurchaseListService extends ChangeNotifier {
         'supplier_id': resolvedSupplierId,
         'supplier_name': resolvedSupplierName,
         'purchase_treatment':
-            (product?.purchaseTreatment ?? PurchaseTreatment.inventory).dbValue,
-        'category_id': product?.categoryId,
-        'category_name': product?.categoryName,
+            (canonicalProduct?.purchaseTreatment ?? PurchaseTreatment.inventory)
+                .dbValue,
+        'category_id': canonicalProduct?.categoryId,
+        'category_name': canonicalProduct?.categoryName,
         'suggested_quantity': quantity,
         'status': 'pending',
         'priority': 50.0, // Default priority for manual additions
-        'current_stock': product?.stockQuantity ?? 0,
-        'min_stock_level': product?.minStockLevel ?? 0,
-        'lead_time_days': product?.leadTimeDays ?? 0,
+        'current_stock': canonicalProduct?.availableStockQuantity ?? 0,
+        'min_stock_level': canonicalProduct?.minStockLevel ?? 0,
+        'lead_time_days': canonicalProduct?.leadTimeDays ?? 0,
         'notes': notes,
         'linked_job_id': linkedJobId,
         'linked_job_number': linkedJobNumber,
@@ -778,10 +789,13 @@ class SmartPurchaseListService extends ChangeNotifier {
     var query = _client.from('smart_purchase_list').select('''
           *,
           products!smart_purchase_list_product_id_fkey(
+            id,
             category_id,
             purchase_treatment,
             track_stock,
             product_type,
+            is_set,
+            parent_set_id,
             product_categories!products_category_id_fkey(
               id,
               name,
@@ -795,9 +809,7 @@ class SmartPurchaseListService extends ChangeNotifier {
     }
 
     final response = await query.order('added_date', ascending: false);
-    return (response as List<dynamic>)
-        .map((json) => SmartPurchaseListItem.fromJson(json))
-        .toList();
+    return _normalizeItems(response as List<dynamic>);
   }
 
   Future<void> addOrMergeJobItem({
@@ -811,6 +823,11 @@ class SmartPurchaseListService extends ChangeNotifier {
     final trimmedName = productName.trim();
     if (trimmedName.isEmpty) {
       throw Exception('Product name cannot be empty');
+    }
+    if (product?.isSetComponent ?? false) {
+      throw StateError(
+        'Las piezas de un juego no se agregan automáticamente a la lista de compra.',
+      );
     }
 
     final activeItems = await getItemsForJob(
@@ -1004,8 +1021,13 @@ class SmartPurchaseListService extends ChangeNotifier {
           .select('''
             *,
             products!smart_purchase_list_product_id_fkey(
+              id,
               category_id,
               purchase_treatment,
+              track_stock,
+              product_type,
+              is_set,
+              parent_set_id,
               product_categories!products_category_id_fkey(
                 id,
                 name,
@@ -1018,9 +1040,7 @@ class SmartPurchaseListService extends ChangeNotifier {
           .order('priority', ascending: false)
           .order('added_date', ascending: false);
 
-      _items = (response as List<dynamic>)
-          .map((json) => SmartPurchaseListItem.fromJson(json))
-          .toList();
+      _items = await _normalizeItems(response as List<dynamic>);
 
       debugPrint('✅ Reloaded ${_items.length} $reloadStatus items');
 
@@ -1096,19 +1116,21 @@ class SmartPurchaseListService extends ChangeNotifier {
 
       // Get all active products with their stock levels
       // We need to filter in Dart since Supabase doesn't support column-to-column comparison
-      final allProducts = await _client
-          .from('products')
-          .select('id, stock_quantity, min_stock_level')
-          .eq('tenant_id', tenantId)
-          .eq('is_active', true);
+      final allProducts = (await _inventoryService.getProducts(
+        forceRefresh: true,
+      ))
+          .where(
+            (product) =>
+                product.isActive &&
+                product.tracksInventory &&
+                !product.isSetComponent,
+          )
+          .toList(growable: false);
 
       // Create a map for quick product lookup
-      final productMap = <String, Map<String, dynamic>>{};
+      final productMap = <String, Product>{};
       for (var product in allProducts) {
-        final productId = product['id']?.toString();
-        if (productId != null) {
-          productMap[productId] = product;
-        }
+        productMap[product.id] = product;
       }
 
       // 1. CLEANUP: Remove pending items that now have sufficient stock
@@ -1119,10 +1141,8 @@ class SmartPurchaseListService extends ChangeNotifier {
 
         final product = productMap[productId];
         if (product != null) {
-          final stockQty = product['inventory_qty'] as int? ??
-              product['stock_quantity'] as int? ??
-              0;
-          final minStock = product['min_stock_level'] as int? ?? 0;
+          final stockQty = product.availableStockQuantity;
+          final minStock = product.minStockLevel;
 
           // Remove if stock is now above minimum (no longer needed)
           if (stockQty > minStock) {
@@ -1139,15 +1159,13 @@ class SmartPurchaseListService extends ChangeNotifier {
       }
 
       // 2. ADD: Find products with low stock that aren't in the list yet
-      final lowStockProducts = (allProducts as List).where((product) {
-        final productId = product['id']?.toString();
-        final stockQty = product['inventory_qty'] as int? ??
-            product['stock_quantity'] as int? ??
-            0;
-        final minStock = product['min_stock_level'] as int? ?? 0;
+      final lowStockProducts = allProducts.where((product) {
+        final productId = product.id;
+        final stockQty = product.availableStockQuantity;
+        final minStock = product.minStockLevel;
 
         // Skip if already in purchase list (any status)
-        if (productId != null && existingIds.contains(productId)) {
+        if (existingIds.contains(productId)) {
           return false;
         }
 
@@ -1156,7 +1174,7 @@ class SmartPurchaseListService extends ChangeNotifier {
 
       int addedCount = 0;
       for (var product in lowStockProducts) {
-        final wasAdded = await checkAndAddLowStockProduct(product['id']);
+        final wasAdded = await checkAndAddLowStockProduct(product.id);
         if (wasAdded) {
           addedCount++;
         }
@@ -1226,15 +1244,11 @@ class SmartPurchaseListService extends ChangeNotifier {
       }
 
       // Get current stock
-      final product = await _client
-          .from('products')
-          .select('inventory_qty, stock_quantity')
-          .eq('id', productId)
-          .single();
-
-      final currentStock = product['inventory_qty'] as int? ??
-          product['stock_quantity'] as int? ??
-          0;
+      final product = await _inventoryService.getProductById(
+        productId,
+        forceRefresh: true,
+      );
+      final currentStock = product?.availableStockQuantity ?? 0;
 
       // Calculate estimated stockout date
       String? estimatedStockoutDate;

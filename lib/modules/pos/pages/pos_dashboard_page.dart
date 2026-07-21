@@ -426,12 +426,13 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
 
     final requiresStock =
         product.productType == ProductType.product && product.trackStock;
-    if (requiresStock && product.stockQuantity < quantity) {
+    if (requiresStock && product.availableStockQuantity < quantity) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text('Stock insuficiente. Disponible: ${product.stockQuantity}'),
+          content: Text(
+            'Stock insuficiente. Disponible: ${product.availableStockQuantity}',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -599,7 +600,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
 
       final requiresStock =
           product.productType == ProductType.product && product.trackStock;
-      final hasStock = !requiresStock || product.stockQuantity > 0;
+      final hasStock = !requiresStock || product.availableStockQuantity > 0;
 
       return matchesSearch && matchesCategory && matchesType && hasStock;
     }).toList();

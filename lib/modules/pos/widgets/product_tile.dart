@@ -22,10 +22,10 @@ class ProductTile extends StatelessWidget {
     final theme = Theme.of(context);
     final isService = product.productType == ProductType.service;
     final requiresStock = product.trackStock && !isService;
-    final isOutOfStock = requiresStock && product.stockQuantity <= 0;
-    final isLowStock = requiresStock &&
-        product.stockQuantity > 0 &&
-        product.stockQuantity <= 5;
+    final availableStock = product.availableStockQuantity;
+    final isOutOfStock = requiresStock && availableStock <= 0;
+    final isLowStock =
+        requiresStock && availableStock > 0 && availableStock <= 5;
     final imageUrl = _effectiveImageUrl;
 
     return Container(
@@ -105,7 +105,7 @@ class ProductTile extends StatelessWidget {
                                 )
                               : _badge(
                                   theme,
-                                  label: '${product.stockQuantity} un.',
+                                  label: '$availableStock un.',
                                   bg: isLowStock
                                       ? theme.colorScheme.errorContainer
                                           .withValues(alpha: 0.9)

@@ -293,6 +293,9 @@ class _ProductFormPageState extends State<ProductFormPage>
   bool _isSet = false;
   SetType? _setType;
   List<SetComponentDraft> _setComponents = [];
+  int? _fullSetsAvailable;
+  String _productSetSaveOperationKey =
+      'product-set-form-${DateTime.now().microsecondsSinceEpoch}';
 
   String? _imageUrl;
   String? _imageUrlOptimized; // Optimized WebP version for fast web loading
@@ -2261,7 +2264,45 @@ class _ProductFormPageState extends State<ProductFormPage>
   /// Load existing component products for a set
   Future<void> _loadSetComponents(String parentSetId) async {
     try {
-      // Get all products from cache/service
+      final snapshot =
+          await _inventoryService.getProductSetComposition(parentSetId);
+      _fullSetsAvailable = snapshot.fullSetsAvailable;
+      _inventoryQtyController.text = snapshot.fullSetsAvailable.toString();
+      _setComponents = snapshot.components.map((component) {
+        final parentPrice =
+            double.tryParse(_priceController.text.replaceAll(',', '.')) ?? 0;
+        final parentCost =
+            double.tryParse(_costController.text.replaceAll(',', '.')) ?? 0;
+        return SetComponentDraft(
+          productId: component.id,
+          label: component.label,
+          name: component.name,
+          skuSuffix: _componentSkuSuffix(
+            parentSku: _skuController.text,
+            componentSku: component.sku,
+          ),
+          position: component.position,
+          quantityInSet: component.quantityInSet,
+          costRatio: component.costRatio ??
+              (parentCost > 0 ? component.cost / parentCost : null),
+          priceRatio: component.priceRatio ??
+              (parentPrice > 0 ? component.price / parentPrice : null),
+          cost: component.cost,
+          price: component.price,
+        );
+      }).toList(growable: false);
+      return;
+    } catch (error) {
+      if (!_isMissingSetCompositionRpc(error)) rethrow;
+      debugPrint(
+        '[SET] Composition RPC is not deployed; using compatibility mirror: '
+        '$error',
+      );
+    }
+
+    try {
+      // Compatibility fallback for clients running before the composition
+      // migration or for legacy rows awaiting its deterministic backfill.
       final allProducts = await _inventoryService.getProducts();
 
       // Filter to get components of this set
@@ -2272,6 +2313,12 @@ class _ProductFormPageState extends State<ProductFormPage>
             (a.componentPosition ?? 0).compareTo(b.componentPosition ?? 0));
 
       if (components.isNotEmpty) {
+        _fullSetsAvailable = components
+            .map((component) => component.inventoryQty)
+            .reduce((current, next) => current < next ? current : next)
+            .clamp(0, 1 << 31)
+            .toInt();
+        _inventoryQtyController.text = _fullSetsAvailable.toString();
         // Convert Product objects to SetComponentDraft for the widget
         _setComponents = components.map((comp) {
           // Calculate ratio if we have parent price/cost
@@ -2281,10 +2328,15 @@ class _ProductFormPageState extends State<ProductFormPage>
               double.tryParse(_costController.text.replaceAll(',', '.')) ?? 0;
 
           return SetComponentDraft(
+            productId: comp.id,
             label: comp.componentLabel ?? comp.name,
             name: comp.name,
-            skuSuffix: comp.sku.split('-').last, // Extract suffix from SKU
+            skuSuffix: _componentSkuSuffix(
+              parentSku: _skuController.text,
+              componentSku: comp.sku,
+            ),
             position: comp.componentPosition ?? 1,
+            quantityInSet: 1,
             costRatio: parentCost > 0 ? comp.cost / parentCost : null,
             priceRatio: parentPrice > 0 ? comp.price / parentPrice : null,
             cost: comp.cost,
@@ -2297,6 +2349,22 @@ class _ProductFormPageState extends State<ProductFormPage>
     } catch (e) {
       debugPrint('[SET] Error loading components: $e');
     }
+  }
+
+  bool _isMissingSetCompositionRpc(Object error) {
+    return error is PostgrestException &&
+        const {'PGRST202', '42883'}.contains(error.code);
+  }
+
+  String _componentSkuSuffix({
+    required String parentSku,
+    required String componentSku,
+  }) {
+    final prefix = '${parentSku.trim()}-';
+    if (prefix.length > 1 && componentSku.startsWith(prefix)) {
+      return componentSku.substring(prefix.length);
+    }
+    return componentSku.split('-').last;
   }
 
   Future<void> _selectMainImage() async {
@@ -2587,7 +2655,8 @@ class _ProductFormPageState extends State<ProductFormPage>
   bool get _canAdjustExistingStock =>
       _existingProduct?.id != null &&
       _tracksInventoryInForm &&
-      !_isChildProduct;
+      !_isChildProduct &&
+      !_isSet;
 
   int get _existingTrackedStockQuantity {
     final product = _existingProduct;
@@ -4937,7 +5006,79 @@ class _ProductFormPageState extends State<ProductFormPage>
       );
 
       Product savedProduct;
-      if (_existingProduct != null) {
+      if (_isSet) {
+        if (_setComponents.isEmpty) {
+          throw StateError('Define al menos un componente para el juego.');
+        }
+        final parentPayload = product.toJson(includeNulls: true)
+          ..remove('tenant_id')
+          ..remove('inventory_qty')
+          ..remove('stock_quantity')
+          ..remove('track_stock')
+          ..remove('is_service')
+          ..remove('is_set')
+          ..remove('parent_set_id')
+          ..remove('component_label')
+          ..remove('component_position')
+          ..remove('created_at')
+          ..remove('updated_at');
+        if (_existingProduct?.id != null) {
+          parentPayload['id'] = _existingProduct!.id;
+          parentPayload['expected_updated_at'] =
+              _existingProduct!.updatedAt.toUtc().toIso8601String();
+        } else {
+          parentPayload.remove('id');
+        }
+
+        final componentPayloads = _setComponents.map((component) {
+          return <String, dynamic>{
+            if (component.productId != null) 'id': component.productId,
+            'sku': component.generateSku(product.sku),
+            'name': component.name.trim().isEmpty
+                ? '${product.name} - ${component.label.trim()}'
+                : component.name.trim(),
+            'label': component.label.trim(),
+            'position': component.position,
+            'quantity_in_set': component.quantityInSet,
+            'price': component.price,
+            'cost': component.cost,
+            if (component.costRatio != null) 'cost_ratio': component.costRatio,
+            if (component.priceRatio != null)
+              'price_ratio': component.priceRatio,
+          };
+        }).toList(growable: false);
+
+        final aggregate = await _inventoryService.saveProductSetAggregate(
+          parent: parentPayload,
+          components: componentPayloads,
+          operationKey: _productSetSaveOperationKey,
+        );
+        savedProduct = aggregate.parent;
+        _existingProduct = savedProduct;
+        // The same key is retained on rejection or an unknown acknowledgement,
+        // but a confirmed receipt starts a fresh edit operation.
+        _productSetSaveOperationKey =
+            'product-set-form-${DateTime.now().microsecondsSinceEpoch}';
+        _fullSetsAvailable = aggregate.composition.fullSetsAvailable;
+        _inventoryQtyController.text = _fullSetsAvailable.toString();
+        _setComponents = aggregate.composition.components.map((component) {
+          return SetComponentDraft(
+            productId: component.id,
+            label: component.label,
+            name: component.name,
+            skuSuffix: _componentSkuSuffix(
+              parentSku: savedProduct.sku,
+              componentSku: component.sku,
+            ),
+            position: component.position,
+            quantityInSet: component.quantityInSet,
+            costRatio: component.costRatio,
+            priceRatio: component.priceRatio,
+            cost: component.cost,
+            price: component.price,
+          );
+        }).toList(growable: false);
+      } else if (_existingProduct != null) {
         savedProduct = await _inventoryService.updateProduct(product);
       } else {
         savedProduct = await _inventoryService.createProduct(product);
@@ -4948,11 +5089,6 @@ class _ProductFormPageState extends State<ProductFormPage>
           tenantId: tenantId,
           productId: savedProduct.id!,
         );
-      }
-
-      // Create component products if this is a set
-      if (_isSet && _setComponents.isNotEmpty && savedProduct.id != null) {
-        await _createSetComponentProducts(savedProduct);
       }
 
       // Save Ficha Técnica spec values
@@ -5058,103 +5194,6 @@ class _ProductFormPageState extends State<ProductFormPage>
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
-  }
-
-  /// Create component products for a set
-  Future<void> _createSetComponentProducts(Product parentProduct) async {
-    final parentId = parentProduct.id;
-    if (parentId == null) return;
-
-    debugPrint(
-        '[SET] Creating ${_setComponents.length} component products for set ${parentProduct.sku}');
-
-    // 1. Identify and delete orphaned components
-    // (Components that exist in DB for this set but are NOT in the current list)
-    try {
-      final allProducts = await _inventoryService.getProducts();
-      final existingSetComponents =
-          allProducts.where((p) => p.parentSetId == parentId).toList();
-
-      final currentSkus =
-          _setComponents.map((c) => c.generateSku(parentProduct.sku)).toSet();
-
-      for (final existing in existingSetComponents) {
-        if (!currentSkus.contains(existing.sku)) {
-          if (existing.id != null) {
-            debugPrint('[SET] Deleting orphaned component: ${existing.sku}');
-            await _inventoryService.deleteProduct(existing.id!);
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('[SET] Error cleaning up orphans: $e');
-    }
-
-    // 2. Create or update current components
-    for (final component in _setComponents) {
-      try {
-        // Generate component SKU
-        final componentSku = component.generateSku(parentProduct.sku);
-
-        // Check if component already exists (for updates)
-        final existingComponent =
-            await _inventoryService.getProductBySku(componentSku);
-
-        if (existingComponent != null) {
-          // Update existing component
-          debugPrint('[SET] Updating existing component: $componentSku');
-          await _inventoryService.updateProduct(existingComponent.copyWith(
-            name: component.name.isNotEmpty
-                ? component.name
-                : '${parentProduct.name} - ${component.label}',
-            price: component.price,
-            cost: component.cost,
-            taxRate: parentProduct.taxRate,
-            componentLabel: component.label,
-            componentPosition: component.position,
-          ));
-        } else {
-          // Create new component product
-          debugPrint('[SET] Creating new component: $componentSku');
-          final componentProduct = Product(
-            tenantId: parentProduct.tenantId,
-            name: component.name.isNotEmpty
-                ? component.name
-                : '${parentProduct.name} - ${component.label}',
-            sku: componentSku,
-            description: '${component.label} del set ${parentProduct.name}',
-            categoryId: parentProduct.categoryId,
-            supplierId: parentProduct.supplierId,
-            brand: parentProduct.brand,
-            price: component.price,
-            cost: component.cost,
-            taxRate: parentProduct.taxRate,
-            inventoryQty: 0, // Components start with 0 stock
-            minStockLevel: parentProduct.minStockLevel,
-            imageUrl: parentProduct.imageUrl,
-            isActive: parentProduct.isActive,
-            isPublished: false, // Components are not published directly
-            productType: ProductType.product,
-            // Link to parent set
-            parentSetId: parentId,
-            componentLabel: component.label,
-            componentPosition: component.position,
-          );
-
-          debugPrint('[SET] Component data: ${componentProduct.toJson()}');
-          final created =
-              await _inventoryService.createProduct(componentProduct);
-          debugPrint(
-              '[SET] ✅ Created component ${component.label} with ID: ${created.id}');
-        }
-      } catch (e, stackTrace) {
-        debugPrint('[SET] ❌ Error creating component ${component.label}: $e');
-        debugPrint('[SET] Stack: $stackTrace');
-        // Continue with other components even if one fails
-      }
-    }
-
-    debugPrint('[SET] Finished creating component products');
   }
 
   void _notifySharedInventory() {
@@ -8592,6 +8631,7 @@ class _ProductFormPageState extends State<ProductFormPage>
   }
 
   List<Widget> _buildInventoryFields(ThemeData theme) {
+    final stockIsDerived = _isSet;
     final stockIsManagedByAdjustments = _canAdjustExistingStock;
     final stockAdjustmentTooltip =
         'Stock valorizado actual: ${ChileanUtils.formatCurrency(_existingTrackedInventoryValue)}\n\n'
@@ -8599,9 +8639,11 @@ class _ProductFormPageState extends State<ProductFormPage>
 
     return [
       Text(
-        stockIsManagedByAdjustments
-            ? 'El stock actual solo cambia mediante ajustes auditables con motivo, fecha, usuario y asiento contable.'
-            : 'Controla cantidades disponibles y stock mínimo para alertas.',
+        stockIsDerived
+            ? 'Disponibilidad calculada desde componentes. El juego no duplica stock físico.'
+            : stockIsManagedByAdjustments
+                ? 'El stock actual solo cambia mediante ajustes auditables con motivo, fecha, usuario y asiento contable.'
+                : 'Controla cantidades disponibles y stock mínimo para alertas.',
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),
@@ -8613,51 +8655,60 @@ class _ProductFormPageState extends State<ProductFormPage>
 
           final stockField = TextFormField(
             controller: _inventoryQtyController,
-            readOnly: stockIsManagedByAdjustments,
+            readOnly: stockIsManagedByAdjustments || stockIsDerived,
             decoration: InputDecoration(
-              labelText: stockIsManagedByAdjustments
-                  ? 'Stock actual'
-                  : 'Stock disponible',
-              helperText: stockIsManagedByAdjustments
-                  ? 'Haz clic en el ícono azul para registrar un ajuste.'
-                  : null,
-              suffixIcon: stockIsManagedByAdjustments
-                  ? Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: Tooltip(
-                        message: stockAdjustmentTooltip,
-                        waitDuration: const Duration(milliseconds: 150),
-                        showDuration: const Duration(seconds: 6),
-                        preferBelow: false,
-                        child: Material(
-                          color:
-                              theme.colorScheme.primary.withValues(alpha: 0.12),
-                          shape: const CircleBorder(),
-                          child: IconButton(
-                            tooltip: 'Registrar ajuste de stock',
-                            onPressed: _isApplyingStockAdjustment
-                                ? null
-                                : _handleStockAdjustment,
-                            color: theme.colorScheme.primary,
-                            splashRadius: 20,
-                            icon: _isApplyingStockAdjustment
-                                ? SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: theme.colorScheme.primary,
-                                    ),
-                                  )
-                                : const Icon(
-                                    Icons.playlist_add_check_circle,
-                                    size: 20,
-                                  ),
-                          ),
-                        ),
-                      ),
+              labelText: stockIsDerived
+                  ? 'Juegos completos disponibles'
+                  : stockIsManagedByAdjustments
+                      ? 'Stock actual'
+                      : 'Stock disponible',
+              helperText: stockIsDerived
+                  ? 'Se actualiza según la pieza más limitada y la cantidad requerida.'
+                  : stockIsManagedByAdjustments
+                      ? 'Haz clic en el ícono azul para registrar un ajuste.'
+                      : null,
+              suffixIcon: stockIsDerived
+                  ? const Tooltip(
+                      message: 'Disponibilidad calculada desde componentes',
+                      child: Icon(Icons.account_tree_outlined),
                     )
-                  : null,
+                  : stockIsManagedByAdjustments
+                      ? Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Tooltip(
+                            message: stockAdjustmentTooltip,
+                            waitDuration: const Duration(milliseconds: 150),
+                            showDuration: const Duration(seconds: 6),
+                            preferBelow: false,
+                            child: Material(
+                              color: theme.colorScheme.primary
+                                  .withValues(alpha: 0.12),
+                              shape: const CircleBorder(),
+                              child: IconButton(
+                                tooltip: 'Registrar ajuste de stock',
+                                onPressed: _isApplyingStockAdjustment
+                                    ? null
+                                    : _handleStockAdjustment,
+                                color: theme.colorScheme.primary,
+                                splashRadius: 20,
+                                icon: _isApplyingStockAdjustment
+                                    ? SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: theme.colorScheme.primary,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.playlist_add_check_circle,
+                                        size: 20,
+                                      ),
+                              ),
+                            ),
+                          ),
+                        )
+                      : null,
             ),
             keyboardType: TextInputType.number,
             inputFormatters: [
@@ -10829,9 +10880,10 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
     return [
       SetConfigurationWidget(
         isSet: _isSet,
+        canChangeSetStatus: _existingProduct == null,
         setType: _setType,
         components: _setComponents,
-        onIsSetChanged: (value) => setState(() => _isSet = value),
+        onIsSetChanged: _handleSetStatusChanged,
         onSetTypeChanged: (value) => setState(() => _setType = value),
         onComponentsChanged: (value) => setState(() => _setComponents = value),
         parentProductName: _nameController.text.trim(),
@@ -10840,6 +10892,27 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
         parentCost: cost,
       ),
     ];
+  }
+
+  void _handleSetStatusChanged(bool value) {
+    final existing = _existingProduct;
+    if (value && existing != null && existing.inventoryQty != 0) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Ajusta el stock de este producto a cero antes de convertirlo en juego.',
+            ),
+          ),
+        );
+      return;
+    }
+    setState(() {
+      _isSet = value;
+      _fullSetsAvailable = value ? 0 : null;
+      if (value) _inventoryQtyController.text = '0';
+    });
   }
 
   List<Widget> _buildDescriptionFields(ThemeData theme) {

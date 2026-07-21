@@ -877,7 +877,7 @@ class _QuickPurchasePanelState extends State<QuickPurchasePanel> {
                     [
                       if (_selectedProduct!.supplierName?.isNotEmpty == true)
                         _selectedProduct!.supplierName!,
-                      'Stock ${_selectedProduct!.stockQuantity}',
+                      'Stock ${_selectedProduct!.availableStockQuantity}',
                       'Costo ${_selectedProduct!.cost.toStringAsFixed(0)}',
                     ].join(' · '),
                     maxLines: 1,
@@ -1038,7 +1038,10 @@ class _QuickPurchasePanelState extends State<QuickPurchasePanel> {
                       if (product.sku.isNotEmpty) _miniMeta(theme, product.sku),
                       if (product.supplierName?.isNotEmpty == true)
                         _miniMeta(theme, product.supplierName!),
-                      _miniMeta(theme, 'Stock ${product.stockQuantity}'),
+                      _miniMeta(
+                        theme,
+                        'Stock ${product.availableStockQuantity}',
+                      ),
                     ],
                   ),
                 ],
@@ -1109,7 +1112,10 @@ class _QuickPurchasePanelState extends State<QuickPurchasePanel> {
                     if (product.sku.isNotEmpty) _miniMeta(theme, product.sku),
                     if (product.supplierName?.isNotEmpty == true)
                       _miniMeta(theme, product.supplierName!),
-                    _miniMeta(theme, 'Stock ${product.stockQuantity}'),
+                    _miniMeta(
+                      theme,
+                      'Stock ${product.availableStockQuantity}',
+                    ),
                     _miniMeta(
                         theme, 'Costo ${product.cost.toStringAsFixed(0)}'),
                   ],

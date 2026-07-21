@@ -18,6 +18,7 @@ import 'product_image_fingerprint_service.dart';
 class BulkProductEditService {
   static final DateTime _legacyInferenceCutoffAt = DateTime.utc(2026, 4, 8);
   static const String _customClearSentinel = '__bulk_clear__';
+  static const Set<String> _aggregateOnlySetFields = {'is_set', 'set_type'};
 
   BulkProductEditService({
     DatabaseService? databaseService,
@@ -623,6 +624,24 @@ class BulkProductEditService {
         continue;
       }
 
+      if (product.isSet) {
+        const message =
+            'El stock del juego se calcula desde sus componentes y no se ajusta directamente.';
+        errors.add('${product.name}: $message');
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.failed,
+            summary: message,
+            beforeValues: const {},
+            afterValues: const {},
+          ),
+        );
+        continue;
+      }
+
       if (!product.tracksInventory) {
         skipped += 1;
         items.add(
@@ -912,6 +931,26 @@ class BulkProductEditService {
 
       try {
         final values = rowValues[productId] ?? const <String, dynamic>{};
+        final aggregateOnlyFields = values.keys
+            .where(_aggregateOnlySetFields.contains)
+            .toList(growable: false);
+        if (aggregateOnlyFields.isNotEmpty) {
+          throw Exception(
+            'La identidad y el tipo de un juego solo se editan desde la ficha individual.',
+          );
+        }
+        if ((product.isSet || product.isSetComponent) &&
+            (values.containsKey('product_type') ||
+                values.containsKey('purchase_treatment'))) {
+          throw Exception(
+            'El formato de juegos y componentes solo se cambia desde la ficha individual.',
+          );
+        }
+        if (product.isSet && values.containsKey('stock')) {
+          throw Exception(
+            'El stock del juego se calcula desde sus componentes y no se edita directamente.',
+          );
+        }
         for (final field in fields) {
           if (!values.containsKey(field.key)) continue;
           final rawValue = values[field.key];
@@ -1490,8 +1529,6 @@ class BulkProductEditService {
       'description' => product.description,
       'product_type' => product.productType.name,
       'purchase_treatment' => product.purchaseTreatment.dbValue,
-      'is_set' => product.isSet,
-      'set_type' => product.setType,
       'category_id' => product.categoryId,
       'brand_id' => product.brandId,
       'model' => product.model,
@@ -1615,16 +1652,6 @@ class BulkProductEditService {
           payload['max_stock_level'] = 0;
           payload['is_set'] = false;
           payload['set_type'] = null;
-        }
-      case 'is_set':
-        payload['is_set'] = value;
-        if (value == false) {
-          payload['set_type'] = null;
-        }
-      case 'set_type':
-        payload['set_type'] = value;
-        if (value != null) {
-          payload['is_set'] = true;
         }
       case 'brand_id':
         payload['brand_id'] = value;

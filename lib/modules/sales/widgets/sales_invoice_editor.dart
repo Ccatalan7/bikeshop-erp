@@ -688,18 +688,11 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       return;
     }
 
-    final db = Provider.of<DatabaseService>(context, listen: false);
-    final rows = await Future.wait(
-      missingProductIds.map((productId) => db.selectById(
-            'products',
-            productId,
-            selectColumns: Product.listPreviewSelect,
-          )),
+    final products = await _inventoryService.getProductsByIds(
+      missingProductIds,
+      forceRefresh: true,
     );
-
-    for (final row in rows) {
-      if (row == null) continue;
-      final product = Product.fromJson(row);
+    for (final product in products) {
       if (_cachedProducts.any((candidate) => candidate.id == product.id)) {
         continue;
       }
@@ -2570,9 +2563,9 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
               if (entry.product != null &&
                   !entry.product!.isService &&
                   entry.product!.trackStock &&
-                  entry.product!.stockQuantity < entry.line.quantity)
+                  entry.product!.availableStockQuantity < entry.line.quantity)
                 Text(
-                  'Quedará en ${(entry.product!.stockQuantity - entry.line.quantity).toInt()}',
+                  'Quedará en ${(entry.product!.availableStockQuantity - entry.line.quantity).toInt()}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: Colors.orange.shade800,
                     fontSize: 10,

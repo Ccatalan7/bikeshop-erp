@@ -36002,5 +36002,10 @@ grant select on public.stock_movements_ledger_view to authenticated;
 -- never cross supplier boundaries, and AE SKUs are globally serialized with
 -- tenant-scoped replay receipts.
 \ir ../migrations/20260721013000_add_supplier_product_aliases_and_sku_reservations.sql
+-- Product-set composition is one tenant-scoped aggregate. Physical stock
+-- belongs to canonical components, set headers remain virtual, and the exact
+-- legacy Viñabike graph/AE0368 omission are repaired only behind immutable
+-- production fingerprints and append-only inventory trace evidence.
+\ir ../migrations/20260721190000_canonicalize_product_set_inventory.sql
 
 commit;

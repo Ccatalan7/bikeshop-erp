@@ -31,7 +31,9 @@ class ProductDetailPage extends StatefulWidget {
 
 class _ProductDetailPageState extends State<ProductDetailPage>
     with AutomaticKeepAliveClientMixin {
-  static const _structuredDataScriptId = 'vinabike-product-structured-data';
+  // Static product snapshots use the same ID. A hydrated product replaces that
+  // snapshot instead of leaving Google two conflicting Product entities.
+  static const _structuredDataScriptId = 'seo-product-jsonld';
   static const Color _catalogBlue = Color(0xFF123F68);
   static const Color _logoBlue = Color(0xFF093357);
   static const Color _warmLine = Color(0xFFE8E2D8);
@@ -314,7 +316,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final isStockTracked =
         product.productType != ProductType.service && product.trackStock;
     final availability = isStockTracked
-        ? (product.stockQuantity > 0
+        ? (product.availableStockQuantity > 0
             ? 'https://schema.org/InStock'
             : 'https://schema.org/OutOfStock')
         : 'https://schema.org/InStock';
@@ -325,9 +327,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       return;
     }
 
-    final description = (product.description?.trim().isNotEmpty ?? false)
-        ? product.description!.trim()
-        : 'Encuentra $storeName online: ${product.name}';
+    final description = (product.websiteDescription?.trim().isNotEmpty ?? false)
+        ? product.websiteDescription!.trim()
+        : (product.description?.trim().isNotEmpty ?? false)
+            ? product.description!.trim()
+            : 'Encuentra $storeName online: ${product.name}';
     final cleanDescription = _cleanSeoText(description);
 
     final gtin = _validGtin(
@@ -339,22 +343,30 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final priceString = product.price % 1 == 0
         ? product.price.toStringAsFixed(0)
         : product.price.toStringAsFixed(2);
+    final structuredBrandName =
+        product.websiteMerchantBrand?.trim().isNotEmpty == true
+            ? product.websiteMerchantBrand!.trim()
+            : product.brand?.trim() ?? '';
 
     final structuredData = <String, dynamic>{
       '@context': 'https://schema.org/',
       '@type': 'Product',
       'name': product.name,
       'description': cleanDescription,
+      'url': productUrl,
       'sku': product.sku,
-      'image': imageList.length == 1 ? imageList.first : imageList,
+      'image': imageList,
       if (gtin != null) 'gtin': gtin,
-      'brand': {
-        '@type': 'Brand',
-        'name': product.brand?.isNotEmpty == true ? product.brand : storeName,
-      },
+      if (product.websiteMerchantMpn?.trim().isNotEmpty == true)
+        'mpn': product.websiteMerchantMpn!.trim(),
+      if (structuredBrandName.isNotEmpty)
+        'brand': {
+          '@type': 'Brand',
+          'name': structuredBrandName,
+        },
       'offers': {
         '@type': 'Offer',
-        'priceCurrency': 'CLP',
+        'priceCurrency': product.priceCurrency,
         'price': priceString,
         'availability': availability,
         'url': productUrl,
@@ -533,7 +545,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
     final isStockTracked =
         _product!.productType != ProductType.service && _product!.trackStock;
-    if (isStockTracked && _product!.stockQuantity < _quantity) {
+    if (isStockTracked && _product!.availableStockQuantity < _quantity) {
       _showProductFeedbackBanner(
         message: 'Stock insuficiente',
         backgroundColor: PublicStoreTheme.error,
@@ -559,7 +571,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
     final isStockTracked =
         _product!.productType != ProductType.service && _product!.trackStock;
-    if (isStockTracked && _product!.stockQuantity < _quantity) {
+    if (isStockTracked && _product!.availableStockQuantity < _quantity) {
       _showProductFeedbackBanner(
         message: 'Stock insuficiente',
         backgroundColor: PublicStoreTheme.error,
@@ -1026,8 +1038,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final cart = context.watch<CartProvider>();
     final inCart = cart.hasProduct(_product!.id);
     final isStockTracked = _product!.tracksInventory;
-    final inStock = isStockTracked ? _product!.stockQuantity > 0 : true;
-    final canIncrease = !isStockTracked || _quantity < _product!.stockQuantity;
+    final inStock =
+        isStockTracked ? _product!.availableStockQuantity > 0 : true;
+    final canIncrease =
+        !isStockTracked || _quantity < _product!.availableStockQuantity;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1167,8 +1181,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             children: [
               _buildInfoTile(
                 icon: Icons.local_shipping_outlined,
-                title: 'Despacho a todo Chile',
-                subtitle: 'Coordinamos envío o retiro según tu compra.',
+                title: 'Despacho a Chile continental',
+                subtitle: 'Entrega estimada de 3 a 12 días hábiles.',
               ),
               _buildInfoTile(
                 icon: Icons.storefront_outlined,

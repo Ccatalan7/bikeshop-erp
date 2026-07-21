@@ -2744,9 +2744,7 @@ ${hintLines.join('\n')}
     })();
 
     final inStockCount = products.where((product) {
-      final stock = (product['stock'] as num?)?.toDouble() ??
-          (product['inventory_qty'] as num?)?.toDouble() ??
-          0;
+      final stock = _availableInventoryStock(product);
       return stock > 0;
     }).length;
 
@@ -2776,6 +2774,13 @@ ${hintLines.join('\n')}
         '$stockSentence $sampleSentence$navigationSentence';
   }
 
+  double _availableInventoryStock(Map<String, dynamic> product) {
+    return (product['available_stock_quantity'] as num?)?.toDouble() ??
+        (product['stock'] as num?)?.toDouble() ??
+        (product['inventory_qty'] as num?)?.toDouble() ??
+        0;
+  }
+
   List<AIAssistantActionCard> _buildInventoryCardsFromSearchResult(
       Map<String, Object?>? searchResult) {
     final productsRaw = searchResult?['products'];
@@ -2803,9 +2808,7 @@ ${hintLines.join('\n')}
     final sku = (product['sku'] ?? '').toString().trim();
     final category =
         (product['category'] ?? product['category_name'] ?? '').toString();
-    final stock = (product['stock'] as num?)?.toDouble() ??
-        (product['inventory_qty'] as num?)?.toDouble() ??
-        0;
+    final stock = _availableInventoryStock(product);
     final location =
         (product['location'] ?? product['warehouse_location'] ?? 'Unknown')
             .toString();
@@ -2987,16 +2990,12 @@ ${hintLines.join('\n')}
 
     if (wantsInStock) {
       filtered = filtered.where((product) {
-        final stock = (product['inventory_qty'] as num?)?.toDouble() ??
-            (product['stock'] as num?)?.toDouble() ??
-            0;
+        final stock = _availableInventoryStock(product);
         return stock > 0;
       }).toList();
     } else if (wantsOutOfStock) {
       filtered = filtered.where((product) {
-        final stock = (product['inventory_qty'] as num?)?.toDouble() ??
-            (product['stock'] as num?)?.toDouble() ??
-            0;
+        final stock = _availableInventoryStock(product);
         return stock <= 0;
       }).toList();
     }
@@ -3188,16 +3187,12 @@ ${hintLines.join('\n')}
 
     if (wantsInStock) {
       candidates = candidates.where((product) {
-        final stock = (product['stock'] as num?)?.toDouble() ??
-            (product['inventory_qty'] as num?)?.toDouble() ??
-            0;
+        final stock = _availableInventoryStock(product);
         return stock > 0;
       }).toList();
     } else if (wantsOutOfStock) {
       candidates = candidates.where((product) {
-        final stock = (product['stock'] as num?)?.toDouble() ??
-            (product['inventory_qty'] as num?)?.toDouble() ??
-            0;
+        final stock = _availableInventoryStock(product);
         return stock <= 0;
       }).toList();
     }
@@ -3209,9 +3204,7 @@ ${hintLines.join('\n')}
           if (range == null) {
             return null;
           }
-          final stock = (product['stock'] as num?)?.toDouble() ??
-              (product['inventory_qty'] as num?)?.toDouble() ??
-              0;
+          final stock = _availableInventoryStock(product);
           return _WidthComparisonCandidate(
             product: product,
             range: range,
@@ -3292,9 +3285,7 @@ ${hintLines.join('\n')}
     }
 
     final filtered = _lastSearchResults.where((result) {
-      final stock = (result['stock'] as num?)?.toDouble() ??
-          (result['inventory_qty'] as num?)?.toDouble() ??
-          0;
+      final stock = _availableInventoryStock(result);
       if (wantsOutOfStock) {
         return stock <= 0;
       }
@@ -3387,7 +3378,10 @@ ${hintLines.join('\n')}
                 'brand': p.brand ?? '',
                 'category_name': p.categoryName ?? '',
                 'price': p.price,
-                'inventory_qty': p.inventoryQty,
+                'inventory_qty': p.availableStockQuantity,
+                'available_stock_quantity': p.availableStockQuantity,
+                'is_set': p.isSet,
+                'parent_set_id': p.parentSetId,
                 'warehouse_location': p.warehouseLocation ?? 'Unknown',
                 'source': 'keyword',
               }));
@@ -3408,6 +3402,22 @@ ${hintLines.join('\n')}
         if (sku.isNotEmpty) seen.add(sku);
         merged.add(r);
       }
+
+      // Semantic RPC rows predate set availability. Rehydrate their catalog
+      // identity so every subsequent AI filter/card uses the same sellable
+      // quantity shown by inventory and POS.
+      await Future.wait(merged.map((result) async {
+        final productId = result['id']?.toString() ?? '';
+        if (productId.isEmpty || result['available_stock_quantity'] != null) {
+          return;
+        }
+        final product = await inventory.getProductById(productId);
+        if (product == null) return;
+        result['available_stock_quantity'] = product.availableStockQuantity;
+        result['inventory_qty'] = product.availableStockQuantity;
+        result['is_set'] = product.isSet;
+        result['parent_set_id'] = product.parentSetId;
+      }));
 
       // 4. Post-filter: ONLY filter by numeric tokens (sizes).
       // Embeddings can't distinguish 29" from 27.5" — all bike wheel parts
@@ -3465,7 +3475,7 @@ ${hintLines.join('\n')}
                 'brand': r['brand'] ?? '',
                 'category': r['category_name'] ?? '',
                 'price': r['price'] ?? 0,
-                'stock': r['inventory_qty'] ?? 0,
+                'stock': _availableInventoryStock(r),
                 'location': r['warehouse_location'] ?? 'Unknown',
               })
           .toList();

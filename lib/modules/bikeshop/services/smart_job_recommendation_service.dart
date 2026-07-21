@@ -210,9 +210,9 @@ class SmartJobRecommendationService {
       final facts = <String>['Freno $positionLabel', partLabel];
       final gaps = <String>[];
       if (product.tracksInventory) {
-        if (product.stockQuantity > 0) {
+        if (product.availableStockQuantity > 0) {
           score += 30;
-          facts.add('${product.stockQuantity} en stock');
+          facts.add('${product.availableStockQuantity} en stock');
         } else {
           score -= 20;
           gaps.add('Producto sin stock.');
@@ -229,9 +229,10 @@ class SmartJobRecommendationService {
         SmartJobRecommendation(
           id: 'brake-pad-product-${product.id}',
           kind: SmartJobRecommendationKind.product,
-          confidence: product.tracksInventory && product.stockQuantity <= 0
-              ? SmartJobRecommendationConfidence.low
-              : SmartJobRecommendationConfidence.medium,
+          confidence:
+              product.tracksInventory && product.availableStockQuantity <= 0
+                  ? SmartJobRecommendationConfidence.low
+                  : SmartJobRecommendationConfidence.medium,
           product: product,
           title: product.name,
           subtitle: [
@@ -411,9 +412,9 @@ class SmartJobRecommendationService {
       }
 
       if (product.tracksInventory) {
-        if (product.stockQuantity > 0) {
+        if (product.availableStockQuantity > 0) {
           score += 30;
-          facts.add('${product.stockQuantity} en stock');
+          facts.add('${product.availableStockQuantity} en stock');
         } else {
           score -= 20;
           dataGaps.add('Producto sin stock.');
@@ -426,9 +427,10 @@ class SmartJobRecommendationService {
         SmartJobRecommendation(
           id: 'chain-product-${product.id}',
           kind: SmartJobRecommendationKind.product,
-          confidence: !product.tracksInventory || product.stockQuantity > 0
-              ? SmartJobRecommendationConfidence.high
-              : SmartJobRecommendationConfidence.medium,
+          confidence:
+              !product.tracksInventory || product.availableStockQuantity > 0
+                  ? SmartJobRecommendationConfidence.high
+                  : SmartJobRecommendationConfidence.medium,
           product: product,
           title: product.name,
           subtitle: [

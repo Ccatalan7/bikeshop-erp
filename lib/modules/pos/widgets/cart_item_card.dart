@@ -92,7 +92,7 @@ class CartItemCard extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                
+
                 const SizedBox(height: 4),
 
                 // SKU & Price per unit
@@ -160,7 +160,7 @@ class CartItemCard extends StatelessWidget {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 6),
 
               // Controls
@@ -191,9 +191,9 @@ class CartItemCard extends StatelessWidget {
                               child: Icon(
                                 Icons.remove,
                                 size: 14,
-                                color: item.quantity > 1 
-                                  ? theme.colorScheme.onSurface 
-                                  : theme.disabledColor,
+                                color: item.quantity > 1
+                                    ? theme.colorScheme.onSurface
+                                    : theme.disabledColor,
                               ),
                             ),
                           ),
@@ -208,7 +208,8 @@ class CartItemCard extends StatelessWidget {
                             ),
                           ),
                           InkWell(
-                            onTap: (item.product?.stockQuantity ?? 999) >
+                            onTap: (item.product?.availableStockQuantity ??
+                                        999) >
                                     item.quantity
                                 ? () =>
                                     onQuantityChanged?.call(item.quantity + 1)
@@ -220,7 +221,8 @@ class CartItemCard extends StatelessWidget {
                               child: Icon(
                                 Icons.add,
                                 size: 14,
-                                color: (item.product?.stockQuantity ?? 999) >
+                                color: (item.product?.availableStockQuantity ??
+                                            999) >
                                         item.quantity
                                     ? theme.colorScheme.onSurface
                                     : theme.disabledColor,

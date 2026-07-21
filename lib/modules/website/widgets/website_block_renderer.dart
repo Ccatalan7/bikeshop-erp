@@ -12,6 +12,7 @@ import '../../../public_store/providers/public_store_tenant_provider.dart';
 import '../../../public_store/services/public_inventory_service.dart';
 import '../../../shared/models/public_product_visibility_policy.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/services/inventory_service.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/widgets/hover_scale.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
@@ -1191,7 +1192,7 @@ class WebsiteBlockRenderer {
           'icon': 'build',
         },
         {
-          'title': 'Envíos a Todo Chile',
+          'title': 'Envíos a Chile continental',
           'description': 'Despacho rápido y seguro',
           'icon': 'local_shipping',
         },
@@ -5087,6 +5088,8 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
           break;
       }
 
+      products = await _hydratePreviewAvailability(products);
+
       if (mounted) {
         setState(() {
           _products = products.take(_maxProducts).toList();
@@ -5100,6 +5103,25 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<List<Product>> _hydratePreviewAvailability(
+    List<Product> products,
+  ) async {
+    if (products.isEmpty) return products;
+    try {
+      final hydrated = await context.read<InventoryService>().getProductsByIds(
+            products.map((product) => product.id),
+            forceRefresh: true,
+          );
+      final byId = {for (final product in hydrated) product.id: product};
+      return products
+          .map((product) => byId[product.id] ?? product)
+          .toList(growable: false);
+    } catch (error) {
+      debugPrint('[ProductsBlock] Set availability unavailable: $error');
+      return products;
     }
   }
 
@@ -5223,6 +5245,14 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
               isPublished: map['is_published'] as bool? ??
                   map['show_on_website'] as bool? ??
                   true,
+              isSet: map['is_set'] as bool? ?? false,
+              setType: SetType.values.cast<SetType?>().firstWhere(
+                    (type) => type?.name == map['set_type']?.toString(),
+                    orElse: () => null,
+                  ),
+              parentSetId: map['parent_set_id']?.toString(),
+              componentLabel: map['component_label']?.toString(),
+              componentPosition: (map['component_position'] as num?)?.toInt(),
               productType: ProductType.values.firstWhere(
                 (type) => type.name == map['product_type']?.toString(),
                 orElse: () => ProductType.product,

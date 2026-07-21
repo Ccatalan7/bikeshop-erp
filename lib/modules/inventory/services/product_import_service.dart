@@ -417,6 +417,21 @@ class ProductImportService {
       final rowNumber = index + 2;
       final row = rows[index];
       try {
+        final stockHeader = fieldToHeader['inventory_qty'];
+        final stockWasProvided = stockHeader != null &&
+            (row[stockHeader]?.trim().isNotEmpty ?? false);
+
+        // A set header has no independent stock ledger. Detect it before image
+        // uploads, supplier creation, metadata updates, or stock RPCs so the
+        // entire row fails without leaving partial side effects.
+        if (stockWasProvided) {
+          final skuHeader = fieldToHeader['sku'];
+          final sku = skuHeader == null ? '' : (row[skuHeader] ?? '').trim();
+          if (sku.isNotEmpty) {
+            await _rejectStockImportForSetHeader(sku);
+          }
+        }
+
         final payload = await _buildPayload(
           row: row,
           fieldToHeader: fieldToHeader,
@@ -431,8 +446,7 @@ class ProductImportService {
         final isInsert = await _upsertProduct(
           payload: payload,
           allowUpdates: allowUpdates,
-          stockWasProvided: fieldToHeader['inventory_qty'] != null &&
-              (row[fieldToHeader['inventory_qty']]?.trim().isNotEmpty ?? false),
+          stockWasProvided: stockWasProvided,
           importReference: importReference,
           idempotencyKey: '$importBatchId:$rowNumber',
           supplierIdentityCache: supplierIdentityCache,
@@ -728,6 +742,10 @@ class ProductImportService {
       );
     }
 
+    if (stockWasProvided && existing.first['is_set'] == true) {
+      throw ProductImportRowException(_setHeaderStockImportMessage(sku));
+    }
+
     final productId = existing.first['id'].toString();
     final currentStock =
         (existing.first['inventory_qty'] as num?)?.round() ?? 0;
@@ -755,6 +773,22 @@ class ProductImportService {
     }
     return false;
   }
+
+  Future<void> _rejectStockImportForSetHeader(String sku) async {
+    final existing = await _db.select(
+      'products',
+      selectColumns: 'id,sku,is_set',
+      where: 'sku=$sku',
+      limit: 1,
+    );
+    if (existing.isNotEmpty && existing.first['is_set'] == true) {
+      throw ProductImportRowException(_setHeaderStockImportMessage(sku));
+    }
+  }
+
+  String _setHeaderStockImportMessage(String sku) =>
+      'El SKU $sku es un juego. Su stock se calcula desde sus componentes y '
+      'no se puede importar en la cabecera; importa o ajusta las piezas del juego.';
 
   Future<_ImportSupplierIdentity?> _supplierIdentityForPayload(
     Map<String, dynamic> payload, {
@@ -828,10 +862,8 @@ class ProductImportService {
   }
 
   bool _looksLikeAliExpress(String value) {
-    final normalized = value
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '');
+    final normalized =
+        value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
     return normalized.contains('aliexpress');
   }
 

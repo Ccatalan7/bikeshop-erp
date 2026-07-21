@@ -258,8 +258,9 @@ class InventoryService extends ChangeNotifier {
         data = await _db.select('products', fetchAll: true);
       }
 
-      List<Product> products =
-          data.map((json) => Product.fromJson(json)).toList();
+      List<Product> products = await _hydrateSetAvailability(
+        data.map((json) => Product.fromJson(json)).toList(),
+      );
 
       // Apply filters
       if (categoryId != null) {
@@ -332,7 +333,9 @@ class InventoryService extends ChangeNotifier {
         selectColumns: Product.listPreviewSelect,
       );
 
-      final products = rows.map((json) => Product.fromJson(json)).toList()
+      final products = await _hydrateSetAvailability(
+        rows.map((json) => Product.fromJson(json)).toList(),
+      )
         ..sort((a, b) => a.name.compareTo(b.name));
       if (products.isNotEmpty) return products;
     } catch (e) {
@@ -377,7 +380,9 @@ class InventoryService extends ChangeNotifier {
         fetchAll: true,
       );
 
-      final products = data.map((json) => Product.fromJson(json)).toList()
+      final products = await _hydrateSetAvailability(
+        data.map((json) => Product.fromJson(json)).toList(),
+      )
         ..sort((a, b) => a.name.compareTo(b.name));
 
       _cachedListProducts = products;
@@ -436,11 +441,34 @@ class InventoryService extends ChangeNotifier {
   Future<Product?> getProductById(String id) async {
     try {
       final data = await _db.selectById('products', id);
-      return data != null ? Product.fromJson(data) : null;
+      if (data == null) return null;
+      final hydrated = await _hydrateSetAvailability([Product.fromJson(data)]);
+      return hydrated.single;
     } catch (e) {
       if (kDebugMode) print('Error fetching product: $e');
       rethrow;
     }
+  }
+
+  Future<List<Product>> _hydrateSetAvailability(
+    List<Product> products,
+  ) async {
+    return Future.wait(products.map((product) async {
+      if (!product.isSet || product.id == null) return product;
+      try {
+        final composition = await getProductSetComposition(product.id!);
+        return product.copyWith(
+          fullSetsAvailable: composition.fullSetsAvailable,
+        );
+      } catch (error) {
+        if (!kReleaseMode) {
+          debugPrint(
+            'No se pudo proyectar disponibilidad del juego ${product.id}: $error',
+          );
+        }
+        return product;
+      }
+    }));
   }
 
   Future<Product?> getProductBySku(String sku) async {
@@ -520,7 +548,8 @@ class InventoryService extends ChangeNotifier {
       },
     );
     if (response is! Map) {
-      throw const FormatException('La reserva AE devolvió una respuesta inválida.');
+      throw const FormatException(
+          'La reserva AE devolvió una respuesta inválida.');
     }
     final rawSkus = response['skus'];
     if (rawSkus is! List) {
@@ -615,6 +644,89 @@ class InventoryService extends ChangeNotifier {
       if (kDebugMode) print('Error updating product: $e');
       rethrow;
     }
+  }
+
+  Future<ProductSetAggregateSaveResult> saveProductSetAggregate({
+    required Map<String, dynamic> parent,
+    required List<Map<String, dynamic>> components,
+    required String operationKey,
+  }) async {
+    final cleanOperationKey = operationKey.trim();
+    if (cleanOperationKey.isEmpty) {
+      throw ArgumentError.value(
+        operationKey,
+        'operationKey',
+        'No puede estar vacío.',
+      );
+    }
+    if (components.isEmpty) {
+      throw ArgumentError.value(
+        components,
+        'components',
+        'Un juego debe tener al menos un componente.',
+      );
+    }
+
+    final response = await _db.rpc(
+      'save_product_set_aggregate',
+      params: {
+        'p_parent': parent,
+        'p_components': components,
+        'p_operation_key': cleanOperationKey,
+      },
+    );
+    final result = ProductSetAggregateSaveResult.fromJson(
+      _rpcJsonMap(response),
+    );
+    invalidateProductsCache();
+    notifyListeners();
+    return result;
+  }
+
+  Future<ProductSetCompositionSnapshot> getProductSetComposition(
+    String setProductId,
+  ) async {
+    final normalizedId = setProductId.trim();
+    if (normalizedId.isEmpty) {
+      throw ArgumentError.value(
+        setProductId,
+        'setProductId',
+        'No puede estar vacío.',
+      );
+    }
+    final response = await _db.rpc(
+      'get_product_set_composition',
+      params: {'p_set_product_id': normalizedId},
+    );
+    return ProductSetCompositionSnapshot.fromJson(_rpcJsonMap(response));
+  }
+
+  Future<Map<String, int>> getProductSetComponentQuantities() async {
+    final rows = await _db.select(
+      'product_set_components',
+      selectColumns: 'component_product_id,quantity_in_set',
+      fetchAll: true,
+    );
+    final quantities = <String, int>{};
+    for (final row in rows) {
+      final componentId = row['component_product_id']?.toString() ?? '';
+      final quantity = (row['quantity_in_set'] as num?)?.round() ?? 1;
+      if (componentId.isEmpty || quantity < 1) continue;
+      quantities[componentId] = quantity;
+    }
+    return quantities;
+  }
+
+  static Map<String, dynamic> _rpcJsonMap(dynamic response) {
+    if (response is Map) {
+      return Map<String, dynamic>.from(response);
+    }
+    if (response is List && response.length == 1 && response.first is Map) {
+      return Map<String, dynamic>.from(response.first as Map);
+    }
+    throw const FormatException(
+      'La base de datos devolvió una respuesta inválida.',
+    );
   }
 
   Future<StockAdjustmentDetail> applyStockAdjustment({

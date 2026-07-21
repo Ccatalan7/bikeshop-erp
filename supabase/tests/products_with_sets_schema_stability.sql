@@ -1,40 +1,61 @@
 begin;
 
-select plan(4);
+select plan(8);
 
 select has_column(
   'public',
   'products_with_sets',
-  'website_featured',
-  'products_with_sets exposes final website columns on the first schema application'
+  'set_components',
+  'products_with_sets preserves the legacy set-components projection'
 );
 
 select has_column(
   'public',
   'products_with_sets',
-  'whatsapp_catalog_sync_status',
-  'products_with_sets exposes final WhatsApp columns on the first schema application'
+  'full_sets_available',
+  'products_with_sets preserves calculated full-set availability'
 );
 
-select is(
-  (
-    select count(*)::integer
-    from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'products_with_sets'
-  ),
-  (
-    select count(*)::integer + 4
-    from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'products'
-  ),
-  'products_with_sets contains every product column plus four computed set columns'
+select has_column(
+  'public',
+  'products_with_sets',
+  'is_partial',
+  'products_with_sets preserves partial-set state'
+);
+
+select has_column(
+  'public',
+  'products_with_sets',
+  'parent_set_info',
+  'products_with_sets preserves parent-set metadata'
 );
 
 select lives_ok(
   $$select * from public.products_with_sets limit 0$$,
-  'products_with_sets remains queryable after its final canonical recreation'
+  'products_with_sets remains queryable after in-place security hardening'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_class relation
+    join pg_namespace namespace on namespace.oid = relation.relnamespace
+    where namespace.nspname = 'public'
+      and relation.relname = 'products_with_sets'
+      and coalesce(relation.reloptions, array[]::text[])
+          @> array['security_invoker=true']::text[]
+  ),
+  'products_with_sets evaluates base-table RLS with caller privileges'
+);
+
+select ok(
+  not has_table_privilege('anon', 'public.products_with_sets', 'SELECT'),
+  'anonymous callers cannot read the internal set projection'
+);
+
+select ok(
+  has_table_privilege('authenticated', 'public.products_with_sets', 'SELECT'),
+  'authenticated ERP callers retain read access to the set projection'
 );
 
 select * from finish();

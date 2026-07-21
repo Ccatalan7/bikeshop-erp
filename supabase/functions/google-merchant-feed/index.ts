@@ -13,6 +13,7 @@ import {
   resolveMerchantIdentifiers,
 } from "../_shared/google_merchant_feed.ts";
 import { publicProductUrl } from "../_shared/product_url.ts";
+import { mergeCanonicalAvailableQuantities } from "../_shared/product_availability.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,7 +38,10 @@ type MerchantProduct = {
   website_price?: number | null;
   price_currency?: string | null;
   stock_quantity?: number | null;
+  inventory_qty?: number | null;
   track_stock?: boolean | null;
+  is_set?: boolean | null;
+  full_sets_available?: number | null;
   image_url?: string | null;
   image_url_optimized?: string | null;
   website_image_url?: string | null;
@@ -158,7 +162,9 @@ serve(async (req) => {
         price_currency,
         tax_rate,
         stock_quantity,
+        inventory_qty,
         track_stock,
+        is_set,
         image_url,
         website_image_url,
         website_image_url_optimized,
@@ -221,11 +227,33 @@ serve(async (req) => {
       categoriesMap = new Map((categories || []).map((c) => [c.id, c.full_path]));
     }
 
-    // Step 6: Filter products that have at least an image
-    const validProducts = filterMerchantProductsByCheckoutTax(
+    // Step 6: Hydrate reservation-aware availability before publishing.
+    const feedCandidates = filterMerchantProductsByCheckoutTax(
       (products || []) as MerchantProduct[],
     )
       .filter((p) => productImageUrls(p).length > 0);
+    const availabilityRows: Array<Record<string, unknown>> = [];
+    for (let index = 0; index < feedCandidates.length; index += 500) {
+      const batch = feedCandidates.slice(index, index + 500);
+      const { data, error } = await supabase.rpc(
+        "get_product_available_quantities",
+        {
+          p_tenant_id: tenantId,
+          p_product_ids: batch.map((product) => product.id),
+        },
+      );
+      if (error) {
+        console.error("Product availability error:", error);
+        throw error;
+      }
+      availabilityRows.push(
+        ...((data || []) as unknown as Array<Record<string, unknown>>),
+      );
+    }
+    const validProducts = mergeCanonicalAvailableQuantities(
+      feedCandidates,
+      availabilityRows,
+    );
 
     // Step 7: Generate XML feed
     const feed = `<?xml version="1.0" encoding="UTF-8"?>

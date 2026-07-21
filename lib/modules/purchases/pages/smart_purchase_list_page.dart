@@ -9,6 +9,7 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/models/supplier.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/services/inventory_service.dart';
 import 'purchase_invoice_form_page.dart';
 
 class SmartPurchaseListPage extends StatefulWidget {
@@ -216,6 +217,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
     }
 
     try {
+      final inventoryService = context.read<InventoryService>();
       final tenantService = context.read<TenantService>();
       final tenantId = await tenantService.getTenantId();
       if (tenantId == null) return [];
@@ -227,9 +229,9 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       // Build search query - match products with same category and similar keywords
       var query = Supabase.instance.client
           .from('products')
-          .select('id, name, sku, inventory_qty, stock_quantity, cost, price')
+          .select('id')
           .eq('tenant_id', tenantId)
-          .gt('inventory_qty', 0); // Only products with stock
+          .eq('is_active', true);
 
       // Filter by category if available
       if (item.categoryId != null && item.categoryId!.isNotEmpty) {
@@ -242,7 +244,12 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       }
 
       final response = await query.limit(50);
-      final products = response as List<dynamic>;
+      final products = await inventoryService.getProductsByIds(
+        (response as List<dynamic>)
+            .map((row) => row['id']?.toString() ?? '')
+            .where((id) => id.isNotEmpty),
+        forceRefresh: true,
+      );
 
       // Extract specs from original product (keywords already extracted above)
       final originalSpecs = _extractSpecs(item.productName);
@@ -255,7 +262,10 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
       // Score and filter products based on SPEC matching (critical) + keyword overlap
       final alternatives = <Map<String, dynamic>>[];
       for (final product in products) {
-        final productName = product['name'] as String;
+        if (product.isSetComponent || product.availableStockQuantity <= 0) {
+          continue;
+        }
+        final productName = product.name;
         final productSpecs = _extractSpecs(productName);
         final productNameLower = productName.toLowerCase();
 
@@ -322,12 +332,12 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
 
         if (isValidMatch) {
           alternatives.add({
-            'id': product['id'],
-            'name': product['name'],
-            'sku': product['sku'],
-            'stock': product['inventory_qty'] ?? product['stock_quantity'] ?? 0,
-            'cost': product['cost'],
-            'price': product['price'],
+            'id': product.id,
+            'name': product.name,
+            'sku': product.sku,
+            'stock': product.availableStockQuantity,
+            'cost': product.cost,
+            'price': product.price,
             'match_score': specMatchScore + keywordMatches,
             'spec_score': specMatchScore,
           });

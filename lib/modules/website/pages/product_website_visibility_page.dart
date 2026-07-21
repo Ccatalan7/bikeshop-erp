@@ -180,6 +180,7 @@ class _ProductWebsiteVisibilityPageState
   static const _productSelectColumns =
       'id,name,sku,product_type,category_id,category_name,brand_id,brand,'
       'price,tax_rate,inventory_qty,stock_quantity,track_stock,is_active,is_published,'
+      'is_set,set_type,parent_set_id,'
       'show_on_website,image_url,image_url_optimized,image_urls,description,'
       'website_description,website_image_url,website_image_url_optimized,'
       'website_image_urls,updated_at';
@@ -260,6 +261,8 @@ class _ProductWebsiteVisibilityPageState
     });
 
     try {
+      final inventoryService =
+          context.read<shared_inventory.InventoryService>();
       final tenantId = await _tenantService.getTenantId();
       if (tenantId == null || tenantId.isEmpty) {
         throw Exception('No se pudo determinar el tenant activo.');
@@ -283,9 +286,29 @@ class _ProductWebsiteVisibilityPageState
           .eq('tenant_id', tenantId)
           .inFilter('key', PublicProductVisibilityPolicy.settingKeys);
 
-      final rows = (response as List)
+      final rawProductRows = (response as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList(growable: false);
+      try {
+        final hydrated = await inventoryService.getProductsByIds(
+          rawProductRows.map((row) => row['id']?.toString() ?? ''),
+          forceRefresh: true,
+        );
+        final byId = {for (final product in hydrated) product.id: product};
+        for (final row in rawProductRows) {
+          final product = byId[row['id']?.toString()];
+          if (product == null) continue;
+          row['is_set'] = product.isSet;
+          row['parent_set_id'] = product.parentSetId;
+          row['inventory_qty'] = product.availableStockQuantity;
+          row['stock_quantity'] = product.availableStockQuantity;
+        }
+      } catch (error) {
+        debugPrint('No se pudo proyectar stock de juegos web: $error');
+      }
+      final rows = rawProductRows
           .map((row) => _WebsiteProductVisibilityRow.fromJson(
-                Map<String, dynamic>.from(row as Map),
+                row,
               ))
           .toList(growable: false);
       final categories = (categoriesResponse as List)
@@ -485,7 +508,7 @@ class _ProductWebsiteVisibilityPageState
         case _StockFilter.available:
           return product.isAvailableForWebsite;
         case _StockFilter.outOfStock:
-          return product.tracksStock && product.stockQuantity <= 0;
+          return product.tracksStock && product.availableStockQuantity <= 0;
         case _StockFilter.notTracked:
           return !product.tracksStock;
       }
@@ -2648,6 +2671,8 @@ class _WebsiteProductVisibilityRow {
     required this.price,
     required this.taxRate,
     required this.stockQuantity,
+    required this.isSet,
+    required this.parentSetId,
     required this.trackStock,
     required this.isActive,
     required this.isPublished,
@@ -2673,6 +2698,8 @@ class _WebsiteProductVisibilityRow {
   final double price;
   final double? taxRate;
   final int stockQuantity;
+  final bool isSet;
+  final String? parentSetId;
   final bool trackStock;
   final bool isActive;
   final bool isPublished;
@@ -2716,6 +2743,8 @@ class _WebsiteProductVisibilityRow {
       price: (json['price'] as num?)?.toDouble() ?? 0,
       taxRate: (json['tax_rate'] as num?)?.toDouble(),
       stockQuantity: math.max(inventoryQty ?? 0, stockQty ?? 0),
+      isSet: json['is_set'] as bool? ?? false,
+      parentSetId: json['parent_set_id']?.toString(),
       trackStock: json['track_stock'] as bool? ?? true,
       isActive: json['is_active'] as bool? ?? true,
       isPublished: json['is_published'] as bool? ?? false,
@@ -2740,6 +2769,7 @@ class _WebsiteProductVisibilityRow {
   }
 
   bool get isService => productType == 'service';
+  int get availableStockQuantity => stockQuantity;
   bool get hasTaxClassification => hasSupportedProductTaxRate(taxRate);
   bool get tracksStock => !isService && trackStock;
   bool get isVisibleOnWebsite => isActive && isPublished && showOnWebsite;
@@ -2747,7 +2777,7 @@ class _WebsiteProductVisibilityRow {
   bool get hasWebsiteDescription =>
       websiteDescription != null && websiteDescription!.trim().isNotEmpty;
   bool get isAvailableForWebsite =>
-      isService || !tracksStock || stockQuantity > 0;
+      isService || !tracksStock || availableStockQuantity > 0;
   bool get hasPublicImage =>
       _isNotBlank(websiteImageUrl) ||
       _isNotBlank(websiteImageUrlOptimized) ||
@@ -2801,9 +2831,9 @@ class _WebsiteProductVisibilityRow {
     if (isService) return true;
     switch (policy) {
       case PublicCatalogStockPolicy.availableOnly:
-        return !tracksStock || stockQuantity > 0;
+        return !tracksStock || availableStockQuantity > 0;
       case PublicCatalogStockPolicy.outOfStockOnly:
-        return tracksStock && stockQuantity <= 0;
+        return tracksStock && availableStockQuantity <= 0;
       case PublicCatalogStockPolicy.all:
         return true;
     }
@@ -2851,8 +2881,8 @@ class _WebsiteProductVisibilityRow {
   String get stockLabel {
     if (isService) return 'Servicio';
     if (!tracksStock) return 'Sin control';
-    if (stockQuantity <= 0) return 'Sin stock';
-    return '$stockQuantity un.';
+    if (availableStockQuantity <= 0) return 'Sin stock';
+    return '$availableStockQuantity un.';
   }
 
   bool matchesQuery(String normalizedQuery) {
@@ -2884,6 +2914,8 @@ class _WebsiteProductVisibilityRow {
       price: price,
       taxRate: taxRate,
       stockQuantity: stockQuantity,
+      isSet: isSet,
+      parentSetId: parentSetId,
       trackStock: trackStock,
       isActive: isActive,
       isPublished: isPublished ?? this.isPublished,

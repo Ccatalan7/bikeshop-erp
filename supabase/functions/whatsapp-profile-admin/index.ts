@@ -1,5 +1,9 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  mergeCanonicalAvailableQuantities,
+  resolveAvailableProductQuantity,
+} from '../_shared/product_availability.ts'
 import { publicProductUrl } from '../_shared/product_url.ts'
 
 const corsHeaders = {
@@ -178,6 +182,33 @@ async function resolveChannel(request: AdminRequest) {
   return data as JsonRecord | null
 }
 
+async function hydrateProductAvailability(
+  tenantId: string,
+  products: JsonRecord[],
+) {
+  if (products.length === 0) return products
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  const availabilityRows: Array<Record<string, unknown>> = []
+  for (let index = 0; index < products.length; index += 500) {
+    const batch = products.slice(index, index + 500)
+    const { data, error } = await adminClient.rpc(
+      'get_product_available_quantities',
+      {
+        p_tenant_id: tenantId,
+        p_product_ids: batch.map((product) => String(product.id)),
+      },
+    )
+    if (error) throw error
+    availabilityRows.push(
+      ...((data || []) as unknown as Array<Record<string, unknown>>),
+    )
+  }
+  return mergeCanonicalAvailableQuantities(
+    products,
+    availabilityRows,
+  )
+}
+
 async function loadProduct(tenantId: string, productId: string) {
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   const { data, error } = await adminClient
@@ -193,6 +224,8 @@ async function loadProduct(tenantId: string, productId: string) {
       'price',
       'inventory_qty',
       'stock_quantity',
+      'track_stock',
+      'is_set',
       'is_active',
       'is_published',
       'is_whatsapp_catalog',
@@ -212,7 +245,11 @@ async function loadProduct(tenantId: string, productId: string) {
     .maybeSingle()
 
   if (error) throw error
-  return data as JsonRecord | null
+  if (!data) return null
+  return (await hydrateProductAvailability(
+    tenantId,
+    [data as unknown as JsonRecord],
+  ))[0]
 }
 
 async function loadEnabledCatalogProducts(tenantId: string) {
@@ -230,6 +267,8 @@ async function loadEnabledCatalogProducts(tenantId: string) {
       'price',
       'inventory_qty',
       'stock_quantity',
+      'track_stock',
+      'is_set',
       'is_active',
       'is_published',
       'is_whatsapp_catalog',
@@ -251,7 +290,10 @@ async function loadEnabledCatalogProducts(tenantId: string) {
     .order('name')
 
   if (error) throw error
-  return (data ?? []) as unknown as JsonRecord[]
+  return await hydrateProductAvailability(
+    tenantId,
+    (data ?? []) as unknown as JsonRecord[],
+  )
 }
 
 function sanitizedProfile(input: JsonRecord = {}) {
@@ -636,9 +678,7 @@ function buildCatalogProductPayload(product: JsonRecord) {
   const price = numberValue(product.whatsapp_catalog_price) ||
     numberValue(product.website_price) ||
     numberValue(product.price)
-  const stock = product.stock_quantity === null || product.stock_quantity === undefined
-    ? numberValue(product.inventory_qty)
-    : numberValue(product.stock_quantity)
+  const stock = resolveAvailableProductQuantity(product)
   const retailerId = firstNonEmpty([product.sku, product.id])
 
   return {

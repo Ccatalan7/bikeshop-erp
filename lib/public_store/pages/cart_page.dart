@@ -222,7 +222,7 @@ class CartPage extends StatelessWidget {
     required bool showTopBorder,
   }) {
     final product = item.product;
-    final isOutOfStock = product.stockQuantity < item.quantity;
+    final isOutOfStock = product.availableStockQuantity < item.quantity;
     final displayImageUrl = product.imageUrlOptimized ?? product.imageUrl;
 
     final imageStage = Container(
@@ -327,7 +327,7 @@ class CartPage extends StatelessWidget {
                 ),
               ),
               child: Text(
-                'Stock insuficiente. Solo ${product.stockQuantity} disponibles.',
+                'Stock insuficiente. Solo ${product.availableStockQuantity} disponibles.',
                 style: const TextStyle(
                   fontFamily: null,
                   fontSize: 13,
@@ -558,7 +558,7 @@ class CartPage extends StatelessWidget {
             color: _warmLine,
           ),
           const SizedBox(height: 18),
-          _buildBenefitRow('Envío a todo Chile'),
+          _buildBenefitRow('Envío a Chile continental'),
           _buildBenefitRow('Retiro en tienda sin costo'),
           _buildBenefitRow('Compra 100% segura'),
           _buildBenefitRow('Atención personalizada', isLast: true),
@@ -610,8 +610,8 @@ class CartPage extends StatelessWidget {
           ),
           _buildQuantityButton(
             icon: Icons.add,
-            enabled: item.quantity < product.stockQuantity,
-            onTap: item.quantity < product.stockQuantity
+            enabled: item.quantity < product.availableStockQuantity,
+            onTap: item.quantity < product.availableStockQuantity
                 ? () => cart.incrementQuantity(product.id)
                 : null,
           ),

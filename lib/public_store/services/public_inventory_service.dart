@@ -137,6 +137,69 @@ class PublicInventoryService extends ChangeNotifier {
     }
   }
 
+  Future<List<Map<String, dynamic>>> _attachSetIdentity({
+    required String tenantId,
+    required List<Map<String, dynamic>> rows,
+    bool deriveAvailability = false,
+  }) async {
+    if (rows.isEmpty) return rows;
+    final ids = rows
+        .map((row) => row['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty) return rows;
+
+    try {
+      final response = await _supabase
+          .from('products')
+          .select(
+            'id,is_set,set_type,parent_set_id,component_label,component_position',
+          )
+          .eq('tenant_id', tenantId)
+          .inFilter('id', ids);
+      final identityById = <String, Map<String, dynamic>>{
+        for (final raw in response as List)
+          if (raw['id'] != null)
+            raw['id'].toString(): Map<String, dynamic>.from(raw as Map),
+      };
+      final enriched = rows
+          .map((row) => <String, dynamic>{
+                ...row,
+                ...?identityById[row['id']?.toString()],
+              })
+          .toList(growable: false);
+
+      if (!deriveAvailability) return enriched;
+      for (final row in enriched.where((row) => row['is_set'] == true)) {
+        final preview = await _supabase.rpc(
+          'preview_product_stock_impact',
+          params: {
+            'p_product_id': row['id'],
+            'p_quantity': 1,
+          },
+        );
+        final payload = preview is Map
+            ? Map<String, dynamic>.from(preview)
+            : preview is List && preview.length == 1 && preview.first is Map
+                ? Map<String, dynamic>.from(preview.first as Map)
+                : null;
+        final available = (payload?['available_quantity'] as num?)?.toInt();
+        if (available != null) {
+          row['inventory_qty'] = available;
+          row['stock_quantity'] = available;
+          row['full_sets_available'] = available;
+        }
+      }
+      return enriched;
+    } catch (error) {
+      debugPrint(
+        '⚠️ PublicInventoryService: set identity unavailable: $error',
+      );
+      return rows;
+    }
+  }
+
   Future<PublicProductPage> getProductPageForTenant({
     required String tenantId,
     List<String>? categoryIds,
@@ -175,7 +238,11 @@ class PublicInventoryService extends ChangeNotifier {
         tenantId: tenantId,
         rows: rows,
       );
-      final products = classifiedRows.map(Product.fromJson).toList();
+      final setAwareRows = await _attachSetIdentity(
+        tenantId: tenantId,
+        rows: classifiedRows,
+      );
+      final products = setAwareRows.map(Product.fromJson).toList();
       final totalCount = classifiedRows.isEmpty
           ? 0
           : (classifiedRows.first['total_count'] as num?)?.toInt() ??
@@ -321,7 +388,9 @@ class PublicInventoryService extends ChangeNotifier {
       // searchQuery is present due to PostgREST's single `or=` query param.
       // We'll filter in-memory after fetching to keep services/non-stock items
       // visible.
-      if (onlyInStock && (searchQuery == null || searchQuery.isEmpty)) {
+      if (onlyInStock &&
+          !includeUnpublished &&
+          (searchQuery == null || searchQuery.isEmpty)) {
         // IMPORTANT: services and non-stock-tracked items must NEVER be
         // filtered out by stock constraints.
         // PostgREST supports only one `or=` param, so we include all
@@ -366,7 +435,21 @@ class PublicInventoryService extends ChangeNotifier {
       final rows = (response as List)
           .map((json) => Map<String, dynamic>.from(json as Map))
           .toList();
-      final products = rows.map(Product.fromJson).toList();
+      final setAwareRows = await _attachSetIdentity(
+        tenantId: tenantId,
+        rows: rows,
+        deriveAvailability: true,
+      );
+      var products = setAwareRows.map(Product.fromJson).toList();
+      if (onlyInStock) {
+        products = products
+            .where(
+              (product) =>
+                  !product.tracksInventory ||
+                  product.availableStockQuantity > 0,
+            )
+            .toList(growable: false);
+      }
 
       if (searchQuery != null && searchQuery.isNotEmpty) {
         final effectivePolicy = policy ?? const PublicProductVisibilityPolicy();
@@ -578,7 +661,11 @@ class PublicInventoryService extends ChangeNotifier {
         tenantId: tenantId,
         rows: rows,
       );
-      final products = classifiedRows.map(Product.fromJson).toList();
+      final setAwareRows = await _attachSetIdentity(
+        tenantId: tenantId,
+        rows: classifiedRows,
+      );
+      final products = setAwareRows.map(Product.fromJson).toList();
 
       debugPrint(
           '✅ PublicInventoryService: Found ${products.length} featured products');
@@ -688,7 +775,11 @@ class PublicInventoryService extends ChangeNotifier {
         tenantId: tenantId,
         rows: rows,
       );
-      final products = classifiedRows.map(Product.fromJson).toList();
+      final setAwareRows = await _attachSetIdentity(
+        tenantId: tenantId,
+        rows: classifiedRows,
+      );
+      final products = setAwareRows.map(Product.fromJson).toList();
       final visibleProducts = policy == null
           ? products
           : products.where(policy.allowsProduct).toList();

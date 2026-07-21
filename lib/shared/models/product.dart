@@ -6,6 +6,7 @@ class Product {
       'category,category_id,category_name,brand_id,brand,model,'
       'supplier_id,supplier_name,supplier_code,'
       'purchase_treatment,product_type,parent_set_id,'
+      'is_set,set_type,component_label,component_position,'
       'track_stock,is_active,is_published,'
       'created_at,updated_at';
 
@@ -22,6 +23,7 @@ class Product {
       'category,category_id,category_name,brand_id,brand,'
       'model,manufacturer,manufacturer_sku,gtin,color,size,material,weight,'
       'specifications,product_type,track_stock,tax_rate,'
+      'is_set,set_type,parent_set_id,component_label,component_position,'
       'is_active,is_published,show_on_website,created_at,updated_at';
 
   final String id;
@@ -317,10 +319,13 @@ class Product {
   static SetType? _parseSetType(dynamic value) {
     if (value == null) return null;
     final str = value.toString();
-    return SetType.values.firstWhere(
-      (t) => t.name == str,
-      orElse: () => SetType.custom,
-    );
+    return switch (str) {
+      'pair' => SetType.pair,
+      'frontRear' || 'front_rear' => SetType.frontRear,
+      'leftRight' || 'left_right' => SetType.leftRight,
+      'custom' => SetType.custom,
+      _ => SetType.custom,
+    };
   }
 
   static List<SetComponent>? _parseSetComponents(dynamic value) {
@@ -652,17 +657,26 @@ class Product {
   /// Returns true if this product tracks inventory
   bool get tracksInventory => !isService && !isWorkshopConsumable && trackStock;
 
-  bool get isLowStock => tracksInventory && stockQuantity <= minStockLevel;
+  bool get isLowStock =>
+      tracksInventory && availableStockQuantity <= minStockLevel;
 
-  bool get isOverStock => tracksInventory && stockQuantity >= maxStockLevel;
+  bool get isOverStock =>
+      tracksInventory && availableStockQuantity >= maxStockLevel;
 
-  bool get isOutOfStock => tracksInventory && stockQuantity <= 0;
+  bool get isOutOfStock => tracksInventory && availableStockQuantity <= 0;
+
+  /// Quantity that sales/search surfaces may offer to the user.
+  ///
+  /// A set parent owns no physical stock: its sellable availability is the
+  /// number of complete sets derivable from its components.
+  int get availableStockQuantity =>
+      isSet ? (fullSetsAvailable ?? stockQuantity) : stockQuantity;
 
   StockStatus get stockStatus {
     if (isService || !trackStock) return StockStatus.notTracked;
-    if (stockQuantity <= 0) return StockStatus.outOfStock;
-    if (stockQuantity <= minStockLevel) return StockStatus.lowStock;
-    if (stockQuantity >= maxStockLevel) return StockStatus.overStock;
+    if (availableStockQuantity <= 0) return StockStatus.outOfStock;
+    if (availableStockQuantity <= minStockLevel) return StockStatus.lowStock;
+    if (availableStockQuantity >= maxStockLevel) return StockStatus.overStock;
     return StockStatus.normal;
   }
 
@@ -675,6 +689,9 @@ class Product {
 
   /// Returns true if this product is a component of a set
   bool get isComponent => parentSetId != null;
+
+  bool get isSetComponent =>
+      parentSetId != null && parentSetId!.trim().isNotEmpty;
 
   /// Returns true if this set has some but not all components in stock
   bool get hasPartialStock => isSet && (isPartial ?? false);

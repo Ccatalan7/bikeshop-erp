@@ -12,6 +12,7 @@ update auth.users set raw_user_meta_data=raw_user_meta_data||jsonb_build_object(
 select set_config('request.jwt.claims',jsonb_build_object('sub','99500000-0000-4000-8000-000000000099','role','authenticated')::text,true);
 select set_config('request.jwt.claim.sub','99500000-0000-4000-8000-000000000099',true);
 
+select set_config('app.product_set_composition_writer','migration',true);
 insert into public.products(id,tenant_id,name,sku,price,cost,product_type,is_service,track_stock,inventory_qty,stock_quantity,min_stock_level,max_stock_level,is_set)
 values
 ('99500000-0000-4000-8000-000000000002','99500000-0000-4000-8000-000000000001','Direct Sale Product','SALE-RETURN-DIRECT',2000,1000,'product',false,true,10,10,0,100,false),
@@ -19,10 +20,17 @@ values
 ('99500000-0000-4000-8000-000000000004','99500000-0000-4000-8000-000000000001','Return Component A','SALE-RETURN-A',2000,1000,'product',false,true,10,10,0,100,false),
 ('99500000-0000-4000-8000-000000000005','99500000-0000-4000-8000-000000000001','Return Component B','SALE-RETURN-B',3000,2000,'product',false,true,20,20,0,100,false),
 ('99500000-0000-4000-8000-000000000006','99500000-0000-4000-8000-000000000001','Scrap Sale Product','SALE-RETURN-SCRAP',1500,700,'product',false,true,5,5,0,100,false);
+select set_config('app.product_set_composition_writer','migration',true);
+update public.products set
+  parent_set_id='99500000-0000-4000-8000-000000000003',
+  component_label=case when id='99500000-0000-4000-8000-000000000004'::uuid then 'A' else 'B' end,
+  component_position=case when id='99500000-0000-4000-8000-000000000004'::uuid then 1 else 2 end
+where id in ('99500000-0000-4000-8000-000000000004'::uuid,'99500000-0000-4000-8000-000000000005'::uuid);
 insert into public.product_set_components(tenant_id,set_product_id,component_product_id,component_label,component_position,quantity_in_set)
 values
 ('99500000-0000-4000-8000-000000000001','99500000-0000-4000-8000-000000000003','99500000-0000-4000-8000-000000000004','A',1,1),
 ('99500000-0000-4000-8000-000000000001','99500000-0000-4000-8000-000000000003','99500000-0000-4000-8000-000000000005','B',2,2);
+select set_config('app.product_set_composition_writer','',true);
 
 insert into public.sales_invoices(id,tenant_id,invoice_number,customer_name,status,subtotal,net_amount,iva_amount,total,balance,tax_treatment,items)
 values('99500000-0000-4000-8000-000000000010','99500000-0000-4000-8000-000000000001','FV-RETURN-001','Return Customer','draft',20500,20500,0,20500,20500,'no_tax',

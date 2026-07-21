@@ -9,6 +9,10 @@ class SetConfigurationWidget extends StatefulWidget {
   /// Whether this product is a set
   final bool isSet;
 
+  /// Existing set identities cannot be downgraded through a best-effort
+  /// product update. Their lifecycle is owned by the aggregate command.
+  final bool canChangeSetStatus;
+
   /// Type of set (pair, front_rear, left_right, custom)
   final SetType? setType;
 
@@ -39,6 +43,7 @@ class SetConfigurationWidget extends StatefulWidget {
   const SetConfigurationWidget({
     super.key,
     required this.isSet,
+    this.canChangeSetStatus = true,
     this.setType,
     required this.components,
     required this.onIsSetChanged,
@@ -164,11 +169,13 @@ class _SetConfigurationWidgetState extends State<SetConfigurationWidget> {
               ),
             ],
           ),
-          subtitle: const Text(
-            'Activa para productos que vienen en pares o sets. Se crearán productos hijos para cada componente.',
+          subtitle: Text(
+            !widget.canChangeSetStatus && !widget.isSet
+                ? 'Un producto existente no se convierte en juego desde esta ficha. Crea un juego nuevo para definir su composición de forma atómica.'
+                : 'El juego no guarda stock propio: su disponibilidad se calcula desde sus componentes.',
           ),
           value: widget.isSet,
-          onChanged: widget.onIsSetChanged,
+          onChanged: widget.canChangeSetStatus ? widget.onIsSetChanged : null,
         ),
 
         // Show set configuration only when isSet is true
@@ -530,6 +537,37 @@ class _SetConfigurationWidgetState extends State<SetConfigurationWidget> {
                         index, component.copyWith(skuSuffix: value)),
                   ),
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    key: ValueKey(
+                      'quantity_${index}_${component.quantityInSet}',
+                    ),
+                    initialValue: component.quantityInSet.toString(),
+                    decoration: const InputDecoration(
+                      labelText: 'Cant. por juego',
+                      helperText: 'Unidades físicas',
+                      isDense: true,
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    validator: (value) {
+                      final quantity = int.tryParse(value ?? '');
+                      if (quantity == null || quantity < 1) {
+                        return 'Mínimo 1';
+                      }
+                      return null;
+                    },
+                    onChanged: (value) {
+                      final quantity = int.tryParse(value);
+                      if (quantity == null || quantity < 1) return;
+                      _updateComponent(
+                        index,
+                        component.copyWith(quantityInSet: quantity),
+                      );
+                    },
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -868,6 +906,7 @@ class _SetConfigurationWidgetState extends State<SetConfigurationWidget> {
         name: _generateComponentName(label),
         skuSuffix: skuSuffix,
         position: index + 1,
+        quantityInSet: 1,
         costRatio: equalRatio,
         priceRatio: equalRatio,
         cost: widget.parentCost * equalRatio,
@@ -890,6 +929,7 @@ class _SetConfigurationWidgetState extends State<SetConfigurationWidget> {
       name: '',
       skuSuffix: 'C${widget.components.length + 1}',
       position: widget.components.length + 1,
+      quantityInSet: 1,
       costRatio: remainingCostRatio,
       priceRatio: remainingPriceRatio,
       cost: widget.parentCost * remainingCostRatio,
@@ -929,20 +969,24 @@ class _SetConfigurationWidgetState extends State<SetConfigurationWidget> {
 
 /// Draft model for component being edited (before saving)
 class SetComponentDraft {
+  final String? productId;
   final String label;
   final String name;
   final String skuSuffix;
   final int position;
+  final int quantityInSet;
   final double? costRatio;
   final double? priceRatio;
   final double cost;
   final double price;
 
   const SetComponentDraft({
+    this.productId,
     required this.label,
     required this.name,
     required this.skuSuffix,
     required this.position,
+    this.quantityInSet = 1,
     this.costRatio,
     this.priceRatio,
     required this.cost,
@@ -950,20 +994,24 @@ class SetComponentDraft {
   });
 
   SetComponentDraft copyWith({
+    String? productId,
     String? label,
     String? name,
     String? skuSuffix,
     int? position,
+    int? quantityInSet,
     double? costRatio,
     double? priceRatio,
     double? cost,
     double? price,
   }) {
     return SetComponentDraft(
+      productId: productId ?? this.productId,
       label: label ?? this.label,
       name: name ?? this.name,
       skuSuffix: skuSuffix ?? this.skuSuffix,
       position: position ?? this.position,
+      quantityInSet: quantityInSet ?? this.quantityInSet,
       costRatio: costRatio ?? this.costRatio,
       priceRatio: priceRatio ?? this.priceRatio,
       cost: cost ?? this.cost,

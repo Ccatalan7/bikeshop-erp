@@ -12,13 +12,21 @@ update auth.users set raw_user_meta_data=raw_user_meta_data||jsonb_build_object(
 select set_config('request.jwt.claims',jsonb_build_object('sub','99700000-0000-4000-8000-000000000099','role','authenticated')::text,true);
 select set_config('request.jwt.claim.sub','99700000-0000-4000-8000-000000000099',true);
 
+select set_config('app.product_set_composition_writer','migration',true);
 insert into public.products(id,tenant_id,name,sku,price,cost,product_type,is_service,track_stock,inventory_qty,stock_quantity,min_stock_level,max_stock_level,is_set) values
 ('99700000-0000-4000-8000-000000000002','99700000-0000-4000-8000-000000000001','Inspection Set','Q-SET',5000,3000,'product',false,true,0,0,0,100,true),
 ('99700000-0000-4000-8000-000000000003','99700000-0000-4000-8000-000000000001','Inspection A','Q-A',2000,1000,'product',false,true,10,10,0,100,false),
 ('99700000-0000-4000-8000-000000000004','99700000-0000-4000-8000-000000000001','Inspection B','Q-B',3000,2000,'product',false,true,20,20,0,100,false);
+select set_config('app.product_set_composition_writer','migration',true);
+update public.products set
+  parent_set_id='99700000-0000-4000-8000-000000000002',
+  component_label=case when id='99700000-0000-4000-8000-000000000003'::uuid then 'A' else 'B' end,
+  component_position=case when id='99700000-0000-4000-8000-000000000003'::uuid then 1 else 2 end
+where id in ('99700000-0000-4000-8000-000000000003'::uuid,'99700000-0000-4000-8000-000000000004'::uuid);
 insert into public.product_set_components(tenant_id,set_product_id,component_product_id,component_label,component_position,quantity_in_set) values
 ('99700000-0000-4000-8000-000000000001','99700000-0000-4000-8000-000000000002','99700000-0000-4000-8000-000000000003','A',1,1),
 ('99700000-0000-4000-8000-000000000001','99700000-0000-4000-8000-000000000002','99700000-0000-4000-8000-000000000004','B',2,2);
+select set_config('app.product_set_composition_writer','',true);
 insert into public.sales_invoices(id,tenant_id,invoice_number,customer_name,status,subtotal,net_amount,iva_amount,total,balance,tax_treatment,items)
 values('99700000-0000-4000-8000-000000000010','99700000-0000-4000-8000-000000000001','FV-Q-001','Inspection Customer','draft',10000,10000,0,10000,10000,'no_tax',
 jsonb_build_array(jsonb_build_object('line_id','q-line','product_id','99700000-0000-4000-8000-000000000002','product_name','Inspection Set','product_sku','Q-SET','quantity',2,'unit_price',5000,'price',5000,'cost',3000,'purchase_treatment','inventory','is_service',false)));

@@ -23,6 +23,7 @@ import '../models/inventory_models.dart';
 import '../services/brand_service.dart';
 import '../services/category_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
+import '../utils/product_set_inventory_projection.dart';
 import '../widgets/bulk_product_create_dialog.dart';
 import '../widgets/bulk_product_edit_dialog.dart';
 import '../widgets/product_movements_tab.dart';
@@ -153,6 +154,7 @@ class _ProductListPageState extends State<ProductListPage> {
   List<Category> _categories = [];
   List<Supplier> _suppliers = [];
   List<ProductBrand> _brands = [];
+  Map<String, int> _quantityInSetByComponentId = const {};
 
   // Detail pane resize
   double _detailPaneWidth = 520.0;
@@ -336,6 +338,9 @@ class _ProductListPageState extends State<ProductListPage> {
       _loadSuppliers();
       _loadBrands();
       _applyFilters(resetPagination: false);
+      if (!_isServicesScope) {
+        unawaited(_loadSetCompositionQuantities());
+      }
       if (_isServicesScope) {
         unawaited(
           _loadServiceStructuredProfileMappings(forceRefresh: false),
@@ -770,6 +775,23 @@ class _ProductListPageState extends State<ProductListPage> {
     }
   }
 
+  Future<void> _loadSetCompositionQuantities() async {
+    try {
+      final quantities =
+          await _inventoryService.getProductSetComponentQuantities();
+      if (!mounted) return;
+      setState(() {
+        _quantityInSetByComponentId = quantities;
+        _applyFilters(resetPagination: false);
+      });
+    } catch (error) {
+      debugPrint(
+        '[SET] Canonical component quantities unavailable; using 1:1 '
+        'compatibility projection: $error',
+      );
+    }
+  }
+
   bool _isServiceStructuredProfileMappingsCacheValid() {
     final fetchedAt = _serviceStructuredProfileMappingsFetchedAt;
     if (fetchedAt == null) return false;
@@ -884,6 +906,10 @@ class _ProductListPageState extends State<ProductListPage> {
         _applyFilters(resetPagination: !preserveState);
         _isLoading = false;
       });
+
+      if (!_isServicesScope) {
+        unawaited(_loadSetCompositionQuantities());
+      }
 
       if (_isServicesScope || _filterMissingServiceStructuredProfile) {
         unawaited(
@@ -1027,18 +1053,23 @@ class _ProductListPageState extends State<ProductListPage> {
         case StockFilter.inStock:
           filtered = filtered
               .where((product) =>
-                  product.tracksInventory && product.inventoryQty > 0)
+                  product.tracksInventory &&
+                  _effectiveInventoryQty(product) > 0)
               .toList();
           break;
         case StockFilter.lowStock:
-          filtered = filtered
-              .where((product) => product.tracksInventory && product.isLowStock)
-              .toList();
+          filtered = filtered.where((product) {
+            final stock = _effectiveInventoryQty(product);
+            return product.tracksInventory &&
+                stock > 0 &&
+                stock <= product.minStockLevel;
+          }).toList();
           break;
         case StockFilter.outOfStock:
           filtered = filtered
-              .where(
-                  (product) => product.tracksInventory && product.isOutOfStock)
+              .where((product) =>
+                  product.tracksInventory &&
+                  _effectiveInventoryQty(product) <= 0)
               .toList();
           break;
       }
@@ -1107,10 +1138,16 @@ class _ProductListPageState extends State<ProductListPage> {
         filtered.sort((a, b) => a.price.compareTo(b.price));
         break;
       case ProductSortOption.stockDesc:
-        filtered.sort((a, b) => b.inventoryQty.compareTo(a.inventoryQty));
+        filtered.sort(
+          (a, b) =>
+              _effectiveInventoryQty(b).compareTo(_effectiveInventoryQty(a)),
+        );
         break;
       case ProductSortOption.stockAsc:
-        filtered.sort((a, b) => a.inventoryQty.compareTo(b.inventoryQty));
+        filtered.sort(
+          (a, b) =>
+              _effectiveInventoryQty(a).compareTo(_effectiveInventoryQty(b)),
+        );
         break;
     }
 
@@ -1125,6 +1162,19 @@ class _ProductListPageState extends State<ProductListPage> {
         _currentPage = _totalPages;
       }
     }
+  }
+
+  ProductSetAvailabilityProjection _setAvailability(Product product) {
+    return projectProductSetAvailability(
+      setProduct: product,
+      allProducts: _products,
+      quantityInSetByComponentId: _quantityInSetByComponentId,
+    );
+  }
+
+  int _effectiveInventoryQty(Product product) {
+    if (!product.isSet) return product.inventoryQty;
+    return _setAvailability(product).completeSetsAvailable;
   }
 
   void _onSearchChanged(String value) {
@@ -2608,14 +2658,9 @@ class _ProductListPageState extends State<ProductListPage> {
       );
     }
 
-    final stockProducts =
-        _filteredProducts.where((p) => p.tracksInventory).toList();
-    final lowStock =
-        stockProducts.where((p) => p.inventoryQty > 0 && p.isLowStock).length;
-    final outOfStock = stockProducts.where((p) => p.inventoryQty <= 0).length;
-    final stockValue = stockProducts.fold<double>(
-      0,
-      (sum, p) => sum + (p.cost > 0 ? p.cost * p.inventoryQty : 0),
+    final summary = summarizePhysicalInventory(
+      visibleProducts: _filteredProducts,
+      allProducts: _products,
     );
 
     return Container(
@@ -2633,14 +2678,18 @@ class _ProductListPageState extends State<ProductListPage> {
               theme,
               Icons.inventory_2_outlined,
               'Costo inventario:',
-              ChileanUtils.formatCurrency(stockValue),
+              ChileanUtils.formatCurrency(summary.inventoryCost),
               theme.colorScheme.primary),
           const SizedBox(width: 24),
           _buildCompactStat(theme, Icons.warning_amber_rounded, 'Bajo stock:',
-              '$lowStock', const Color(0xFFE67E22)),
+              '${summary.lowStockCount}', const Color(0xFFE67E22)),
           const SizedBox(width: 24),
-          _buildCompactStat(theme, Icons.remove_shopping_cart_outlined,
-              'Sin stock:', '$outOfStock', const Color(0xFFE74C3C)),
+          _buildCompactStat(
+              theme,
+              Icons.remove_shopping_cart_outlined,
+              'Sin stock:',
+              '${summary.outOfStockCount}',
+              const Color(0xFFE74C3C)),
         ],
       ),
     );
@@ -3509,7 +3558,7 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Widget _buildMobileProductRow(Product product, ThemeData theme) {
-    final stockQty = product.inventoryQty;
+    final stockQty = _effectiveInventoryQty(product);
     final isLowStock = product.tracksInventory &&
         stockQty > 0 &&
         stockQty <= product.minStockLevel;
@@ -3627,7 +3676,7 @@ class _ProductListPageState extends State<ProductListPage> {
               width: 92,
               child: Align(
                 alignment: Alignment.centerRight,
-                child: product.tracksInventory
+                child: product.tracksInventory && !product.isSet
                     ? Text(
                         '$stockQty',
                         style: TextStyle(
@@ -4265,6 +4314,9 @@ class _ProductListPageState extends State<ProductListPage> {
 
   Widget _buildComponentRow(Product component, ThemeData theme) {
     final hasStock = component.inventoryQty > 0;
+    final quantityInSet = component.id == null
+        ? 1
+        : _quantityInSetByComponentId[component.id!] ?? 1;
 
     return InkWell(
       onTap: () => _openEditor(component),
@@ -4320,7 +4372,9 @@ class _ProductListPageState extends State<ProductListPage> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                'Stock: ${component.inventoryQty}',
+                quantityInSet == 1
+                    ? 'Stock: ${component.inventoryQty}'
+                    : 'Stock: ${component.inventoryQty} · usa $quantityInSet',
                 style: theme.textTheme.labelSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: hasStock
@@ -4388,35 +4442,50 @@ class _ProductListPageState extends State<ProductListPage> {
       );
     }
 
-    // NEW: Partial Set Indicator (Set = 0 but has components)
-    // We calculate isPartial locally since DB column might be missing
-    final bool isPartialSet = product.isSet &&
-        product.inventoryQty == 0 &&
-        _products.any((p) =>
-            p.parentSetId == product.id &&
-            p.inventoryQty > 0); // Check if ANY component has stock
-
-    if (isPartialSet) {
+    if (product.isSet) {
+      final availability = _setAvailability(product);
+      final complete = availability.completeSetsAvailable;
+      final hasProblem =
+          !availability.isConfigured || availability.hasNegativeComponentStock;
+      final color = hasProblem
+          ? theme.colorScheme.error
+          : availability.hasPartialStock
+              ? Colors.deepOrange
+              : complete > 0
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.error;
+      final tooltip = !availability.isConfigured
+          ? 'Juego sin componentes configurados'
+          : availability.hasNegativeComponentStock
+              ? 'Hay componentes con stock negativo'
+              : availability.hasPartialStock
+                  ? '$complete juegos completos; quedan piezas parciales'
+                  : '$complete juegos completos disponibles';
       return Center(
         child: Tooltip(
-          message: 'Set incompleto: faltan componentes',
+          message: tooltip,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.15),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
+              border: Border.all(color: color.withValues(alpha: 0.45)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.warning_amber_rounded,
-                    size: 14, color: Colors.deepOrange),
+                Icon(
+                  hasProblem || availability.hasPartialStock
+                      ? Icons.warning_amber_rounded
+                      : Icons.account_tree_outlined,
+                  size: 14,
+                  color: color,
+                ),
                 const SizedBox(width: 4),
                 Text(
-                  '0', // Still 0 stock
+                  availability.isConfigured ? '$complete' : '—',
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.deepOrange,
+                    color: color,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -5004,9 +5073,19 @@ class _ProductListPageState extends State<ProductListPage> {
                           _buildDetailSection(theme,
                               title: 'Inventario',
                               children: [
-                                _buildDetailRow(theme, 'Stock Actual',
-                                    '${_selectedProduct!.inventoryQty}',
+                                _buildDetailRow(
+                                    theme,
+                                    _selectedProduct!.isSet
+                                        ? 'Juegos completos'
+                                        : 'Stock Actual',
+                                    '${_effectiveInventoryQty(_selectedProduct!)}',
                                     isHighlight: true),
+                                if (_selectedProduct!.isSet)
+                                  _buildDetailRow(
+                                    theme,
+                                    'Cálculo',
+                                    'Desde componentes',
+                                  ),
                                 if (_selectedProduct!.warehouseLocation != null)
                                   _buildDetailRow(theme, 'Ubicación',
                                       _selectedProduct!.warehouseLocation!),

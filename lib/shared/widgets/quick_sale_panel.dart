@@ -851,12 +851,23 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    p.sku,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                    ),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 3,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        p.sku,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.5),
+                        ),
+                      ),
+                      if (p.isSetComponent)
+                        _setRoleBadge(theme, 'Pieza de juego'),
+                      if (p.isSet) _setRoleBadge(theme, 'Juego completo'),
+                    ],
                   ),
                 ],
               ),
@@ -907,10 +918,12 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
                       const SizedBox(width: 4),
                     ],
                     Text(
-                      p.trackStock ? '${p.stockQuantity} uds' : 'Servicio',
+                      p.trackStock
+                          ? '${p.availableStockQuantity} uds'
+                          : 'Servicio',
                       style: TextStyle(
                         fontSize: 10,
-                        color: p.trackStock && p.stockQuantity <= 0
+                        color: p.trackStock && p.availableStockQuantity <= 0
                             ? Colors.red
                             : theme.colorScheme.onSurface
                                 .withValues(alpha: 0.45),
@@ -988,6 +1001,15 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
                           style: const TextStyle(
                               fontSize: 11, fontWeight: FontWeight.w500),
                         ),
+                        if (p.isSetComponent || p.isSet) ...[
+                          const SizedBox(height: 2),
+                          _setRoleBadge(
+                            theme,
+                            p.isSetComponent
+                                ? 'Pieza de juego'
+                                : 'Juego completo',
+                          ),
+                        ],
                         const Spacer(),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1001,10 +1023,13 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
                               ),
                             ),
                             Text(
-                              p.trackStock ? '${p.stockQuantity}' : 'Srv',
+                              p.trackStock
+                                  ? '${p.availableStockQuantity}'
+                                  : 'Srv',
                               style: TextStyle(
                                 fontSize: 10,
-                                color: p.trackStock && p.stockQuantity <= 0
+                                color: p.trackStock &&
+                                        p.availableStockQuantity <= 0
                                     ? Colors.red
                                     : theme.colorScheme.onSurface
                                         .withValues(alpha: 0.4),
@@ -1294,8 +1319,8 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
     final subtleBorder = theme.colorScheme.outline.withValues(alpha: 0.14);
     final cardBg = isDark ? const Color(0xFF232323) : Colors.white;
     final mutedColor = theme.colorScheme.onSurface.withValues(alpha: 0.52);
-    final isLowStock =
-        product.trackStock && product.stockQuantity <= product.minStockLevel;
+    final isLowStock = product.trackStock &&
+        product.availableStockQuantity <= product.minStockLevel;
     final margin = _marginPercent(salePrice, product.cost);
     final marginColor = salePrice < product.cost
         ? Colors.redAccent
@@ -1431,6 +1456,22 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
                           if (!product.trackStock)
                             _pill(theme, isDark, subtleBorder, 'Servicio',
                                 accent: theme.colorScheme.primary),
+                          if (product.isSetComponent)
+                            _pill(
+                              theme,
+                              isDark,
+                              subtleBorder,
+                              'Pieza de juego',
+                              accent: theme.colorScheme.tertiary,
+                            ),
+                          if (product.isSet)
+                            _pill(
+                              theme,
+                              isDark,
+                              subtleBorder,
+                              'Juego completo',
+                              accent: theme.colorScheme.primary,
+                            ),
                         ],
                       ),
                       if ((product.warehouseLocation ?? '').isNotEmpty) ...[
@@ -1472,7 +1513,7 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
                     child: _statTile(theme, isDark, subtleBorder,
                         label: product.trackStock ? 'Stock' : 'Tipo',
                         value: product.trackStock
-                            ? '${product.stockQuantity}'
+                            ? '${product.availableStockQuantity}'
                             : 'Servicio',
                         sub: product.trackStock
                             ? 'Mín ${product.minStockLevel}'
@@ -1715,6 +1756,24 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
           fontFamily: isCode ? 'monospace' : null,
           fontWeight: isCode ? FontWeight.w600 : FontWeight.w500,
           color: accent ?? theme.colorScheme.onSurface.withValues(alpha: 0.75),
+        ),
+      ),
+    );
+  }
+
+  Widget _setRoleBadge(ThemeData theme, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onTertiaryContainer,
+          fontWeight: FontWeight.w600,
+          fontSize: 9,
         ),
       ),
     );

@@ -49,7 +49,8 @@ class WebsiteService extends ChangeNotifier {
   static const int _currentBlockSchemaVersion = 1;
   static const String _orderItemProductContextSelect =
       'id,name,sku,category_name,stock_quantity,inventory_qty,is_active,'
-      'is_published,product_type,track_stock,purchase_treatment';
+      'is_published,product_type,track_stock,purchase_treatment,'
+      'is_set,parent_set_id';
 
   bool get canRetryOnlineOrderPaymentProcessing =>
       _tenantService.hasAnyRole(const ['admin', 'manager', 'cashier']) ||
@@ -2304,6 +2305,16 @@ class WebsiteService extends ChangeNotifier {
             productsById[id] = product;
           }
         }
+        for (final product in productsById.values
+            .where((product) => product['is_set'] == true)) {
+          final available = await _loadSetAvailability(
+            product['id']?.toString() ?? '',
+          );
+          if (available != null) {
+            product['inventory_qty'] = available;
+            product['stock_quantity'] = available;
+          }
+        }
       } catch (e) {
         debugPrint('Error loading order product context: $e');
         return items;
@@ -2894,13 +2905,45 @@ class WebsiteService extends ChangeNotifier {
           .eq('show_on_website', true)
           .eq('is_published', true)
           .eq('is_active', true)
-          .gt('inventory_qty', 0)
           .order('name');
 
-      return (response as List).map((json) => Product.fromJson(json)).toList();
+      final products = (response as List)
+          .map((json) => Product.fromJson(json))
+          .toList(growable: false);
+      final hydrated = <Product>[];
+      for (final product in products) {
+        final available =
+            product.isSet ? await _loadSetAvailability(product.id) : null;
+        final setAware = available == null
+            ? product
+            : product.copyWith(fullSetsAvailable: available);
+        if (!setAware.tracksInventory || setAware.availableStockQuantity > 0) {
+          hydrated.add(setAware);
+        }
+      }
+      return hydrated;
     } catch (e) {
       debugPrint('Error loading website products: $e');
       return [];
+    }
+  }
+
+  Future<int?> _loadSetAvailability(String productId) async {
+    if (productId.isEmpty) return null;
+    try {
+      final response = await _supabase.rpc(
+        'preview_product_stock_impact',
+        params: {'p_product_id': productId, 'p_quantity': 1},
+      );
+      final payload = response is Map
+          ? Map<String, dynamic>.from(response)
+          : response is List && response.length == 1 && response.first is Map
+              ? Map<String, dynamic>.from(response.first as Map)
+              : null;
+      return (payload?['available_quantity'] as num?)?.toInt();
+    } catch (error) {
+      debugPrint('Error loading set availability for $productId: $error');
+      return null;
     }
   }
 

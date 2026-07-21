@@ -1,4 +1,8 @@
 import { hasSupportedEcommerceTaxRate } from "./ecommerce_tax.ts";
+import {
+  isProductAvailable,
+  type ProductAvailabilityFields,
+} from "./product_availability.ts";
 
 type MerchantIdentifierFields = {
   sku?: string | null;
@@ -13,10 +17,7 @@ export type MerchantIdentifiers = {
   mpn: string;
 };
 
-type MerchantAvailabilityFields = {
-  track_stock?: unknown;
-  stock_quantity?: unknown;
-};
+type MerchantAvailabilityFields = ProductAvailabilityFields;
 
 /**
  * Merchant may advertise only products the public checkout can actually sell.
@@ -52,9 +53,7 @@ export function resolveMerchantIdentifiers(
 export function resolveMerchantAvailability(
   product: MerchantAvailabilityFields,
 ): "in_stock" | "out_of_stock" {
-  if (product.track_stock === false) return "in_stock";
-  const stock = Number(product.stock_quantity ?? 0);
-  return Number.isFinite(stock) && stock > 0 ? "in_stock" : "out_of_stock";
+  return isProductAvailable(product) ? "in_stock" : "out_of_stock";
 }
 
 function firstNonEmpty(...values: Array<string | null | undefined>): string {

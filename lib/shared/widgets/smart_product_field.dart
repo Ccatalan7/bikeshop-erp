@@ -331,6 +331,11 @@ class _SmartProductFieldState extends State<SmartProductField> {
                     ),
                   ),
                 ),
+              if (_product?.isSetComponent == true ||
+                  _product?.isSet == true) ...[
+                const SizedBox(height: 4),
+                _buildSetRoleLabel(theme),
+              ],
               if (_descriptionController.text.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
@@ -510,6 +515,11 @@ class _SmartProductFieldState extends State<SmartProductField> {
                         ),
                       ),
                     ),
+                  if (_product?.isSetComponent == true ||
+                      _product?.isSet == true) ...[
+                    const SizedBox(height: 4),
+                    _buildSetRoleLabel(theme),
+                  ],
                 ],
               ),
             ),
@@ -575,6 +585,32 @@ class _SmartProductFieldState extends State<SmartProductField> {
       compatibilityResolver: widget.compatibilityResolver,
       compatibilityContextKey: widget.compatibilityContextKey,
       onProductSelected: _selectProduct,
+    );
+  }
+
+  Widget _buildSetRoleLabel(ThemeData theme) {
+    final isComponent = _product?.isSetComponent == true;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: (isComponent
+                  ? theme.colorScheme.tertiaryContainer
+                  : theme.colorScheme.primaryContainer)
+              .withValues(alpha: 0.75),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          isComponent ? 'Pieza de juego' : 'Juego completo',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: isComponent
+                ? theme.colorScheme.onTertiaryContainer
+                : theme.colorScheme.onPrimaryContainer,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
     );
   }
 }

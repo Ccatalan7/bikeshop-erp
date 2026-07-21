@@ -767,18 +767,11 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       return;
     }
 
-    final db = Provider.of<DatabaseService>(context, listen: false);
-    final rows = await Future.wait(
-      missingProductIds.map((productId) => db.selectById(
-            'products',
-            productId,
-            selectColumns: Product.listPreviewSelect,
-          )),
+    final products = await _inventoryService.getProductsByIds(
+      missingProductIds,
+      forceRefresh: true,
     );
-
-    for (final row in rows) {
-      if (row == null) continue;
-      final product = Product.fromJson(row);
+    for (final product in products) {
       if (_cachedProducts.any((candidate) => candidate.id == product.id)) {
         continue;
       }
@@ -3340,7 +3333,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
               // Stock warning (hide for services)
               if (line.product != null &&
                   !line.product!.isService &&
-                  line.product!.stockQuantity < line.quantity)
+                  line.product!.availableStockQuantity < line.quantity)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Row(
@@ -3351,7 +3344,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          'Al confirmar quedará en ${(line.product!.stockQuantity - line.quantity).toInt()}',
+                          'Al confirmar quedará en ${(line.product!.availableStockQuantity - line.quantity).toInt()}',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: Colors.orange.shade800,
                             fontSize: 10,
@@ -4138,7 +4131,10 @@ class _InvoiceLineEntry {
                               '\$${product.price.toStringAsFixed(0)}'),
                           _detailRow(
                               'Costo', '\$${product.cost.toStringAsFixed(0)}'),
-                          _detailRow('Stock', '${product.stockQuantity}'),
+                          _detailRow(
+                            product.isSet ? 'Juegos disponibles' : 'Stock',
+                            '${product.availableStockQuantity}',
+                          ),
                           if (product.brand != null &&
                               product.brand!.isNotEmpty)
                             _detailRow('Marca', product.brand!),

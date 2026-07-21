@@ -2,6 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { hasSupportedEcommerceTaxRate } from "../_shared/ecommerce_tax.ts";
 import {
+  mergeCanonicalAvailableQuantities,
+  resolveAvailableProductQuantity,
+} from "../_shared/product_availability.ts";
+import {
   isFetchableMerchantDataSource,
   merchantDataSourceFetchUrl,
   merchantDataSourcesUrl,
@@ -363,7 +367,7 @@ async function getMerchantFeedEligibility(offerId: string) {
   const { data, error } = await adminClient()
     .from("products")
     .select(
-      "id, name, is_active, is_published, is_google_merchant, lifecycle_status, price, stock_quantity, tax_rate",
+      "id, tenant_id, name, is_active, is_published, is_google_merchant, lifecycle_status, price, stock_quantity, inventory_qty, track_stock, is_set, tax_rate",
     )
     .eq("id", offerId)
     .maybeSingle();
@@ -385,7 +389,20 @@ async function getMerchantFeedEligibility(offerId: string) {
     };
   }
 
+  const { data: availabilityRows, error: availabilityError } = await adminClient()
+    .rpc("get_product_available_quantities", {
+      p_tenant_id: data.tenant_id,
+      p_product_ids: [data.id],
+    });
+  const canonicalProduct = mergeCanonicalAvailableQuantities(
+    [data],
+    (availabilityRows || []) as unknown as Array<Record<string, unknown>>,
+  )[0];
+
   const reasons: string[] = [];
+  if (availabilityError) {
+    reasons.push("No se pudo calcular la disponibilidad vendible del producto.");
+  }
   if (data.is_active !== true) reasons.push("El producto no esta activo.");
   if (data.is_published !== true) {
     reasons.push("El producto no esta publicado en la tienda online.");
@@ -402,6 +419,10 @@ async function getMerchantFeedEligibility(offerId: string) {
   if (!hasSupportedEcommerceTaxRate(data.tax_rate)) {
     reasons.push("La clasificación tributaria debe ser exenta (0) o afecta a IVA (19).");
   }
+  const availableQuantity = resolveAvailableProductQuantity(canonicalProduct);
+  if (data.track_stock !== false && availableQuantity <= 0) {
+    reasons.push("El producto no tiene disponibilidad vendible en el catálogo público.");
+  }
 
   return {
     known: true,
@@ -415,7 +436,7 @@ async function getMerchantFeedEligibility(offerId: string) {
       isGoogleMerchant: data.is_google_merchant === true,
       lifecycleStatus: data.lifecycle_status,
       price: data.price,
-      stockQuantity: data.stock_quantity,
+      stockQuantity: availableQuantity,
       taxRate: data.tax_rate,
     },
   };

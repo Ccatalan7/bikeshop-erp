@@ -41,6 +41,7 @@ select set_config(
 );
 select set_config('request.jwt.claim.sub', '99100000-0000-4000-8000-000000000099', true);
 
+select set_config('app.product_set_composition_writer', 'migration', true);
 insert into public.products (
   id, tenant_id, name, sku, price, cost, product_type, is_service,
   track_stock, inventory_qty, stock_quantity, min_stock_level, max_stock_level
@@ -63,12 +64,19 @@ insert into public.products (
   ('99100000-0000-4000-8000-000000000006', '99100000-0000-4000-8000-000000000001', 'Set Component A', 'SET-A', 2000, 1000, 'product', false, true, 0, 0, 0, 100, false),
   ('99100000-0000-4000-8000-000000000007', '99100000-0000-4000-8000-000000000001', 'Set Component B', 'SET-B', 3000, 2000, 'product', false, true, 0, 0, 0, 100, false);
 
+select set_config('app.product_set_composition_writer', 'migration', true);
+update public.products set
+  parent_set_id = '99100000-0000-4000-8000-000000000005',
+  component_label = case when id = '99100000-0000-4000-8000-000000000006'::uuid then 'A' else 'B' end,
+  component_position = case when id = '99100000-0000-4000-8000-000000000006'::uuid then 1 else 2 end
+where id in ('99100000-0000-4000-8000-000000000006'::uuid, '99100000-0000-4000-8000-000000000007'::uuid);
 insert into public.product_set_components (
   tenant_id, set_product_id, component_product_id, component_label,
   component_position, quantity_in_set
 ) values
   ('99100000-0000-4000-8000-000000000001', '99100000-0000-4000-8000-000000000005', '99100000-0000-4000-8000-000000000006', 'A', 1, 1),
   ('99100000-0000-4000-8000-000000000001', '99100000-0000-4000-8000-000000000005', '99100000-0000-4000-8000-000000000007', 'B', 2, 2);
+select set_config('app.product_set_composition_writer', '', true);
 
 insert into public.purchase_invoices (
   id, tenant_id, invoice_number, supplier_name, status,

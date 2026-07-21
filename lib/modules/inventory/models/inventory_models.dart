@@ -113,6 +113,7 @@ class Product {
   final String? parentSetId;
   final String? componentLabel;
   final int? componentPosition;
+  final int? fullSetsAvailable;
   final bool? isPartial;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -201,6 +202,7 @@ class Product {
     this.parentSetId,
     this.componentLabel,
     this.componentPosition,
+    this.fullSetsAvailable,
     this.isPartial,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -333,6 +335,7 @@ class Product {
       parentSetId: json['parent_set_id']?.toString(),
       componentLabel: json['component_label'],
       componentPosition: json['component_position'],
+      fullSetsAvailable: (json['full_sets_available'] as num?)?.toInt(),
       isPartial: json['is_partial'],
       createdAt: json['created_at'] == null
           ? DateTime.now()
@@ -568,6 +571,7 @@ class Product {
     String? parentSetId,
     String? componentLabel,
     int? componentPosition,
+    int? fullSetsAvailable,
     bool? isPartial,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -727,14 +731,18 @@ class Product {
       parentSetId: parentSetId ?? this.parentSetId,
       componentLabel: componentLabel ?? this.componentLabel,
       componentPosition: componentPosition ?? this.componentPosition,
+      fullSetsAvailable: fullSetsAvailable ?? this.fullSetsAvailable,
       isPartial: isPartial ?? this.isPartial,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
-  bool get isLowStock => inventoryQty <= minStockLevel;
-  bool get isOutOfStock => inventoryQty <= 0;
+  int get availableStockQuantity =>
+      isSet ? (fullSetsAvailable ?? inventoryQty) : inventoryQty;
+
+  bool get isLowStock => availableStockQuantity <= minStockLevel;
+  bool get isOutOfStock => availableStockQuantity <= 0;
 
   /// Returns true if this product is a component of a set (has a parent set)
   bool get isSetComponent => parentSetId != null && parentSetId!.isNotEmpty;
@@ -743,6 +751,134 @@ class Product {
   double get marginPercentage => cost > 0 ? (marginAmount / cost) * 100 : 0;
 
   double get inventoryValue => cost * inventoryQty;
+}
+
+class ProductSetCompositionItem {
+  const ProductSetCompositionItem({
+    required this.id,
+    required this.sku,
+    required this.name,
+    required this.label,
+    required this.position,
+    required this.quantityInSet,
+    required this.price,
+    required this.cost,
+    required this.stockQuantity,
+    this.costRatio,
+    this.priceRatio,
+  });
+
+  final String id;
+  final String sku;
+  final String name;
+  final String label;
+  final int position;
+  final int quantityInSet;
+  final double price;
+  final double cost;
+  final int stockQuantity;
+  final double? costRatio;
+  final double? priceRatio;
+
+  factory ProductSetCompositionItem.fromJson(Map<String, dynamic> json) {
+    final id = json['id']?.toString().trim() ?? '';
+    final sku = json['sku']?.toString().trim() ?? '';
+    final name = json['name']?.toString().trim() ?? '';
+    final label = json['label']?.toString().trim() ?? '';
+    final position = (json['position'] as num?)?.round() ?? 0;
+    final quantityInSet = (json['quantity_in_set'] as num?)?.round() ?? 1;
+    if (id.isEmpty ||
+        sku.isEmpty ||
+        name.isEmpty ||
+        label.isEmpty ||
+        position < 1 ||
+        quantityInSet < 1) {
+      throw const FormatException(
+        'La composición del juego devolvió un componente inválido.',
+      );
+    }
+
+    return ProductSetCompositionItem(
+      id: id,
+      sku: sku,
+      name: name,
+      label: label,
+      position: position,
+      quantityInSet: quantityInSet,
+      price: (json['price'] as num?)?.toDouble() ?? 0,
+      cost: (json['cost'] as num?)?.toDouble() ?? 0,
+      stockQuantity: (json['stock_quantity'] as num?)?.round() ?? 0,
+      costRatio: (json['cost_ratio'] as num?)?.toDouble(),
+      priceRatio: (json['price_ratio'] as num?)?.toDouble(),
+    );
+  }
+}
+
+class ProductSetCompositionSnapshot {
+  const ProductSetCompositionSnapshot({
+    required this.setProductId,
+    required this.fullSetsAvailable,
+    required this.components,
+  });
+
+  final String setProductId;
+  final int fullSetsAvailable;
+  final List<ProductSetCompositionItem> components;
+
+  factory ProductSetCompositionSnapshot.fromJson(Map<String, dynamic> json) {
+    final setProductId =
+        (json['set_product_id'] ?? (json['parent'] as Map?)?['id'])
+                ?.toString()
+                .trim() ??
+            '';
+    final rawComponents = json['components'];
+    if (setProductId.isEmpty || rawComponents is! List) {
+      throw const FormatException(
+        'La base de datos no devolvió la composición completa del juego.',
+      );
+    }
+    return ProductSetCompositionSnapshot(
+      setProductId: setProductId,
+      fullSetsAvailable: (json['full_sets_available'] as num?)?.round() ?? 0,
+      components: rawComponents
+          .map(
+            (raw) => ProductSetCompositionItem.fromJson(
+              Map<String, dynamic>.from(raw as Map),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+class ProductSetAggregateSaveResult {
+  const ProductSetAggregateSaveResult({
+    required this.operationId,
+    required this.replayed,
+    required this.parent,
+    required this.composition,
+  });
+
+  final String operationId;
+  final bool replayed;
+  final Product parent;
+  final ProductSetCompositionSnapshot composition;
+
+  factory ProductSetAggregateSaveResult.fromJson(Map<String, dynamic> json) {
+    final operationId = json['operation_id']?.toString().trim() ?? '';
+    final rawParent = json['parent'];
+    if (operationId.isEmpty || rawParent is! Map) {
+      throw const FormatException(
+        'El guardado del juego no devolvió un comprobante válido.',
+      );
+    }
+    return ProductSetAggregateSaveResult(
+      operationId: operationId,
+      replayed: json['replayed'] == true,
+      parent: Product.fromJson(Map<String, dynamic>.from(rawParent)),
+      composition: ProductSetCompositionSnapshot.fromJson(json),
+    );
+  }
 }
 
 enum ProductCategory {

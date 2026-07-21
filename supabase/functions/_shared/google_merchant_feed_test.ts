@@ -33,6 +33,15 @@ Deno.test("Merchant availability matches tracked and untracked storefront stock"
     resolveMerchantAvailability({ track_stock: true, stock_quantity: 0 }),
     "out_of_stock",
   );
+  assertEquals(
+    resolveMerchantAvailability({
+      track_stock: true,
+      is_set: true,
+      stock_quantity: 0,
+      full_sets_available: 2,
+    }),
+    "in_stock",
+  );
 });
 
 Deno.test("Merchant identifiers never reinterpret the store SKU as MPN", () => {

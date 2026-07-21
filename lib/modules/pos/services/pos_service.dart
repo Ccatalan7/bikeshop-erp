@@ -119,7 +119,7 @@ class POSService extends ChangeNotifier {
     if (quantity <= 0) return false;
 
     // Check stock availability
-    if (product.trackStock && product.stockQuantity < quantity) {
+    if (product.trackStock && product.availableStockQuantity < quantity) {
       return false;
     }
 
@@ -132,7 +132,7 @@ class POSService extends ChangeNotifier {
       final existingItem = _cartItems[existingIndex];
       final newQuantity = existingItem.quantity + quantity;
 
-      if (product.trackStock && product.stockQuantity < newQuantity) {
+      if (product.trackStock && product.availableStockQuantity < newQuantity) {
         return false;
       }
 
@@ -206,7 +206,8 @@ class POSService extends ChangeNotifier {
         final requiresStock =
             item.product!.productType == ProductType.product &&
                 item.product!.trackStock;
-        if (requiresStock && item.product!.stockQuantity < newQuantity) {
+        if (requiresStock &&
+            item.product!.availableStockQuantity < newQuantity) {
           if (kDebugMode) {
             print('POSService: Insufficient stock for quantity $newQuantity');
           }

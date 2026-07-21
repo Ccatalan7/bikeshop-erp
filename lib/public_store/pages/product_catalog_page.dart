@@ -1827,7 +1827,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
     final displayImageUrl = product.imageUrlOptimized ?? product.imageUrl;
     final hasImage = displayImageUrl != null && displayImageUrl.isNotEmpty;
     final isInStock =
-        product.tracksInventory ? product.stockQuantity > 0 : true;
+        product.tracksInventory ? product.availableStockQuantity > 0 : true;
     final stockLabel = isInStock ? 'EN STOCK' : 'AGOTADO';
     const hoverDuration = Duration(milliseconds: 220);
     const logoBlue = Color(0xFF0B3A5F);

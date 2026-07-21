@@ -16640,7 +16640,7 @@ class _PartItemDialogState extends State<_PartItemDialog> {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _selection!.product!.stockQuantity > 0
+                    color: _selection!.product!.availableStockQuantity > 0
                         ? Colors.blue.shade50
                         : Colors.red.shade50,
                     borderRadius: BorderRadius.circular(8),
@@ -16648,23 +16648,24 @@ class _PartItemDialogState extends State<_PartItemDialog> {
                   child: Row(
                     children: [
                       Icon(
-                        _selection!.product!.stockQuantity > 0
+                        _selection!.product!.availableStockQuantity > 0
                             ? Icons.inventory
                             : Icons.warning_amber,
                         size: 20,
-                        color: _selection!.product!.stockQuantity > 0
+                        color: _selection!.product!.availableStockQuantity > 0
                             ? Colors.blue
                             : Colors.red,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Stock disponible: ${_selection!.product!.stockQuantity.toInt()} unidades',
+                          'Stock disponible: ${_selection!.product!.availableStockQuantity} unidades',
                           style: TextStyle(
                             fontSize: 13,
-                            color: _selection!.product!.stockQuantity > 0
-                                ? Colors.blue.shade900
-                                : Colors.red.shade900,
+                            color:
+                                _selection!.product!.availableStockQuantity > 0
+                                    ? Colors.blue.shade900
+                                    : Colors.red.shade900,
                           ),
                         ),
                       ),
@@ -16812,7 +16813,7 @@ class _ProductSelectorDialogState extends State<_ProductSelectorDialog> {
                 return DropdownMenuItem(
                   value: product,
                   child: Text(
-                      '${product.name} (${product.sku}) - Stock: ${product.stockQuantity}'),
+                      '${product.name} (${product.sku}) - Stock: ${product.availableStockQuantity}'),
                 );
               }).toList(),
               onChanged: (product) {

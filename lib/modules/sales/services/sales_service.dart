@@ -35,6 +35,14 @@ String formatSalesNegativeStockWarning(
       '${remaining > 0 ? ' y $remaining más' : ''}.';
 }
 
+class _ProjectedStockAccumulator {
+  _ProjectedStockAccumulator({required this.name, required this.stock});
+
+  final String name;
+  final int stock;
+  int required = 0;
+}
+
 class SalesInvoiceDeletionException implements Exception {
   const SalesInvoiceDeletionException(this.message);
 
@@ -91,6 +99,7 @@ class SalesService extends ChangeNotifier {
     List<InvoiceItem> items,
   ) async {
     final requestedByProduct = <String, int>{};
+    final productNames = <String, String>{};
     for (final item in items) {
       final productId = item.productId;
       if (productId == null ||
@@ -106,42 +115,88 @@ class SalesService extends ChangeNotifier {
         (current) => current + quantity,
         ifAbsent: () => quantity,
       );
+      productNames[productId] = item.productName?.trim().isNotEmpty == true
+          ? item.productName!.trim()
+          : 'Producto';
     }
     if (requestedByProduct.isEmpty) return const [];
 
-    late final List<Map<String, dynamic>> products;
     try {
-      products = await _databaseService.select(
-        'products',
-        selectColumns:
-            'id,name,inventory_qty,stock_quantity,track_stock,is_service',
-        where: 'id',
-        whereIn: requestedByProduct.keys.toList(growable: false),
+      final impacts = await Future.wait(
+        requestedByProduct.entries.map((entry) async {
+          final response = await _databaseService.rpc(
+            'preview_product_stock_impact',
+            params: {
+              'p_product_id': entry.key,
+              'p_quantity': entry.value,
+            },
+          );
+          if (response is Map) {
+            return Map<String, dynamic>.from(response);
+          }
+          if (response is List &&
+              response.length == 1 &&
+              response.first is Map) {
+            return Map<String, dynamic>.from(response.first as Map);
+          }
+          throw const FormatException('Respuesta de stock inválida.');
+        }),
       );
+
+      final byPhysicalProduct = <String, _ProjectedStockAccumulator>{};
+      for (final impact in impacts) {
+        if (impact['tracks_inventory'] == false) continue;
+        final productId = impact['product_id']?.toString() ?? '';
+        final requested = (impact['requested_quantity'] as num?)?.round() ?? 0;
+        final isSet = impact['is_set'] == true;
+        final rawComponents = impact['components'];
+
+        if (isSet && rawComponents is List) {
+          for (final raw in rawComponents) {
+            if (raw is! Map) continue;
+            final component = Map<String, dynamic>.from(raw);
+            final componentId = component['product_id']?.toString() ?? '';
+            if (componentId.isEmpty) continue;
+            final required =
+                (component['required_quantity'] as num?)?.round() ?? 0;
+            final stock = (component['stock_quantity'] as num?)?.round() ?? 0;
+            final accumulator = byPhysicalProduct.putIfAbsent(
+              componentId,
+              () => _ProjectedStockAccumulator(
+                name: component['name']?.toString() ?? 'Componente',
+                stock: stock,
+              ),
+            );
+            accumulator.required += required;
+          }
+          continue;
+        }
+
+        if (productId.isEmpty) continue;
+        final available = (impact['available_quantity'] as num?)?.round() ?? 0;
+        final accumulator = byPhysicalProduct.putIfAbsent(
+          productId,
+          () => _ProjectedStockAccumulator(
+            name: productNames[productId] ?? 'Producto',
+            stock: available,
+          ),
+        );
+        accumulator.required += requested;
+      }
+
+      return byPhysicalProduct.values
+          .where((impact) => impact.stock - impact.required < 0)
+          .map(
+            (impact) => SalesNegativeStockWarning(
+              productName: impact.name,
+              projectedStock: impact.stock - impact.required,
+            ),
+          )
+          .toList(growable: false);
     } catch (error) {
       debugPrint('Negative-stock preview unavailable (non-blocking): $error');
       return const [];
     }
-    final warnings = <SalesNegativeStockWarning>[];
-    for (final product in products) {
-      if (product['track_stock'] == false || product['is_service'] == true) {
-        continue;
-      }
-      final productId = product['id']?.toString();
-      final requested = requestedByProduct[productId];
-      if (productId == null || requested == null) continue;
-      final current = (product['inventory_qty'] as num?)?.round() ??
-          (product['stock_quantity'] as num?)?.round() ??
-          0;
-      final projected = current - requested;
-      if (projected < 0) {
-        warnings.add(SalesNegativeStockWarning(
-          productName: product['name']?.toString() ?? 'Producto',
-          projectedStock: projected,
-        ));
-      }
-    }
-    return warnings;
   }
 
   /// Check if cache is still valid

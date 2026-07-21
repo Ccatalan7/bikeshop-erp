@@ -114,7 +114,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
       }
       if (_filterInStockOnly &&
           p.productType != ProductType.service &&
-          p.stockQuantity <= 0) {
+          p.availableStockQuantity <= 0) {
         return false;
       }
 
@@ -994,7 +994,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
 
   Widget _buildProductTile(Product product, ThemeData theme) {
     // Only relevant for stockable products — services have no stock concept
-    final hasStock = product.stockQuantity > 0;
+    final hasStock = product.availableStockQuantity > 0;
     final compatibility = _compatibilityByProductId[product.id];
     final showCompatibilityFeedback =
         _shouldShowCompatibilityFeedback(compatibility);
@@ -1084,6 +1084,20 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                           children: [
                             _buildCompactBadge(
                                 Icons.tag, 'SKU: ${product.sku}', theme),
+                            if (product.isSetComponent)
+                              _buildCompactBadge(
+                                Icons.extension_outlined,
+                                'Pieza de juego',
+                                theme,
+                                color: theme.colorScheme.tertiary,
+                              ),
+                            if (product.isSet)
+                              _buildCompactBadge(
+                                Icons.account_tree_outlined,
+                                'Juego completo',
+                                theme,
+                                color: theme.colorScheme.primary,
+                              ),
                             if (product.brand != null &&
                                 product.brand!.isNotEmpty)
                               _buildCompactBadge(
@@ -1167,7 +1181,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                               const SizedBox(width: 4),
                               Text(
                                 hasStock
-                                    ? '${product.stockQuantity} ${product.unit.name}'
+                                    ? '${product.availableStockQuantity} ${product.unit.name}'
                                     : 'Sin stock',
                                 style: theme.textTheme.labelMedium?.copyWith(
                                   fontWeight: FontWeight.bold,

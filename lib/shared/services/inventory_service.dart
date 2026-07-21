@@ -11,6 +11,7 @@ class InventoryService extends ChangeNotifier {
   final TenantService _tenantService = TenantService();
   final List<Product> _products = [];
   final Set<int> _loadedPreviewPages = <int>{};
+  final Map<String, _CachedSetAvailability> _setAvailabilityCache = {};
 
   bool _isLoading = false;
   bool _hasLoaded = false;
@@ -99,7 +100,9 @@ class InventoryService extends ChangeNotifier {
         orderBy: 'name',
       );
 
-      final mappedBatch = rawBatch.map(_productFromMap).toList(growable: false);
+      final mappedBatch = await _hydrateSetAvailabilityBatch(
+        rawBatch.map(_productFromMap).toList(growable: false),
+      );
       for (final product in mappedBatch) {
         _upsertLocalProduct(product);
       }
@@ -123,7 +126,10 @@ class InventoryService extends ChangeNotifier {
     if (!_hasLoaded || forceRefresh) {
       await _loadProducts(force: forceRefresh);
     }
-    return _products;
+    return _hydrateSetAvailabilityBatch(
+      _products,
+      forceRefresh: forceRefresh,
+    );
   }
 
   /// Get products of a specific type from server with a limit
@@ -131,13 +137,17 @@ class InventoryService extends ChangeNotifier {
       {int limit = 100}) async {
     try {
       if (_db == null) {
-        return _products.where((p) => p.productType == type).toList();
+        return _hydrateSetAvailabilityBatch(
+          _products.where((p) => p.productType == type),
+        );
       }
 
       final data = await _db.select('products',
           where: "product_type=${type.name.toLowerCase()}", limit: limit);
 
-      final results = data.map(_productFromMap).toList();
+      final results = await _hydrateSetAvailabilityBatch(
+        data.map(_productFromMap).toList(growable: false),
+      );
       // Update local cache with these items
       for (var p in results) {
         _upsertLocalProduct(p);
@@ -145,7 +155,9 @@ class InventoryService extends ChangeNotifier {
       return results;
     } catch (e) {
       debugPrint('⚠️ [InventoryService] Failed to fetch products by type: $e');
-      return _products.where((p) => p.productType == type).toList();
+      return _hydrateSetAvailabilityBatch(
+        _products.where((p) => p.productType == type),
+      );
     }
   }
 
@@ -158,7 +170,9 @@ class InventoryService extends ChangeNotifier {
 
     try {
       if (!forceRefresh) {
-        return _products.firstWhere((product) => product.id == normalizedId);
+        final product =
+            _products.firstWhere((product) => product.id == normalizedId);
+        return _hydrateSetAvailability(product);
       }
     } catch (_) {}
 
@@ -170,7 +184,10 @@ class InventoryService extends ChangeNotifier {
           selectColumns: Product.listPreviewSelect,
         );
         if (data == null) return null;
-        final product = _productFromMap(data);
+        final product = await _hydrateSetAvailability(
+          _productFromMap(data),
+          forceRefresh: forceRefresh,
+        );
         _upsertLocalProduct(product);
         notifyListeners();
         return product;
@@ -187,7 +204,12 @@ class InventoryService extends ChangeNotifier {
     }
 
     try {
-      return _products.firstWhere((product) => product.id == normalizedId);
+      final product =
+          _products.firstWhere((product) => product.id == normalizedId);
+      return _hydrateSetAvailability(
+        product,
+        forceRefresh: forceRefresh,
+      );
     } catch (_) {
       return null;
     }
@@ -198,8 +220,9 @@ class InventoryService extends ChangeNotifier {
     if (normalizedSku.isEmpty) return null;
 
     try {
-      return _products.firstWhere((product) =>
+      final product = _products.firstWhere((product) =>
           product.sku.toLowerCase() == normalizedSku.toLowerCase());
+      return _hydrateSetAvailability(product);
     } catch (_) {
       if (_db != null) {
         try {
@@ -210,7 +233,8 @@ class InventoryService extends ChangeNotifier {
             limit: 1,
           );
           if (records.isEmpty) return null;
-          final product = _productFromMap(records.first);
+          final product =
+              await _hydrateSetAvailability(_productFromMap(records.first));
           _upsertLocalProduct(product);
           notifyListeners();
           return product;
@@ -225,8 +249,9 @@ class InventoryService extends ChangeNotifier {
       if (_db == null && !_hasLoaded) {
         await getProducts();
         try {
-          return _products.firstWhere((product) =>
+          final product = _products.firstWhere((product) =>
               product.sku.toLowerCase() == normalizedSku.toLowerCase());
+          return _hydrateSetAvailability(product);
         } catch (_) {
           return null;
         }
@@ -241,8 +266,9 @@ class InventoryService extends ChangeNotifier {
     if (normalizedBarcode.isEmpty) return null;
 
     try {
-      return _products.firstWhere((product) =>
+      final product = _products.firstWhere((product) =>
           product.barcode?.toLowerCase() == normalizedBarcode.toLowerCase());
+      return _hydrateSetAvailability(product);
     } catch (_) {
       try {
         if (_db != null) {
@@ -253,7 +279,8 @@ class InventoryService extends ChangeNotifier {
             limit: 1,
           );
           if (records.isEmpty) return null;
-          final product = _productFromMap(records.first);
+          final product =
+              await _hydrateSetAvailability(_productFromMap(records.first));
           _upsertLocalProduct(product);
           notifyListeners();
           return product;
@@ -268,8 +295,9 @@ class InventoryService extends ChangeNotifier {
       if (_db == null && !_hasLoaded) {
         await getProducts();
         try {
-          return _products
+          final product = _products
               .firstWhere((product) => product.barcode == normalizedBarcode);
+          return _hydrateSetAvailability(product);
         } catch (_) {
           return null;
         }
@@ -293,15 +321,16 @@ class InventoryService extends ChangeNotifier {
         (product) => product.supplierCode?.trim().toLowerCase() == lowerCode,
       );
       debugPrint('✅ Memory Match: ${match.name} (ID: ${match.id})');
-      return match;
+      return _hydrateSetAvailability(match);
     } catch (_) {
       debugPrint('⚠️ Not in memory. DB Fallback for cleanCode="$cleanCode"...');
       if (_db == null) {
         if (!_hasLoaded) {
           await getProducts();
           try {
-            return _products.firstWhere((product) =>
+            final product = _products.firstWhere((product) =>
                 product.supplierCode?.trim().toLowerCase() == lowerCode);
+            return _hydrateSetAvailability(product);
           } catch (_) {
             return null;
           }
@@ -324,7 +353,8 @@ class InventoryService extends ChangeNotifier {
         }
 
         debugPrint('🔨 Mapping record 0...');
-        final product = _productFromMap(records.first);
+        final product =
+            await _hydrateSetAvailability(_productFromMap(records.first));
         debugPrint('✅ Mapped: ${product.name}');
 
         _upsertLocalProduct(product);
@@ -632,7 +662,7 @@ class InventoryService extends ChangeNotifier {
       }
     }
 
-    return requestedIds
+    final results = requestedIds
         .map(
           (productId) => _products.cast<Product?>().firstWhere(
                 (product) => product?.id == productId,
@@ -641,6 +671,10 @@ class InventoryService extends ChangeNotifier {
         )
         .whereType<Product>()
         .toList(growable: false);
+    return _hydrateSetAvailabilityBatch(
+      results,
+      forceRefresh: forceRefresh,
+    );
   }
 
   String _normalize(String text) {
@@ -662,11 +696,12 @@ class InventoryService extends ChangeNotifier {
   }) async {
     if (query.trim().isEmpty) {
       if (_hasLoaded && _products.isNotEmpty) {
-        return _products
+        final results = _products
             .where((product) =>
                 productType == null || product.productType == productType)
             .take(limit)
             .toList();
+        return _hydrateSetAvailabilityBatch(results);
       }
 
       if (_db != null) {
@@ -681,7 +716,9 @@ class InventoryService extends ChangeNotifier {
             limit: limit,
           );
 
-          final results = data.map(_productFromMap).toList();
+          final results = await _hydrateSetAvailabilityBatch(
+            data.map(_productFromMap).toList(growable: false),
+          );
           for (final product in results) {
             _upsertLocalProduct(product);
           }
@@ -717,7 +754,7 @@ class InventoryService extends ChangeNotifier {
     // If products are already in local memory, use accent-insensitive filter
     // (avoids DB ILIKE which is accent-sensitive in PostgreSQL by default)
     if (_hasLoaded && _products.isNotEmpty) {
-      return _products
+      final results = _products
           .where((product) {
             if (productType != null && product.productType != productType) {
               return false;
@@ -735,6 +772,7 @@ class InventoryService extends ChangeNotifier {
           })
           .take(limit)
           .toList();
+      return _hydrateSetAvailabilityBatch(results);
     }
 
     // 1. Try DB search first if available for efficiency on large datasets
@@ -758,11 +796,15 @@ class InventoryService extends ChangeNotifier {
               productType == null ? null : 'product_type=${productType.name}',
         );
 
-        final List<Product> results = [];
+        final List<Product> mappedResults = [];
         for (var map in rawResults) {
           final product = _productFromMap(map);
+          mappedResults.add(product);
+        }
+
+        final results = await _hydrateSetAvailabilityBatch(mappedResults);
+        for (final product in results) {
           _upsertLocalProduct(product);
-          results.add(product);
         }
 
         if (results.isNotEmpty) return results;
@@ -804,6 +846,12 @@ class InventoryService extends ChangeNotifier {
     if (newQuantity < 0) return false;
     final product = await getProductById(productId);
     if (product == null) return false;
+    if (product.isSet) {
+      debugPrint(
+        'InventoryService: refusing direct stock update for set parent $productId',
+      );
+      return false;
+    }
 
     final difference = newQuantity - product.stockQuantity;
     if (difference == 0) return true;
@@ -848,6 +896,12 @@ class InventoryService extends ChangeNotifier {
     if (quantity <= 0) return false;
     final product = await getProductById(productId);
     if (product == null) return false;
+    if (product.isSet) {
+      debugPrint(
+        'InventoryService: refusing direct stock deduction for set parent $productId',
+      );
+      return false;
+    }
 
     if (product.trackStock && product.stockQuantity < quantity) {
       if (kDebugMode) {
@@ -895,6 +949,12 @@ class InventoryService extends ChangeNotifier {
     if (quantity <= 0) return false;
     final product = await getProductById(productId);
     if (product == null) return false;
+    if (product.isSet) {
+      debugPrint(
+        'InventoryService: refusing direct stock addition for set parent $productId',
+      );
+      return false;
+    }
 
     if (_db != null) {
       try {
@@ -926,7 +986,98 @@ class InventoryService extends ChangeNotifier {
 
   Future<void> removeProductFromCache(String productId) async {
     _products.removeWhere((product) => product.id == productId);
+    _setAvailabilityCache.remove(productId);
     notifyListeners();
+  }
+
+  Future<List<Product>> _hydrateSetAvailabilityBatch(
+    Iterable<Product> products, {
+    bool forceRefresh = false,
+  }) async {
+    final hydrated = await Future.wait(
+      products.map(
+        (product) => _hydrateSetAvailability(
+          product,
+          forceRefresh: forceRefresh,
+        ),
+      ),
+    );
+    return hydrated;
+  }
+
+  Future<Product> _hydrateSetAvailability(
+    Product product, {
+    bool forceRefresh = false,
+  }) async {
+    final db = _db;
+    if (!product.isSet || product.id.isEmpty || db == null) return product;
+
+    final now = DateTime.now();
+    final cached = _setAvailabilityCache[product.id];
+    if (!forceRefresh &&
+        cached != null &&
+        now.difference(cached.fetchedAt) < const Duration(seconds: 15)) {
+      return product.copyWith(
+        fullSetsAvailable: cached.availableQuantity,
+        isPartial: cached.isPartial,
+      );
+    }
+
+    try {
+      final response = await db.rpc(
+        'preview_product_stock_impact',
+        params: {
+          'p_product_id': product.id,
+          'p_quantity': 1,
+        },
+      );
+      final payload = _rpcJsonMap(response);
+      if (payload == null || payload['is_set'] != true) return product;
+
+      final available = (payload['available_quantity'] as num?)?.toInt() ?? 0;
+      final components = payload['components'] as List? ?? const [];
+      final isPartial = components.any((rawComponent) {
+        if (rawComponent is! Map) return false;
+        final component = Map<String, dynamic>.from(rawComponent);
+        final stock = (component['stock_quantity'] as num?)?.toInt() ?? 0;
+        final quantityInSet =
+            ((component['quantity_in_set'] as num?)?.toInt() ?? 1)
+                .clamp(1, 1 << 31)
+                .toInt();
+        return stock < 0 || stock != available * quantityInSet;
+      });
+      final availability = _CachedSetAvailability(
+        availableQuantity: available,
+        isPartial: isPartial,
+        fetchedAt: now,
+      );
+      _setAvailabilityCache[product.id] = availability;
+      return product.copyWith(
+        fullSetsAvailable: availability.availableQuantity,
+        isPartial: availability.isPartial,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          'InventoryService: could not derive availability for set ${product.id} -> $error',
+        );
+      }
+      return product;
+    }
+  }
+
+  void _refreshSetAvailabilityInBackground(String? setProductId) {
+    final normalizedId = setProductId?.trim() ?? '';
+    if (normalizedId.isEmpty) return;
+    final index = _products.indexWhere(
+      (product) => product.id == normalizedId && product.isSet,
+    );
+    if (index == -1) return;
+    final parent = _products[index];
+    _hydrateSetAvailability(parent, forceRefresh: true).then((hydrated) {
+      _upsertLocalProduct(hydrated);
+      notifyListeners();
+    });
   }
 
   Future<void> _loadProducts({bool force = false}) async {
@@ -985,7 +1136,10 @@ class InventoryService extends ChangeNotifier {
           break;
         }
 
-        final mappedBatch = rawBatch.map(_productFromMap).toList();
+        final mappedBatch = await _hydrateSetAvailabilityBatch(
+          rawBatch.map(_productFromMap).toList(growable: false),
+          forceRefresh: force,
+        );
 
         if (offset == 0) {
           _products
@@ -1052,7 +1206,7 @@ class InventoryService extends ChangeNotifier {
     final price = (json['price'] as num?)?.toDouble() ?? 0.0;
     final cost = (json['cost'] as num?)?.toDouble() ?? 0.0;
     final stockQuantity =
-        json['inventory_qty'] as int? ?? json['stock_quantity'] as int? ?? 0;
+        json['stock_quantity'] as int? ?? json['inventory_qty'] as int? ?? 0;
     final minStock =
         json['min_stock_level'] as int? ?? json['min_stock'] as int? ?? 0;
     final maxStock =
@@ -1136,7 +1290,13 @@ class InventoryService extends ChangeNotifier {
       ),
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
+      isSet: json['is_set'] as bool? ?? false,
+      setType: _parseSharedSetType(json['set_type']),
       parentSetId: json['parent_set_id']?.toString(),
+      componentLabel: json['component_label']?.toString(),
+      componentPosition: (json['component_position'] as num?)?.toInt(),
+      fullSetsAvailable: (json['full_sets_available'] as num?)?.toInt(),
+      isPartial: json['is_partial'] as bool?,
     );
   }
 
@@ -1198,6 +1358,28 @@ class InventoryService extends ChangeNotifier {
   }
 }
 
+SetType? _parseSharedSetType(dynamic value) {
+  return switch (value?.toString()) {
+    null || '' => null,
+    'pair' => SetType.pair,
+    'frontRear' || 'front_rear' => SetType.frontRear,
+    'leftRight' || 'left_right' => SetType.leftRight,
+    _ => SetType.custom,
+  };
+}
+
+class _CachedSetAvailability {
+  const _CachedSetAvailability({
+    required this.availableQuantity,
+    required this.isPartial,
+    required this.fetchedAt,
+  });
+
+  final int availableQuantity;
+  final bool isPartial;
+  final DateTime fetchedAt;
+}
+
 DateTime _parseDate(dynamic value) {
   if (value == null) return DateTime.now();
   if (value is DateTime) return value;
@@ -1242,17 +1424,28 @@ extension _InventoryServiceRealtime on InventoryService {
             callback: (payload) {
               debugPrint(
                   '🔔 [InventoryService] Product changed: ${payload.eventType}');
+              // Any component balance change can alter a parent set's derived
+              // availability. Force the next read to re-evaluate it.
+              _setAvailabilityCache.clear();
 
               if (payload.newRecord.isNotEmpty) {
                 final updatedProduct = _productFromMap(payload.newRecord);
                 _upsertLocalProduct(updatedProduct);
                 notifyListeners();
+                _refreshSetAvailabilityInBackground(
+                  updatedProduct.isSet
+                      ? updatedProduct.id
+                      : updatedProduct.parentSetId,
+                );
               } else if (payload.eventType == PostgresChangeEvent.delete) {
                 final id = payload.oldRecord['id']?.toString();
+                final parentSetId =
+                    payload.oldRecord['parent_set_id']?.toString();
                 if (id != null) {
                   _products.removeWhere((p) => p.id == id);
                   notifyListeners();
                 }
+                _refreshSetAvailabilityInBackground(parentSetId);
               }
             },
           )

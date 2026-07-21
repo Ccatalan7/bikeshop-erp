@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/shared/models/product.dart';
 import 'package:vinabike_erp/shared/services/inventory_service.dart';
 import 'package:vinabike_erp/shared/widgets/product_autocomplete_field.dart';
+import 'package:vinabike_erp/shared/widgets/smart_product_field.dart';
 
 void main() {
   setUpAll(() async {
@@ -64,6 +65,67 @@ void main() {
       expect(inventory.requests.last.productType, ProductType.service);
     },
   );
+
+  testWidgets('sale picker labels but allows child products from a set',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final inventory = _SetInventoryService();
+    await tester.pumpWidget(
+      ChangeNotifierProvider<InventoryService>.value(
+        value: inventory,
+        child: MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 500,
+              child: ProductAutocompleteField(
+                onProductSelected: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(TextField));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Juego de frenos'), findsOneWidget);
+    expect(find.text('Freno delantero'), findsOneWidget);
+    expect(find.text('Pieza de juego'), findsOneWidget);
+    expect(find.text('2 resultados'), findsOneWidget);
+  });
+
+  testWidgets('selected component keeps its piece-of-set label',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final inventory = _SetInventoryService();
+    await tester.pumpWidget(
+      ChangeNotifierProvider<InventoryService>.value(
+        value: inventory,
+        child: MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 600,
+              child: SmartProductField(
+                onProductChanged: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(TextField));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Freno delantero'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pieza de juego'), findsOneWidget);
+  });
 }
 
 class _RecordingInventoryService extends InventoryService {
@@ -94,6 +156,19 @@ class _SearchRequest {
 
   final String query;
   final ProductType? productType;
+}
+
+class _SetInventoryService extends InventoryService {
+  _SetInventoryService() : super(db: null);
+
+  @override
+  Future<List<Product>> searchProducts(
+    String query, {
+    int limit = 200,
+    ProductType? productType,
+  }) async {
+    return [_setParent, _setComponent];
+  }
 }
 
 final _now = DateTime(2026, 7, 16);
@@ -145,6 +220,32 @@ final _service3 = Product(
   stockQuantity: 0,
   category: ProductCategory.other,
   productType: ProductType.service,
+  createdAt: _now,
+  updatedAt: _now,
+);
+
+final _setParent = Product(
+  id: 'set-1',
+  name: 'Juego de frenos',
+  sku: 'SET-1',
+  price: 30000,
+  cost: 15000,
+  stockQuantity: 1,
+  category: ProductCategory.other,
+  isSet: true,
+  createdAt: _now,
+  updatedAt: _now,
+);
+
+final _setComponent = Product(
+  id: 'component-1',
+  name: 'Freno delantero',
+  sku: 'SET-1-FRONT',
+  price: 15000,
+  cost: 7500,
+  stockQuantity: 1,
+  category: ProductCategory.other,
+  parentSetId: 'set-1',
   createdAt: _now,
   updatedAt: _now,
 );
