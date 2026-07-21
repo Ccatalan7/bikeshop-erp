@@ -2591,6 +2591,14 @@ the retained audit row.
 - a linked workshop invoice cannot be deleted directly from Sales. The FK uses
   `ON DELETE RESTRICT` and the former invoice-to-job cascade is retired, so a
   draft invoice can never silently erase its authoritative workshop ficha.
+- Removing a workshop job from daily operation is a reversible archive, never
+  a physical delete. `set_mechanic_job_archived` requires an authenticated
+  active worker, reason and idempotency key; locks the job and linked invoice;
+  verifies that items, bicycle links, payments, stock movements and journals
+  did not change; and records both `mechanic_job_archive_events` and the shared
+  inventory/accounting operation checkpoints. The canonical table exposes
+  these rows only through `Trabajos: Eliminados`, including their reason and
+  the audited restore action. Invoice correction remains a separate workflow.
   Any eligible cleanup starts from the job and still passes the invoice's
   payment/accounting deletion guards.
 - after a service-budget decision leaves `pending`, its

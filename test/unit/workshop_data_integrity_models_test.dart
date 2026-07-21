@@ -52,6 +52,32 @@ void main() {
     expect(job.toJson().containsKey('time_metrics'), isFalse);
   });
 
+  test('job archive evidence is readable but only the audited RPC can write it',
+      () {
+    final job = MechanicJob.fromJson({
+      'id': 'job-archived',
+      'tenant_id': 'tenant-1',
+      'customer_id': 'customer-1',
+      'arrival_date': '2026-07-21T13:00:00Z',
+      'created_at': '2026-07-21T13:00:00Z',
+      'updated_at': '2026-07-21T14:00:00Z',
+      'deleted_at': '2026-07-21T14:00:00Z',
+      'deleted_by': 'worker-1',
+      'archive_reason': 'Trabajo creado para una prueba',
+      'archive_operation_id': 'operation-1',
+    });
+
+    expect(job.deletedAt, DateTime.parse('2026-07-21T14:00:00Z'));
+    expect(job.deletedBy, 'worker-1');
+    expect(job.archiveReason, 'Trabajo creado para una prueba');
+    expect(job.archiveOperationId, 'operation-1');
+
+    final payload = job.toJson(forUpdate: true);
+    expect(payload.containsKey('deleted_at'), isFalse);
+    expect(payload.containsKey('archive_reason'), isFalse);
+    expect(payload.containsKey('archive_operation_id'), isFalse);
+  });
+
   test('legacy fractional diagnosis wear is normalized to percent', () {
     final drivetrain = DrivetrainDiagnosisSheet.fromJson(const {
       'chain_wear_percent': 0.8,

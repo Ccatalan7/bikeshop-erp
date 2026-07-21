@@ -449,6 +449,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         'warranty_completed',
         'quotations_closed',
         'unpaid',
+        'deleted',
         'all',
       ];
 
@@ -470,6 +471,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         return 'Cotizaciones cerradas';
       case 'unpaid':
         return 'Sin pagar';
+      case 'deleted':
+        return 'Eliminados';
       case 'all':
         return 'Todos';
       default:
@@ -495,6 +498,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         return 'trabajos sin pagar';
       case 'test':
         return 'trabajos de prueba';
+      case 'deleted':
+        return 'trabajos eliminados';
       case 'all':
       default:
         return 'trabajos visibles';
@@ -534,6 +539,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         return const Color(0xFF64748B);
       case 'unpaid':
         return const Color(0xFFEA580C);
+      case 'deleted':
+        return const Color(0xFFB91C1C);
       case 'all':
         return const Color(0xFF64748B);
       default:
@@ -559,6 +566,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         return '📄';
       case 'unpaid':
         return '💵';
+      case 'deleted':
+        return '🗑️';
       case 'all':
         return '🗃️';
       default:
@@ -1085,7 +1094,9 @@ class _PegasTablePageState extends State<PegasTablePage>
     // Only instant-render when all companion caches are still fresh.
     // Rendering from an expired jobs cache causes the stale first frame the user sees
     // before the full fetch corrects customer/bike names and row membership.
-    if (_canUseFreshInstantCache && _jobs.isEmpty) {
+    if (_statusFilter != 'deleted' &&
+        _canUseFreshInstantCache &&
+        _jobs.isEmpty) {
       setState(() {
         _jobs = _bikeshopService.cachedJobs;
         _filteredJobs = _jobs;
@@ -1102,7 +1113,11 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     try {
       final results = await Future.wait([
-        _bikeshopService.getJobs(includeCompleted: true),
+        _bikeshopService.getJobs(
+          includeCompleted: true,
+          includeDeleted: _statusFilter == 'deleted',
+          forceRefresh: _statusFilter == 'deleted',
+        ),
         _customerService.getCustomers(),
         _bikeshopService.getBikes(),
         _loadInvoices(
@@ -1376,6 +1391,12 @@ class _PegasTablePageState extends State<PegasTablePage>
     final hasCustomStatusFilter = _customStatusFilter.isNotEmpty;
 
     var filtered = _jobs.where((job) {
+      if (_statusFilter == 'deleted') {
+        if (job.deletedAt == null) return false;
+      } else if (job.deletedAt != null) {
+        return false;
+      }
+
       final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
       final isMarkedAsTest = _jobMatchesTestFilter(job);
       final isInvoicedEffective = _isJobInvoicedEffective(job);
@@ -1449,6 +1470,8 @@ class _PegasTablePageState extends State<PegasTablePage>
           break;
         case 'unpaid':
           if (isPaidEffective || !isInvoicedEffective) return false;
+          break;
+        case 'deleted':
           break;
       }
 
@@ -3062,10 +3085,16 @@ class _PegasTablePageState extends State<PegasTablePage>
       glyphFor: _statusFilterGlyph,
       minWidth: compact ? 0 : 188,
       compact: compact,
-      onSelected: (selected) {
+      onSelected: (selected) async {
         if (selected == _statusFilter) return;
+        final requiresReload =
+            selected == 'deleted' || _statusFilter == 'deleted';
         setState(() => _statusFilter = selected);
-        _applyFiltersAndSort();
+        if (requiresReload) {
+          await _loadData();
+        } else {
+          _applyFiltersAndSort();
+        }
       },
     );
   }
@@ -5471,6 +5500,24 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
 
       case 'state':
+        if (job.deletedAt != null) {
+          return LayoutBuilder(
+            builder: (context, constraints) => Align(
+              alignment: Alignment.centerLeft,
+              child: _buildStatusBadge(
+                label: 'ELIMINADO',
+                accentColor: const Color(0xFFB91C1C),
+                timestamp: job.deletedAt,
+                metaText: job.archiveReason,
+                metaIcon: Icons.delete_outline,
+                onTap: null,
+                maxWidth:
+                    constraints.maxWidth.isFinite ? constraints.maxWidth : 132,
+              ),
+            ),
+          );
+        }
+
         // Per-bike detail: show per-bike status (independent per bike)
         if (isPerBikeDetail) {
           // Use per-bike status if set, otherwise fall back to job status
@@ -6437,6 +6484,30 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
 
       case 'actions':
+        if (job.deletedAt != null) {
+          return PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, size: 16),
+            padding: EdgeInsets.zero,
+            tooltip: '',
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'restore',
+                child: Row(
+                  children: [
+                    Icon(Icons.restore, size: 18),
+                    SizedBox(width: 8),
+                    Text('Restaurar'),
+                  ],
+                ),
+              ),
+            ],
+            onSelected: (value) async {
+              if (value != 'restore') return;
+              await Future<void>.delayed(Duration.zero);
+              if (mounted) await _confirmRestore(job);
+            },
+          );
+        }
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -6567,7 +6638,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                   ),
                 ),
               ],
-              onSelected: (value) {
+              onSelected: (value) async {
                 if (value == 'classify_intake') {
                   _classifyJobIntake(job);
                 } else if (value == 'quotation_pdf') {
@@ -6584,7 +6655,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                 } else if (value == 'complete') {
                   _markJobAsComplete(job);
                 } else if (value == 'delete') {
-                  _confirmDelete(job);
+                  await Future<void>.delayed(Duration.zero);
+                  if (mounted) await _confirmDelete(job);
                 }
               },
             ),
@@ -8583,63 +8655,150 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Future<void> _confirmDelete(MechanicJob job) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Mover trabajo a eliminados'),
-        content: Text(
-            '¿Mover ${job.jobNumber} a eliminados? La factura y su historial contable se conservarán.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red,
+    final reason = await _requestArchiveReason(
+      job: job,
+      restoring: false,
+    );
+    if (reason == null || !mounted) return;
+
+    _startLocalOperation();
+    try {
+      await _bikeshopService.softDeleteJob(
+        job.id!,
+        reason: reason,
+        operationKey: const Uuid().v4(),
+      );
+      await _loadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${job.jobNumber} se movió a Eliminados con su historial intacto.',
             ),
-            child: const Text('Mover a eliminados'),
+            duration: const Duration(seconds: 3),
           ),
-        ],
+        );
+      }
+    } catch (e) {
+      await _loadData(surfaceErrors: false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo eliminar el trabajo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      _endLocalOperation();
+    }
+  }
+
+  Future<void> _confirmRestore(MechanicJob job) async {
+    final reason = await _requestArchiveReason(
+      job: job,
+      restoring: true,
+    );
+    if (reason == null || !mounted) return;
+
+    _startLocalOperation();
+    try {
+      await _bikeshopService.restoreJob(
+        job.id!,
+        reason: reason,
+        operationKey: const Uuid().v4(),
+      );
+      await _loadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${job.jobNumber} fue restaurado.'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      await _loadData(surfaceErrors: false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo restaurar el trabajo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      _endLocalOperation();
+    }
+  }
+
+  Future<String?> _requestArchiveReason({
+    required MechanicJob job,
+    required bool restoring,
+  }) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(
+            restoring ? 'Restaurar trabajo' : 'Mover trabajo a eliminados',
+          ),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  restoring
+                      ? '${job.jobNumber} volverá a los trabajos activos.'
+                      : job.invoiceId == null
+                          ? '${job.jobNumber} dejará de aparecer entre los trabajos activos. Sus presupuestos, elementos y eventos se conservarán.'
+                          : '${job.jobNumber} dejará de aparecer entre los trabajos activos. La factura, pagos, stock y asientos vinculados no serán alterados.',
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  maxLines: 3,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: InputDecoration(
+                    labelText: restoring
+                        ? 'Motivo de restauración *'
+                        : 'Motivo de eliminación *',
+                    hintText: restoring
+                        ? 'Ej.: Se eliminó por error'
+                        : 'Ej.: Trabajo creado para una prueba',
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: controller.text.trim().isEmpty
+                  ? null
+                  : () => Navigator.pop(
+                        dialogContext,
+                        controller.text.trim(),
+                      ),
+              style: restoring
+                  ? null
+                  : FilledButton.styleFrom(backgroundColor: Colors.red),
+              child: Text(restoring ? 'Restaurar' : 'Mover a eliminados'),
+            ),
+          ],
+        ),
       ),
     );
-
-    if (confirmed == true && mounted) {
-      // Start local operation to suppress reload from realtime notifications
-      _startLocalOperation();
-
-      // Optimistic update - remove from list immediately
-      final deletedJob = job;
-      setState(() {
-        _jobs.removeWhere((j) => j.id == job.id);
-        _applyFiltersAndSort();
-      });
-
-      try {
-        await _bikeshopService.softDeleteJob(job.id!);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Trabajo movido a eliminados'),
-                duration: Duration(seconds: 1)),
-          );
-        }
-      } catch (e) {
-        // Restore on error
-        if (mounted) {
-          setState(() {
-            _jobs.add(deletedJob);
-            _applyFiltersAndSort();
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-          );
-        }
-      } finally {
-        _endLocalOperation();
-      }
-    }
+    controller.dispose();
+    return result;
   }
 
   // Interactive cell methods

@@ -36007,5 +36007,9 @@ grant select on public.stock_movements_ledger_view to authenticated;
 -- legacy Viñabike graph/AE0368 omission are repaired only behind immutable
 -- production fingerprints and append-only inventory trace evidence.
 \ir ../migrations/20260721190000_canonicalize_product_set_inventory.sql
+-- Workshop jobs are removed from active operation through a replay-safe,
+-- reversible archive command. Its append-only event and central checkpoints
+-- prove that linked invoices, payments, stock and journals were preserved.
+\ir ../migrations/20260721234000_add_audited_mechanic_job_archive.sql
 
 commit;

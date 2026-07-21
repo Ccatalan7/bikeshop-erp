@@ -4449,37 +4449,65 @@ class BikeshopService extends ChangeNotifier {
 
   // ========== SOFT DELETE METHODS ==========
 
-  /// Soft delete a mechanic job (sets deleted_at timestamp)
-  Future<void> softDeleteJob(String jobId) async {
+  /// Archives a workshop job through the audited, replay-safe DB command.
+  Future<Map<String, dynamic>> softDeleteJob(
+    String jobId, {
+    required String reason,
+    required String operationKey,
+  }) =>
+      _setJobArchived(
+        jobId,
+        archived: true,
+        reason: reason,
+        operationKey: operationKey,
+      );
+
+  /// Restores a workshop job through the same audited command.
+  Future<Map<String, dynamic>> restoreJob(
+    String jobId, {
+    required String reason,
+    required String operationKey,
+  }) =>
+      _setJobArchived(
+        jobId,
+        archived: false,
+        reason: reason,
+        operationKey: operationKey,
+      );
+
+  Future<Map<String, dynamic>> _setJobArchived(
+    String jobId, {
+    required bool archived,
+    required String reason,
+    required String operationKey,
+  }) async {
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      await Supabase.instance.client.from('mechanic_jobs').update({
-        'deleted_at': DateTime.now().toIso8601String(),
-        'deleted_by': userId,
-      }).eq('id', jobId);
+      final response = await Supabase.instance.client.rpc(
+        'set_mechanic_job_archived',
+        params: {
+          'p_job_id': jobId,
+          'p_archived': archived,
+          'p_reason': reason,
+          'p_idempotency_key': operationKey,
+        },
+      );
+      if (response is! Map) {
+        throw StateError('La base de datos no confirmó la acción.');
+      }
+      final result = Map<String, dynamic>.from(response);
+      if (result['job_id']?.toString() != jobId ||
+          result['archived'] != archived ||
+          result['operation_id'] == null ||
+          result['event_id'] == null) {
+        throw StateError('La confirmación de la base de datos no coincide.');
+      }
 
       invalidateJobsCache();
       _debouncedNotify();
-      debugPrint('🗑️ Soft deleted job: $jobId');
+      debugPrint('${archived ? '🗑️' : '♻️'} Audited job archive: $jobId');
+      return result;
     } catch (e) {
-      if (kDebugMode) print('Error soft deleting job: $e');
-      rethrow;
-    }
-  }
-
-  /// Restore a soft-deleted mechanic job
-  Future<void> restoreJob(String jobId) async {
-    try {
-      await Supabase.instance.client.from('mechanic_jobs').update({
-        'deleted_at': null,
-        'deleted_by': null,
-      }).eq('id', jobId);
-
-      invalidateJobsCache();
-      _debouncedNotify();
-      debugPrint('♻️ Restored job: $jobId');
-    } catch (e) {
-      if (kDebugMode) print('Error restoring job: $e');
+      if (kDebugMode) print('Error changing job archive state: $e');
       rethrow;
     }
   }
@@ -4502,21 +4530,12 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-  /// Permanently delete a job (hard delete - cannot be undone)
+  /// Hard deletion is intentionally unavailable: operational and financial
+  /// evidence must remain restorable and traceable.
   Future<void> permanentlyDeleteJob(String jobId) async {
-    try {
-      await Supabase.instance.client
-          .from('mechanic_jobs')
-          .delete()
-          .eq('id', jobId);
-
-      invalidateJobsCache();
-      _debouncedNotify();
-      debugPrint('🔥 Permanently deleted job: $jobId');
-    } catch (e) {
-      if (kDebugMode) print('Error permanently deleting job: $e');
-      rethrow;
-    }
+    throw UnsupportedError(
+      'Los trabajos se archivan; no se eliminan físicamente.',
+    );
   }
 
   // ============================================================

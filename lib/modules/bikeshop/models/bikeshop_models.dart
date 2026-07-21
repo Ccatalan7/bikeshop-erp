@@ -3081,6 +3081,8 @@ class MechanicJob {
   // Soft delete fields
   final DateTime? deletedAt;
   final String? deletedBy;
+  final String? archiveReason;
+  final String? archiveOperationId;
 
   MechanicJob({
     this.id,
@@ -3145,6 +3147,8 @@ class MechanicJob {
     DateTime? updatedAt,
     this.deletedAt,
     this.deletedBy,
+    this.archiveReason,
+    this.archiveOperationId,
   })  : workflowKind =
             workflowKind ?? JobWorkflowKind.fromLegacyJobType(jobType),
         intakeKind = intakeKind ??
@@ -3315,6 +3319,8 @@ class MechanicJob {
       updatedAt: _parseDate(json['updated_at']),
       deletedAt: _parseDateNullable(json['deleted_at']),
       deletedBy: json['deleted_by']?.toString(),
+      archiveReason: json['archive_reason']?.toString(),
+      archiveOperationId: json['archive_operation_id']?.toString(),
     );
   }
 
@@ -3460,6 +3466,10 @@ class MechanicJob {
     JobStatusCustom? customStatus,
     DateTime? statusUpdatedAt,
     Object? serviceWarranty = _sentinel,
+    Object? deletedAt = _sentinel,
+    Object? deletedBy = _sentinel,
+    Object? archiveReason = _sentinel,
+    Object? archiveOperationId = _sentinel,
   }) {
     return MechanicJob(
       id: id ?? this.id,
@@ -3555,6 +3565,15 @@ class MechanicJob {
       imageUrls: imageUrls ?? this.imageUrls,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt:
+          deletedAt == _sentinel ? this.deletedAt : deletedAt as DateTime?,
+      deletedBy: deletedBy == _sentinel ? this.deletedBy : deletedBy as String?,
+      archiveReason: archiveReason == _sentinel
+          ? this.archiveReason
+          : archiveReason as String?,
+      archiveOperationId: archiveOperationId == _sentinel
+          ? this.archiveOperationId
+          : archiveOperationId as String?,
     );
   }
 
