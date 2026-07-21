@@ -2,7 +2,68 @@
   'use strict';
 
   const SOURCE = 'AliExpress';
-  const CONTENT_VERSION = '0.4.0';
+  const CONTENT_VERSION = '0.4.6';
+  const DEBUG_PREFIX = `[AE-DEBUG][content][v${CONTENT_VERSION}]`;
+
+  function aeDebug(event, details = {}, level = 'log') {
+    try {
+      const payload = JSON.stringify({
+        event,
+        at: new Date().toISOString(),
+        ...details,
+      });
+      const writer = console[level] || console.log;
+      writer.call(console, `${DEBUG_PREFIX} ${payload}`);
+    } catch (error) {
+      console.log(`${DEBUG_PREFIX} ${event} (debug serialization failed: ${String(error)})`);
+    }
+  }
+
+  function safeDebugUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+      const parsed = new URL(raw, globalThis.location && globalThis.location.href);
+      const safe = new URL(`${parsed.origin}${parsed.pathname}`);
+      ['orderId', 'orderIdList', 'orderNo', 'orderNumber', 'itemId', 'productId'].forEach((key) => {
+        const field = parsed.searchParams.get(key);
+        if (field) safe.searchParams.set(key, field.slice(0, 80));
+      });
+      return safe.toString();
+    } catch (_) {
+      return raw.split('?')[0].slice(0, 240);
+    }
+  }
+
+  function debugItemSummary(item) {
+    return {
+      sku: item && item.sku || '',
+      itemId: item && item.itemId || '',
+      description: String(item && item.description || '').slice(0, 160),
+      quantity: Number(item && item.quantity || 0),
+      unitPrice: Number(item && item.unitPrice || 0),
+      total: Number(item && item.total || 0),
+      productUrl: safeDebugUrl(item && item.productUrl || ''),
+      hasImage: Boolean(item && item.imageUrl),
+    };
+  }
+
+  function debugOrderSummary(order) {
+    return {
+      orderNumber: order && order.orderNumber || '',
+      orderDate: order && order.orderDate || '',
+      pageUrl: safeDebugUrl(order && order.pageUrl || ''),
+      subtotal: order && order.subtotal,
+      shipping: order && order.shipping,
+      tax: order && order.tax,
+      discount: order && order.discount,
+      total: order && order.total,
+      authoritativeTotals: order && order.__authoritativeTotals === true,
+      itemCount: Array.isArray(order && order.items) ? order.items.length : 0,
+      items: Array.isArray(order && order.items) ? order.items.map(debugItemSummary) : [],
+      warnings: Array.isArray(order && order.warnings) ? order.warnings : [],
+    };
+  }
 
   function getPageMetrics() {
     return {
@@ -32,8 +93,16 @@
   }
 
   async function extractOrderWithPreload() {
+    aeDebug('detail.preload.start', { pageUrl: safeDebugUrl(location.href) });
     await preloadOrderDetailContent();
-    return extractOrder();
+    aeDebug('detail.preload.complete', {
+      pageUrl: safeDebugUrl(location.href),
+      expand: globalThis.__AE_EXPAND_DEBUG__ || null,
+      totalsCardCaptured: Boolean(globalThis.__AE_TOTALS_CARD_TEXT__),
+    });
+    const order = extractOrder();
+    aeDebug('detail.extract.complete', debugOrderSummary(order));
+    return order;
   }
 
   async function extractProductMediaRowsWithPreload() {
@@ -53,8 +122,34 @@
   }
 
   async function extractOrdersListWithPreload(filters = {}) {
+    aeDebug('list.preload.start', {
+      pageUrl: safeDebugUrl(location.href),
+      filters: {
+        dateMode: filters.dateMode || '',
+        exactDate: filters.exactDate || '',
+        fromDate: filters.fromDate || '',
+        toDate: filters.toDate || '',
+        maxLoadClicks: filters.maxLoadClicks || null,
+      },
+    });
     const preload = await preloadOrdersListContent(filters || {});
-    return { ...extractOrdersList(filters || {}), preload };
+    aeDebug('list.preload.complete', preload);
+    const extracted = extractOrdersList(filters || {});
+    if (extracted.scannedCount === 0) {
+      extracted.warnings.push(
+        preload.visibleOrderSignals > 0
+          ? `Diagnostico: AliExpress expone ${preload.visibleOrderSignals} pedido(s), pero su nueva tarjeta aun no pudo reconocerse.`
+          : `Diagnostico: no se encontraron IDs de pedido visibles (fin: ${preload.terminationReason || 'desconocido'}).`,
+      );
+    }
+    const result = { ...extracted, preload };
+    aeDebug('list.extract.complete', {
+      scannedCount: result.scannedCount,
+      matchedCount: result.orders.length,
+      warnings: result.warnings,
+      orders: result.orders.map(debugOrderSummary),
+    });
+    return result;
   }
 
   function getVisibleProductImageRects() {
@@ -71,7 +166,24 @@
     visibleProductImageRects: getVisibleProductImageRects,
     getPageMetrics,
     scrollTo: scrollToPosition,
+    diagnoseOrdersList,
+    _testing: {
+      extractOrderListNumber,
+      extractOrderListDate,
+      extractOrderNumberFromHref,
+      findOrderListDetailUrl,
+      loadMoreTextScore,
+      extractTotalsFromTextBlob,
+      cardTotalsBalance,
+      dedupeExtractedItems,
+      collapseOrderListItemCandidates,
+    },
   };
+
+  aeDebug('bridge.installed', {
+    pageUrl: safeDebugUrl(globalThis.location && globalThis.location.href),
+    host: globalThis.chrome && globalThis.chrome.runtime ? 'chrome-extension' : 'erp-webview',
+  });
 
   if (typeof globalThis.__ALIEXPRESS_INVOICE_CONTENT_CLEANUP__ === 'function') {
     try {
@@ -126,10 +238,18 @@
     return false;
   };
 
-  chrome.runtime.onMessage.addListener(onMessage);
-  globalThis.__ALIEXPRESS_INVOICE_CONTENT_CLEANUP__ = () => {
-    chrome.runtime.onMessage.removeListener(onMessage);
-  };
+  const extensionRuntime = globalThis.chrome && globalThis.chrome.runtime;
+  if (extensionRuntime && extensionRuntime.onMessage) {
+    extensionRuntime.onMessage.addListener(onMessage);
+    globalThis.__ALIEXPRESS_INVOICE_CONTENT_CLEANUP__ = () => {
+      extensionRuntime.onMessage.removeListener(onMessage);
+    };
+  } else {
+    // The ERP's embedded WebView reuses this extractor without Chrome's
+    // extension messaging API. The public bridge above is the integration
+    // boundary in that host.
+    globalThis.__ALIEXPRESS_INVOICE_CONTENT_CLEANUP__ = () => {};
+  }
 
   async function preloadOrderDetailContent() {
     const initialX = window.scrollX;
@@ -225,19 +345,25 @@
     // Capture the cleanest totals card text so extractTotals can use it as the authoritative
     // source. The card is small and only contains real Subtotal/Shipping/Tax/Discount/Total
     // rows -- it cannot be polluted by promo text like "$800 coupon if delayed".
-    let bestCard = null;
-    let bestLength = Infinity;
-    for (const card of cards) {
-      if (!totalsBreakdownVisible(card)) continue;
-      const text = (card.innerText || card.textContent || '');
-      if (text.length > 0 && text.length < bestLength) {
-        bestCard = card;
-        bestLength = text.length;
-      }
-    }
-    globalThis.__AE_TOTALS_CARD_TEXT__ = bestCard ? (bestCard.innerText || bestCard.textContent || '') : null;
+    globalThis.__AE_TOTALS_CARD_TEXT__ = bestTotalsCardText(cards);
     debug.lastCardTextSample = (cards[0] && cards[0].innerText ? cards[0].innerText : '').slice(0, 400);
     return debug;
+  }
+
+  function bestTotalsCardText(cards) {
+    const candidates = [];
+    for (const card of cards) {
+      for (const text of [card.innerText || '', card.textContent || '']) {
+        if (!text || !/subtotal/i.test(text) || !/\btotal\b/i.test(text)) continue;
+        const totals = extractTotalsFromTextBlob(text);
+        let score = scoreTotalsCandidate(totals);
+        if (cardTotalsBalance(totals)) score += 2000;
+        score -= Math.max(0, text.length - 1800) / 10;
+        candidates.push({ text, score });
+      }
+    }
+    candidates.sort((a, b) => b.score - a.score || a.text.length - b.text.length);
+    return candidates[0]?.text || null;
   }
 
   function findSubtotalLabelNodes() {
@@ -295,9 +421,11 @@
   function collectExpandToggles(region) {
     const toggles = [];
     const seen = new Set();
+    const subtotalRects = findSubtotalLabelNodes()
+      .filter((label) => region === label || (region.contains && region.contains(label)))
+      .map((label) => label.getBoundingClientRect && label.getBoundingClientRect())
+      .filter(Boolean);
     const selectorList = [
-      '[role="button"]',
-      'button',
       '[aria-expanded]',
       '[class*="arrow" i]',
       '[class*="chevron" i]',
@@ -305,11 +433,8 @@
       '[class*="expand" i]',
       '[class*="toggle" i]',
       '[class*="caret" i]',
-      '[class*="detail" i]',
-      '[class*="more" i]',
       'svg',
       'i',
-      'a',
     ];
     for (const selector of selectorList) {
       let found;
@@ -317,17 +442,26 @@
       for (const element of found) {
         const target = resolveClickableAncestor(element) || element;
         if (!target || seen.has(target)) continue;
-        // Skip oversized targets (entire panels) - we want small icon-sized toggles.
         const rect = target.getBoundingClientRect ? target.getBoundingClientRect() : null;
-        if (rect && (rect.width > 220 || rect.height > 80)) {
-          // Allow small chevrons even if their parent is a wide row.
-          if (target.tagName !== 'svg' && target.tagName !== 'I') continue;
-        }
+        if (!rect || rect.width <= 0 || rect.height <= 0 || rect.width > 220 || rect.height > 80) continue;
+        const text = normalizeText(target.innerText || target.textContent || target.getAttribute?.('aria-label') || '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (/add\s+to\s+cart|returns?|refunds?|buy\s+now|contact|chat/i.test(text)) continue;
+        const classText = `${element.className || ''} ${target.className || ''} ${target.getAttribute?.('aria-label') || ''}`;
+        const explicit = target.getAttribute?.('aria-expanded') !== null
+          || /arrow|chevron|fold|expand|toggle|caret/i.test(classText);
+        const nearby = subtotalRects.length === 0 || subtotalRects.some((labelRect) => {
+          const vertical = Math.abs((rect.top + rect.height / 2) - (labelRect.top + labelRect.height / 2));
+          const horizontal = Math.abs((rect.left + rect.width / 2) - (labelRect.left + labelRect.width / 2));
+          return vertical <= 140 && horizontal <= 760;
+        });
+        if (!nearby || (!explicit && !['svg', 'I'].includes(element.tagName))) continue;
         seen.add(target);
-        toggles.push(target);
+        toggles.push({ target, score: (explicit ? 100 : 0) + rect.left / 1000 });
       }
     }
-    return toggles;
+    return toggles.sort((a, b) => b.score - a.score).map((entry) => entry.target);
   }
 
   function resolveClickableAncestor(element) {
@@ -365,41 +499,103 @@
   async function preloadOrdersListContent(filters = {}) {
     const initialX = window.scrollX;
     const initialY = window.scrollY;
-    const maxLoadClicks = Math.min(24, Math.max(0, Number(filters.maxLoadClicks) || 16));
+    const maxLoadClicks = Math.min(40, Math.max(0, Number(filters.maxLoadClicks) || 24));
+    const maxScrollPasses = Math.max(8, maxLoadClicks + 8);
     let loadMoreClicks = 0;
     let scrollPasses = 0;
     let stuckClicks = 0;
+    let noProgressPasses = 0;
+    let terminationReason = 'max-scroll-passes';
+    let lastTraversal = null;
 
-    for (let cycle = 0; cycle <= maxLoadClicks; cycle += 1) {
-      await traverseLoadedOrdersList(initialX);
-      scrollPasses += 1;
+    aeDebug('list.scroll.begin', {
+      targetDate: filters.exactDate || filters.fromDate || '',
+      maxLoadClicks,
+      maxScrollPasses,
+      initialOrderSignals: countOrderListNumbers(),
+      initialHeight: getDocumentScrollHeight(),
+    });
 
-      if (ordersListHasReachedDate(filters.exactDate || filters.fromDate)) break;
-
-      const loadMoreButton = findOrdersListLoadMoreButton();
-      if (!loadMoreButton || loadMoreClicks >= maxLoadClicks) break;
-
+    for (let cycle = 0; cycle < maxScrollPasses; cycle += 1) {
       const beforeCount = countOrderListNumbers();
       const beforeHeight = getDocumentScrollHeight();
-      loadMoreButton.scrollIntoView({ block: 'center', inline: 'nearest' });
-      await sleep(120);
-      loadMoreButton.click();
-      loadMoreClicks += 1;
-      await sleep(900);
+      lastTraversal = await traverseLoadedOrdersList(initialX);
+      scrollPasses += 1;
+
+      if (ordersListHasReachedDate(filters.exactDate || filters.fromDate)) {
+        terminationReason = 'target-date-reached';
+        aeDebug('list.scroll.cycle', {
+          cycle: cycle + 1,
+          beforeCount,
+          afterCount: countOrderListNumbers(),
+          beforeHeight,
+          afterHeight: getDocumentScrollHeight(),
+          loadMoreFound: Boolean(findOrdersListLoadMoreButton()),
+          targetDateReached: true,
+          traversal: lastTraversal,
+        });
+        break;
+      }
+
+      const loadMoreButton = findOrdersListLoadMoreButton();
+      if (loadMoreButton && loadMoreClicks < maxLoadClicks) {
+        loadMoreButton.scrollIntoView({ block: 'center', inline: 'nearest' });
+        await sleep(160);
+        fireSyntheticClick(loadMoreButton);
+        loadMoreClicks += 1;
+        await sleep(1100);
+      } else if (lastTraversal && !lastTraversal.reachedBottom) {
+        // Long order histories may span far more than one 9,000px pass. Keep
+        // traversing even when the load-more control is still below the
+        // viewport instead of stopping after the first chunk.
+        terminationReason = 'continuing-long-list';
+        continue;
+      } else {
+        // Newer AliExpress variants lazy-load at the bottom without rendering
+        // a button. Give the list one more chance to append content.
+        window.scrollTo(initialX, Math.max(0, getDocumentScrollHeight() - (window.innerHeight || 800)));
+        await sleep(750);
+      }
 
       const afterCount = countOrderListNumbers();
       const afterHeight = getDocumentScrollHeight();
+      aeDebug('list.scroll.cycle', {
+        cycle: cycle + 1,
+        beforeCount,
+        afterCount,
+        beforeHeight,
+        afterHeight,
+        loadMoreFound: Boolean(loadMoreButton),
+        loadMoreClicks,
+        noProgressPasses,
+        traversal: lastTraversal,
+      });
       if (afterCount <= beforeCount && afterHeight <= beforeHeight + 24) {
-        stuckClicks += 1;
-        if (stuckClicks >= 2) break;
+        noProgressPasses += 1;
+        if (loadMoreButton) stuckClicks += 1;
+        if (noProgressPasses >= 3 || stuckClicks >= 3) {
+          terminationReason = loadMoreButton ? 'load-more-stuck' : 'end-of-list';
+          break;
+        }
       } else {
+        noProgressPasses = 0;
         stuckClicks = 0;
       }
+
     }
 
+    const diagnostics = diagnoseOrdersList();
     window.scrollTo(initialX, initialY);
     await sleep(90);
-    return { loadMoreClicks, scrollPasses };
+    const result = {
+      loadMoreClicks,
+      scrollPasses,
+      terminationReason,
+      lastTraversal,
+      ...diagnostics,
+    };
+    aeDebug('list.scroll.end', result);
+    return result;
   }
 
   async function traverseLoadedOrdersList(initialX) {
@@ -411,8 +607,16 @@
 
     for (let y = startY; y <= maxTraversalY; y += step) {
       window.scrollTo(initialX, y);
-      await sleep(120);
+      await sleep(150);
     }
+    window.scrollTo(initialX, maxTraversalY);
+    await sleep(220);
+    return {
+      startY,
+      endY: window.scrollY,
+      maxY,
+      reachedBottom: maxTraversalY >= maxY - 12,
+    };
   }
 
   function getDocumentScrollHeight() {
@@ -426,12 +630,17 @@
     const text = normalizeText(document.body ? document.body.innerText : '');
     const numbers = new Set();
     const patterns = [
-      /\border\s*(?:id|number|no\.?)\s*[:#]?\s*(\d{8,})/gi,
-      /\bpedido\s*(?:n[°o.]?|numero|id)?\s*[:#]?\s*(\d{8,})/gi,
+      /\border\s*(?:id|number|no\.?|#)?\s*[:#]?\s*(\d{8,})/gi,
+      /\bpedido\s*(?:n[°ºo.]?|n[uú]mero|numero|id|#)?\s*[:#]?\s*(\d{8,})/gi,
+      /\b(?:n[uú]mero|numero|n[°ºo.]?)\s+de\s+pedido\s*[:#]?\s*(\d{8,})/gi,
     ];
     patterns.forEach((pattern) => {
       let match;
       while ((match = pattern.exec(text)) !== null) numbers.add(match[1]);
+    });
+    Array.from(document.querySelectorAll('a[href]')).forEach((anchor) => {
+      const orderNumber = extractOrderNumberFromHref(anchor.href || anchor.getAttribute('href') || '');
+      if (orderNumber) numbers.add(orderNumber);
     });
     return numbers.size;
   }
@@ -468,17 +677,21 @@
     if (!compact || compact.length > 80) return 0;
     if (/order\s*details|detalles\s+del\s+pedido|add\s+to\s+cart|remove|copy|need\s+help/i.test(compact)) return 0;
 
-    let score = 0;
-    if (/^view\s+orders?$/.test(compact)) score += 100;
-    if (/^view\s+more\s+orders?$/.test(compact)) score += 95;
-    if (/^load\s+more\s+orders?$/.test(compact)) score += 95;
-    if (/^show\s+more\s+orders?$/.test(compact)) score += 90;
-    if (/^(view|show|load)\s+more$/.test(compact)) score += 70;
-    if (/\b(ver|mostrar|cargar)\b.*\b(pedidos|ordenes|órdenes)\b/i.test(compact)) score += 90;
+    let score = loadMoreTextScore(compact);
     if (!score) return 0;
     score += Math.max(0, rect.top + window.scrollY) / 100000;
     if (element.matches('button,[role="button"],a')) score += 5;
     return score;
+  }
+
+  function loadMoreTextScore(value) {
+    const compact = normalizeText(value).trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!compact || compact.length > 80) return 0;
+    if (/^(view|show|load|see)\s+(?:\d+\s+)?(?:more\s+)?orders?(?:\s*[([]\d+[)\]])?$/.test(compact)) return 100;
+    if (/^(view|show|load|see)\s+more(?:\s*[([]\d+[)\]])?$/.test(compact)) return 75;
+    if (/^(ver|mostrar|cargar)\s+(?:m[aá]s\s+)?(?:pedidos|[oó]rdenes)(?:\s*[([]\d+[)\]])?$/.test(compact)) return 100;
+    if (/^(ver|mostrar|cargar)\s+m[aá]s(?:\s*[([]\d+[)\]])?$/.test(compact)) return 75;
+    return 0;
   }
 
   function sleep(milliseconds) {
@@ -589,47 +802,148 @@
 
   function collectOrderListCards() {
     const byOrder = new Map();
-    Array.from(document.querySelectorAll('article,section,li,div'))
-      .forEach((element) => {
-        if (!element || !element.getBoundingClientRect) return;
-        const text = normalizeText(element.innerText || element.textContent || '').trim();
-        if (!text || text.length < 40 || text.length > 3600) return;
-        const orderNumber = extractOrderListNumber(text);
-        if (!orderNumber) return;
+    const seeds = new Set();
+    Array.from(document.querySelectorAll('article,section,li,div')).forEach((element) => {
+      if (!element || !element.getBoundingClientRect) return;
+      const text = normalizeText(element.innerText || element.textContent || '').trim();
+      if (!text || text.length < 16 || text.length > 1800) return;
+      if (extractOrderListNumber(text)) seeds.add(element);
+    });
+    Array.from(document.querySelectorAll('a[href]')).forEach((anchor) => {
+      if (extractOrderNumberFromHref(anchor.href || anchor.getAttribute('href') || '')) {
+        seeds.add(anchor);
+      }
+    });
 
-        const card = findOrderListCard(element, orderNumber);
-        if (!card) return;
-        const cardText = normalizeText(card.innerText || card.textContent || '').trim();
-        const candidate = { element: card, text: cardText, orderNumber, score: orderListCardScore(card, cardText) };
-        const existing = byOrder.get(orderNumber);
-        if (!existing || candidate.score > existing.score) byOrder.set(orderNumber, candidate);
-      });
+    seeds.forEach((element) => {
+      const seedOrderNumber = extractOrderListNumberFromElement(element);
+      if (!seedOrderNumber) return;
+      const card = findOrderListCard(element, seedOrderNumber);
+      if (!card) return;
+      // One card may contain product/store links with unrelated numeric IDs.
+      // Always key the result by the canonical order number resolved from the
+      // complete card, never by the seed link that happened to find it.
+      const orderNumber = extractOrderListNumberFromElement(card);
+      if (!orderNumber) return;
+      const cardText = normalizeText(card.innerText || card.textContent || '').trim();
+      const candidate = { element: card, text: cardText, orderNumber, score: orderListCardScore(card, cardText) };
+      const existing = byOrder.get(orderNumber);
+      if (!existing || candidate.score > existing.score) byOrder.set(orderNumber, candidate);
+    });
 
-    return Array.from(byOrder.values())
+    const selected = Array.from(byOrder.values())
       .sort((a, b) => cardPageY(a.element) - cardPageY(b.element))
       .map((entry) => entry.element);
+    aeDebug('list.cards.detected', {
+      seedCount: seeds.size,
+      uniqueOrderCount: byOrder.size,
+      selected: Array.from(byOrder.values()).map((entry) => ({
+        orderNumber: entry.orderNumber,
+        score: roundMoney(entry.score),
+        textLength: entry.text.length,
+      })),
+    });
+    return selected;
   }
 
   function findOrderListCard(seed, orderNumber) {
     let current = seed;
     let best = null;
-    for (let depth = 0; depth < 9 && current && current !== document.body; depth += 1) {
+    let bestScore = Number.NEGATIVE_INFINITY;
+    for (let depth = 0; depth < 12 && current && current !== document.body; depth += 1) {
       if (!current.getBoundingClientRect) {
         current = current.parentElement;
         continue;
       }
       const rect = current.getBoundingClientRect();
       const text = normalizeText(current.innerText || current.textContent || '').trim();
-      const containsOrder = text.includes(orderNumber);
-      const hasDate = /\border\s*date\b|\bfecha\b|\bpedido\s+efectuado\b/i.test(text);
-      const hasTotal = /\btotal\s*:/i.test(text) || /\btotal\b[^\n]{0,30}(?:CLP\s*)?\$\s*[\d.,]+/i.test(text);
-      const reasonable = rect.width >= 360 && rect.height >= 70 && text.length <= 3600;
-      if (containsOrder && hasDate && hasTotal && reasonable && !isRecommendationText(text)) {
-        best = current;
+      const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
+      const containsOrder = elementContainsOrderNumber(current, orderNumber);
+      const date = extractOrderListDate(lines);
+      const hasTotal = Boolean(extractOrderListTotal(lines, text));
+      const hasProduct = Boolean(current.querySelector && current.querySelector(
+        'a[href*="/item/"],a[href*="itemId="],a[href*="productId="],img[src],img[data-src]',
+      ));
+      const hasDetailLink = Array.from(current.querySelectorAll ? current.querySelectorAll('a[href]') : [])
+        .some((anchor) => extractOrderNumberFromHref(anchor.href || anchor.getAttribute('href') || '') === orderNumber);
+      const reasonable = rect.width >= 280 && rect.height >= 55 && text.length <= 8000;
+      if (containsOrder && date && (hasTotal || hasProduct || hasDetailLink) && reasonable && !isRecommendationText(text)) {
+        const score = orderListCardScore(current, text)
+          + (hasTotal ? 35 : 0)
+          + (hasProduct ? 25 : 0)
+          + (hasDetailLink ? 20 : 0)
+          - Math.max(0, text.length - 2600) / 40
+          - Math.max(0, rect.height - 900) / 15;
+        if (score > bestScore) {
+          best = current;
+          bestScore = score;
+        }
       }
       current = current.parentElement;
     }
     return best;
+  }
+
+  function extractOrderListNumberFromElement(element) {
+    if (!element) return '';
+    const text = normalizeText(element.innerText || element.textContent || '').trim();
+    const fromText = extractOrderListNumber(text);
+    if (fromText) return fromText;
+
+    const links = [];
+    if (element.matches && element.matches('a[href]')) links.push(element);
+    if (element.querySelectorAll) links.push(...Array.from(element.querySelectorAll('a[href]')));
+    for (const link of links) {
+      const fromHref = extractOrderNumberFromHref(link.href || link.getAttribute('href') || '');
+      if (fromHref) return fromHref;
+    }
+
+    const attributes = ['data-order-id', 'data-order-number', 'data-order-no', 'data-orderid'];
+    for (const name of attributes) {
+      const value = element.getAttribute && element.getAttribute(name);
+      const match = String(value || '').match(/\d{8,}/);
+      if (match) return match[0];
+    }
+    return '';
+  }
+
+  function elementContainsOrderNumber(element, orderNumber) {
+    if (!element || !orderNumber) return false;
+    const text = normalizeText(element.innerText || element.textContent || '');
+    if (text.includes(orderNumber)) return true;
+    if (!element.querySelectorAll) return false;
+    return Array.from(element.querySelectorAll('a[href]')).some((anchor) =>
+      extractOrderNumberFromHref(anchor.href || anchor.getAttribute('href') || '') === orderNumber
+    );
+  }
+
+  function diagnoseOrdersList() {
+    const cards = collectOrderListCards();
+    const dates = cards
+      .map((card) => extractOrderListDate(
+        normalizeText(card.innerText || card.textContent || '')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean),
+      ))
+      .filter(Boolean)
+      .sort();
+    const loadMore = findOrdersListLoadMoreButton();
+    return {
+      visibleOrderSignals: countOrderListNumbers(),
+      detectedCards: cards.length,
+      datedCards: dates.length,
+      oldestVisibleDate: dates[0] || '',
+      newestVisibleDate: dates[dates.length - 1] || '',
+      loadMoreFound: Boolean(loadMore),
+      loadMoreLabel: loadMore
+        ? normalizeText(loadMore.innerText || loadMore.textContent || loadMore.getAttribute('aria-label') || '')
+            .trim()
+            .slice(0, 80)
+        : '',
+      documentHeight: getDocumentScrollHeight(),
+      finalScrollY: window.scrollY,
+    };
   }
 
   function orderListCardScore(card, text) {
@@ -652,7 +966,7 @@
   function buildOrderListInvoice(card) {
     const text = normalizeText(card.innerText || card.textContent || '').trim();
     const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
-    const orderNumber = extractOrderListNumber(text);
+    const orderNumber = extractOrderListNumberFromElement(card);
     if (!orderNumber) return null;
 
     const orderDate = extractOrderListDate(lines);
@@ -662,7 +976,7 @@
     const resolvedItems = items.length > 0 ? items : [buildOrderListSummaryItem(card, orderNumber, totalMoney)];
     const total = totalMoney ? totalMoney.amount : sumItems(resolvedItems);
 
-    return {
+    const invoice = {
       source: SOURCE,
       generatedAt: new Date().toISOString(),
       extractedAt: new Date().toISOString(),
@@ -690,12 +1004,23 @@
       ].filter(Boolean),
       listTextPreview: text.slice(0, 1200),
     };
+    aeDebug('list.card.extracted', {
+      ...debugOrderSummary(invoice),
+      detailUrlKind: /\/p\/message\//i.test(detailUrl)
+        ? 'message'
+        : /order.*detail|detail.*order/i.test(detailUrl)
+          ? 'order-detail'
+          : 'other',
+      usedSummaryPlaceholder: items.length === 0,
+    });
+    return invoice;
   }
 
   function extractOrderListNumber(text) {
     const patterns = [
-      /\border\s*(?:id|number|no\.?)\s*[:#]?\s*(\d{8,})/i,
-      /\bpedido\s*(?:n[°o.]?|numero|id)?\s*[:#]?\s*(\d{8,})/i,
+      /\b(?:order|purchase)\s*(?:id|number|no\.?|#)?\s*[:#]?\s*(\d{8,})/i,
+      /\bpedido\s*(?:n[°ºo.]?|n[uú]mero|numero|id|#)?\s*[:#]?\s*(\d{8,})/i,
+      /\b(?:n[uú]mero|numero|n[°ºo.]?)\s+de\s+pedido\s*[:#]?\s*(\d{8,})/i,
     ];
     for (const pattern of patterns) {
       const match = String(text || '').match(pattern);
@@ -705,12 +1030,55 @@
   }
 
   function extractOrderListDate(lines) {
-    const dateLine = lines.find((line) => /\border\s*date\b|\bfecha\s*(?:del\s*)?pedido\b|\bpedido\s+efectuado\b/i.test(line) && !isDeliveryDateLine(line));
+    const dateLabel = /\b(?:order\s*(?:date|placed)|placed\s+on|purchase\s+date|date\s+purchased|fecha\s*(?:del\s*)?(?:pedido|compra)|comprado\s+el|pedido\s+(?:efectuado|realizado)(?:\s+el)?)\b/i;
+    const dateLine = lines.find((line) => dateLabel.test(line) && !isDeliveryDateLine(line));
     if (dateLine) {
-      const afterLabel = dateLine.replace(/^.*?(?:order\s*date|fecha\s*(?:del\s*)?pedido|pedido\s+efectuado)(?:\s+el)?\s*[:\-]?\s*/i, '');
+      const afterLabel = dateLine.replace(
+        /^.*?(?:order\s*(?:date|placed)|placed\s+on|purchase\s+date|date\s+purchased|fecha\s*(?:del\s*)?(?:pedido|compra)|comprado\s+el|pedido\s+(?:efectuado|realizado)(?:\s+el)?)\s*[:\-]?\s*/i,
+        '',
+      );
       return parseDateString(afterLabel) || parseDateString(dateLine);
     }
     return extractDate(lines);
+  }
+
+  function extractOrderNumberFromHref(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+      const base = globalThis.location && globalThis.location.href
+        ? globalThis.location.href
+        : 'https://www.aliexpress.com/';
+      const url = new URL(raw, base);
+      const keys = [
+        'orderId',
+        'orderIdList',
+        'orderNo',
+        'orderNoList',
+        'orderNumber',
+        'order_id',
+        'order_no',
+      ];
+      for (const key of keys) {
+        const candidate = url.searchParams.get(key);
+        const match = String(candidate || '').match(/\d{8,}/);
+        if (match) return match[0];
+      }
+
+      const decoded = decodeURIComponent(`${url.pathname}${url.hash}`);
+      const labeled = decoded.match(/(?:order|detail)[^\d]{0,32}(\d{8,})/i);
+      if (labeled) return labeled[1];
+      // Never treat generic numeric paths (for example /store/1103059752) as
+      // order IDs. A bare path number is valid only inside an order-detail URL.
+      const hasOrderPathContext = /(?:^|\/)(?:p\/)?order(?:\/|[-_])|order.*detail|detail.*order/i.test(decoded);
+      const pathNumber = hasOrderPathContext
+        ? decoded.match(/(?:^|[\/_-])(\d{10,})(?:[\/_-]|$)/)
+        : null;
+      return pathNumber ? pathNumber[1] : '';
+    } catch (_error) {
+      const fallback = raw.match(/(?:order(?:Id|No|Number)?|pedido)[^\d]{0,20}(\d{8,})/i);
+      return fallback ? fallback[1] : '';
+    }
   }
 
   function extractOrderListTotal(lines, text) {
@@ -721,10 +1089,35 @@
 
   function findOrderListDetailUrl(card, orderNumber) {
     const anchors = Array.from(card.querySelectorAll('a[href]'));
-    const detailAnchor = anchors.find((anchor) => /order.*detail|detail.*order|detalles/i.test(anchor.innerText || anchor.textContent || anchor.href))
-      || anchors.find((anchor) => String(anchor.href || '').includes(orderNumber))
-      || anchors.find((anchor) => /order.*detail|orderId|order_id|orderIdList/i.test(anchor.href || ''));
-    return detailAnchor && detailAnchor.href ? detailAnchor.href : '';
+    const detailAnchor = anchors.find((anchor) => isUsableOrderDetailHref(
+      anchor.href || anchor.getAttribute('href') || '',
+      orderNumber,
+    ));
+    if (detailAnchor && detailAnchor.href) return detailAnchor.href;
+
+    const digits = String(orderNumber || '').replace(/\D+/g, '');
+    if (!digits) return '';
+    const base = globalThis.location && globalThis.location.href
+      ? globalThis.location.href
+      : 'https://www.aliexpress.com/';
+    return new URL(`/p/order/detail.html?orderId=${encodeURIComponent(digits)}`, base).toString();
+  }
+
+  function isUsableOrderDetailHref(value, orderNumber) {
+    try {
+      const base = globalThis.location && globalThis.location.href
+        ? globalThis.location.href
+        : 'https://www.aliexpress.com/';
+      const url = new URL(String(value || ''), base);
+      const path = url.pathname.toLowerCase();
+      if (/\/p\/message\//i.test(path) || /\/p\/order\/index\.html/i.test(path)) return false;
+      if (!(path.includes('order') && path.includes('detail'))) return false;
+      const expected = String(orderNumber || '').replace(/\D+/g, '');
+      const resolved = extractOrderNumberFromHref(url.toString());
+      return !expected || !resolved || resolved === expected;
+    } catch (_) {
+      return false;
+    }
   }
 
   function extractOrderListItems(card) {
@@ -736,26 +1129,17 @@
       .filter(Boolean);
     const candidates = [...rowCandidates, ...mediaCandidates];
     if (candidates.length === 0) return [];
+    return collapseOrderListItemCandidates(candidates);
+  }
 
-    const result = [];
-    const seen = new Set();
-    candidates
-      .sort((a, b) => a._y - b._y || a._x - b._x)
-      .forEach((item) => {
-        const key = [
-          normalizeProductUrl(item.productUrl),
-          item.itemId || '',
-          dedupeTextKey(item.description),
-          imageIdentityKey(item.imageUrl),
-          item.total,
-          item.quantity,
-        ].join('|');
-        if (seen.has(key)) return;
-        seen.add(key);
+  function collapseOrderListItemCandidates(candidates) {
+    const publicItems = [...(candidates || [])]
+      .sort((a, b) => Number(a._y || 0) - Number(b._y || 0) || Number(a._x || 0) - Number(b._x || 0))
+      .map((item) => {
         const { _y, _x, ...publicItem } = item;
-        result.push(publicItem);
+        return publicItem;
       });
-    return result.slice(0, 20);
+    return dedupeExtractedItems(publicItems).slice(0, 20);
   }
 
   function collectOrderListProductRows(card) {
@@ -1008,13 +1392,13 @@
   }
 
   function extractDate(lines) {
-    const labelPattern = /(order\s*(date|time)|placed\s*on|paid\s*on|fecha\s*(del\s*pedido)?|pedido\s*(?:realizado|efectuado)(?:\s+el)?)\s*[:\-]?\s*(.+)/i;
+    const labelPattern = /(?:order\s*(?:date|time|placed)|placed\s+on|paid\s+on|purchase\s+date|date\s+purchased|fecha\s*(?:del\s*)?(?:pedido|compra)|comprado\s+el|pedido\s*(?:realizado|efectuado)(?:\s+el)?)\s*[:\-]?\s*(.+)/i;
 
     for (const line of lines.slice(0, 80)) {
       if (isDeliveryDateLine(line)) continue;
       const labelMatch = line.match(labelPattern);
       if (labelMatch) {
-        const parsed = parseDateString(labelMatch[4] || labelMatch[0]);
+        const parsed = parseDateString(labelMatch[1] || labelMatch[0]);
         if (parsed) return parsed;
       }
     }
@@ -1174,7 +1558,7 @@
       const taxAmt = result.tax ? (typeof result.tax === 'object' ? Math.abs(result.tax.amount || 0) : Math.abs(result.tax)) : 0;
       const discountAmt = result.discount ? (typeof result.discount === 'object' ? Math.abs(result.discount.amount || 0) : Math.abs(result.discount)) : 0;
       const calc = roundMoney(subtotalAmt + shippingAmt + taxAmt - discountAmt);
-      const tolerance = Math.max(2, totalAmt * 0.01);
+      const tolerance = 2;
       if (Math.abs(roundMoney(totalAmt - calc)) <= tolerance) {
         result.__authoritative = true;
       }
@@ -1191,8 +1575,7 @@
     });
   }
 
-  // [v0.3.51] True when an authoritative totals-card parse balances within ~1% tolerance.
-  // Tolerance accounts for AliExpress rounding cents that don't survive CLP truncation.
+  // A totals card is authoritative only when it closes within CLP rounding.
   function cardTotalsBalance(totals) {
     if (!totals || !totals.subtotal || !totals.total) return false;
     const subtotal = Math.abs(totals.subtotal.amount || 0);
@@ -1201,7 +1584,7 @@
     const tax = Math.abs(totals.tax?.amount || 0);
     const discount = Math.abs(totals.discount?.amount || 0);
     const calc = roundMoney(subtotal + shipping + tax - discount);
-    const tolerance = Math.max(2, total * 0.01);
+    const tolerance = 2;
     return Math.abs(roundMoney(total - calc)) <= tolerance;
   }
 
@@ -2901,6 +3284,7 @@
 
   function dedupeExtractedItems(items) {
     const result = [];
+    const duplicates = [];
 
     items.forEach((item) => {
       const duplicateIndex = result.findIndex((existing) => areLikelyDuplicateItems(existing, item));
@@ -2909,16 +3293,42 @@
         return;
       }
 
+      duplicates.push({
+        kept: debugItemSummary(result[duplicateIndex]),
+        removed: debugItemSummary(item),
+      });
+
       if (itemQualityScore(item) > itemQualityScore(result[duplicateIndex])) {
         result[duplicateIndex] = item;
       }
     });
+
+    if (duplicates.length > 0) {
+      aeDebug('detail.items.deduplicated', {
+        beforeCount: items.length,
+        afterCount: result.length,
+        duplicates,
+      }, 'warn');
+    }
 
     return result;
   }
 
   function areLikelyDuplicateItems(first, second) {
     if (!first || !second) return false;
+    const samePriceAndQuantity = roundMoney(first.unitPrice) === roundMoney(second.unitPrice)
+      && roundMoney(first.total) === roundMoney(second.total)
+      && Number(first.quantity || 0) === Number(second.quantity || 0);
+    const firstTitle = dedupeTextKey(first.description);
+    const secondTitle = dedupeTextKey(second.description);
+    const sameSupplierItem = Boolean(
+      (first.itemId && second.itemId && first.itemId === second.itemId)
+      || (first.productUrl && second.productUrl
+        && normalizeProductUrl(first.productUrl) === normalizeProductUrl(second.productUrl))
+      || (first.sku && second.sku && first.sku === second.sku),
+    );
+    if (sameSupplierItem && samePriceAndQuantity && firstTitle === secondTitle) return true;
+
     const firstVariantKey = variantIdentityKeyFromItem(first);
     const secondVariantKey = variantIdentityKeyFromItem(second);
     if (firstVariantKey && secondVariantKey && firstVariantKey !== secondVariantKey) return false;
@@ -2938,13 +3348,8 @@
       return true;
     }
 
-    const samePriceAndQuantity = roundMoney(first.unitPrice) === roundMoney(second.unitPrice)
-      && roundMoney(first.total) === roundMoney(second.total)
-      && Number(first.quantity || 0) === Number(second.quantity || 0);
     if (!samePriceAndQuantity) return false;
 
-    const firstTitle = dedupeTextKey(first.description);
-    const secondTitle = dedupeTextKey(second.description);
     return isWeakItemDescription(first.description)
       || isWeakItemDescription(second.description)
       || firstTitle === secondTitle

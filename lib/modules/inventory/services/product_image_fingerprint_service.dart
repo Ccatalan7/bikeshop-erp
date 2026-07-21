@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:image/image.dart' as img;
 
 class ProductImageFingerprint {
@@ -149,6 +150,15 @@ class _RadialShapeProfile {
 }
 
 class ProductImageFingerprintService {
+  static String contentDigest(Uint8List bytes) =>
+      sha256.convert(bytes).toString();
+
+  static bool hasExactContent(Uint8List left, Uint8List right) {
+    if (identical(left, right)) return true;
+    if (left.lengthInBytes != right.lengthInBytes) return false;
+    return contentDigest(left) == contentDigest(right);
+  }
+
   static ProductImageFingerprint? fromBytes(Uint8List bytes) {
     final decoded = img.decodeImage(bytes);
     if (decoded == null || decoded.width == 0 || decoded.height == 0) {

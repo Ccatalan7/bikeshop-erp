@@ -39,6 +39,7 @@ import '../services/mechanic_job_intake_classification_coordinator.dart';
 import '../services/mechanic_job_quotation_command_coordinator.dart';
 import '../services/mechanic_job_sale_classification_coordinator.dart';
 import '../services/mechanic_job_sale_ui_policy.dart';
+import '../services/mechanic_job_visibility_policy.dart';
 import '../services/mechanic_job_warranty_command_coordinator.dart';
 import '../models/bikeshop_models.dart';
 import '../widgets/pega_detail_view.dart';
@@ -512,9 +513,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   bool _isJobCurrentlyDelivered(MechanicJob job) {
-    return job.status == JobStatus.entregado ||
-        job.customStatus?.triggersDelivery == true ||
-        job.customStatus?.code.trim().toLowerCase() == 'entregado';
+    return isMechanicJobCurrentlyDelivered(job);
   }
 
   Color _statusFilterColor(String value) {
@@ -1589,32 +1588,14 @@ class _PegasTablePageState extends State<PegasTablePage>
     final customer = _customers[job.customerId];
     final bike = _bikes[job.bikeId];
 
-    final customerName = customer?.name.trim().toLowerCase() ?? '';
-    if (customerName == 'test' || customerName.startsWith('test ')) {
-      return true;
-    }
-
-    final bikeName = bike?.displayName.trim().toLowerCase() ?? '';
-    if (bikeName == 'test' || bikeName.startsWith('test ')) {
-      return true;
-    }
-
-    final auditText = [
-      job.jobNumber,
-      job.clientRequest,
-      job.diagnosis,
-      job.workPerformed,
-      job.notes,
-      bike?.brand,
-      bike?.model,
-      bike?.serialNumber,
-    ].whereType<String>().join(' ').toLowerCase();
-
-    return auditText.contains('[test') ||
-        auditText.contains('test perfil') ||
-        auditText.contains('test data') ||
-        auditText.contains('sandbox') ||
-        auditText.contains('dummy');
+    return mechanicJobMatchesTestFixture(
+      job,
+      customerName: customer?.name,
+      bikeName: bike?.displayName,
+      bikeBrand: bike?.brand,
+      bikeModel: bike?.model,
+      bikeSerialNumber: bike?.serialNumber,
+    );
   }
 
   void _sortByColumn(String column) {

@@ -13,6 +13,7 @@ import 'package:http/http.dart' as http;
 
 import '../services/ocr_service.dart';
 import '../services/ocr_file_handoff_service.dart';
+import '../services/ocr_product_resolution_policy.dart';
 import '../services/invoice_parser_service.dart';
 import '../services/pdf_parser_service.dart';
 import '../services/veryfi_proxy_service.dart';
@@ -194,7 +195,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   bool _showStock = false; // Toggle to show/hide stock column
   bool _isSavingSupplierTemplate = false;
   bool _isCheckingSimilarProducts = false;
+  bool _isOpeningBulkCreate = false;
   String? _similarProductMessage;
+  String? _aliExpressSkuReservationOperationKey;
+  int _aliExpressSkuReservationGeneration = 0;
   String? _processedInitialFileId;
   final AIAssistantService _aiAssistantService = AIAssistantService();
 
@@ -286,6 +290,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         sourceSupplierId: file.sourceSupplierId,
         sourceSupplierName: file.sourceSupplierName,
         sourceSupplierWebsite: file.sourceSupplierWebsite,
+        structuredInvoiceData: file.structuredInvoiceData,
       );
     } catch (error) {
       _handleInvoiceFileProcessingError(error);
@@ -546,6 +551,18 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     final supplierTemplateActive =
         (_ocrSupplier?.ocrTemplate.enabled ?? false) ||
             aliExpressTemplateActive;
+    final unresolvedProductCount = widget.showLineItemReview
+        ? data.lineItems
+            .where((item) =>
+                item.matchedProductId == null ||
+                item.matchedProductId!.trim().isEmpty)
+            .length
+        : 0;
+    final hasResolvedSupplier = _ocrSupplier != null;
+    final canUseParsedData = !widget.showLineItemReview ||
+        (hasResolvedSupplier &&
+            data.lineItems.isNotEmpty &&
+            unresolvedProductCount == 0);
 
     return Column(
       mainAxisSize: MainAxisSize.max,
@@ -1140,9 +1157,16 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: OutlinedButton.icon(
-                onPressed: _openBulkCreateScreen,
-                icon:
-                    const Icon(Icons.add_circle_outline, color: Colors.orange),
+                onPressed:
+                    _isOpeningBulkCreate ? null : _openBulkCreateScreen,
+                icon: _isOpeningBulkCreate
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add_circle_outline,
+                        color: Colors.orange),
                 label: Text(
                   'Crear ${data.lineItems.where((item) => item.existsInDatabase == false).length} Productos Nuevos',
                   style: const TextStyle(color: Colors.orange),
@@ -1180,9 +1204,18 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             const SizedBox(width: 12),
             Expanded(
               child: FilledButton.icon(
-                onPressed: () => _handleUseParsedData(data),
+                onPressed:
+                    canUseParsedData ? () => _handleUseParsedData(data) : null,
                 icon: const Icon(Icons.check),
-                label: const Text('Usar Datos'),
+                label: Text(canUseParsedData
+                    ? 'Usar Datos'
+                    : !hasResolvedSupplier
+                        ? 'Seleccionar proveedor'
+                        : data.lineItems.isEmpty
+                            ? 'Sin productos detectados'
+                            : unresolvedProductCount == 1
+                                ? 'Resolver 1 producto'
+                                : 'Resolver $unresolvedProductCount productos'),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
@@ -1308,7 +1341,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
       final verifiedItem =
-          await _verifySingleProduct(item.copyWith(sku: newSku.trim()));
+          await _verifySingleProduct(
+        item.copyWith(sku: newSku.trim()),
+        supplierId: _supplierIdForNewProducts ?? widget.supplierId,
+      );
 
       // If we found a match, validate if names match
       if (verifiedItem.existsInDatabase == true &&
@@ -1431,7 +1467,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   }
 
   /// Verify a single product against the database
-  Future<ParsedLineItem> _verifySingleProduct(ParsedLineItem item) async {
+  Future<ParsedLineItem> _verifySingleProduct(
+    ParsedLineItem item, {
+    String? supplierId,
+  }) async {
     final inventoryService =
         Provider.of<InventoryService>(context, listen: false);
 
@@ -1453,15 +1492,25 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         item.sku!.trim().isNotEmpty) {
       final cleanSku = item.sku!.trim();
       try {
-        matchedProduct =
-            await inventoryService.getProductBySupplierCode(cleanSku);
+        final scopedSupplierId = supplierId?.trim();
+        if (scopedSupplierId != null && scopedSupplierId.isNotEmpty) {
+          matchedProduct =
+              await inventoryService.getProductBySupplierCodeForSupplier(
+            supplierId: scopedSupplierId,
+            supplierCode: cleanSku,
+          );
+        }
       } catch (e) {
         debugPrint('   ❌ Error looking up Supplier Code $cleanSku: $e');
       }
     }
 
     // PRIORITY 3: Fall back to searching by name (EXACT MATCH ONLY)
-    if (matchedProduct == null && item.description.isNotEmpty) {
+    final scopedSupplierId = supplierId?.trim();
+    if (matchedProduct == null &&
+        scopedSupplierId != null &&
+        scopedSupplierId.isNotEmpty &&
+        item.description.isNotEmpty) {
       try {
         final normalizedDescription = item.description.trim().toLowerCase();
         final candidateProducts =
@@ -1469,7 +1518,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
         for (final product in candidateProducts) {
           final normalizedProductName = product.name.trim().toLowerCase();
-          if (normalizedProductName == normalizedDescription) {
+          if (product.supplierId == scopedSupplierId &&
+              normalizedProductName == normalizedDescription) {
             matchedProduct = product;
             break;
           }
@@ -1489,22 +1539,44 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         sku: item.sku, // Keep whatever the user typed or OCR found
       );
     } else {
-      return item.copyWith(existsInDatabase: false);
+      return _clearProductResolution(item);
     }
+  }
+
+  ParsedLineItem _clearProductResolution(ParsedLineItem item) {
+    return ParsedLineItem(
+      description: item.description,
+      sku: item.sku,
+      rawRowText: item.rawRowText,
+      imageUrl: item.imageUrl,
+      productUrl: item.productUrl,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      total: item.total,
+      discount: item.discount,
+      discountRate: item.discountRate,
+      discountInferred: item.discountInferred,
+      wasAutoAdjusted: item.wasAutoAdjusted,
+      adjustmentSummary: item.adjustmentSummary,
+      existsInDatabase: false,
+    );
   }
 
   /// Open the bulk product creation screen
   Future<void> _uploadImage(
       _NewProductEntry entry, Uint8List bytes, String fileName) async {
+    if (!mounted || !_newProductEntries.contains(entry)) return;
     setState(() => entry.isUploadingImage = true);
     try {
       final result = await ImageService.uploadProductImageWithOptimization(
           bytes: bytes, fileName: fileName);
+      if (!mounted || !_newProductEntries.contains(entry)) return;
       setState(() {
         entry.imageUrl = result.optimizedUrl ?? result.originalUrl;
         entry.imageUrlOptimized = result.optimizedUrl;
         entry.imageBytes = bytes;
         entry.imageFileName = fileName;
+        entry.invalidateDuplicateResolution();
       });
     } catch (e) {
       debugPrint('Error uploading image: $e');
@@ -1513,61 +1585,219 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         SnackBar(content: Text('Error al subir imagen: $e')),
       );
     } finally {
-      if (mounted) {
+      if (mounted && _newProductEntries.contains(entry)) {
         setState(() => entry.isUploadingImage = false);
       }
     }
   }
 
   Future<void> _openBulkCreateScreen() async {
-    if (_parsedData == null) return;
+    if (_parsedData == null || _isOpeningBulkCreate) return;
+    final sourceData = _parsedData!;
+    setState(() => _isOpeningBulkCreate = true);
 
-    // Get new products (all unrecognized items)
-    final newProducts = _parsedData!.lineItems
-        .where((item) => item.existsInDatabase == false)
-        .toList();
-
-    if (newProducts.isEmpty) return;
-
-    // Load categories and brands
     try {
-      final dbService = DatabaseService();
-      final tenantService = TenantService();
-      final categoryService = CategoryService(dbService, tenantService);
-      final brandService = BrandService(dbService);
-      _categories = await categoryService.getCategories();
-      _brands = await brandService.getBrands(activeOnly: true);
-    } catch (e) {
-      debugPrint('Failed to load categories/brands: $e');
+      // Get new products (all unrecognized items)
+      final newProducts = sourceData.lineItems
+          .where((item) => item.existsInDatabase == false)
+          .toList();
+
+      if (newProducts.isEmpty) return;
+
+      // Category is mandatory for every created catalog product. Do not open a
+      // form that can never be completed if its reference data did not load.
+      try {
+        final dbService = DatabaseService();
+        final tenantService = TenantService();
+        final categoryService = CategoryService(dbService, tenantService);
+        final brandService = BrandService(dbService);
+        final results = await Future.wait<dynamic>([
+          categoryService.getCategories(),
+          brandService.getBrands(activeOnly: true),
+        ]);
+        if (!mounted || !identical(_parsedData, sourceData)) return;
+        _categories = results[0] as List<Category>;
+        _brands = results[1] as List<ProductBrand>;
+        if (_categories.isEmpty) {
+          throw StateError('No hay categorías disponibles para crear productos.');
+        }
+      } catch (e) {
+        debugPrint('Failed to load categories/brands: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'No se pudo abrir la creación de productos: $e Reintenta.',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (!mounted || !identical(_parsedData, sourceData)) return;
+
+      // Auto-detect tax-inclusive cost source. AliExpress invoices allocate
+      // IVA into each item's unitPrice, so the unit cost already contains IVA.
+      final isAliExpressInvoice = _looksLikeAliExpressInvoice(sourceData);
+      _costsIncludeIva = isAliExpressInvoice;
+
+      final nextEntries = newProducts
+          .map((item) => _NewProductEntry(
+                originalItem: item,
+                isSelected: true,
+                initialSku: isAliExpressInvoice ? '' : null,
+                selectedCategory: null,
+                costIncludesIva: _costsIncludeIva,
+                requiresDuplicateReview: isAliExpressInvoice,
+              ))
+          .toList();
+      for (final oldEntry in _newProductEntries) {
+        oldEntry.dispose();
+      }
+      _newProductEntries = nextEntries;
+
+      // Assigned from the exact pending line identities on first reservation,
+      // so retries replay while a reopened/partially completed invoice gets a
+      // different request fingerprint.
+      _aliExpressSkuReservationOperationKey = null;
+      _aliExpressSkuReservationGeneration = 0;
+
+      if (isAliExpressInvoice) {
+        try {
+          await _assignNextAliExpressSkus(_newProductEntries);
+        } catch (error) {
+          debugPrint(
+              '⚠️ [OCR] No se pudo preparar la secuencia SKU AE: $error');
+        }
+      }
+
+      if (!mounted || !identical(_parsedData, sourceData)) return;
+      setState(() {
+        _showBulkCreate = true;
+        _similarProductMessage = null;
+      });
+
+      if (isAliExpressInvoice) {
+        // Matching must consume the final cleaned title/category/brand/model.
+        await _aiCleanProductNamesForEntries();
+        await _checkSimilarProductsForNewEntries(autoTriggered: true);
+      }
+    } finally {
+      if (mounted) setState(() => _isOpeningBulkCreate = false);
     }
+  }
 
-    // Auto-detect tax-inclusive cost source. AliExpress invoices allocate
-    // IVA into each item's unitPrice, so the unit cost already contains IVA.
-    // For typical Chilean purchase invoices the cost is pre-tax (Net).
-    _costsIncludeIva = _looksLikeAliExpressInvoice(_parsedData!);
-
-    // Create entries for each new product
-    _newProductEntries = newProducts
-        .map((item) => _NewProductEntry(
-              originalItem: item,
-              isSelected: true,
-              selectedCategory: null, // No default - user must choose
-              costIncludesIva: _costsIncludeIva,
-            ))
-        .toList();
-
-    setState(() {
-      _showBulkCreate = true;
-      _similarProductMessage = null;
-    });
-
-    if (_looksLikeAliExpressInvoice(_parsedData!)) {
-      // Fire AI cleanup of noisy supplier titles in the background and the
-      // similar-products check at the same time. Both are independent and
-      // both update individual rows as their results land.
-      unawaited(_aiCleanProductNamesForEntries());
-      await _checkSimilarProductsForNewEntries(autoTriggered: true);
+  Future<void> _assignNextAliExpressSkus(
+    List<_NewProductEntry> entries,
+  ) async {
+    if (entries.isEmpty) return;
+    final inventoryService = inv_service.InventoryService(
+      DatabaseService(),
+      TenantService(),
+    );
+    final firstSku = await inventoryService.getNextAliExpressSku(
+      supplierId: _supplierIdForNewProducts ?? widget.supplierId,
+      supplierName:
+          _ocrSupplierName ?? widget.supplierName ?? 'AliExpress Marketplace',
+    );
+    final firstSequence = int.tryParse(
+          RegExp(r'^AE(\d{4,})$', caseSensitive: false)
+                  .firstMatch(firstSku)
+                  ?.group(1) ??
+              '',
+        ) ??
+        1;
+    for (var index = 0; index < entries.length; index++) {
+      entries[index].skuController.text =
+          'AE${(firstSequence + index).toString().padLeft(4, '0')}';
     }
+  }
+
+  Future<void> _reserveAliExpressSkusForEntries(
+    List<_NewProductEntry> entries,
+  ) async {
+    final pending = entries
+        .where((entry) => !entry.hasReservedAliExpressSku)
+        .toList(growable: false);
+    if (pending.isEmpty) return;
+
+    final supplierId =
+        (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
+    final supplierName =
+        (_ocrSupplierName ?? widget.supplierName)?.trim();
+    if (supplierId == null || supplierId.isEmpty) {
+      throw StateError('Falta resolver el proveedor AliExpress.');
+    }
+    if (supplierName == null || supplierName.isEmpty) {
+      throw StateError('Falta el nombre del proveedor AliExpress.');
+    }
+    final inventoryService = context.read<InventoryService>();
+    for (var attempt = 0; attempt < 5; attempt++) {
+      var operationKey = _aliExpressSkuReservationOperationKey?.trim();
+      if (operationKey == null || operationKey.isEmpty) {
+        operationKey = _buildAliExpressSkuReservationOperationKey(pending);
+        _aliExpressSkuReservationOperationKey = operationKey;
+      }
+
+      final reservation = await inventoryService.reserveAliExpressSkus(
+        count: pending.length,
+        operationKey: operationKey,
+        supplierId: supplierId,
+        supplierName: supplierName,
+      );
+      if (reservation.skus.length != pending.length) {
+        throw StateError('La reserva SKU devolvió una cantidad inesperada.');
+      }
+
+      var hasForeignCollision = false;
+      for (final sku in reservation.skus) {
+        if (await inventoryService.getProductBySku(sku) != null) {
+          hasForeignCollision = true;
+          break;
+        }
+      }
+      if (hasForeignCollision) {
+        _aliExpressSkuReservationGeneration++;
+        _aliExpressSkuReservationOperationKey = null;
+        continue;
+      }
+
+      for (var index = 0; index < pending.length; index++) {
+        pending[index].skuController.text = reservation.skus[index];
+        pending[index].hasReservedAliExpressSku = true;
+      }
+      return;
+    }
+    throw StateError(
+      'No se pudo obtener un rango SKU AE libre después de 5 intentos.',
+    );
+  }
+
+  String _buildAliExpressSkuReservationOperationKey(
+    List<_NewProductEntry> entries,
+  ) {
+    final invoice = _parsedData;
+    final identity = <String>[
+      'v1',
+      'generation=$_aliExpressSkuReservationGeneration',
+      invoice?.invoiceNumber?.trim() ?? 'sin-folio',
+      invoice?.date?.toIso8601String() ?? 'sin-fecha',
+      (_supplierIdForNewProducts ?? widget.supplierId ?? '').trim(),
+      for (final entry in entries) ...[
+        _aliExpressItemIdForLine(entry.originalItem) ?? '',
+        entry.originalItem.productUrl?.trim() ?? '',
+        entry.originalItem.sku?.trim() ?? '',
+        entry.originalItem.description.trim(),
+        '${entry.originalItem.quantity ?? ''}',
+        '${entry.originalItem.total ?? ''}',
+      ],
+    ].join('\u001f');
+    final digest = ProductImageFingerprintService.contentDigest(
+      Uint8List.fromList(utf8.encode(identity)),
+    );
+    return 'aliexpress-ocr-v1-${digest.substring(0, 32)}';
   }
 
   Future<void> _showSupplierSelectionDialog() async {
@@ -1643,23 +1873,47 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                       subtitle: Text(
                                         _supplierSubtitle(supplier),
                                       ),
-                                      onTap: () {
-                                        this.setState(() {
-                                          _ocrSupplier = supplier;
-                                          _ocrSupplierName = supplier.name;
-                                          _supplierIdForNewProducts =
-                                              supplier.id;
-
-                                          // Update parsed data to reflect manually selected supplier
-                                          if (_baseParsedData != null) {
-                                            _parsedData =
-                                                _applySupplierTemplate(
-                                              _baseParsedData!,
+                                      onTap: () async {
+                                        Navigator.pop(context);
+                                        final source = _baseParsedData;
+                                        if (!mounted || source == null) return;
+                                        this.setState(
+                                            () => _isProcessing = true);
+                                        try {
+                                          final supplierBase =
+                                              await _verifyProductsInDatabase(
+                                            source.copyWith(
+                                              supplierName: supplier.name,
+                                            ),
+                                            supplierId: supplier.id,
+                                          );
+                                          if (!mounted) return;
+                                          this.setState(() {
+                                            _ocrSupplier = supplier;
+                                            _ocrSupplierName = supplier.name;
+                                            _supplierIdForNewProducts =
+                                                supplier.id;
+                                            _baseParsedData = supplierBase;
+                                            _parsedData = _applySupplierTemplate(
+                                              supplierBase,
                                               supplier,
                                             );
-                                          }
-                                        });
-                                        Navigator.pop(context);
+                                            _isProcessing = false;
+                                          });
+                                        } catch (error) {
+                                          if (!mounted) return;
+                                          this.setState(
+                                              () => _isProcessing = false);
+                                          ScaffoldMessenger.of(this.context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                'No se pudo verificar el catálogo de ${supplier.name}: $error',
+                                              ),
+                                              backgroundColor: Colors.red,
+                                            ),
+                                          );
+                                        }
                                       },
                                     );
                                   },
@@ -1855,7 +2109,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Crear Productos Nuevos',
+                        const Text('Revisar productos de la factura',
                             style: TextStyle(
                                 fontSize: 20, fontWeight: FontWeight.bold)),
                         Row(
@@ -1932,7 +2186,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                     ),
                     const SizedBox(width: 12),
                     OutlinedButton.icon(
-                      onPressed: _isCheckingSimilarProducts
+                      onPressed: _bulkCreateBusy()
                           ? null
                           : () => _checkSimilarProductsForNewEntries(),
                       icon: _isCheckingSimilarProducts
@@ -2044,8 +2298,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                   width: wChk,
                                   child: Checkbox(
                                     value: entry.isSelected,
-                                    onChanged: (v) => setState(
-                                        () => entry.isSelected = v ?? false),
+                                    onChanged: entry.requiresDuplicateReview
+                                        ? null
+                                        : (v) => setState(() =>
+                                            entry.isSelected = v ?? false),
                                   ),
                                 ),
                                 // Image cell
@@ -2136,6 +2392,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                                 entry.imageUrlOptimized = null;
                                                 entry.imageBytes = null;
                                                 entry.imageFileName = null;
+                                                entry
+                                                    .invalidateDuplicateResolution();
                                               }),
                                               child: Container(
                                                 width: 16,
@@ -2160,7 +2418,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                   child: TextField(
                                     controller: entry.skuController,
                                     enabled: entry.isSelected,
-                                    onChanged: (_) => setState(() {}),
+                                    onChanged: (_) => setState(() {
+                                      entry.invalidateDuplicateResolution();
+                                    }),
                                     decoration: InputDecoration(
                                       isDense: true,
                                       border: const OutlineInputBorder(),
@@ -2329,8 +2589,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                         .toList(),
                                     onSelected: (v) {
                                       if (v != null) {
-                                        setState(
-                                            () => entry.selectedCategory = v);
+                                        setState(() {
+                                          entry.selectedCategory = v;
+                                          entry.invalidateDuplicateResolution();
+                                        });
                                       }
                                     },
                                   ),
@@ -2362,7 +2624,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                         .toList(),
                                     onSelected: (v) {
                                       if (v != null) {
-                                        setState(() => entry.selectedBrand = v);
+                                        setState(() {
+                                          entry.selectedBrand = v;
+                                          entry.invalidateDuplicateResolution();
+                                        });
                                       }
                                     },
                                   ),
@@ -2401,18 +2666,47 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
               const SizedBox(height: 20),
 
+              if (_bulkCreateBlockingMessage() case final message?) ...[
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    border: Border.all(color: Colors.amber.shade200),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline,
+                          size: 17, color: Colors.amber.shade900),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          message,
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.amber.shade900),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+
               // Action buttons
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {
-                        for (final e in _newProductEntries) {
-                          e.dispose();
-                        }
-                        _newProductEntries.clear();
-                        setState(() => _showBulkCreate = false);
-                      },
+                      onPressed: _bulkCreateBusy()
+                          ? null
+                          : () {
+                              for (final e in _newProductEntries) {
+                                e.dispose();
+                              }
+                              _newProductEntries.clear();
+                              setState(() => _showBulkCreate = false);
+                            },
                       icon: const Icon(Icons.arrow_back),
                       label: const Text('Volver'),
                       style: OutlinedButton.styleFrom(
@@ -2422,10 +2716,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: _newProductEntries
-                              .any((e) => e.isSelected && e.isValid)
-                          ? _createBulkProducts
-                          : null,
+                      onPressed:
+                          _canCreateBulkProducts() ? _createBulkProducts : null,
                       icon: _creatingProducts
                           ? const SizedBox(
                               width: 16,
@@ -2434,7 +2726,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                   strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.check),
                       label: Text(
-                          _creatingProducts ? 'Creando...' : 'Crear Productos'),
+                        _creatingProducts
+                            ? 'Creando...'
+                            : 'Crear ${_newProductEntries.where((entry) => entry.isSelected).length} producto${_newProductEntries.where((entry) => entry.isSelected).length == 1 ? '' : 's'}',
+                      ),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         backgroundColor: Colors.orange,
@@ -2450,8 +2745,99 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     );
   }
 
+  bool _canCreateBulkProducts() => OcrProductResolutionPolicy.canCreate(
+        globalBusy: _isOpeningBulkCreate ||
+            _creatingProducts ||
+            _isCheckingSimilarProducts,
+        lines: _newProductEntries.map(
+          (entry) => OcrProductResolutionSnapshot(
+            selected: entry.isSelected,
+            valid: entry.isValid,
+            requiresDuplicateReview: entry.requiresDuplicateReview,
+            state: entry.resolutionState,
+            aiCleaning: entry.isAICleaningName,
+            matchChecking:
+                entry.isCheckingSimilar ||
+                entry.isLinkingExisting ||
+                entry.isUploadingImage,
+          ),
+        ),
+      );
+
+  bool _bulkCreateBusy() =>
+      _isOpeningBulkCreate ||
+      _creatingProducts ||
+      _isCheckingSimilarProducts ||
+      _newProductEntries
+          .any((entry) =>
+              entry.isAICleaningName ||
+              entry.isCheckingSimilar ||
+              entry.isLinkingExisting ||
+              entry.isUploadingImage);
+
+  String? _bulkCreateBlockingMessage() {
+    final selected =
+        _newProductEntries.where((entry) => entry.isSelected).toList();
+    if (_creatingProducts) return null;
+    if (selected
+        .any((entry) =>
+            entry.isAICleaningName ||
+            entry.isCheckingSimilar ||
+            entry.isLinkingExisting ||
+            entry.isUploadingImage)) {
+      return 'Espera a que termine el análisis o la carga de imágenes.';
+    }
+    final unresolved = selected
+        .where(
+            (entry) => entry.requiresDuplicateReview && !entry.isReadyToCreate)
+        .length;
+    if (unresolved > 0) {
+      return 'Revisa $unresolved fila${unresolved == 1 ? '' : 's'}: vincula un producto existente o confirma que es nuevo.';
+    }
+    final incomplete = selected.where((entry) => !entry.isValid).length;
+    if (incomplete > 0) {
+      return 'Completa SKU, nombre, categoría, costo y precio en $incomplete fila${incomplete == 1 ? '' : 's'}.';
+    }
+    return null;
+  }
+
   Widget _buildSimilarProductCell(_NewProductEntry entry) {
-    if (entry.isCheckingSimilar) {
+    if (entry.isLinkingExisting) {
+      return const Row(
+        children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: 8),
+          Text('Guardando vínculo...', style: TextStyle(fontSize: 11)),
+        ],
+      );
+    }
+
+    if (entry.creationError != null) {
+      return Tooltip(
+        message: entry.creationError!,
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, size: 15, color: Colors.red.shade700),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Error al crear · reintentar',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, color: Colors.red.shade700),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (entry.isCheckingSimilar ||
+        entry.resolutionState == OcrProductResolutionState.searching) {
       return Row(
         children: [
           const SizedBox(
@@ -2468,9 +2854,79 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       );
     }
 
+    if (entry.resolutionState == OcrProductResolutionState.newProduct) {
+      return Tooltip(
+        message: 'Revisión completa. Pulsa para buscar nuevamente.',
+        child: InkWell(
+          onTap: entry.isSelected
+                  && !_bulkCreateBusy()
+              ? () => _checkSimilarProductsForNewEntries(entry: entry)
+              : null,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              border: Border.all(color: Colors.green.shade200),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.add_box_outlined,
+                    size: 15, color: Colors.green.shade800),
+                const SizedBox(width: 6),
+                Text(
+                  'Nuevo',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green.shade900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (entry.resolutionState == OcrProductResolutionState.noCandidates) {
+      return FilledButton.tonalIcon(
+        onPressed: entry.isSelected && !_bulkCreateBusy()
+            ? () => setState(() {
+                  entry.markNewProduct();
+                  _similarProductMessage =
+                      'Producto nuevo confirmado manualmente.';
+                })
+            : null,
+        icon: const Icon(Icons.add_box_outlined, size: 14),
+        label: const Text('Confirmar nuevo'),
+        style: FilledButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          textStyle: const TextStyle(fontSize: 12),
+        ),
+      );
+    }
+
+    if (entry.resolutionState == OcrProductResolutionState.failed) {
+      return OutlinedButton.icon(
+        onPressed: entry.isSelected
+                && !_bulkCreateBusy()
+            ? () => _checkSimilarProductsForNewEntries(entry: entry)
+            : null,
+        icon: const Icon(Icons.refresh, size: 14),
+        label: const Text('Reintentar'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.red.shade700,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          textStyle: const TextStyle(fontSize: 12),
+        ),
+      );
+    }
+
     return ProductDuplicateSummaryButton(
       candidates: entry.similarCandidates,
-      isEnabled: entry.isSelected,
+      isEnabled: entry.isSelected && !_bulkCreateBusy(),
       onPressed: () => entry.similarCandidates.isEmpty
           ? _checkSimilarProductsForNewEntries(entry: entry)
           : _showSimilarProductsDialog(entry),
@@ -2780,9 +3236,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       final originalTitle = extractMarker(raw, 'ORIGINAL_TITLE');
       final addonCategory = extractMarker(raw, 'AI_CATEGORY');
       final addonBrand = extractMarker(raw, 'AI_BRAND');
+      final addonModel = extractMarker(raw, 'AI_MODEL');
       if (originalTitle != null) entry.originalNoisyTitle = originalTitle;
       if (addonCategory != null) entry.aiSuggestedCategoryName = addonCategory;
       if (addonBrand != null) entry.aiSuggestedBrandName = addonBrand;
+      if (addonModel != null) entry.aiSuggestedModel = addonModel;
       entry.nameWasAICleaned = true;
       if (entry.selectedBrand == null && addonBrand != null) {
         final match = resolveBrand(addonBrand);
@@ -2841,6 +3299,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         if (result != null) {
           entry.aiSuggestedCategoryName = result.categoryName;
           entry.aiSuggestedBrandName = result.brand;
+          entry.aiSuggestedModel = result.model;
           entry.applyAICleanedName(result.cleanedName);
           if (entry.selectedBrand == null && result.brand != null) {
             final match = resolveBrand(result.brand);
@@ -2882,6 +3341,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     _NewProductEntry? entry,
     bool autoTriggered = false,
   }) async {
+    if (!autoTriggered && _bulkCreateBusy()) return;
     final entries = entry == null
         ? _newProductEntries.where((e) => e.isSelected).toList()
         : [entry];
@@ -2893,7 +3353,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           ? 'Plantilla AliExpress: buscando parecidos antes de crear productos.'
           : 'Buscando productos parecidos...';
       for (final current in entries) {
-        current.isCheckingSimilar = true;
+        current.markSearching();
       }
     });
 
@@ -2906,40 +3366,86 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       );
 
       var flagged = 0;
+      var unresolved = 0;
+      var autoLinked = 0;
       for (final current in entries) {
-        final candidates = await duplicateMatcher.findCandidates(
-          probe: ProductDuplicateProbe(
-            name: current.nameController.text,
-            description: current.originalItem.description,
-            sku: current.skuController.text.trim().isNotEmpty
-                ? current.skuController.text.trim()
-                : current.originalItem.sku,
-            rawText: current.originalItem.rawRowText,
-            categoryName: current.selectedCategory?.name ??
-                current.aiSuggestedCategoryName,
-            brandName:
-                current.selectedBrand?.name ?? current.aiSuggestedBrandName,
-            supplierId: _supplierIdForNewProducts ?? widget.supplierId,
-            supplierName: _ocrSupplierName ?? widget.supplierName,
-            imageUrl: current.imageUrl,
-            imageBytes: current.imageBytes,
-            imageFileName: current.imageFileName,
-            price: current.price,
-            cost: current.cost,
-          ),
-          products: allProducts,
-        );
-        current.similarCandidates = candidates;
-        if (candidates.isNotEmpty) flagged++;
-        current.isCheckingSimilar = false;
+        final revision = current.resolutionRevision;
+        try {
+          await _ensureEntryImageBytes(current);
+          inv_models.Product? remembered;
+          try {
+            remembered = await _resolveRememberedProductAlias(
+              current,
+              inventoryService: inventoryService,
+              products: allProducts,
+            );
+          } catch (aliasError) {
+            // Learning is an optimization. A missing/transient alias service
+            // must never prevent the current invoice from being reviewed.
+            debugPrint(
+                'Could not resolve remembered supplier alias: $aliasError');
+          }
+          if (remembered != null) {
+            final linked =
+                await _useExistingProductForEntry(current, remembered);
+            if (linked) {
+              autoLinked++;
+              continue;
+            }
+          }
+          final candidates = await duplicateMatcher.findCandidates(
+            probe: ProductDuplicateProbe(
+              name: current.nameController.text,
+              description: current.originalItem.description,
+              sku: _costsIncludeIva && current.supplierCode.isNotEmpty
+                  ? current.supplierCode
+                  : current.skuController.text.trim().isNotEmpty
+                      ? current.skuController.text.trim()
+                      : current.originalItem.sku,
+              model: current.aiSuggestedModel,
+              rawText: current.originalItem.rawRowText,
+              categoryName: current.selectedCategory?.name ??
+                  current.aiSuggestedCategoryName,
+              brandName:
+                  current.selectedBrand?.name ?? current.aiSuggestedBrandName,
+              supplierId: _supplierIdForNewProducts ?? widget.supplierId,
+              supplierName: _ocrSupplierName ?? widget.supplierName,
+              imageUrl: current.imageUrl,
+              imageBytes: current.imageBytes,
+              imageFileName: current.imageFileName,
+              price: current.price,
+              cost: current.cost,
+            ),
+            products: allProducts,
+          );
+          // Ignore a stale response if the worker edited identity fields while
+          // the matcher was running. The row returns to "Buscar" instead.
+          if (current.resolutionRevision != revision) continue;
+          if (candidates.isEmpty) {
+            current.markNoCandidates();
+          } else {
+            current.markNeedsReview(candidates);
+            flagged++;
+          }
+        } catch (error) {
+          if (current.resolutionRevision == revision) {
+            current.markResolutionFailed(error);
+            unresolved++;
+          }
+          debugPrint('Error checking OCR row for duplicates: $error');
+        }
         if (mounted) setState(() {});
       }
 
       if (!mounted) return;
       setState(() {
-        _similarProductMessage = flagged == 0
-            ? 'No encontré parecidos fuertes en el catálogo actual.'
-            : 'Encontré parecidos para $flagged producto${flagged == 1 ? '' : 's'}. Revisa antes de crear.';
+        _similarProductMessage = unresolved > 0
+            ? 'No se pudieron revisar $unresolved fila${unresolved == 1 ? '' : 's'}. Reintenta antes de crear.'
+            : flagged == 0
+                ? autoLinked == 0
+                    ? 'Revisión completa: confirma las filas sin coincidencias antes de crear productos nuevos.'
+                    : '$autoLinked producto${autoLinked == 1 ? '' : 's'} vinculado${autoLinked == 1 ? '' : 's'} por una publicación ya confirmada; confirma las filas restantes.'
+                : 'Hay $flagged fila${flagged == 1 ? '' : 's'} por confirmar. Vincula el existente o confirma producto nuevo.';
       });
 
       if (entry != null && entry.similarCandidates.isNotEmpty) {
@@ -2952,7 +3458,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         _similarProductMessage =
             'No se pudo completar la búsqueda de parecidos.';
         for (final current in entries) {
-          current.isCheckingSimilar = false;
+          current.markResolutionFailed(e);
         }
       });
     } finally {
@@ -2977,7 +3483,43 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         .trim();
   }
 
+  Future<inv_models.Product?> _resolveRememberedProductAlias(
+    _NewProductEntry entry, {
+    required inv_service.InventoryService inventoryService,
+    required List<inv_models.Product> products,
+  }) async {
+    if (!entry.requiresDuplicateReview) return null;
+    final supplierId =
+        (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
+    final productUrl = entry.originalItem.productUrl?.trim();
+    final itemId = _aliExpressItemIdForLine(entry.originalItem);
+    final variantKey = _aliExpressVariantKeyForLine(entry.originalItem);
+    if (supplierId == null ||
+        supplierId.isEmpty ||
+        itemId == null ||
+        itemId.isEmpty ||
+        variantKey == null ||
+        variantKey.isEmpty) {
+      return null;
+    }
+
+    final remembered =
+        await context.read<InventoryService>().resolveSupplierProductAlias(
+              supplierId: supplierId,
+              productUrl: productUrl,
+              itemId: itemId,
+              variantKey: variantKey,
+            );
+    if (remembered == null) return null;
+
+    for (final product in products) {
+      if (product.id == remembered.id) return product;
+    }
+    return inventoryService.getProductById(remembered.id);
+  }
+
   Future<void> _showSimilarProductsDialog(_NewProductEntry entry) async {
+    var confirmedNewProduct = false;
     final selected = await showDialog<inv_models.Product>(
       context: context,
       builder: (context) => ProductDuplicateReviewDialog(
@@ -2992,6 +3534,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                 entry.selectedCategory!.name,
               if ((entry.selectedBrand?.name ?? '').isNotEmpty)
                 entry.selectedBrand!.name,
+              if ((entry.aiSuggestedModel ?? '').isNotEmpty)
+                entry.aiSuggestedModel!,
             ],
             candidates: entry.similarCandidates,
             onCandidateSelected: (product) =>
@@ -3001,20 +3545,50 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         title: 'Productos parecidos',
         subtitle: entry.nameController.text,
         emptyActionLabel: 'Crear como producto nuevo',
+        onEmptyAction: () {
+          confirmedNewProduct = true;
+          Navigator.of(context).pop();
+        },
       ),
     );
 
     if (selected != null) {
-      _useExistingProductForEntry(entry, selected);
+      await _useExistingProductForEntry(entry, selected);
+    } else if (confirmedNewProduct && mounted) {
+      setState(() {
+        entry.markNewProduct();
+        _similarProductMessage =
+            'Producto nuevo confirmado. Completa sus datos para crearlo.';
+      });
     }
   }
 
-  void _useExistingProductForEntry(
+  Future<bool> _useExistingProductForEntry(
     _NewProductEntry entry,
     inv_models.Product product,
-  ) {
+  ) async {
     final productId = product.id;
-    if (productId == null || _parsedData == null) return;
+    if (productId == null || _parsedData == null) return false;
+
+    if (entry.requiresDuplicateReview) {
+      if (mounted) setState(() => entry.isLinkingExisting = true);
+      try {
+        await _rememberAliExpressAlias(entry, productId: productId);
+      } catch (error) {
+        debugPrint('Error remembering AliExpress product alias: $error');
+        if (mounted) {
+          setState(() => entry.isLinkingExisting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Producto vinculado para esta factura, pero no se pudo guardar la publicación para el próximo ingreso. ($error)'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+      if (mounted) setState(() => entry.isLinkingExisting = false);
+    }
 
     final oldItem = entry.originalItem;
     final existingSku = product.sku.trim();
@@ -3053,13 +3627,79 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         _showBulkCreate = false;
       }
     });
+    return true;
+  }
+
+  String? _aliExpressItemIdForLine(ParsedLineItem item) {
+    final ids = _extractAliExpressItemIds(
+      '${item.productUrl ?? ''}\n${item.rawRowText ?? ''}',
+    );
+    return ids.isEmpty ? null : ids.first;
+  }
+
+  String? _aliExpressVariantKeyForLine(ParsedLineItem item) {
+    final raw = item.rawRowText ?? '';
+    for (final marker in ['VARIANT_KEY', 'VARIANT']) {
+      final value = RegExp(
+        '^$marker:\\s*(.+)\$',
+        caseSensitive: false,
+        multiLine: true,
+      ).firstMatch(raw)?.group(1)?.trim();
+      if (value != null && value.isNotEmpty) {
+        return _normalizeSimilarityText(value).replaceAll(' ', '-');
+      }
+    }
+    return null;
+  }
+
+  Future<bool> _rememberAliExpressAlias(
+    _NewProductEntry entry, {
+    required String productId,
+  }) async {
+    final supplierId =
+        (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
+    if (supplierId == null || supplierId.isEmpty) {
+      throw StateError('Falta resolver el proveedor AliExpress.');
+    }
+
+    final itemId = _aliExpressItemIdForLine(entry.originalItem);
+    final variantKey = _aliExpressVariantKeyForLine(entry.originalItem);
+    final productUrl = entry.originalItem.productUrl?.trim();
+    // Order-message URLs are not product identities. Persist only when a real
+    // AliExpress item ID was extracted from the item URL/markers; otherwise
+    // the current manual link still applies without pretending it was learned.
+    if (itemId == null ||
+        itemId.isEmpty ||
+        variantKey == null ||
+        variantKey.isEmpty) {
+      return false;
+    }
+
+    await _ensureEntryImageBytes(entry);
+    if (!mounted) return false;
+    final imageHash = entry.imageBytes == null
+        ? null
+        : ProductImageFingerprintService.contentDigest(entry.imageBytes!);
+    await context.read<InventoryService>().rememberSupplierProductAlias(
+          supplierId: supplierId,
+          productId: productId,
+          productUrl: productUrl,
+          itemId: itemId,
+          variantKey: variantKey,
+          originalTitle:
+              entry.originalNoisyTitle ?? entry.originalItem.description,
+          model: entry.aiSuggestedModel,
+          imageUrl: imageHash == null ? entry.imageUrl : null,
+          imageContentHash: imageHash,
+        );
+    return true;
   }
 
   /// Create products from the bulk creation form
   Future<void> _createBulkProducts() async {
     final selectedEntries =
-        _newProductEntries.where((e) => e.isSelected && e.isValid).toList();
-    if (selectedEntries.isEmpty) return;
+        _newProductEntries.where((entry) => entry.isSelected).toList();
+    if (!_canCreateBulkProducts() || selectedEntries.isEmpty) return;
 
     setState(() => _creatingProducts = true);
 
@@ -3069,9 +3709,18 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       final inventoryService =
           inv_service.InventoryService(dbService, tenantService);
       final sharedInventoryService = context.read<InventoryService>();
-      int created = 0;
+      final createdProducts = <_NewProductEntry, inv_models.Product>{};
+      var failed = 0;
+      var aliasWarnings = 0;
+
+      if (_looksLikeAliExpressInvoice(_parsedData!)) {
+        // The database serializes the shared AE namespace and replays this
+        // exact reservation when a response is lost and the worker retries.
+        await _reserveAliExpressSkusForEntries(selectedEntries);
+      }
 
       for (final entry in selectedEntries) {
+        entry.creationError = null;
         await _ensureEntryImageBytes(entry);
         final product = inv_models.Product(
           tenantId: tenantService.currentTenantId ?? '',
@@ -3089,7 +3738,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           brand: entry.selectedBrand?.name,
           supplierId: _supplierIdForNewProducts ?? widget.supplierId,
           supplierName: _ocrSupplierName ?? widget.supplierName,
-          supplierCode: entry.sku, // Store OCR SKU as supplier code
+          supplierCode:
+              entry.supplierCode.isEmpty ? entry.sku : entry.supplierCode,
           isActive: true,
           purchaseTreatment: entry.isWorkshopConsumable
               ? PurchaseTreatment.workshopConsumable
@@ -3106,42 +3756,125 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         );
 
         try {
-          await inventoryService.createProduct(product);
-          created++;
+          var savedProduct = await inventoryService.createProduct(product);
+          if (entry.requiresDuplicateReview && savedProduct.id != null) {
+            try {
+              await _rememberAliExpressAlias(
+                entry,
+                productId: savedProduct.id!,
+              );
+            } catch (error) {
+              aliasWarnings++;
+              debugPrint(
+                  'Product was created but its supplier alias was not stored: $error');
+            }
+          }
+          createdProducts[entry] = savedProduct;
           debugPrint('✅ Created product: ${product.name} (${product.sku})');
         } catch (e) {
-          debugPrint('❌ Failed to create product ${product.sku}: $e');
+          // A lost HTTP acknowledgement can happen after the insert commits.
+          // Read back the reserved SKU before reporting a failure or allowing
+          // a retry that would otherwise look like a duplicate.
+          inv_models.Product? committedProduct;
+          try {
+            committedProduct = await inventoryService.getProductBySku(
+              entry.sku,
+            );
+          } catch (readbackError) {
+            debugPrint('Product read-back also failed: $readbackError');
+          }
+          if (committedProduct != null &&
+              _matchesAttemptedProduct(product, committedProduct)) {
+            createdProducts[entry] = committedProduct;
+            debugPrint(
+                '✅ Product commit confirmed by SKU read-back: ${entry.sku}');
+          } else {
+            failed++;
+            if (committedProduct != null && entry.requiresDuplicateReview) {
+              // Another legacy creator claimed a reserved-but-not-yet-used SKU.
+              // Never interpret that row as this operation's commit. The next
+              // retry receives a fresh audited range for the affected rows.
+              entry.hasReservedAliExpressSku = false;
+              _aliExpressSkuReservationGeneration++;
+              _aliExpressSkuReservationOperationKey = null;
+              entry.creationError =
+                  'El SKU ${entry.sku} fue ocupado por otro producto. Reintenta para reservar uno nuevo.';
+            } else {
+              entry.creationError = e.toString();
+            }
+            debugPrint('❌ Failed to create product ${product.sku}: $e');
+          }
         }
       }
 
-      // Re-verify products after creation
-      if (_parsedData != null && created > 0) {
-        // Refresh shared inventory cache to ensure newly created products are found
-        await sharedInventoryService.refresh();
-
-        if (!mounted) return;
-        final verifiedInvoice = await _verifyProductsInDatabase(_parsedData!);
+      if (_parsedData != null && createdProducts.isNotEmpty) {
         if (!mounted) return;
         setState(() {
-          _parsedData = verifiedInvoice;
-          _showBulkCreate = false;
+          final parsedItems = List<ParsedLineItem>.from(_parsedData!.lineItems);
+          final baseItems = _baseParsedData == null
+              ? null
+              : List<ParsedLineItem>.from(_baseParsedData!.lineItems);
+          for (final created in createdProducts.entries) {
+            final createdEntry = created.key;
+            final savedProduct = created.value;
+            final rowIndex = parsedItems.indexOf(createdEntry.originalItem);
+            if (rowIndex >= 0) {
+              final resolvedItem = createdEntry.originalItem.copyWith(
+                description: savedProduct.name,
+                sku: savedProduct.sku,
+                existsInDatabase: true,
+                matchedProductId: savedProduct.id,
+                matchedProductName: savedProduct.name,
+                currentStock: savedProduct.inventoryQty,
+              );
+              parsedItems[rowIndex] = resolvedItem;
+              if (baseItems != null && rowIndex < baseItems.length) {
+                baseItems[rowIndex] = resolvedItem;
+              }
+              _skuControllers[rowIndex]?.text = savedProduct.sku;
+            }
+            _newProductEntries.remove(createdEntry);
+            createdEntry.dispose();
+          }
+          _parsedData = _parsedData!.copyWith(lineItems: parsedItems);
+          if (_baseParsedData != null && baseItems != null) {
+            _baseParsedData = _baseParsedData!.copyWith(lineItems: baseItems);
+          }
+          _showBulkCreate = _newProductEntries.isNotEmpty;
+          _similarProductMessage = failed == 0
+              ? null
+              : '$failed producto${failed == 1 ? '' : 's'} no se pudieron crear. Corrige el error y reintenta; los creados no se repetirán.';
         });
+
+        try {
+          await sharedInventoryService.refresh();
+        } catch (error) {
+          debugPrint(
+              'Products were committed but inventory cache refresh failed: $error');
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('✅ $created producto(s) creado(s)'),
-              backgroundColor: Colors.green,
+              content: Text(failed == 0
+                  ? '✅ ${createdProducts.length} producto${createdProducts.length == 1 ? '' : 's'} creado${createdProducts.length == 1 ? '' : 's'}${aliasWarnings == 0 ? '' : '; $aliasWarnings vínculo${aliasWarnings == 1 ? '' : 's'} pendiente${aliasWarnings == 1 ? '' : 's'}'}'
+                  : '${createdProducts.length} creados; $failed pendientes de reintento.'),
+              backgroundColor: failed == 0 && aliasWarnings == 0
+                  ? Colors.green
+                  : Colors.orange,
             ),
           );
         }
+      } else if (failed > 0 && mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'No se creó ningún producto. Las $failed filas siguen disponibles para reintentar.'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
-
-      // Dispose controllers
-      for (final entry in _newProductEntries) {
-        entry.dispose();
-      }
-      _newProductEntries.clear();
     } catch (e) {
       debugPrint('Error creating products: $e');
       if (mounted) {
@@ -3153,8 +3886,35 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         );
       }
     } finally {
-      setState(() => _creatingProducts = false);
+      if (mounted) setState(() => _creatingProducts = false);
     }
+  }
+
+  bool _matchesAttemptedProduct(
+    inv_models.Product attempted,
+    inv_models.Product readBack,
+  ) {
+    String normalized(String? value) =>
+        _normalizeSimilarityText(value?.trim() ?? '');
+    bool sameMoney(double left, double right) => (left - right).abs() <= 0.01;
+
+    if (normalized(attempted.sku) != normalized(readBack.sku) ||
+        normalized(attempted.name) != normalized(readBack.name) ||
+        !sameMoney(attempted.cost, readBack.cost) ||
+        !sameMoney(attempted.price, readBack.price)) {
+      return false;
+    }
+    final expectedSupplierId = attempted.supplierId?.trim() ?? '';
+    if (expectedSupplierId.isNotEmpty &&
+        readBack.supplierId?.trim() != expectedSupplierId) {
+      return false;
+    }
+    final expectedSupplierCode = normalized(attempted.supplierCode);
+    if (expectedSupplierCode.isNotEmpty &&
+        normalized(readBack.supplierCode) != expectedSupplierCode) {
+      return false;
+    }
+    return true;
   }
 
   Future<void> _ensureEntryImageBytes(_NewProductEntry entry) async {
@@ -3412,6 +4172,52 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       debugPrint('Error matching supplier: $e');
     }
     return null;
+  }
+
+  Future<_PreparedOcrInvoice> _prepareInvoiceForReview(
+    ParsedInvoice invoice, {
+    String? fileName,
+    String? sourceSupplierId,
+    String? sourceSupplierName,
+    String? sourceSupplierWebsite,
+  }) async {
+    final supplier = await _matchSupplierForInvoice(
+      invoice,
+      fileName: fileName,
+      sourceSupplierId: sourceSupplierId,
+      sourceSupplierName: sourceSupplierName,
+      sourceSupplierWebsite: sourceSupplierWebsite,
+    );
+
+    final canonicalSupplierInvoice = ParsedInvoice(
+      rut: invoice.rut,
+      invoiceNumber: invoice.invoiceNumber,
+      date: invoice.date,
+      total: invoice.total,
+      supplierName: supplier?.name,
+      lineItems: invoice.lineItems,
+      rawText: invoice.rawText,
+    );
+    final base = await _verifyProductsInDatabase(
+      canonicalSupplierInvoice,
+      supplierId: supplier?.id,
+    );
+    final display = supplier == null
+        ? base
+        : _applySupplierTemplate(base, supplier).copyWith(
+            supplierName: supplier.name,
+          );
+
+    if (supplier != null) {
+      debugPrint('✅ OCR matched supplier: ${supplier.name}');
+    } else if (invoice.supplierName?.trim().isNotEmpty == true) {
+      debugPrint('⚠️ Supplier not found in DB, clearing OCR result');
+    }
+    return _PreparedOcrInvoice(
+      base: base,
+      display: display,
+      supplier: supplier,
+    );
   }
 
   shared_supplier.Supplier? _matchSupplierByWebsite(
@@ -3769,6 +4575,38 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   }
 
   Future<void> _handleUseParsedData(ParsedInvoice data) async {
+    if (widget.showLineItemReview) {
+      if (_ocrSupplier == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Selecciona un proveedor antes de aplicar la factura.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+      final unresolved = data.lineItems
+          .where((item) =>
+              item.matchedProductId == null ||
+              item.matchedProductId!.trim().isEmpty)
+          .length;
+      if (data.lineItems.isEmpty || unresolved > 0) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data.lineItems.isEmpty
+                  ? 'La factura no tiene productos detectados para aplicar.'
+                  : 'Resuelve los $unresolved producto${unresolved == 1 ? '' : 's'} antes de usar la factura.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+    }
     final diagnostics = _getInvoiceDiagnostics(data);
     if (!diagnostics.shouldWarnBeforeApply) {
       widget.onComplete(data);
@@ -3873,47 +4711,19 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         fileName: image.name,
       );
 
-      // Verify products against database
-      parsedData = await _verifyProductsInDatabase(parsedData);
-      ParsedInvoice baseParsedData = parsedData;
-
-      String? matchedSupplierName = parsedData.supplierName;
-      String? matchedSupplierId;
-      shared_supplier.Supplier? matchedSupplier;
-
-      matchedSupplier = await _matchSupplierForInvoice(
+      final prepared = await _prepareInvoiceForReview(
         parsedData,
         fileName: image.name,
       );
-      if (matchedSupplier != null) {
-        matchedSupplierName = matchedSupplier.name;
-        matchedSupplierId = matchedSupplier.id;
-        parsedData = _applySupplierTemplate(parsedData, matchedSupplier);
-        parsedData = parsedData.copyWith(supplierName: matchedSupplier.name);
-        debugPrint('✅ OCR matched supplier: ${matchedSupplier.name}');
-      } else if (parsedData.supplierName != null) {
-        // If supplier not found in DB, clear it to avoid phantom suppliers
-        // forcing user to select a valid one later
-        matchedSupplierName = null;
-        debugPrint('⚠️ Supplier not found in DB, clearing OCR result');
-        baseParsedData = ParsedInvoice(
-          rut: parsedData.rut,
-          invoiceNumber: parsedData.invoiceNumber,
-          date: parsedData.date,
-          total: parsedData.total,
-          supplierName: null, // Clear supplier name
-          lineItems: parsedData.lineItems,
-          rawText: parsedData.rawText,
-        );
-        parsedData = baseParsedData;
-      }
+      parsedData = prepared.display;
 
+      if (!mounted) return;
       setState(() {
-        _baseParsedData = baseParsedData;
+        _baseParsedData = prepared.base;
         _parsedData = parsedData;
-        _ocrSupplier = matchedSupplier;
-        _ocrSupplierName = matchedSupplierName;
-        _supplierIdForNewProducts = matchedSupplierId;
+        _ocrSupplier = prepared.supplier;
+        _ocrSupplierName = prepared.supplier?.name;
+        _supplierIdForNewProducts = prepared.supplier?.id;
         _isProcessing = false;
       });
       if (!widget.showPreview) {
@@ -4014,6 +4824,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     String? sourceSupplierId,
     String? sourceSupplierName,
     String? sourceSupplierWebsite,
+    Map<String, dynamic>? structuredInvoiceData,
   }) async {
     ParsedInvoice? parsedData;
     ParsedInvoice? directPdfParsedData;
@@ -4023,14 +4834,20 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     final isPdf = normalizedExtension == 'pdf';
     final isImage = _isSupportedInvoiceImageExtension(normalizedExtension);
 
-    if (isPdf) {
+    if (structuredInvoiceData != null) {
+      parsedData = _parseAliExpressInvoiceMap(structuredInvoiceData);
+    } else if (isPdf) {
       directPdfParsedData = await _pdfService.parseInvoiceFromBytes(
         fileBytes,
         filename: fileName,
       );
     }
 
-    if (isImage) {
+    if (parsedData != null) {
+      // A trusted internal extractor already supplied the lossless invoice
+      // structure alongside the human-readable PDF. Continue through the
+      // same supplier matching, product verification and review below.
+    } else if (isImage) {
       if (_useVeryfi) {
         parsedData = await _processWithVeryfi(
           fileBytes,
@@ -4084,49 +4901,22 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       fileName: fileName,
     );
 
-    // Verify products against database
-    parsedData = await _verifyProductsInDatabase(parsedData);
-    ParsedInvoice baseParsedData = parsedData;
-
-    String? matchedSupplierName = parsedData.supplierName;
-    String? matchedSupplierId;
-    shared_supplier.Supplier? matchedSupplier;
-
-    matchedSupplier = await _matchSupplierForInvoice(
+    final prepared = await _prepareInvoiceForReview(
       parsedData,
       fileName: fileName,
       sourceSupplierId: sourceSupplierId,
       sourceSupplierName: sourceSupplierName,
       sourceSupplierWebsite: sourceSupplierWebsite,
     );
-    if (matchedSupplier != null) {
-      matchedSupplierName = matchedSupplier.name;
-      matchedSupplierId = matchedSupplier.id;
-      parsedData = _applySupplierTemplate(parsedData, matchedSupplier);
-      parsedData = parsedData.copyWith(supplierName: matchedSupplier.name);
-      debugPrint('✅ OCR matched supplier: ${matchedSupplier.name}');
-    } else if (parsedData.supplierName != null) {
-      // If supplier not found in DB, clear it to avoid phantom suppliers
-      matchedSupplierName = null;
-      debugPrint('⚠️ Supplier not found in DB, clearing OCR result');
-      baseParsedData = ParsedInvoice(
-        rut: parsedData.rut,
-        invoiceNumber: parsedData.invoiceNumber,
-        date: parsedData.date,
-        total: parsedData.total,
-        supplierName: null, // Clear supplier name
-        lineItems: parsedData.lineItems,
-        rawText: parsedData.rawText,
-      );
-      parsedData = baseParsedData;
-    }
+    parsedData = prepared.display;
 
+    if (!mounted) return;
     setState(() {
-      _baseParsedData = baseParsedData;
+      _baseParsedData = prepared.base;
       _parsedData = parsedData;
-      _ocrSupplier = matchedSupplier;
-      _ocrSupplierName = matchedSupplierName;
-      _supplierIdForNewProducts = matchedSupplierId;
+      _ocrSupplier = prepared.supplier;
+      _ocrSupplierName = prepared.supplier?.name;
+      _supplierIdForNewProducts = prepared.supplier?.id;
       _isProcessing = false;
     });
     if (!widget.showPreview) {
@@ -4296,6 +5086,12 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           item['originalDescription'] == null
               ? null
               : 'ORIGINAL_TITLE: ${item['originalDescription']}',
+          (item['variant']?.toString().trim().isNotEmpty ?? false)
+              ? 'VARIANT: ${item['variant'].toString().trim()}'
+              : null,
+          (item['variantKey']?.toString().trim().isNotEmpty ?? false)
+              ? 'VARIANT_KEY: ${item['variantKey'].toString().trim()}'
+              : null,
           item['aiCleaned'] == true ? 'AI_CLEANED: true' : null,
           (item['aiCategory'] is String &&
                   (item['aiCategory'] as String).trim().isNotEmpty)
@@ -4304,6 +5100,13 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           (item['aiBrand'] is String &&
                   (item['aiBrand'] as String).trim().isNotEmpty)
               ? 'AI_BRAND: ${(item['aiBrand'] as String).trim()}'
+              : null,
+          (item['aiModel'] is String &&
+                  (item['aiModel'] as String).trim().isNotEmpty)
+              ? 'AI_MODEL: ${(item['aiModel'] as String).trim()}'
+              : null,
+          (item['itemId']?.toString().trim().isNotEmpty ?? false)
+              ? 'ITEM_ID: ${item['itemId'].toString().trim()}'
               : null,
           item['productUrl'],
           item['imageUrl'] == null ? null : 'IMAGE_URL: ${item['imageUrl']}',
@@ -4609,14 +5412,20 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   /// Search priority:
   /// 1. By SKU (exact match)
   /// 2. By product name (fuzzy search fallback)
-  Future<ParsedInvoice> _verifyProductsInDatabase(ParsedInvoice invoice) async {
+  Future<ParsedInvoice> _verifyProductsInDatabase(
+    ParsedInvoice invoice, {
+    String? supplierId,
+  }) async {
     debugPrint(
         '🔍 Verifying ${invoice.lineItems.length} products in database...');
 
     final verifiedItems = <ParsedLineItem>[];
 
     for (final item in invoice.lineItems) {
-      final verifiedItem = await _verifySingleProduct(item);
+      final verifiedItem = await _verifySingleProduct(
+        item,
+        supplierId: supplierId,
+      );
       verifiedItems.add(verifiedItem);
     }
 
@@ -4677,6 +5486,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   void dispose() {
     _debounceTimer?.cancel();
     _bulkCreateHorizontalScrollController.dispose();
+    for (final entry in _newProductEntries) {
+      entry.dispose();
+    }
+    _newProductEntries.clear();
     for (var controller in _skuControllers.values) {
       controller.dispose();
     }
@@ -4692,9 +5505,23 @@ enum OCRDocumentType {
   receipt, // Boleta/Recibo (simpler format)
 }
 
+class _PreparedOcrInvoice {
+  const _PreparedOcrInvoice({
+    required this.base,
+    required this.display,
+    required this.supplier,
+  });
+
+  final ParsedInvoice base;
+  final ParsedInvoice display;
+  final shared_supplier.Supplier? supplier;
+}
+
 /// Entry for a new product to be created from OCR
 class _NewProductEntry {
   final ParsedLineItem originalItem;
+  final String supplierCode;
+  final bool requiresDuplicateReview;
   bool isSelected;
   final TextEditingController nameController;
   final TextEditingController skuController;
@@ -4710,7 +5537,13 @@ class _NewProductEntry {
   bool isHoveringImage = false;
   bool isWorkshopConsumable = false;
   bool isCheckingSimilar = false;
+  bool isLinkingExisting = false;
+  bool hasReservedAliExpressSku = false;
   List<ProductDuplicateCandidate> similarCandidates = [];
+  OcrProductResolutionState resolutionState;
+  String? resolutionError;
+  String? creationError;
+  int resolutionRevision = 0;
 
   /// AI-cleanup state for AliExpress (and other noisy supplier) titles.
   /// When true, the row name field is being rewritten by the AI cleaner.
@@ -4733,6 +5566,10 @@ class _NewProductEntry {
   /// to seed the duplicate-matcher probe.
   String? aiSuggestedBrandName;
 
+  /// Model/part number returned by the AI cleaner (for example RT56). Model
+  /// identifiers are normalized by the duplicate matcher before comparison.
+  String? aiSuggestedModel;
+
   /// Original noisy supplier title preserved as the description fallback so
   /// the long AliExpress text doesn't get lost when the name is cleaned.
   String? originalNoisyTitle;
@@ -4748,11 +5585,18 @@ class _NewProductEntry {
     required this.originalItem,
     this.isSelected = true,
     String? initialName,
+    String? initialSku,
     this.selectedCategory,
     this.costIncludesIva = false,
-  })  : nameController = TextEditingController(
+    this.requiresDuplicateReview = false,
+  })  : supplierCode = _supplierCodeForItem(originalItem),
+        resolutionState = requiresDuplicateReview
+            ? OcrProductResolutionState.unsearched
+            : OcrProductResolutionState.newProduct,
+        nameController = TextEditingController(
             text: initialName ?? _cleanDescription(originalItem.description)),
-        skuController = TextEditingController(text: originalItem.sku),
+        skuController =
+            TextEditingController(text: initialSku ?? originalItem.sku),
         costController =
             TextEditingController(text: _calculateDefaultCost(originalItem)),
         priceController = TextEditingController(
@@ -4769,7 +5613,51 @@ class _NewProductEntry {
     nameController.addListener(() {
       if (_suppressNameEditTracking) return;
       nameUserEdited = true;
+      invalidateDuplicateResolution();
     });
+  }
+
+  void invalidateDuplicateResolution() {
+    if (!requiresDuplicateReview) return;
+    resolutionRevision++;
+    isCheckingSimilar = false;
+    similarCandidates = [];
+    resolutionError = null;
+    resolutionState = OcrProductResolutionState.unsearched;
+  }
+
+  void markSearching() {
+    resolutionRevision++;
+    isCheckingSimilar = true;
+    resolutionError = null;
+    resolutionState = OcrProductResolutionState.searching;
+  }
+
+  void markNeedsReview(List<ProductDuplicateCandidate> candidates) {
+    isCheckingSimilar = false;
+    similarCandidates = candidates;
+    resolutionError = null;
+    resolutionState = OcrProductResolutionState.reviewRequired;
+  }
+
+  void markNoCandidates() {
+    isCheckingSimilar = false;
+    similarCandidates = [];
+    resolutionError = null;
+    resolutionState = OcrProductResolutionState.noCandidates;
+  }
+
+  void markNewProduct() {
+    isCheckingSimilar = false;
+    similarCandidates = [];
+    resolutionError = null;
+    resolutionState = OcrProductResolutionState.newProduct;
+  }
+
+  void markResolutionFailed(Object error) {
+    isCheckingSimilar = false;
+    resolutionError = error.toString();
+    resolutionState = OcrProductResolutionState.failed;
   }
 
   /// Set by the AI cleaner around `nameController.text = ...` so the
@@ -4796,6 +5684,22 @@ class _NewProductEntry {
     final clean = segment.split('?').first.trim();
     if (clean.isEmpty) return 'aliexpress-product-image.jpg';
     return clean.contains('.') ? clean : '$clean.jpg';
+  }
+
+  static String _supplierCodeForItem(ParsedLineItem item) {
+    final identityText = [
+      item.productUrl,
+      item.rawRowText,
+    ].whereType<String>().join('\n');
+    for (final pattern in [
+      RegExp(r'ITEM_ID:\s*(\d{8,})', caseSensitive: false),
+      RegExp(r'/item/(\d{8,})', caseSensitive: false),
+      RegExp(r'(?:itemId|productId)=(\d{8,})', caseSensitive: false),
+    ]) {
+      final match = pattern.firstMatch(identityText)?.group(1)?.trim();
+      if (match != null && match.isNotEmpty) return match;
+    }
+    return item.sku?.trim() ?? '';
   }
 
   static String _calculateDefaultCost(ParsedLineItem item) {
@@ -4889,10 +5793,15 @@ class _NewProductEntry {
   bool get isValid =>
       sku.isNotEmpty &&
       nameController.text.isNotEmpty &&
+      selectedCategory != null &&
       parsedCost != null &&
       parsedCost! >= 0 &&
       price != null &&
       price! > 0;
+
+  bool get isReadyToCreate =>
+      !requiresDuplicateReview ||
+      resolutionState == OcrProductResolutionState.newProduct;
 }
 
 class _OCRRowDiagnostics {

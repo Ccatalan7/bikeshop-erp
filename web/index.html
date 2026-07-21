@@ -228,6 +228,8 @@
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
     "name": "Viñabike",
+    "legalName": "NEWEN SpA",
+    "taxID": "77.541.999-7",
     "telephone": "+56 9 9835 7797",
     "email": "contacto@vinabike.cl",
     "url": "https://vinabike.cl",
@@ -235,8 +237,29 @@
       "@type": "PostalAddress",
       "streetAddress": "Alvarez 32, Local 17",
       "addressLocality": "Viña del Mar",
+      "addressRegion": "Valparaíso",
+      "postalCode": "2520000",
       "addressCountry": "Chile"
-    }
+    },
+    "areaServed": {"@type": "Country", "name": "Chile"},
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "contactType": "customer support",
+      "telephone": "+56 9 9835 7797",
+      "email": "contacto@vinabike.cl",
+      "areaServed": "CL",
+      "availableLanguage": ["es"]
+    },
+    "hasMerchantReturnPolicy": {
+      "@type": "MerchantReturnPolicy",
+      "applicableCountry": "CL",
+      "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
+      "merchantReturnDays": 10,
+      "returnMethod": ["https://schema.org/ReturnByMail", "https://schema.org/ReturnInStore"],
+      "returnFees": "https://schema.org/ReturnFeesCustomerResponsibility",
+      "url": "https://vinabike.cl/devoluciones"
+    },
+    "sameAs": ["https://www.instagram.com/vina.bike"]
   }
   </script>
 
@@ -305,7 +328,7 @@
       
       <!-- Business Contact Info -->
       <address>
-        <p>Dirección: Alvarez 32, Local 17, Viña del Mar, Chile</p>
+        <p>Dirección: Alvarez 32, Local 17, Viña del Mar, Valparaíso, 2520000, Chile</p>
         <p>Teléfono: +56 9 9835 7797</p>
         <p>Email: contacto@vinabike.cl</p>
       </address>

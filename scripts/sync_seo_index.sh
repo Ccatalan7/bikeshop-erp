@@ -103,11 +103,16 @@ get_setting() {
 
 # Get SEO values with fallbacks to legacy keys
 BUSINESS_NAME=$(get_setting "seo_business_name" "$(get_setting "store_name" "Vinabike")")
+LEGAL_NAME=$(get_setting "business_legal_name" "NEWEN SpA")
+TAX_ID=$(get_setting "business_tax_id" "77.541.999-7")
 PHONE=$(get_setting "seo_phone" "$(get_setting "contact_phone" "+56998357797")")
 EMAIL=$(get_setting "seo_email" "$(get_setting "contact_email" "vinabikechile@gmail.com")")
 ADDRESS_STREET_RAW=$(get_setting "seo_address_street" "$(get_setting "contact_address" "Álvarez 32, Local 17")")
 ADDRESS_CITY=$(get_setting "seo_address_locality" "$(get_setting "seo_address_city" "Viña del Mar")")
+ADDRESS_REGION=$(get_setting "seo_address_region" "Valparaíso")
+ADDRESS_POSTAL=$(get_setting "seo_address_postal" "2520000")
 ADDRESS_COUNTRY=$(get_setting "seo_address_country" "Chile")
+INSTAGRAM=$(get_setting "instagram" "")
 META_TITLE=$(get_setting "seo_meta_title" "$(get_setting "meta_title" "Tienda y Taller de Bicicletas en Viña del Mar | $BUSINESS_NAME")")
 META_DESCRIPTION=$(get_setting "seo_meta_description" "$(get_setting "meta_description" "Compra bicicletas, repuestos y accesorios en $BUSINESS_NAME. Taller especializado, mantenciones y reparaciones en Viña del Mar, con retiro en tienda y despacho.")")
 CANONICAL_URL=$(get_setting "seo_canonical_url" "$(get_setting "store_url" "https://vinabike.cl")")
@@ -219,7 +224,11 @@ ADDRESS_COUNTRY=$(normalize_country "$ADDRESS_COUNTRY")
 ADDRESS_STREET=$(normalize_street_address "$ADDRESS_STREET_RAW" "$ADDRESS_CITY" "$ADDRESS_COUNTRY")
 
 # Full address (safe from duplicates)
-FULL_ADDRESS=$(build_full_address "$ADDRESS_STREET" "$ADDRESS_CITY" "$ADDRESS_COUNTRY")
+FULL_ADDRESS=$(build_full_address "$ADDRESS_STREET" "$ADDRESS_CITY" "$ADDRESS_REGION" "$ADDRESS_POSTAL" "$ADDRESS_COUNTRY")
+SAME_AS_JSON=""
+if [[ -n "$INSTAGRAM" ]]; then
+  SAME_AS_JSON=$(printf ',\n    "sameAs": ["%s"]' "$INSTAGRAM")
+fi
 
 echo "✅ Fetched settings:"
 echo "   Business: $BUSINESS_NAME"
@@ -460,6 +469,8 @@ cat > "$INDEX_FILE" << HEREDOC
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
     "name": "$BUSINESS_NAME",
+    "legalName": "$LEGAL_NAME",
+    "taxID": "$TAX_ID",
     "telephone": "$PHONE",
     "email": "$EMAIL",
     "url": "$CANONICAL_URL",
@@ -467,8 +478,28 @@ cat > "$INDEX_FILE" << HEREDOC
       "@type": "PostalAddress",
       "streetAddress": "$ADDRESS_STREET",
       "addressLocality": "$ADDRESS_CITY",
+      "addressRegion": "$ADDRESS_REGION",
+      "postalCode": "$ADDRESS_POSTAL",
       "addressCountry": "$ADDRESS_COUNTRY"
-    }
+    },
+    "areaServed": {"@type": "Country", "name": "Chile"},
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "contactType": "customer support",
+      "telephone": "$PHONE",
+      "email": "$EMAIL",
+      "areaServed": "CL",
+      "availableLanguage": ["es"]
+    },
+    "hasMerchantReturnPolicy": {
+      "@type": "MerchantReturnPolicy",
+      "applicableCountry": "CL",
+      "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
+      "merchantReturnDays": 10,
+      "returnMethod": ["https://schema.org/ReturnByMail", "https://schema.org/ReturnInStore"],
+      "returnFees": "https://schema.org/ReturnFeesCustomerResponsibility",
+      "url": "$CANONICAL_URL$REFUND_URL"
+    }$SAME_AS_JSON
   }
   </script>
 

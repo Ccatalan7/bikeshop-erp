@@ -7,7 +7,11 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { filterMerchantProductsByCheckoutTax } from "../_shared/google_merchant_feed.ts";
+import {
+  filterMerchantProductsByCheckoutTax,
+  resolveMerchantAvailability,
+  resolveMerchantIdentifiers,
+} from "../_shared/google_merchant_feed.ts";
 import { publicProductUrl } from "../_shared/product_url.ts";
 
 const corsHeaders = {
@@ -33,6 +37,7 @@ type MerchantProduct = {
   website_price?: number | null;
   price_currency?: string | null;
   stock_quantity?: number | null;
+  track_stock?: boolean | null;
   image_url?: string | null;
   image_url_optimized?: string | null;
   website_image_url?: string | null;
@@ -153,6 +158,7 @@ serve(async (req) => {
         price_currency,
         tax_rate,
         stock_quantity,
+        track_stock,
         image_url,
         website_image_url,
         website_image_url_optimized,
@@ -310,7 +316,7 @@ function generateProductItem(
   const price = `${Math.round(effectivePrice)} ${currency}`;
 
   // Availability based on stock
-  const availability = (product.stock_quantity ?? 0) > 0 ? "in_stock" : "out_of_stock";
+  const availability = resolveMerchantAvailability(product);
 
   // Brand resolution: brand_id → brands table → product.brand → store name
   let brand = firstNonEmpty(product.website_merchant_brand);
@@ -330,15 +336,9 @@ function generateProductItem(
     categoryPath = product.category_name;
   }
 
-  // GTIN: only send real GTIN-8/12/13/14 values with a valid check digit.
-  const gtin = validGtin(
-    product.website_merchant_gtin,
-    product.gtin,
-    product.barcode,
-  );
-
-  // MPN: use SKU
-  const mpn = firstNonEmpty(product.website_merchant_mpn, product.sku);
+  // Only send identifiers with verified provenance. A store SKU is not an MPN,
+  // and lack of locally recorded identifiers does not prove that none exist.
+  const { gtin, mpn } = resolveMerchantIdentifiers(product);
 
   // Build item XML
   let itemXml = `    <item>
@@ -362,12 +362,9 @@ function generateProductItem(
   // Add GTIN if available (preferred by Google)
   if (gtin) {
     itemXml += `\n      <g:gtin>${escapeXml(gtin)}</g:gtin>`;
-  } else {
-    // No valid GTIN - must explicitly mark identifier_exists as false
-    itemXml += `\n      <g:identifier_exists>false</g:identifier_exists>`;
   }
 
-  // Add MPN (SKU) - always add if available
+  // Add only an explicitly recorded manufacturer part number.
   if (mpn) {
     itemXml += `\n      <g:mpn>${escapeXml(mpn)}</g:mpn>`;
   }
@@ -377,14 +374,16 @@ function generateProductItem(
     itemXml += `\n      <g:product_type>${escapeXml(categoryPath)}</g:product_type>`;
   }
 
-  // Google product category - USE NUMERIC ID, not text!
-  // 3618 = Sporting Goods > Outdoor Recreation > Cycling > Bicycle Parts & Accessories
-  // 1085 = Sporting Goods > Outdoor Recreation > Cycling > Bicycles
-  // For general cycling products, use the parent category ID
-  // See: https://www.google.com/basepages/producttype/taxonomy-with-ids.en-US.txt
-  itemXml += `\n      <g:google_product_category>${
-    escapeXml(firstNonEmpty(product.website_google_product_category, "3618"))
-  }</g:google_product_category>`;
+  // Let Google categorize automatically unless staff recorded an exact
+  // taxonomy value. One bicycle-parts fallback is not correct for every item.
+  const googleProductCategory = firstNonEmpty(
+    product.website_google_product_category,
+  );
+  if (googleProductCategory) {
+    itemXml += `\n      <g:google_product_category>${
+      escapeXml(googleProductCategory)
+    }</g:google_product_category>`;
+  }
 
   itemXml += `\n    </item>`;
 
@@ -481,30 +480,4 @@ function productImageUrls(product: MerchantProduct): string[] {
 
 function isPublicImageUrl(value: string): boolean {
   return value.startsWith("https://") || value.startsWith("http://");
-}
-
-function validGtin(...values: Array<string | null | undefined>): string {
-  for (const rawValue of values) {
-    const value = String(rawValue ?? "").trim().replace(/[\s-]+/g, "");
-    if (!/^\d+$/.test(value)) continue;
-    if (![8, 12, 13, 14].includes(value.length)) continue;
-    if (!hasValidGtinCheckDigit(value)) continue;
-    return value;
-  }
-  return "";
-}
-
-function hasValidGtinCheckDigit(value: string): boolean {
-  const digits = value.split("").map((digit) => Number.parseInt(digit, 10));
-  const checkDigit = digits[digits.length - 1];
-  let sum = 0;
-  let positionFromRight = 1;
-
-  for (let i = digits.length - 2; i >= 0; i--) {
-    sum += digits[i] * (positionFromRight % 2 === 1 ? 3 : 1);
-    positionFromRight++;
-  }
-
-  const calculatedCheckDigit = (10 - (sum % 10)) % 10;
-  return calculatedCheckDigit === checkDigit;
 }

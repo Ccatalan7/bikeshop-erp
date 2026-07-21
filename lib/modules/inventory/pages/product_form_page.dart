@@ -322,6 +322,8 @@ class _ProductFormPageState extends State<ProductFormPage>
   bool _isSaving = false;
   bool _isApplyingStockAdjustment = false;
   bool _isGeneratingSku = false;
+  String _aliExpressSkuReservationOperationKey =
+      'product-form-${DateTime.now().microsecondsSinceEpoch}';
   bool _isLoadingConversionStatus = false;
   bool _isRestoringConversion = false;
   Product? _existingProduct;
@@ -2552,7 +2554,11 @@ class _ProductFormPageState extends State<ProductFormPage>
   Future<void> _handleSupplierChanged(String? value) async {
     if (_selectedSupplierId == value) return;
 
-    setState(() => _selectedSupplierId = value);
+    setState(() {
+      _selectedSupplierId = value;
+      _aliExpressSkuReservationOperationKey =
+          'product-form-${DateTime.now().microsecondsSinceEpoch}';
+    });
     await _maybeAutoGenerateSupplierSku();
   }
 
@@ -4656,6 +4662,20 @@ class _ProductFormPageState extends State<ProductFormPage>
           _additionalImages.whereType<String>().toList(growable: false);
       final safeWebsiteAdditionalImages =
           _websiteAdditionalImages.whereType<String>().toList(growable: false);
+
+      if (_existingProduct == null && _usesAliExpressSkuSequence) {
+        final supplier = _selectedSupplier;
+        if (supplier == null) {
+          throw StateError('Falta resolver el proveedor AliExpress.');
+        }
+        final reserved = await _inventoryService.reserveAliExpressSkus(
+          count: 1,
+          operationKey: _aliExpressSkuReservationOperationKey,
+          supplierId: supplier.id,
+          supplierName: supplier.name,
+        );
+        _skuController.text = reserved.single;
+      }
 
       final name = _nameController.text.trim();
       final sku = _skuController.text.trim();
@@ -9017,8 +9037,6 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   String get _effectiveMerchantMpn => _firstNonEmptyText([
         _websiteMerchantMpnController.text,
-        _skuController.text,
-        _existingProduct?.sku,
       ]);
 
   String get _effectiveWhatsappCatalogTitle => _firstNonEmptyText([
@@ -9604,8 +9622,10 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
                 controller: _websiteMerchantMpnController,
                 decoration: InputDecoration(
                   labelText: 'MPN',
-                  hintText: _effectiveMerchantMpn,
-                  helperText: 'Vacío = SKU.',
+                  hintText: _effectiveMerchantMpn.isEmpty
+                      ? 'Solo si lo asignó el fabricante'
+                      : _effectiveMerchantMpn,
+                  helperText: 'No uses el SKU interno como MPN.',
                 ),
               ),
             ),
@@ -9617,7 +9637,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
                 decoration: const InputDecoration(
                   labelText: 'Google product category',
                   hintText: '3618',
-                  helperText: 'Vacío = cycling parts/accessories.',
+                  helperText: 'Vacío = categorización automática de Google.',
                 ),
               ),
             ),

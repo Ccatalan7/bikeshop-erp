@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/product.dart';
+import '../models/supplier_product_identity.dart';
 import 'database_service.dart';
 import 'tenant_service.dart';
 
@@ -335,6 +336,247 @@ class InventoryService extends ChangeNotifier {
         return null;
       }
     }
+  }
+
+  /// Resolves an exact supplier code without allowing the same code from a
+  /// different supplier (or tenant) to match.
+  ///
+  /// This is the supplier-aware API for OCR/purchase workflows. The legacy
+  /// [getProductBySupplierCode] remains only for callers that have not yet
+  /// collected an explicit supplier identity.
+  Future<Product?> getProductBySupplierCodeForSupplier({
+    required String supplierId,
+    required String supplierCode,
+  }) async {
+    final cleanSupplierId = supplierId.trim();
+    final cleanCode = supplierCode.trim();
+    if (cleanSupplierId.isEmpty || cleanCode.isEmpty) return null;
+
+    if (_db == null) {
+      final matches = _products
+          .where(
+            (product) =>
+                product.supplierId == cleanSupplierId &&
+                product.supplierCode?.trim().toLowerCase() ==
+                    cleanCode.toLowerCase(),
+          )
+          .take(2)
+          .toList(growable: false);
+      if (matches.length > 1) {
+        throw StateError(
+          'Supplier code is ambiguous for the selected supplier.',
+        );
+      }
+      return matches.isEmpty ? null : matches.single;
+    }
+
+    final response = await _db.rpc(
+      'resolve_product_by_supplier_code',
+      params: {
+        'p_supplier_id': cleanSupplierId,
+        'p_supplier_code': cleanCode,
+      },
+    );
+    final payload = _rpcJsonMap(response);
+    if (payload == null) return null;
+
+    final productId = payload['product_id']?.toString().trim() ?? '';
+    if (productId.isEmpty) {
+      throw const FormatException(
+        'Supplier-code lookup response has no product ID.',
+      );
+    }
+    return getProductById(productId, forceRefresh: true);
+  }
+
+  /// Resolves a previously confirmed supplier listing variant to its ERP
+  /// product. A listing ID without an explicit variant identity never matches.
+  Future<Product?> resolveSupplierProductAlias({
+    required String supplierId,
+    required String variantKey,
+    String? productUrl,
+    String? itemId,
+  }) async {
+    final cleanSupplierId = supplierId.trim();
+    final cleanVariantKey = variantKey.trim();
+    if (cleanSupplierId.isEmpty) {
+      throw ArgumentError.value(supplierId, 'supplierId', 'Cannot be empty.');
+    }
+    if (cleanVariantKey.isEmpty) {
+      throw ArgumentError.value(variantKey, 'variantKey', 'Cannot be empty.');
+    }
+    if (cleanVariantKey.length > 512) {
+      throw ArgumentError.value(
+        variantKey,
+        'variantKey',
+        'Cannot exceed 512 characters.',
+      );
+    }
+    _requireListingIdentity(productUrl: productUrl, itemId: itemId);
+
+    final db = _requireDatabase();
+    final response = await db.rpc(
+      'resolve_supplier_product_alias',
+      params: {
+        'p_supplier_id': cleanSupplierId,
+        'p_product_url': _nullIfBlank(productUrl),
+        'p_item_id': _nullIfBlank(itemId),
+        'p_variant_key': cleanVariantKey,
+      },
+    );
+    final payload = _rpcJsonMap(response);
+    if (payload == null) return null;
+
+    final productId = payload['product_id']?.toString().trim() ?? '';
+    if (productId.isEmpty) {
+      throw const FormatException('Alias response has no product ID.');
+    }
+    return getProductById(productId, forceRefresh: true);
+  }
+
+  /// Persists an explicit supplier-listing-variant -> product decision.
+  ///
+  /// The database derives tenant ownership from the authenticated session,
+  /// canonicalizes the listing ID, and deliberately preserves the product's
+  /// existing primary supplier fields.
+  Future<SupplierProductAliasRecord> rememberSupplierProductAlias({
+    required String supplierId,
+    required String productId,
+    required String variantKey,
+    String? productUrl,
+    String? itemId,
+    String? originalTitle,
+    String? model,
+    String? imageUrl,
+    String? imageContentHash,
+  }) async {
+    final cleanSupplierId = supplierId.trim();
+    final cleanProductId = productId.trim();
+    final cleanVariantKey = variantKey.trim();
+    if (cleanSupplierId.isEmpty) {
+      throw ArgumentError.value(supplierId, 'supplierId', 'Cannot be empty.');
+    }
+    if (cleanProductId.isEmpty) {
+      throw ArgumentError.value(productId, 'productId', 'Cannot be empty.');
+    }
+    if (cleanVariantKey.isEmpty) {
+      throw ArgumentError.value(variantKey, 'variantKey', 'Cannot be empty.');
+    }
+    if (cleanVariantKey.length > 512) {
+      throw ArgumentError.value(
+        variantKey,
+        'variantKey',
+        'Cannot exceed 512 characters.',
+      );
+    }
+    _requireListingIdentity(productUrl: productUrl, itemId: itemId);
+
+    final db = _requireDatabase();
+    final response = await db.rpc(
+      'remember_supplier_product_alias',
+      params: {
+        'p_supplier_id': cleanSupplierId,
+        'p_product_id': cleanProductId,
+        'p_product_url': _nullIfBlank(productUrl),
+        'p_item_id': _nullIfBlank(itemId),
+        'p_variant_key': cleanVariantKey,
+        'p_original_title': _nullIfBlank(originalTitle),
+        'p_model': _nullIfBlank(model),
+        'p_image_url': _nullIfBlank(imageUrl),
+        'p_image_content_hash': _nullIfBlank(imageContentHash),
+      },
+    );
+    final payload = _rpcJsonMap(response);
+    if (payload == null) {
+      throw const FormatException('Alias write returned no receipt.');
+    }
+    return SupplierProductAliasRecord.fromJson(payload);
+  }
+
+  /// Atomically reserves one or more globally unique `AE####` values.
+  ///
+  /// Reusing [operationKey] with the same supplier/count replays the committed
+  /// receipt; reusing it for another request fails instead of allocating twice.
+  Future<AliExpressSkuReservation> reserveAliExpressSkus({
+    required int count,
+    required String operationKey,
+    required String supplierId,
+    required String supplierName,
+  }) async {
+    final cleanOperationKey = operationKey.trim();
+    final cleanSupplierId = supplierId.trim();
+    final cleanSupplierName = supplierName.trim();
+    if (count < 1 || count > 100) {
+      throw RangeError.range(count, 1, 100, 'count');
+    }
+    if (cleanOperationKey.isEmpty) {
+      throw ArgumentError.value(
+        operationKey,
+        'operationKey',
+        'Cannot be empty.',
+      );
+    }
+    if (cleanSupplierId.isEmpty) {
+      throw ArgumentError.value(supplierId, 'supplierId', 'Cannot be empty.');
+    }
+    if (cleanSupplierName.isEmpty) {
+      throw ArgumentError.value(
+        supplierName,
+        'supplierName',
+        'Cannot be empty.',
+      );
+    }
+
+    final db = _requireDatabase();
+    final response = await db.rpc(
+      'reserve_aliexpress_skus',
+      params: {
+        'p_count': count,
+        'p_operation_key': cleanOperationKey,
+        'p_supplier_id': cleanSupplierId,
+        'p_supplier_name': cleanSupplierName,
+      },
+    );
+    final payload = _rpcJsonMap(response);
+    if (payload == null) {
+      throw const FormatException('SKU reservation returned no receipt.');
+    }
+    return AliExpressSkuReservation.fromJson(payload);
+  }
+
+  DatabaseService _requireDatabase() {
+    final db = _db;
+    if (db == null) {
+      throw StateError(
+        'This inventory operation requires a database-backed service.',
+      );
+    }
+    return db;
+  }
+
+  static void _requireListingIdentity({
+    String? productUrl,
+    String? itemId,
+  }) {
+    if (_nullIfBlank(productUrl) == null && _nullIfBlank(itemId) == null) {
+      throw ArgumentError('A productUrl or itemId is required.');
+    }
+  }
+
+  static String? _nullIfBlank(String? value) {
+    final normalized = value?.trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  static Map<String, dynamic>? _rpcJsonMap(dynamic response) {
+    if (response == null) return null;
+    if (response is Map) {
+      return Map<String, dynamic>.from(response);
+    }
+    if (response is List && response.length == 1 && response.first is Map) {
+      return Map<String, dynamic>.from(response.first as Map);
+    }
+    throw const FormatException('Unexpected database RPC response shape.');
   }
 
   Future<List<Product>> getProductsByIds(

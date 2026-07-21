@@ -35998,5 +35998,9 @@ grant select on public.stock_movements_ledger_view to authenticated;
 -- version. This also makes payment-journal cleanup safe when an expense DELETE
 -- cascades over payments after the parent row is no longer visible.
 \ir ../migrations/20260719217000_finalize_expense_journal_rpc_hardening.sql
+-- Exact supplier/listing identity survives OCR review, supplier-code matches
+-- never cross supplier boundaries, and AE SKUs are globally serialized with
+-- tenant-scoped replay receipts.
+\ir ../migrations/20260721013000_add_supplier_product_aliases_and_sku_reservations.sql
 
 commit;

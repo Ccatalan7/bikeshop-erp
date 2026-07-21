@@ -17,7 +17,8 @@
 }
 
 body {
-  width: 460px;
+  width: 100%;
+  min-width: 340px;
   margin: 0;
   background: var(--bg);
   color: var(--text);
@@ -31,7 +32,113 @@ body.workspace-mode {
 }
 
 .shell {
-  padding: 14px;
+  padding: 14px 12px 24px;
+}
+
+.app-header {
+  align-items: flex-start;
+}
+
+.header-helper {
+  max-width: 390px;
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.app-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  margin: 12px 0 10px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #eef1f5;
+}
+
+.app-tab {
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.app-tab:hover {
+  color: var(--text);
+}
+
+.app-tab.active {
+  background: #fff;
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .1);
+}
+
+.app-tab-panel[hidden] {
+  display: none;
+}
+
+.step-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.step-number {
+  display: inline-flex;
+  width: 23px;
+  height: 23px;
+  flex: 0 0 23px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #e9eef7;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.panel-kicker {
+  margin: 0 0 3px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.workflow-primary,
+.full-button {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.workflow-primary {
+  min-height: 40px;
+}
+
+.empty-copy {
+  margin: 0;
+  padding: 18px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 11px;
+}
+
+.tool-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.tool-actions button {
+  min-height: 36px;
 }
 
 .header,
@@ -88,6 +195,10 @@ h2 {
 .panel {
   margin-top: 10px;
   padding: 12px;
+}
+
+.primary-workflow {
+  border-color: #cbd5e1;
 }
 
 .helper-text {

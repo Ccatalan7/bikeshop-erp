@@ -40,4 +40,20 @@ void main() {
       contains('La importación de productos usa exclusivamente'),
     );
   });
+
+  test('new AliExpress imports reserve the canonical SKU per row', () {
+    expect(canonicalServiceSource, contains("'reserve_aliexpress_skus'"));
+    expect(
+      canonicalServiceSource,
+      contains("'p_operation_key': operationKey"),
+    );
+    expect(
+      canonicalServiceSource,
+      contains("operationKey: 'product-import:\$idempotencyKey'"),
+    );
+    expect(
+      canonicalServiceSource,
+      contains("insertPayload['sku'] = reservedSku"),
+    );
+  });
 }

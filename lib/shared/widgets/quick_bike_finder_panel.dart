@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../modules/bikeshop/models/bikeshop_models.dart';
 import '../../modules/bikeshop/services/bikeshop_service.dart';
+import '../../modules/bikeshop/services/mechanic_job_visibility_policy.dart';
 import '../../modules/crm/models/crm_models.dart';
 import '../../modules/crm/services/customer_service.dart';
 import '../services/workspace_manager.dart';
@@ -196,29 +197,61 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
 
   Map<String, _BikeFinderMetrics> _buildMetrics(List<MechanicJob> jobs) {
     final metrics = <String, _BikeFinderMetrics>{};
+    final bikesById = {
+      for (final bike in _bikes)
+        if (bike.id != null && bike.id!.isNotEmpty) bike.id!: bike,
+    };
 
     for (final job in jobs) {
       final bikeId = job.bikeId?.trim();
       if (bikeId == null || bikeId.isEmpty) continue;
 
+      final bike = bikesById[bikeId];
+      final owner = bike == null ? null : _customersById[bike.customerId];
+      if (mechanicJobMatchesTestFixture(
+        job,
+        customerName: owner?.name,
+        bikeName: bike?.displayName,
+        bikeBrand: bike?.brand,
+        bikeModel: bike?.model,
+        bikeSerialNumber: bike?.serialNumber,
+      )) {
+        continue;
+      }
+      final isInWorkshop = isMechanicJobBikeInWorkshop(
+        job,
+      );
       final previous = metrics[bikeId] ?? const _BikeFinderMetrics();
       final lastDeliveredAt = previous.lastDeliveredAt == null
           ? job.deliveredAt
           : _maxDate(previous.lastDeliveredAt, job.deliveredAt);
       final lastArrivalAt = _maxDate(previous.lastArrivalAt, job.arrivalDate);
-      final becomesLatestActive = job.isActive &&
-          (previous.latestActiveJobAt == null ||
-              job.updatedAt.isAfter(previous.latestActiveJobAt!));
+      final becomesLatestJob = previous.latestJobAt == null ||
+          job.arrivalDate.isAfter(previous.latestJobAt!) ||
+          (job.arrivalDate.isAtSameMomentAs(previous.latestJobAt!) &&
+              job.updatedAt.isAfter(previous.latestJobUpdatedAt!));
+      final becomesLatestWorkshopJob = isInWorkshop &&
+          (previous.latestWorkshopJobAt == null ||
+              job.updatedAt.isAfter(previous.latestWorkshopJobAt!));
 
       metrics[bikeId] = previous.copyWith(
         totalJobs: previous.totalJobs + 1,
-        activeJobs: previous.activeJobs + (job.isActive ? 1 : 0),
+        workshopJobs: previous.workshopJobs + (isInWorkshop ? 1 : 0),
         lastDeliveredAt: lastDeliveredAt,
         lastArrivalAt: lastArrivalAt,
-        latestActiveJobId:
-            becomesLatestActive ? job.id : previous.latestActiveJobId,
-        latestActiveJobAt:
-            becomesLatestActive ? job.updatedAt : previous.latestActiveJobAt,
+        latestJobId: becomesLatestJob ? job.id : previous.latestJobId,
+        latestJobInvoiceId:
+            becomesLatestJob ? job.invoiceId : previous.latestJobInvoiceId,
+        clearLatestJobInvoiceId:
+            becomesLatestJob && (job.invoiceId?.trim().isEmpty ?? true),
+        latestJobAt: becomesLatestJob ? job.arrivalDate : previous.latestJobAt,
+        latestJobUpdatedAt:
+            becomesLatestJob ? job.updatedAt : previous.latestJobUpdatedAt,
+        latestWorkshopJobId:
+            becomesLatestWorkshopJob ? job.id : previous.latestWorkshopJobId,
+        latestWorkshopJobAt: becomesLatestWorkshopJob
+            ? job.updatedAt
+            : previous.latestWorkshopJobAt,
       );
     }
 
@@ -265,15 +298,11 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
       }
 
       final activeCompare =
-          right.metrics.activeJobs.compareTo(left.metrics.activeJobs);
+          right.metrics.workshopJobs.compareTo(left.metrics.workshopJobs);
       if (activeCompare != 0) return activeCompare;
 
-      final historyCompare = (right.metrics.lastDeliveredAt ??
-              right.metrics.lastArrivalAt ??
-              DateTime(0))
-          .compareTo(left.metrics.lastDeliveredAt ??
-              left.metrics.lastArrivalAt ??
-              DateTime(0));
+      final historyCompare = (right.metrics.lastActivityAt ?? DateTime(0))
+          .compareTo(left.metrics.lastActivityAt ?? DateTime(0));
       if (historyCompare != 0) return historyCompare;
 
       return right.bike.updatedAt.compareTo(left.bike.updatedAt);
@@ -289,7 +318,7 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
   }) {
     return switch (_scope) {
       _BikeFinderScope.recent => hasQuery || bike.isActive,
-      _BikeFinderScope.activeJobs => bike.isActive && metrics.activeJobs > 0,
+      _BikeFinderScope.activeJobs => bike.isActive && metrics.workshopJobs > 0,
       _BikeFinderScope.warranty => bike.isActive && bike.isUnderWarranty,
       _BikeFinderScope.history => bike.isActive && metrics.hasHistory,
       _BikeFinderScope.archived => !bike.isActive,
@@ -312,7 +341,7 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
   }) {
     if (query.isEmpty) {
       var score = 10;
-      if (metrics.activeJobs > 0) score += 60;
+      if (metrics.workshopJobs > 0) score += 60;
       if (metrics.hasHistory) score += 30;
       if (bike.isUnderWarranty) score += 20;
       return score;
@@ -340,7 +369,7 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
     if (matchScore == 0) return 0;
 
     var rankScore = matchScore;
-    if (metrics.activeJobs > 0) rankScore += 16;
+    if (metrics.workshopJobs > 0) rankScore += 16;
     if (metrics.hasHistory) rankScore += 8;
 
     return rankScore;
@@ -404,13 +433,36 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
     context.read<WorkspaceManager>().navigateActiveWorkspace(route);
   }
 
-  void _openActiveJob(_BikeFinderMetrics metrics) {
-    final jobId = metrics.latestActiveJobId?.trim();
+  void _openWorkshopJob(_BikeFinderMetrics metrics) {
+    final jobId = metrics.latestWorkshopJobId?.trim();
     if (jobId == null || jobId.isEmpty) return;
 
     context
         .read<WorkspaceManager>()
         .navigateActiveWorkspace('/taller/pegas/$jobId');
+  }
+
+  void _openLatestJob(_BikeFinderMetrics metrics) {
+    final jobId = metrics.latestJobId?.trim();
+    if (jobId == null || jobId.isEmpty) return;
+
+    context
+        .read<WorkspaceManager>()
+        .navigateActiveWorkspace('/taller/pegas/$jobId');
+  }
+
+  void _openLatestInvoice(_BikeFinderMetrics metrics) {
+    final invoiceId = metrics.latestJobInvoiceId?.trim();
+    if (invoiceId == null || invoiceId.isEmpty) return;
+
+    final route = Uri(
+      path: '/sales/invoices',
+      queryParameters: {
+        'selectedInvoiceId': invoiceId,
+        'view': 'split',
+      },
+    ).toString();
+    context.read<WorkspaceManager>().navigateActiveWorkspace(route);
   }
 
   @override
@@ -749,17 +801,15 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
         : 'Cliente desconocido';
     final accentColor = !bike.isActive
         ? theme.colorScheme.onSurfaceVariant
-        : metrics.activeJobs > 0
+        : metrics.workshopJobs > 0
             ? Colors.orange.shade700
             : (bike.isUnderWarranty
                 ? Colors.green.shade700
                 : theme.colorScheme.primary);
     final phone = owner?.phone?.trim();
     final serial = bike.serialNumber?.trim();
-    final lastActivity = metrics.lastDeliveredAt ?? metrics.lastArrivalAt;
+    final lastActivity = metrics.lastActivityAt;
     final status = _buildBikeStatus(theme, bike, metrics);
-    final activeJobId = metrics.latestActiveJobId?.trim();
-    final canOpenActiveJob = activeJobId != null && activeJobId.isNotEmpty;
 
     return Material(
       color: Colors.transparent,
@@ -850,29 +900,14 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
                           children: [
                             if (status != null) status,
                             const Spacer(),
-                            if (canOpenActiveJob)
-                              _buildWorkAction(
-                                theme,
-                                label: 'Abrir trabajo',
-                                icon: Icons.handyman_outlined,
-                                color: Colors.orange.shade800,
-                                onTap: () => _openActiveJob(metrics),
-                              )
-                            else if (bike.isActive)
-                              _buildWorkAction(
-                                theme,
-                                label: 'Nuevo trabajo',
-                                icon: Icons.add_rounded,
-                                color: theme.colorScheme.primary,
-                                onTap: () => _openNewJob(bike),
-                              ),
+                            _buildRowActions(theme, bike, metrics),
                           ],
                         ),
                       ),
                   ],
                 ),
               ),
-              _buildResultMenu(theme, bike, canOpenActiveJob),
+              _buildResultMenu(theme, bike, metrics),
             ],
           ),
         ),
@@ -883,8 +918,13 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
   Widget _buildResultMenu(
     ThemeData theme,
     Bike bike,
-    bool canOpenActiveJob,
+    _BikeFinderMetrics metrics,
   ) {
+    final canOpenWorkshopJob =
+        metrics.latestWorkshopJobId?.trim().isNotEmpty == true;
+    final canOpenLatestJob = metrics.latestJobId?.trim().isNotEmpty == true;
+    final canOpenLatestInvoice =
+        metrics.latestJobInvoiceId?.trim().isNotEmpty == true;
     return PopupMenuButton<String>(
       tooltip: 'Más acciones',
       position: PopupMenuPosition.under,
@@ -896,6 +936,8 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
             _openClient(bike);
           case 'new-job':
             _openNewJob(bike);
+          case 'last-job':
+            _openLatestJob(metrics);
         }
       },
       itemBuilder: (context) => [
@@ -917,7 +959,17 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
             title: Text('Abrir cliente'),
           ),
         ),
-        if (bike.isActive && canOpenActiveJob)
+        if (!canOpenWorkshopJob && canOpenLatestJob && canOpenLatestInvoice)
+          const PopupMenuItem(
+            value: 'last-job',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.history_rounded),
+              title: Text('Abrir último trabajo'),
+            ),
+          ),
+        if (bike.isActive && canOpenWorkshopJob)
           const PopupMenuItem(
             value: 'new-job',
             child: ListTile(
@@ -936,6 +988,59 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
     );
   }
 
+  Widget _buildRowActions(
+    ThemeData theme,
+    Bike bike,
+    _BikeFinderMetrics metrics,
+  ) {
+    final canOpenWorkshopJob =
+        metrics.latestWorkshopJobId?.trim().isNotEmpty == true;
+    if (canOpenWorkshopJob) {
+      return _buildWorkAction(
+        theme,
+        label: 'Abrir trabajo',
+        icon: Icons.handyman_outlined,
+        color: Colors.orange.shade800,
+        tooltip: 'Abrir trabajo actual',
+        onTap: () => _openWorkshopJob(metrics),
+      );
+    }
+
+    final canOpenLatestJob = metrics.latestJobId?.trim().isNotEmpty == true;
+    final canOpenLatestInvoice =
+        metrics.latestJobInvoiceId?.trim().isNotEmpty == true;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (canOpenLatestJob)
+          _buildWorkAction(
+            theme,
+            label: canOpenLatestInvoice ? 'Factura' : 'Último trabajo',
+            icon: canOpenLatestInvoice
+                ? Icons.receipt_long_outlined
+                : Icons.history_rounded,
+            color: theme.colorScheme.onSurfaceVariant,
+            tooltip: canOpenLatestInvoice
+                ? 'Abrir última factura'
+                : 'Abrir último trabajo',
+            onTap: canOpenLatestInvoice
+                ? () => _openLatestInvoice(metrics)
+                : () => _openLatestJob(metrics),
+          ),
+        if (canOpenLatestJob && bike.isActive) const SizedBox(width: 2),
+        if (bike.isActive)
+          _buildWorkAction(
+            theme,
+            label: canOpenLatestJob ? 'Nuevo' : 'Nuevo trabajo',
+            icon: Icons.add_rounded,
+            color: theme.colorScheme.primary,
+            tooltip: 'Crear nuevo trabajo',
+            onTap: () => _openNewJob(bike),
+          ),
+      ],
+    );
+  }
+
   Widget? _buildBikeStatus(
     ThemeData theme,
     Bike bike,
@@ -949,11 +1054,11 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
       icon = Icons.inventory_2_outlined;
       label = 'Archivada';
       color = theme.colorScheme.onSurfaceVariant;
-    } else if (metrics.activeJobs > 0) {
+    } else if (metrics.workshopJobs > 0) {
       icon = Icons.circle;
-      label = metrics.activeJobs == 1
+      label = metrics.workshopJobs == 1
           ? 'En taller'
-          : '${metrics.activeJobs} en taller';
+          : '${metrics.workshopJobs} en taller';
       color = Colors.orange.shade800;
     } else if (bike.isUnderWarranty) {
       icon = Icons.verified_user_outlined;
@@ -984,9 +1089,10 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
     required String label,
     required IconData icon,
     required Color color,
+    String? tooltip,
     required VoidCallback onTap,
   }) {
-    return TextButton.icon(
+    final button = TextButton.icon(
       onPressed: onTap,
       icon: Icon(icon, size: 15),
       label: Text(label),
@@ -1001,6 +1107,7 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
         ),
       ),
     );
+    return tooltip == null ? button : Tooltip(message: tooltip, child: button);
   }
 
   Widget _buildBikeFact(
@@ -1043,38 +1150,64 @@ class _BikeFinderResult {
 
 class _BikeFinderMetrics {
   final int totalJobs;
-  final int activeJobs;
+  final int workshopJobs;
   final DateTime? lastDeliveredAt;
   final DateTime? lastArrivalAt;
-  final String? latestActiveJobId;
-  final DateTime? latestActiveJobAt;
+  final String? latestJobId;
+  final String? latestJobInvoiceId;
+  final DateTime? latestJobAt;
+  final DateTime? latestJobUpdatedAt;
+  final String? latestWorkshopJobId;
+  final DateTime? latestWorkshopJobAt;
 
   const _BikeFinderMetrics({
     this.totalJobs = 0,
-    this.activeJobs = 0,
+    this.workshopJobs = 0,
     this.lastDeliveredAt,
     this.lastArrivalAt,
-    this.latestActiveJobId,
-    this.latestActiveJobAt,
+    this.latestJobId,
+    this.latestJobInvoiceId,
+    this.latestJobAt,
+    this.latestJobUpdatedAt,
+    this.latestWorkshopJobId,
+    this.latestWorkshopJobAt,
   });
 
   bool get hasHistory => totalJobs > 0;
+  DateTime? get lastActivityAt {
+    if (lastDeliveredAt == null) return lastArrivalAt;
+    if (lastArrivalAt == null) return lastDeliveredAt;
+    return lastArrivalAt!.isAfter(lastDeliveredAt!)
+        ? lastArrivalAt
+        : lastDeliveredAt;
+  }
 
   _BikeFinderMetrics copyWith({
     int? totalJobs,
-    int? activeJobs,
+    int? workshopJobs,
     DateTime? lastDeliveredAt,
     DateTime? lastArrivalAt,
-    String? latestActiveJobId,
-    DateTime? latestActiveJobAt,
+    String? latestJobId,
+    String? latestJobInvoiceId,
+    bool clearLatestJobInvoiceId = false,
+    DateTime? latestJobAt,
+    DateTime? latestJobUpdatedAt,
+    String? latestWorkshopJobId,
+    DateTime? latestWorkshopJobAt,
   }) {
     return _BikeFinderMetrics(
       totalJobs: totalJobs ?? this.totalJobs,
-      activeJobs: activeJobs ?? this.activeJobs,
+      workshopJobs: workshopJobs ?? this.workshopJobs,
       lastDeliveredAt: lastDeliveredAt ?? this.lastDeliveredAt,
       lastArrivalAt: lastArrivalAt ?? this.lastArrivalAt,
-      latestActiveJobId: latestActiveJobId ?? this.latestActiveJobId,
-      latestActiveJobAt: latestActiveJobAt ?? this.latestActiveJobAt,
+      latestJobId: latestJobId ?? this.latestJobId,
+      latestJobInvoiceId: clearLatestJobInvoiceId
+          ? null
+          : (latestJobInvoiceId ?? this.latestJobInvoiceId),
+      latestJobAt: latestJobAt ?? this.latestJobAt,
+      latestJobUpdatedAt: latestJobUpdatedAt ?? this.latestJobUpdatedAt,
+      latestWorkshopJobId: latestWorkshopJobId ?? this.latestWorkshopJobId,
+      latestWorkshopJobAt: latestWorkshopJobAt ?? this.latestWorkshopJobAt,
     );
   }
 }

@@ -1,5 +1,19 @@
 import 'inventory_models.dart';
 
+enum ProductDuplicateMatchTier {
+  /// Deterministic identity evidence: exact SKU/supplier identity, canonical
+  /// image URL, or byte-identical image content.
+  exact,
+
+  /// Decisive corroborating evidence (for example, an exact normalized model
+  /// identifier) that should rank ahead of fuzzy candidates but still needs a
+  /// human confirmation.
+  strong,
+
+  /// Fuzzy text, semantic, metadata, or perceptual-image evidence only.
+  possible,
+}
+
 class ProductDuplicateCandidate {
   const ProductDuplicateCandidate({
     required this.product,
@@ -11,6 +25,10 @@ class ProductDuplicateCandidate {
     required this.identityScore,
     required this.metadataScore,
     required this.hasProductImage,
+    required this.imageComparisonAvailable,
+    required this.hasExactImageMatch,
+    required this.hasExactModelMatch,
+    required this.matchTier,
     required this.signals,
     this.imageDebugSignals = const [],
   });
@@ -24,8 +42,14 @@ class ProductDuplicateCandidate {
   final double identityScore;
   final double metadataScore;
   final bool hasProductImage;
+  final bool imageComparisonAvailable;
+  final bool hasExactImageMatch;
+  final bool hasExactModelMatch;
+  final ProductDuplicateMatchTier matchTier;
   final List<String> signals;
   final List<String> imageDebugSignals;
+
+  bool get isExactIdentity => matchTier == ProductDuplicateMatchTier.exact;
 }
 
 class ProductDuplicateReviewRow {

@@ -411,6 +411,7 @@ class ProductImportService {
     final importReference = 'product_import:$importBatchId';
     final errors = <ProductImportError>[];
     final supplierCache = <String, String>{};
+    final supplierIdentityCache = <String, _ImportSupplierIdentity>{};
 
     for (var index = 0; index < rows.length; index++) {
       final rowNumber = index + 2;
@@ -434,6 +435,7 @@ class ProductImportService {
               (row[fieldToHeader['inventory_qty']]?.trim().isNotEmpty ?? false),
           importReference: importReference,
           idempotencyKey: '$importBatchId:$rowNumber',
+          supplierIdentityCache: supplierIdentityCache,
         );
         if (isInsert) {
           inserted += 1;
@@ -670,6 +672,7 @@ class ProductImportService {
     required bool stockWasProvided,
     required String importReference,
     required String idempotencyKey,
+    required Map<String, _ImportSupplierIdentity> supplierIdentityCache,
   }) async {
     final sku = (payload['sku'] as String).trim();
     final existing = await _db.select('products', where: 'sku=$sku');
@@ -678,6 +681,35 @@ class ProductImportService {
       final insertPayload = Map<String, dynamic>.from(payload)
         ..['inventory_qty'] = 0
         ..['stock_quantity'] = 0;
+
+      final supplier = await _supplierIdentityForPayload(
+        payload,
+        cache: supplierIdentityCache,
+      );
+      if (supplier?.isAliExpress ?? false) {
+        final reservedSku = await _reserveAliExpressSku(
+          supplier: supplier!,
+          operationKey: 'product-import:$idempotencyKey',
+        );
+
+        // The allocator serializes every migrated caller. This read catches a
+        // legacy client that might still occupy the reservation before insert,
+        // and fails closed rather than overwriting or updating that product.
+        final occupied = await _db.select(
+          'products',
+          selectColumns: 'id',
+          where: 'sku=$reservedSku',
+          limit: 1,
+        );
+        if (occupied.isNotEmpty) {
+          throw ProductImportRowException(
+            'El SKU AliExpress reservado $reservedSku ya fue ocupado. '
+            'Vuelve a intentar esta fila para obtener una reserva nueva.',
+          );
+        }
+        insertPayload['sku'] = reservedSku;
+      }
+
       final created = await _db.insert('products', insertPayload);
       if (targetStock > 0) {
         await _db.rpc('apply_product_import_stock', params: {
@@ -722,6 +754,85 @@ class ProductImportService {
       });
     }
     return false;
+  }
+
+  Future<_ImportSupplierIdentity?> _supplierIdentityForPayload(
+    Map<String, dynamic> payload, {
+    required Map<String, _ImportSupplierIdentity> cache,
+  }) async {
+    final supplierId = payload['supplier_id']?.toString().trim() ?? '';
+    if (supplierId.isEmpty) return null;
+
+    final cached = cache[supplierId];
+    if (cached != null) return cached;
+
+    final rows = await _db.select(
+      'suppliers',
+      selectColumns: 'id,name,aliases',
+      where: 'id=$supplierId',
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      throw ProductImportRowException(
+        'El proveedor seleccionado ya no existe.',
+      );
+    }
+
+    final row = rows.first;
+    final name = row['name']?.toString().trim() ?? '';
+    final aliases = row['aliases'] is Iterable
+        ? (row['aliases'] as Iterable)
+            .map((value) => value?.toString().trim() ?? '')
+            .where((value) => value.isNotEmpty)
+        : const Iterable<String>.empty();
+    final identity = _ImportSupplierIdentity(
+      id: supplierId,
+      name: name,
+      isAliExpress: <String>[name, ...aliases].any(_looksLikeAliExpress),
+    );
+    cache[supplierId] = identity;
+    return identity;
+  }
+
+  Future<String> _reserveAliExpressSku({
+    required _ImportSupplierIdentity supplier,
+    required String operationKey,
+  }) async {
+    if (supplier.name.isEmpty) {
+      throw ProductImportRowException(
+        'El proveedor AliExpress no tiene un nombre válido.',
+      );
+    }
+    final response = await _db.rpc(
+      'reserve_aliexpress_skus',
+      params: {
+        'p_count': 1,
+        'p_operation_key': operationKey,
+        'p_supplier_id': supplier.id,
+        'p_supplier_name': supplier.name,
+      },
+    );
+    final rawSkus = response is Map ? response['skus'] : null;
+    if (rawSkus is! List || rawSkus.length != 1) {
+      throw ProductImportRowException(
+        'La reserva de SKU AliExpress devolvió una respuesta inválida.',
+      );
+    }
+    final reservedSku = rawSkus.single?.toString().trim() ?? '';
+    if (!RegExp(r'^AE\d{4,}$').hasMatch(reservedSku)) {
+      throw ProductImportRowException(
+        'La reserva de SKU AliExpress devolvió un código inválido.',
+      );
+    }
+    return reservedSku;
+  }
+
+  bool _looksLikeAliExpress(String value) {
+    final normalized = value
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '');
+    return normalized.contains('aliexpress');
   }
 
   List<List<dynamic>> _parseDelimited(Uint8List bytes, bool isTsv) {
@@ -1317,6 +1428,18 @@ class ProductImportFieldDefinition {
 }
 
 enum ProductImportFieldType { text, longText, integer, decimal, boolean }
+
+class _ImportSupplierIdentity {
+  const _ImportSupplierIdentity({
+    required this.id,
+    required this.name,
+    required this.isAliExpress,
+  });
+
+  final String id;
+  final String name;
+  final bool isAliExpress;
+}
 
 class _TemplateStructure {
   _TemplateStructure({

@@ -39,6 +39,19 @@ import '../widgets/purchase_receipt_history_panel.dart';
 import 'purchase_receiving_page.dart';
 import 'purchase_credit_note_page.dart';
 import 'purchase_supplier_return_page.dart';
+import '../services/purchase_invoice_ocr_application_policy.dart';
+
+class _OcrPurchaseLineResolution {
+  const _OcrPurchaseLineResolution({
+    required this.lineNumber,
+    required this.item,
+    required this.product,
+  });
+
+  final int lineNumber;
+  final ParsedLineItem item;
+  final Product? product;
+}
 
 class PurchaseInvoiceFormPage extends StatefulWidget {
   final String? invoiceId;
@@ -378,7 +391,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
   }
 
-  Product? _findCachedProductByCode(String code) {
+  Product? _findCachedProductByCode(
+    String code, {
+    String? supplierId,
+  }) {
     final normalizedCode = code.trim().toLowerCase();
     if (normalizedCode.isEmpty) {
       return null;
@@ -389,26 +405,40 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               product != null &&
               (product.sku.toLowerCase() == normalizedCode ||
                   product.barcode?.toLowerCase() == normalizedCode ||
-                  product.supplierCode?.trim().toLowerCase() == normalizedCode),
+                  (supplierId != null &&
+                      supplierId.isNotEmpty &&
+                      product.supplierCode?.trim().toLowerCase() ==
+                          normalizedCode &&
+                      product.supplierId == supplierId)),
           orElse: () => null,
         );
   }
 
-  Future<Product?> _findProductByExactCode(String code) async {
+  Future<Product?> _findProductByExactCode(
+    String code, {
+    String? supplierId,
+  }) async {
     final normalizedCode = code.trim();
     if (normalizedCode.isEmpty) {
       return null;
     }
 
-    final cachedProduct = _findCachedProductByCode(normalizedCode);
+    final cachedProduct = _findCachedProductByCode(
+      normalizedCode,
+      supplierId: supplierId,
+    );
     if (cachedProduct != null) {
       return cachedProduct;
     }
 
     Product? product = await _inventoryService.getProductBySku(normalizedCode);
     product ??= await _inventoryService.getProductByBarcode(normalizedCode);
-    product ??=
-        await _inventoryService.getProductBySupplierCode(normalizedCode);
+    if (product == null && supplierId != null && supplierId.isNotEmpty) {
+      product = await _inventoryService.getProductBySupplierCodeForSupplier(
+        supplierId: supplierId,
+        supplierCode: normalizedCode,
+      );
+    }
 
     if (product != null) {
       _upsertProductCache(product);
@@ -656,9 +686,11 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                         supplierId: _selectedSupplier?.id,
                         supplierName: _selectedSupplier?.name,
                         onComplete: (parsedInvoice) async {
-                          Navigator.of(dialogContext).pop();
                           await _loadProducts();
-                          await _applyOCRData(parsedInvoice);
+                          final applied = await _applyOCRData(parsedInvoice);
+                          if (applied && dialogContext.mounted) {
+                            Navigator.of(dialogContext).pop();
+                          }
                         },
                         onError: (error) {
                           debugPrint('OCR Error: $error');
@@ -675,7 +707,33 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     );
   }
 
-  Future<void> _applyOCRData(ParsedInvoice parsedInvoice) async {
+  shared_supplier.Supplier? _matchOcrSupplier(ParsedInvoice parsedInvoice) {
+    if (parsedInvoice.rut == null && parsedInvoice.supplierName == null) {
+      return _selectedSupplier;
+    }
+    final rut = parsedInvoice.rut?.replaceAll(RegExp(r'[.\-]'), '');
+    final name = parsedInvoice.supplierName?.trim().toLowerCase();
+    return _supplierCache.cast<shared_supplier.Supplier?>().firstWhere(
+      (supplier) {
+        if (supplier == null) return false;
+        if (rut != null && supplier.rut != null) {
+          final supplierRut = supplier.rut!.replaceAll(RegExp(r'[.\-]'), '');
+          if (supplierRut == rut) return true;
+        }
+        if (name != null && name.isNotEmpty) {
+          final supplierName = supplier.name.trim().toLowerCase();
+          return supplierName.contains(name) || name.contains(supplierName);
+        }
+        return false;
+      },
+      orElse: () => null,
+    );
+  }
+
+  Future<List<_OcrPurchaseLineResolution>> _resolveOcrPurchaseLines(
+    ParsedInvoice parsedInvoice, {
+    String? supplierId,
+  }) async {
     await _hydrateProductsByIds(
       parsedInvoice.lineItems
           .where(
@@ -687,259 +745,256 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           .map((item) => item.matchedProductId!),
     );
 
+    final resolutions = <_OcrPurchaseLineResolution>[];
+    for (var index = 0; index < parsedInvoice.lineItems.length; index++) {
+      final item = parsedInvoice.lineItems[index];
+      Product? matchedProduct;
+
+      if (item.existsInDatabase == true &&
+          item.matchedProductId != null &&
+          item.matchedProductId!.isNotEmpty) {
+        matchedProduct = _productCache.cast<Product?>().firstWhere(
+              (product) => product?.id == item.matchedProductId,
+              orElse: () => null,
+            );
+      }
+
+      final sku = item.sku?.trim();
+      if (matchedProduct == null && sku != null && sku.isNotEmpty) {
+        matchedProduct = await _findProductByExactCode(
+          sku,
+          supplierId: supplierId,
+        );
+      }
+
+      resolutions.add(
+        _OcrPurchaseLineResolution(
+          lineNumber: index + 1,
+          item: item,
+          product: matchedProduct,
+        ),
+      );
+    }
+    return resolutions;
+  }
+
+  _PurchaseLineEntry _buildOcrPurchaseLineEntry(
+    _OcrPurchaseLineResolution resolution,
+  ) {
+    final item = resolution.item;
+    final matchedProduct = resolution.product!;
+    final finalQty =
+        PurchaseInvoiceOcrApplicationPolicy.normalizedQuantity(item.quantity);
+    final finalUnitCost = item.unitPrice ?? matchedProduct.cost;
+
+    var finalDiscount = 0.0;
+    var finalDiscountType = DiscountType.amount;
+    if (item.discount != null && item.discount! > 0) {
+      finalDiscount = item.discount!;
+    } else if (item.discountRate != null && item.discountRate! > 0) {
+      finalDiscountType = DiscountType.percentage;
+      finalDiscount = item.discountRate!;
+    }
+
+    final entry = _PurchaseLineEntry(
+      line: PurchaseInvoiceItem(
+        productId: matchedProduct.id,
+        productName: matchedProduct.name,
+        productSku: matchedProduct.sku,
+        purchaseTreatment: matchedProduct.purchaseTreatment,
+        quantity: finalQty,
+        unitCost: finalUnitCost,
+        discount: 0,
+        description: matchedProduct.description,
+      ),
+      product: matchedProduct,
+    );
+
+    entry.productNameController.text = matchedProduct.name;
+    entry.productSkuController.text = matchedProduct.sku;
+    entry.descriptionController.text = matchedProduct.description ?? '';
+    if (entry.line.unitCost > 0) {
+      entry.unitCostController.text = entry.line.unitCost.toStringAsFixed(0);
+    }
+    if (finalDiscount > 0) {
+      entry.discountType = finalDiscountType;
+      entry.discountController.text = finalDiscount.toStringAsFixed(0);
+      entry.recalculateDiscount();
+    }
+    entry.attachListeners(_recalculateTotals);
+    return entry;
+  }
+
+  Future<void> _showOcrApplicationBlocked({
+    required String title,
+    required String message,
+  }) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.error_outline, color: Colors.red),
+        title: Text(title),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: SingleChildScrollView(child: SelectableText(message)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _applyOCRData(ParsedInvoice parsedInvoice) async {
+    final matchedOcrSupplier = _matchOcrSupplier(parsedInvoice);
+    late final List<_OcrPurchaseLineResolution> resolutions;
+    try {
+      resolutions = await _resolveOcrPurchaseLines(
+        parsedInvoice,
+        supplierId: matchedOcrSupplier?.id,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('OCR product resolution failed: $error\n$stackTrace');
+      await _showOcrApplicationBlocked(
+        title: 'No se pudo validar el OCR',
+        message: 'No se aplicó ningún dato porque no fue posible verificar '
+            'los productos en inventario. Reintenta cuando haya conexión.\n\n'
+            'Detalle: $error',
+      );
+      return false;
+    }
+
+    if (!mounted) return false;
+
+    final unresolved = resolutions
+        .where((resolution) => resolution.product == null)
+        .toList(growable: false);
+    final resolvedLineCount = resolutions.length - unresolved.length;
+    if (!PurchaseInvoiceOcrApplicationPolicy.allParsedLinesResolved(
+      parsedLineCount: parsedInvoice.lineItems.length,
+      resolvedLineCount: resolvedLineCount,
+    )) {
+      final details = unresolved.map((resolution) {
+        final sku = resolution.item.sku?.trim();
+        final identifier = sku == null || sku.isEmpty ? 'sin SKU' : 'SKU $sku';
+        return '• Línea ${resolution.lineNumber} ($identifier): '
+            '${resolution.item.description.trim()}';
+      }).join('\n');
+      await _showOcrApplicationBlocked(
+        title: 'Faltan productos por vincular',
+        message: 'No se aplicó ningún dato. ${unresolved.length} de '
+            '${parsedInvoice.lineItems.length} líneas no tienen un producto '
+            'resuelto:\n\n$details\n\nVuelve al OCR y usa Encontrar parecidos '
+            'o crea el producto antes de continuar. El borrador se mantuvo sin '
+            'cambios.',
+      );
+      return false;
+    }
+
+    final isAliExpress =
+        PurchaseInvoiceOcrApplicationPolicy.isAliExpress(parsedInvoice);
+    if (isAliExpress && parsedInvoice.total != null && resolutions.isNotEmpty) {
+      final reconciliation = PurchaseInvoiceOcrApplicationPolicy.reconcile(
+        invoiceTotal: parsedInvoice.total!,
+        appliedLineTotals: resolutions.map(
+          (resolution) => PurchaseInvoiceOcrApplicationPolicy.appliedLineTotal(
+            resolution.item,
+            fallbackUnitCost: resolution.product!.cost,
+          ),
+        ),
+      );
+
+      if (!reconciliation.isWithinTolerance) {
+        await _showOcrApplicationBlocked(
+          title: 'El total de AliExpress no cuadra',
+          message: 'No se aplicó ningún dato porque los costos aterrizados '
+              'no coinciden con el total OCR.\n\n'
+              'Total OCR: '
+              '${ChileanUtils.formatCurrency(reconciliation.invoiceTotal)}\n'
+              'Suma de ${resolutions.length} líneas aplicables: '
+              '${ChileanUtils.formatCurrency(reconciliation.appliedLineTotal)}\n'
+              'Diferencia: '
+              '${ChileanUtils.formatCurrency(reconciliation.difference)}\n'
+              'Tolerancia: '
+              '${ChileanUtils.formatCurrency(reconciliation.toleranceClp)} '
+              '(máximo 1 CLP por línea por redondeo).\n\n'
+              'Revisa cantidades y costos en el OCR antes de continuar. El '
+              'borrador se mantuvo sin cambios.',
+        );
+        return false;
+      }
+    }
+
+    final newEntries =
+        resolutions.map(_buildOcrPurchaseLineEntry).toList(growable: false);
+    final appliedLineCount = newEntries.length;
+    final targetTaxTreatment =
+        PurchaseInvoiceOcrApplicationPolicy.taxTreatmentFor(
+      invoice: parsedInvoice,
+      current: _taxTreatment,
+    );
+
     setState(() {
-      // 1. Invoice number (if extracted)
-      if (parsedInvoice.invoiceNumber != null &&
-          parsedInvoice.invoiceNumber!.isNotEmpty) {
+      if (parsedInvoice.invoiceNumber?.isNotEmpty == true) {
         _invoiceNumberController.text = parsedInvoice.invoiceNumber!;
       }
 
-      // 2. Date (if extracted)
       if (parsedInvoice.date != null) {
         _issueDate = parsedInvoice.date!;
         _dueDate = _issueDate.add(const Duration(days: 30));
       }
 
-      // 3. Supplier (match by RUT or name)
-      if (parsedInvoice.rut != null || parsedInvoice.supplierName != null) {
-        final rut = parsedInvoice.rut
-            ?.replaceAll(RegExp(r'[.\-]'), ''); // Normalize RUT
-        final name = parsedInvoice.supplierName?.toLowerCase();
-
-        // Try to match existing supplier
-        final matchedSupplier =
-            _supplierCache.cast<shared_supplier.Supplier?>().firstWhere(
-          (supplier) {
-            if (supplier == null) return false;
-
-            // Match by RUT (if available)
-            if (rut != null && supplier.rut != null) {
-              final supplierRut =
-                  supplier.rut!.replaceAll(RegExp(r'[.\-]'), '');
-              if (supplierRut == rut) return true;
-            }
-
-            // Match by name (fuzzy)
-            if (name != null) {
-              final supplierName = supplier.name.toLowerCase();
-              return supplierName.contains(name) || name.contains(supplierName);
-            }
-
-            return false;
-          },
-          orElse: () => null,
-        );
-
-        if (matchedSupplier != null) {
-          _selectedSupplier = matchedSupplier;
-        }
+      if (matchedOcrSupplier != null) {
+        _selectedSupplier = matchedOcrSupplier;
       }
 
-      // 4. Total amount (show as reference in notes if no line items)
       if (parsedInvoice.total != null && parsedInvoice.lineItems.isEmpty) {
         final totalStr = ChileanUtils.formatCurrency(parsedInvoice.total!);
         _notesController.text =
             'Total detectado: $totalStr\n${_notesController.text}';
       }
-      // 5. Line items (if extracted)
-      if (parsedInvoice.lineItems.isNotEmpty) {
-        // Clear default empty line if it's the only one and has no product
-        // Check if the list contains only one item and that item is "empty" (no product ID or name)
+
+      if (newEntries.isNotEmpty) {
         if (_lineEntries.length == 1) {
-          final firstLine = _lineEntries.first.line;
+          final firstEntry = _lineEntries.first;
+          final firstLine = firstEntry.line;
           if (firstLine.productId.isEmpty &&
               (firstLine.productName == null ||
                   firstLine.productName!.isEmpty)) {
             _lineEntries.clear();
+            firstEntry.dispose();
           }
         }
-
-        for (final item in parsedInvoice.lineItems) {
-          // Try to match product by SKU first, then by name
-          // Debug cache content
-          debugPrint(
-              '🔍 Matching item: ${item.description} (SKU: ${item.sku})');
-          debugPrint('📦 Product Cache Size: ${_productCache.length}');
-
-          // Check if SKU exists in cache manually for debugging
-          if (item.sku != null) {
-            final targetSku = item.sku!.trim().toUpperCase();
-
-            // Check both SKU and supplier_code in cache
-            final skuMatches = _productCache
-                .where((p) => p.sku.trim().toUpperCase() == targetSku)
-                .toList();
-            final supplierCodeMatches = _productCache
-                .where((p) =>
-                    p.supplierCode != null &&
-                    p.supplierCode!.trim().toUpperCase() == targetSku)
-                .toList();
-
-            debugPrint('🔎 Looking for: "$targetSku"');
-            debugPrint('📊 SKU matches: ${skuMatches.length}');
-            debugPrint(
-                '📊 Supplier Code matches: ${supplierCodeMatches.length}');
-
-            if (supplierCodeMatches.isNotEmpty) {
-              debugPrint(
-                  '✅ Found by SUPPLIER CODE: ${supplierCodeMatches.first.name}');
-            }
-            if (skuMatches.isNotEmpty) {
-              debugPrint('✅ Found by SKU: ${skuMatches.first.name}');
-            }
-
-            if (skuMatches.isEmpty && supplierCodeMatches.isEmpty) {
-              debugPrint('❌ Not found in either SKU or Supplier Code');
-              // Print sample data for debugging
-              debugPrint(
-                  '📋 Sample products with supplier codes: ${_productCache.take(5).map((p) => '${p.sku} / ${p.supplierCode}').toList()}');
-            }
-          }
-
-          Product? matchedProduct;
-
-          // PRIORITY 0: Use pre-matched product ID from OCR verification (if available)
-          // This is the most reliable - the OCR widget already verified this product exists
-          if (item.existsInDatabase == true &&
-              item.matchedProductId != null &&
-              item.matchedProductId!.isNotEmpty) {
-            matchedProduct = _productCache.cast<Product?>().firstWhere(
-                  (p) => p?.id == item.matchedProductId,
-                  orElse: () => null,
-                );
-            if (matchedProduct != null) {
-              debugPrint(
-                  '  ✓ Using pre-matched product from OCR: ${matchedProduct.name}');
-            }
-          }
-
-          // FALLBACK: If no pre-matched product, try to match locally
-          matchedProduct ??= _productCache.cast<Product?>().firstWhere(
-            (product) {
-              if (product == null) return false;
-
-              // 1. Match by SKU or Supplier Code (Exact match)
-              if (item.sku != null && item.sku!.isNotEmpty) {
-                final productSku = product.sku.trim().toUpperCase();
-                final itemSku = item.sku!.trim().toUpperCase();
-
-                // Match by SKU
-                if (productSku == itemSku) {
-                  return true;
-                }
-
-                // Match by Supplier Code (Código Proveedor)
-                if (product.supplierCode != null &&
-                    product.supplierCode!.isNotEmpty) {
-                  final productSupplierCode =
-                      product.supplierCode!.trim().toUpperCase();
-                  if (productSupplierCode == itemSku) {
-                    return true;
-                  }
-                }
-              }
-
-              // NOTE: No fuzzy name matching here - only SKU/Supplier Code
-              // The OCR verification already handled name matching
-              return false;
-            },
-            orElse: () => null,
-          );
-
-          if (matchedProduct != null) {
-            debugPrint(
-                '  ✨ Selected product: ${matchedProduct.name} (ID: ${matchedProduct.id})');
-
-            // ⚠️ CRITICAL MUST BE AN INTEGER: VeryfiAdapter fallback can generate fractional quantities
-            // like 4.503 from (17990 / 3995) to force match a total. This breaks the UI integer math.
-            double finalQty = (item.quantity ?? 1).roundToDouble();
-            if (finalQty <= 0) finalQty = 1;
-
-            double finalUnitCost = item.unitPrice ?? matchedProduct.cost;
-            double finalDiscount = item.discount ?? 0;
-            DiscountType finalDiscountType = DiscountType.amount;
-
-            // Precedence logic if discounts were actually explicitly found by OCR/Adapter:
-            if (item.discount != null && item.discount! > 0) {
-              finalDiscountType = DiscountType.amount;
-              finalDiscount = item.discount!;
-            } else if (item.discountRate != null && item.discountRate! > 0) {
-              finalDiscountType = DiscountType.percentage;
-              finalDiscount = item.discountRate!;
-            }
-
-            // Add matched product - Mirroring manual selection logic
-            final newLine = PurchaseInvoiceItem(
-              productId: matchedProduct.id,
-              productName: matchedProduct.name,
-              productSku: matchedProduct.sku,
-              purchaseTreatment: matchedProduct.purchaseTreatment,
-              quantity: finalQty,
-              unitCost: finalUnitCost,
-              discount: 0, // Gets recalculated below via controller
-              description: matchedProduct.description,
-            );
-
-            final newEntry = _PurchaseLineEntry(line: newLine);
-
-            // CRITICAL: Set all controllers and product object to match manual selection behavior
-            newEntry.product = matchedProduct;
-            newEntry.productNameController.text = matchedProduct.name;
-            newEntry.productSkuController.text = matchedProduct.sku;
-            newEntry.descriptionController.text =
-                matchedProduct.description ?? '';
-
-            // Set unit cost controller if we have a price
-            if (newLine.unitCost > 0) {
-              newEntry.unitCostController.text =
-                  newLine.unitCost.toStringAsFixed(0);
-            }
-
-            if (finalDiscount > 0) {
-              newEntry.discountType = finalDiscountType;
-              newEntry.discountController.text =
-                  finalDiscount.toStringAsFixed(0);
-              newEntry.recalculateDiscount();
-            }
-
-            newEntry.attachListeners(_recalculateTotals);
-            _lineEntries.add(newEntry);
-          } else {
-            debugPrint('  ❌ No match found for item');
-          }
-        }
+        _lineEntries.addAll(newEntries);
       }
 
-      // 6. Set tax treatment if total detected
-      if (parsedInvoice.total != null && _taxTreatment == TaxTreatment.noTax) {
-        // Assume tax included for Chilean invoices
-        _taxTreatment = TaxTreatment.taxIncluded;
-      }
+      // AliExpress line costs already contain distributed tax, shipping and
+      // discounts. `noTax` prevents the purchase form from adding another 19%.
+      _taxTreatment = targetTaxTreatment;
     });
 
-    // Show success message
-    if (mounted) {
-      final extractedFields = <String>[];
-      if (parsedInvoice.invoiceNumber != null) {
-        extractedFields.add('N° Factura');
-      }
-      if (parsedInvoice.supplierName != null) extractedFields.add('Proveedor');
-      if (parsedInvoice.date != null) extractedFields.add('Fecha');
-      if (parsedInvoice.total != null) extractedFields.add('Total');
-      if (parsedInvoice.lineItems.isNotEmpty) {
-        extractedFields.add('${parsedInvoice.lineItems.length} productos');
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '✅ Datos extraídos: ${extractedFields.join(', ')}',
-          ),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+    if (!mounted) return false;
+    final extractedFields = <String>[];
+    if (parsedInvoice.invoiceNumber != null) extractedFields.add('N° Factura');
+    if (parsedInvoice.supplierName != null) extractedFields.add('Proveedor');
+    if (parsedInvoice.date != null) extractedFields.add('Fecha');
+    if (parsedInvoice.total != null) extractedFields.add('Total');
+    if (parsedInvoice.lineItems.isNotEmpty) {
+      extractedFields.add('$appliedLineCount productos aplicados');
     }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✅ Datos extraídos: ${extractedFields.join(', ')}'),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+    return true;
   }
 
   Future<void> _initialize() async {

@@ -6761,7 +6761,8 @@ Google requires ONE of these combinations:
 
 **Database Columns:**
 - `gtin` → `<g:gtin>` tag (12-14 digits)
-- `sku` → `<g:mpn>` tag (Manufacturer Part Number)
+- `website_merchant_mpn` → `<g:mpn>` only when it is the manufacturer-assigned part number
+- `sku` remains the retailer's internal stock code and must never be sent as MPN
 
 ---
 
@@ -6807,7 +6808,6 @@ WHERE id = '775815ba-4c04-4ad8-b037-33d9ed70f06a';
   <g:id>775815ba-4c04-4ad8-b037-33d9ed70f06a</g:id>
   <g:title>Aceite Mineral Shimano SM-DBOIL 1 Litro</g:title>
   <g:gtin>022255354042</g:gtin>  <!-- ✅ Now in correct tag -->
-  <g:mpn>S56467</g:mpn>          <!-- SKU becomes MPN -->
   <g:brand>Shimano</g:brand>
   ...
 </item>
@@ -6843,18 +6843,19 @@ WHERE id = '775815ba-4c04-4ad8-b037-33d9ed70f06a';
 | Database Column | Feed Tag | What to Store |
 |-----------------|----------|---------------|
 | `gtin` | `<g:gtin>` | UPC/EAN barcode number (12-14 digits) |
-| `sku` | `<g:mpn>` | Your internal SKU (retailer code) |
+| `website_merchant_mpn` | `<g:mpn>` | Manufacturer-assigned part number only |
+| `sku` | `<g:id>` is not derived from this today | Your internal retailer stock code; never an MPN |
 | `barcode` | Fallback for gtin | If gtin is empty, feed uses barcode |
 
-**⚠️ CRITICAL: `sku` maps to `<g:mpn>`, NOT the other way around!**
+**⚠️ CRITICAL: an internal SKU is not an MPN. Never substitute one for the other.**
 
 Our feed logic:
 ```typescript
 // GTIN: prefer gtin field, fallback to barcode
 const gtin = product.gtin || product.barcode || ''
 
-// MPN: use SKU (our internal code)
-const mpn = product.sku || ''
+// MPN: only use a value explicitly verified from the manufacturer
+const mpn = product.website_merchant_mpn || ''
 ```
 
 ---
@@ -6867,17 +6868,10 @@ For products that genuinely don't have a GTIN:
 - Very old products without barcodes
 - Store-branded items
 
-**Feed Logic:**
-```typescript
-if (gtin && gtin.length >= 8) {
-  itemXml += `<g:gtin>${gtin}</g:gtin>`
-} else {
-  // No valid GTIN - must explicitly mark
-  itemXml += `<g:identifier_exists>false</g:identifier_exists>`
-}
-```
-
-**⚠️ WARNING:** Google scrutinizes products with `identifier_exists=false`. Only use for genuinely unique products!
+**Feed Logic:** omit unknown identifiers. Do not infer `identifier_exists=false`
+merely because the local GTIN/MPN fields are blank. That assertion is valid
+only after staff verifies that the manufacturer assigned no unique product
+identifier; the current schema has no reviewed field for that assertion.
 
 ---
 
@@ -6891,7 +6885,7 @@ if (gtin && gtin.length >= 8) {
 - [ ] **Price:** Greater than 0, correct currency (CLP for Chile)
 - [ ] **Brand:** Must be set (either brand_id or brand text field)
 - [ ] **GTIN:** If product has barcode, enter the barcode number here
-- [ ] **SKU:** Your internal stock code (becomes MPN in feed)
+- [ ] **MPN:** Enter only the manufacturer-assigned code; never copy the internal SKU
 - [ ] **Stock:** Set accurate inventory (affects availability status)
 - [ ] **Category:** Assigned to a product category
 
@@ -6910,7 +6904,7 @@ if (gtin && gtin.length >= 8) {
 ```sql
 -- Core product data
 name text not null,
-sku text,                    -- Becomes <g:mpn>
+sku text,                    -- Retailer stock code; never emitted as MPN
 description text,
 price numeric not null,
 price_currency text default 'CLP',
@@ -7007,7 +7001,7 @@ The product form includes these Google Merchant-relevant fields:
 
 1. **Basic Info Tab:**
    - Name (becomes title)
-   - SKU (becomes MPN)
+   - SKU (internal retailer code; never MPN)
    - Description (needs 150+ chars)
    - Price & Currency
 
@@ -7027,8 +7021,8 @@ The product form includes these Google Merchant-relevant fields:
 The feed uses numeric category IDs from Google's taxonomy:
 
 ```typescript
-// Current hardcoded: Cycling Accessories
-itemXml += `<g:google_product_category>3618</g:google_product_category>`
+// Emit only an explicitly reviewed taxonomy value. Otherwise omit the field
+// and allow Google to categorize the product automatically.
 ```
 
 **Common Cycling Categories:**
@@ -7037,7 +7031,7 @@ itemXml += `<g:google_product_category>3618</g:google_product_category>`
 - `3636` - Bicycle Tires & Tubes
 - `3612` - Bicycle Frames
 
-**Future Enhancement:** Map `product_categories` to Google taxonomy IDs.
+**Future Enhancement:** Map each internal category to a reviewed Google taxonomy ID.
 
 ---
 
@@ -7045,9 +7039,10 @@ itemXml += `<g:google_product_category>3618</g:google_product_category>`
 
 When enabling a product for Google Merchant:
 
-1. ✅ **Verify product has GTIN or set `identifier_exists=false`**
+1. ✅ **Verify identifiers without guessing**
    - If barcode exists → Put it in `gtin` column
-   - If no barcode → Product needs `identifier_exists=false` (auto-handled by feed)
+   - If the manufacturer publishes an MPN → Put it in `website_merchant_mpn`
+   - If identifiers are unknown → Leave them blank; do not use SKU or assert `identifier_exists=false`
 
 2. ✅ **Check description length** → Must be 150+ characters
 

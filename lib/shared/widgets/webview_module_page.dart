@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kDebugMode, kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
@@ -20,12 +21,14 @@ import '../../modules/purchases/services/purchase_service.dart';
 import '../../modules/storage/models/app_stored_file.dart';
 import '../../modules/storage/services/app_file_storage_service.dart';
 import '../services/auth_service.dart';
+import '../services/aliexpress_daily_invoice_service.dart';
 import '../services/browser_credential_vault.dart';
 import '../services/browser_profile_service.dart';
 import '../services/browser_site_memory_service.dart';
 import '../services/browser_supplier_credential_resolver.dart';
 import '../services/browser_supplier_portal_catalog.dart';
 import '../services/document_relay_service.dart';
+import '../services/ocr_file_handoff_service.dart';
 import '../services/smart_screenshot_service.dart';
 import '../services/window_zoom_service.dart';
 import '../services/workspace_manager.dart';
@@ -137,6 +140,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   final Set<String> _insecureCredentialFeedbackOrigins = {};
   String? _registeredScreenshotWorkspaceId;
   late final String _browserProfileIdentity;
+  Completer<void>? _aliExpressNavigationCompleter;
+  String? _aliExpressBridgeSource;
+  bool _isAliExpressImportRunning = false;
+  final Map<String, String> _aliExpressInvoiceImageDataCache = {};
 
   @override
   bool get wantKeepAlive => true;
@@ -282,6 +289,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     _suggestionTimer?.cancel();
     _hideSuggestionsTimer?.cancel();
     _windowsTrackpadScrollTimer?.cancel();
+    final navigationCompleter = _aliExpressNavigationCompleter;
+    if (navigationCompleter != null && !navigationCompleter.isCompleted) {
+      navigationCompleter.complete();
+    }
     _addressController.removeListener(_handleAddressTextChanged);
     _addressFocusNode.removeListener(_handleAddressFocusChanged);
     _addressController.dispose();
@@ -571,6 +582,721 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     });
 
     await _controller?.loadUrl(urlRequest: _urlRequest(uri));
+  }
+
+  bool get _isAliExpressPage => AliExpressDailyInvoiceService.isTrustedUri(
+        Uri.tryParse(_currentUrl),
+      );
+
+  Future<_AliExpressImportRequest?> _pickAliExpressImportRequest() async {
+    var selectedDate = DateTime.now();
+    return showDialog<_AliExpressImportRequest>(
+      context: context,
+      useRootNavigator: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.receipt_long_outlined, size: 22),
+              SizedBox(width: 10),
+              Text('Compras AliExpress'),
+            ],
+          ),
+          content: SizedBox(
+            width: 390,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'El ERP reunirá todos los pedidos del día, abrirá cada detalle '
+                  'y preparará una sola factura. Puedes revisar el PDF primero '
+                  'o abrir directamente la revisión OCR.',
+                ),
+                const SizedBox(height: 16),
+                InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: selectedDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) {
+                      setDialogState(() => selectedDate = picked);
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Día de compra',
+                      prefixIcon: Icon(Icons.calendar_today_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    child: Text(
+                      '${selectedDate.day.toString().padLeft(2, '0')}/'
+                      '${selectedDate.month.toString().padLeft(2, '0')}/'
+                      '${selectedDate.year}',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'No se guardará la factura ni se crearán productos hasta tu confirmación.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(
+                _AliExpressImportRequest(
+                  date: selectedDate,
+                  mode: _AliExpressImportMode.preview,
+                ),
+              ),
+              icon: const Icon(Icons.visibility_outlined, size: 17),
+              label: const Text('Generar preview'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(
+                _AliExpressImportRequest(
+                  date: selectedDate,
+                  mode: _AliExpressImportMode.directToOcr,
+                ),
+              ),
+              icon: const Icon(Icons.auto_awesome, size: 17),
+              label: const Text('Preparar factura'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _startAliExpressDailyImport() async {
+    if (_isAliExpressImportRunning) return;
+    final request = await _pickAliExpressImportRequest();
+    if (request == null || !mounted) return;
+    final date = request.date;
+
+    final progress = ValueNotifier<String>('Abriendo tus pedidos...');
+    NavigatorState? progressNavigator;
+    final progressTitle = request.mode == _AliExpressImportMode.preview
+        ? 'Generando preview AliExpress'
+        : 'Preparando factura AliExpress';
+    setState(() => _isAliExpressImportRunning = true);
+    unawaited(
+      showDialog<void>(
+        context: context,
+        useRootNavigator: false,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          progressNavigator = Navigator.of(dialogContext);
+          return AlertDialog(
+            content: SizedBox(
+              width: 390,
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ValueListenableBuilder<String>(
+                      valueListenable: progress,
+                      builder: (_, message, __) => Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            progressTitle,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(message),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    void closeProgressDialog() {
+      final navigator = progressNavigator;
+      if (navigator != null && navigator.mounted && navigator.canPop()) {
+        navigator.pop();
+      }
+      progressNavigator = null;
+    }
+
+    try {
+      final invoice = await _collectAliExpressDailyInvoice(
+        date,
+        onProgress: (message) => progress.value = message,
+      );
+      if (!mounted) return;
+
+      final dateText = '${date.year.toString().padLeft(4, '0')}-'
+          '${date.month.toString().padLeft(2, '0')}-'
+          '${date.day.toString().padLeft(2, '0')}';
+      final fileName = 'aliexpress-$dateText.pdf';
+      final bytes = await _buildAliExpressInvoicePdf(invoice);
+      if (!mounted) return;
+      closeProgressDialog();
+
+      if (request.mode == _AliExpressImportMode.preview) {
+        final sendToOcr = await _showAliExpressInvoicePreview(
+          bytes: bytes,
+          fileName: fileName,
+          invoice: invoice,
+        );
+        if (!sendToOcr || !mounted) return;
+      }
+
+      final workspaceManager = context.read<WorkspaceManager>();
+      if (workspaceManager.workspaces.length >=
+          WorkspaceManager.maxWorkspaces) {
+        throw StateError(
+          'No hay espacio para abrir la revisión OCR. Cierra una pestaña del ERP e inténtalo nuevamente.',
+        );
+      }
+      workspaceManager.addWorkspace(
+        title: 'Factura AliExpress · $dateText',
+        initialRoute: '/purchases/new',
+      );
+      context.read<OcrFileHandoffService>().queue(
+            target: OcrFileHandoffTarget.purchaseInvoice,
+            fileName: fileName,
+            mimeType: 'application/pdf',
+            bytes: bytes,
+            extension: 'pdf',
+            sourceLabel: 'Navegador ERP · AliExpress · $dateText',
+            sourceSupplierName: 'AliExpress Marketplace',
+            sourceSupplierWebsite: 'https://www.aliexpress.com',
+            structuredInvoiceData: invoice,
+          );
+    } catch (error) {
+      closeProgressDialog();
+      _showBrowserSnack(_friendlyAliExpressImportError(error));
+    } finally {
+      progress.dispose();
+      if (mounted) setState(() => _isAliExpressImportRunning = false);
+    }
+  }
+
+  Future<bool> _showAliExpressInvoicePreview({
+    required Uint8List bytes,
+    required String fileName,
+    required Map<String, dynamic> invoice,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      useRootNavigator: false,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.42),
+      builder: (dialogContext) => _AliExpressInvoicePreviewDialog(
+        bytes: bytes,
+        fileName: fileName,
+        invoice: invoice,
+      ),
+    );
+    return result == true;
+  }
+
+  Future<Map<String, dynamic>> _collectAliExpressDailyInvoice(
+    DateTime date, {
+    required ValueChanged<String> onProgress,
+  }) async {
+    final controller = _controller;
+    if (controller == null) {
+      throw StateError('El navegador todavía no está listo.');
+    }
+
+    final dateText = '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+    final ordersUri = Uri.parse(AliExpressDailyInvoiceService.ordersUri);
+    if (Uri.tryParse(_currentUrl)?.path != ordersUri.path) {
+      await _navigateAliExpressAndWait(ordersUri);
+    }
+
+    onProgress('Buscando todos los pedidos del $dateText...');
+    await _installAliExpressBridge(controller);
+    final listResult = await _runAliExpressBridge(
+      controller,
+      method: 'extractOrdersList',
+      arguments: <String, dynamic>{
+        'filters': <String, dynamic>{
+          'dateMode': 'day',
+          'exactDate': dateText,
+          'fromDate': dateText,
+          'toDate': dateText,
+        },
+      },
+    );
+    final rawOrders = listResult['orders'];
+    final orders = <Map<String, dynamic>>[
+      if (rawOrders is List)
+        for (final order in rawOrders)
+          if (order is Map) Map<String, dynamic>.from(order),
+    ];
+    _aliExpressDebug('list.extracted', <String, dynamic>{
+      'date': dateText,
+      'scannedCount': listResult['scannedCount'],
+      'returnedCount': orders.length,
+      'duplicateOrderNumbers': _aliExpressDuplicateOrderNumbers(orders),
+      'warnings': listResult['warnings'],
+      'preload': listResult['preload'],
+      'orders': orders.map(_aliExpressOrderDebugSummary).toList(),
+    });
+    if (orders.isEmpty) {
+      final warnings = (listResult['warnings'] as List? ?? const [])
+          .map((value) => value.toString())
+          .where((value) => value.isNotEmpty)
+          .join(' ');
+      throw StateError(
+        warnings.isEmpty
+            ? 'No encontré pedidos para $dateText. Verifica la sesión y la fecha.'
+            : warnings,
+      );
+    }
+    if (orders.length > 100) {
+      throw StateError(
+        'Encontré más de 100 pedidos para un solo día; revisa el filtro antes de continuar.',
+      );
+    }
+
+    final enriched = <Map<String, dynamic>>[];
+    for (var index = 0; index < orders.length; index++) {
+      final listOrder = orders[index];
+      final detailUri =
+          AliExpressDailyInvoiceService.resolveOrderDetailUri(listOrder);
+      if (detailUri == null) {
+        throw StateError(
+          'El pedido ${listOrder['orderNumber'] ?? index + 1} no tiene un enlace válido.',
+        );
+      }
+      onProgress(
+        'Leyendo pedido ${index + 1} de ${orders.length} '
+        '(${listOrder['orderNumber'] ?? ''})...',
+      );
+      _aliExpressDebug('detail.navigation.start', <String, dynamic>{
+        'index': index + 1,
+        'totalOrders': orders.length,
+        'listOrder': _aliExpressOrderDebugSummary(listOrder),
+        'detailUrl': _aliExpressSafeDebugUrl(detailUri.toString()),
+      });
+      await _navigateAliExpressAndWait(detailUri);
+      await _installAliExpressBridge(controller);
+      final detail = await _runAliExpressBridge(
+        controller,
+        method: 'extractOrder',
+      );
+      _aliExpressDebug('detail.extracted', <String, dynamic>{
+        'index': index + 1,
+        'listOrderNumber': listOrder['orderNumber'],
+        'detailOrderNumber': detail['orderNumber'],
+        'orderNumberMatches': listOrder['orderNumber'] == detail['orderNumber'],
+        'detail': _aliExpressOrderDebugSummary(detail),
+        'expandDebug': detail['__expandDebug'],
+      });
+      final merged = AliExpressDailyInvoiceService.mergeListAndDetailOrder(
+        listOrder,
+        detail,
+        detailUri,
+      );
+      _aliExpressDebug('detail.merged', <String, dynamic>{
+        'index': index + 1,
+        'listOrderNumber': listOrder['orderNumber'],
+        'detailOrderNumber': detail['orderNumber'],
+        'merged': _aliExpressOrderDebugSummary(merged),
+      });
+      enriched.add(merged);
+    }
+
+    onProgress('Consolidando ${orders.length} pedidos y generando el PDF...');
+    final invoice = AliExpressDailyInvoiceService.buildDailyInvoice(
+      date: date,
+      orders: enriched,
+      sourcePageUrl: listResult['pageUrl']?.toString(),
+    );
+    _aliExpressDebug('invoice.combined', <String, dynamic>{
+      'inputOrderCount': enriched.length,
+      'duplicateOrderNumbers': _aliExpressDuplicateOrderNumbers(enriched),
+      'invoice': _aliExpressOrderDebugSummary(invoice),
+      'componentDifference': invoice['componentDifference'],
+      'bulkMath': invoice['bulkMath'],
+    });
+    return invoice;
+  }
+
+  void _aliExpressDebug(String event, Map<String, dynamic> details) {
+    if (!kDebugMode) return;
+    try {
+      debugPrint(
+        '[AE-DEBUG][erp] ${jsonEncode(<String, dynamic>{
+              'event': event,
+              'at': DateTime.now().toUtc().toIso8601String(),
+              ...details,
+            })}',
+      );
+    } catch (error) {
+      debugPrint('[AE-DEBUG][erp] $event serialization failed: $error');
+    }
+  }
+
+  String _aliExpressSafeDebugUrl(String value) {
+    final uri = Uri.tryParse(value);
+    if (uri == null) return value.split('?').first;
+    const allowedKeys = <String>{
+      'orderId',
+      'orderIdList',
+      'orderNo',
+      'orderNumber',
+      'itemId',
+      'productId',
+    };
+    return uri.replace(
+      queryParameters: <String, String>{
+        for (final entry in uri.queryParameters.entries)
+          if (allowedKeys.contains(entry.key)) entry.key: entry.value,
+      },
+      fragment: '',
+    ).toString();
+  }
+
+  Map<String, int> _aliExpressDuplicateOrderNumbers(
+    List<Map<String, dynamic>> orders,
+  ) {
+    final counts = <String, int>{};
+    for (final order in orders) {
+      final number = order['orderNumber']?.toString().trim() ?? '';
+      if (number.isNotEmpty) counts[number] = (counts[number] ?? 0) + 1;
+    }
+    counts.removeWhere((_, count) => count < 2);
+    return counts;
+  }
+
+  Map<String, dynamic> _aliExpressOrderDebugSummary(
+    Map<String, dynamic> order,
+  ) {
+    final rawItems = order['items'];
+    final items = <Map<String, dynamic>>[
+      if (rawItems is List)
+        for (final item in rawItems)
+          if (item is Map) Map<String, dynamic>.from(item),
+    ];
+    final itemSummaries = items.map((item) {
+      final description = item['description']?.toString() ?? '';
+      final productUrl = item['productUrl']?.toString() ?? '';
+      final placeholder =
+          RegExp(r'^AliExpress order\s+\d+$', caseSensitive: false)
+                  .hasMatch(description.trim()) ||
+              (productUrl.contains('/p/message/') &&
+                  (item['itemId']?.toString().isEmpty ?? true));
+      return <String, dynamic>{
+        'sku': item['sku'],
+        'itemId': item['itemId'],
+        'description': description.length > 160
+            ? description.substring(0, 160)
+            : description,
+        'quantity': item['quantity'],
+        'sourcePurchaseQuantity': item['sourcePurchaseQuantity'],
+        'unitsPerPurchase': item['unitsPerPurchase'],
+        'sourceTotal': item['sourceTotal'],
+        'total': item['total'],
+        'hasImage': (item['imageUrl']?.toString().isNotEmpty ?? false),
+        'productUrl': _aliExpressSafeDebugUrl(productUrl),
+        'placeholder': placeholder,
+      };
+    }).toList();
+    return <String, dynamic>{
+      'orderNumber': order['orderNumber'],
+      'orderDate': order['orderDate'],
+      'pageUrl': _aliExpressSafeDebugUrl(order['pageUrl']?.toString() ?? ''),
+      'itemCount': items.length,
+      'placeholderCount':
+          itemSummaries.where((item) => item['placeholder'] == true).length,
+      'subtotal': order['subtotal'],
+      'shipping': order['shipping'],
+      'tax': order['tax'],
+      'discount': order['discount'],
+      'total': order['total'],
+      'warnings': order['warnings'],
+      'items': itemSummaries,
+    };
+  }
+
+  Future<void> _navigateAliExpressAndWait(Uri uri) async {
+    if (!AliExpressDailyInvoiceService.isTrustedUri(uri)) {
+      throw StateError('AliExpress intentó abrir una dirección no confiable.');
+    }
+    final controller = _controller;
+    if (controller == null) throw StateError('El navegador no está listo.');
+    final completer = Completer<void>();
+    _aliExpressNavigationCompleter = completer;
+    await controller.loadUrl(urlRequest: _urlRequest(uri));
+    await completer.future.timeout(
+      const Duration(seconds: 35),
+      onTimeout: () =>
+          throw TimeoutException('AliExpress tardó demasiado en cargar.'),
+    );
+  }
+
+  Future<void> _installAliExpressBridge(
+    InAppWebViewController controller,
+  ) async {
+    if (!AliExpressDailyInvoiceService.isTrustedUri(
+        Uri.tryParse(_currentUrl))) {
+      throw StateError(
+          'La extracción solo puede ejecutarse dentro de AliExpress.');
+    }
+    _aliExpressBridgeSource ??= await rootBundle.loadString(
+      'tools/chrome-extensions/aliexpress-invoice-generator/content.js',
+    );
+    await controller.evaluateJavascript(source: _aliExpressBridgeSource!);
+  }
+
+  Future<Map<String, dynamic>> _runAliExpressBridge(
+    InAppWebViewController controller, {
+    required String method,
+    Map<String, dynamic> arguments = const {},
+  }) async {
+    const allowedMethods = {'extractOrdersList', 'extractOrder'};
+    if (!allowedMethods.contains(method)) {
+      throw ArgumentError.value(method, 'method');
+    }
+    final result = await controller.callAsyncJavaScript(
+      functionBody: '''
+        const bridge = globalThis.__ALIEXPRESS_INVOICE_BRIDGE__;
+        if (!bridge || typeof bridge[method] !== 'function') {
+          throw new Error('Extractor AliExpress no disponible.');
+        }
+        return await bridge[method](filters || undefined);
+      ''',
+      arguments: <String, dynamic>{
+        'method': method,
+        'filters': arguments['filters'],
+      },
+    );
+    if (result == null) {
+      throw StateError('AliExpress no devolvió información.');
+    }
+    if (result.error != null) throw StateError(result.error!);
+    final value = result.value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    if (value is String) {
+      final decoded = jsonDecode(value);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    }
+    throw StateError('AliExpress devolvió un formato inesperado.');
+  }
+
+  String _friendlyAliExpressImportError(Object error) {
+    final message =
+        error.toString().replaceFirst(RegExp(r'^\w+(?:Error)?:\s*'), '');
+    return 'No pude preparar la factura: $message';
+  }
+
+  Future<Uint8List> _buildAliExpressInvoicePdf(
+    Map<String, dynamic> invoice,
+  ) async {
+    try {
+      final printingInfo = await Printing.info();
+      if (!printingInfo.canConvertHtml) {
+        throw UnsupportedError(
+          'Este equipo no puede convertir la plantilla HTML de AliExpress.',
+        );
+      }
+      final html = await _buildAliExpressInvoiceHtml(invoice);
+      // The extension invoice is HTML-first. Converting that same renderer
+      // keeps the ERP preview and Chrome document on one visual contract.
+      // ignore: deprecated_member_use
+      return await Printing.convertHtml(
+        html: html,
+        format: PdfPageFormat.letter,
+      );
+    } catch (error) {
+      _aliExpressDebug('invoice.canonical-renderer.failed', <String, dynamic>{
+        'error': error.toString(),
+        'fallback': 'disabled',
+      });
+      throw StateError(
+        'No pude generar el PDF con la plantilla real de Chrome. '
+        'No se usó una vista simplificada para evitar un preview engañoso. '
+        'Detalle: $error',
+      );
+    }
+  }
+
+  Future<String> _buildAliExpressInvoiceHtml(
+    Map<String, dynamic> invoice,
+  ) async {
+    final assets = await Future.wait<dynamic>([
+      rootBundle.loadString(
+        'tools/chrome-extensions/aliexpress-invoice-generator/invoice.css',
+      ),
+      rootBundle.loadString(
+        'tools/chrome-extensions/aliexpress-invoice-generator/invoice.js',
+      ),
+      rootBundle.load('assets/images/loading_logo.png'),
+      _inlineAliExpressInvoiceImages(invoice),
+    ]);
+    final css = assets[0] as String;
+    final rendererSource = (assets[1] as String).replaceAll(
+      RegExp('</script', caseSensitive: false),
+      r'<\/script',
+    );
+    final logoData = assets[2] as ByteData;
+    final logoBytes = logoData.buffer.asUint8List(
+      logoData.offsetInBytes,
+      logoData.lengthInBytes,
+    );
+    final preparedInvoice = assets[3] as Map<String, dynamic>;
+    final invoiceLiteral = _safeAliExpressInvoiceJavascriptLiteral(
+      preparedInvoice,
+    );
+    final logoLiteral = jsonEncode(
+      'data:image/png;base64,${base64Encode(logoBytes)}',
+    );
+
+    return '''<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AliExpress OCR Invoice</title>
+    <style>$css</style>
+    <style>
+      .toolbar { display: none !important; }
+      body { background: #fff !important; }
+      .paper { margin: 0; box-shadow: none; }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <div>
+        <strong>Factura OCR AliExpress</strong>
+        <span id="toolbarMeta"></span>
+      </div>
+      <div class="toolbar-actions">
+        <button id="copyTextButton" type="button">Copiar texto OCR</button>
+        <button id="downloadHtmlButton" type="button">Descargar HTML</button>
+        <button id="downloadJsonButton" type="button">Descargar JSON</button>
+        <button id="printButton" type="button" class="primary">Imprimir / Guardar PDF</button>
+      </div>
+    </div>
+    <main id="invoiceRoot" class="paper" aria-live="polite"></main>
+    <script>
+      globalThis.__ALIEXPRESS_INVOICE_DATA__ = $invoiceLiteral;
+      globalThis.__ALIEXPRESS_INVOICE_LOGO_URL__ = $logoLiteral;
+    </script>
+    <script>$rendererSource</script>
+  </body>
+</html>''';
+  }
+
+  Future<Map<String, dynamic>> _inlineAliExpressInvoiceImages(
+    Map<String, dynamic> invoice,
+  ) async {
+    final rawItems = invoice['items'];
+    final items = <Map<String, dynamic>>[
+      if (rawItems is List)
+        for (final rawItem in rawItems)
+          if (rawItem is Map) Map<String, dynamic>.from(rawItem),
+    ];
+    final preparedItems = await Future.wait(
+      items.map((item) async {
+        final imageUrl = item['imageUrl']?.toString().trim() ?? '';
+        if (imageUrl.isEmpty) return item;
+        return <String, dynamic>{
+          ...item,
+          'embeddedImageUrl': await _inlineAliExpressInvoiceImage(imageUrl),
+        };
+      }),
+    );
+    return <String, dynamic>{
+      ...invoice,
+      'items': preparedItems,
+    };
+  }
+
+  Future<String> _inlineAliExpressInvoiceImage(String value) async {
+    if (value.startsWith('data:image/')) return value;
+    final cached = _aliExpressInvoiceImageDataCache[value];
+    if (cached != null) return cached;
+
+    final normalized = value.startsWith('//') ? 'https:$value' : value;
+    final uri = Uri.tryParse(normalized);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        !_isTrustedAliExpressImageHost(uri.host)) {
+      return '';
+    }
+
+    try {
+      final response = await http.get(
+        uri,
+        headers: const <String, String>{
+          'Referer': 'https://www.aliexpress.com/',
+          'User-Agent':
+              'Mozilla/5.0 AppleWebKit/537.36 Chrome/136 Safari/537.36',
+        },
+      ).timeout(const Duration(seconds: 8));
+      final mimeType = (response.headers['content-type'] ?? '')
+          .split(';')
+          .first
+          .trim()
+          .toLowerCase();
+      if (response.statusCode == 200 &&
+          mimeType.startsWith('image/') &&
+          response.bodyBytes.isNotEmpty &&
+          response.bodyBytes.length <= 8 * 1024 * 1024) {
+        final dataUri =
+            'data:$mimeType;base64,${base64Encode(response.bodyBytes)}';
+        _aliExpressInvoiceImageDataCache[value] = dataUri;
+        return dataUri;
+      }
+    } catch (_) {
+      // The canonical renderer keeps the trusted remote URL as a last resort;
+      // its own image fallback removes it cleanly if WebKit cannot load it.
+    }
+    return uri.toString();
+  }
+
+  bool _isTrustedAliExpressImageHost(String host) {
+    final normalized = host.toLowerCase();
+    return normalized == 'alicdn.com' ||
+        normalized.endsWith('.alicdn.com') ||
+        normalized == 'aliexpress-media.com' ||
+        normalized.endsWith('.aliexpress-media.com') ||
+        normalized == 'aliexpress.com' ||
+        normalized.endsWith('.aliexpress.com');
+  }
+
+  String _safeAliExpressInvoiceJavascriptLiteral(Object? value) {
+    return jsonEncode(value)
+        .replaceAll('&', r'\u0026')
+        .replaceAll('<', r'\u003c')
+        .replaceAll('>', r'\u003e')
+        .replaceAll('\u2028', r'\u2028')
+        .replaceAll('\u2029', r'\u2029');
   }
 
   Future<void> _openCurrentExternal() async {
@@ -2599,6 +3325,11 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                 unawaited(_installPageInteractionBridge(controller));
                 unawaited(_applyBrowserZoom(browserZoom));
                 unawaited(_refreshNavigationState());
+                final navigationCompleter = _aliExpressNavigationCompleter;
+                if (navigationCompleter != null &&
+                    !navigationCompleter.isCompleted) {
+                  navigationCompleter.complete();
+                }
               },
               onProgressChanged: (controller, progress) {
                 if (!mounted) return;
@@ -2644,6 +3375,13 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                   _lastErrorMessage = error.description;
                   _isLoading = false;
                 });
+                final navigationCompleter = _aliExpressNavigationCompleter;
+                if (navigationCompleter != null &&
+                    !navigationCompleter.isCompleted) {
+                  navigationCompleter.completeError(
+                    StateError(error.description),
+                  );
+                }
                 if (canRecoverThroughRelay) {
                   unawaited(_recoverCurrentDocumentThroughRelay(failedUrl));
                 }
@@ -3313,6 +4051,30 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                   ),
                 ),
                 const SizedBox(width: 8),
+                if (_isAliExpressPage) ...[
+                  Tooltip(
+                    message: 'Reunir las compras de un día en una factura',
+                    child: FilledButton.tonalIcon(
+                      onPressed: canUseWebView && !_isAliExpressImportRunning
+                          ? _startAliExpressDailyImport
+                          : null,
+                      icon: _isAliExpressImportRunning
+                          ? const SizedBox(
+                              width: 15,
+                              height: 15,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.receipt_long_outlined, size: 17),
+                      label: const Text('Compras del día'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 36),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 IconButton(
                   icon: const Icon(Icons.arrow_back, size: 20),
                   onPressed: _canGoBack ? _goBack : null,
@@ -3632,6 +4394,172 @@ class _WebViewModulePageState extends State<WebViewModulePage>
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+enum _AliExpressImportMode { preview, directToOcr }
+
+class _AliExpressImportRequest {
+  const _AliExpressImportRequest({
+    required this.date,
+    required this.mode,
+  });
+
+  final DateTime date;
+  final _AliExpressImportMode mode;
+}
+
+class _AliExpressInvoicePreviewDialog extends StatelessWidget {
+  const _AliExpressInvoicePreviewDialog({
+    required this.bytes,
+    required this.fileName,
+    required this.invoice,
+  });
+
+  final Uint8List bytes;
+  final String fileName;
+  final Map<String, dynamic> invoice;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final screen = MediaQuery.sizeOf(context);
+    final dialogWidth = (screen.width - 32).clamp(0.0, 1180.0).toDouble();
+    final dialogHeight = (screen.height - 32).clamp(0.0, 900.0).toDouble();
+    final rawOrders = invoice['sourceOrders'];
+    final rawItems = invoice['items'];
+    final orderCount = rawOrders is List ? rawOrders.length : 0;
+    final itemCount = rawItems is List ? rawItems.length : 0;
+    final total = invoice['total'] is num
+        ? (invoice['total'] as num).round()
+        : num.tryParse('${invoice['total']}')?.round() ?? 0;
+
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: SizedBox(
+        width: dialogWidth,
+        height: dialogHeight,
+        child: Column(
+          children: [
+            Container(
+              color: theme.colorScheme.surface,
+              padding: const EdgeInsets.fromLTRB(18, 12, 8, 12),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.picture_as_pdf_outlined,
+                    size: 22,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Preview de factura AliExpress',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$orderCount pedidos · $itemCount líneas · \$$total CLP',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Cerrar preview',
+                    onPressed: () => Navigator.of(context).pop(false),
+                    icon: const Icon(Icons.close, size: 20),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: theme.dividerColor),
+            Expanded(
+              child: PdfPreview(
+                build: (_) async => bytes,
+                useActions: false,
+                allowPrinting: false,
+                allowSharing: false,
+                canChangeOrientation: false,
+                canChangePageFormat: false,
+                canDebug: false,
+                pdfFileName: fileName,
+                maxPageWidth: 1500,
+                scrollViewDecoration: const BoxDecoration(
+                  color: Color(0xFFE5E7EB),
+                ),
+                loadingWidget: const Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+            Divider(height: 1, color: theme.dividerColor),
+            Container(
+              color: theme.colorScheme.surface,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final actions = Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text('Volver a AliExpress'),
+                      ),
+                      FilledButton.icon(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        icon: const Icon(Icons.document_scanner_outlined,
+                            size: 18),
+                        label: const Text('Enviar al OCR'),
+                      ),
+                    ],
+                  );
+                  final status = Text(
+                    'Solo se enviará al OCR cuando lo confirmes.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  );
+                  if (constraints.maxWidth < 620) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        status,
+                        const SizedBox(height: 10),
+                        actions,
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: status),
+                      const SizedBox(width: 16),
+                      actions,
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

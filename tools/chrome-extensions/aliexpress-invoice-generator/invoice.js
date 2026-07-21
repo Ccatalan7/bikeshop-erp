@@ -2,18 +2,34 @@
   'use strict';
 
   const STORAGE_PREFIX = 'aliexpressInvoiceDraft:';
-  const root = document.getElementById('invoiceRoot');
-  const toolbarMeta = document.getElementById('toolbarMeta');
+  const hasDocument = typeof document !== 'undefined';
+  const root = hasDocument ? document.getElementById('invoiceRoot') : null;
+  const toolbarMeta = hasDocument ? document.getElementById('toolbarMeta') : null;
   let currentInvoice = null;
 
-  document.getElementById('printButton').addEventListener('click', () => window.print());
-  document.getElementById('downloadHtmlButton').addEventListener('click', downloadHtml);
-  document.getElementById('downloadJsonButton').addEventListener('click', downloadJson);
-  document.getElementById('copyTextButton').addEventListener('click', copyOcrText);
-
-  loadInvoice();
+  if (hasDocument) {
+    document.getElementById('printButton')?.addEventListener('click', () => window.print());
+    document.getElementById('downloadHtmlButton')?.addEventListener('click', downloadHtml);
+    document.getElementById('downloadJsonButton')?.addEventListener('click', downloadJson);
+    document.getElementById('copyTextButton')?.addEventListener('click', copyOcrText);
+    loadInvoice();
+  }
 
   async function loadInvoice() {
+    const embeddedInvoice = globalThis.__ALIEXPRESS_INVOICE_DATA__;
+    if (embeddedInvoice && typeof embeddedInvoice === 'object') {
+      currentInvoice = normalizeInvoice(embeddedInvoice);
+      document.title = `AliExpress ${currentInvoice.orderNumber || 'invoice'}`;
+      if (toolbarMeta) {
+        toolbarMeta.textContent = currentInvoice.orderNumber
+          ? `Pedido ${currentInvoice.orderNumber}`
+          : '';
+      }
+      renderInvoice(currentInvoice);
+      globalThis.__ALIEXPRESS_INVOICE_READY__ = true;
+      return;
+    }
+
     const params = new URLSearchParams(location.search);
     const draftId = params.get('draft');
 
@@ -33,21 +49,31 @@
 
     currentInvoice = normalizeInvoice(invoice);
     document.title = `AliExpress ${currentInvoice.orderNumber || 'invoice'}`;
-    toolbarMeta.textContent = currentInvoice.orderNumber ? `Pedido ${currentInvoice.orderNumber}` : '';
+    if (toolbarMeta) {
+      toolbarMeta.textContent = currentInvoice.orderNumber ? `Pedido ${currentInvoice.orderNumber}` : '';
+    }
     renderInvoice(currentInvoice);
+    globalThis.__ALIEXPRESS_INVOICE_READY__ = true;
   }
 
   function renderInvoice(invoice) {
+    if (!root) return;
+    root.innerHTML = buildInvoiceMarkup(invoice);
+    wireImageFallbacks();
+  }
+
+  function buildInvoiceMarkup(invoice) {
     const itemRows = invoice.items.map((item, index) => `
       <tr>
         <td class="index-cell">${index + 1}</td>
         <td class="image-cell">
-          ${item.imageUrl ? `<img class="item-image" src="${escapeAttr(item.imageUrl)}" alt="" referrerpolicy="no-referrer">` : '<div class="item-image-empty"></div>'}
+          ${(item.embeddedImageUrl || item.imageUrl) ? `<img class="item-image" src="${escapeAttr(item.embeddedImageUrl || item.imageUrl)}" alt="" referrerpolicy="no-referrer">` : '<div class="item-image-empty"></div>'}
         </td>
         <td>
           <div class="article-copy">
             <strong>${escapeHtml(item.description || 'AliExpress item')}</strong>
             <div class="muted">SKU: ${escapeHtml(item.sku || 'AE-ITEM')}</div>
+            ${item.unitsPerPurchase > 1 ? `<div class="muted">Compra AliExpress: ${formatQuantity(item.sourcePurchaseQuantity)} × ${formatQuantity(item.unitsPerPurchase)} pares = ${formatQuantity(item.quantity)} pares</div>` : ''}
             <span class="machine-metadata">${buildMachineMetadata(item)}</span>
           </div>
         </td>
@@ -56,6 +82,7 @@
         <td class="numeric allocation-cell">${formatOptionalUnitMoney(-Math.abs(toNumber(item.allocatedDiscount)), invoice.currency)}</td>
         <td class="numeric allocation-cell">${formatOptionalUnitMoney(item.allocatedShipping, invoice.currency)}</td>
         <td class="numeric allocation-cell">${formatOptionalUnitMoney(item.allocatedTax, invoice.currency)}</td>
+        <td class="numeric allocation-cell">${formatOptionalUnitMoney(item.allocatedAdjustment, invoice.currency)}</td>
         <td class="numeric calculated-cost-cell">${formatUnitMoney(item.unitPrice, invoice.currency)}</td>
         <td class="numeric">${formatMoney(item.total, invoice.currency)}</td>
       </tr>
@@ -64,13 +91,26 @@
     const itemSubtotal = sumItems(invoice.items);
     const sourceSubtotal = invoice.subtotal || sumSourceItems(invoice.items) || itemSubtotal;
     const shipping = toNumber(invoice.shipping);
+    const adjustment = toNullableNumber(invoice.componentDifference)
+      ?? roundMoney(invoice.items.reduce(
+        (sum, item) => sum + toNumber(item.allocatedAdjustmentTotal),
+        0,
+      ));
     const paidAmount = invoice.total;
     const balance = Math.max(0, roundMoney(invoice.total - paidAmount));
+    const logoUrl = String(
+      globalThis.__ALIEXPRESS_INVOICE_LOGO_URL__
+        || 'https://vinabike.cl/vinabike-logo.png',
+    );
+    const machineInvoice = {
+      ...invoice,
+      items: invoice.items.map(({ embeddedImageUrl, ...item }) => item),
+    };
 
-    root.innerHTML = `
+    return `
       <header class="invoice-header">
         <div class="brand-mark">
-          <img class="brand-logo" src="https://vinabike.cl/vinabike-logo.png" alt="Vinabike">
+          <img class="brand-logo" src="${escapeAttr(logoUrl)}" alt="Vinabike">
         </div>
         <aside class="invoice-summary">
           <strong># ${escapeHtml(invoice.orderNumber)}</strong>
@@ -109,6 +149,7 @@
               <th class="numeric">Desc./coins u.</th>
               <th class="numeric">Envío u.</th>
               <th class="numeric">Tax u.</th>
+              <th class="numeric">Ajuste u.</th>
               <th class="numeric">Costo unit. calc.</th>
               <th class="numeric">Importe</th>
             </tr>
@@ -123,15 +164,14 @@
         ${shipping > 0 ? `<div class="totals-row"><span>Shipping</span><span>${formatMoney(shipping, invoice.currency)}</span></div>` : ''}
         <div class="totals-row subtotal-row"><span>Neto (subtotal imponible)</span><span>${formatMoney(sourceSubtotal - Math.abs(invoice.discount || 0) + shipping, invoice.currency)}</span></div>
         ${invoice.tax ? `<div class="totals-row"><span>IVA / Tax</span><span>${formatMoney(invoice.tax, invoice.currency)}</span></div>` : ''}
+        ${adjustment ? `<div class="totals-row"><span>Ajuste AliExpress / redondeo</span><span>${formatMoney(adjustment, invoice.currency)}</span></div>` : ''}
         <div class="totals-row grand-total"><span>TOTAL</span><span>${formatMoney(invoice.total, invoice.currency)}</span></div>
         <div class="totals-row paid-row"><span>Pago realizado</span><span>${formatMoney(paidAmount, invoice.currency)}</span></div>
         <div class="totals-row balance-row"><span>Saldo adeudado</span><span>${formatMoney(balance, invoice.currency)}</span></div>
       </section>
 
-      <script type="application/json" id="aliexpress-invoice-data">${escapeHtml(JSON.stringify(invoice))}</script>
+      <script type="application/json" id="aliexpress-invoice-data">${escapeHtml(JSON.stringify(machineInvoice))}</script>
     `;
-
-    wireImageFallbacks();
   }
 
   function wireImageFallbacks() {
@@ -159,7 +199,7 @@
     lines.push(`Pedido # ${invoice.orderNumber}`);
     lines.push(`Factura ${invoice.orderNumber}`);
     lines.push(`Fecha: ${formatDate(invoice.orderDate)}`);
-    lines.push('SKU DESCRIPCION CANTIDAD TARIFA_ORIGEN DESC_UNIT ENVIO_UNIT TAX_UNIT COSTO_UNIT IMPORTE');
+    lines.push('SKU DESCRIPCION CANTIDAD TARIFA_ORIGEN DESC_UNIT ENVIO_UNIT TAX_UNIT AJUSTE_UNIT COSTO_UNIT IMPORTE');
     lines.push('IMPORTE');
 
     invoice.items.forEach((item) => {
@@ -170,6 +210,7 @@
       lines.push(`$ ${formatDecimalComma(-Math.abs(toNumber(item.allocatedDiscount)))}`);
       lines.push(`$ ${formatDecimalComma(item.allocatedShipping || 0)}`);
       lines.push(`$ ${formatDecimalComma(item.allocatedTax || 0)}`);
+      lines.push(`$ ${formatDecimalComma(item.allocatedAdjustment || 0)}`);
       lines.push(`$ ${formatDecimalComma(item.unitPrice || 0)}`);
       lines.push(`$ ${formatDecimalComma(item.total || 0)}`);
     });
@@ -187,6 +228,14 @@
     const lines = [];
     if (item.productUrl) lines.push(`PRODUCT_URL: ${item.productUrl}`);
     if (item.imageUrl) lines.push(`IMAGE_URL: ${item.imageUrl}`);
+    if (item.unitsPerPurchase > 1) {
+      lines.push(`SOURCE_PURCHASE_QUANTITY: ${item.sourcePurchaseQuantity}`);
+      lines.push(`UNITS_PER_PURCHASE: ${item.unitsPerPurchase}`);
+      lines.push(`INVENTORY_UNIT: ${item.inventoryUnit || 'unit'}`);
+    }
+    if (item.sourceOrderNumbers.length) {
+      lines.push(`SOURCE_ORDERS: ${item.sourceOrderNumbers.join(',')}`);
+    }
     return escapeHtml(lines.join('\n'));
   }
 
@@ -199,6 +248,7 @@
       const allocatedDiscountTotal = toNullableNumber(item.allocatedDiscountTotal);
       const allocatedShippingTotal = toNullableNumber(item.allocatedShippingTotal);
       const allocatedTaxTotal = toNullableNumber(item.allocatedTaxTotal);
+      const allocatedAdjustmentTotal = toNullableNumber(item.allocatedAdjustmentTotal);
       const allocationGranularity = item.allocationGranularity === 'unit' ? 'unit' : '';
       const sourceDescription = String(item.originalDescription || item.description || 'AliExpress item').trim();
       const cleanedDescription = smartProductName(sourceDescription, item);
@@ -211,9 +261,16 @@
         sku: String(item.sku || `AE-${String(index + 1).padStart(3, '0')}`).trim(),
         description,
         originalDescription,
+        variant: String(item.variant || '').trim(),
+        variantKey: String(item.variantKey || '').trim(),
         quantity,
         unitPrice,
         total,
+        sourcePurchaseQuantity: toNumber(item.sourcePurchaseQuantity) || quantity,
+        unitsPerPurchase: toNumber(item.unitsPerPurchase) || 1,
+        inventoryUnit: item.inventoryUnit || '',
+        sourcePurchaseUnitPrice: toNullableNumber(item.sourcePurchaseUnitPrice),
+        sourceOrderNumbers: Array.isArray(item.sourceOrderNumbers) ? item.sourceOrderNumbers : [],
         sourceUnitPrice,
         sourceTotal: toNullableNumber(item.sourceTotal) ?? roundMoney(sourceUnitPrice * quantity),
         allocatedDiscount: normalizeAllocationUnit(item.allocatedDiscount, allocatedDiscountTotal, quantity, allocationGranularity),
@@ -222,10 +279,13 @@
         allocatedShippingTotal,
         allocatedTax: normalizeAllocationUnit(item.allocatedTax, allocatedTaxTotal, quantity, allocationGranularity),
         allocatedTaxTotal,
+        allocatedAdjustment: normalizeAllocationUnit(item.allocatedAdjustment, allocatedAdjustmentTotal, quantity, allocationGranularity),
+        allocatedAdjustmentTotal,
         allocationGranularity: 'unit',
         itemId: item.itemId || '',
         productUrl: item.productUrl || '',
         imageUrl: item.imageUrl || '',
+        embeddedImageUrl: item.embeddedImageUrl || '',
       };
     });
 
@@ -240,6 +300,8 @@
       tax: toNullableNumber(invoice.tax),
       discount: toNullableNumber(invoice.discount),
       total: toNumber(invoice.total) || sumItems(items),
+      componentDifference: toNullableNumber(invoice.componentDifference)
+        ?? toNullableNumber(invoice.allocation && invoice.allocation.componentDifference),
       notes: invoice.notes || '',
       pageUrl: invoice.pageUrl || '',
       items,
@@ -262,6 +324,15 @@
     const normalized = normalizeNameKey(base);
     const brand = extractCatalogBrand(base);
     const variant = extractTrailingVariant(base);
+
+    if (/\b(pastillas?(?:\s+de)?\s+freno|brake\s+pads?)\b/.test(normalized)) {
+      return compactName([
+        'Pastillas de freno',
+        brand,
+        brakePadModelLabel(base),
+        '(par)',
+      ]);
+    }
 
     if (isBottomBracketTitle(normalized)) {
       return compactName([
@@ -346,6 +417,11 @@
     const blocked = new Set(['USB', 'LED', 'BSA', 'ISO', 'JIS', 'MTB', 'BMX', 'BB', 'T6']);
     if (blocked.has(acronym[0]) || /^[A-Z]{1,4}\d{1,5}$/.test(acronym[0])) return '';
     return acronym[0];
+  }
+
+  function brakePadModelLabel(value) {
+    const match = String(value || '').match(/\b([A-Z]{1,6}-\d{1,4}[A-Z]?)\b/i);
+    return match ? match[1].toUpperCase() : '';
   }
 
   function isBottomBracketTitle(normalized) {
@@ -541,5 +617,18 @@
 
   function safeFilePart(value) {
     return String(value || 'invoice').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || 'invoice';
+  }
+
+  const testing = Object.freeze({
+    normalizeInvoice,
+    smartProductName,
+    buildInvoiceMarkup,
+    formatMoney,
+    formatUnitMoney,
+    formatOptionalUnitMoney,
+  });
+  globalThis.__ALIEXPRESS_INVOICE_RENDERER_TESTING__ = testing;
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = testing;
   }
 }());

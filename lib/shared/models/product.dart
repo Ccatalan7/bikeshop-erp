@@ -4,7 +4,8 @@ class Product {
       'id,name,sku,barcode,price,cost,inventory_qty,stock_quantity,'
       'min_stock_level,max_stock_level,image_url,image_url_optimized,'
       'category,category_id,category_name,brand_id,brand,model,'
-      'supplier_code,purchase_treatment,product_type,parent_set_id,'
+      'supplier_id,supplier_name,supplier_code,'
+      'purchase_treatment,product_type,parent_set_id,'
       'track_stock,is_active,is_published,'
       'created_at,updated_at';
 

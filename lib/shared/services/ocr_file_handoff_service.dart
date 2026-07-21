@@ -18,6 +18,7 @@ class OcrFileHandoffPayload {
     this.sourceSupplierId,
     this.sourceSupplierName,
     this.sourceSupplierWebsite,
+    this.structuredInvoiceData,
   });
 
   final String id;
@@ -31,6 +32,7 @@ class OcrFileHandoffPayload {
   final String? sourceSupplierId;
   final String? sourceSupplierName;
   final String? sourceSupplierWebsite;
+  final Map<String, dynamic>? structuredInvoiceData;
 }
 
 class OcrFileHandoffService extends ChangeNotifier {
@@ -50,6 +52,7 @@ class OcrFileHandoffService extends ChangeNotifier {
     String? sourceSupplierId,
     String? sourceSupplierName,
     String? sourceSupplierWebsite,
+    Map<String, dynamic>? structuredInvoiceData,
   }) {
     _pending = OcrFileHandoffPayload(
       id: '${DateTime.now().microsecondsSinceEpoch}-${_sequence++}',
@@ -63,6 +66,7 @@ class OcrFileHandoffService extends ChangeNotifier {
       sourceSupplierId: sourceSupplierId,
       sourceSupplierName: sourceSupplierName,
       sourceSupplierWebsite: sourceSupplierWebsite,
+      structuredInvoiceData: structuredInvoiceData,
     );
     notifyListeners();
   }

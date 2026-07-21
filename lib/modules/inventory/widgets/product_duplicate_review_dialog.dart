@@ -33,30 +33,40 @@ class ProductDuplicateSummaryButton extends StatelessWidget {
     }
 
     final top = candidates.first;
+    final tone = switch (top.matchTier) {
+      ProductDuplicateMatchTier.exact => Colors.green,
+      ProductDuplicateMatchTier.strong => Colors.orange,
+      ProductDuplicateMatchTier.possible => Colors.blue,
+    };
     return InkWell(
       onTap: isEnabled ? onPressed : null,
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.amber.shade50,
-          border: Border.all(color: Colors.amber.shade200),
+          color: tone.shade50,
+          border: Border.all(color: tone.shade200),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
-            Icon(Icons.warning_amber_rounded,
-                size: 16, color: Colors.amber.shade800),
+            Icon(
+              top.isExactIdentity
+                  ? Icons.verified_outlined
+                  : Icons.compare_arrows,
+              size: 16,
+              color: tone.shade800,
+            ),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                '${candidates.length} parecido${candidates.length == 1 ? '' : 's'} • ${(top.overallScore * 100).round()}%',
+                '${candidates.length} opción${candidates.length == 1 ? '' : 'es'} • ${(top.overallScore * 100).round()}%',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Colors.amber.shade900,
+                  color: tone.shade900,
                 ),
               ),
             ),
@@ -77,6 +87,7 @@ class ProductDuplicateReviewDialog extends StatelessWidget {
     this.footerText,
     this.closeLabel = 'Volver a la tabla',
     this.emptyActionLabel,
+    this.onEmptyAction,
   });
 
   final List<ProductDuplicateReviewRow> rows;
@@ -85,6 +96,7 @@ class ProductDuplicateReviewDialog extends StatelessWidget {
   final String? footerText;
   final String closeLabel;
   final String? emptyActionLabel;
+  final VoidCallback? onEmptyAction;
 
   @override
   Widget build(BuildContext context) {
@@ -179,7 +191,8 @@ class ProductDuplicateReviewDialog extends StatelessWidget {
                   const SizedBox(width: 12),
                   if (emptyActionLabel != null)
                     OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed:
+                          onEmptyAction ?? () => Navigator.of(context).pop(),
                       icon: const Icon(Icons.add_box_outlined),
                       label: Text(emptyActionLabel!),
                     )
@@ -228,12 +241,12 @@ class ProductDuplicateReviewCard extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(10),
                 child: SizedBox(
-                  width: 58,
-                  height: 58,
+                  width: 72,
+                  height: 72,
                   child: row.imageUrl != null
                       ? ImageService.buildProductImage(
                           imageUrl: row.imageUrl,
-                          size: 58,
+                          size: 72,
                         )
                       : Container(
                           color: theme.colorScheme.surfaceContainerHighest,
@@ -341,6 +354,18 @@ class ProductDuplicateCandidateTile extends StatelessWidget {
     final theme = Theme.of(context);
     final product = candidate.product;
     final scorePercent = (candidate.overallScore * 100).round();
+    final tierLabel = switch (candidate.matchTier) {
+      ProductDuplicateMatchTier.exact when candidate.identityScore >= 1 =>
+        'Identidad exacta',
+      ProductDuplicateMatchTier.exact => 'Misma imagen',
+      ProductDuplicateMatchTier.strong => 'Coincidencia alta',
+      ProductDuplicateMatchTier.possible => 'Posible coincidencia',
+    };
+    final tierColor = switch (candidate.matchTier) {
+      ProductDuplicateMatchTier.exact => Colors.green,
+      ProductDuplicateMatchTier.strong => Colors.orange,
+      ProductDuplicateMatchTier.possible => Colors.blue,
+    };
 
     final content = Container(
       padding: const EdgeInsets.all(10),
@@ -357,11 +382,11 @@ class ProductDuplicateCandidateTile extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: SizedBox(
-              width: 52,
-              height: 52,
+              width: 72,
+              height: 72,
               child: ImageService.buildProductImage(
                 imageUrl: _productPreviewUrl(product),
-                size: 52,
+                size: 72,
               ),
             ),
           ),
@@ -400,13 +425,11 @@ class ProductDuplicateCandidateTile extends StatelessWidget {
                           '$scorePercent%',
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w800,
-                            color: candidate.overallScore >= 0.8
-                                ? Colors.orange.shade700
-                                : theme.colorScheme.primary,
+                            color: tierColor.shade700,
                           ),
                         ),
                         Text(
-                          'score total',
+                          tierLabel,
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
@@ -478,19 +501,6 @@ class ProductDuplicateCandidateTile extends StatelessWidget {
                       ),
                   ],
                 ),
-                if (candidate.imageDebugSignals.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: candidate.imageDebugSignals
-                        .map((signal) => ProductDuplicateMetricChip(
-                              label: signal,
-                              tone: ProductDuplicateChipTone.neutral,
-                            ))
-                        .toList(growable: false),
-                  ),
-                ],
                 if (candidate.signals.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(
@@ -512,7 +522,7 @@ class ProductDuplicateCandidateTile extends StatelessWidget {
             FilledButton.icon(
               onPressed: onSelected,
               icon: const Icon(Icons.check, size: 16),
-              label: const Text('Usar'),
+              label: const Text('Vincular'),
             ),
           ],
         ],

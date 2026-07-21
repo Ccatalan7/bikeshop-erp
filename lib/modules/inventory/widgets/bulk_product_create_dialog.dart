@@ -36,6 +36,8 @@ class _ProductDraft {
   bool isGeneratingSku = false;
   bool isCheckingDuplicates = false;
   bool hasCheckedDuplicates = false;
+  bool hasReservedAliExpressSku = false;
+  String? aliExpressSkuReservationOperationKey;
   final TextEditingController skuController;
   final TextEditingController nameController;
   final TextEditingController descriptionController;
@@ -218,6 +220,8 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
       if (_defaultCategory != null) draft.selectedCategory = _defaultCategory;
       if (_defaultBrand != null) draft.selectedBrand = _defaultBrand;
       if (_defaultSupplier != null) draft.selectedSupplier = _defaultSupplier;
+      draft.hasReservedAliExpressSku = false;
+      draft.aliExpressSkuReservationOperationKey = null;
       draft.isWorkshopConsumable = _defaultWorkshop;
     }
     setState(() {});
@@ -322,7 +326,11 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
   Future<void> _onSupplierSelected(
       _ProductDraft draft, Supplier? supplier) async {
     _invalidateDuplicateCheck(draft);
-    setState(() => draft.selectedSupplier = supplier);
+    setState(() {
+      draft.selectedSupplier = supplier;
+      draft.hasReservedAliExpressSku = false;
+      draft.aliExpressSkuReservationOperationKey = null;
+    });
     await _generateSkuForRow(draft);
   }
 
@@ -560,8 +568,25 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
       final tenantService = TenantService();
       int created = 0;
       final List<String> failed = [];
+      final createdDrafts = <_ProductDraft>[];
 
       for (final draft in selectedRows) {
+        final supplier = draft.selectedSupplier;
+        if (supplier != null &&
+            inventoryService.isAliExpressSupplierName(supplier.name) &&
+            !draft.hasReservedAliExpressSku) {
+          draft.aliExpressSkuReservationOperationKey ??=
+              'bulk-product-${DateTime.now().microsecondsSinceEpoch}-'
+              '${identityHashCode(draft)}';
+          final reserved = await inventoryService.reserveAliExpressSkus(
+            count: 1,
+            operationKey: draft.aliExpressSkuReservationOperationKey!,
+            supplierId: supplier.id,
+            supplierName: supplier.name,
+          );
+          draft.skuController.text = reserved.single;
+          draft.hasReservedAliExpressSku = true;
+        }
         final product = Product(
           tenantId: tenantService.currentTenantId ?? '',
           name: draft.nameController.text.trim(),
@@ -599,9 +624,19 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
         try {
           await inventoryService.createProduct(product);
           created++;
+          createdDrafts.add(draft);
         } catch (e) {
           debugPrint('❌ Failed to create product "${product.name}": $e');
           failed.add(draft.nameController.text.trim());
+        }
+      }
+
+      if (createdDrafts.isNotEmpty) {
+        setState(() {
+          _rows.removeWhere((draft) => createdDrafts.contains(draft));
+        });
+        for (final draft in createdDrafts) {
+          draft.dispose();
         }
       }
 

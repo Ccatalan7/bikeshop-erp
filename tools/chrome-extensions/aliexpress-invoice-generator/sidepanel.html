@@ -3,214 +3,266 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>AliExpress Invoice Bulk Workspace</title>
+    <title>Compras AliExpress</title>
     <link rel="stylesheet" href="popup.css">
   </head>
   <body data-workspace="1" data-sidepanel="1">
     <main class="shell">
-      <header class="header">
+      <header class="header app-header">
         <div>
-          <p class="eyebrow">AliExpress</p>
-          <h1>Factura para OCR</h1>
+          <p class="eyebrow">AliExpress · v0.4.6</p>
+          <h1>Compras del día</h1>
+          <p class="header-helper">Busca los pedidos, revísalos y crea una sola factura para el OCR.</p>
         </div>
-        <button id="extractButton" class="icon-button" type="button" title="Extraer pagina actual">Extraer</button>
       </header>
 
-      <section id="status" class="status neutral">Panel bulk estable listo.</section>
+      <nav class="app-tabs" aria-label="Secciones del complemento">
+        <button type="button" class="app-tab active" data-tab="invoice" aria-selected="true">Factura</button>
+        <button type="button" class="app-tab" data-tab="vision" aria-selected="false">AI Vision</button>
+        <button type="button" class="app-tab" data-tab="tools" aria-selected="false">Más</button>
+      </nav>
 
-      <section class="panel settings-panel">
-        <details id="settingsDetails" class="settings-details">
-          <summary>
-            <span>
-              <strong>Ajustes</strong>
-              <small>Defaults del bulk y seguridad de salida</small>
-            </span>
-          </summary>
-          <div class="settings-grid">
+      <section id="status" class="status neutral" aria-live="polite">Elige el día que quieres procesar.</section>
+
+      <div class="app-tab-panel active" data-tab-panel="invoice">
+        <section class="panel bulk-panel primary-workflow">
+          <div class="step-heading">
+            <span class="step-number">1</span>
+            <div>
+              <h2>Elige la fecha</h2>
+              <p class="helper-text">AliExpress cargará automáticamente el historial necesario.</p>
+            </div>
+          </div>
+
+          <div class="bulk-date-mode-grid">
             <label>
-              Fecha por defecto
-              <select id="settingsDefaultDateMode">
-                <option value="range">Rango</option>
-                <option value="day">Dia exacto</option>
+              Buscar por
+              <select id="bulkDateMode">
+                <option value="day">Un día</option>
+                <option value="range">Un rango</option>
               </select>
             </label>
-            <label>
-              Dias del rango
-              <input id="settingsRangeDays" type="number" min="1" max="365" step="1">
-            </label>
-            <label>
-              Salida por defecto
-              <select id="settingsDefaultOutputMode">
-                <option value="separate">Una factura por orden</option>
-                <option value="combined">Factura consolidada</option>
-              </select>
-            </label>
-            <label>
-              Max. facturas separadas
-              <input id="settingsMaxSeparateInvoices" type="number" min="1" max="50" step="1">
+            <label id="bulkExactDateField" class="bulk-exact-date-field">
+              Día de compra
+              <input id="bulkExactDate" type="date">
             </label>
           </div>
-          <label class="settings-check-row">
-            <input id="settingsAutoSelectOrders" type="checkbox">
-            Seleccionar automaticamente las ordenes colectadas
-          </label>
-          <label class="settings-check-row">
-            <input id="settingsEnrichDetails" type="checkbox">
-            Leer el detalle de cada orden antes de generar/exportar
-          </label>
-          <div class="settings-actions">
-            <button id="resetSettingsButton" type="button" class="secondary-button">Restaurar</button>
-            <button id="applySettingsButton" type="button" class="secondary-button">Aplicar ahora</button>
-            <button id="saveSettingsButton" type="button" class="primary-button">Guardar</button>
+          <div id="bulkRangeFields" class="grid-two bulk-range-fields">
+            <label>
+              Desde
+              <input id="bulkFromDate" type="date">
+            </label>
+            <label>
+              Hasta
+              <input id="bulkToDate" type="date">
+            </label>
           </div>
-        </details>
-      </section>
+          <button id="collectBulkButton" type="button" class="primary-button workflow-primary">Buscar compras</button>
+          <button id="openWorkspaceButton" type="button" hidden>Panel estable</button>
 
-      <section class="panel bulk-panel">
-        <div class="section-heading">
-          <div>
-            <h2>Bulk desde lista</h2>
-            <p class="helper-text">Panel estable: colecta, revisa, exporta y genera sin depender del popup.</p>
+          <div id="bulkProgress" class="bulk-progress idle" aria-live="polite">
+            <div class="bulk-progress-top">
+              <span id="bulkProgressLabel">Listo</span>
+              <span id="bulkProgressCount">0%</span>
+            </div>
+            <div class="bulk-progress-track">
+              <div id="bulkProgressBar" class="bulk-progress-bar" style="width: 0%"></div>
+            </div>
+            <div id="bulkProgressDetail" class="bulk-progress-detail">Todavía no se ha iniciado una búsqueda.</div>
           </div>
-          <div class="bulk-heading-actions">
-            <button id="openWorkspaceButton" type="button" class="secondary-button">Panel estable</button>
-            <button id="collectBulkButton" type="button" class="secondary-button">Colectar</button>
+        </section>
+
+        <section class="panel results-panel">
+          <div class="step-heading">
+            <span class="step-number">2</span>
+            <div>
+              <h2>Revisa los pedidos</h2>
+              <p class="helper-text">Desmarca únicamente lo que no pertenezca a esta factura.</p>
+            </div>
           </div>
-        </div>
-        <div class="bulk-date-mode-grid">
-          <label>
-            Fecha
-            <select id="bulkDateMode">
-              <option value="range">Rango</option>
-              <option value="day">Dia exacto</option>
+          <div id="bulkOrdersList" class="bulk-orders-list empty-results">
+            <p class="empty-copy">Aquí aparecerán las compras encontradas.</p>
+          </div>
+        </section>
+
+        <section class="panel output-panel">
+          <div class="step-heading">
+            <span class="step-number">3</span>
+            <div>
+              <h2>Crea la factura</h2>
+              <p class="helper-text">Por defecto se consolidan todos los pedidos del día.</p>
+            </div>
+          </div>
+          <label class="bulk-mode-field">
+            Resultado
+            <select id="bulkOutputMode">
+              <option value="combined">Una factura consolidada</option>
+              <option value="separate">Una factura por pedido</option>
             </select>
           </label>
-          <label id="bulkExactDateField" class="bulk-exact-date-field">
-            Dia
-            <input id="bulkExactDate" type="date">
-          </label>
-        </div>
-        <div id="bulkRangeFields" class="grid-two bulk-range-fields">
-          <label>
-            Desde
-            <input id="bulkFromDate" type="date">
-          </label>
-          <label>
-            Hasta
-            <input id="bulkToDate" type="date">
-          </label>
-        </div>
-        <div id="bulkProgress" class="bulk-progress idle" aria-live="polite">
-          <div class="bulk-progress-top">
-            <span id="bulkProgressLabel">Listo</span>
-            <span id="bulkProgressCount">0%</span>
-          </div>
-          <div class="bulk-progress-track">
-            <div id="bulkProgressBar" class="bulk-progress-bar" style="width: 0%"></div>
-          </div>
-          <div id="bulkProgressDetail" class="bulk-progress-detail">Sin proceso bulk activo.</div>
-        </div>
-        <div id="bulkOrdersList" class="bulk-orders-list"></div>
-        <label class="bulk-mode-field">
-          Salida
-          <select id="bulkOutputMode">
-            <option value="separate">Una factura por orden seleccionada</option>
-            <option value="combined">Una factura consolidada</option>
-          </select>
-        </label>
-        <div class="bulk-actions">
-          <button id="downloadBulkJsonButton" type="button" class="secondary-button">JSON bulk</button>
-          <button id="generateBulkButton" type="button" class="primary-button">Generar</button>
-        </div>
-      </section>
+          <button id="generateBulkButton" type="button" class="primary-button workflow-primary">Crear factura para OCR</button>
+        </section>
+      </div>
 
-      <section class="panel ai-panel">
-        <div class="section-heading">
-          <div>
-            <h2>AI Vision OCR</h2>
-            <p class="helper-text">Fallback para cuando AliExpress cambia el HTML. Captura el area visible y extrae lineas con Gemini.</p>
+      <div class="app-tab-panel" data-tab-panel="vision" hidden>
+        <section class="panel ai-panel">
+          <div class="section-heading">
+            <div>
+              <p class="panel-kicker">Respaldo opcional</p>
+              <h2>Leer el área visible con AI Vision</h2>
+              <p class="helper-text">Úsalo sólo si la extracción normal no reconoce una página de detalle.</p>
+            </div>
           </div>
-          <button id="aiExtractButton" type="button" class="secondary-button">AI OCR visible</button>
-        </div>
-        <div class="ai-key-row">
-          <label>
-            Gemini API key
-            <input id="geminiApiKey" type="password" placeholder="AIza..." autocomplete="off">
-          </label>
-          <button id="saveGeminiKeyButton" type="button" class="secondary-button">Guardar</button>
-        </div>
-        <div class="section-heading" style="margin-top:12px">
-          <div>
-            <h2>✨ Limpieza de nombres con IA</h2>
-            <p class="helper-text">Reescribe los titulos AliExpress como nombres cortos para taller (ej. "Postiza ZTTO 001"). Conserva el original.</p>
+          <div class="ai-key-row">
+            <label>
+              Gemini API key
+              <input id="geminiApiKey" type="password" placeholder="AIza..." autocomplete="off">
+            </label>
+            <button id="saveGeminiKeyButton" type="button" class="secondary-button">Guardar</button>
           </div>
-          <button id="aiCleanNamesButton" type="button" class="secondary-button">Limpiar nombres ahora</button>
-        </div>
-        <label class="settings-check-row">
-          <input id="aiAutoCleanToggle" type="checkbox">
-          Limpiar nombres automaticamente despues de extraer / colectar
-        </label>
-      </section>
+          <button id="aiExtractButton" type="button" class="primary-button workflow-primary">Leer área visible</button>
+        </section>
 
-      <section class="panel">
-        <h2>Cabecera</h2>
-        <label>
-          Proveedor
-          <input id="supplierName" type="text" value="AliExpress Marketplace" autocomplete="off">
-        </label>
-        <label>
-          RUT / Tax ID proveedor (opcional)
-          <input id="supplierTaxId" type="text" placeholder="Solo si lo tienes" autocomplete="off">
-        </label>
-        <div class="grid-two">
-          <label>
-            Pedido / factura
-            <input id="orderNumber" type="text" autocomplete="off">
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <h2>Limpiar nombres de productos</h2>
+              <p class="helper-text">Convierte títulos largos en nombres breves para taller sin borrar el original.</p>
+            </div>
+          </div>
+          <label class="settings-check-row">
+            <input id="aiAutoCleanToggle" type="checkbox">
+            Limpiar automáticamente después de extraer
           </label>
-          <label>
-            Fecha
-            <input id="orderDate" type="date">
-          </label>
-        </div>
-        <div class="grid-two">
-          <label>
-            Moneda
-            <input id="currency" type="text" value="CLP" autocomplete="off" readonly>
-          </label>
-          <label>
-            Total
-            <input id="total" type="number" step="0.01" min="0">
-          </label>
-        </div>
-        <div class="grid-two">
-          <label>
-            Subtotal
-            <input id="subtotal" type="number" step="0.01" min="0">
-          </label>
-          <label>
-            Shipping
-            <input id="shipping" type="number" step="0.01" min="0">
-          </label>
-        </div>
-        <label>
-          Notas
-          <textarea id="notes" rows="3" placeholder="Opcional"></textarea>
-        </label>
-      </section>
+          <button id="aiCleanNamesButton" type="button" class="secondary-button full-button">Limpiar nombres ahora</button>
+        </section>
+      </div>
 
-      <section class="panel items-panel">
-        <div class="section-heading">
-          <h2>Productos</h2>
-          <button id="addItemButton" type="button" class="secondary-button">Agregar linea</button>
-        </div>
-        <div id="itemsList"></div>
-      </section>
+      <div class="app-tab-panel" data-tab-panel="tools" hidden>
+        <section class="panel manual-extract-panel">
+          <div class="section-heading">
+            <div>
+              <p class="panel-kicker">Modo manual</p>
+              <h2>Extraer pedido abierto</h2>
+              <p class="helper-text">Para revisar una sola página de detalle, no para buscar por día.</p>
+            </div>
+            <button id="extractButton" class="secondary-button" type="button">Extraer</button>
+          </div>
+        </section>
 
-      <footer class="actions">
-        <button id="copyTextButton" type="button" class="secondary-button">Copiar texto OCR</button>
-        <button id="downloadJsonButton" type="button" class="secondary-button">Descargar JSON</button>
-        <button id="generateButton" type="button" class="primary-button">Generar PDF</button>
-      </footer>
+        <section class="panel settings-panel">
+          <details id="settingsDetails" class="settings-details">
+            <summary>
+              <span>
+                <strong>Ajustes de búsqueda</strong>
+                <small>Selección, enriquecimiento y límites</small>
+              </span>
+            </summary>
+            <div class="settings-grid">
+              <label>
+                Fecha por defecto
+                <select id="settingsDefaultDateMode">
+                  <option value="day">Un día</option>
+                  <option value="range">Un rango</option>
+                </select>
+              </label>
+              <label>
+                Días del rango
+                <input id="settingsRangeDays" type="number" min="1" max="365" step="1">
+              </label>
+              <label>
+                Salida por defecto
+                <select id="settingsDefaultOutputMode">
+                  <option value="combined">Factura consolidada</option>
+                  <option value="separate">Una factura por pedido</option>
+                </select>
+              </label>
+              <label>
+                Máx. facturas separadas
+                <input id="settingsMaxSeparateInvoices" type="number" min="1" max="50" step="1">
+              </label>
+            </div>
+            <label class="settings-check-row">
+              <input id="settingsAutoSelectOrders" type="checkbox">
+              Seleccionar automáticamente los pedidos encontrados
+            </label>
+            <label class="settings-check-row">
+              <input id="settingsEnrichDetails" type="checkbox">
+              Leer cada detalle antes de generar
+            </label>
+            <div class="settings-actions">
+              <button id="resetSettingsButton" type="button" class="secondary-button">Restaurar</button>
+              <button id="applySettingsButton" type="button" class="secondary-button">Aplicar</button>
+              <button id="saveSettingsButton" type="button" class="primary-button">Guardar</button>
+            </div>
+          </details>
+        </section>
+
+        <section class="panel">
+          <h2>Cabecera manual</h2>
+          <label>
+            Proveedor
+            <input id="supplierName" type="text" value="AliExpress Marketplace" autocomplete="off">
+          </label>
+          <label>
+            RUT / Tax ID proveedor (opcional)
+            <input id="supplierTaxId" type="text" placeholder="Sólo si lo tienes" autocomplete="off">
+          </label>
+          <div class="grid-two">
+            <label>
+              Pedido / factura
+              <input id="orderNumber" type="text" autocomplete="off">
+            </label>
+            <label>
+              Fecha
+              <input id="orderDate" type="date">
+            </label>
+          </div>
+          <div class="grid-two">
+            <label>
+              Moneda
+              <input id="currency" type="text" value="CLP" autocomplete="off" readonly>
+            </label>
+            <label>
+              Total
+              <input id="total" type="number" step="0.01" min="0">
+            </label>
+          </div>
+          <div class="grid-two">
+            <label>
+              Subtotal
+              <input id="subtotal" type="number" step="0.01" min="0">
+            </label>
+            <label>
+              Shipping
+              <input id="shipping" type="number" step="0.01" min="0">
+            </label>
+          </div>
+          <label>
+            Notas
+            <textarea id="notes" rows="3" placeholder="Opcional"></textarea>
+          </label>
+        </section>
+
+        <section class="panel items-panel">
+          <div class="section-heading">
+            <h2>Productos manuales</h2>
+            <button id="addItemButton" type="button" class="secondary-button">Agregar línea</button>
+          </div>
+          <div id="itemsList"></div>
+        </section>
+
+        <section class="panel export-panel">
+          <h2>Exportar y diagnóstico</h2>
+          <p class="helper-text">Opciones técnicas para respaldo o revisión.</p>
+          <div class="tool-actions">
+            <button id="copyTextButton" type="button" class="secondary-button">Copiar texto OCR</button>
+            <button id="downloadJsonButton" type="button" class="secondary-button">JSON manual</button>
+            <button id="downloadBulkJsonButton" type="button" class="secondary-button">JSON búsqueda</button>
+            <button id="generateButton" type="button" class="primary-button">PDF manual</button>
+          </div>
+        </section>
+      </div>
     </main>
 
     <script src="popup.js"></script>

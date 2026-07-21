@@ -130,6 +130,9 @@ flutter:
     - web/spreadsheet_engine/univer_desktop_host.html
     - web/spreadsheet_engine/univer.bundle.js
     - web/spreadsheet_engine/univer.bundle.css
+    - tools/chrome-extensions/aliexpress-invoice-generator/content.js
+    - tools/chrome-extensions/aliexpress-invoice-generator/invoice.css
+    - tools/chrome-extensions/aliexpress-invoice-generator/invoice.js
 
   fonts:
     - family: Oswald

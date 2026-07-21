@@ -14,6 +14,7 @@ class ProductDuplicateProbe {
     required this.name,
     this.description,
     this.sku,
+    this.model,
     this.rawText,
     this.categoryName,
     this.brandName,
@@ -29,6 +30,7 @@ class ProductDuplicateProbe {
   final String name;
   final String? description;
   final String? sku;
+  final String? model;
   final String? rawText;
   final String? categoryName;
   final String? brandName;
@@ -39,6 +41,52 @@ class ProductDuplicateProbe {
   final String? imageFileName;
   final double? price;
   final double? cost;
+}
+
+typedef ProductDuplicateImageLoader = Future<Uint8List?> Function(String url);
+
+typedef ProductDuplicateVisualComparator = Future<AIProductVisualComparison?>
+    Function({
+  required Uint8List probeImageBytes,
+  required Uint8List candidateImageBytes,
+  String? probeName,
+  String? candidateName,
+  String? candidateBrand,
+  String? candidateCategory,
+});
+
+class _ResolvedProbeImage {
+  const _ResolvedProbeImage({
+    required this.fingerprint,
+    required this.bytes,
+    required this.hasReference,
+  });
+
+  final ProductImageFingerprint? fingerprint;
+  final Uint8List? bytes;
+  final bool hasReference;
+}
+
+class _ImageMatchEvidence {
+  const _ImageMatchEvidence({
+    required this.score,
+    required this.isAvailable,
+    this.isExactCanonicalUrl = false,
+    this.isExactContent = false,
+  });
+
+  const _ImageMatchEvidence.unavailable()
+      : score = 0,
+        isAvailable = false,
+        isExactCanonicalUrl = false,
+        isExactContent = false;
+
+  final double score;
+  final bool isAvailable;
+  final bool isExactCanonicalUrl;
+  final bool isExactContent;
+
+  bool get isExact => isExactCanonicalUrl || isExactContent;
 }
 
 class _BottomBracketSpec {
@@ -82,6 +130,9 @@ class _DuplicateRescoreInputs {
     required this.catalogSpecScore,
     required this.shapeAttributeScore,
     required this.hasImageProbe,
+    required this.imageComparisonAvailable,
+    required this.hasExactImageMatch,
+    required this.hasExactModelMatch,
   });
 
   final Product product;
@@ -92,6 +143,9 @@ class _DuplicateRescoreInputs {
   final double catalogSpecScore;
   final double shapeAttributeScore;
   final bool hasImageProbe;
+  final bool imageComparisonAvailable;
+  final bool hasExactImageMatch;
+  final bool hasExactModelMatch;
 
   // Bounded transient cache, populated and drained inside one
   // `findCandidates` call. Not used outside that scope.
@@ -103,11 +157,21 @@ class ProductDuplicateMatcherService {
   ProductDuplicateMatcherService({
     required inv_service.InventoryService inventoryService,
     AIAssistantService? aiAssistantService,
+    ProductDuplicateImageLoader? imageLoader,
+    ProductDuplicateVisualComparator? visualComparator,
+    this.enableSemanticSearch = true,
+    this.persistComputedImageFingerprints = true,
   })  : _inventoryService = inventoryService,
-        _aiAssistantService = aiAssistantService ?? AIAssistantService();
+        _aiAssistantService = aiAssistantService ?? AIAssistantService(),
+        _imageLoader = imageLoader,
+        _visualComparator = visualComparator;
 
   final inv_service.InventoryService _inventoryService;
   final AIAssistantService _aiAssistantService;
+  final ProductDuplicateImageLoader? _imageLoader;
+  final ProductDuplicateVisualComparator? _visualComparator;
+  final bool enableSemanticSearch;
+  final bool persistComputedImageFingerprints;
 
   Future<List<ProductDuplicateCandidate>> findCandidates({
     required ProductDuplicateProbe probe,
@@ -123,9 +187,9 @@ class ProductDuplicateMatcherService {
       probeFamilies,
     );
     final probeTokens = _extractSimilarityTokens(probeText);
-    final probeFingerprint = await _resolveProbeFingerprint(probe);
-    final hasImageProbe = probeFingerprint != null ||
-        _normalizeImageIdentity(probe.imageUrl).isNotEmpty;
+    final probeModelIdentifiers = _extractProbeModelIdentifiers(probe);
+    final resolvedProbeImage = await _resolveProbeImage(probe);
+    final hasImageProbe = resolvedProbeImage.hasReference;
 
     final productsById = <String, Product>{
       for (final product in products)
@@ -163,7 +227,7 @@ class ProductDuplicateMatcherService {
       }
     }
 
-    if (probeText.trim().length >= 12) {
+    if (enableSemanticSearch && probeText.trim().length >= 12) {
       final vector = await _aiAssistantService.generateEmbedding(probeText);
       if (vector != null) {
         try {
@@ -215,25 +279,35 @@ class ProductDuplicateMatcherService {
         catalogSpecScore,
       );
       final identityScore = _computeIdentityScore(probe, product);
+      final hasExactModelMatch = probeModelIdentifiers
+          .intersection(_extractProductModelIdentifiers(product))
+          .isNotEmpty;
+      final exactCanonicalImage = _hasExactCanonicalImageMatch(
+        probe.imageUrl,
+        product,
+      );
+      final hasDeterministicIdentity =
+          identityScore >= 1 || exactCanonicalImage;
       final familyConflict = _hasHardFamilyConflict(
         probeFamilies,
         productFamilies,
       );
-      if (familyConflict && identityScore < 1) {
+      if (familyConflict && !hasDeterministicIdentity) {
         continue;
       }
       if (_hasHardShapeProfileConflict(
             probeShapeProfile,
             productShapeProfile,
           ) &&
-          identityScore < 1) {
+          !hasDeterministicIdentity) {
         continue;
       }
       // Soft category gate: when the probe carries a confident category and
       // the candidate's category is set but completely unrelated (no shared
       // word, no substring), drop it unless image/identity is already strong.
       // Avoids "buscar parecidos" surfacing pastillas when probe is cassette.
-      if (identityScore < 1 &&
+      if (!hasDeterministicIdentity &&
+          !hasExactModelMatch &&
           probe.categoryName != null &&
           probe.categoryName!.trim().isNotEmpty &&
           (product.categoryName ?? '').trim().isNotEmpty) {
@@ -257,13 +331,14 @@ class ProductDuplicateMatcherService {
               // Will be re-evaluated below; mark with a sentinel by skipping
               // unless the image score (computed next) is strong enough.
               // Compute image score now so we can decide.
-              final earlyImageScore = await _computeImageScore(
+              final earlyImageEvidence = await _computeImageEvidence(
                 probe,
-                probeFingerprint,
+                resolvedProbeImage,
                 product,
                 allowRemoteFingerprint: false,
               );
-              if (earlyImageScore < 0.7) {
+              if (earlyImageEvidence.isAvailable &&
+                  earlyImageEvidence.score < 0.7) {
                 continue;
               }
             }
@@ -279,14 +354,16 @@ class ProductDuplicateMatcherService {
       final sameAliExpressFamily =
           _sameAliExpressSupplierFamily(probe, product);
       final aliExpressTextMatch = aliExpressScore >= 0.48;
-      final allowRemoteImageFingerprint = probeFingerprint != null &&
-          (identityScore > 0 ||
-              keywordScore >= 0.08 ||
-              metadataScore >= 0.20 ||
-              _sameAliExpressSupplierFamily(probe, product));
-      final imageScore = await _computeImageScore(
+      final allowRemoteImageFingerprint =
+          resolvedProbeImage.fingerprint != null &&
+              (identityScore > 0 ||
+                  hasExactModelMatch ||
+                  keywordScore >= 0.08 ||
+                  metadataScore >= 0.20 ||
+                  sameAliExpressFamily);
+      final imageEvidence = await _computeImageEvidence(
         probe,
-        probeFingerprint,
+        resolvedProbeImage,
         product,
         allowRemoteFingerprint: allowRemoteImageFingerprint,
       );
@@ -294,47 +371,65 @@ class ProductDuplicateMatcherService {
       final overallScore = _combineDuplicateScores(
         keywordScore: keywordScore,
         semanticScore: semanticScore,
-        imageScore: imageScore,
+        imageScore: imageEvidence.score,
         identityScore: identityScore,
         metadataScore: metadataScore,
         catalogSpecScore: catalogSpecScore,
         shapeAttributeScore: shapeAttributeScore,
         hasImageProbe: hasImageProbe,
+        imageComparisonAvailable: imageEvidence.isAvailable,
+        hasExactImageMatch: imageEvidence.isExact,
+        hasExactModelMatch: hasExactModelMatch,
       );
 
       if (!_shouldKeepDuplicateCandidate(
         overallScore: overallScore,
         keywordScore: keywordScore,
         semanticScore: semanticScore,
-        imageScore: imageScore,
+        imageScore: imageEvidence.score,
         identityScore: identityScore,
         metadataScore: metadataScore,
         shapeAttributeScore: shapeAttributeScore,
         sameAliExpressFamily: sameAliExpressFamily,
         aliExpressTextMatch: aliExpressTextMatch,
+        hasExactImageMatch: imageEvidence.isExact,
+        hasExactModelMatch: hasExactModelMatch,
       )) {
         continue;
       }
 
+      final matchTier = _determineMatchTier(
+        overallScore: overallScore,
+        identityScore: identityScore,
+        hasExactImageMatch: imageEvidence.isExact,
+        hasExactModelMatch: hasExactModelMatch,
+      );
       candidates.add(ProductDuplicateCandidate(
         product: product,
         overallScore: overallScore,
         keywordScore: keywordScore,
         semanticScore: semanticScore,
-        imageScore: imageScore,
+        imageScore: imageEvidence.score,
         aiTypeScore: 0,
         identityScore: identityScore,
         metadataScore: metadataScore,
         hasProductImage: _productImageUrls(product).isNotEmpty,
+        imageComparisonAvailable: imageEvidence.isAvailable,
+        hasExactImageMatch: imageEvidence.isExact,
+        hasExactModelMatch: hasExactModelMatch,
+        matchTier: matchTier,
         signals: _buildDuplicateSignals(
           product,
           keywordScore: keywordScore,
           semanticScore: semanticScore,
-          imageScore: imageScore,
+          imageScore: imageEvidence.score,
           identityScore: identityScore,
           metadataScore: metadataScore,
           shapeAttributeScore: shapeAttributeScore,
           catalogSpecScore: catalogSpecScore,
+          imageComparisonAvailable: imageEvidence.isAvailable,
+          hasExactImageMatch: imageEvidence.isExact,
+          hasExactModelMatch: hasExactModelMatch,
         ),
       ));
       _DuplicateRescoreInputs._cache[candidates.last] = _DuplicateRescoreInputs(
@@ -346,10 +441,13 @@ class ProductDuplicateMatcherService {
         catalogSpecScore: catalogSpecScore,
         shapeAttributeScore: shapeAttributeScore,
         hasImageProbe: hasImageProbe,
+        imageComparisonAvailable: imageEvidence.isAvailable,
+        hasExactImageMatch: imageEvidence.isExact,
+        hasExactModelMatch: hasExactModelMatch,
       );
     }
 
-    candidates.sort((a, b) => b.overallScore.compareTo(a.overallScore));
+    candidates.sort(_compareCandidates);
 
     // ============================================================
     // SECOND PASS: detailed shape/color similarity on top candidates.
@@ -362,19 +460,29 @@ class ProductDuplicateMatcherService {
     // user actually expects when they click "Buscar parecidos".
     // ============================================================
     if (hasImageProbe && candidates.isNotEmpty) {
-      await _upgradeTopCandidatesWithDetailedImage(
-        probe: probe,
+      final bestCandidateBytes = await _upgradeTopCandidatesWithDetailedImage(
+        resolvedProbeImage: resolvedProbeImage,
         candidates: candidates,
         topK: math.max(limit * 3, 18),
       );
-      candidates.sort((a, b) => b.overallScore.compareTo(a.overallScore));
-      await _upgradeTopCandidatesWithDetailedImage(
-        probe: probe,
-        candidates: candidates,
-        topK: limit,
-        onlyMissingDebug: true,
+      candidates.sort(_compareCandidates);
+      bestCandidateBytes.addAll(
+        await _upgradeTopCandidatesWithDetailedImage(
+          resolvedProbeImage: resolvedProbeImage,
+          candidates: candidates,
+          topK: limit,
+          onlyMissingDebug: true,
+        ),
       );
-      candidates.sort((a, b) => b.overallScore.compareTo(a.overallScore));
+      candidates.sort(_compareCandidates);
+      await _upgradeTopAmbiguousCandidatesWithAi(
+        probe: probe,
+        resolvedProbeImage: resolvedProbeImage,
+        candidates: candidates,
+        bestCandidateBytes: bestCandidateBytes,
+        maxComparisons: 3,
+      );
+      candidates.sort(_compareCandidates);
     }
     // Drop scoring-input cache entries for candidates we are about to
     // expose, to keep memory bounded.
@@ -384,20 +492,14 @@ class ProductDuplicateMatcherService {
     return candidates.take(limit).toList();
   }
 
-  Future<void> _upgradeTopCandidatesWithDetailedImage({
-    required ProductDuplicateProbe probe,
+  Future<Map<String, Uint8List>> _upgradeTopCandidatesWithDetailedImage({
+    required _ResolvedProbeImage resolvedProbeImage,
     required List<ProductDuplicateCandidate> candidates,
     required int topK,
     bool onlyMissingDebug = false,
   }) async {
-    // Resolve probe bytes once.
-    Uint8List? probeBytes = probe.imageBytes;
-    if (probeBytes == null) {
-      final probeUrl = probe.imageUrl?.trim();
-      if (probeUrl != null && probeUrl.isNotEmpty) {
-        probeBytes = await _downloadImageBytes(probeUrl);
-      }
-    }
+    final probeBytes = resolvedProbeImage.bytes;
+    final bestCandidateBytes = <String, Uint8List>{};
     if (probeBytes == null || probeBytes.isEmpty) {
       _markImageDebugUnavailable(
         candidates,
@@ -405,21 +507,14 @@ class ProductDuplicateMatcherService {
         reason: 'probe raw no disponible',
         onlyMissingDebug: onlyMissingDebug,
       );
-      return;
+      return bestCandidateBytes;
     }
 
-    final upgradeTargets = candidates.take(topK).toList();
-    final replacements = <int, ProductDuplicateCandidate>{};
-
-    // Run downloads/vision in parallel but bound concurrency by Future.wait on
-    // the display band (typically 12).
-    final detailedFutures = <Future<void>>[];
-    for (var i = 0; i < upgradeTargets.length; i++) {
-      final candidate = upgradeTargets[i];
+    for (final candidate in candidates.take(topK).toList()) {
       if (onlyMissingDebug && candidate.imageDebugSignals.isNotEmpty) {
         continue;
       }
-      final urls = _productImageUrls(candidate.product);
+      final urls = _uniqueProductImageUrls(candidate.product);
       if (urls.isEmpty) {
         _replaceCandidateAt(
           candidates,
@@ -431,119 +526,210 @@ class ProductDuplicateMatcherService {
         );
         continue;
       }
-      detailedFutures.add(() async {
-        final productBytes = await _downloadImageBytes(urls.first);
-        if (productBytes == null || productBytes.isEmpty) {
-          _replaceCandidateAt(
-            candidates,
-            candidate,
-            _copyCandidateWithImageDebug(
-              candidate,
-              const ['dbg imagen catalogo no descargable'],
-            ),
-          );
-          return;
+
+      ProductImageSimilarityDebug? bestDebug;
+      Uint8List? bestBytes;
+      var exactContent = false;
+      var downloadedAny = false;
+      for (final url in urls) {
+        final productBytes = await _downloadImageBytes(url);
+        if (productBytes == null || productBytes.isEmpty) continue;
+        downloadedAny = true;
+        if (ProductImageFingerprintService.hasExactContent(
+          probeBytes,
+          productBytes,
+        )) {
+          exactContent = true;
+          bestBytes = productBytes;
+          break;
         }
         final debug =
             ProductImageFingerprintService.detailedSimilarityDebugFromBytes(
-          probeBytes!,
+          probeBytes,
           productBytes,
         );
-        if (debug == null) {
-          _replaceCandidateAt(
-            candidates,
-            candidate,
-            _copyCandidateWithImageDebug(
-              candidate,
-              const ['dbg imagen no decodificable'],
-            ),
-          );
-          return;
+        if (debug != null &&
+            (bestDebug == null || debug.score > bestDebug.score)) {
+          bestDebug = debug;
+          bestBytes = productBytes;
         }
-        final aiComparison =
-            await _aiAssistantService.compareProductImagesForDuplicate(
-          probeImageBytes: probeBytes,
-          candidateImageBytes: productBytes,
-          probeName: probe.name,
-          candidateName: candidate.product.name,
-          candidateBrand: candidate.product.brand,
-          candidateCategory: candidate.product.categoryName,
-        );
-        // Trust the detailed score directly. Earlier we blended it with
-        // the cheap fingerprint score, but that floored the result and
-        // pulled visually-different parts back up: a derailleur hanger
-        // with no real shape overlap was scoring 63% only because the
-        // cheap aHash/dHash agreed (both "centered dark thing on white").
-        // The detailed scorer already has its own shape-mismatch cap and
-        // strong-shape boost, so its raw output is what we want here.
-        final basic = candidate.imageScore;
-        final visualScore = aiComparison == null
-            ? debug.score
-            : (aiComparison.samePartScore * 0.72 + debug.score * 0.28)
-                .clamp(0, 1)
-                .toDouble();
+      }
 
-        final inputs = _DuplicateRescoreInputs._cache[candidate];
-        if (inputs == null) {
-          _replaceCandidateAt(
-            candidates,
+      if (!downloadedAny) {
+        _replaceCandidateAt(
+          candidates,
+          candidate,
+          _copyCandidateWithImageDebug(
             candidate,
-            _copyCandidateWithImageDebug(
-              candidate,
-              const ['dbg scorer sin cache'],
-            ),
-          );
-          return;
-        }
-        final aiRejectsVisualMatch = aiComparison != null &&
-            aiComparison.confidence >= 0.55 &&
-            aiComparison.samePartScore < 0.55;
-        final suppressSemantic =
-            (debug.shapeMismatchCapApplied || aiRejectsVisualMatch) &&
-                inputs.keywordScore <= 0.30 &&
-                inputs.identityScore < 1;
-        final effectiveSemanticScore = suppressSemantic
-            ? math.min(inputs.semanticScore, 0.15)
-            : inputs.semanticScore;
-        final newOverall = _combineDuplicateScores(
-          keywordScore: inputs.keywordScore,
-          semanticScore: effectiveSemanticScore,
-          imageScore: visualScore,
-          identityScore: inputs.identityScore,
-          metadataScore: inputs.metadataScore,
-          catalogSpecScore: inputs.catalogSpecScore,
-          shapeAttributeScore: inputs.shapeAttributeScore,
-          hasImageProbe: inputs.hasImageProbe,
-        );
-        final upgraded = ProductDuplicateCandidate(
-          product: candidate.product,
-          overallScore: newOverall,
-          keywordScore: candidate.keywordScore,
-          semanticScore: effectiveSemanticScore,
-          imageScore: visualScore,
-          aiTypeScore: aiComparison?.samePartScore ?? candidate.aiTypeScore,
-          identityScore: candidate.identityScore,
-          metadataScore: candidate.metadataScore,
-          hasProductImage: candidate.hasProductImage,
-          signals: candidate.signals,
-          imageDebugSignals: _buildImageDebugSignals(
-            cheapScore: basic,
-            debug: debug,
-            aiComparison: aiComparison,
-            semanticSuppressed: suppressSemantic,
+            const ['dbg imagen catalogo no descargable'],
           ),
         );
-        final idx = candidates.indexOf(candidate);
-        if (idx >= 0) replacements[idx] = upgraded;
-        _DuplicateRescoreInputs._cache[upgraded] = inputs;
-        _DuplicateRescoreInputs._cache.remove(candidate);
-      }());
-    }
+        continue;
+      }
+      if (bestBytes != null) {
+        bestCandidateBytes[_productStableKey(candidate.product)] = bestBytes;
+      }
+      final inputs = _DuplicateRescoreInputs._cache[candidate];
+      if (inputs == null) {
+        _replaceCandidateAt(
+          candidates,
+          candidate,
+          _copyCandidateWithImageDebug(
+            candidate,
+            const ['dbg scorer sin cache'],
+          ),
+        );
+        continue;
+      }
 
-    await Future.wait(detailedFutures);
-    replacements.forEach((idx, upgraded) {
-      candidates[idx] = upgraded;
-    });
+      final hasExactImageMatch = candidate.hasExactImageMatch || exactContent;
+      final visualScore = hasExactImageMatch ? 1.0 : bestDebug?.score;
+      if (visualScore == null) {
+        _replaceCandidateAt(
+          candidates,
+          candidate,
+          _copyCandidateWithImageDebug(
+            candidate,
+            const ['dbg imagen no decodificable'],
+          ),
+        );
+        continue;
+      }
+      final suppressSemantic = !hasExactImageMatch &&
+          bestDebug!.shapeMismatchCapApplied &&
+          inputs.keywordScore <= 0.30 &&
+          inputs.identityScore < 1;
+      final effectiveSemanticScore = suppressSemantic
+          ? math.min(inputs.semanticScore, 0.15)
+          : inputs.semanticScore;
+      final newInputs = _DuplicateRescoreInputs(
+        product: inputs.product,
+        keywordScore: inputs.keywordScore,
+        semanticScore: effectiveSemanticScore,
+        identityScore: inputs.identityScore,
+        metadataScore: inputs.metadataScore,
+        catalogSpecScore: inputs.catalogSpecScore,
+        shapeAttributeScore: inputs.shapeAttributeScore,
+        hasImageProbe: inputs.hasImageProbe,
+        imageComparisonAvailable: true,
+        hasExactImageMatch: hasExactImageMatch,
+        hasExactModelMatch: inputs.hasExactModelMatch,
+      );
+      final upgraded = _rebuildCandidate(
+        candidate,
+        inputs: newInputs,
+        imageScore: visualScore,
+        semanticScore: effectiveSemanticScore,
+        imageDebugSignals: exactContent
+            ? const ['dbg contenido de imagen idéntico']
+            : _buildImageDebugSignals(
+                cheapScore: candidate.imageScore,
+                debug: bestDebug!,
+                aiComparison: null,
+                semanticSuppressed: suppressSemantic,
+              ),
+      );
+      _replaceCandidateAtWithInputs(
+        candidates,
+        candidate,
+        upgraded,
+        newInputs,
+      );
+    }
+    return bestCandidateBytes;
+  }
+
+  Future<void> _upgradeTopAmbiguousCandidatesWithAi({
+    required ProductDuplicateProbe probe,
+    required _ResolvedProbeImage resolvedProbeImage,
+    required List<ProductDuplicateCandidate> candidates,
+    required Map<String, Uint8List> bestCandidateBytes,
+    required int maxComparisons,
+  }) async {
+    final probeBytes = resolvedProbeImage.bytes;
+    if (probeBytes == null || probeBytes.isEmpty || maxComparisons <= 0) return;
+
+    var comparisons = 0;
+    for (final candidate in candidates.toList()) {
+      if (comparisons >= maxComparisons) break;
+      if (candidate.isExactIdentity) continue;
+      final productBytes =
+          bestCandidateBytes[_productStableKey(candidate.product)];
+      if (productBytes == null || productBytes.isEmpty) continue;
+      comparisons++;
+      final aiComparison = _visualComparator == null
+          ? await _aiAssistantService.compareProductImagesForDuplicate(
+              probeImageBytes: probeBytes,
+              candidateImageBytes: productBytes,
+              probeName: probe.name,
+              candidateName: candidate.product.name,
+              candidateBrand: candidate.product.brand,
+              candidateCategory: candidate.product.categoryName,
+            )
+          : await _visualComparator(
+              probeImageBytes: probeBytes,
+              candidateImageBytes: productBytes,
+              probeName: probe.name,
+              candidateName: candidate.product.name,
+              candidateBrand: candidate.product.brand,
+              candidateCategory: candidate.product.categoryName,
+            );
+      if (aiComparison == null) continue;
+      final inputs = _DuplicateRescoreInputs._cache[candidate];
+      if (inputs == null) continue;
+      final visualScore =
+          (aiComparison.samePartScore * 0.72 + candidate.imageScore * 0.28)
+              .clamp(0, 1)
+              .toDouble();
+      final aiRejectsVisualMatch =
+          aiComparison.confidence >= 0.55 && aiComparison.samePartScore < 0.55;
+      final effectiveSemanticScore = aiRejectsVisualMatch &&
+              inputs.keywordScore <= 0.30 &&
+              inputs.identityScore < 1
+          ? math.min(inputs.semanticScore, 0.15)
+          : inputs.semanticScore;
+      final newInputs = _DuplicateRescoreInputs(
+        product: inputs.product,
+        keywordScore: inputs.keywordScore,
+        semanticScore: effectiveSemanticScore,
+        identityScore: inputs.identityScore,
+        metadataScore: inputs.metadataScore,
+        catalogSpecScore: inputs.catalogSpecScore,
+        shapeAttributeScore: inputs.shapeAttributeScore,
+        hasImageProbe: inputs.hasImageProbe,
+        imageComparisonAvailable: true,
+        hasExactImageMatch: inputs.hasExactImageMatch,
+        hasExactModelMatch: inputs.hasExactModelMatch,
+      );
+      final debug =
+          ProductImageFingerprintService.detailedSimilarityDebugFromBytes(
+              probeBytes, productBytes);
+      final upgraded = _rebuildCandidate(
+        candidate,
+        inputs: newInputs,
+        imageScore: visualScore,
+        semanticScore: effectiveSemanticScore,
+        aiTypeScore: aiComparison.samePartScore,
+        imageDebugSignals: debug == null
+            ? <String>[
+                ...candidate.imageDebugSignals,
+                'AI same ${(aiComparison.samePartScore * 100).round()}%',
+              ]
+            : _buildImageDebugSignals(
+                cheapScore: candidate.imageScore,
+                debug: debug,
+                aiComparison: aiComparison,
+                semanticSuppressed:
+                    effectiveSemanticScore != inputs.semanticScore,
+              ),
+      );
+      _replaceCandidateAtWithInputs(
+        candidates,
+        candidate,
+        upgraded,
+        newInputs,
+      );
+    }
   }
 
   void _markImageDebugUnavailable(
@@ -577,6 +763,77 @@ class ProductDuplicateMatcherService {
     candidates[idx] = replacement;
   }
 
+  void _replaceCandidateAtWithInputs(
+    List<ProductDuplicateCandidate> candidates,
+    ProductDuplicateCandidate previous,
+    ProductDuplicateCandidate replacement,
+    _DuplicateRescoreInputs inputs,
+  ) {
+    final idx = candidates.indexOf(previous);
+    if (idx < 0) return;
+    _DuplicateRescoreInputs._cache.remove(previous);
+    _DuplicateRescoreInputs._cache[replacement] = inputs;
+    candidates[idx] = replacement;
+  }
+
+  ProductDuplicateCandidate _rebuildCandidate(
+    ProductDuplicateCandidate candidate, {
+    required _DuplicateRescoreInputs inputs,
+    required double imageScore,
+    required double semanticScore,
+    required List<String> imageDebugSignals,
+    double? aiTypeScore,
+  }) {
+    final overallScore = _combineDuplicateScores(
+      keywordScore: inputs.keywordScore,
+      semanticScore: semanticScore,
+      imageScore: imageScore,
+      identityScore: inputs.identityScore,
+      metadataScore: inputs.metadataScore,
+      catalogSpecScore: inputs.catalogSpecScore,
+      shapeAttributeScore: inputs.shapeAttributeScore,
+      hasImageProbe: inputs.hasImageProbe,
+      imageComparisonAvailable: inputs.imageComparisonAvailable,
+      hasExactImageMatch: inputs.hasExactImageMatch,
+      hasExactModelMatch: inputs.hasExactModelMatch,
+    );
+    final matchTier = _determineMatchTier(
+      overallScore: overallScore,
+      identityScore: inputs.identityScore,
+      hasExactImageMatch: inputs.hasExactImageMatch,
+      hasExactModelMatch: inputs.hasExactModelMatch,
+    );
+    return ProductDuplicateCandidate(
+      product: candidate.product,
+      overallScore: overallScore,
+      keywordScore: candidate.keywordScore,
+      semanticScore: semanticScore,
+      imageScore: imageScore,
+      aiTypeScore: aiTypeScore ?? candidate.aiTypeScore,
+      identityScore: candidate.identityScore,
+      metadataScore: candidate.metadataScore,
+      hasProductImage: candidate.hasProductImage,
+      imageComparisonAvailable: inputs.imageComparisonAvailable,
+      hasExactImageMatch: inputs.hasExactImageMatch,
+      hasExactModelMatch: inputs.hasExactModelMatch,
+      matchTier: matchTier,
+      signals: _buildDuplicateSignals(
+        candidate.product,
+        keywordScore: inputs.keywordScore,
+        semanticScore: semanticScore,
+        imageScore: imageScore,
+        identityScore: inputs.identityScore,
+        metadataScore: inputs.metadataScore,
+        shapeAttributeScore: inputs.shapeAttributeScore,
+        catalogSpecScore: inputs.catalogSpecScore,
+        imageComparisonAvailable: inputs.imageComparisonAvailable,
+        hasExactImageMatch: inputs.hasExactImageMatch,
+        hasExactModelMatch: inputs.hasExactModelMatch,
+      ),
+      imageDebugSignals: imageDebugSignals,
+    );
+  }
+
   ProductDuplicateCandidate _copyCandidateWithImageDebug(
     ProductDuplicateCandidate candidate,
     List<String> imageDebugSignals,
@@ -591,6 +848,10 @@ class ProductDuplicateMatcherService {
       identityScore: candidate.identityScore,
       metadataScore: candidate.metadataScore,
       hasProductImage: candidate.hasProductImage,
+      imageComparisonAvailable: candidate.imageComparisonAvailable,
+      hasExactImageMatch: candidate.hasExactImageMatch,
+      hasExactModelMatch: candidate.hasExactModelMatch,
+      matchTier: candidate.matchTier,
       signals: candidate.signals,
       imageDebugSignals: imageDebugSignals,
     );
@@ -663,6 +924,7 @@ class ProductDuplicateMatcherService {
     return [
       probe.name,
       probe.sku,
+      probe.model,
       probe.description,
       probe.rawText,
       probe.categoryName,
@@ -679,6 +941,7 @@ class ProductDuplicateMatcherService {
     return [
       probe.name,
       probe.sku,
+      probe.model,
       probe.description,
       probe.rawText,
       probe.supplierName,
@@ -723,6 +986,86 @@ class ProductDuplicateMatcherService {
         .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+  }
+
+  Set<String> _extractProbeModelIdentifiers(ProductDuplicateProbe probe) {
+    return <String>{
+      ...extractModelIdentifiers(probe.model ?? '', explicit: true),
+      ...extractModelIdentifiers(probe.name),
+      ...extractModelIdentifiers(probe.description ?? ''),
+      ...extractModelIdentifiers(probe.rawText ?? ''),
+    };
+  }
+
+  Set<String> _extractProductModelIdentifiers(Product product) {
+    return <String>{
+      ...extractModelIdentifiers(product.model ?? '', explicit: true),
+      ...extractModelIdentifiers(product.manufacturerSku ?? '', explicit: true),
+      ...extractModelIdentifiers(product.name),
+      ...extractModelIdentifiers(product.description ?? ''),
+      for (final tag in product.tags) ...extractModelIdentifiers(tag),
+    };
+  }
+
+  /// Canonical model extraction used by both OCR probes and catalog products.
+  /// Punctuation and spacing are deliberately ignored, so RT56, RT-56 and
+  /// RT 56 all produce the same `rt56` identifier.
+  @visibleForTesting
+  static Set<String> extractModelIdentifiers(
+    String value, {
+    bool explicit = false,
+  }) {
+    final normalized = value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[áàäâã]'), 'a')
+        .replaceAll(RegExp(r'[éèëê]'), 'e')
+        .replaceAll(RegExp(r'[íìïî]'), 'i')
+        .replaceAll(RegExp(r'[óòöôõ]'), 'o')
+        .replaceAll(RegExp(r'[úùüû]'), 'u')
+        .replaceAll('ñ', 'n');
+    final tokens = RegExp(r'[a-z0-9]+')
+        .allMatches(normalized)
+        .map((match) => match.group(0)!)
+        .toList(growable: false);
+    final identifiers = <String>{};
+
+    bool isCandidate(String token) {
+      if (token.length < 3 || token.length > 24) return false;
+      if (!RegExp('[a-z]').hasMatch(token) ||
+          !RegExp('[0-9]').hasMatch(token)) {
+        return false;
+      }
+      if (RegExp(r'^\d+(?:mm|cm|lm|mah|wh|pcs?|v|w|t)$').hasMatch(token)) {
+        return false;
+      }
+      return true;
+    }
+
+    void add(String token) {
+      final canonical = token.replaceAll(RegExp(r'[^a-z0-9]'), '');
+      if (isCandidate(canonical)) identifiers.add(canonical);
+    }
+
+    for (final token in tokens) {
+      add(token);
+    }
+    const genericPrefixes = {'mtb', 'bike', 'bici', 'led', 'usb'};
+    for (var index = 0; index + 1 < tokens.length; index++) {
+      final left = tokens[index];
+      final right = tokens[index + 1];
+      final leftIsShortLetters =
+          left.length <= 5 && RegExp(r'^[a-z]+$').hasMatch(left);
+      final rightContainsDigit = RegExp('[0-9]').hasMatch(right);
+      if (leftIsShortLetters &&
+          rightContainsDigit &&
+          !genericPrefixes.contains(left)) {
+        add('$left$right');
+      }
+    }
+    if (explicit && tokens.isNotEmpty) {
+      add(tokens.join());
+    }
+    return identifiers;
   }
 
   // Families that, when present on the probe, REQUIRE the candidate to share
@@ -1336,75 +1679,136 @@ class ProductDuplicateMatcherService {
     return (jaccard * 0.55 + containment * 0.45).clamp(0, 1).toDouble();
   }
 
-  Future<ProductImageFingerprint?> _resolveProbeFingerprint(
+  Future<_ResolvedProbeImage> _resolveProbeImage(
     ProductDuplicateProbe probe,
   ) async {
-    if (probe.imageBytes != null) {
-      return ProductImageFingerprintService.fromBytes(probe.imageBytes!);
+    final suppliedBytes = probe.imageBytes;
+    if (suppliedBytes != null && suppliedBytes.isNotEmpty) {
+      return _ResolvedProbeImage(
+        fingerprint: ProductImageFingerprintService.fromBytes(suppliedBytes),
+        bytes: suppliedBytes,
+        hasReference: true,
+      );
     }
 
     final imageUrl = probe.imageUrl?.trim();
-    if (imageUrl == null || imageUrl.isEmpty) return null;
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return const _ResolvedProbeImage(
+        fingerprint: null,
+        bytes: null,
+        hasReference: false,
+      );
+    }
     final bytes = await _downloadImageBytes(imageUrl);
-    if (bytes == null) return null;
-    return ProductImageFingerprintService.fromBytes(bytes);
+    return _ResolvedProbeImage(
+      fingerprint: bytes == null
+          ? null
+          : ProductImageFingerprintService.fromBytes(bytes),
+      bytes: bytes,
+      hasReference: true,
+    );
   }
 
-  Future<double> _computeImageScore(ProductDuplicateProbe probe,
-      ProductImageFingerprint? probeFingerprint, Product product,
-      {required bool allowRemoteFingerprint}) async {
-    final probeImageKey = _normalizeImageIdentity(probe.imageUrl);
-    final productImageKeys = _productImageUrls(product)
-        .map(_normalizeImageIdentity)
-        .where((value) => value.isNotEmpty)
-        .toSet();
-
-    if (probeImageKey.isNotEmpty && productImageKeys.contains(probeImageKey)) {
-      return 1;
+  Future<_ImageMatchEvidence> _computeImageEvidence(
+    ProductDuplicateProbe probe,
+    _ResolvedProbeImage resolvedProbeImage,
+    Product product, {
+    required bool allowRemoteFingerprint,
+  }) async {
+    if (_hasExactCanonicalImageMatch(probe.imageUrl, product)) {
+      return const _ImageMatchEvidence(
+        score: 1,
+        isAvailable: true,
+        isExactCanonicalUrl: true,
+      );
     }
 
-    if (probeFingerprint == null) return 0;
+    final probeFingerprint = resolvedProbeImage.fingerprint;
+    if (probeFingerprint == null) {
+      return const _ImageMatchEvidence.unavailable();
+    }
 
     final productFingerprint =
         ProductImageFingerprint.fromStorageJson(product.imageFingerprint);
-    if (productFingerprint == null) {
-      if (!allowRemoteFingerprint) return 0;
-      return _computeAndStoreProductImageScore(probeFingerprint, product);
+    if (productFingerprint != null) {
+      return _ImageMatchEvidence(
+        score: ProductImageFingerprintService.similarity(
+          probeFingerprint,
+          productFingerprint,
+        ),
+        isAvailable: true,
+      );
     }
 
-    return ProductImageFingerprintService.similarity(
-      probeFingerprint,
-      productFingerprint,
+    if (!allowRemoteFingerprint) {
+      return const _ImageMatchEvidence.unavailable();
+    }
+    return _computeAndStoreProductImageEvidence(
+      resolvedProbeImage,
+      product,
     );
   }
 
-  Future<double> _computeAndStoreProductImageScore(
-    ProductImageFingerprint probeFingerprint,
+  Future<_ImageMatchEvidence> _computeAndStoreProductImageEvidence(
+    _ResolvedProbeImage resolvedProbeImage,
     Product product,
   ) async {
+    final probeFingerprint = resolvedProbeImage.fingerprint;
+    if (probeFingerprint == null) {
+      return const _ImageMatchEvidence.unavailable();
+    }
+    final urls = _uniqueProductImageUrls(product);
+    if (urls.isEmpty) return const _ImageMatchEvidence.unavailable();
+
+    ProductImageFingerprint? firstFingerprint;
+    var bestScore = 0.0;
+    var compared = false;
+    for (final url in urls) {
+      final bytes = await _downloadImageBytes(url);
+      if (bytes == null || bytes.isEmpty) continue;
+      if (resolvedProbeImage.bytes != null &&
+          ProductImageFingerprintService.hasExactContent(
+            resolvedProbeImage.bytes!,
+            bytes,
+          )) {
+        return const _ImageMatchEvidence(
+          score: 1,
+          isAvailable: true,
+          isExactContent: true,
+        );
+      }
+      final fingerprint = ProductImageFingerprintService.fromBytes(bytes);
+      if (fingerprint == null) continue;
+      compared = true;
+      firstFingerprint ??= fingerprint;
+      bestScore = math.max(
+        bestScore,
+        ProductImageFingerprintService.similarity(
+          probeFingerprint,
+          fingerprint,
+        ),
+      );
+    }
+
     final productId = product.id;
-    if (productId == null) return 0;
-    final urls = _productImageUrls(product);
-    if (urls.isEmpty) return 0;
-
-    final bytes = await _downloadImageBytes(urls.first);
-    if (bytes == null) return 0;
-    final productFingerprint = ProductImageFingerprintService.fromBytes(bytes);
-    if (productFingerprint == null) return 0;
-
-    await _inventoryService.storeProductImageFingerprint(
-      productId: productId,
-      imageFingerprint: productFingerprint.toStorageJson(),
-    );
-
-    return ProductImageFingerprintService.similarity(
-      probeFingerprint,
-      productFingerprint,
-    );
+    if (persistComputedImageFingerprints &&
+        productId != null &&
+        firstFingerprint != null) {
+      await _inventoryService.storeProductImageFingerprint(
+        productId: productId,
+        imageFingerprint: firstFingerprint.toStorageJson(),
+      );
+    }
+    if (!compared) return const _ImageMatchEvidence.unavailable();
+    return _ImageMatchEvidence(score: bestScore, isAvailable: true);
   }
 
   Future<Uint8List?> _downloadImageBytes(String imageUrl) async {
     try {
+      final injectedLoader = _imageLoader;
+      if (injectedLoader != null) {
+        return await injectedLoader(imageUrl);
+      }
       final uri = Uri.tryParse(imageUrl.trim());
       if (uri == null || !uri.hasScheme) return null;
       final response = await http.get(uri).timeout(const Duration(seconds: 8));
@@ -1457,20 +1861,50 @@ class ProductDuplicateMatcherService {
     }).toList(growable: false);
   }
 
-  String _normalizeImageIdentity(String? imageUrl) {
+  List<String> _uniqueProductImageUrls(Product product) {
+    final seen = <String>{};
+    final result = <String>[];
+    for (final url in _productImageUrls(product)) {
+      final identity = canonicalImageIdentity(url);
+      final key = identity.isEmpty ? url.trim() : identity;
+      if (seen.add(key)) result.add(url);
+    }
+    return result;
+  }
+
+  bool _hasExactCanonicalImageMatch(String? probeImageUrl, Product product) {
+    final probeIdentity = canonicalImageIdentity(probeImageUrl);
+    if (probeIdentity.isEmpty) return false;
+    return _productImageUrls(product)
+        .map(canonicalImageIdentity)
+        .any((identity) => identity == probeIdentity);
+  }
+
+  @visibleForTesting
+  static String canonicalImageIdentity(String? imageUrl) {
     if (imageUrl == null || imageUrl.trim().isEmpty) return '';
     final uri = Uri.tryParse(imageUrl.trim());
     if (uri == null) return imageUrl.trim().toLowerCase();
-    final normalizedPath = uri.path.replaceAll(
-      RegExp(r'_(\d+)x\d+[^/]*$'),
-      '',
+    var host = uri.host.toLowerCase();
+    if (host.endsWith('.alicdn.com') ||
+        host == 'alicdn.com' ||
+        host.endsWith('.aliexpress-media.com') ||
+        host == 'aliexpress-media.com') {
+      host = 'aliexpress-image';
+    }
+    var path = Uri.decodeComponent(uri.path).toLowerCase();
+    // AliExpress appends transformations after the original extension, e.g.
+    // `.jpg_640x640q90.jpg_.webp`. Keep the stable original asset path.
+    path = path.replaceFirstMapped(
+      RegExp(r'(\.(?:jpe?g|png|webp|gif))(?:_[^/]*)$'),
+      (match) => match.group(1)!,
     );
-    return Uri(
-      scheme: uri.scheme.toLowerCase(),
-      host: uri.host.toLowerCase(),
-      path: normalizedPath,
-    ).toString();
+    path = path.replaceAll(RegExp(r'/+'), '/');
+    return '$host$path';
   }
+
+  String _productStableKey(Product product) =>
+      product.id ?? '${product.sku}\u0000${product.name}';
 
   bool _sameAliExpressSupplierFamily(
     ProductDuplicateProbe probe,
@@ -1486,16 +1920,48 @@ class ProductDuplicateMatcherService {
     final entrySku = _normalizeSimilarityText(probe.sku ?? '');
     final productSku = _normalizeSimilarityText(product.sku);
     final supplierCode = _normalizeSimilarityText(product.supplierCode ?? '');
+    final sameSupplierIdentityScope =
+        _hasCompatibleSupplierIdentityScope(probe, product);
 
     final sharedAliExpressIds =
         _extractAliExpressItemIds(_buildProbeText(probe)).intersection(
             _extractAliExpressItemIds(_buildProductSimilarityText(product)));
-    if (sharedAliExpressIds.isNotEmpty) return 1;
+    if (sameSupplierIdentityScope && sharedAliExpressIds.isNotEmpty) return 1;
 
     if (entrySku.isEmpty) return 0;
-    final productIds = {productSku, supplierCode}.where((v) => v.isNotEmpty);
-    if (productIds.contains(entrySku)) return 1;
+    // The internal catalog SKU is globally unique. A supplier/listing code is
+    // only unique within its supplier (or the AliExpress supplier family).
+    if (productSku == entrySku) return 1;
+    if (sameSupplierIdentityScope && supplierCode == entrySku) return 1;
     return 0;
+  }
+
+  bool _hasCompatibleSupplierIdentityScope(
+    ProductDuplicateProbe probe,
+    Product product,
+  ) {
+    final probeIsAliExpress =
+        _inventoryService.isAliExpressSupplierName(probe.supplierName) ||
+            _looksLikeAliExpressProbe(probe);
+    final productIsAliExpress =
+        _inventoryService.isAliExpressSupplierName(product.supplierName);
+    if (probeIsAliExpress || productIsAliExpress) {
+      return probeIsAliExpress && productIsAliExpress;
+    }
+
+    final probeSupplierId = probe.supplierId?.trim();
+    final productSupplierId = product.supplierId?.trim();
+    if (probeSupplierId != null &&
+        probeSupplierId.isNotEmpty &&
+        productSupplierId != null &&
+        productSupplierId.isNotEmpty) {
+      return probeSupplierId == productSupplierId;
+    }
+
+    final probeSupplier = _normalizeSimilarityText(probe.supplierName ?? '');
+    final productSupplier =
+        _normalizeSimilarityText(product.supplierName ?? '');
+    return probeSupplier.isNotEmpty && probeSupplier == productSupplier;
   }
 
   double _computeAliExpressScore(
@@ -1511,7 +1977,10 @@ class ProductDuplicateMatcherService {
     final sharedIds = _extractAliExpressItemIds(_buildProbeText(probe))
         .intersection(
             _extractAliExpressItemIds(_buildProductSimilarityText(product)));
-    if (sharedIds.isNotEmpty) return 1;
+    if (sharedIds.isNotEmpty &&
+        _hasCompatibleSupplierIdentityScope(probe, product)) {
+      return 1;
+    }
 
     if (probeTokens.isEmpty || productTokens.isEmpty) return 0;
     final sharedCount = probeTokens.intersection(productTokens).length;
@@ -1714,8 +2183,12 @@ class ProductDuplicateMatcherService {
     required double catalogSpecScore,
     required double shapeAttributeScore,
     required bool hasImageProbe,
+    required bool imageComparisonAvailable,
+    required bool hasExactImageMatch,
+    required bool hasExactModelMatch,
   }) {
-    if (identityScore >= 1) return 1;
+    if (identityScore >= 1 || hasExactImageMatch) return 1;
+    if (hasExactModelMatch) return 0.94;
     if (shapeAttributeScore >= 0.90 &&
         math.max(keywordScore, metadataScore) >= 0.25) {
       return 0.90;
@@ -1723,19 +2196,17 @@ class ProductDuplicateMatcherService {
     if (catalogSpecScore >= 0.94) return 0.96;
     if (catalogSpecScore >= 0.86) return 0.90;
     final textScore = math.max(keywordScore, semanticScore);
-    // When we actually have an image to compare, the image carries more real
-    // "is this the same physical part" signal than Spanish keyword overlap
-    // on AliExpress titles. Bias the combiner toward image evidence.
-    final imageWeight = hasImageProbe ? 0.55 : 0.08;
-    final textWeight = hasImageProbe ? 0.28 : 0.70;
-    const metadataWeight = 0.10;
-    const shapeAttributeWeight = 0.08;
-    const identityWeight = 0.05;
+    // Missing/unreadable images are unknown, not a mismatch. Redistribute
+    // their weight across the available text and metadata evidence.
+    final canCompareImage = hasImageProbe && imageComparisonAvailable;
+    final imageWeight = canCompareImage ? 0.55 : 0.0;
+    final textWeight = canCompareImage ? 0.27 : 0.70;
+    final metadataWeight = canCompareImage ? 0.10 : 0.18;
+    final shapeAttributeWeight = canCompareImage ? 0.08 : 0.12;
     var total = textScore * textWeight +
         imageScore * imageWeight +
         metadataScore * metadataWeight +
-        shapeAttributeScore * shapeAttributeWeight +
-        identityScore * identityWeight;
+        shapeAttributeScore * shapeAttributeWeight;
     // Tiebreaker boost: when text similarity is strong (>=0.5) AND metadata
     // (which folds in category/brand match) is also strong (>=0.4), nudge
     // the score up. This rewards literal "same family + same name pattern"
@@ -1758,8 +2229,12 @@ class ProductDuplicateMatcherService {
     required double shapeAttributeScore,
     required bool sameAliExpressFamily,
     required bool aliExpressTextMatch,
+    required bool hasExactImageMatch,
+    required bool hasExactModelMatch,
   }) {
-    if (identityScore >= 1) return true;
+    if (identityScore >= 1 || hasExactImageMatch || hasExactModelMatch) {
+      return true;
+    }
     if (overallScore >= 0.58) return true;
     if (keywordScore >= 0.62) return true;
     if (semanticScore >= 0.72) return true;
@@ -1777,6 +2252,69 @@ class ProductDuplicateMatcherService {
     return false;
   }
 
+  ProductDuplicateMatchTier _determineMatchTier({
+    required double overallScore,
+    required double identityScore,
+    required bool hasExactImageMatch,
+    required bool hasExactModelMatch,
+  }) {
+    if (identityScore >= 1 || hasExactImageMatch) {
+      return ProductDuplicateMatchTier.exact;
+    }
+    if (hasExactModelMatch || overallScore >= 0.82) {
+      return ProductDuplicateMatchTier.strong;
+    }
+    return ProductDuplicateMatchTier.possible;
+  }
+
+  int _compareCandidates(
+    ProductDuplicateCandidate left,
+    ProductDuplicateCandidate right,
+  ) {
+    int tierRank(ProductDuplicateMatchTier tier) => switch (tier) {
+          ProductDuplicateMatchTier.exact => 0,
+          ProductDuplicateMatchTier.strong => 1,
+          ProductDuplicateMatchTier.possible => 2,
+        };
+
+    var result = tierRank(left.matchTier).compareTo(tierRank(right.matchTier));
+    if (result != 0) return result;
+    result = _compareTrueFirst(
+      left.hasExactImageMatch,
+      right.hasExactImageMatch,
+    );
+    if (result != 0) return result;
+    result = _compareTrueFirst(
+      left.hasExactModelMatch,
+      right.hasExactModelMatch,
+    );
+    if (result != 0) return result;
+    result = right.overallScore.compareTo(left.overallScore);
+    if (result != 0) return result;
+    result = right.identityScore.compareTo(left.identityScore);
+    if (result != 0) return result;
+    result = right.imageScore.compareTo(left.imageScore);
+    if (result != 0) return result;
+    result = right.keywordScore.compareTo(left.keywordScore);
+    if (result != 0) return result;
+    result = right.semanticScore.compareTo(left.semanticScore);
+    if (result != 0) return result;
+    result = left.product.sku
+        .toLowerCase()
+        .compareTo(right.product.sku.toLowerCase());
+    if (result != 0) return result;
+    result = left.product.name
+        .toLowerCase()
+        .compareTo(right.product.name.toLowerCase());
+    if (result != 0) return result;
+    return (left.product.id ?? '').compareTo(right.product.id ?? '');
+  }
+
+  int _compareTrueFirst(bool left, bool right) {
+    if (left == right) return 0;
+    return left ? -1 : 1;
+  }
+
   List<String> _buildDuplicateSignals(
     Product product, {
     required double keywordScore,
@@ -1786,15 +2324,22 @@ class ProductDuplicateMatcherService {
     required double metadataScore,
     required double shapeAttributeScore,
     required double catalogSpecScore,
+    required bool imageComparisonAvailable,
+    required bool hasExactImageMatch,
+    required bool hasExactModelMatch,
   }) {
     final signals = <String>[];
     if (identityScore >= 1) signals.add('SKU/código proveedor coincide');
+    if (hasExactImageMatch) signals.add('Imagen idéntica');
+    if (hasExactModelMatch) signals.add('Modelo exacto');
     if (catalogSpecScore >= 0.78) signals.add('Medida/familia coinciden');
     if (keywordScore >= 0.62) signals.add('Nombre muy parecido');
     if (semanticScore >= 0.72) signals.add('Descripción semántica parecida');
-    if (imageScore >= 0.90) {
+    if (!imageComparisonAvailable) {
+      signals.add('Imagen no disponible para comparar');
+    } else if (!hasExactImageMatch && imageScore >= 0.90) {
       signals.add('Imagen coincide');
-    } else if (imageScore >= 0.78) {
+    } else if (!hasExactImageMatch && imageScore >= 0.78) {
       signals.add('Imagen parecida');
     }
     if (metadataScore >= 0.8) signals.add('Categoría/marca coinciden');

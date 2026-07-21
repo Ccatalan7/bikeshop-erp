@@ -390,4 +390,14 @@ th {
     padding: 14mm;
     box-shadow: none;
   }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr,
+  .totals {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 }

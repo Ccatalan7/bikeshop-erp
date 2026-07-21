@@ -2079,7 +2079,7 @@ This strengthens the backbone by keeping visit diagnosis and executed work on
 stable workshop entities while one invoice/payment boundary owns all financial
 classification and posting.
 
-## Recent Continuity Note (2026-07-17 Quick Bicycle Finder)
+## Recent Continuity Note (2026-07-17 Quick Bicycle Finder, corrected 2026-07-20)
 
 - the right-toolbar `QuickBikeFinderPanel` is a bounded read/navigation surface;
   it does not own bicycle identity, technical profile, diagnosis, or workshop
@@ -2088,6 +2088,11 @@ classification and posting.
   register. One scope menu exposes bicycles in the workshop, under warranty,
   with history, archived, or all; a typed search still reaches archived records
   and normalizes punctuation in telephone, serial, and QR values.
+- the workshop badge and ordering use physical custody rather than the legacy
+  `MechanicJob.isActive` shortcut: a bike-linked, non-test job remains in the
+  workshop when completed and leaves only when delivered or cancelled. The
+  finder and Jobs table share delivery and test-fixture classification so debug
+  jobs cannot displace real customer bicycles.
 - search terms use AND semantics across the bicycle and its customer, so a query
   such as `Oxford Felipe 5497` may resolve each token from a different related
   field. Accent and punctuation differences are ignored, one small alphabetic
@@ -2095,6 +2100,11 @@ classification and posting.
 - every result has one primary record action and one contextual workshop action:
   open the newest active job or start a new job. Customer access is secondary,
   and the previous duplicated per-owner bicycle expansion is removed.
+- a bicycle outside the workshop keeps compact access to its latest operational
+  record beside `Nuevo`: the linked sales invoice opens in the canonical split
+  preview when present, otherwise the latest job opens directly. The latest job
+  remains available from the row menu when the visible shortcut prefers its
+  invoice; the finder does not embed another job or invoice reader.
 - `/taller/pegas/nueva?customer_id=...&bike_id=...` now carries the bicycle
   through `app_router.dart` into `MechanicJobFormPage`. The form selects it only
   after loading the customer and verifying that the bicycle is active and owned

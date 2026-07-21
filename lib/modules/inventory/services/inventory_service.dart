@@ -501,6 +501,41 @@ class InventoryService extends ChangeNotifier {
     return 'AE${(maxSequence + 1).toString().padLeft(4, '0')}';
   }
 
+  /// Reserves the canonical AE namespace in the database. Every creation
+  /// surface must reserve immediately before insert; previewing the next SKU
+  /// alone is intentionally not an allocation.
+  Future<List<String>> reserveAliExpressSkus({
+    required int count,
+    required String operationKey,
+    required String supplierId,
+    required String supplierName,
+  }) async {
+    final response = await _db.rpc(
+      'reserve_aliexpress_skus',
+      params: {
+        'p_count': count,
+        'p_operation_key': operationKey.trim(),
+        'p_supplier_id': supplierId.trim(),
+        'p_supplier_name': supplierName.trim(),
+      },
+    );
+    if (response is! Map) {
+      throw const FormatException('La reserva AE devolvió una respuesta inválida.');
+    }
+    final rawSkus = response['skus'];
+    if (rawSkus is! List) {
+      throw const FormatException('La reserva AE no devolvió SKUs.');
+    }
+    final skus = rawSkus
+        .map((value) => value?.toString().trim() ?? '')
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    if (skus.length != count) {
+      throw const FormatException('La cantidad reservada de SKUs no coincide.');
+    }
+    return skus;
+  }
+
   Future<Product> createProduct(Product product) async {
     try {
       // Check if SKU already exists

@@ -129,7 +129,10 @@ void main(List<String> args) async {
     final productName =
         _cleanText(_firstNonEmpty(product['website_name'], product['name']));
     final productSku = (product['sku'] ?? '').toString().trim();
-    final productBrand = (product['brand'] ?? '').toString().trim();
+    final productBrand = _firstNonEmpty(
+      product['website_merchant_brand'],
+      product['brand'],
+    ).trim();
     final productCategory = (product['category_name'] ?? '').toString().trim();
     final productDescriptionRaw =
         _firstNonEmpty(product['website_description'], product['description']);
@@ -293,6 +296,29 @@ void main(List<String> args) async {
   final categories = _buildProductCategories(
     products: products,
     storeUrl: storeUrl,
+  );
+  final catalogUrl = _joinUrl(storeUrl, '/productos');
+  final catalogTitle = 'Productos para bicicletas | $storeName Viña del Mar';
+  final catalogDescription =
+      'Compra bicicletas, repuestos y accesorios en $storeName. Catálogo online con precios en CLP, retiro en tienda y despacho en Chile.';
+  await File(pathJoin(outDir.path, 'index.html')).writeAsString(
+    _buildCategoryHtml(
+      baseHtml: baseHtml,
+      title: catalogTitle,
+      description: catalogDescription,
+      canonicalUrl: catalogUrl,
+      jsonLd: _buildCatalogJsonLd(
+        products: products,
+        storeUrl: storeUrl,
+        storeName: storeName,
+        catalogUrl: catalogUrl,
+      ),
+      fallbackHtml: _buildCatalogFallbackHtml(
+        products: products,
+        title: catalogTitle,
+        description: catalogDescription,
+      ),
+    ),
   );
   final categoryOutDir = Directory(pathJoin(outDir.path, 'categoria'));
   categoryOutDir.createSync(recursive: true);
@@ -780,8 +806,22 @@ String _businessInfoHtml(Map<String, String> settings, String storeName) {
       fallback: 'contacto@vinabike.cl');
   final phone = _setting(settings, ['contact_phone', 'seo_phone'],
       fallback: '+56998357797');
+  final streetAddress = _setting(settings, ['seo_address_street'],
+      fallback: 'Álvarez 32, Local 17');
+  final addressLocality = _setting(
+      settings, ['seo_address_locality', 'seo_address_city'],
+      fallback: 'Viña del Mar');
+  final addressRegion =
+      _setting(settings, ['seo_address_region'], fallback: 'Valparaíso');
+  final postalCode =
+      _setting(settings, ['seo_address_postal'], fallback: '2520000');
+  final legalName =
+      _setting(settings, ['business_legal_name'], fallback: 'NEWEN SpA');
+  final taxId =
+      _setting(settings, ['business_tax_id'], fallback: '77.541.999-7');
   final address = _setting(settings, ['contact_address'],
-      fallback: 'Álvarez 32, Local 17, Viña del Mar, Chile');
+      fallback:
+          '$streetAddress, $addressLocality, $addressRegion, $postalCode, Chile');
   final hoursSummary = _parseBusinessHours(settings)?.summary ??
       'Lunes a viernes de 11:00 a 19:30; sábados de 11:00 a 15:00.';
 
@@ -790,6 +830,8 @@ String _businessInfoHtml(Map<String, String> settings, String storeName) {
       <h2>Información de la tienda</h2>
       <div class="seo-business-grid">
         <p><strong>Nombre comercial:</strong><br>${_escapeHtml(storeName)}</p>
+        <p><strong>Razón social:</strong><br>${_escapeHtml(legalName)}</p>
+        <p><strong>RUT:</strong><br>${_escapeHtml(taxId)}</p>
         <p><strong>Dirección:</strong><br>${_escapeHtml(address)}</p>
         <p><strong>Teléfono y WhatsApp:</strong><br>${_escapeHtml(phone)}</p>
         <p><strong>Email:</strong><br><a href="mailto:${_escapeHtml(email)}">${_escapeHtml(email)}</a></p>
@@ -909,8 +951,19 @@ String _buildStaticTrustPageJsonLd({
       fallback: 'contacto@vinabike.cl');
   final phone = _setting(settings, ['contact_phone', 'seo_phone'],
       fallback: '+56998357797');
-  final address = _setting(settings, ['contact_address'],
-      fallback: 'Álvarez 32, Local 17, Viña del Mar, Chile');
+  final streetAddress = _setting(settings, ['seo_address_street'],
+      fallback: 'Álvarez 32, Local 17');
+  final addressLocality = _setting(
+      settings, ['seo_address_locality', 'seo_address_city'],
+      fallback: 'Viña del Mar');
+  final addressRegion =
+      _setting(settings, ['seo_address_region'], fallback: 'Valparaíso');
+  final postalCode =
+      _setting(settings, ['seo_address_postal'], fallback: '2520000');
+  final legalName =
+      _setting(settings, ['business_legal_name'], fallback: 'NEWEN SpA');
+  final taxId =
+      _setting(settings, ['business_tax_id'], fallback: '77.541.999-7');
   final instagram = _setting(settings, ['instagram'], fallback: '');
   final openingHoursSpecification =
       _parseBusinessHours(settings)?.jsonLdSpecifications ??
@@ -940,13 +993,17 @@ String _buildStaticTrustPageJsonLd({
         '@type': 'LocalBusiness',
         '@id': _joinUrl(storeUrl, '/#localbusiness'),
         'name': storeName,
+        'legalName': legalName,
+        'taxID': taxId,
         'url': storeUrl,
         'email': email,
         'telephone': phone,
         'address': {
           '@type': 'PostalAddress',
-          'streetAddress': address,
-          'addressLocality': 'Viña del Mar',
+          'streetAddress': streetAddress,
+          'addressLocality': addressLocality,
+          'addressRegion': addressRegion,
+          'postalCode': postalCode,
           'addressCountry': 'CL',
         },
         'areaServed': {
@@ -1224,6 +1281,13 @@ Map<String, dynamic>? _findPageBySlug(
 
 Map<String, _TrustPageFallback> _trustPageFallbacks(String storeName) {
   return {
+    'servicios': _TrustPageFallback(
+      title: 'Servicios de Taller',
+      description:
+          'Mantención y reparación de bicicletas en Viña del Mar con diagnóstico y presupuesto antes de realizar el trabajo.',
+      body:
+          '$storeName presta servicios de mantención y reparación de bicicletas en Álvarez 32, Local 17, Viña del Mar. Evaluamos cada bicicleta y confirmamos alcance, precio y plazo antes de ejecutar trabajos no autorizados. Para coordinar una evaluación escribe a contacto@vinabike.cl o llama al +56 9 9835 7797.',
+    ),
     'contacto': _TrustPageFallback(
       title: 'Contacto',
       description:
@@ -1305,7 +1369,8 @@ String? _buildProductJsonLd({
     'url': productUrl,
     'image': imageUrls,
     if (productSku.isNotEmpty) 'sku': productSku,
-    if (gtin == null && productSku.isNotEmpty) 'mpn': productSku,
+    if ((product['website_merchant_mpn'] ?? '').toString().trim().isNotEmpty)
+      'mpn': (product['website_merchant_mpn'] ?? '').toString().trim(),
     if (category.isNotEmpty) 'category': category,
     if (structuredBrandName.isNotEmpty)
       'brand': {
@@ -1442,6 +1507,51 @@ String _buildCategoryJsonLd({
   return jsonEncode(data);
 }
 
+String _buildCatalogJsonLd({
+  required List<Map<String, dynamic>> products,
+  required String storeUrl,
+  required String storeName,
+  required String catalogUrl,
+}) {
+  final visibleProducts = products.take(24).toList(growable: false);
+  return jsonEncode({
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'CollectionPage',
+        'name': 'Productos para bicicletas en $storeName',
+        'url': catalogUrl,
+        'description':
+            'Catálogo online de bicicletas, repuestos y accesorios en Viña del Mar.',
+      },
+      _buildBreadcrumbListJsonLd(
+        storeUrl: storeUrl,
+        items: [('Inicio', '/'), ('Productos', '/productos')],
+      ),
+      {
+        '@type': 'ItemList',
+        'name': 'Catálogo de $storeName',
+        'numberOfItems': products.length,
+        'itemListElement': [
+          for (var i = 0; i < visibleProducts.length; i++)
+            {
+              '@type': 'ListItem',
+              'position': i + 1,
+              'url': _joinUrl(
+                storeUrl,
+                _publicProductPath(visibleProducts[i]),
+              ),
+              'name': _cleanText(_firstNonEmpty(
+                visibleProducts[i]['website_name'],
+                visibleProducts[i]['name'],
+              )),
+            },
+        ],
+      },
+    ],
+  });
+}
+
 Map<String, dynamic> _buildBreadcrumbListJsonLd({
   required String storeUrl,
   required List<(String, String)> items,
@@ -1527,7 +1637,7 @@ Future<List<Map<String, dynamic>>> _fetchProducts({
       '&is_published=eq.true'
       '&show_on_website=eq.true'
       '&product_type=eq.product'
-      '&select=id,name,description,website_description,website_name,website_price,website_image_url,website_image_url_optimized,website_image_urls,website_seo_title,website_seo_description,website_search_terms,website_merchant_gtin,price,price_currency,sku,gtin,barcode,image_url,image_url_optimized,image_urls,brand,category_name,stock_quantity,inventory_qty,track_stock,updated_at,created_at'
+      '&select=id,name,description,website_description,website_name,website_price,website_image_url,website_image_url_optimized,website_image_urls,website_seo_title,website_seo_description,website_search_terms,website_merchant_gtin,website_merchant_mpn,website_merchant_brand,price,price_currency,sku,gtin,barcode,image_url,image_url_optimized,image_urls,brand,category_name,stock_quantity,inventory_qty,track_stock,updated_at,created_at'
       '&limit=$pageSize'
       '&offset=$offset',
     );
@@ -2003,6 +2113,33 @@ String _buildCategoryFallbackHtml({
   </noscript>''';
 }
 
+String _buildCatalogFallbackHtml({
+  required List<Map<String, dynamic>> products,
+  required String title,
+  required String description,
+}) {
+  final items = products.take(24).map((product) {
+    final name = _cleanText(_firstNonEmpty(
+      product['website_name'],
+      product['name'],
+    ));
+    return '<li><a href="${_escapeHtml(_publicProductPath(product))}">'
+        '${_escapeHtml(name)}</a></li>';
+  }).join('\n          ');
+
+  return '''
+  <noscript id="seo-catalog-fallback">
+    <main>
+      <h1>${_escapeHtml(title)}</h1>
+      <p>${_escapeHtml(description)}</p>
+      <ul>
+          $items
+      </ul>
+      <p><a href="/contacto">Consulta productos y disponibilidad con Viñabike</a></p>
+    </main>
+  </noscript>''';
+}
+
 String _categoryWheelSizeSummary(_ProductCategorySeo category) {
   final sizes = <String>{};
   for (final product in category.products) {
@@ -2302,8 +2439,6 @@ User-agent: *
 Allow: /
 
 Disallow: /cuenta/
-Disallow: /checkout
-Disallow: /carrito
 Disallow: /pedido/
 
 Sitemap: $normalizedStoreUrl/sitemap.xml

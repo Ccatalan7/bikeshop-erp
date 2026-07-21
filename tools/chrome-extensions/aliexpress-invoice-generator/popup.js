@@ -7,11 +7,12 @@
   const SETTINGS_STORAGE = 'aliexpressInvoiceSettings';
   const AI_AUTO_CLEAN_STORAGE = 'aliexpressInvoiceAiAutoClean';
   const AI_NAME_CACHE_STORAGE = 'aliexpressInvoiceAiNameCache_v4';
+  const DEBUG_RUN_STORAGE = 'aliexpressInvoiceLastDebugRun';
   const AI_NAME_CACHE_LIMIT = 500;
   const DEFAULT_SETTINGS = {
-    defaultDateMode: 'range',
+    defaultDateMode: 'day',
     rangeDays: 30,
-    defaultOutputMode: 'separate',
+    defaultOutputMode: 'combined',
     autoSelectCollectedOrders: true,
     enrichDetailsBeforeOutput: true,
     maxSeparateInvoices: 20,
@@ -21,7 +22,163 @@
     'gemini-2.5-flash-lite',
     'gemini-flash-latest',
   ];
-  const CONTENT_SCRIPT_VERSION = '0.4.0';
+  const CONTENT_SCRIPT_VERSION = '0.4.6';
+  const DEBUG_PREFIX = `[AE-DEBUG][popup][v${CONTENT_SCRIPT_VERSION}]`;
+  let debugRunId = '';
+  let debugTrace = [];
+
+  function beginAeDebugRun(kind, details = {}) {
+    debugRunId = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+    debugTrace = [];
+    aeDebug(`${kind}.run.start`, details);
+    return debugRunId;
+  }
+
+  function aeDebug(event, details = {}, level = 'log') {
+    const entry = {
+      runId: debugRunId || 'no-run',
+      event,
+      at: new Date().toISOString(),
+      ...details,
+    };
+    try {
+      const snapshot = JSON.parse(JSON.stringify(entry));
+      debugTrace.push(snapshot);
+      if (debugTrace.length > 500) debugTrace = debugTrace.slice(-500);
+      const writer = console[level] || console.log;
+      writer.call(console, `${DEBUG_PREFIX} ${JSON.stringify(snapshot)}`);
+    } catch (error) {
+      console.log(`${DEBUG_PREFIX} ${event} (debug serialization failed: ${String(error)})`);
+    }
+  }
+
+  async function persistAeDebugTrace(stage) {
+    if (!globalThis.chrome || !chrome.storage || !chrome.storage.local) return;
+    try {
+      await chrome.storage.local.set({
+        [DEBUG_RUN_STORAGE]: {
+          version: CONTENT_SCRIPT_VERSION,
+          runId: debugRunId,
+          stage,
+          savedAt: new Date().toISOString(),
+          entries: debugTrace,
+        },
+      });
+    } catch (error) {
+      aeDebug('debug.persist.failed', { stage, error: error && error.message ? error.message : String(error) }, 'warn');
+    }
+  }
+
+  function safeDebugUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+      const parsed = new URL(raw);
+      const safe = new URL(`${parsed.origin}${parsed.pathname}`);
+      ['orderId', 'orderIdList', 'orderNo', 'orderNumber', 'itemId', 'productId'].forEach((key) => {
+        const field = parsed.searchParams.get(key);
+        if (field) safe.searchParams.set(key, field.slice(0, 80));
+      });
+      return safe.toString();
+    } catch (_) {
+      return raw.split('?')[0].slice(0, 240);
+    }
+  }
+
+  function debugItemSummary(item) {
+    const description = String(item && (item.description || item.originalDescription) || '');
+    return {
+      sku: String(item && item.sku || ''),
+      itemId: String(item && item.itemId || ''),
+      description: description.slice(0, 160),
+      quantity: toNumber(item && item.quantity),
+      sourcePurchaseQuantity: toNumber(item && item.sourcePurchaseQuantity),
+      unitsPerPurchase: toNumber(item && item.unitsPerPurchase) || 1,
+      sourceTotal: sourceItemTotal(item || {}),
+      total: toNumber(item && item.total),
+      productUrl: safeDebugUrl(item && item.productUrl || ''),
+      hasImage: Boolean(item && item.imageUrl),
+      placeholder: isDebugPlaceholderItem(item),
+      usable: isDebugUsableItem(item),
+    };
+  }
+
+  function isDebugPlaceholderItem(item) {
+    const description = String(item && (item.description || item.originalDescription) || '').trim();
+    return /^AliExpress order\s+\d+$/i.test(description)
+      || (!item?.itemId && !item?.imageUrl && /\/p\/message\//i.test(String(item?.productUrl || '')));
+  }
+
+  function isDebugUsableItem(item) {
+    if (!item || isDebugPlaceholderItem(item)) return false;
+    return Boolean(String(item.description || item.sku || '').trim())
+      && (sourceItemTotal(item) > 0 || Boolean(item.itemId || item.imageUrl));
+  }
+
+  function debugOrderSummary(order) {
+    const items = Array.isArray(order && order.items) ? order.items : [];
+    const summaries = items.map(debugItemSummary);
+    return {
+      orderNumber: String(order && order.orderNumber || ''),
+      orderDate: String(order && order.orderDate || ''),
+      pageUrl: safeDebugUrl(order && order.pageUrl || ''),
+      itemCount: items.length,
+      usableItemCount: summaries.filter((item) => item.usable).length,
+      placeholderCount: summaries.filter((item) => item.placeholder).length,
+      subtotal: toNullableNumber(order && order.subtotal),
+      shipping: toNullableNumber(order && order.shipping),
+      tax: toNullableNumber(order && order.tax),
+      discount: toNullableNumber(order && order.discount),
+      total: toNullableNumber(order && order.total),
+      authoritativeTotals: order && order.__authoritativeTotals === true,
+      warnings: Array.isArray(order && order.warnings) ? order.warnings : [],
+      items: summaries,
+    };
+  }
+
+  function duplicateOrderNumberCounts(orders) {
+    const counts = new Map();
+    (orders || []).forEach((order) => {
+      const number = String(order && order.orderNumber || '').trim();
+      if (number) counts.set(number, (counts.get(number) || 0) + 1);
+    });
+    return Object.fromEntries(Array.from(counts.entries()).filter(([, count]) => count > 1));
+  }
+
+  function dedupeBulkOrdersByOrderNumber(orders) {
+    const result = [];
+    const indexByOrderNumber = new Map();
+    (orders || []).forEach((order) => {
+      const orderNumber = String(order && order.orderNumber || '').trim();
+      if (!orderNumber) {
+        result.push(order);
+        return;
+      }
+      const existingIndex = indexByOrderNumber.get(orderNumber);
+      if (existingIndex === undefined) {
+        indexByOrderNumber.set(orderNumber, result.length);
+        result.push(order);
+        return;
+      }
+      const existing = result[existingIndex];
+      if (bulkOrderQualityScore(order) > bulkOrderQualityScore(existing)) {
+        result[existingIndex] = order;
+      }
+    });
+    return result;
+  }
+
+  function bulkOrderQualityScore(order) {
+    const summary = debugOrderSummary(order || {});
+    const components = ['shipping', 'tax', 'discount']
+      .filter((field) => toNullableNumber(order && order[field]) !== null).length;
+    return (summary.usableItemCount * 1000)
+      - (summary.placeholderCount * 1000)
+      + (summary.items.filter((item) => item.hasImage).length * 25)
+      + (isUsableOrderDetailUrl(order && order.pageUrl, order && order.orderNumber) ? 100 : 0)
+      + (order && order.__authoritativeTotals === true ? 100 : 0)
+      + (components * 10);
+  }
   const imageDimensionCache = new Map();
   // In-memory mirror of the persisted AI cleaned-name cache.
   // Key: `${imageHashOrUrl}|${rawTitle.toLowerCase()}` → cleaned payload.
@@ -101,6 +258,7 @@
   });
 
   async function initializePanel() {
+    initializeTabs();
     await loadSettings();
     setDefaultDate();
     setDefaultBulkDates();
@@ -113,6 +271,26 @@
     renderItems();
     restoreBulkWorkspaceState();
     setupBulkWorkspaceStorageListener();
+  }
+
+  function initializeTabs() {
+    const buttons = Array.from(document.querySelectorAll('[data-tab]'));
+    const panels = Array.from(document.querySelectorAll('[data-tab-panel]'));
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const selected = button.dataset.tab;
+        buttons.forEach((candidate) => {
+          const active = candidate.dataset.tab === selected;
+          candidate.classList.toggle('active', active);
+          candidate.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        panels.forEach((panel) => {
+          const active = panel.dataset.tabPanel === selected;
+          panel.classList.toggle('active', active);
+          panel.hidden = !active;
+        });
+      });
+    });
   }
 
   el.extractButton.addEventListener('click', extractCurrentPage);
@@ -1208,10 +1386,17 @@
     }
 
     const filters = getBulkDateFilters({ syncInputs: true });
-    setStatus('Colectando ordenes cargadas en la lista de AliExpress...', 'neutral');
+    beginAeDebugRun('bulk.collect', {
+      filters,
+      previousState: {
+        orderCount: state.bulkOrders.length,
+        duplicateOrderNumbers: duplicateOrderNumberCounts(state.bulkOrders),
+      },
+    });
+    setStatus('Buscando compras en el historial de AliExpress...', 'neutral');
     setBulkProgress({
       active: true,
-      label: 'Colectando ordenes',
+      label: 'Buscando compras',
       detail: filters.label,
       percent: 18,
       type: 'active',
@@ -1220,15 +1405,20 @@
     el.generateBulkButton.disabled = true;
 
     try {
-      await saveBulkWorkspaceState('Colectando ordenes cargadas en la lista de AliExpress...', 'neutral');
+      await saveBulkWorkspaceState('Buscando compras en el historial de AliExpress...', 'neutral');
       const tab = await getAliExpressSourceTab();
       if (!tab || !tab.id) throw new Error('No se encontro una pestana activa.');
       if (!/^https:\/\/([^/]+\.)?aliexpress\.com\//i.test(tab.url || '')) {
         throw new Error('Abre Account > Orders en AliExpress antes de colectar.');
       }
+      aeDebug('bulk.collect.source-tab', {
+        tabId: tab.id,
+        pageUrl: safeDebugUrl(tab.url || ''),
+        status: tab.status || '',
+      });
 
       await ensureFreshContentBridge(tab.id);
-      setBulkProgress({ active: true, label: 'Leyendo lista AliExpress', detail: 'Escaneando ordenes visibles y View orders.', percent: 42, type: 'active' });
+      setBulkProgress({ active: true, label: 'Leyendo historial', detail: 'Cargando pedidos hasta alcanzar la fecha elegida.', percent: 42, type: 'active' });
       const response = await executeContentCommand(tab.id, 'ordersList', filters);
 
       if (!response || !response.ok) {
@@ -1236,6 +1426,16 @@
       }
 
       const result = response.result || {};
+      const rawOrders = Array.isArray(result.orders) ? result.orders : [];
+      aeDebug('bulk.collect.raw-result', {
+        scannedCount: result.scannedCount || 0,
+        returnedCount: rawOrders.length,
+        uniqueOrderCount: new Set(rawOrders.map((order) => String(order && order.orderNumber || '')).filter(Boolean)).size,
+        duplicateOrderNumbers: duplicateOrderNumberCounts(rawOrders),
+        warnings: result.warnings || [],
+        preload: result.preload || null,
+        orders: rawOrders.map(debugOrderSummary),
+      }, Object.keys(duplicateOrderNumberCounts(rawOrders)).length ? 'warn' : 'log');
       state.bulkMeta = {
         pageUrl: result.pageUrl || tab.url || '',
         collectedAt: result.collectedAt || new Date().toISOString(),
@@ -1247,7 +1447,15 @@
         preload: result.preload || null,
         warnings: result.warnings || [],
       };
-      state.bulkOrders = Array.isArray(result.orders) ? result.orders.map(normalizeBulkInvoice) : [];
+      state.bulkOrders = dedupeBulkOrdersByOrderNumber(
+        Array.isArray(result.orders) ? result.orders.map(normalizeBulkInvoice) : [],
+      );
+      aeDebug('bulk.collect.normalized-result', {
+        orderCount: state.bulkOrders.length,
+        uniqueOrderCount: new Set(state.bulkOrders.map((order) => order.orderNumber).filter(Boolean)).size,
+        duplicateOrderNumbers: duplicateOrderNumberCounts(state.bulkOrders),
+        orders: state.bulkOrders.map(debugOrderSummary),
+      }, Object.keys(duplicateOrderNumberCounts(state.bulkOrders)).length ? 'warn' : 'log');
       state.bulkSelection = state.settings.autoSelectCollectedOrders
         ? state.bulkOrders.map(bulkOrderSelectionKey).filter(Boolean)
         : [];
@@ -1261,19 +1469,25 @@
         : '';
       setBulkProgress({
         active: false,
-        label: state.bulkOrders.length > 0 ? 'Bulk listo' : 'Sin ordenes en rango',
-        detail: `${state.bulkOrders.length}/${state.bulkMeta.scannedCount} orden(es). ${filters.label}${loadText}`,
+        label: state.bulkOrders.length > 0 ? 'Compras encontradas' : 'No se encontraron compras',
+        detail: `${state.bulkOrders.length}/${state.bulkMeta.scannedCount} pedido(s). ${filters.label}${loadText}`,
         percent: 100,
         type: statusType,
       });
-      setStatus(`Bulk listo: ${state.bulkOrders.length}/${state.bulkMeta.scannedCount} orden(es) en rango.${loadText}${warningText}`, statusType);
-      await saveBulkWorkspaceState(`Bulk listo: ${state.bulkOrders.length}/${state.bulkMeta.scannedCount} orden(es) en rango.${loadText}${warningText}`, statusType);
+      const resultMessage = state.bulkOrders.length > 0
+        ? `${state.bulkOrders.length} pedido(s) listos para revisar.${loadText}${warningText}`
+        : `No se encontraron compras para la fecha seleccionada.${warningText}`;
+      setStatus(resultMessage, statusType);
+      await saveBulkWorkspaceState(resultMessage, statusType);
+      await persistAeDebugTrace('collection-complete');
       // Optional auto-cleanup right after bulk collect.
       maybeAutoCleanAfter('bulk-collect');
     } catch (error) {
-      setBulkProgress({ active: false, label: 'Bulk fallo', detail: error.message || String(error), percent: 100, type: 'error' });
+      aeDebug('bulk.collect.failed', { error: error.message || String(error) }, 'error');
+      setBulkProgress({ active: false, label: 'La búsqueda falló', detail: error.message || String(error), percent: 100, type: 'error' });
       setStatus(error.message || String(error), 'error');
       await saveBulkWorkspaceState(error.message || String(error), 'error');
+      await persistAeDebugTrace('collection-failed');
     } finally {
       el.collectBulkButton.disabled = false;
       el.generateBulkButton.disabled = false;
@@ -1283,7 +1497,7 @@
   function renderBulkOrders() {
     if (!el.bulkOrdersList) return;
     if (!state.bulkOrders.length) {
-      el.bulkOrdersList.innerHTML = '<p class="status neutral">Sin ordenes colectadas. Abre la lista de AliExpress y pulsa Colectar.</p>';
+      el.bulkOrdersList.innerHTML = '<p class="empty-copy">Aquí aparecerán las compras encontradas.</p>';
       return;
     }
 
@@ -1332,6 +1546,13 @@
 
     el.generateBulkButton.disabled = true;
     try {
+      if (!debugRunId) beginAeDebugRun('bulk.generate', {});
+      aeDebug('bulk.generate.selection', {
+        selectedCount: orders.length,
+        uniqueOrderCount: new Set(orders.map((order) => order.orderNumber).filter(Boolean)).size,
+        duplicateOrderNumbers: duplicateOrderNumberCounts(orders),
+        orders: orders.map(debugOrderSummary),
+      }, Object.keys(duplicateOrderNumberCounts(orders)).length ? 'warn' : 'log');
       await saveBulkWorkspaceState('Generando bulk...', 'neutral');
       setBulkProgress({ active: true, label: 'Preparando bulk', detail: `${orders.length} orden(es) seleccionadas.`, percent: 8, type: 'active' });
       const mode = el.bulkOutputMode ? el.bulkOutputMode.value : 'separate';
@@ -1344,6 +1565,7 @@
         setBulkProgress({ active: false, label: 'Factura consolidada lista', detail: `${orders.length} orden(es), ${invoice.items.length} linea(s).`, percent: 100, type: 'success' });
         setStatus(`Factura consolidada creada con ${orders.length} orden(es) y ${invoice.items.length} linea(s).`, 'success');
         await saveBulkWorkspaceState(`Factura consolidada creada con ${orders.length} orden(es) y ${invoice.items.length} linea(s).`, 'success');
+        await persistAeDebugTrace('combined-invoice-opened');
         return;
       }
 
@@ -1359,9 +1581,11 @@
       setStatus(`Se generaron ${limited.length} factura(s) en pestanas nuevas.${suffix}`, orders.length > maxTabs ? 'warning' : 'success');
       await saveBulkWorkspaceState(`Se generaron ${limited.length} factura(s) en pestanas nuevas.${suffix}`, orders.length > maxTabs ? 'warning' : 'success');
     } catch (error) {
+      aeDebug('bulk.generate.failed', { error: error.message || String(error) }, 'error');
       setBulkProgress({ active: false, label: 'Generacion fallo', detail: error.message || String(error), percent: 100, type: 'error' });
       setStatus(error.message || String(error), 'error');
       await saveBulkWorkspaceState(error.message || String(error), 'error');
+      await persistAeDebugTrace('generation-failed');
     } finally {
       el.generateBulkButton.disabled = false;
     }
@@ -1369,11 +1593,28 @@
 
   async function enrichBulkOrdersFromDetails(orders) {
     const result = [];
-    state.lastEnrichmentDebug = []; // [v0.3.50 DEBUG] reset audit log per batch
+    state.lastEnrichmentDebug = [];
+    aeDebug('bulk.enrichment.start', {
+      orderCount: orders.length,
+      uniqueOrderCount: new Set(orders.map((order) => order.orderNumber).filter(Boolean)).size,
+      duplicateOrderNumbers: duplicateOrderNumberCounts(orders),
+      orders: orders.map(debugOrderSummary),
+    }, Object.keys(duplicateOrderNumberCounts(orders)).length ? 'warn' : 'log');
     setBulkProgress({ active: true, label: 'Leyendo detalles', detail: `0/${orders.length}`, current: 0, total: orders.length, type: 'active' });
     for (let index = 0; index < orders.length; index += 1) {
       const listOrder = normalizeBulkInvoice(orders[index]);
       const detailUrl = resolveOrderDetailUrl(listOrder);
+      aeDebug('bulk.enrichment.order.start', {
+        index: index + 1,
+        totalOrders: orders.length,
+        listOrder: debugOrderSummary(listOrder),
+        resolvedDetailUrl: safeDebugUrl(detailUrl),
+        resolvedUrlKind: /\/p\/message\//i.test(detailUrl)
+          ? 'message'
+          : /order.*detail|detail.*order/i.test(detailUrl)
+            ? 'order-detail'
+            : 'other',
+      }, /\/p\/message\//i.test(detailUrl) ? 'warn' : 'log');
       if (!detailUrl) {
         result.push({
           ...listOrder,
@@ -1393,11 +1634,26 @@
         const response = await executeContentCommand(detailTab.id, 'extract');
         if (!response || !response.ok || !response.order) throw new Error(response && response.error ? response.error : 'Detalle sin datos.');
         const detailOrder = response.order;
-        // [v0.3.50 DEBUG] Per-order enrichment audit. Open popup DevTools (right-click popup -> Inspect) to view.
+        let loadedPageUrl = detailUrl;
+        try {
+          const loadedTab = await chrome.tabs.get(detailTab.id);
+          loadedPageUrl = loadedTab && loadedTab.url || detailUrl;
+        } catch (_) { /* the extraction result is still useful */ }
+        aeDebug('bulk.enrichment.order.extracted', {
+          index: index + 1,
+          listOrderNumber: listOrder.orderNumber || '',
+          detailOrderNumber: detailOrder.orderNumber || '',
+          orderNumberMatches: Boolean(listOrder.orderNumber && detailOrder.orderNumber && listOrder.orderNumber === detailOrder.orderNumber),
+          requestedUrl: safeDebugUrl(detailUrl),
+          loadedPageUrl: safeDebugUrl(loadedPageUrl),
+          detail: debugOrderSummary(detailOrder),
+          expandDebug: detailOrder.__expandDebug || null,
+        }, (!detailOrder.orderNumber || detailOrder.orderNumber !== listOrder.orderNumber || debugOrderSummary(detailOrder).usableItemCount === 0) ? 'warn' : 'log');
+        // Keep a compact per-order totals audit alongside the structured run trace.
         try {
           const audit = {
             orderNumber: detailOrder.orderNumber || listOrder.orderNumber || '',
-            detailUrl,
+            detailUrl: safeDebugUrl(detailUrl),
             list: { subtotal: listOrder.subtotal, shipping: listOrder.shipping, tax: listOrder.tax, discount: listOrder.discount, total: listOrder.total },
             detail: { subtotal: detailOrder.subtotal, shipping: detailOrder.shipping, tax: detailOrder.tax, discount: detailOrder.discount, total: detailOrder.total },
             balance: (() => {
@@ -1409,11 +1665,15 @@
               const calc = Math.round((sub + ship + tax - disc) * 100) / 100;
               return { calc, total: tot, residual: Math.round((tot - calc) * 100) / 100 };
             })(),
-            rawTextPreview: (detailOrder.rawTextPreview || '').slice(0, 2500),
+            relevantTotalsText: String(detailOrder.rawTextPreview || '')
+              .split('\n')
+              .map((line) => line.trim())
+              .filter((line) => /subtotal|shipping|env[ií]o|tax|iva|coupon|cup[oó]n|discount|descuento|coins?|monedas?|total/i.test(line))
+              .slice(0, 30)
+              .join('\n'),
             expandDebug: detailOrder.__expandDebug || null,
           };
-          // eslint-disable-next-line no-console
-          console.log('[AE-INV 0.3.51] enrichment audit', audit);
+          aeDebug('bulk.enrichment.order.totals-audit', audit);
           state.lastEnrichmentDebug = state.lastEnrichmentDebug || [];
           state.lastEnrichmentDebug.push(audit);
           try { await chrome.storage.local.set({ aliExpressLastEnrichmentDebug: state.lastEnrichmentDebug }); } catch (_) { /* ignore */ }
@@ -1421,6 +1681,12 @@
         const merged = mergeBulkListAndDetailOrder(listOrder, detailOrder, detailUrl);
         result.push(merged);
       } catch (error) {
+        aeDebug('bulk.enrichment.order.failed', {
+          index: index + 1,
+          listOrderNumber: listOrder.orderNumber || '',
+          requestedUrl: safeDebugUrl(detailUrl),
+          error: error.message || String(error),
+        }, 'error');
         result.push({
           ...listOrder,
           warnings: [...(listOrder.warnings || []), `No se pudo leer detalle (${error.message || String(error)}); se uso la informacion visible en la lista.`],
@@ -1433,9 +1699,16 @@
       }
     }
 
-    state.bulkOrders = result.map(normalizeBulkInvoice);
+    state.bulkOrders = dedupeBulkOrdersByOrderNumber(result.map(normalizeBulkInvoice));
+    aeDebug('bulk.enrichment.complete', {
+      orderCount: state.bulkOrders.length,
+      uniqueOrderCount: new Set(state.bulkOrders.map((order) => order.orderNumber).filter(Boolean)).size,
+      duplicateOrderNumbers: duplicateOrderNumberCounts(state.bulkOrders),
+      orders: state.bulkOrders.map(debugOrderSummary),
+    }, Object.keys(duplicateOrderNumberCounts(state.bulkOrders)).length ? 'warn' : 'log');
     renderBulkOrders();
     await saveBulkWorkspaceState();
+    await persistAeDebugTrace('enrichment-complete');
     return state.bulkOrders;
   }
 
@@ -1448,7 +1721,7 @@
       percent: 100,
       type: 'warning',
     });
-    return orders.map(normalizeBulkInvoice);
+    return dedupeBulkOrdersByOrderNumber(orders.map(normalizeBulkInvoice));
   }
 
   function resolveOrderDetailUrl(order) {
@@ -1461,10 +1734,22 @@
   function isUsableOrderDetailUrl(url, orderNumber) {
     const value = String(url || '');
     if (!/^https:\/\/([^/]+\.)?aliexpress\.com\//i.test(value)) return false;
-    if (/\/p\/order\/index\.html/i.test(value)) return false;
-    if (/order.*detail|detail.*order|orderId|order_id|orderIdList/i.test(value)) return true;
-    const digits = String(orderNumber || '').replace(/\D+/g, '');
-    return Boolean(digits && value.includes(digits));
+    try {
+      const parsed = new URL(value);
+      const path = parsed.pathname.toLowerCase();
+      if (/\/p\/message\//i.test(path) || /\/p\/order\/index\.html/i.test(path)) return false;
+      if (!(path.includes('order') && path.includes('detail'))) return false;
+      const expected = String(orderNumber || '').replace(/\D+/g, '');
+      const resolved = [
+        parsed.searchParams.get('orderId'),
+        parsed.searchParams.get('orderIdList'),
+        parsed.searchParams.get('orderNo'),
+        parsed.searchParams.get('orderNumber'),
+      ].map((candidate) => String(candidate || '').replace(/\D+/g, '')).find(Boolean) || '';
+      return !expected || !resolved || expected === resolved;
+    } catch (_) {
+      return false;
+    }
   }
 
   function waitForTabComplete(tabId, timeoutMs) {
@@ -1494,7 +1779,10 @@
     const list = normalizeBulkInvoice(listOrder);
     const detailItems = detail.items.filter((item) => item.description || item.sku);
     const listItems = list.items.filter((item) => item.description || item.sku);
-    const useDetailItems = detailItems.length >= listItems.length || detailItems.some((item) => item.imageUrl);
+    const detailUsableItems = detailItems.filter(isDebugUsableItem);
+    const listUsableItems = listItems.filter(isDebugUsableItem);
+    const useDetailItems = detailUsableItems.length > 0
+      && (detailUsableItems.length >= listUsableItems.length || detailUsableItems.some((item) => item.imageUrl));
     const items = useDetailItems ? detailItems : listItems;
     const subtotal = toNullableNumber(detail.subtotal) ?? toNullableNumber(list.subtotal) ?? sumItems(items);
     const total = toNullableNumber(detail.total) ?? toNullableNumber(list.total) ?? roundMoney(sumItems(items) + (toNullableNumber(detail.shipping) || toNullableNumber(list.shipping) || 0));
@@ -1518,7 +1806,7 @@
       return toNullableNumber(list[field]);
     };
 
-    return {
+    const merged = {
       ...list,
       ...detail,
       pageUrl: detail.pageUrl || detailUrl || list.pageUrl,
@@ -1536,6 +1824,26 @@
       items,
       warnings,
     };
+    const listHealth = debugOrderSummary({ ...list, items: listItems });
+    const detailHealth = debugOrderSummary({ ...detailOrder, items: detailItems });
+    aeDebug('bulk.enrichment.order.merged', {
+      listOrderNumber: list.orderNumber || '',
+      detailOrderNumber: detail.orderNumber || '',
+      mergedOrderNumber: merged.orderNumber || '',
+      orderNumberMatches: Boolean(list.orderNumber && detail.orderNumber && list.orderNumber === detail.orderNumber),
+      itemDecision: useDetailItems ? 'detail' : 'list',
+      itemDecisionReason: detailUsableItems.length === 0
+        ? 'detail-has-no-usable-products'
+        : detailUsableItems.length >= listUsableItems.length
+        ? 'detail-item-count-gte-list'
+        : detailUsableItems.some((item) => item.imageUrl)
+          ? 'detail-has-image'
+          : 'list-has-more-items',
+      listHealth,
+      detailHealth,
+      merged: debugOrderSummary(merged),
+    }, (detailHealth.usableItemCount === 0 || detailHealth.placeholderCount > 0 || merged.orderNumber !== list.orderNumber) ? 'warn' : 'log');
+    return merged;
   }
 
   async function downloadBulkJson() {
@@ -1578,43 +1886,22 @@
 
   function allocateInvoiceComponents(invoice) {
     const items = Array.isArray(invoice.items) ? invoice.items.map(normalizeItem).filter((item) => item.description || item.sku) : [];
-    if (!items.length) return { ...invoice, items };
+    if (!items.length) {
+      aeDebug('allocation.skipped-empty', {
+        orderNumber: invoice && invoice.orderNumber || '',
+        suppliedTotal: toNullableNumber(invoice && invoice.total),
+      }, 'warn');
+      return { ...invoice, items };
+    }
 
     const sourceTotals = items.map(sourceItemTotal);
     const calculatedSubtotal = roundMoney(sourceTotals.reduce((sum, value) => sum + value, 0));
     const providedSubtotal = toNullableNumber(invoice.subtotal);
-    const subtotal = calculatedSubtotal > (providedSubtotal || 0)
-      ? calculatedSubtotal
-      : (providedSubtotal ?? calculatedSubtotal);
-    const hasKnownShipping = toNullableNumber(invoice.shipping) !== null;
-    const hasKnownTax = toNullableNumber(invoice.tax) !== null;
+    const subtotal = providedSubtotal ?? calculatedSubtotal;
     let shipping = positiveComponentAmount(invoice.shipping);
     let tax = positiveComponentAmount(invoice.tax);
     let discount = positiveComponentAmount(invoice.discount);
     const statedTotal = toNullableNumber(invoice.total);
-
-    if (statedTotal !== null) {
-      const componentTotal = roundMoney(subtotal + shipping + tax - discount);
-      const residual = roundMoney(statedTotal - componentTotal);
-      // [v0.3.51] Only fabricate a missing component when the gap is large enough that it
-      // is clearly a real missing line (shipping / tax / discount). Small gaps (CLP rounding,
-      // ~$1-$50 on a multi-thousand-CLP order) are absorbed silently by the per-row adjustment
-      // below at line ~1325, so we never invent a fake discount that mirrors shipping.
-      const fabricationThreshold = Math.max(50, Math.abs(statedTotal) * 0.02);
-      if (residual > fabricationThreshold) {
-        if (!hasKnownTax && hasKnownShipping) {
-          tax = roundMoney(tax + residual);
-        } else if (!hasKnownShipping && hasKnownTax) {
-          shipping = roundMoney(shipping + residual);
-        } else if (!hasKnownShipping && !hasKnownTax) {
-          tax = roundMoney(tax + residual);
-        } else {
-          tax = roundMoney(tax + residual);
-        }
-      } else if (residual < -fabricationThreshold) {
-        discount = roundMoney(discount + Math.abs(residual));
-      }
-    }
 
     const finalTotal = statedTotal ?? roundMoney(subtotal + shipping + tax - discount);
     const basis = sourceTotals.some((value) => value > 0)
@@ -1661,10 +1948,12 @@
         ...target,
         total: adjustedTotal,
         unitPrice: roundMoney(adjustedTotal / (toNumber(target.quantity) || 1)),
+        allocatedAdjustmentTotal: residual,
+        allocatedAdjustment: roundMoney(residual / (toNumber(target.quantity) || 1)),
       };
     }
 
-    return {
+    const result = {
       ...invoice,
       subtotal,
       shipping: shipping || null,
@@ -1679,8 +1968,27 @@
         tax,
         discount,
         finalTotal,
+        componentDifference: roundMoney(finalTotal - roundMoney(subtotal + shipping + tax - discount)),
       },
     };
+    aeDebug('allocation.complete', {
+      orderNumber: invoice && invoice.orderNumber || '',
+      itemCount: items.length,
+      sourceTotals,
+      calculatedSubtotal,
+      providedSubtotal,
+      subtotal,
+      shipping,
+      tax,
+      discount,
+      componentCalculation: roundMoney(subtotal + shipping + tax - discount),
+      finalTotal,
+      componentDifference: result.allocation.componentDifference,
+      allocatedRowTotal: sumItems(result.items),
+      residualApplied: residual,
+      items: result.items.map(debugItemSummary),
+    }, (Math.abs(result.allocation.componentDifference) >= 0.01 || result.items.some(isDebugPlaceholderItem)) ? 'warn' : 'log');
+    return result;
   }
 
   function sourceItemUnitPrice(item) {
@@ -1737,19 +2045,30 @@
   }
 
   function buildCombinedBulkInvoice(orders) {
-    const normalizedOrders = orders.map(normalizeBulkInvoice);
+    const normalizedOrders = dedupeBulkOrdersByOrderNumber(
+      orders.map(normalizeBulkInvoice),
+    );
     const orderDates = normalizedOrders.map((order) => order.orderDate).filter(Boolean).sort();
     const exactInvoiceDate = selectedBulkExactInvoiceDate();
     const generatedInvoiceDate = exactInvoiceDate || orderDates[orderDates.length - 1] || '';
     const orderNumbers = normalizedOrders.map((order) => order.orderNumber).filter(Boolean);
-    const items = normalizedOrders.flatMap((order) => order.items.map((item) => ({
+    const duplicateOrderNumbers = duplicateOrderNumberCounts(normalizedOrders);
+    aeDebug('bulk.combine.input', {
+      selectedOrderCount: normalizedOrders.length,
+      uniqueOrderCount: new Set(orderNumbers).size,
+      duplicateOrderNumbers,
+      orders: normalizedOrders.map(debugOrderSummary),
+    }, Object.keys(duplicateOrderNumbers).length ? 'warn' : 'log');
+    const rawItems = normalizedOrders.flatMap((order) => order.items.map((item) => ({
       ...item,
       sku: item.sku || (order.orderNumber ? `AE-${lastDigits(order.orderNumber, 8)}` : ''),
-      description: `[${order.orderNumber || 'AliExpress'}] ${item.description || item.sku || 'Linea AliExpress'}`,
+      description: item.description || item.sku || 'Linea AliExpress',
       sourceOrderNumber: order.orderNumber || '',
+      sourceOrderNumbers: [order.orderNumber || ''].filter(Boolean),
       sourceOrderDate: order.orderDate || '',
       sourceOrderUrl: order.pageUrl || '',
     })));
+    const items = aggregateDailyItems(rawItems);
     const itemSubtotal = roundMoney(items.reduce((sum, item) => sum + sourceItemTotal(item), 0));
     const knownShipping = sumKnownTotals(normalizedOrders, 'shipping');
     const knownTax = sumKnownTotals(normalizedOrders, 'tax');
@@ -1767,7 +2086,7 @@
         : `Rango: ${orderDates[0] || el.bulkFromDate.value || ''}${orderDates.length ? ` a ${orderDates[orderDates.length - 1]}` : ''}.`,
     ].filter(Boolean).join('\n');
 
-    return {
+    const invoice = {
       source: 'AliExpress',
       generatedAt: new Date().toISOString(),
       extractedAt: new Date().toISOString(),
@@ -1783,6 +2102,9 @@
       tax: knownTax || null,
       discount: knownDiscount || null,
       total: finalTotal,
+      componentDifference: roundMoney(
+        finalTotal - roundMoney(combinedSubtotal + knownShipping + knownTax - knownDiscount),
+      ),
       notes,
       items: finalItems,
       warnings: normalizedOrders.flatMap((order) => order.warnings || []).concat(
@@ -1808,6 +2130,37 @@
         allocatedRowTotal: sumItems(finalItems),
       },
     };
+    const usableRawItems = rawItems.filter(isDebugUsableItem);
+    const usableRepresentedOrders = new Set(
+      usableRawItems.flatMap((item) => [
+        item.sourceOrderNumber,
+        ...(Array.isArray(item.sourceOrderNumbers) ? item.sourceOrderNumbers : []),
+      ]).filter(Boolean),
+    );
+    const missingUsableOrderNumbers = Array.from(new Set(orderNumbers))
+      .filter((number) => !usableRepresentedOrders.has(number));
+    aeDebug('bulk.combine.output', {
+      selectedOrderCount: normalizedOrders.length,
+      uniqueOrderCount: new Set(orderNumbers).size,
+      duplicateOrderNumbers,
+      rawItemCount: rawItems.length,
+      usableRawItemCount: usableRawItems.length,
+      placeholderRawItemCount: rawItems.filter(isDebugPlaceholderItem).length,
+      aggregatedItemCount: items.length,
+      usableRepresentedOrderCount: usableRepresentedOrders.size,
+      missingUsableOrderNumbers,
+      subtotal: combinedSubtotal,
+      shipping: knownShipping,
+      tax: knownTax,
+      discount: knownDiscount,
+      componentCalculation: roundMoney(combinedSubtotal + knownShipping + knownTax - knownDiscount),
+      total: finalTotal,
+      componentDifference: invoice.componentDifference,
+      allocatedRowTotal: invoice.bulkMath.allocatedRowTotal,
+      items: items.map(debugItemSummary),
+    }, (Object.keys(duplicateOrderNumbers).length || missingUsableOrderNumbers.length || Math.abs(invoice.componentDifference) >= 0.01) ? 'warn' : 'log');
+    void persistAeDebugTrace('combined-invoice-built');
+    return invoice;
   }
 
   function sumKnownTotals(orders, field) {
@@ -1851,7 +2204,11 @@
   }
 
   function normalizeBulkInvoice(order) {
-    const items = Array.isArray(order && order.items) ? order.items.map(normalizeItem).filter((item) => item.description || item.sku) : [];
+    const items = dedupeOrderItems(
+      Array.isArray(order && order.items)
+        ? order.items.map(normalizeItem).filter((item) => item.description || item.sku)
+        : [],
+    );
     const total = toNumber(order && order.total) || sumItems(items);
     return allocateInvoiceComponents({
       source: 'AliExpress',
@@ -2101,9 +2458,18 @@
   }
 
   function normalizeItem(item) {
-    const quantity = toNumber(item.quantity) || 1;
-    const unitPrice = toNumber(item.unitPrice) || 0;
-    const total = toNumber(item.total) || roundMoney(quantity * unitPrice);
+    const rawDescription = String(item.originalDescription || item.description || '').trim();
+    const variant = String(item.variant || extractTrailingVariant(rawDescription) || '').trim();
+    const variantKey = String(
+      item.variantKey
+      || variantIdentityKeyFromText(variant)
+      || variant.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+      || '',
+    ).trim();
+    const quantityInfo = normalizeInventoryQuantity(item, rawDescription);
+    const quantity = quantityInfo.quantity;
+    const unitPrice = quantityInfo.sourceUnitPrice;
+    const total = quantityInfo.sourceTotal;
     // If the addon already AI-cleaned this row, keep that exact name and
     // don't run the heuristic cleaner over the original noisy title again.
     if (item.aiCleaned && item.description) {
@@ -2111,6 +2477,8 @@
         sku: String(item.sku || '').trim(),
         description: String(item.description).trim(),
         originalDescription: String(item.originalDescription || '').trim(),
+        variant,
+        variantKey,
         aiCleaned: true,
         aiCategory: String(item.aiCategory || '').trim(),
         aiBrand: String(item.aiBrand || '').trim(),
@@ -2120,14 +2488,20 @@
         quantity,
         unitPrice,
         total,
-        sourceUnitPrice: toNullableNumber(item.sourceUnitPrice),
-        sourceTotal: toNullableNumber(item.sourceTotal),
+        sourcePurchaseQuantity: quantityInfo.sourcePurchaseQuantity,
+        unitsPerPurchase: quantityInfo.unitsPerPurchase,
+        inventoryUnit: quantityInfo.inventoryUnit,
+        sourcePurchaseUnitPrice: quantityInfo.sourcePurchaseUnitPrice,
+        sourceUnitPrice: quantityInfo.sourceUnitPrice,
+        sourceTotal: quantityInfo.sourceTotal,
         allocatedDiscount: toNullableNumber(item.allocatedDiscount),
         allocatedDiscountTotal: toNullableNumber(item.allocatedDiscountTotal),
         allocatedShipping: toNullableNumber(item.allocatedShipping),
         allocatedShippingTotal: toNullableNumber(item.allocatedShippingTotal),
         allocatedTax: toNullableNumber(item.allocatedTax),
         allocatedTaxTotal: toNullableNumber(item.allocatedTaxTotal),
+        allocatedAdjustment: toNullableNumber(item.allocatedAdjustment),
+        allocatedAdjustmentTotal: toNullableNumber(item.allocatedAdjustmentTotal),
         allocationGranularity: item.allocationGranularity || '',
         productUrl: item.productUrl || '',
         itemId: item.itemId || '',
@@ -2145,22 +2519,239 @@
       sku: String(item.sku || '').trim(),
       description,
       originalDescription,
+      variant,
+      variantKey,
       quantity,
       unitPrice,
       total,
-      sourceUnitPrice: toNullableNumber(item.sourceUnitPrice),
-      sourceTotal: toNullableNumber(item.sourceTotal),
+      sourcePurchaseQuantity: quantityInfo.sourcePurchaseQuantity,
+      unitsPerPurchase: quantityInfo.unitsPerPurchase,
+      inventoryUnit: quantityInfo.inventoryUnit,
+      sourcePurchaseUnitPrice: quantityInfo.sourcePurchaseUnitPrice,
+      sourceUnitPrice: quantityInfo.sourceUnitPrice,
+      sourceTotal: quantityInfo.sourceTotal,
       allocatedDiscount: toNullableNumber(item.allocatedDiscount),
       allocatedDiscountTotal: toNullableNumber(item.allocatedDiscountTotal),
       allocatedShipping: toNullableNumber(item.allocatedShipping),
       allocatedShippingTotal: toNullableNumber(item.allocatedShippingTotal),
       allocatedTax: toNullableNumber(item.allocatedTax),
       allocatedTaxTotal: toNullableNumber(item.allocatedTaxTotal),
+      allocatedAdjustment: toNullableNumber(item.allocatedAdjustment),
+      allocatedAdjustmentTotal: toNullableNumber(item.allocatedAdjustmentTotal),
       allocationGranularity: item.allocationGranularity || '',
       productUrl: item.productUrl || '',
       itemId: item.itemId || '',
       imageUrl: item.imageUrl || '',
     };
+  }
+
+  function normalizeInventoryQuantity(item, description) {
+    const inferredUnits = inferUnitsPerPurchase(description);
+    const explicitUnits = toNumber(item.unitsPerPurchase);
+    const unitsPerPurchase = explicitUnits > 0 ? explicitUnits : inferredUnits;
+    const sourcePurchaseQuantity = toNumber(item.sourcePurchaseQuantity)
+      || toNumber(item.quantity)
+      || 1;
+    const safeUnits = unitsPerPurchase > 0 ? unitsPerPurchase : 1;
+    const quantity = roundQuantity(sourcePurchaseQuantity * safeUnits);
+    const rawUnitPrice = toNumber(item.unitPrice);
+    const sourceTotal = toNullableNumber(item.sourceTotal)
+      ?? toNullableNumber(item.total)
+      ?? roundMoney(sourcePurchaseQuantity * rawUnitPrice);
+    const sourcePurchaseUnitPrice = toNullableNumber(item.sourcePurchaseUnitPrice)
+      ?? roundMoney(sourceTotal / sourcePurchaseQuantity);
+    const normalized = {
+      sourcePurchaseQuantity,
+      unitsPerPurchase: safeUnits,
+      inventoryUnit: safeUnits > 1 ? 'par' : '',
+      quantity,
+      sourcePurchaseUnitPrice,
+      sourceUnitPrice: roundMoney(sourceTotal / quantity),
+      sourceTotal,
+    };
+    if (safeUnits > 1 || sourceTotal <= 0 || isDebugPlaceholderItem(item)) {
+      aeDebug('item.quantity-normalized', {
+        sku: String(item && item.sku || ''),
+        description: String(description || '').slice(0, 180),
+        inputQuantity: toNumber(item && item.quantity),
+        explicitSourcePurchaseQuantity: toNullableNumber(item && item.sourcePurchaseQuantity),
+        inferredUnits,
+        explicitUnits: explicitUnits || null,
+        normalized,
+        placeholder: isDebugPlaceholderItem(item),
+      }, (sourceTotal <= 0 || isDebugPlaceholderItem(item)) ? 'warn' : 'log');
+    }
+    return normalized;
+  }
+
+  function inferUnitsPerPurchase(description) {
+    const matches = Array.from(String(description || '').matchAll(/\b(\d{1,2})\s*(?:pares?|pairs?)\b/gi))
+      .map((match) => Number(match[1]))
+      .filter((value) => value > 1 && value <= 50);
+    const unique = Array.from(new Set(matches));
+    return unique.length === 1 ? unique[0] : 1;
+  }
+
+  function roundQuantity(value) {
+    return Math.round((Number(value) || 0) * 10000) / 10000;
+  }
+
+  function dedupeOrderItems(items) {
+    const result = [];
+    const duplicates = [];
+    items.forEach((item) => {
+      const key = orderItemIdentity(item);
+      const duplicateIndex = result.findIndex((existing) => sameOrderItemObservation(existing, item));
+      if (duplicateIndex < 0) {
+        result.push(item);
+        return;
+      }
+      const existing = result[duplicateIndex];
+      duplicates.push({
+        key,
+        kept: debugItemSummary(existing),
+        removed: debugItemSummary(item),
+      });
+      result[duplicateIndex] = {
+        ...existing,
+        imageUrl: existing.imageUrl || item.imageUrl || '',
+        productUrl: existing.productUrl || item.productUrl || '',
+        itemId: existing.itemId || item.itemId || '',
+      };
+    });
+    if (duplicates.length) {
+      aeDebug('order.items.deduplicated', {
+        beforeCount: items.length,
+        afterCount: result.length,
+        duplicates,
+      }, 'warn');
+    }
+    return result;
+  }
+
+  function sameOrderItemObservation(first, second) {
+    if (orderItemIdentity(first) === orderItemIdentity(second)) return true;
+    const firstId = extractAliExpressItemId(first.productUrl || '') || String(first.itemId || '').trim();
+    const secondId = extractAliExpressItemId(second.productUrl || '') || String(second.itemId || '').trim();
+    if (firstId && secondId && firstId !== secondId) return false;
+    const firstSku = String(first.sku || '').trim();
+    const secondSku = String(second.sku || '').trim();
+    if (firstSku && secondSku && firstSku !== secondSku) return false;
+    return normalizedItemDescription(first) === normalizedItemDescription(second)
+      && toNumber(first.sourcePurchaseQuantity) === toNumber(second.sourcePurchaseQuantity)
+      && toNumber(first.unitsPerPurchase) === toNumber(second.unitsPerPurchase)
+      && toNumber(first.sourceTotal) === toNumber(second.sourceTotal);
+  }
+
+  function aggregateDailyItems(items) {
+    const result = [];
+    const merges = [];
+    items.forEach((item) => {
+      const key = dailyItemIdentity(item);
+      const index = result.findIndex((existing) => dailyItemIdentity(existing) === key);
+      if (index < 0) {
+        result.push({ ...item });
+        return;
+      }
+      const existing = result[index];
+      const quantity = roundQuantity(toNumber(existing.quantity) + toNumber(item.quantity));
+      const sourcePurchaseQuantity = roundQuantity(
+        toNumber(existing.sourcePurchaseQuantity) + toNumber(item.sourcePurchaseQuantity),
+      );
+      const sourceTotal = roundMoney(toNumber(existing.sourceTotal) + toNumber(item.sourceTotal));
+      const total = roundMoney(toNumber(existing.total) + toNumber(item.total));
+      const allocatedShippingTotal = roundMoney(
+        toNumber(existing.allocatedShippingTotal) + toNumber(item.allocatedShippingTotal),
+      );
+      const allocatedTaxTotal = roundMoney(
+        toNumber(existing.allocatedTaxTotal) + toNumber(item.allocatedTaxTotal),
+      );
+      const allocatedDiscountTotal = roundMoney(
+        toNumber(existing.allocatedDiscountTotal) + toNumber(item.allocatedDiscountTotal),
+      );
+      const allocatedAdjustmentTotal = roundMoney(
+        toNumber(existing.allocatedAdjustmentTotal) + toNumber(item.allocatedAdjustmentTotal),
+      );
+      const sourceOrderNumbers = Array.from(new Set([
+        ...(Array.isArray(existing.sourceOrderNumbers) ? existing.sourceOrderNumbers : []),
+        ...(Array.isArray(item.sourceOrderNumbers) ? item.sourceOrderNumbers : []),
+      ].filter(Boolean)));
+      const incomingOrderNumbers = Array.isArray(item.sourceOrderNumbers)
+        ? item.sourceOrderNumbers.filter(Boolean)
+        : [item.sourceOrderNumber].filter(Boolean);
+      const existingOrderNumbers = Array.isArray(existing.sourceOrderNumbers)
+        ? existing.sourceOrderNumbers.filter(Boolean)
+        : [existing.sourceOrderNumber].filter(Boolean);
+      merges.push({
+        key,
+        existingOrders: existingOrderNumbers,
+        incomingOrders: incomingOrderNumbers,
+        repeatsSameOrder: incomingOrderNumbers.some((number) => existingOrderNumbers.includes(number)),
+        existing: debugItemSummary(existing),
+        incoming: debugItemSummary(item),
+        resultingQuantity: quantity,
+        resultingSourcePurchaseQuantity: sourcePurchaseQuantity,
+        resultingSourceTotal: sourceTotal,
+      });
+      result[index] = {
+        ...existing,
+        quantity,
+        sourcePurchaseQuantity,
+        sourceTotal,
+        sourceUnitPrice: roundMoney(sourceTotal / quantity),
+        sourcePurchaseUnitPrice: roundMoney(sourceTotal / sourcePurchaseQuantity),
+        allocatedShippingTotal,
+        allocatedShipping: roundMoney(allocatedShippingTotal / quantity),
+        allocatedTaxTotal,
+        allocatedTax: roundMoney(allocatedTaxTotal / quantity),
+        allocatedDiscountTotal,
+        allocatedDiscount: roundMoney(allocatedDiscountTotal / quantity),
+        allocatedAdjustmentTotal,
+        allocatedAdjustment: roundMoney(allocatedAdjustmentTotal / quantity),
+        unitPrice: roundMoney(total / quantity),
+        total,
+        sourceOrderNumbers,
+        imageUrl: existing.imageUrl || item.imageUrl || '',
+      };
+    });
+    if (merges.length) {
+      aeDebug('bulk.items.aggregated', {
+        beforeCount: items.length,
+        afterCount: result.length,
+        merges,
+      }, merges.some((merge) => merge.repeatsSameOrder) ? 'warn' : 'log');
+    }
+    return result;
+  }
+
+  function orderItemIdentity(item) {
+    return [
+      supplierItemIdentity(item),
+      normalizedItemDescription(item),
+      toNumber(item.sourcePurchaseQuantity),
+      toNumber(item.unitsPerPurchase),
+      toNumber(item.sourceTotal),
+    ].join('|');
+  }
+
+  function dailyItemIdentity(item) {
+    return [
+      supplierItemIdentity(item),
+      normalizedItemDescription(item),
+      toNumber(item.unitsPerPurchase),
+    ].join('|');
+  }
+
+  function supplierItemIdentity(item) {
+    const itemId = String(item.itemId || '').trim();
+    if (itemId) return `id:${itemId}`;
+    const urlId = extractAliExpressItemId(item.productUrl || '');
+    if (urlId) return `id:${urlId}`;
+    return `sku:${String(item.sku || '').trim()}`;
+  }
+
+  function normalizedItemDescription(item) {
+    return normalizeNameKey(item.description || item.originalDescription || '');
   }
 
   function smartProductName(description, item = {}) {
@@ -2171,6 +2762,15 @@
     const normalized = normalizeNameKey(base);
     const brand = extractCatalogBrand(base);
     const variant = extractTrailingVariant(base);
+
+    if (/\b(pastillas?(?:\s+de)?\s+freno|brake\s+pads?)\b/.test(normalized)) {
+      return compactName([
+        'Pastillas de freno',
+        brand,
+        brakePadModelLabel(base),
+        '(par)',
+      ]);
+    }
 
     if (isBottomBracketTitle(normalized)) {
       return compactName([
@@ -2255,6 +2855,11 @@
     const blocked = new Set(['USB', 'LED', 'BSA', 'ISO', 'JIS', 'MTB', 'BMX', 'BB', 'T6']);
     if (blocked.has(acronym[0]) || /^[A-Z]{1,4}\d{1,5}$/.test(acronym[0])) return '';
     return acronym[0];
+  }
+
+  function brakePadModelLabel(value) {
+    const match = String(value || '').match(/\b([A-Z]{1,6}-\d{1,4}[A-Z]?)\b/i);
+    return match ? match[1].toUpperCase() : '';
   }
 
   function isBottomBracketTitle(normalized) {
@@ -2362,6 +2967,21 @@
     for (const candidate of candidates) {
       const color = variantColorToken(candidate);
       if (color) return color;
+    }
+
+    if (parenthetical) {
+      const normalized = parenthetical[1]
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      if (normalized.length >= 2 && normalized.length <= 90) return normalized;
+    }
+    if (dashVariant) {
+      const normalized = dashVariant[1]
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      if (normalized.length >= 2 && normalized.length <= 90) return normalized;
     }
 
     return '';
@@ -3203,7 +3823,9 @@
   }
 
   function sanitizeSettings(settings) {
-    const value = settings && typeof settings === 'object' ? settings : {};
+    const value = settings && typeof settings === 'object'
+      ? { ...DEFAULT_SETTINGS, ...settings }
+      : { ...DEFAULT_SETTINGS };
     return {
       defaultDateMode: value.defaultDateMode === 'day' ? 'day' : 'range',
       rangeDays: clampInteger(value.rangeDays, 1, 365, DEFAULT_SETTINGS.rangeDays),
@@ -3358,13 +3980,13 @@
     if (isWorkspaceMode()) {
       document.body.classList.add('workspace-mode');
       if (el.openWorkspaceButton) el.openWorkspaceButton.hidden = true;
-      if (el.collectBulkButton) el.collectBulkButton.textContent = 'Colectar';
+      if (el.collectBulkButton) el.collectBulkButton.textContent = 'Buscar compras';
       if (params.get('autocollect') === '1') {
         window.setTimeout(() => collectBulkOrders(), 250);
       }
     } else {
       if (el.openWorkspaceButton) el.openWorkspaceButton.textContent = 'Abrir panel estable';
-      if (el.collectBulkButton) el.collectBulkButton.textContent = 'Abrir panel y colectar';
+      if (el.collectBulkButton) el.collectBulkButton.textContent = 'Abrir y buscar compras';
     }
   }
 
@@ -3602,4 +4224,14 @@
     anchor.click();
     URL.revokeObjectURL(url);
   }
+
+  globalThis.__ALIEXPRESS_INVOICE_POPUP_TESTING__ = {
+    normalizeItem,
+    dedupeOrderItems,
+    dedupeBulkOrdersByOrderNumber,
+    aggregateDailyItems,
+    allocateInvoiceComponents,
+    resolveOrderDetailUrl,
+    isUsableOrderDetailUrl,
+  };
 }());
