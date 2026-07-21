@@ -22,6 +22,9 @@ void main() {
     final formPersistencePolicy = File(
       'lib/modules/bikeshop/services/mechanic_job_form_persistence_policy.dart',
     ).readAsStringSync();
+    final visibilityPolicy = File(
+      'lib/modules/bikeshop/services/mechanic_job_visibility_policy.dart',
+    ).readAsStringSync();
     final registry = File(
       'docs/architecture/canonical-ui-surfaces.md',
     ).readAsStringSync();
@@ -312,9 +315,21 @@ void main() {
     expect(table, isNot(contains('_jobStatusService.updateJobStatus(')));
     expect(
       table,
+      contains('return isMechanicJobCurrentlyDelivered(job);'),
+      reason:
+          'The table must delegate delivery classification to the shared visibility policy.',
+    );
+    expect(
+      table,
+      contains('final isDelivered = _isJobCurrentlyDelivered(job);'),
+      reason:
+          'Active/completed filters must use the shared current-delivery classification.',
+    );
+    expect(
+      visibilityPolicy,
       contains('job.customStatus?.triggersDelivery == true'),
       reason:
-          'Active/completed filters must honor tenant delivery statuses, not only the legacy enum.',
+          'The shared visibility policy must honor tenant delivery statuses, not only the legacy enum.',
     );
     expect(form, contains('bool get _isStatusTransitionLocked'));
     expect(
