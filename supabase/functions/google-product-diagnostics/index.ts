@@ -1,6 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { hasSupportedEcommerceTaxRate } from "../_shared/ecommerce_tax.ts";
+import {
+  isFetchableMerchantDataSource,
+  merchantDataSourceFetchUrl,
+  merchantDataSourcesUrl,
+  merchantProductSummary,
+  merchantProductUrl,
+} from "../_shared/google_merchant_api.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -650,15 +657,16 @@ async function inspectMerchant(args: {
       scopes: [merchantScope],
     });
 
-    const encodedIds = [
-      `online:es:CL:${args.offerId}`,
-      `online:en:CL:${args.offerId}`,
-    ].map((id) => encodeURIComponent(id));
-
     const attempts = [];
-    for (const productId of encodedIds) {
+    for (const contentLanguage of ["es", "en"]) {
+      const url = merchantProductUrl({
+        accountId: args.merchantAccountId,
+        contentLanguage,
+        feedLabel: "CL",
+        offerId: args.offerId,
+      });
       const response = await fetch(
-        `https://shoppingcontent.googleapis.com/content/v2.1/${args.merchantAccountId}/productstatuses/${productId}`,
+        url,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -667,33 +675,34 @@ async function inspectMerchant(args: {
         },
       );
       const payload = await response.json().catch(() => ({}));
-      attempts.push({ status: response.status, payload });
+      attempts.push({ contentLanguage, status: response.status, payload });
       if (response.status === 401 || response.status === 403) {
+        const googleError = cleanText(payload?.error?.message);
+        const registrationRequired = googleError.toLowerCase().includes(
+          "not registered with the merchant account",
+        );
         return {
           configured: true,
           ok: false,
-          status: "merchant_access_denied",
-          error: payload?.error?.message ||
-            "La cuenta tecnica de Google no tiene acceso a este Merchant Center. Agrega el service account como usuario en Merchant Center o corrige GOOGLE_MERCHANT_ACCOUNT_ID.",
+          api: "merchant_v1",
+          status: registrationRequired
+            ? "merchant_api_registration_required"
+            : "merchant_access_denied",
+          registrationRequired,
+          error: googleError ||
+            "La cuenta tecnica de Google no tiene acceso a este Merchant Center. Agrega el service account como administrador en Merchant Center o corrige GOOGLE_MERCHANT_ACCOUNT_ID.",
           feedEligibility: args.feedEligibility,
           attempts,
         };
       }
       if (response.ok) {
-        const issues = payload?.itemLevelIssues || [];
+        const summary = merchantProductSummary(payload);
         return {
           configured: true,
           ok: true,
+          api: "merchant_v1",
           feedEligibility: args.feedEligibility,
-          status: payload?.destinationStatuses?.[0]?.status ||
-            payload?.kind ||
-            "found",
-          productId: payload?.productId,
-          title: payload?.title,
-          link: payload?.link,
-          destinationStatuses: payload?.destinationStatuses || [],
-          itemLevelIssues: issues,
-          issueCount: issues.length,
+          ...summary,
           raw: payload,
         };
       }
@@ -702,6 +711,7 @@ async function inspectMerchant(args: {
     return {
       configured: true,
       ok: false,
+      api: "merchant_v1",
       status: "not_found_or_not_ready",
       error: args.feedEligibility?.eligible
         ? "El producto cumple las reglas locales del feed, pero Merchant Center aun no lo encuentra. Fuerza una lectura del feed en Merchant Center o espera a que Google procese el item."
@@ -713,6 +723,7 @@ async function inspectMerchant(args: {
     return {
       configured: true,
       ok: false,
+      api: "merchant_v1",
       error: errorMessage(error),
       feedEligibility: args.feedEligibility,
     };
@@ -738,38 +749,45 @@ async function refreshMerchantFeeds() {
     privateKey,
     scopes: [merchantScope],
   });
-  const listResponse = await fetch(
-    `https://shoppingcontent.googleapis.com/content/v2.1/${merchantAccountId}/datafeeds`,
-    {
+  const feeds = [];
+  let pageToken = "";
+  do {
+    const listUrl = new URL(merchantDataSourcesUrl(merchantAccountId));
+    if (pageToken) listUrl.searchParams.set("pageToken", pageToken);
+    const listResponse = await fetch(listUrl, {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
       },
-    },
-  );
-  const listPayload = await listResponse.json().catch(() => ({}));
-  if (!listResponse.ok) {
-    return {
-      ok: false,
-      configured: true,
-      status: listResponse.status,
-      error: listPayload?.error?.message || JSON.stringify(listPayload),
-    };
-  }
+    });
+    const listPayload = await listResponse.json().catch(() => ({}));
+    if (!listResponse.ok) {
+      const googleError = cleanText(listPayload?.error?.message);
+      const registrationRequired = googleError.toLowerCase().includes(
+        "not registered with the merchant account",
+      );
+      return {
+        ok: false,
+        configured: true,
+        api: "merchant_v1",
+        status: registrationRequired ? "merchant_api_registration_required" : listResponse.status,
+        registrationRequired,
+        error: googleError || JSON.stringify(listPayload),
+      };
+    }
+    if (Array.isArray(listPayload?.dataSources)) {
+      feeds.push(...listPayload.dataSources);
+    }
+    pageToken = cleanText(listPayload?.nextPageToken);
+  } while (pageToken);
 
-  const feeds = Array.isArray(listPayload?.resources)
-    ? listPayload.resources
-    : Array.isArray(listPayload?.datafeeds)
-    ? listPayload.datafeeds
-    : [];
+  const fetchableFeeds = feeds.filter(isFetchableMerchantDataSource);
   const results = [];
-  for (const feed of feeds) {
-    const id = cleanText(feed?.id);
-    if (!id) continue;
+  for (const feed of fetchableFeeds) {
+    const name = cleanText(feed?.name);
+    if (!name) continue;
     const response = await fetch(
-      `https://shoppingcontent.googleapis.com/content/v2.1/${merchantAccountId}/datafeeds/${
-        encodeURIComponent(id)
-      }/fetchNow`,
+      merchantDataSourceFetchUrl(name),
       {
         method: "POST",
         headers: {
@@ -781,8 +799,9 @@ async function refreshMerchantFeeds() {
     );
     const payload = await response.json().catch(() => ({}));
     results.push({
-      id,
-      name: cleanText(feed?.name),
+      id: cleanText(feed?.dataSourceId),
+      name,
+      displayName: cleanText(feed?.displayName),
       ok: response.ok,
       status: response.status,
       error: response.ok ? null : payload?.error?.message || JSON.stringify(payload),
@@ -792,7 +811,12 @@ async function refreshMerchantFeeds() {
   return {
     ok: results.length > 0 && results.every((result) => result.ok),
     configured: true,
+    api: "merchant_v1",
     feedCount: results.length,
+    dataSourceCount: feeds.length,
+    error: results.length === 0
+      ? "Merchant API no encontro una fuente URL actualizable para este comercio."
+      : null,
     results,
   };
 }

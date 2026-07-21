@@ -522,6 +522,21 @@ checkout, identidad comercial y políticas sincronizados, conservar esta
 evidencia y escalar por el canal de soporte/revisión que Google vuelva a
 habilitar.
 
+### Migración a Merchant API (20 de julio de 2026)
+
+`google-product-diagnostics` ya no llama Content API for Shopping. La consulta
+de estado usa Merchant Products API v1 (`products.get`) y la actualización de
+la fuente usa Merchant Data Sources API v1 (`dataSources.list` y
+`dataSources.fetch`). El proyecto Google Cloud `vinabikeapp` (número
+`599064625399`) quedó registrado con Merchant Center `5635601285`, con
+`vinabikechile@gmail.com` como contacto de desarrollo.
+
+La verificación productiva desde la ficha ERP confirmó que la consulta del
+producto `S56467` responde `Rechazado` y que `Actualizar feed` responde
+`Conectado`. Esto acredita que autenticación, registro, lectura de productos y
+lectura manual de la fuente funcionan por Merchant API; no resuelve ni cambia
+la suspensión externa de la cuenta descrita arriba.
+
 ## Prueba de aceptación aislada
 
 La suite destructiva se ejecuta en un clon derivado de producción o en el
