@@ -2,7 +2,7 @@ begin;
 
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
-select plan(17);
+select plan(18);
 
 insert into public.tenants(id, shop_name)
 values ('99500000-0000-4000-8000-000000000001', 'Workshop Archive Test');
@@ -85,6 +85,18 @@ select set_config(
   'request.jwt.claim.sub',
   '99500000-0000-4000-8000-000000000099',
   true
+);
+
+select throws_ok($$
+  update public.mechanic_jobs
+  set deleted_at = clock_timestamp(),
+      deleted_by = '99500000-0000-4000-8000-000000000099',
+      archive_reason = 'Bypass',
+      archive_operation_id = gen_random_uuid()
+  where id = '99500000-0000-4000-8000-000000000030'
+$$, '42501',
+  'Esta versión del ERP no puede eliminar trabajos de forma auditada. Actualiza la aplicación e inténtalo nuevamente.',
+  'direct or old-client archive updates cannot bypass the audited command'
 );
 
 create temporary table archive_result as

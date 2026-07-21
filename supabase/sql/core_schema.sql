@@ -36011,5 +36011,8 @@ grant select on public.stock_movements_ledger_view to authenticated;
 -- reversible archive command. Its append-only event and central checkpoints
 -- prove that linked invoices, payments, stock and journals were preserved.
 \ir ../migrations/20260721234000_add_audited_mechanic_job_archive.sql
+-- Old clients and direct table updates cannot bypass the archive event and
+-- central checkpoints; the public RPC wraps the retained internal command.
+\ir ../migrations/20260721235000_enforce_audited_mechanic_job_archive.sql
 
 commit;
