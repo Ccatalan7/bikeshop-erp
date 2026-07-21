@@ -77,6 +77,9 @@ void main() {
         File('scripts/bootstrap/bootstrap_macos.sh').readAsStringSync();
     final windowsBootstrap =
         File('scripts/bootstrap/bootstrap_windows.ps1').readAsStringSync();
+    final integrityWorkflow =
+        File('.github/workflows/erp-integrity-gate.yml').readAsStringSync();
+    final gitignore = File('.gitignore').readAsStringSync();
 
     expect(
       conditionalExport,
@@ -102,6 +105,27 @@ void main() {
     expect(pubspec, contains('- web/spreadsheet_engine/univer.bundle.css'));
     expect(macosBootstrap, contains('npm run build:spreadsheet-engine'));
     expect(windowsBootstrap, contains('npm run build:spreadsheet-engine'));
+    expect(
+      File('web/spreadsheet_engine/univer.bundle.js').existsSync(),
+      isTrue,
+    );
+    expect(
+      File('web/spreadsheet_engine/univer.bundle.css').existsSync(),
+      isTrue,
+    );
+    expect(
+      gitignore,
+      isNot(contains('/web/spreadsheet_engine/univer.bundle.js')),
+    );
+    expect(
+      gitignore,
+      isNot(contains('/web/spreadsheet_engine/univer.bundle.css')),
+    );
+    expect(
+      integrityWorkflow,
+      contains('Verify packaged spreadsheet assets are committed'),
+    );
+    expect(integrityWorkflow, contains('git diff --exit-code --'));
   });
 
   test('editor delegates workbook behavior to Univer and persists snapshots',

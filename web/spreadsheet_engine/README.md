@@ -14,8 +14,11 @@ npm ci
 npm run build:spreadsheet-engine
 ```
 
-The generated `univer.bundle.js` and `univer.bundle.css` files are ignored by
-Git and are produced by bootstrap, the desktop VS Code launch tasks, and CI.
+The generated `univer.bundle.js` and `univer.bundle.css` files are committed to
+Git so a clean checkout can run `flutter build macos` or `flutter build windows`
+without a separate Node setup step. When the engine source or pinned npm
+packages change, regenerate and commit both files with the command above; CI
+rejects a change that leaves them out of sync.
 Flutter web lazy-loads them only when a Planillas workbook is opened. Native
 desktop packages the same files as Flutter assets and loads
 `univer_desktop_host.html` inside WKWebView on macOS or WebView2 on Windows.
