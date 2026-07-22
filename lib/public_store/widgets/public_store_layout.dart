@@ -645,7 +645,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     );
     final logoUrl = websiteService.getSetting('logo_url', '');
     final topBannerText = websiteService
-        .getSetting('top_banner_text', 'Envíos a todo Chile')
+        .getSetting('top_banner_text', 'Envíos a Chile continental')
         .trim();
 
     // Footer info - use provider for live preview when in editor context

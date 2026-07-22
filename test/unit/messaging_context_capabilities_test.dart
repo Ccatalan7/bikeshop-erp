@@ -138,18 +138,29 @@ void main() {
       expect(capabilities.explanation, isNull);
     });
 
-    test('non-WhatsApp customer gets a concise transport explanation', () {
-      final capabilities = ConversationSmartActionCapabilities.fromConversation(
-        conversation(
-          channel: 'website_portal',
-          contextType: 'job',
-          contextId: 'job-1',
-        ),
-      );
+    test('non-WhatsApp channels never expose WhatsApp-only actions', () {
+      for (final channel in [
+        'website_portal',
+        'instagram',
+        'facebook_messenger',
+      ]) {
+        final capabilities =
+            ConversationSmartActionCapabilities.fromConversation(
+          conversation(
+            channel: channel,
+            contextType: 'job',
+            contextId: 'job-1',
+          ),
+        );
 
-      expect(capabilities.isEligibleCustomerConversation, isTrue);
-      expect(capabilities.hasInteractiveActions, isFalse);
-      expect(capabilities.explanation, contains('requieren abrir el WhatsApp'));
+        expect(capabilities.isEligibleCustomerConversation, isTrue);
+        expect(capabilities.supportsInteractiveTransport, isFalse);
+        expect(capabilities.hasInteractiveActions, isFalse);
+        expect(
+          capabilities.explanation,
+          contains('requieren abrir el WhatsApp'),
+        );
+      }
     });
 
     test('shared chat UI gates rendering and sending with the same contract',

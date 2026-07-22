@@ -1,9 +1,20 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   filterMerchantProductsByCheckoutTax,
+  isVerifiableMerchantBrand,
   resolveMerchantAvailability,
   resolveMerchantIdentifiers,
+  resolveMerchantPrice,
 } from "./google_merchant_feed.ts";
+
+Deno.test("Merchant brand rejects legacy placeholders and origin labels", () => {
+  assertEquals(isVerifiableMerchantBrand("Shimano"), true);
+  assertEquals(isVerifiableMerchantBrand("Genérico"), false);
+  assertEquals(isVerifiableMerchantBrand("China"), false);
+  assertEquals(isVerifiableMerchantBrand("Taiwan"), false);
+  assertEquals(isVerifiableMerchantBrand("Aliexpress"), false);
+  assertEquals(isVerifiableMerchantBrand(""), false);
+});
 
 Deno.test("Merchant feed excludes products checkout cannot tax-classify", () => {
   const products = [
@@ -42,6 +53,17 @@ Deno.test("Merchant availability matches tracked and untracked storefront stock"
     }),
     "in_stock",
   );
+});
+
+Deno.test("Merchant price uses the effective positive storefront price", () => {
+  assertEquals(resolveMerchantPrice({ price: 10000 }), 10000);
+  assertEquals(
+    resolveMerchantPrice({ price: 10000, website_price: 12990 }),
+    12990,
+  );
+  assertEquals(resolveMerchantPrice({ price: 10000, website_price: 0 }), null);
+  assertEquals(resolveMerchantPrice({ price: 0, website_price: 12990 }), 12990);
+  assertEquals(resolveMerchantPrice({ price: null, website_price: null }), null);
 });
 
 Deno.test("Merchant identifiers never reinterpret the store SKU as MPN", () => {

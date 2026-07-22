@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/messaging_service.dart';
 import '../models/conversation.dart';
+import '../utils/conversation_channel_presentation.dart';
 import '../widgets/chat_window.dart';
 
 enum _EntityChatStartChannel { website, whatsapp }
@@ -683,7 +684,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
                   backgroundColor: hasUnread
                       ? const Color(0xFF16A34A).withValues(alpha: 0.14)
                       : theme.colorScheme.primaryContainer,
-                  child: Icon(_channelIcon(conv),
+                  child: Icon(ConversationChannelPresentation.icon(conv),
                       size: 18,
                       color: hasUnread
                           ? const Color(0xFF16A34A)
@@ -802,12 +803,6 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
         ),
       ],
     );
-  }
-
-  IconData _channelIcon(Conversation conversation) {
-    if (conversation.isWhatsApp) return Icons.phone_in_talk_outlined;
-    if (conversation.isWebsitePortal) return Icons.language_outlined;
-    return Icons.chat_bubble_outline;
   }
 
   Conversation _copyConversationWithUnread(

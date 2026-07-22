@@ -1,5 +1,57 @@
 import '../models/message.dart';
 
+String? _messageIdentityValue(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
+/// Reconciles one optimistic row only from exact durable identities whenever
+/// they exist. The text/time fallback is reserved for legacy optimistic rows
+/// that predate client/server/provider IDs.
+bool hasMatchingServerMessage({
+  required Message optimistic,
+  required Iterable<Message> serverMessages,
+  Duration legacyMatchWindow = const Duration(seconds: 20),
+}) {
+  final serverMessageId =
+      _messageIdentityValue(optimistic.metadata['server_message_id']);
+  final clientMessageId =
+      _messageIdentityValue(optimistic.metadata['client_message_id']);
+  final externalMessageId =
+      _messageIdentityValue(optimistic.metadata['external_message_id']);
+  final hasDurableIdentity = serverMessageId != null ||
+      clientMessageId != null ||
+      externalMessageId != null;
+
+  for (final message in serverMessages) {
+    if (message.id == optimistic.id) return true;
+    if (message.conversationId != optimistic.conversationId) continue;
+    if (serverMessageId != null && message.id == serverMessageId) return true;
+
+    final messageClientId =
+        _messageIdentityValue(message.metadata['client_message_id']);
+    if (clientMessageId != null && messageClientId == clientMessageId) {
+      return true;
+    }
+
+    final messageExternalId =
+        _messageIdentityValue(message.metadata['external_message_id']);
+    if (externalMessageId != null && messageExternalId == externalMessageId) {
+      return true;
+    }
+
+    if (hasDurableIdentity) continue;
+    if (message.senderId != optimistic.senderId ||
+        message.content != optimistic.content) {
+      continue;
+    }
+    final deltaMs =
+        message.createdAt.difference(optimistic.createdAt).inMilliseconds.abs();
+    if (deltaMs < legacyMatchWindow.inMilliseconds) return true;
+  }
+  return false;
+}
+
 Message? latestMessageByTimelineOrder(Iterable<Message> messages) {
   Message? latest;
   for (final message in messages) {

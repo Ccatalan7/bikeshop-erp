@@ -1491,7 +1491,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
             {
               'icon': 'local_shipping',
               'title': 'Envío Rápido',
-              'description': 'Envíos a todo Chile en 24-48 horas'
+              'description': 'Envíos a Chile continental en 3 a 12 días hábiles'
             },
             {
               'icon': 'verified',
@@ -1542,7 +1542,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
             },
             {
               'question': '¿Hacen envíos a regiones?',
-              'answer': 'Sí, enviamos a todo Chile'
+              'answer': 'Sí, enviamos a Chile continental'
             },
           ],
         };

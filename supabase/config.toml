@@ -397,6 +397,20 @@ verify_jwt = true
 # x-hub-signature-256 HMAC before any payload is processed.
 verify_jwt = false
 
+[functions.meta-webhook]
+# Meta cannot attach a Supabase JWT. Raw-body x-hub-signature-256 is mandatory.
+verify_jwt = false
+
+[functions.meta-send]
+# Staff JWT is gateway-verified and independently resolved before a durable
+# service-only send receipt is created.
+verify_jwt = true
+
+[functions.meta-oauth]
+# The start action authenticates staff itself; Meta's browser callback has no
+# Supabase JWT and is authorized by a one-time, hashed database state.
+verify_jwt = false
+
 [functions.whatsapp-media]
 # Media hydration is available only to an authenticated user who can read the
 # referenced message through the canonical messaging RLS policy.

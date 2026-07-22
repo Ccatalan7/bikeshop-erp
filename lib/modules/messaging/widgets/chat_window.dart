@@ -18,12 +18,14 @@ import '../models/conversation.dart';
 import '../models/conversation_smart_action_capabilities.dart';
 import '../services/messaging_service.dart';
 import '../services/messaging_attachment_service.dart';
+import '../services/meta_messaging_service.dart';
 import '../models/message.dart';
 import '../models/message_delivery_state.dart';
 import '../models/autocomplete_suggestion.dart';
 import 'parsed_message_text.dart';
 import '../providers/chat_provider.dart';
 import '../utils/message_parser.dart';
+import '../utils/conversation_channel_presentation.dart';
 import 'assign_context_dialog.dart';
 import 'chat_attachment_viewer.dart';
 import 'message_delivery_indicator.dart';
@@ -366,6 +368,7 @@ class _ChatWindowState extends State<ChatWindow> {
   final FocusNode _emojiSearchFocusNode = FocusNode();
   final TextEditingController _emojiSearchController = TextEditingController();
   final MessagingService _messagingService = MessagingService();
+  final MetaMessagingService _metaMessagingService = MetaMessagingService();
   final Object _conversationViewOwner = Object();
   ChatProvider? _chatProvider;
   String? _reportedConversationId;
@@ -415,6 +418,8 @@ class _ChatWindowState extends State<ChatWindow> {
       MessagingAttachmentService();
 
   bool get _isWhatsAppConversation => widget.conversation.isWhatsApp;
+  bool get _isMetaConversation => widget.conversation.isMetaMessaging;
+  bool get _supportsOutgoingAttachments => !_isMetaConversation;
 
   bool get _hasBlockingOutcomeUnknownAttachment => _pendingAttachments.any(
         (attachment) => attachment.outcomeUnknown && !attachment.canRetrySafely,
@@ -594,9 +599,11 @@ class _ChatWindowState extends State<ChatWindow> {
     _serviceWindowTicker?.cancel();
     _serviceWindowTicker = null;
 
-    if (!_isWhatsAppConversation) return;
+    if (!_isWhatsAppConversation && !_isMetaConversation) return;
 
-    unawaited(_getWhatsAppContactFuture());
+    if (_isWhatsAppConversation) {
+      unawaited(_getWhatsAppContactFuture());
+    }
 
     _serviceWindowTicker = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
@@ -1403,6 +1410,26 @@ class _ChatWindowState extends State<ChatWindow> {
       unawaited(_getWhatsAppContactFuture());
     }
 
+    if (_isMetaConversation) {
+      if (!chatProvider.hasCompleteMetaConversationStateSnapshot(
+        widget.conversation.id,
+      )) {
+        unawaited(
+          chatProvider.refreshMetaConversationState(widget.conversation.id),
+        );
+        _showErrorSnackBar(
+          context,
+          chatProvider.metaConversationStateError(widget.conversation.id) ??
+              'Espera mientras verificamos el estado autorizado por Meta.',
+        );
+        return;
+      }
+      if (!chatProvider.canReplyToMetaConversation(widget.conversation.id)) {
+        _showMetaReplyWindowClosed();
+        return;
+      }
+    }
+
     _messageController.clear();
     _restoreComposerFocus();
     setState(() {
@@ -1411,7 +1438,7 @@ class _ChatWindowState extends State<ChatWindow> {
     });
 
     try {
-      if (!_isWhatsAppConversation) {
+      if (!_isWhatsAppConversation && !_isMetaConversation) {
         await chatProvider.sendMessage(
           pendingText,
           metadata: messageMetadata.isEmpty ? null : messageMetadata,
@@ -1419,6 +1446,43 @@ class _ChatWindowState extends State<ChatWindow> {
         if (!mounted) {
           return;
         }
+        return;
+      }
+
+      if (_isMetaConversation) {
+        final sendStartedAt = DateTime.now();
+        final optimisticMessageId =
+            'temp-meta-${sendStartedAt.microsecondsSinceEpoch}';
+        chatProvider.addOptimisticMessage(
+          Message(
+            id: optimisticMessageId,
+            conversationId: widget.conversation.id,
+            senderId: _messagingService.currentUserId,
+            content: pendingText,
+            type: 'text',
+            metadata: {
+              ...messageMetadata,
+              'channel': widget.conversation.channel,
+              'provider': widget.conversation.channel,
+              'external_provider': widget.conversation.channel,
+              'pending': true,
+              'client_message_id': optimisticMessageId,
+            },
+            createdAt: sendStartedAt,
+            isMe: true,
+          ),
+        );
+
+        if (mounted) setState(() => _isSendingMessage = false);
+        unawaited(
+          _dispatchMetaSend(
+            chatProvider: chatProvider,
+            optimisticMessageId: optimisticMessageId,
+            pendingText: pendingText,
+            messageMetadata: messageMetadata,
+            conversationId: widget.conversation.id,
+          ),
+        );
         return;
       }
 
@@ -1496,6 +1560,101 @@ class _ChatWindowState extends State<ChatWindow> {
       if (mounted && _isSendingMessage) {
         setState(() => _isSendingMessage = false);
       }
+    }
+  }
+
+  void _showMetaReplyWindowClosed() {
+    if (!mounted) return;
+    _showErrorSnackBar(
+      context,
+      'La ventana de respuesta de 24 horas está cerrada. Podrás responder cuando el cliente vuelva a escribir por ${widget.conversation.shortChannelLabel}.',
+    );
+  }
+
+  Future<void> _dispatchMetaSend({
+    required ChatProvider chatProvider,
+    required String optimisticMessageId,
+    required String pendingText,
+    required Map<String, dynamic> messageMetadata,
+    required String conversationId,
+  }) async {
+    final receipt = await _metaMessagingService.sendText(
+      conversationId: conversationId,
+      message: pendingText,
+      clientMessageId: optimisticMessageId,
+      metadata: messageMetadata,
+    );
+
+    switch (receipt.outcome) {
+      case MetaSendOutcome.accepted:
+        chatProvider.updateMessageById(
+          optimisticMessageId,
+          metadataUpdates: {
+            'pending': false,
+            'server_ack_durable': true,
+            'server_message_id': receipt.messageId,
+            'external_status': receipt.externalStatus ?? 'accepted',
+            'external_message_id': receipt.externalMessageId,
+            if (receipt.attemptId != null)
+              'provider_attempt_id': receipt.attemptId,
+          },
+        );
+        break;
+      case MetaSendOutcome.outcomeUnknown:
+        chatProvider.updateMessageMetadataById(
+          optimisticMessageId,
+          {
+            'pending': false,
+            'external_status': 'outcome_unknown',
+            'meta_status': 'outcome_unknown',
+            'outcome_unknown': true,
+            'retry_disabled': true,
+            'server_ack_optimistic': false,
+            if (receipt.attemptId != null)
+              'provider_attempt_id': receipt.attemptId,
+            if (receipt.messageId != null)
+              'server_message_id': receipt.messageId,
+            if (receipt.externalMessageId != null)
+              'external_message_id': receipt.externalMessageId,
+          },
+        );
+        if (mounted && widget.conversation.id == conversationId) {
+          _showErrorSnackBar(
+            context,
+            'Resultado incierto: verifica la conversación antes de reenviar.',
+          );
+        }
+        break;
+      case MetaSendOutcome.rejected:
+        final errorMessage = receipt.replyWindowClosed
+            ? 'La ventana de respuesta de 24 horas se cerró antes del envío.'
+            : receipt.errorMessage?.trim().isNotEmpty == true
+                ? receipt.errorMessage!.trim()
+                : 'El canal Meta rechazó el mensaje.';
+        chatProvider.updateMessageMetadataById(
+          optimisticMessageId,
+          {
+            'pending': false,
+            'external_status': 'failed',
+            'server_ack_optimistic': false,
+            if (receipt.attemptId != null)
+              'provider_attempt_id': receipt.attemptId,
+            if (receipt.errorCode != null)
+              'external_error_code': receipt.errorCode,
+            'external_error_message': errorMessage,
+          },
+        );
+        if (mounted && widget.conversation.id == conversationId) {
+          if (_messageController.text.trim().isEmpty) {
+            _messageController.text = pendingText;
+            _messageController.selection = TextSelection.collapsed(
+              offset: _messageController.text.length,
+            );
+          }
+          _restoreComposerFocus();
+          _showErrorSnackBar(context, errorMessage);
+        }
+        break;
     }
   }
 
@@ -2073,6 +2232,13 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Future<void> _sendPendingAttachments() async {
     if (_pendingAttachments.isEmpty || _isSendingPendingAttachments) return;
+    if (!_supportsOutgoingAttachments) {
+      _showErrorSnackBar(
+        context,
+        'Los adjuntos aún no están habilitados para ${widget.conversation.shortChannelLabel}.',
+      );
+      return;
+    }
     if (_guardPendingAttachmentMutation()) return;
 
     final caption = _messageController.text.trim();
@@ -2189,6 +2355,13 @@ class _ChatWindowState extends State<ChatWindow> {
     bool retryUpload = false,
   }) async {
     if (!mounted || bytes.isEmpty) {
+      return const _AttachmentDispatchResult.rejected();
+    }
+    if (!_supportsOutgoingAttachments) {
+      _showErrorSnackBar(
+        context,
+        'Los adjuntos aún no están habilitados para ${widget.conversation.shortChannelLabel}.',
+      );
       return const _AttachmentDispatchResult.rejected();
     }
 
@@ -2738,6 +2911,8 @@ class _ChatWindowState extends State<ChatWindow> {
       ],
     );
 
+    if (!_supportsOutgoingAttachments) return chatContent;
+
     return DropTarget(
       onDragEntered: (_) {
         if (!_hasBlockingOutcomeUnknownAttachment &&
@@ -2975,19 +3150,14 @@ class _ChatWindowState extends State<ChatWindow> {
                     children: [
                       CircleAvatar(
                         radius: widget.compact ? 17 : 20,
-                        backgroundColor: conversation.type == 'support'
-                            ? colorScheme.primary.withValues(alpha: 0.1)
-                            : colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.12),
+                        backgroundColor:
+                            ConversationChannelPresentation.accent(conversation)
+                                .withValues(alpha: 0.1),
                         child: Icon(
-                          conversation.isWhatsApp
-                              ? Icons.phone_in_talk_outlined
-                              : conversation.isWebsitePortal
-                                  ? Icons.language_outlined
-                                  : Icons.groups_outlined,
-                          color: conversation.type == 'support'
-                              ? colorScheme.primary
-                              : colorScheme.onSurfaceVariant,
+                          ConversationChannelPresentation.icon(conversation),
+                          color: ConversationChannelPresentation.accent(
+                            conversation,
+                          ),
                           size: 20,
                         ),
                       ),
@@ -3590,25 +3760,19 @@ class _ChatWindowState extends State<ChatWindow> {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: conversation.type == 'support'
-            ? colorScheme.primaryContainer
-            : colorScheme.surfaceContainerHighest,
+        color: ConversationChannelPresentation.accent(conversation)
+            .withValues(alpha: 0.1),
         border: Border.all(
-          color: conversation.isWhatsApp
-              ? const Color(0xFF14B8A6).withValues(alpha: 0.42)
+          color: conversation.usesExternalMessagingTransport
+              ? ConversationChannelPresentation.accent(conversation)
+                  .withValues(alpha: 0.42)
               : colorScheme.outlineVariant,
           width: 1.5,
         ),
       ),
       child: Icon(
-        conversation.isWhatsApp
-            ? Icons.phone_in_talk_outlined
-            : conversation.isWebsitePortal
-                ? Icons.language_outlined
-                : Icons.groups_outlined,
-        color: conversation.type == 'support'
-            ? colorScheme.onPrimaryContainer
-            : colorScheme.onSurfaceVariant,
+        ConversationChannelPresentation.icon(conversation),
+        color: ConversationChannelPresentation.accent(conversation),
         size: size * 0.42,
       ),
     );
@@ -6872,10 +7036,11 @@ class _ChatWindowState extends State<ChatWindow> {
     for (final message in messages) {
       final direction = message.metadata['message_direction']?.toString();
       final provider = message.metadata['external_provider']?.toString();
+      final isExternalProvider = provider == 'whatsapp' ||
+          provider == 'instagram' ||
+          provider == 'facebook_messenger';
       final isInbound = direction == 'inbound' ||
-          (provider == 'whatsapp' &&
-              direction != 'outbound' &&
-              !message.isMe) ||
+          (isExternalProvider && direction != 'outbound' && !message.isMe) ||
           (message.senderId == null &&
               message.type != 'system' &&
               message.content.trim().isNotEmpty);
@@ -7027,6 +7192,90 @@ class _ChatWindowState extends State<ChatWindow> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildMetaReplyWindowNotice({
+    required DateTime? replyWindowExpiresAt,
+    required bool isChecking,
+    required bool isRefreshing,
+    required bool isOpen,
+    required String? stateError,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final rawRemaining = replyWindowExpiresAt == null
+        ? Duration.zero
+        : replyWindowExpiresAt.toUtc().difference(DateTime.now().toUtc());
+    final remaining = rawRemaining.isNegative ? Duration.zero : rawRemaining;
+    final hasError = stateError != null;
+    final color = hasError
+        ? colorScheme.error
+        : isOpen
+            ? colorScheme.primary
+            : colorScheme.tertiary;
+    final label = hasError
+        ? isRefreshing
+            ? 'Reintentando verificación de Meta'
+            : 'No se pudo verificar el estado de Meta'
+        : isChecking
+            ? 'Verificando estado de Meta'
+            : isOpen
+                ? '${widget.conversation.shortChannelLabel}: ${_formatWindowDuration(remaining)} disponibles'
+                : '${widget.conversation.shortChannelLabel}: ventana cerrada';
+
+    return Tooltip(
+      message: hasError
+          ? '$stateError Los envíos permanecerán bloqueados hasta completar la verificación.'
+          : isChecking
+              ? 'Esperando los receipts pendientes y la ventana autoritativa de Meta.'
+              : isOpen
+                  ? 'Ventana confirmada por el binding de Meta para esta conversación.'
+                  : 'Meta requiere que el cliente vuelva a escribir antes de enviar otra respuesta.',
+      child: Row(
+        children: [
+          Icon(
+            hasError && !isRefreshing
+                ? Icons.cloud_off_outlined
+                : isChecking
+                    ? Icons.sync_outlined
+                    : isOpen
+                        ? Icons.schedule_outlined
+                        : Icons.lock_clock_outlined,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+          if (isChecking)
+            IconButton(
+              tooltip: 'Volver a consultar Meta',
+              visualDensity: VisualDensity.compact,
+              onPressed: isRefreshing
+                  ? null
+                  : () => unawaited(
+                        context
+                            .read<ChatProvider>()
+                            .refreshMetaConversationState(
+                              widget.conversation.id,
+                            ),
+                      ),
+              icon: isRefreshing
+                  ? const SizedBox.square(
+                      dimension: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded, size: 17),
+            ),
+        ],
+      ),
     );
   }
 
@@ -7246,15 +7495,42 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   Widget _buildComposer(BuildContext context) {
+    final chatProvider = context.read<ChatProvider>();
+    final hasMetaStateSnapshot = !_isMetaConversation ||
+        chatProvider.hasCompleteMetaConversationStateSnapshot(
+          widget.conversation.id,
+        );
+    final replyWindowExpiresAt = _isMetaConversation
+        ? chatProvider.metaReplyWindowExpiresAt(widget.conversation.id)
+        : null;
+    final metaStateError = _isMetaConversation
+        ? chatProvider.metaConversationStateError(widget.conversation.id)
+        : null;
+    final isCheckingMetaWindow = _isMetaConversation && !hasMetaStateSnapshot;
+    final isMetaWindowOpen = !_isMetaConversation ||
+        chatProvider.canReplyToMetaConversation(widget.conversation.id);
     return _buildTextComposer(
       context,
       showSmartActions: _canUseSmartActions,
+      composerEnabled: !isCheckingMetaWindow && isMetaWindowOpen,
+      metaReplyWindowExpiresAt: replyWindowExpiresAt,
+      isCheckingMetaWindow: isCheckingMetaWindow,
+      isRefreshingMetaState: _isMetaConversation &&
+          chatProvider.isMetaConversationStateLoading(widget.conversation.id),
+      isMetaWindowOpen: isMetaWindowOpen,
+      metaStateError: metaStateError,
     );
   }
 
   Widget _buildTextComposer(
     BuildContext context, {
     required bool showSmartActions,
+    required bool composerEnabled,
+    required DateTime? metaReplyWindowExpiresAt,
+    required bool isCheckingMetaWindow,
+    required bool isRefreshingMetaState,
+    required bool isMetaWindowOpen,
+    required String? metaStateError,
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -7265,6 +7541,15 @@ class _ChatWindowState extends State<ChatWindow> {
       children: [
         if (_isWhatsAppConversation) ...[
           _buildWhatsAppServiceWindowGauge(context),
+          const SizedBox(height: 8),
+        ] else if (_isMetaConversation) ...[
+          _buildMetaReplyWindowNotice(
+            replyWindowExpiresAt: metaReplyWindowExpiresAt,
+            isChecking: isCheckingMetaWindow,
+            isRefreshing: isRefreshingMetaState,
+            isOpen: isMetaWindowOpen,
+            stateError: metaStateError,
+          ),
           const SizedBox(height: 8),
         ],
         if (_pendingAttachments.isNotEmpty) ...[
@@ -7281,13 +7566,16 @@ class _ChatWindowState extends State<ChatWindow> {
                 child: IconButton(
                   tooltip: hasBlockingOutcomeUnknownAttachment
                       ? 'Esperando confirmación del adjunto'
-                      : 'Agregar al mensaje',
-                  onPressed: hasBlockingOutcomeUnknownAttachment
-                      ? null
-                      : () => _showComposerActionsMenu(
-                            context,
-                            showSmartActions: showSmartActions,
-                          ),
+                      : !composerEnabled
+                          ? 'Ventana de respuesta no disponible'
+                          : 'Agregar al mensaje',
+                  onPressed:
+                      hasBlockingOutcomeUnknownAttachment || !composerEnabled
+                          ? null
+                          : () => _showComposerActionsMenu(
+                                context,
+                                showSmartActions: showSmartActions,
+                              ),
                   style: IconButton.styleFrom(
                     foregroundColor: colorScheme.onSurfaceVariant,
                     backgroundColor: colorScheme.surfaceContainerHighest,
@@ -7318,13 +7606,20 @@ class _ChatWindowState extends State<ChatWindow> {
                   child: TextField(
                     controller: _messageController,
                     focusNode: _focusNode,
+                    enabled: composerEnabled,
                     minLines: 1,
                     maxLines: 5,
                     keyboardType: TextInputType.multiline,
                     textInputAction: TextInputAction.newline,
                     textCapitalization: TextCapitalization.sentences,
                     decoration: InputDecoration(
-                      hintText: 'Escribe un mensaje... (# para ref)',
+                      hintText: _isMetaConversation && !composerEnabled
+                          ? metaStateError != null
+                              ? 'Verificación de Meta pendiente'
+                              : isCheckingMetaWindow
+                                  ? 'Verificando ventana de respuesta...'
+                                  : 'Espera un nuevo mensaje del cliente'
+                          : 'Escribe un mensaje... (# para ref)',
                       filled: true,
                       fillColor: colorScheme.surfaceContainerLowest,
                       contentPadding: const EdgeInsets.symmetric(
@@ -7364,7 +7659,8 @@ class _ChatWindowState extends State<ChatWindow> {
                 ),
               ),
               onPressed: _isSendingPendingAttachments ||
-                      hasBlockingOutcomeUnknownAttachment
+                      hasBlockingOutcomeUnknownAttachment ||
+                      !composerEnabled
                   ? null
                   : () => _sendComposer(),
               child: _isSendingPendingAttachments
@@ -7396,15 +7692,16 @@ class _ChatWindowState extends State<ChatWindow> {
         iconColor: _accentBlue,
         title: 'Agregar al mensaje',
         children: [
-          _buildComposerPopoverAction(
-            icon: Icons.attach_file_rounded,
-            color: const Color(0xFF2563EB),
-            title: 'Foto o archivo',
-            subtitle: 'Previsualiza antes de enviar',
-            onTap: () => _showAttachmentOptions(
-              anchorKey: _composerActionsButtonKey,
+          if (_supportsOutgoingAttachments)
+            _buildComposerPopoverAction(
+              icon: Icons.attach_file_rounded,
+              color: const Color(0xFF2563EB),
+              title: 'Foto o archivo',
+              subtitle: 'Previsualiza antes de enviar',
+              onTap: () => _showAttachmentOptions(
+                anchorKey: _composerActionsButtonKey,
+              ),
             ),
-          ),
           _buildComposerPopoverAction(
             icon: Icons.emoji_emotions_outlined,
             color: const Color(0xFFD97706),
@@ -8585,7 +8882,18 @@ class _ChatWindowState extends State<ChatWindow> {
                           children: [
                             Padding(
                               padding: const EdgeInsets.only(bottom: 16),
-                              child: contentWidget,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (msg.metadata[
+                                          'recovered_outbound_attempt'] ==
+                                      true) ...[
+                                    _buildRecoveredMetaAttemptNotice(msg),
+                                    const SizedBox(height: 5),
+                                  ],
+                                  contentWidget,
+                                ],
+                              ),
                             ),
                             Positioned(
                               bottom: 0,
@@ -8653,6 +8961,65 @@ class _ChatWindowState extends State<ChatWindow> {
           MessageDeliveryIndicator(state: deliveryState, size: 14),
         ],
       ],
+    );
+  }
+
+  Widget _buildRecoveredMetaAttemptNotice(Message message) {
+    final state = message.metadata['meta_attempt_state']?.toString();
+    final (label, icon, color) = switch (state) {
+      'prepared' => (
+          'Preparado, resultado incierto · no reenviar',
+          Icons.help_outline_rounded,
+          const Color(0xFF9A6700),
+        ),
+      'provider_accepted'
+          when message.metadata['external_message_id'] != null =>
+        (
+          'Aceptado por Meta · pendiente de registro',
+          Icons.cloud_done_outlined,
+          const Color(0xFF1D4ED8),
+        ),
+      'provider_rejected' => (
+          'Rechazado por Meta',
+          Icons.error_outline_rounded,
+          const Color(0xFFB42318),
+        ),
+      'preflight_failed' => (
+          'El envío no se inició · corrige y reintenta',
+          Icons.report_gmailerrorred_outlined,
+          const Color(0xFFB42318),
+        ),
+      _ => (
+          'Resultado incierto · no reenviar',
+          Icons.help_outline_rounded,
+          const Color(0xFF9A6700),
+        ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

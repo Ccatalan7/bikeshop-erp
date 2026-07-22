@@ -9,6 +9,7 @@ import '../models/conversation.dart';
 import '../models/conversation_context_hint.dart';
 import '../models/message.dart';
 import '../services/conversation_context_hint_cache.dart';
+import '../services/meta_messaging_service.dart';
 import '../services/messaging_service.dart';
 import '../utils/message_receipt_projection.dart';
 import '../utils/message_receipt_refresh_coalescer.dart';
@@ -73,6 +74,7 @@ class _OutgoingConversationPreview {
 
 class ChatProvider extends ChangeNotifier {
   final MessagingService _service = MessagingService();
+  MetaMessagingService? _metaMessagingService;
   final ConversationContextHintCache _contextHintCache =
       ConversationContextHintCache();
   final UserManagementService? _userService;
@@ -97,6 +99,12 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, Message> _optimisticMessages = {};
   final Map<String, Map<String, dynamic>> _userCache = {}; // id -> user data
   final Map<String, ConversationDraft> _conversationDrafts = {};
+  final Map<String, MetaConversationTransport> _metaConversationTransports = {};
+  final Set<String> _metaOutboundReceiptSnapshots = {};
+  final Set<String> _metaConversationTransportSnapshots = {};
+  final Map<String, String> _metaConversationStateErrors = {};
+  final Map<String, Future<void>> _metaConversationStateRefreshes = {};
+  final Set<String> _pendingMetaConversationStateRefreshes = {};
   final Map<String, int> _conversationOpeningUnreadCounts = {};
   final Map<String, DateTime> _localReadAtByConversation = {};
   final Map<String, int> _localReadMessageSequenceByConversation = {};
@@ -155,6 +163,34 @@ class ChatProvider extends ChangeNotifier {
   String? get activeConversationId => _activeConversationId;
   bool get isApplicationForeground => _isApplicationForeground;
 
+  bool hasMetaReplyWindowSnapshot(String conversationId) =>
+      _metaConversationTransportSnapshots.contains(conversationId);
+
+  bool hasMetaOutboundReceiptSnapshot(String conversationId) =>
+      _metaOutboundReceiptSnapshots.contains(conversationId);
+
+  bool hasCompleteMetaConversationStateSnapshot(String conversationId) =>
+      hasMetaOutboundReceiptSnapshot(conversationId) &&
+      hasMetaReplyWindowSnapshot(conversationId);
+
+  String? metaConversationStateError(String conversationId) =>
+      _metaConversationStateErrors[conversationId];
+
+  DateTime? metaReplyWindowExpiresAt(String conversationId) =>
+      _metaConversationTransports[conversationId]?.replyWindowExpiresAt;
+
+  bool canReplyToMetaConversation(String conversationId) {
+    final transport = _metaConversationTransports[conversationId];
+    return hasCompleteMetaConversationStateSnapshot(conversationId) &&
+        transport?.canReply == true &&
+        MetaMessagingService.isReplyWindowOpenFromExpiry(
+          transport?.replyWindowExpiresAt,
+        );
+  }
+
+  bool isMetaConversationStateLoading(String conversationId) =>
+      _metaConversationStateRefreshes.containsKey(conversationId);
+
   bool hasMoreMessages(String conversationId) {
     final known = _hasMoreMessagesByConversation[conversationId];
     if (known != null) return known;
@@ -175,7 +211,12 @@ class ChatProvider extends ChangeNotifier {
     final merged = <Message>[...cached];
     for (final message in _optimisticMessages.values) {
       if (message.conversationId != conversationId) continue;
-      if (_hasMatchingServerMessage(message, merged)) continue;
+      if (hasMatchingServerMessage(
+        optimistic: message,
+        serverMessages: merged,
+      )) {
+        continue;
+      }
       merged.add(message);
     }
     merged.sort(compareMessageTimelineOrder);
@@ -196,42 +237,6 @@ class ChatProvider extends ChangeNotifier {
   List<Message> get _mergedActiveMessages {
     final activeId = _activeConversationId;
     return activeId == null ? const [] : messagesForConversation(activeId);
-  }
-
-  bool _hasMatchingServerMessage(Message optimistic, List<Message> server) {
-    final clientMessageId =
-        optimistic.metadata['client_message_id']?.toString();
-    final externalMessageId =
-        optimistic.metadata['external_message_id']?.toString();
-
-    return server.any((message) {
-      if (message.id == optimistic.id) return true;
-      if (message.conversationId != optimistic.conversationId) return false;
-
-      final messageClientId = message.metadata['client_message_id']?.toString();
-      if (clientMessageId != null &&
-          clientMessageId.isNotEmpty &&
-          messageClientId == clientMessageId) {
-        return true;
-      }
-
-      final messageExternalId =
-          message.metadata['external_message_id']?.toString();
-      if (externalMessageId != null &&
-          externalMessageId.isNotEmpty &&
-          messageExternalId == externalMessageId) {
-        return true;
-      }
-
-      if (message.senderId != optimistic.senderId) return false;
-      if (message.content != optimistic.content) return false;
-
-      final deltaMs = message.createdAt
-          .difference(optimistic.createdAt)
-          .inMilliseconds
-          .abs();
-      return deltaMs < const Duration(seconds: 20).inMilliseconds;
-    });
   }
 
   bool _isWhatsAppStatusMessage(Message message) {
@@ -364,7 +369,10 @@ class ChatProvider extends ChangeNotifier {
 
   void _pruneConfirmedOptimisticMessages(List<Message> serverMessages) {
     _optimisticMessages.removeWhere(
-      (_, optimistic) => _hasMatchingServerMessage(optimistic, serverMessages),
+      (_, optimistic) => hasMatchingServerMessage(
+        optimistic: optimistic,
+        serverMessages: serverMessages,
+      ),
     );
   }
 
@@ -499,6 +507,12 @@ class ChatProvider extends ChangeNotifier {
     _optimisticMessages.clear();
     _userCache.clear();
     _conversationDrafts.clear();
+    _metaConversationTransports.clear();
+    _metaOutboundReceiptSnapshots.clear();
+    _metaConversationTransportSnapshots.clear();
+    _metaConversationStateErrors.clear();
+    _metaConversationStateRefreshes.clear();
+    _pendingMetaConversationStateRefreshes.clear();
     _conversationOpeningUnreadCounts.clear();
     _localReadAtByConversation.clear();
     _localReadMessageSequenceByConversation.clear();
@@ -1392,6 +1406,7 @@ class ChatProvider extends ChangeNotifier {
       notifyListeners();
       final conversationId = _activeConversationId;
       if (conversationId != null && isConversationVisible(conversationId)) {
+        unawaited(refreshMetaConversationState(conversationId));
         _markActiveConversationReadIfNeeded(
           conversationId,
           _messageCacheByConversation[conversationId] ?? const [],
@@ -1545,6 +1560,7 @@ class ChatProvider extends ChangeNotifier {
   /// Open a conversation and subscribe to updates
   void setActiveConversation(String conversationId) {
     if (_activeConversationId == conversationId) {
+      unawaited(refreshMetaConversationState(conversationId));
       if (_messagesSubscription == null) {
         _isLoading = _activeMessages.isEmpty;
         notifyListeners();
@@ -1584,6 +1600,191 @@ class ChatProvider extends ChangeNotifier {
 
     // 2. Subscribe to new message stream
     _subscribeToActiveMessages(conversationId);
+    unawaited(refreshMetaConversationState(conversationId));
+  }
+
+  MetaMessagingService get _resolvedMetaMessagingService =>
+      _metaMessagingService ??= MetaMessagingService();
+
+  /// Rehydrates durable, unresolved Meta sends and the authoritative reply
+  /// window when a conversation opens or the application resumes.
+  Future<void> refreshMetaConversationState(String conversationId) {
+    final existing = _metaConversationStateRefreshes[conversationId];
+    if (existing != null) {
+      _pendingMetaConversationStateRefreshes.add(conversationId);
+      return existing;
+    }
+
+    final conversation = _conversations
+        .where((candidate) => candidate.id == conversationId)
+        .firstOrNull;
+    if (!_sessionReady || conversation?.isMetaMessaging != true) {
+      return Future<void>.value();
+    }
+
+    late final Future<void> refresh;
+    refresh = _loadMetaConversationState(
+      conversation: conversation!,
+      operationEpoch: _sessionEpoch,
+    );
+    _metaConversationStateRefreshes[conversationId] = refresh;
+    unawaited(
+      refresh.whenComplete(() {
+        if (identical(
+          _metaConversationStateRefreshes[conversationId],
+          refresh,
+        )) {
+          _metaConversationStateRefreshes.remove(conversationId);
+          if (!_disposed) notifyListeners();
+          if (_pendingMetaConversationStateRefreshes.remove(conversationId) &&
+              !_disposed) {
+            unawaited(refreshMetaConversationState(conversationId));
+          }
+        }
+      }),
+    );
+    return refresh;
+  }
+
+  Future<void> _loadMetaConversationState({
+    required Conversation conversation,
+    required int operationEpoch,
+  }) async {
+    List<MetaOutboundSendReceipt>? receipts;
+    MetaConversationTransport? transport;
+    var receiptsFailed = false;
+    var transportFailed = false;
+
+    try {
+      receipts = await _resolvedMetaMessagingService.listOutboundSendReceipts(
+        conversationId: conversation.id,
+      );
+    } catch (error) {
+      receiptsFailed = true;
+      debugPrint(
+        '[MetaRecovery] receipt_read_failed errorType=${error.runtimeType}',
+      );
+    }
+
+    try {
+      final loadedTransport =
+          await _resolvedMetaMessagingService.getConversationTransport(
+        conversationId: conversation.id,
+      );
+      if (loadedTransport.provider != conversation.channel) {
+        throw const FormatException('Meta transport provider mismatch');
+      }
+      transport = loadedTransport;
+    } catch (error) {
+      transportFailed = true;
+      debugPrint(
+        '[MetaRecovery] window_read_failed errorType=${error.runtimeType}',
+      );
+    }
+
+    if (!_isCurrentSession(operationEpoch)) return;
+
+    var changed = false;
+    if (receipts != null) {
+      changed = _reconcileMetaOutboundReceipts(
+            conversation: conversation,
+            receipts: receipts,
+          ) ||
+          changed;
+      changed = _metaOutboundReceiptSnapshots.add(conversation.id) || changed;
+    } else {
+      changed =
+          _metaOutboundReceiptSnapshots.remove(conversation.id) || changed;
+    }
+    if (transport != null) {
+      final previous = _metaConversationTransports[conversation.id];
+      _metaConversationTransports[conversation.id] = transport;
+      changed = previous?.provider != transport.provider ||
+          previous?.replyWindowExpiresAt != transport.replyWindowExpiresAt ||
+          previous?.canReply != transport.canReply ||
+          changed;
+      changed =
+          _metaConversationTransportSnapshots.add(conversation.id) || changed;
+    } else {
+      changed = _metaConversationTransportSnapshots.remove(conversation.id) ||
+          changed;
+    }
+
+    final nextError = switch ((receiptsFailed, transportFailed)) {
+      (true, true) =>
+        'No se pudieron verificar los envíos pendientes ni la ventana de Meta.',
+      (true, false) =>
+        'No se pudieron verificar los envíos pendientes de Meta.',
+      (false, true) => 'No se pudo verificar la ventana de respuesta de Meta.',
+      (false, false) => null,
+    };
+    final previousError = _metaConversationStateErrors[conversation.id];
+    if (nextError == null) {
+      changed = _metaConversationStateErrors.remove(conversation.id) != null ||
+          changed;
+    } else if (previousError != nextError) {
+      _metaConversationStateErrors[conversation.id] = nextError;
+      changed = true;
+    }
+    if (changed) notifyListeners();
+  }
+
+  bool _reconcileMetaOutboundReceipts({
+    required Conversation conversation,
+    required List<MetaOutboundSendReceipt> receipts,
+  }) {
+    final unresolved = receipts
+        .where((receipt) => receipt.shouldRecover)
+        .toList(growable: false);
+    final unresolvedClientIds =
+        unresolved.map((receipt) => receipt.clientMessageId).toSet();
+    var changed = false;
+
+    _optimisticMessages.removeWhere((_, message) {
+      final shouldRemove = message.conversationId == conversation.id &&
+          message.metadata['recovered_outbound_attempt'] == true &&
+          !unresolvedClientIds.contains(
+            message.metadata['client_message_id']?.toString(),
+          );
+      changed = changed || shouldRemove;
+      return shouldRemove;
+    });
+
+    for (final receipt in unresolved) {
+      MapEntry<String, Message>? existingEntry;
+      for (final entry in _optimisticMessages.entries) {
+        if (entry.value.conversationId == conversation.id &&
+            entry.value.metadata['client_message_id']?.toString() ==
+                receipt.clientMessageId) {
+          existingEntry = entry;
+          break;
+        }
+      }
+
+      final recovered = buildRecoveredMetaAttemptMessage(
+        receipt: receipt,
+        channel: conversation.channel,
+        currentUserId: _service.currentUserId,
+        optimisticMessageId: existingEntry?.key,
+        existingMetadata: existingEntry?.value.metadata ?? const {},
+      );
+      _optimisticMessages[recovered.id] = recovered;
+
+      _optimisticMessages.removeWhere((id, message) {
+        if (id == recovered.id || message.conversationId != conversation.id) {
+          return false;
+        }
+        return message.metadata['client_message_id']?.toString() ==
+            receipt.clientMessageId;
+      });
+      changed = true;
+    }
+
+    final serverMessages =
+        _messageCacheByConversation[conversation.id] ?? const <Message>[];
+    final optimisticCountBeforePrune = _optimisticMessages.length;
+    _pruneConfirmedOptimisticMessages(serverMessages);
+    return changed || _optimisticMessages.length != optimisticCountBeforePrune;
   }
 
   void clearActiveConversation({
@@ -1674,6 +1875,7 @@ class ChatProvider extends ChangeNotifier {
           );
           _isLoading = false;
           _markActiveConversationReadIfNeeded(conversationId, merged);
+          unawaited(refreshMetaConversationState(conversationId));
           notifyListeners();
         },
         onError: (error) {
@@ -2359,6 +2561,14 @@ class ChatProvider extends ChangeNotifier {
     if (!_isCurrentSession(operationEpoch)) return;
     final targetConversationId = conversationId ?? _activeConversationId;
     if (targetConversationId == null || content.trim().isEmpty) return;
+    final targetConversation = _conversations
+        .where((candidate) => candidate.id == targetConversationId)
+        .firstOrNull;
+    if (targetConversation?.isMetaMessaging == true) {
+      throw StateError(
+        'Instagram y Messenger requieren el transporte Meta server-side.',
+      );
+    }
     final sendStartedAt = DateTime.now();
 
     final tempId = 'temp-${DateTime.now().millisecondsSinceEpoch}';

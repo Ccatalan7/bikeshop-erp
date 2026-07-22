@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/message_delivery_state.dart';
 
-/// Shared WhatsApp-style receipt used by both the timeline and inbox preview.
+/// Shared provider receipt used by both the timeline and inbox preview.
 class MessageDeliveryIndicator extends StatelessWidget {
   const MessageDeliveryIndicator({
     super.key,
@@ -16,6 +16,7 @@ class MessageDeliveryIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final provider = state.providerLabel ?? 'el canal externo';
     final (icon, color, label) = switch (state.stage) {
       MessageDeliveryStage.pending => (
           Icons.access_time_rounded,
@@ -31,22 +32,22 @@ class MessageDeliveryIndicator extends StatelessWidget {
       MessageDeliveryStage.accepted => (
           Icons.done_rounded,
           colorScheme.onSurfaceVariant.withValues(alpha: 0.72),
-          'Aceptado por el canal de WhatsApp',
+          'Aceptado por $provider',
         ),
       MessageDeliveryStage.sent => (
           Icons.done_rounded,
           colorScheme.onSurfaceVariant.withValues(alpha: 0.72),
-          'Enviado a WhatsApp',
+          'Enviado a $provider',
         ),
       MessageDeliveryStage.delivered => (
           Icons.done_all_rounded,
           colorScheme.onSurfaceVariant.withValues(alpha: 0.72),
-          'Entregado al teléfono',
+          'Entregado, confirmado por $provider',
         ),
       MessageDeliveryStage.read => (
           Icons.done_all_rounded,
           const Color(0xFF0B84D8),
-          'Leído, confirmado por WhatsApp',
+          'Leído, confirmado por $provider',
         ),
       MessageDeliveryStage.failed => (
           Icons.error_outline_rounded,

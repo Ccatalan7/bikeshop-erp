@@ -12,6 +12,7 @@ import '../../messaging/widgets/new_chat_dialog.dart';
 import '../../messaging/widgets/context_side_panel.dart';
 import '../../messaging/widgets/chat_context_panel.dart';
 import '../../messaging/utils/conversation_activity.dart';
+import '../../messaging/utils/conversation_channel_presentation.dart';
 import '../../messaging/utils/conversation_search.dart';
 import '../../messaging/utils/message_parser.dart';
 import '../../messaging/widgets/conversation_tile.dart';
@@ -934,6 +935,29 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
             conversation.status != 'pending' &&
             conversation.status != 'resolved')
         .toList();
+    final instagramConvs = customerConvs
+        .where((conversation) =>
+            conversation.isInstagram &&
+            conversation.status != 'pending' &&
+            conversation.status != 'resolved')
+        .toList();
+    final facebookMessengerConvs = customerConvs
+        .where((conversation) =>
+            conversation.isFacebookMessenger &&
+            conversation.status != 'pending' &&
+            conversation.status != 'resolved')
+        .toList();
+    // Keep a visible fallback so a newly introduced provider can never vanish
+    // from the canonical inbox merely because its dedicated section has not
+    // shipped yet.
+    final otherChannelConvs = customerConvs
+        .where((conversation) =>
+            !conversation.isWhatsApp &&
+            !conversation.isWebsitePortal &&
+            !conversation.isMetaMessaging &&
+            conversation.status != 'pending' &&
+            conversation.status != 'resolved')
+        .toList();
     final resolvedConvs = customerConvs
         .where((conversation) => conversation.status == 'resolved')
         .toList();
@@ -955,11 +979,35 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         // WhatsApp Section
         if (whatsAppConvs.isNotEmpty)
           _buildSection(
-            icon: Icons.phone_in_talk_outlined,
+            icon: ConversationChannelPresentation.iconForChannel('whatsapp'),
             title: 'WhatsApp',
             count: whatsAppConvs.length,
-            color: const Color(0xFF047857),
+            color: ConversationChannelPresentation.whatsAppAccent,
             conversations: whatsAppConvs,
+            provider: provider,
+            activeId: activeId,
+          ),
+
+        if (instagramConvs.isNotEmpty)
+          _buildSection(
+            icon: ConversationChannelPresentation.iconForChannel('instagram'),
+            title: 'Instagram',
+            count: instagramConvs.length,
+            color: ConversationChannelPresentation.instagramAccent,
+            conversations: instagramConvs,
+            provider: provider,
+            activeId: activeId,
+          ),
+
+        if (facebookMessengerConvs.isNotEmpty)
+          _buildSection(
+            icon: ConversationChannelPresentation.iconForChannel(
+              'facebook_messenger',
+            ),
+            title: 'Facebook Messenger',
+            count: facebookMessengerConvs.length,
+            color: ConversationChannelPresentation.facebookMessengerAccent,
+            conversations: facebookMessengerConvs,
             provider: provider,
             activeId: activeId,
           ),
@@ -972,6 +1020,17 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
             count: websiteConvs.length,
             color: _accentBlue,
             conversations: websiteConvs,
+            provider: provider,
+            activeId: activeId,
+          ),
+
+        if (otherChannelConvs.isNotEmpty)
+          _buildSection(
+            icon: Icons.chat_bubble_outline,
+            title: 'Otros canales',
+            count: otherChannelConvs.length,
+            color: ConversationChannelPresentation.internalAccent,
+            conversations: otherChannelConvs,
             provider: provider,
             activeId: activeId,
           ),

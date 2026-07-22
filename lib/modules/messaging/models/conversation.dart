@@ -3,7 +3,12 @@ import 'conversation_context_hint.dart';
 class Conversation {
   final String id;
   final String type; // 'internal' or 'support'
-  final String channel; // 'internal', 'website_portal', or 'whatsapp'
+  /// Canonical transport for this thread.
+  ///
+  /// Provider-backed customer channels must never fall back to the native
+  /// `messages` insert path: their outbound command is owned by the matching
+  /// server-side transport.
+  final String channel;
   final bool isGroup; // Immutable shape for internal conversations
   final String? counterpartyType; // 'internal', 'customer', or 'supplier'
   final String status; // 'pending', 'active', 'resolved', 'rejected'
@@ -61,7 +66,9 @@ class Conversation {
     final value = rawChannel?.toString().trim();
     if (value == 'internal' ||
         value == 'website_portal' ||
-        value == 'whatsapp') {
+        value == 'whatsapp' ||
+        value == 'instagram' ||
+        value == 'facebook_messenger') {
       return value!;
     }
 
@@ -79,6 +86,10 @@ class Conversation {
   bool get isInternal => channel == 'internal' || type == 'internal';
   bool get isSupport => type == 'support';
   bool get isWhatsApp => channel == 'whatsapp';
+  bool get isInstagram => channel == 'instagram';
+  bool get isFacebookMessenger => channel == 'facebook_messenger';
+  bool get isMetaMessaging => isInstagram || isFacebookMessenger;
+  bool get usesExternalMessagingTransport => isWhatsApp || isMetaMessaging;
   bool get isWebsitePortal => channel == 'website_portal';
   String get effectiveCounterpartyType {
     final stored = counterpartyType?.trim().toLowerCase();
@@ -136,12 +147,16 @@ class Conversation {
     if (isWhatsApp) {
       return isSupplierConversation ? 'Proveedor WhatsApp' : 'Cliente WhatsApp';
     }
+    if (isInstagram) return 'Cliente Instagram';
+    if (isFacebookMessenger) return 'Cliente Facebook Messenger';
     if (isWebsitePortal) return 'Cliente web';
     return 'Chat interno';
   }
 
   String get shortChannelLabel {
     if (isWhatsApp) return 'WhatsApp';
+    if (isInstagram) return 'Instagram';
+    if (isFacebookMessenger) return 'Messenger';
     if (isWebsitePortal) return 'Web';
     return 'Interno';
   }

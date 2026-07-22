@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { hasSupportedEcommerceTaxRate } from "../_shared/ecommerce_tax.ts";
+import { isVerifiableMerchantBrand } from "../_shared/google_merchant_feed.ts";
 import {
   mergeCanonicalAvailableQuantities,
   resolveAvailableProductQuantity,
@@ -364,10 +365,11 @@ async function getMerchantFeedEligibility(offerId: string) {
     };
   }
 
-  const { data, error } = await adminClient()
+  const client = adminClient();
+  const { data, error } = await client
     .from("products")
     .select(
-      "id, tenant_id, name, is_active, is_published, is_google_merchant, lifecycle_status, price, stock_quantity, inventory_qty, track_stock, is_set, tax_rate",
+      "id, tenant_id, name, is_active, is_published, show_on_website, is_google_merchant, lifecycle_status, product_type, price, website_price, price_currency, stock_quantity, inventory_qty, track_stock, is_set, tax_rate, image_url, image_url_optimized, website_image_url, website_image_url_optimized, image_urls, website_image_urls, brand_id, brand, website_merchant_brand",
     )
     .eq("id", offerId)
     .maybeSingle();
@@ -389,7 +391,7 @@ async function getMerchantFeedEligibility(offerId: string) {
     };
   }
 
-  const { data: availabilityRows, error: availabilityError } = await adminClient()
+  const { data: availabilityRows, error: availabilityError } = await client
     .rpc("get_product_available_quantities", {
       p_tenant_id: data.tenant_id,
       p_product_ids: [data.id],
@@ -407,6 +409,9 @@ async function getMerchantFeedEligibility(offerId: string) {
   if (data.is_published !== true) {
     reasons.push("El producto no esta publicado en la tienda online.");
   }
+  if (data.show_on_website !== true) {
+    reasons.push("El producto no esta incluido en el catalogo web.");
+  }
   if (data.is_google_merchant !== true) {
     reasons.push("Google Merchant esta desactivado para este producto.");
   }
@@ -415,9 +420,55 @@ async function getMerchantFeedEligibility(offerId: string) {
       `El ciclo de vida es ${cleanText(data.lifecycle_status) || "desconocido"}, no active.`,
     );
   }
-  if (Number(data.price || 0) <= 0) reasons.push("El precio guardado debe ser mayor a 0.");
+  if (data.product_type !== "product") {
+    reasons.push("Solo los productos fisicos entran al feed Merchant.");
+  }
+  const effectivePrice = Number(data.website_price ?? data.price);
+  if (!Number.isFinite(effectivePrice) || effectivePrice <= 0) {
+    reasons.push("El precio efectivo de la tienda debe ser mayor a 0.");
+  }
+  const currency = cleanText(data.price_currency || "CLP").toUpperCase();
+  if (currency !== "CLP") {
+    reasons.push("La moneda de la tienda para Chile debe ser CLP.");
+  }
   if (!hasSupportedEcommerceTaxRate(data.tax_rate)) {
     reasons.push("La clasificación tributaria debe ser exenta (0) o afecta a IVA (19).");
+  }
+  const scalarImages = [
+    data.website_image_url_optimized,
+    data.image_url_optimized,
+    data.website_image_url,
+    data.image_url,
+  ];
+  const galleryImages = Array.isArray(data.website_image_urls) &&
+      data.website_image_urls.length > 0
+    ? data.website_image_urls
+    : Array.isArray(data.image_urls)
+    ? data.image_urls
+    : [];
+  const hasPublicImage = [...scalarImages, ...galleryImages].some((value) => {
+    const url = cleanText(value);
+    return url.startsWith("https://") || url.startsWith("http://");
+  });
+  if (!hasPublicImage) {
+    reasons.push("El producto necesita una imagen publica HTTP(S).");
+  }
+  let linkedBrand = "";
+  if (cleanText(data.brand_id)) {
+    const { data: brandRow } = await client
+      .from("product_brands")
+      .select("name")
+      .eq("id", data.brand_id)
+      .maybeSingle();
+    linkedBrand = cleanText(brandRow?.name);
+  }
+  const explicitBrand = cleanText(data.website_merchant_brand) || linkedBrand ||
+    cleanText(data.brand);
+  const hasExplicitBrand = isVerifiableMerchantBrand(explicitBrand);
+  if (!hasExplicitBrand) {
+    reasons.push(
+      "El producto necesita una marca de fabricante verificable; origen, marketplace o Generico no sirven como marca.",
+    );
   }
   const availableQuantity = resolveAvailableProductQuantity(canonicalProduct);
   if (data.track_stock !== false && availableQuantity <= 0) {
@@ -433,10 +484,16 @@ async function getMerchantFeedEligibility(offerId: string) {
       name: data.name,
       isActive: data.is_active === true,
       isPublished: data.is_published === true,
+      showOnWebsite: data.show_on_website === true,
       isGoogleMerchant: data.is_google_merchant === true,
       lifecycleStatus: data.lifecycle_status,
-      price: data.price,
+      productType: data.product_type,
+      price: effectivePrice,
+      currency,
       stockQuantity: availableQuantity,
+      hasPublicImage,
+      hasExplicitBrand,
+      merchantBrand: explicitBrand || null,
       taxRate: data.tax_rate,
     },
   };

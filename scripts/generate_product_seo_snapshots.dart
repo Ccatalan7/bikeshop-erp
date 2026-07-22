@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-const num _structuredDataMaxShippingRateClp = 14990;
-
 /// Generates static HTML "SEO snapshots" for product routes.
 ///
 /// Why: Firebase Hosting is configured as an SPA (rewrite ** -> /index.html).
@@ -87,12 +85,32 @@ void main(List<String> args) async {
       _getSetting(settings, 'seo_product_description_template') ??
           '{product_description}';
 
-  final products = await _fetchProducts(
+  final productCandidates = await _fetchProducts(
     supabaseUrl: supabaseUrl,
     tenantId: tenantId,
     serviceRoleKey: serviceRoleKey,
     onlyMerchant: onlyMerchant,
   );
+  final publicAvailability = await _fetchPublicProductAvailability(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
+    productIds: productCandidates
+        .map((product) => (product['id'] ?? '').toString())
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false),
+  );
+  final products = productCandidates
+      .where((product) =>
+          publicAvailability.containsKey((product['id'] ?? '').toString()))
+      .map((product) {
+    final quantity = publicAvailability[(product['id'] ?? '').toString()]!;
+    return <String, dynamic>{
+      ...product,
+      'stock_quantity': quantity,
+      'inventory_qty': quantity,
+    };
+  }).toList(growable: false);
   final productUrlAliases = await _fetchProductUrlAliases(
     supabaseUrl: supabaseUrl,
     tenantId: tenantId,
@@ -117,6 +135,12 @@ void main(List<String> args) async {
   );
 
   final outDir = Directory(pathJoin(buildDir.path, 'productos'));
+  // This directory is generated output. Recreate it so a product removed from
+  // the current public visibility policy cannot survive as a stale soft-404
+  // snapshot or sitemap destination from an earlier build.
+  if (outDir.existsSync()) {
+    outDir.deleteSync(recursive: true);
+  }
   outDir.createSync(recursive: true);
 
   final productHtmlById = <String, String>{};
@@ -214,8 +238,7 @@ void main(List<String> args) async {
         storeUrl: storeUrl,
         storeName: _cleanText(storeName),
         product: product,
-        description: _cleanText(
-            description.isNotEmpty ? description : productDescription),
+        description: baseProductDescription,
         inStock: inStock,
         currency: currency,
         priceNum: priceNum,
@@ -1359,8 +1382,10 @@ String? _buildProductJsonLd({
   ));
   final cleanDescription = _cleanText(description);
   final category = (product['category_name'] ?? '').toString().trim();
-  final structuredBrandName =
-      productBrand.isNotEmpty ? productBrand : (gtin == null ? 'Genérico' : '');
+  // A missing catalog brand is unknown, not evidence that the manufacturer is
+  // "Genérico" or that the retailer is the brand. Omit it rather than invent
+  // structured data that can contradict a named manufacturer in the title.
+  final structuredBrandName = productBrand;
 
   final productData = <String, dynamic>{
     '@type': 'Product',
@@ -1387,7 +1412,6 @@ String? _buildProductJsonLd({
           ? 'https://schema.org/InStock'
           : 'https://schema.org/OutOfStock',
       'itemCondition': 'https://schema.org/NewCondition',
-      'shippingDetails': _buildShippingDetailsJsonLd(currency),
       'hasMerchantReturnPolicy': _buildMerchantReturnPolicyJsonLd(storeUrl),
       'seller': {
         '@type': 'Organization',
@@ -1416,36 +1440,6 @@ String? _buildProductJsonLd({
   };
 
   return jsonEncode(data);
-}
-
-Map<String, dynamic> _buildShippingDetailsJsonLd(String currency) {
-  return {
-    '@type': 'OfferShippingDetails',
-    'shippingRate': {
-      '@type': 'MonetaryAmount',
-      'maxValue': _structuredDataMaxShippingRateClp,
-      'currency': currency,
-    },
-    'shippingDestination': {
-      '@type': 'DefinedRegion',
-      'addressCountry': 'CL',
-    },
-    'deliveryTime': {
-      '@type': 'ShippingDeliveryTime',
-      'handlingTime': {
-        '@type': 'QuantitativeValue',
-        'minValue': 1,
-        'maxValue': 2,
-        'unitCode': 'DAY',
-      },
-      'transitTime': {
-        '@type': 'QuantitativeValue',
-        'minValue': 2,
-        'maxValue': 10,
-        'unitCode': 'DAY',
-      },
-    },
-  };
 }
 
 Map<String, dynamic> _buildMerchantReturnPolicyJsonLd(String storeUrl) {
@@ -1658,6 +1652,47 @@ Future<List<Map<String, dynamic>>> _fetchProducts({
   return products;
 }
 
+Future<Map<String, int>> _fetchPublicProductAvailability({
+  required String supabaseUrl,
+  required String tenantId,
+  required String serviceRoleKey,
+  required List<String> productIds,
+}) async {
+  if (productIds.isEmpty) return const {};
+
+  const pageSize = 1000;
+  final quantities = <String, int>{};
+  for (var offset = 0;; offset += pageSize) {
+    final response = await _httpPostJson(
+      Uri.parse('$supabaseUrl/rest/v1/rpc/get_public_products'),
+      headers: {
+        'apikey': serviceRoleKey,
+        'Authorization': 'Bearer $serviceRoleKey',
+      },
+      body: {
+        'p_tenant_id': tenantId,
+        'p_product_ids': productIds,
+        'p_only_in_stock': true,
+        'p_sort_by': 'name',
+        'p_limit': pageSize,
+        'p_offset': offset,
+      },
+    );
+
+    final decoded = jsonDecode(response) as List<dynamic>;
+    for (final rawRow in decoded) {
+      final row = rawRow as Map<String, dynamic>;
+      final id = (row['id'] ?? '').toString();
+      if (id.isEmpty) continue;
+      quantities[id] =
+          _toInt(row['stock_quantity']) ?? _toInt(row['inventory_qty']) ?? 0;
+    }
+    if (decoded.length < pageSize) break;
+  }
+
+  return quantities;
+}
+
 Future<List<Map<String, dynamic>>> _fetchProductUrlAliases({
   required String supabaseUrl,
   required String tenantId,
@@ -1772,6 +1807,30 @@ Future<String> _httpGet(Uri url, {required Map<String, String> headers}) async {
           'GET $url failed: ${res.statusCode} ${res.reasonPhrase}\n$body');
     }
     return body;
+  } finally {
+    client.close(force: true);
+  }
+}
+
+Future<String> _httpPostJson(
+  Uri url, {
+  required Map<String, String> headers,
+  required Map<String, dynamic> body,
+}) async {
+  final client = HttpClient();
+  try {
+    final req = await client.postUrl(url);
+    headers.forEach(req.headers.set);
+    req.headers.contentType = ContentType.json;
+    req.write(jsonEncode(body));
+    final res = await req.close();
+    final responseBody = await res.transform(utf8.decoder).join();
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw HttpException(
+        'POST $url failed: ${res.statusCode} ${res.reasonPhrase}\n$responseBody',
+      );
+    }
+    return responseBody;
   } finally {
     client.close(force: true);
   }
@@ -2033,8 +2092,7 @@ String _buildProductFallbackHtml({
   if (priceNum != null) {
     details.add('Precio: ${priceNum.toStringAsFixed(0)} $currency');
   }
-  details.add(
-      inStock ? 'Disponibilidad: en stock' : 'Disponibilidad: consultar stock');
+  details.add(inStock ? 'Disponibilidad: en stock' : 'Disponibilidad: agotado');
 
   final imageHtml = imageUrl.isEmpty
       ? ''

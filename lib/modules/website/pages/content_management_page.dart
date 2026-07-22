@@ -61,7 +61,7 @@ Al usar este sitio, aceptas estos términos y condiciones.
 - Nos reservamos el derecho de modificar precios sin previo aviso
 
 ## 3. Política de Despacho
-- Envíos a todo Chile
+- Envíos a Chile continental
 - Tiempo estimado: 3-7 días hábiles
 - Costo de envío calculado al checkout
 
@@ -115,7 +115,7 @@ Para consultas sobre privacidad: contacto@vinabike.cl
 # Información de Envío
 
 ## Cobertura
-Realizamos envíos a todo Chile continental.
+Realizamos envíos a Chile continental.
 
 ## Tiempos de Entrega
 - Santiago: 2-3 días hábiles
@@ -247,108 +247,108 @@ Respondemos consultas de Lunes a Viernes, 9:00 a 18:00 hrs.
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                if (!widget.embedded) ...[
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => context.go('/website'),
-                  ),
-                  const SizedBox(width: 8),
-                ],
+        // Header
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              if (!widget.embedded) ...[
+                IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => context.go('/website'),
+                ),
+                const SizedBox(width: 8),
+              ],
               Text('Contenido del Sitio',
                   style: theme.textTheme.headlineSmall
                       ?.copyWith(fontWeight: FontWeight.bold)),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () => websiteService.loadContents(),
-                  tooltip: 'Actualizar',
-                ),
-              ],
-            ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () => websiteService.loadContents(),
+                tooltip: 'Actualizar',
+              ),
+            ],
           ),
-          // Content
-          Expanded(
-            child: websiteService.isLoading && websiteService.contents.isEmpty
-                ? const Center(child: BrandedLoading())
-                : Column(
-              children: [
-                // Info banner
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  margin: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        color: theme.colorScheme.primary,
+        ),
+        // Content
+        Expanded(
+          child: websiteService.isLoading && websiteService.contents.isEmpty
+              ? const Center(child: BrandedLoading())
+              : Column(
+                  children: [
+                    // Info banner
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Gestiona el contenido de tu sitio web',
-                              style: TextStyle(
-                                color: theme.colorScheme.onPrimaryContainer,
-                                fontWeight: FontWeight.bold,
-                              ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Gestiona el contenido de tu sitio web',
+                                  style: TextStyle(
+                                    color: theme.colorScheme.onPrimaryContainer,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Edita textos de páginas legales, información de contacto, y más',
+                                  style: TextStyle(
+                                    color: theme.colorScheme.onPrimaryContainer,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Edita textos de páginas legales, información de contacto, y más',
-                              style: TextStyle(
-                                color: theme.colorScheme.onPrimaryContainer,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-
-                // Content sections grid
-                Expanded(
-                  child: GridView.builder(
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      childAspectRatio: 1.5,
                     ),
-                    itemCount: _sections.length,
-                    itemBuilder: (context, index) {
-                      final section = _sections[index];
-                      final savedContent =
-                          websiteService.getContentById(section.id);
-                      final hasContent = savedContent?.content != null;
 
-                      return _buildSectionCard(
-                        context,
-                        section,
-                        hasContent,
-                        savedContent,
-                        websiteService,
-                      );
-                    },
-                  ),
+                    // Content sections grid
+                    Expanded(
+                      child: GridView.builder(
+                        padding: const EdgeInsets.all(16),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          childAspectRatio: 1.5,
+                        ),
+                        itemCount: _sections.length,
+                        itemBuilder: (context, index) {
+                          final section = _sections[index];
+                          final savedContent =
+                              websiteService.getContentById(section.id);
+                          final hasContent = savedContent?.content != null;
+
+                          return _buildSectionCard(
+                            context,
+                            section,
+                            hasContent,
+                            savedContent,
+                            websiteService,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+        ),
       ],
     );
 
@@ -810,7 +810,7 @@ class _ContentEditorPageState extends State<_ContentEditorPage> {
     try {
       final service = context.read<WebsiteService>();
       final tenantService = context.read<TenantService>();
-      
+
       final tenantId = await tenantService.getTenantId();
       if (tenantId == null) {
         throw Exception('No tenant found. Please log in again.');

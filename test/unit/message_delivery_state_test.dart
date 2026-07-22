@@ -89,7 +89,8 @@ void main() {
           'external_error_message': 'Late duplicate webhook',
         },
         explicitStatus: 'failed',
-        isWhatsApp: true,
+        isExternalTransport: true,
+        providerLabel: 'WhatsApp',
       );
 
       expect(state.stage, MessageDeliveryStage.delivered);
@@ -128,10 +129,42 @@ void main() {
           'whatsapp_status': 'accepted',
         },
         explicitStatus: 'outcome_unknown',
-        isWhatsApp: true,
+        isExternalTransport: true,
+        providerLabel: 'WhatsApp',
       );
 
       expect(state.stage, MessageDeliveryStage.accepted);
+    });
+
+    test('uses Instagram provider evidence without inferring a receipt', () {
+      final state = MessageDeliveryState.fromMessage(
+        whatsappMessage(
+          metadata: const {
+            'external_provider': 'instagram',
+            'external_status': 'delivered',
+          },
+        ),
+      );
+
+      expect(state.stage, MessageDeliveryStage.delivered);
+      expect(state.providerLabel, 'Instagram');
+    });
+
+    test('uses Messenger failure evidence and provider-specific copy', () {
+      final state = MessageDeliveryState.fromMessage(
+        whatsappMessage(
+          metadata: const {
+            'external_provider': 'facebook_messenger',
+            'external_status': 'failed',
+            'external_error_message': 'Ventana cerrada',
+          },
+        ),
+      );
+
+      expect(state.stage, MessageDeliveryStage.failed);
+      expect(state.providerLabel, 'Messenger');
+      expect(state.failureMessage, contains('Messenger'));
+      expect(state.failureMessage, contains('Ventana cerrada'));
     });
   });
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +11,7 @@ import '../../modules/crm/services/customer_service.dart';
 import '../../modules/messaging/models/conversation.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
 import '../../modules/messaging/utils/conversation_activity.dart';
+import '../../modules/messaging/utils/conversation_channel_presentation.dart';
 import '../../modules/messaging/utils/conversation_search.dart';
 import '../../modules/messaging/widgets/chat_window.dart';
 import '../../modules/messaging/widgets/conversation_tile.dart';
@@ -17,7 +19,17 @@ import '../../modules/messaging/widgets/new_chat_dialog.dart';
 import '../services/image_service.dart';
 import '../services/right_toolbar_service.dart';
 
-enum _MessageFilter { all, unread, whatsapp, clients, team }
+enum _MessageFilter {
+  all,
+  unread,
+  meta,
+  whatsapp,
+  instagram,
+  messenger,
+  web,
+  clients,
+  team,
+}
 
 class QuickMessagesPanel extends StatefulWidget {
   const QuickMessagesPanel({super.key});
@@ -319,46 +331,48 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   Widget _buildActionBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 8, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              'Mensajería',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
+      child: LayoutBuilder(
+        builder: (context, constraints) => Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Mensajería',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0,
+                    ),
+              ),
             ),
-          ),
-          _buildActiveModeMenu(),
-          const SizedBox(width: 2),
-          IconButton(
-            tooltip: 'Nuevo chat interno',
-            onPressed: _showNewChatDialog,
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.add_comment_outlined, size: 18),
-          ),
-          IconButton(
-            tooltip: 'Recargar',
-            onPressed: _isRefreshing ? null : _refresh,
-            visualDensity: VisualDensity.compact,
-            icon: _isRefreshing
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh, size: 20),
-          ),
-          IconButton(
-            tooltip: 'Abrir mensajería completa',
-            onPressed: () => _openFullChat(),
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.open_in_full, size: 18),
-          ),
-        ],
+            _buildActiveModeMenu(compact: constraints.maxWidth < 300),
+            const SizedBox(width: 2),
+            IconButton(
+              tooltip: 'Nuevo chat interno',
+              onPressed: _showNewChatDialog,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.add_comment_outlined, size: 18),
+            ),
+            IconButton(
+              tooltip: 'Recargar',
+              onPressed: _isRefreshing ? null : _refresh,
+              visualDensity: VisualDensity.compact,
+              icon: _isRefreshing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh, size: 20),
+            ),
+            IconButton(
+              tooltip: 'Abrir mensajería completa',
+              onPressed: () => _openFullChat(),
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.open_in_full, size: 18),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -387,11 +401,12 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     );
   }
 
-  Widget _buildActiveModeMenu() {
+  Widget _buildActiveModeMenu({bool compact = false}) {
     final colorScheme = Theme.of(context).colorScheme;
     return PopupMenuButton<bool>(
       initialValue: _showOnlyActiveChats,
       tooltip: 'Elegir alcance de la bandeja',
+      padding: EdgeInsets.zero,
       onSelected: (value) => unawaited(_setShowOnlyActiveChats(value)),
       itemBuilder: (context) => [
         _buildActiveModeMenuItem(
@@ -423,19 +438,21 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
               size: 15,
               color: colorScheme.primary,
             ),
-            const SizedBox(width: 5),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 140),
-              child: Text(
-                _showOnlyActiveChats ? 'Activos' : 'Historial',
-                key: ValueKey(_showOnlyActiveChats),
-                style: TextStyle(
-                  color: colorScheme.onSurface,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
+            if (!compact) ...[
+              const SizedBox(width: 5),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 140),
+                child: Text(
+                  _showOnlyActiveChats ? 'Activos' : 'Historial',
+                  key: ValueKey(_showOnlyActiveChats),
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-            ),
+            ],
             const SizedBox(width: 2),
             Icon(
               Icons.expand_more,
@@ -505,6 +522,14 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
           .length,
       _MessageFilter.whatsapp:
           visibleConversations.where((c) => c.isWhatsApp).length,
+      _MessageFilter.meta:
+          visibleConversations.where((c) => c.isMetaMessaging).length,
+      _MessageFilter.instagram:
+          visibleConversations.where((c) => c.isInstagram).length,
+      _MessageFilter.messenger:
+          visibleConversations.where((c) => c.isFacebookMessenger).length,
+      _MessageFilter.web:
+          visibleConversations.where((c) => c.isWebsitePortal).length,
       _MessageFilter.clients:
           visibleConversations.where((c) => c.isSupport).length,
       _MessageFilter.team:
@@ -523,119 +548,247 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
           bottom: BorderSide(color: colorScheme.outlineVariant),
         ),
       ),
-      child: Row(
-        children: [
-          PopupMenuButton<_MessageFilter>(
-            initialValue: _filter,
-            tooltip: 'Filtrar conversaciones',
-            onSelected: (filter) => setState(() => _filter = filter),
-            itemBuilder: (context) => _MessageFilter.values
-                .map(
-                  (filter) => PopupMenuItem<_MessageFilter>(
-                    value: filter,
-                    height: 42,
-                    child: Row(
-                      children: [
-                        Icon(
-                          _filterIcon(filter),
-                          size: 17,
-                          color: filter == _filter
-                              ? colorScheme.primary
-                              : colorScheme.onSurfaceVariant,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compactMenu = constraints.maxWidth < 300;
+          final showResultCount = constraints.maxWidth >= 360;
+
+          return Row(
+            children: [
+              PopupMenuButton<_MessageFilter>(
+                initialValue: _filter,
+                tooltip: 'Filtrar conversaciones',
+                padding: EdgeInsets.zero,
+                onSelected: (filter) => setState(() => _filter = filter),
+                itemBuilder: (context) => _MessageFilter.values
+                    .map(
+                      (filter) => PopupMenuItem<_MessageFilter>(
+                        value: filter,
+                        height: 42,
+                        child: Row(
+                          children: [
+                            _buildFilterGlyph(
+                              filter,
+                              size: 17,
+                              color: filter == _filter
+                                  ? _filterAccent(filter, colorScheme)
+                                  : colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _filterLabel(filter),
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  fontWeight: filter == _filter
+                                      ? FontWeight.w700
+                                      : FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '${counts[filter] ?? 0}',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (filter == _filter) ...[
+                              const SizedBox(width: 8),
+                              Icon(
+                                Icons.check,
+                                size: 16,
+                                color: colorScheme.primary,
+                              ),
+                            ],
+                          ],
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
+                      ),
+                    )
+                    .toList(),
+                child: Container(
+                  height: 32,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compactMenu ? 6 : 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Color.alphaBlend(
+                      colorScheme.primary.withValues(alpha: 0.055),
+                      colorScheme.surface,
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: colorScheme.outlineVariant),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildFilterGlyph(
+                        _filter,
+                        size: 16,
+                        color: _filterAccent(_filter, colorScheme),
+                      ),
+                      if (!compactMenu) ...[
+                        const SizedBox(width: 6),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 140),
                           child: Text(
-                            _filterLabel(filter),
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              fontWeight: filter == _filter
-                                  ? FontWeight.w700
-                                  : FontWeight.w600,
+                            _filterLabel(_filter),
+                            key: ValueKey(_filter),
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: colorScheme.onSurface,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
-                        Text(
-                          '${counts[filter] ?? 0}',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        const SizedBox(width: 6),
+                      ] else
+                        const SizedBox(width: 4),
+                      Text(
+                        '${counts[_filter] ?? 0}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
                         ),
-                        if (filter == _filter) ...[
-                          const SizedBox(width: 8),
-                          Icon(
-                            Icons.check,
-                            size: 16,
-                            color: colorScheme.primary,
-                          ),
-                        ],
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.expand_more,
+                        size: 16,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ],
                   ),
-                )
-                .toList(),
-            child: Container(
-              height: 32,
-              padding: const EdgeInsets.symmetric(horizontal: 9),
-              decoration: BoxDecoration(
-                color: Color.alphaBlend(
-                  colorScheme.primary.withValues(alpha: 0.055),
-                  colorScheme.surface,
                 ),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: colorScheme.outlineVariant),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _filterIcon(_filter),
-                    size: 16,
-                    color: colorScheme.primary,
-                  ),
-                  const SizedBox(width: 6),
-                  AnimatedSwitcher(
+              const SizedBox(width: 6),
+              _buildPlatformFilterButton(
+                key: const ValueKey('quick_messages_platform_whatsapp'),
+                filter: _MessageFilter.whatsapp,
+                label: 'WhatsApp',
+                icon: ConversationChannelPresentation.platformIconForChannel(
+                  'whatsapp',
+                ),
+                accent: ConversationChannelPresentation.whatsAppAccent,
+                count: counts[_MessageFilter.whatsapp] ?? 0,
+              ),
+              const SizedBox(width: 4),
+              _buildPlatformFilterButton(
+                key: const ValueKey('quick_messages_platform_instagram'),
+                filter: _MessageFilter.instagram,
+                label: 'Instagram',
+                icon: ConversationChannelPresentation.platformIconForChannel(
+                  'instagram',
+                ),
+                accent: ConversationChannelPresentation.instagramAccent,
+                count: counts[_MessageFilter.instagram] ?? 0,
+              ),
+              const SizedBox(width: 4),
+              _buildPlatformFilterButton(
+                key: const ValueKey('quick_messages_platform_messenger'),
+                filter: _MessageFilter.messenger,
+                label: 'Messenger',
+                icon: ConversationChannelPresentation.platformIconForChannel(
+                  'facebook_messenger',
+                ),
+                accent: ConversationChannelPresentation.facebookMessengerAccent,
+                count: counts[_MessageFilter.messenger] ?? 0,
+              ),
+              const SizedBox(width: 4),
+              _buildPlatformFilterButton(
+                key: const ValueKey('quick_messages_platform_web'),
+                filter: _MessageFilter.web,
+                label: 'Web',
+                icon: ConversationChannelPresentation.platformIconForChannel(
+                  'website_portal',
+                ),
+                accent: ConversationChannelPresentation.websiteAccent,
+                count: counts[_MessageFilter.web] ?? 0,
+              ),
+              if (showResultCount) ...[
+                const Spacer(),
+                Flexible(
+                  child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 140),
                     child: Text(
-                      _filterLabel(_filter),
-                      key: ValueKey(_filter),
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: colorScheme.onSurface,
-                        fontWeight: FontWeight.w700,
+                      '$resultCount ${resultCount == 1 ? 'resultado' : 'resultados'}',
+                      key: ValueKey('$resultCount-$_filter-$_searchTerm'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant
+                            .withValues(alpha: 0.78),
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${counts[_filter] ?? 0}',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  Icon(
-                    Icons.expand_more,
-                    size: 16,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ],
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPlatformFilterButton({
+    required Key key,
+    required _MessageFilter filter,
+    required String label,
+    required IconData icon,
+    required Color accent,
+    required int count,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selected = _filter == filter;
+    final background = selected
+        ? Color.alphaBlend(
+            accent.withValues(alpha: 0.12),
+            colorScheme.surface,
+          )
+        : colorScheme.surface;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'Filtrar por $label',
+      value: '$count ${count == 1 ? 'conversación' : 'conversaciones'}',
+      child: Tooltip(
+        message: 'Filtrar por $label',
+        excludeFromSemantics: true,
+        waitDuration: const Duration(milliseconds: 350),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(
+              color: selected
+                  ? accent.withValues(alpha: 0.58)
+                  : colorScheme.outlineVariant.withValues(alpha: 0.8),
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(7),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: key,
+              borderRadius: BorderRadius.circular(7),
+              onTap: () => setState(
+                () => _filter = selected ? _MessageFilter.all : filter,
+              ),
+              child: Center(
+                child: FaIcon(
+                  icon,
+                  size: 16,
+                  color: selected ? accent : accent.withValues(alpha: 0.88),
+                ),
               ),
             ),
           ),
-          const Spacer(),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 140),
-            child: Text(
-              '$resultCount ${resultCount == 1 ? 'resultado' : 'resultados'}',
-              key: ValueKey('$resultCount-$_filter-$_searchTerm'),
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.78),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -644,7 +797,11 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     return switch (filter) {
       _MessageFilter.all => 'Todos',
       _MessageFilter.unread => 'Sin leer',
+      _MessageFilter.meta => 'Meta',
       _MessageFilter.whatsapp => 'WhatsApp',
+      _MessageFilter.instagram => 'Instagram',
+      _MessageFilter.messenger => 'Messenger',
+      _MessageFilter.web => 'Web',
       _MessageFilter.clients => 'Clientes',
       _MessageFilter.team => 'Equipo',
     };
@@ -654,9 +811,55 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     return switch (filter) {
       _MessageFilter.all => Icons.inbox_outlined,
       _MessageFilter.unread => Icons.mark_chat_unread_outlined,
-      _MessageFilter.whatsapp => Icons.phone_in_talk_outlined,
+      _MessageFilter.meta =>
+        ConversationChannelPresentation.platformIconForChannel(
+          'facebook_messenger',
+        ),
+      _MessageFilter.whatsapp =>
+        ConversationChannelPresentation.platformIconForChannel('whatsapp'),
+      _MessageFilter.instagram =>
+        ConversationChannelPresentation.platformIconForChannel('instagram'),
+      _MessageFilter.messenger =>
+        ConversationChannelPresentation.platformIconForChannel(
+          'facebook_messenger',
+        ),
+      _MessageFilter.web =>
+        ConversationChannelPresentation.platformIconForChannel(
+          'website_portal',
+        ),
       _MessageFilter.clients => Icons.person_outline,
       _MessageFilter.team => Icons.groups_outlined,
+    };
+  }
+
+  Widget _buildFilterGlyph(
+    _MessageFilter filter, {
+    required double size,
+    required Color color,
+  }) {
+    final icon = _filterIcon(filter);
+    return switch (filter) {
+      _MessageFilter.meta ||
+      _MessageFilter.whatsapp ||
+      _MessageFilter.instagram ||
+      _MessageFilter.messenger ||
+      _MessageFilter.web =>
+        FaIcon(icon, size: size, color: color),
+      _ => Icon(icon, size: size, color: color),
+    };
+  }
+
+  Color _filterAccent(_MessageFilter filter, ColorScheme colorScheme) {
+    return switch (filter) {
+      _MessageFilter.meta =>
+        ConversationChannelPresentation.facebookMessengerAccent,
+      _MessageFilter.whatsapp => ConversationChannelPresentation.whatsAppAccent,
+      _MessageFilter.instagram =>
+        ConversationChannelPresentation.instagramAccent,
+      _MessageFilter.messenger =>
+        ConversationChannelPresentation.facebookMessengerAccent,
+      _MessageFilter.web => ConversationChannelPresentation.websiteAccent,
+      _ => colorScheme.primary,
     };
   }
 
@@ -938,7 +1141,11 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
       _MessageFilter.all => true,
       _MessageFilter.unread => conversation.unreadCount > 0 ||
           (conversation.isSupport && conversation.status == 'pending'),
+      _MessageFilter.meta => conversation.isMetaMessaging,
       _MessageFilter.whatsapp => conversation.isWhatsApp,
+      _MessageFilter.instagram => conversation.isInstagram,
+      _MessageFilter.messenger => conversation.isFacebookMessenger,
+      _MessageFilter.web => conversation.isWebsitePortal,
       _MessageFilter.clients => conversation.isSupport,
       _MessageFilter.team => conversation.isInternal,
     };
@@ -1141,7 +1348,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     final subtitle = activeModeEmpty
         ? 'Desactiva "Solo activos" para ver el historial completo.'
         : isTotallyEmpty
-            ? 'Los chats internos, web y WhatsApp de clientes aparecerán aquí.'
+            ? 'Los chats internos, web, WhatsApp, Instagram y Messenger aparecerán aquí.'
             : 'Prueba con otro filtro o limpia la búsqueda.';
 
     return ListView(

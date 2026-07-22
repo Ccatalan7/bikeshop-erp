@@ -9,8 +9,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   filterMerchantProductsByCheckoutTax,
+  isVerifiableMerchantBrand,
   resolveMerchantAvailability,
   resolveMerchantIdentifiers,
+  resolveMerchantPrice,
 } from "../_shared/google_merchant_feed.ts";
 import { publicProductUrl } from "../_shared/product_url.ts";
 import { mergeCanonicalAvailableQuantities } from "../_shared/product_availability.ts";
@@ -166,6 +168,7 @@ serve(async (req) => {
         track_stock,
         is_set,
         image_url,
+        image_url_optimized,
         website_image_url,
         website_image_url_optimized,
         image_urls,
@@ -191,7 +194,6 @@ serve(async (req) => {
       .eq("lifecycle_status", "active")
       .eq("product_type", "product")
       .in("tax_rate", [0, 0.19, 19])
-      .gt("price", 0)
       .order("name");
 
     if (productsError) {
@@ -227,33 +229,50 @@ serve(async (req) => {
       categoriesMap = new Map((categories || []).map((c) => [c.id, c.full_path]));
     }
 
-    // Step 6: Hydrate reservation-aware availability before publishing.
+    // Step 6: Keep only products whose effective storefront data is eligible.
     const feedCandidates = filterMerchantProductsByCheckoutTax(
       (products || []) as MerchantProduct[],
     )
-      .filter((p) => productImageUrls(p).length > 0);
-    const availabilityRows: Array<Record<string, unknown>> = [];
-    for (let index = 0; index < feedCandidates.length; index += 500) {
-      const batch = feedCandidates.slice(index, index + 500);
-      const { data, error } = await supabase.rpc(
-        "get_product_available_quantities",
-        {
+      .filter((p) => resolveMerchantPrice(p) !== null)
+      .filter((p) => productImageUrls(p).length > 0)
+      .filter((p) => isVerifiableMerchantBrand(resolveMerchantBrand(p, brandsMap)));
+
+    // The public catalog RPC subtracts live online-order reservations and
+    // enforces the same stock visibility policy as the landing pages. Omit
+    // unavailable products conservatively: otherwise Merchant could follow an
+    // out-of-stock offer to a landing page that the storefront resolves as
+    // "Producto no encontrado" under the current available-only policy.
+    let validProducts: MerchantProduct[] = [];
+    if (feedCandidates.length > 0) {
+      const { data: publicProducts, error: publicProductsError } = await supabase
+        .rpc("get_public_products", {
           p_tenant_id: tenantId,
-          p_product_ids: batch.map((product) => product.id),
-        },
-      );
-      if (error) {
-        console.error("Product availability error:", error);
-        throw error;
+          p_product_ids: feedCandidates.map((product) => product.id),
+          p_only_in_stock: true,
+          p_sort_by: "name",
+          p_limit: feedCandidates.length,
+          p_offset: 0,
+        });
+
+      if (publicProductsError) {
+        console.error("Public availability error:", publicProductsError);
+        throw publicProductsError;
       }
-      availabilityRows.push(
-        ...((data || []) as unknown as Array<Record<string, unknown>>),
+
+      const availableIds = new Set(
+        (publicProducts || []).map((product: { id: unknown }) => String(product.id)),
       );
+      validProducts = mergeCanonicalAvailableQuantities(
+        feedCandidates.filter((product) => availableIds.has(product.id)),
+        (publicProducts || []).map(
+          (product: { id: unknown; stock_quantity?: unknown }) => ({
+            product_id: product.id,
+            available_quantity: product.stock_quantity,
+          }),
+        ),
+      )
+        .filter((product) => resolveMerchantAvailability(product) === "in_stock");
     }
-    const validProducts = mergeCanonicalAvailableQuantities(
-      feedCandidates,
-      availabilityRows,
-    );
 
     // Step 7: Generate XML feed
     const feed = `<?xml version="1.0" encoding="UTF-8"?>
@@ -331,7 +350,7 @@ function generateProductItem(
 
     description = `${title}. ${
       description ? description + ". " : ""
-    }Producto de la marca ${brand}, categoría ${category}. Disponible en ${storeName}, tu tienda de bicicletas y accesorios en Chile. Envíos a todo el país.`;
+    }Producto de la marca ${brand}, categoría ${category}. Disponible en ${storeName}, tu tienda de bicicletas y accesorios en Chile. Envíos a Chile continental.`;
   }
   // Ensure minimum 150 chars
   while (description.length < 150) {
@@ -340,20 +359,20 @@ function generateProductItem(
 
   // Price with currency (default CLP)
   const currency = product.price_currency || "CLP";
-  const effectivePrice = product.website_price ?? product.price;
+  const effectivePrice = resolveMerchantPrice(product);
+  if (effectivePrice === null) {
+    throw new Error(`Merchant product ${product.id} has no positive storefront price`);
+  }
   const price = `${Math.round(effectivePrice)} ${currency}`;
 
   // Availability based on stock
   const availability = resolveMerchantAvailability(product);
 
-  // Brand resolution: brand_id → brands table → product.brand → store name
-  let brand = firstNonEmpty(product.website_merchant_brand);
-  if (!brand && product.brand_id && brandsMap.has(product.brand_id)) {
-    brand = brandsMap.get(product.brand_id)!;
-  } else if (!brand && product.brand) {
-    brand = product.brand;
-  } else if (!brand) {
-    brand = storeName;
+  // Never invent the retailer as a manufacturer. Eligibility already requires
+  // an explicit Merchant, linked catalog, or product brand.
+  const brand = resolveMerchantBrand(product, brandsMap);
+  if (!brand) {
+    throw new Error(`Merchant product ${product.id} has no explicit brand`);
   }
 
   // Category path from categories table
@@ -480,6 +499,18 @@ function firstNonEmpty(...values: Array<string | null | undefined>): string {
     if (text.length > 0) return text;
   }
   return "";
+}
+
+function resolveMerchantBrand(
+  product: MerchantProduct,
+  brandsMap: Map<string, string>,
+): string {
+  const explicit = firstNonEmpty(product.website_merchant_brand);
+  if (explicit) return explicit;
+  if (product.brand_id && brandsMap.has(product.brand_id)) {
+    return firstNonEmpty(brandsMap.get(product.brand_id));
+  }
+  return firstNonEmpty(product.brand);
 }
 
 function productImageUrls(product: MerchantProduct): string[] {

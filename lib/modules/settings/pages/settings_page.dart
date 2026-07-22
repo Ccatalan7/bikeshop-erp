@@ -119,6 +119,12 @@ class _SettingsPageState extends State<SettingsPage> {
             route: '/settings/whatsapp',
           ),
           _SettingsEntry(
+            icon: Icons.camera_alt_outlined,
+            title: 'Instagram y Messenger',
+            subtitle: 'Conexión, permisos y estado de canales Meta',
+            route: '/settings/meta',
+          ),
+          _SettingsEntry(
             icon: Icons.notifications_outlined,
             title: 'Notificaciones',
             subtitle: 'Preferencias del dispositivo y pruebas',

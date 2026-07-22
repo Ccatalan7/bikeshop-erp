@@ -52,4 +52,21 @@ void main() {
     expect(service, contains('_initializingFuture'));
     expect(service, contains('_desktopMessagesAuthUserId'));
   });
+
+  test('online-order routes preserve exact durable read semantics', () {
+    final router = File('lib/shared/routes/app_router.dart').readAsStringSync();
+    final ordersPage = File(
+      'lib/modules/website/pages/online_orders_page.dart',
+    ).readAsStringSync();
+    final layout =
+        File('lib/shared/widgets/main_layout.dart').readAsStringSync();
+
+    expect(router, contains("state.uri.queryParameters['order']"));
+    expect(router, contains('initialOrderId: initialOrderId'));
+    expect(ordersPage, contains('this.initialOrderId'));
+    expect(ordersPage, contains('didUpdateWidget'));
+    expect(ordersPage, contains('markOnlineOrderAlertReadForOrder'));
+    expect(ordersPage, contains('_openInitialOrderWhenAvailable'));
+    expect(layout, contains('_resolveWebsiteMenuRoute'));
+  });
 }

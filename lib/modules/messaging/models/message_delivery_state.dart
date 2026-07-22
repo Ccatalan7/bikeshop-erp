@@ -1,6 +1,6 @@
 import 'message.dart';
 
-/// Provider-confirmed delivery state for an outbound WhatsApp message.
+/// Provider-confirmed delivery state for an outbound external message.
 ///
 /// A later customer reply is deliberately not considered proof that an older
 /// message was read. Only the status persisted from the provider webhook may
@@ -20,39 +20,46 @@ class MessageDeliveryState {
   const MessageDeliveryState({
     required this.stage,
     this.failureMessage,
+    this.providerLabel,
   });
 
   final MessageDeliveryStage stage;
   final String? failureMessage;
+  final String? providerLabel;
 
   bool get isVisible => stage != MessageDeliveryStage.none;
 
   static MessageDeliveryState fromMessage(Message message) {
+    final providerLabel = _providerLabel(message.metadata);
     return fromValues(
       metadata: message.metadata,
       explicitStatus: message.metadata['external_status']?.toString(),
-      isWhatsApp: _isWhatsAppMetadata(message.metadata),
+      isExternalTransport: providerLabel != null,
+      providerLabel: providerLabel,
     );
   }
 
   static MessageDeliveryState fromConversationPreview({
     required Map<String, dynamic> metadata,
     required String? explicitStatus,
-    required bool isWhatsApp,
+    required bool isExternalTransport,
+    required String providerLabel,
   }) {
     return fromValues(
       metadata: metadata,
       explicitStatus: explicitStatus,
-      isWhatsApp: isWhatsApp,
+      isExternalTransport: isExternalTransport,
+      providerLabel: providerLabel,
     );
   }
 
   static MessageDeliveryState fromValues({
     required Map<String, dynamic> metadata,
     required String? explicitStatus,
-    required bool isWhatsApp,
+    required bool isExternalTransport,
+    String? providerLabel,
   }) {
-    if (!isWhatsApp) {
+    if (!isExternalTransport) {
       return const MessageDeliveryState(stage: MessageDeliveryStage.none);
     }
 
@@ -72,8 +79,10 @@ class MessageDeliveryState {
 
     return MessageDeliveryState(
       stage: stage,
+      providerLabel: providerLabel,
       failureMessage: switch (stage) {
-        MessageDeliveryStage.failed => _failureMessage(metadata),
+        MessageDeliveryStage.failed =>
+          _failureMessage(metadata, providerLabel: providerLabel),
         MessageDeliveryStage.outcomeUnknown =>
           'Resultado incierto: verifica la conversación antes de reenviar.',
         _ => null,
@@ -81,14 +90,20 @@ class MessageDeliveryState {
     );
   }
 
-  static bool _isWhatsAppMetadata(Map<String, dynamic> metadata) {
+  static String? _providerLabel(Map<String, dynamic> metadata) {
     final provider = metadata['external_provider']?.toString().toLowerCase() ??
         metadata['provider']?.toString().toLowerCase();
     final channel = metadata['channel']?.toString().toLowerCase();
     final externalId = metadata['external_message_id']?.toString();
-    return provider == 'whatsapp' ||
-        channel == 'whatsapp' ||
-        externalId?.startsWith('wamid.') == true;
+    final resolved = provider ?? channel;
+    return switch (resolved) {
+      'whatsapp' => 'WhatsApp',
+      'instagram' => 'Instagram',
+      'facebook_messenger' => 'Messenger',
+      _ when externalId?.startsWith('wamid.') == true => 'WhatsApp',
+      _ when externalId?.trim().isNotEmpty == true => 'el proveedor',
+      _ => null,
+    };
   }
 
   static String? _strongestConfirmedStatus(
@@ -99,6 +114,7 @@ class MessageDeliveryState {
       explicitStatus,
       metadata['external_status']?.toString(),
       metadata['whatsapp_status']?.toString(),
+      metadata['meta_status']?.toString(),
     ];
 
     String? strongestPositive;
@@ -139,14 +155,18 @@ class MessageDeliveryState {
                 : null);
   }
 
-  static String _failureMessage(Map<String, dynamic> metadata) {
+  static String _failureMessage(
+    Map<String, dynamic> metadata, {
+    String? providerLabel,
+  }) {
     final raw = metadata['external_error_message'] ??
         metadata['error_message'] ??
         metadata['error'];
     final detail = raw?.toString().trim();
+    final provider = providerLabel ?? 'El proveedor';
     if (detail == null || detail.isEmpty) {
-      return 'WhatsApp no pudo entregar este mensaje.';
+      return '$provider no pudo entregar este mensaje.';
     }
-    return 'WhatsApp no pudo entregar este mensaje: $detail';
+    return '$provider no pudo entregar este mensaje: $detail';
   }
 }

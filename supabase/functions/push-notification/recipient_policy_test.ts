@@ -3,7 +3,10 @@ import {
   isSilentMessagingRow,
   resolveMessagingRecipientIds,
 } from "./recipient_policy.ts";
-import type { PushConversation, PushMessageRecord } from "./recipient_policy.ts";
+import type {
+  PushConversation,
+  PushMessageRecord,
+} from "./recipient_policy.ts";
 
 function assertEquals(actual: unknown, expected: unknown, message: string) {
   const actualJson = JSON.stringify(actual);
@@ -192,5 +195,19 @@ Deno.test("FCM data retains stable database message and conversation ids", () =>
     data.route,
     `/chat?conversation=${record.conversation_id}`,
     "route must open canonical chat",
+  );
+});
+
+Deno.test("Meta push data uses a provider-specific external sender id", () => {
+  const record = message({
+    sender_id: null,
+    external_provider: "instagram",
+    message_direction: "inbound",
+  });
+  const data = buildMessagingPushData(record, "Instagram • A1B2C3", "Hola");
+  assertEquals(
+    data.sender_id,
+    "external_instagram",
+    "Meta sender fallback must not be mislabeled as WhatsApp",
   );
 });

@@ -1224,7 +1224,7 @@ class WebsiteBlockRegistry {
         'title': 'Partners',
         'imageUrl': null,
         'items': [
-          {'label': 'Envíos a todo Chile'},
+          {'label': 'Envíos a Chile continental'},
           {'label': 'Marcas líderes'},
           {'label': 'Servicio técnico certificado'},
         ],

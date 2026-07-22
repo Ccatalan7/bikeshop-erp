@@ -75,6 +75,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         POSReceiptPage,
         PageManagementPage,
         PaymentMethodsSettingsPage,
+        MetaSettingsPage,
         WhatsAppSettingsPage,
         PaymentsPage,
         PegasTablePage,
@@ -2365,6 +2366,19 @@ class AppRouter {
           ),
         ),
         GoRoute(
+          path: '/settings/meta',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            // Deferred page classes cannot be constructed with const.
+            // ignore: prefer_const_constructors
+            () => MainLayout(
+              child: erp.MetaSettingsPage(),
+            ),
+          ),
+        ),
+        GoRoute(
           path: '/settings/payment-methods',
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
@@ -2626,13 +2640,15 @@ class AppRouter {
             // Online Orders
             GoRoute(
               path: 'orders',
-              pageBuilder: (context, state) =>
-                  _buildDeferredPageWithNoTransition(
-                context,
-                state,
-                erp.loadLibrary(),
-                () => erp.OnlineOrdersPage(),
-              ),
+              pageBuilder: (context, state) {
+                final initialOrderId = state.uri.queryParameters['order'];
+                return _buildDeferredPageWithNoTransition(
+                  context,
+                  state,
+                  erp.loadLibrary(),
+                  () => erp.OnlineOrdersPage(initialOrderId: initialOrderId),
+                );
+              },
             ),
             // Website Settings
             GoRoute(

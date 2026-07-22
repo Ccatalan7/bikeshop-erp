@@ -1,13 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../modules/mail/providers/email_provider.dart';
 import '../../modules/mail/providers/mail_account_manager.dart';
 import '../../modules/messaging/models/conversation.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
+import '../../modules/messaging/utils/conversation_channel_presentation.dart';
 import '../../modules/storage/models/app_stored_file.dart';
 import '../../modules/storage/services/app_file_storage_service.dart';
 import '../models/notification_digest.dart';
@@ -15,6 +18,7 @@ import '../services/notification_service.dart';
 import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
 import '../utils/chilean_utils.dart';
+import '../utils/trusted_meta_notification_url.dart';
 
 /// Opens the operational briefing as a slide-in panel.
 Future<void> showNotificationsPanel(BuildContext context) {
@@ -359,6 +363,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
       )?.toLocal();
       if (createdAt == null || !digest.contains(createdAt)) continue;
       final type = row['type']?.toString() ?? '';
+      final platformKey = _platformKeyForNotificationType(type);
       items.add(
         _BriefingActivityItem(
           title: row['title']?.toString() ?? 'Actividad',
@@ -372,6 +377,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
           kind: _kindForNotificationType(type),
           unread: row['read_at'] == null,
           notificationId: row['id']?.toString(),
+          platformKey: platformKey,
         ),
       );
     }
@@ -409,13 +415,21 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
               ? conversation.channelLabel
               : message,
           createdAt: lastMessageAt,
-          route: '/chat',
-          icon: Icons.chat_bubble_outline,
-          accent: _chatAccent,
+          route: Uri(
+            path: '/chat',
+            queryParameters: {'conversation': conversation.id},
+          ).toString(),
+          icon: ConversationChannelPresentation.icon(conversation),
+          accent: ConversationChannelPresentation.accent(conversation),
           kind: _BriefingActivityKind.chat,
           unread: conversation.unreadCount > 0 ||
               (conversation.type == 'support' &&
                   conversation.status == 'pending'),
+          platformKey: ConversationChannelPresentation.usesPlatformGlyph(
+            conversation.channel,
+          )
+              ? conversation.channel
+              : null,
         ),
       );
     }
@@ -1606,7 +1620,16 @@ class _ActivityRow extends StatelessWidget {
                         ),
                       ),
                       alignment: Alignment.center,
-                      child: Icon(item.icon, size: 14, color: item.accent),
+                      child: item.platformKey == null
+                          ? Icon(item.icon, size: 14, color: item.accent)
+                          : FaIcon(
+                              ConversationChannelPresentation
+                                  .platformIconForChannel(
+                                item.platformKey,
+                              ),
+                              size: 14,
+                              color: item.accent,
+                            ),
                     ),
                   ),
                 ],
@@ -1768,6 +1791,7 @@ class _BriefingActivityItem {
     required this.kind,
     required this.unread,
     this.notificationId,
+    this.platformKey,
   });
 
   final String title;
@@ -1779,9 +1803,34 @@ class _BriefingActivityItem {
   final _BriefingActivityKind kind;
   final bool unread;
   final String? notificationId;
+  final String? platformKey;
 }
 
 void _navigateToRoute(BuildContext context, String route) {
+  final trustedExternalUri = trustedMetaNotificationUrl(route);
+  if (trustedExternalUri != null) {
+    unawaited(
+      launchUrl(
+        trustedExternalUri,
+        mode: LaunchMode.externalApplication,
+      ).then<void>(
+        (opened) {
+          if (!opened && context.mounted) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+              const SnackBar(
+                content: Text('No se pudo abrir la interacción de Meta.'),
+              ),
+            );
+          }
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          debugPrint('No se pudo abrir la interacción de Meta: $error');
+        },
+      ),
+    );
+    return;
+  }
+
   try {
     context.read<WorkspaceManager>().navigateActiveWorkspaceFromSharedLink(
           route,
@@ -1792,6 +1841,14 @@ void _navigateToRoute(BuildContext context, String route) {
 }
 
 IconData _iconForNotificationType(String type) {
+  if (type.startsWith('meta_instagram_')) {
+    return ConversationChannelPresentation.iconForChannel('instagram');
+  }
+  if (type.startsWith('meta_facebook_')) {
+    return ConversationChannelPresentation.iconForChannel(
+      'facebook_messenger',
+    );
+  }
   switch (type) {
     case 'mechanic_job_created':
       return Icons.build_outlined;
@@ -1804,6 +1861,12 @@ IconData _iconForNotificationType(String type) {
     default:
       return Icons.notifications_outlined;
   }
+}
+
+String? _platformKeyForNotificationType(String type) {
+  if (type.startsWith('meta_instagram_')) return 'instagram';
+  if (type.startsWith('meta_facebook_')) return 'facebook';
+  return null;
 }
 
 _BriefingActivityKind _kindForNotificationType(String type) {
@@ -1820,6 +1883,12 @@ _BriefingActivityKind _kindForNotificationType(String type) {
 }
 
 Color _accentForNotificationType(String type) {
+  if (type.startsWith('meta_instagram_')) {
+    return ConversationChannelPresentation.instagramAccent;
+  }
+  if (type.startsWith('meta_facebook_')) {
+    return ConversationChannelPresentation.facebookMessengerAccent;
+  }
   switch (type) {
     case 'mechanic_job_created':
       return _jobsAccent;

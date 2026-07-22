@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/conversation.dart';
 import '../models/message_delivery_state.dart';
 import '../providers/chat_provider.dart';
+import '../utils/conversation_channel_presentation.dart';
 import '../../../shared/services/route_share_service.dart';
 import '../../../shared/services/image_service.dart';
 import 'message_delivery_indicator.dart';
@@ -95,7 +96,10 @@ class _ConversationTileState extends State<ConversationTile> {
     final title = widget.titleOverride ?? projection.title;
     final hasUnread = conv.unreadCount > 0;
     final isPending = conv.status == 'pending';
-    final accentColor = _channelColor(conv, isPending);
+    final accentColor = ConversationChannelPresentation.accent(
+      conv,
+      isPending: isPending,
+    );
     const unreadColor = Color(0xFF16A34A);
     final timeColor = hasUnread
         ? unreadColor
@@ -300,7 +304,7 @@ class _ConversationTileState extends State<ConversationTile> {
               ),
             ),
             child: Icon(
-              _channelIcon(conv),
+              ConversationChannelPresentation.icon(conv),
               size: 12,
               color: accentColor,
             ),
@@ -628,7 +632,8 @@ class _ConversationTileState extends State<ConversationTile> {
       state: MessageDeliveryState.fromConversationPreview(
         metadata: conv.lastMessageMetadata,
         explicitStatus: conv.lastMessageExternalStatus,
-        isWhatsApp: conv.isWhatsApp,
+        isExternalTransport: conv.usesExternalMessagingTransport,
+        providerLabel: conv.shortChannelLabel,
       ),
     );
   }
@@ -682,19 +687,6 @@ class _ConversationTileState extends State<ConversationTile> {
       return 'Tú: $preview';
     }
     return preview;
-  }
-
-  IconData _channelIcon(Conversation conv) {
-    if (conv.isWhatsApp) return Icons.phone_in_talk_outlined;
-    if (conv.isWebsitePortal) return Icons.language_outlined;
-    return Icons.people_outline;
-  }
-
-  Color _channelColor(Conversation conv, bool isPending) {
-    if (isPending) return const Color(0xFFD97706);
-    if (conv.isWhatsApp) return const Color(0xFF047857);
-    if (conv.isWebsitePortal) return const Color(0xFF0F4C81);
-    return const Color(0xFF475569);
   }
 
   String _initialsFor(String title) {

@@ -187,6 +187,7 @@ class _PublicPolicyView extends StatelessWidget {
     return (value ?? '')
         .toString()
         .replaceAll('vinabikechile@gmail.com', 'contacto@vinabike.cl')
+        .replaceAll(r'\n', '\n')
         .replaceAll(RegExp(r'[ \t]+'), ' ')
         .trim();
   }

@@ -11737,7 +11737,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     _storeNameController.text = service.getSetting('store_name', '');
     _logoUrlController.text = service.getSetting('logo_url', '');
     _topBannerController.text =
-        service.getSetting('top_banner_text', 'Envíos a todo Chile');
+        service.getSetting('top_banner_text', 'Envíos a Chile continental');
     _headerBgColorController.text =
         service.getSetting('header_bg_color', '#FFFFFF');
 

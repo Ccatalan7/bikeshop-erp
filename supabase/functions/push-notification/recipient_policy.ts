@@ -135,7 +135,10 @@ export function buildMessagingPushData(
     id: record.id,
     message_id: record.id,
     conversation_id: record.conversation_id,
-    sender_id: record.sender_id || "external_whatsapp",
+    sender_id: record.sender_id ||
+      (record.external_provider
+        ? `external_${record.external_provider}`
+        : "external_support"),
     sender_name: senderName,
     title: senderName,
     body,

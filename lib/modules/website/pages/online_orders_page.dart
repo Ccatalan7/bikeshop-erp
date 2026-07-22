@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../../../shared/services/notification_service.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/interactive_table_field.dart';
 import '../../../shared/widgets/modern_context_menu.dart';
@@ -20,9 +21,11 @@ class OnlineOrdersPage extends StatefulWidget {
   const OnlineOrdersPage({
     super.key,
     this.embedded = false,
+    this.initialOrderId,
   });
 
   final bool embedded;
+  final String? initialOrderId;
 
   @override
   State<OnlineOrdersPage> createState() => _OnlineOrdersPageState();
@@ -52,6 +55,8 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
   String _searchTerm = '';
   String _sortKey = 'created';
   bool _sortAscending = false;
+  String? _lastMarkedAlertOrderId;
+  String? _lastOpenedInitialOrderId;
 
   Future<void> _handleCancellation(
     OnlineOrder order,
@@ -256,9 +261,57 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
   @override
   void initState() {
     super.initState();
+    _markNotificationReadForOrder(widget.initialOrderId);
     // Lazy load orders when this page opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       context.read<WebsiteService>().initializeOrders();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant OnlineOrdersPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialOrderId == widget.initialOrderId) return;
+    _lastOpenedInitialOrderId = null;
+    _markNotificationReadForOrder(widget.initialOrderId);
+  }
+
+  void _markNotificationReadForOrder(String? orderId) {
+    final trimmedOrderId = orderId?.trim();
+    if (trimmedOrderId == null ||
+        trimmedOrderId.isEmpty ||
+        trimmedOrderId == _lastMarkedAlertOrderId) {
+      return;
+    }
+    _lastMarkedAlertOrderId = trimmedOrderId;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationService().markOnlineOrderAlertReadForOrder(trimmedOrderId);
+    });
+  }
+
+  void _openInitialOrderWhenAvailable(List<OnlineOrder> orders) {
+    final orderId = widget.initialOrderId?.trim();
+    if (orderId == null ||
+        orderId.isEmpty ||
+        orderId == _lastOpenedInitialOrderId) {
+      return;
+    }
+
+    OnlineOrder? matchingOrder;
+    for (final order in orders) {
+      if (order.id == orderId) {
+        matchingOrder = order;
+        break;
+      }
+    }
+    if (matchingOrder == null) return;
+
+    _lastOpenedInitialOrderId = orderId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || widget.initialOrderId?.trim() != orderId) return;
+      _showOrderInspector(matchingOrder!);
     });
   }
 
@@ -361,6 +414,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final websiteService = context.watch<WebsiteService>();
+    _openInitialOrderWhenAvailable(websiteService.orders);
 
     final query = _searchTerm.trim().toLowerCase();
     final orders = websiteService.orders.where((order) {

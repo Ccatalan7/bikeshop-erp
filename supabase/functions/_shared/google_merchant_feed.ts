@@ -1,8 +1,5 @@
 import { hasSupportedEcommerceTaxRate } from "./ecommerce_tax.ts";
-import {
-  isProductAvailable,
-  type ProductAvailabilityFields,
-} from "./product_availability.ts";
+import { isProductAvailable, type ProductAvailabilityFields } from "./product_availability.ts";
 
 type MerchantIdentifierFields = {
   sku?: string | null;
@@ -17,7 +14,10 @@ export type MerchantIdentifiers = {
   mpn: string;
 };
 
-type MerchantAvailabilityFields = ProductAvailabilityFields;
+type MerchantPriceFields = {
+  price?: unknown;
+  website_price?: unknown;
+};
 
 /**
  * Merchant may advertise only products the public checkout can actually sell.
@@ -51,9 +51,32 @@ export function resolveMerchantIdentifiers(
 
 /** Keep Merchant availability aligned with the public storefront contract. */
 export function resolveMerchantAvailability(
-  product: MerchantAvailabilityFields,
+  product: ProductAvailabilityFields,
 ): "in_stock" | "out_of_stock" {
   return isProductAvailable(product) ? "in_stock" : "out_of_stock";
+}
+
+/** Resolve the exact positive price rendered by the public storefront. */
+export function resolveMerchantPrice(
+  product: MerchantPriceFields,
+): number | null {
+  const price = Number(product.website_price ?? product.price);
+  return Number.isFinite(price) && price > 0 ? price : null;
+}
+
+/**
+ * Require a factual manufacturer/brand, not a marketplace, origin country, or
+ * generic placeholder recorded in a legacy catalog field.
+ */
+export function isVerifiableMerchantBrand(value: unknown): boolean {
+  const normalized = String(value ?? "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (!normalized) return false;
+  return !new Set(["generico", "generic", "china", "taiwan", "aliexpress"])
+    .has(normalized);
 }
 
 function firstNonEmpty(...values: Array<string | null | undefined>): string {

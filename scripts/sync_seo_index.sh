@@ -449,18 +449,6 @@ cat > "$INDEX_FILE" << HEREDOC
       }
     }
 
-    /* Visually hidden SEO content (for Merchant Center bots) */
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      border: 0;
-      white-space: nowrap;
-    }
   </style>
   
   <!-- JSON-LD Structured Data for LocalBusiness -->
@@ -554,33 +542,63 @@ cat > "$INDEX_FILE" << HEREDOC
       alt="$BUSINESS_NAME"
     />
     
-    <!-- SEO Content (Visually Hidden for Merchant Center bots) -->
-    <div class="sr-only">
-      <h1>$BUSINESS_NAME - Tienda de Bicicletas en $ADDRESS_CITY</h1>
-      <p>$META_DESCRIPTION</p>
-      
-      <!-- Navigation -->
-      <nav>
-        <a href="/productos">Productos</a>
-        <a href="/servicios">Servicios</a>
-        <a href="/contacto">Contacto</a>
-      </nav>
-      
-      <!-- Business Contact Info -->
-      <address>
-        <p>Dirección: $FULL_ADDRESS</p>
-        <p>Teléfono: $PHONE</p>
-        <p>Email: $EMAIL</p>
-      </address>
-      
-      <!-- Legal Links (Required by Google Merchant Center) -->
-      <footer>
-        <a href="$REFUND_URL">Política de Reembolso</a>
-        <a href="$TERMS_URL">Términos y Condiciones</a>
-        <a href="$SHIPPING_URL">Política de Envíos</a>
-        <a href="$PRIVACY_URL">Política de Privacidad</a>
-      </footer>
-    </div>
+    <noscript id="storefront-nojs-fallback">
+      <style>
+        #app-shell {
+          position: static;
+          min-height: 100vh;
+          box-sizing: border-box;
+          overflow-y: auto;
+          flex-direction: column;
+          gap: 24px;
+          padding: 24px;
+        }
+
+        #loading-logo {
+          width: 120px;
+          height: 120px;
+          animation: none;
+        }
+
+        .storefront-nojs-fallback {
+          width: min(100%, 720px);
+          color: #111827;
+          font-family: Arial, sans-serif;
+          line-height: 1.5;
+        }
+
+        .storefront-nojs-fallback nav,
+        .storefront-nojs-fallback footer {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px 20px;
+          margin: 16px 0;
+        }
+      </style>
+      <main class="storefront-nojs-fallback">
+        <h1>$BUSINESS_NAME - Tienda de Bicicletas en $ADDRESS_CITY</h1>
+        <p>$META_DESCRIPTION</p>
+
+        <nav aria-label="Navegación principal">
+          <a href="/productos">Productos</a>
+          <a href="/servicios">Servicios</a>
+          <a href="/contacto">Contacto</a>
+        </nav>
+
+        <address>
+          <p>Dirección: $FULL_ADDRESS</p>
+          <p>Teléfono: $PHONE</p>
+          <p>Email: $EMAIL</p>
+        </address>
+
+        <footer aria-label="Información legal">
+          <a href="$REFUND_URL">Política de Reembolso</a>
+          <a href="$TERMS_URL">Términos y Condiciones</a>
+          <a href="$SHIPPING_URL">Política de Envíos</a>
+          <a href="$PRIVACY_URL">Política de Privacidad</a>
+        </footer>
+      </main>
+    </noscript>
   </div>
 
   <script>

@@ -118,6 +118,127 @@ void main() {
     expect(merged.map((message) => message.id), ['message-a', 'message-b']);
   });
 
+  test('identical texts reconcile only by the exact client message ID', () {
+    final createdAt = DateTime.utc(2026, 7, 21, 10);
+    Message outbound(String id, String clientMessageId) => Message(
+          id: id,
+          conversationId: 'conversation-1',
+          senderId: 'staff-1',
+          content: 'El mismo texto',
+          type: 'text',
+          metadata: {'client_message_id': clientMessageId},
+          createdAt: createdAt,
+          isMe: true,
+        );
+
+    final first = outbound('temp-1', 'client-1');
+    final second = outbound('temp-2', 'client-2');
+    final durableSecond = Message(
+      id: 'server-2',
+      conversationId: 'conversation-1',
+      senderId: 'staff-1',
+      content: 'El mismo texto',
+      type: 'text',
+      metadata: const {'client_message_id': 'client-2'},
+      createdAt: createdAt.add(const Duration(seconds: 1)),
+      isMe: true,
+    );
+
+    expect(
+      hasMatchingServerMessage(
+        optimistic: first,
+        serverMessages: [durableSecond],
+      ),
+      isFalse,
+    );
+    expect(
+      hasMatchingServerMessage(
+        optimistic: second,
+        serverMessages: [durableSecond],
+      ),
+      isTrue,
+    );
+  });
+
+  test('server message ID is exact and disables the text/time heuristic', () {
+    final optimistic = Message(
+      id: 'temp-1',
+      conversationId: 'conversation-1',
+      senderId: 'staff-1',
+      content: 'El mismo texto',
+      type: 'text',
+      metadata: const {'server_message_id': 'server-expected'},
+      createdAt: DateTime.utc(2026, 7, 21, 10),
+      isMe: true,
+    );
+    final wrongServerRow = Message(
+      id: 'server-other',
+      conversationId: 'conversation-1',
+      senderId: 'staff-1',
+      content: 'El mismo texto',
+      type: 'text',
+      metadata: const {},
+      createdAt: DateTime.utc(2026, 7, 21, 10, 0, 1),
+      isMe: true,
+    );
+    final exactServerRow = Message(
+      id: 'server-expected',
+      conversationId: 'conversation-1',
+      senderId: 'staff-1',
+      content: 'Texto normalizado por servidor',
+      type: 'text',
+      metadata: const {},
+      createdAt: DateTime.utc(2026, 7, 21, 10, 0, 2),
+      isMe: true,
+    );
+
+    expect(
+      hasMatchingServerMessage(
+        optimistic: optimistic,
+        serverMessages: [wrongServerRow],
+      ),
+      isFalse,
+    );
+    expect(
+      hasMatchingServerMessage(
+        optimistic: optimistic,
+        serverMessages: [wrongServerRow, exactServerRow],
+      ),
+      isTrue,
+    );
+  });
+
+  test('legacy rows without durable identity retain the narrow heuristic', () {
+    final optimistic = Message(
+      id: 'legacy-temp',
+      conversationId: 'conversation-1',
+      senderId: 'staff-1',
+      content: 'Texto legado',
+      type: 'text',
+      metadata: const {},
+      createdAt: DateTime.utc(2026, 7, 21, 10),
+      isMe: true,
+    );
+    final durable = Message(
+      id: 'legacy-server',
+      conversationId: 'conversation-1',
+      senderId: 'staff-1',
+      content: 'Texto legado',
+      type: 'text',
+      metadata: const {},
+      createdAt: DateTime.utc(2026, 7, 21, 10, 0, 1),
+      isMe: true,
+    );
+
+    expect(
+      hasMatchingServerMessage(
+        optimistic: optimistic,
+        serverMessages: [durable],
+      ),
+      isTrue,
+    );
+  });
+
   test('a higher sequence stays unread when createdAt is tied', () {
     final tiedTimestamp = DateTime.utc(2026, 7, 19, 12, 1);
 

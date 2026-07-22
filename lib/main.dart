@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
@@ -27,6 +28,7 @@ import 'shared/services/workspace_manager.dart';
 import 'shared/config/supabase_config.dart';
 import 'shared/widgets/workspace_tab_bar.dart';
 import 'shared/utils/web_url.dart';
+import 'shared/utils/trusted_meta_notification_url.dart';
 import 'modules/inventory/services/category_service.dart';
 import 'modules/inventory/services/inventory_service.dart' as module_inventory;
 import 'modules/inventory/services/brand_service.dart';
@@ -58,6 +60,7 @@ import 'public_store/providers/cart_provider.dart';
 import 'public_store/providers/public_store_tenant_provider.dart';
 import 'modules/messaging/providers/chat_provider.dart';
 import 'modules/messaging/services/messaging_service.dart';
+import 'modules/messaging/utils/conversation_channel_presentation.dart';
 import 'modules/mail/providers/email_provider.dart';
 import 'modules/mail/providers/mail_account_manager.dart';
 import 'public_store/services/customer_account_service.dart';
@@ -1234,6 +1237,14 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
   }
 
   IconData _iconForErpNotification(String? type) {
+    if (type?.startsWith('meta_instagram_') == true) {
+      return ConversationChannelPresentation.iconForChannel('instagram');
+    }
+    if (type?.startsWith('meta_facebook_') == true) {
+      return ConversationChannelPresentation.iconForChannel(
+        'facebook_messenger',
+      );
+    }
     switch (type) {
       case 'mechanic_job_created':
         return Icons.build_outlined;
@@ -1304,14 +1315,26 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     }
 
     var title = message.notification?.title?.trim();
+    var channel =
+        (data['channel'] ?? data['external_provider'] ?? data['provider'])
+            ?.toString()
+            .trim()
+            .toLowerCase();
+    var chatIcon = ConversationChannelPresentation.iconForChannel(channel);
     for (final conversation in chatProvider.conversations) {
       if (conversation.id == conversationId) {
         title = chatProvider.getChatTitle(conversation);
+        channel = conversation.channel;
+        chatIcon = ConversationChannelPresentation.icon(conversation);
         break;
       }
     }
     if (title == null || title.isEmpty || title == 'New Message') {
-      title = 'Nuevo mensaje';
+      final isMetaChannel =
+          channel == 'instagram' || channel == 'facebook_messenger';
+      title = isMetaChannel
+          ? 'Nuevo mensaje de ${ConversationChannelPresentation.shortLabelForChannel(channel)}'
+          : 'Nuevo mensaje';
     }
 
     final chatRoute = Uri(
@@ -1321,7 +1344,7 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     _showWorkspaceAlert(
       title: title,
       body: content.isEmpty ? 'Nuevo mensaje recibido' : content,
-      icon: Icons.chat_bubble_outline_rounded,
+      icon: chatIcon,
       route: chatRoute,
       category: NotificationCategory.message,
       showSystemNotification: !kIsWeb,
@@ -1459,10 +1482,35 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
                 ),
                 child: InkWell(
                   onTap: () {
-                    _workspaceManager.navigateActiveWorkspace(route);
                     entry.remove();
                     if (identical(_workspaceAlertOverlay, entry)) {
                       _workspaceAlertOverlay = null;
+                    }
+
+                    final trustedExternalUri =
+                        trustedMetaNotificationUrl(route);
+                    if (trustedExternalUri != null) {
+                      unawaited(
+                        launchUrl(
+                          trustedExternalUri,
+                          mode: LaunchMode.externalApplication,
+                        ).then<void>(
+                          (opened) {
+                            if (!opened) {
+                              debugPrint(
+                                '🔔 [WorkspaceShell] Could not open trusted Meta URL',
+                              );
+                            }
+                          },
+                          onError: (Object error, StackTrace stackTrace) {
+                            debugPrint(
+                              '🔔 [WorkspaceShell] Could not open trusted Meta URL: $error',
+                            );
+                          },
+                        ),
+                      );
+                    } else {
+                      _workspaceManager.navigateActiveWorkspace(route);
                     }
                   },
                   borderRadius: BorderRadius.circular(30),

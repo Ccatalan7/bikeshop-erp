@@ -197,7 +197,7 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
               'meta_title', '$tenantName - Tienda de Bicicletas');
           _metaDescriptionController.text = service.getSetting(
               'meta_description',
-              'Tienda de bicicletas y accesorios. Envío a todo el país.');
+              'Tienda de bicicletas y accesorios. Envío a Chile continental.');
           _metaKeywordsController.text = service.getSetting(
               'meta_keywords', 'bicicletas, mtb, ruta, accesorios, ciclismo');
 

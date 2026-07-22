@@ -6,7 +6,11 @@ import {
   isSilentMessagingRow,
   resolveMessagingRecipientIds,
 } from "./recipient_policy.ts";
-import type { PushConversation, PushMessageRecord, PushParticipant } from "./recipient_policy.ts";
+import type {
+  PushConversation,
+  PushMessageRecord,
+  PushParticipant,
+} from "./recipient_policy.ts";
 
 interface NotificationPayload {
   type: "INSERT";
@@ -63,6 +67,18 @@ async function resolveSenderName(params: {
     if (record.external_provider === "whatsapp") {
       return cleanText(metadata.contact_name, "WhatsApp");
     }
+    if (record.external_provider === "instagram") {
+      return cleanText(
+        metadata.contact_label ?? metadata.contact_name ?? metadata.username,
+        "Instagram",
+      );
+    }
+    if (record.external_provider === "facebook_messenger") {
+      return cleanText(
+        metadata.contact_label ?? metadata.contact_name,
+        "Messenger",
+      );
+    }
     return "Cliente";
   }
 
@@ -97,7 +113,9 @@ async function resolveSenderName(params: {
       } | null;
 
       if (employee) {
-        const fullName = `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim();
+        const fullName = `${employee.first_name ?? ""} ${
+          employee.last_name ?? ""
+        }`.trim();
         if (fullName) return cleanText(fullName, "Equipo Viñabike");
       }
     }
@@ -263,7 +281,9 @@ Deno.serve(async (req) => {
 
   const customerNamesByUserId = new Map(
     activeCustomers.flatMap((row) =>
-      row.auth_user_id && row.name ? [[row.auth_user_id, row.name] as const] : []
+      row.auth_user_id && row.name
+        ? [[row.auth_user_id, row.name] as const]
+        : []
     ),
   );
   const senderName = await resolveSenderName({
