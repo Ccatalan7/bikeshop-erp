@@ -7,6 +7,7 @@ WORKFLOW='macos-release.yml'
 MESSAGE=''
 NO_WAIT='NO'
 REQUIRE_CONFIRMATION='NO'
+PREFLIGHT_ONLY='NO'
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -19,6 +20,9 @@ while [[ $# -gt 0 ]]; do
       ;;
     --require-confirmation)
       REQUIRE_CONFIRMATION='YES'
+      ;;
+    --preflight-only)
+      PREFLIGHT_ONLY='YES'
       ;;
     *)
       echo "Unknown option: $1" >&2
@@ -110,7 +114,7 @@ step 'Running the local release integrity preflight on the staged snapshot'
   npm run build:spreadsheet-engine
   "$flutter_bin" pub get
   "$flutter_bin" analyze --no-fatal-infos --no-fatal-warnings lib test
-  "$flutter_bin" test
+  bash scripts/run_flutter_test_gate.sh "$flutter_bin"
   "$flutter_bin" build web --release --no-wasm-dry-run \
     --dart-define=STORE_PERF_LOGS=true \
     -t lib/main.dart \
@@ -127,6 +131,12 @@ fi
 
 cleanup_snapshot
 trap - EXIT
+
+if [[ "$PREFLIGHT_ONLY" == 'YES' ]]; then
+  step 'Local macOS release preflight passed'
+  echo 'Nothing was committed, pushed, or published.'
+  exit 0
+fi
 
 if [[ -n "$staged_files" ]]; then
   step 'Committing staged changes'

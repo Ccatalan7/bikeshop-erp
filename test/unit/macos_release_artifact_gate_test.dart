@@ -8,6 +8,7 @@ void main() {
   late String installer;
   late String updaterService;
   late String publishHelper;
+  late String flutterTestGate;
   late String runbook;
   late String infoPlist;
   late String releaseEntitlements;
@@ -22,6 +23,8 @@ void main() {
       'lib/shared/services/desktop_update_service_io.dart',
     ).readAsStringSync();
     publishHelper = File('scripts/publish_macos_update.sh').readAsStringSync();
+    flutterTestGate =
+        File('scripts/run_flutter_test_gate.sh').readAsStringSync();
     runbook = File('docs/MACOS_DESKTOP_DISTRIBUTION.md').readAsStringSync();
     infoPlist = File('macos/Runner/Info.plist').readAsStringSync();
     releaseEntitlements =
@@ -206,7 +209,10 @@ void main() {
       '"\$flutter_bin" analyze --no-fatal-infos --no-fatal-warnings lib test',
       flutterDependencies,
     );
-    final tests = publishHelper.indexOf('"\$flutter_bin" test', analyzer);
+    final tests = publishHelper.indexOf(
+      'bash scripts/run_flutter_test_gate.sh "\$flutter_bin"',
+      analyzer,
+    );
     final webBuild = publishHelper.indexOf(
       '"\$flutter_bin" build web --release --no-wasm-dry-run',
       tests,
@@ -249,5 +255,17 @@ void main() {
       publishHelper,
       contains('"\$repo_root/.fvm/flutter_sdk/bin/flutter"'),
     );
+  });
+
+  test('Flutter gate reports the exact failed test without noisy source dumps',
+      () {
+    expect(flutterTestGate, contains('test --machine'));
+    expect(flutterTestGate, contains('Flutter tests failed. Exact failure'));
+    expect(flutterTestGate, contains('FAILED:'));
+    expect(flutterTestGate, contains('split("\\n  Actual:")[0]'));
+    expect(flutterTestGate, contains('Nothing was published.'));
+    expect(integrityWorkflow,
+        contains('bash scripts/run_flutter_test_gate.sh flutter'));
+    expect(publishHelper, contains('--preflight-only'));
   });
 }

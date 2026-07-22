@@ -3,6 +3,20 @@ name: ERP Integrity Gate
 on:
   workflow_call:
   workflow_dispatch:
+  push:
+    branches:
+      - smartpegas1.0
+    paths:
+      - "assets/**"
+      - "lib/**"
+      - "packages/**"
+      - "test/**"
+      - "web/spreadsheet_engine/**"
+      - "package.json"
+      - "package-lock.json"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - "scripts/run_flutter_test_gate.sh"
 
 permissions:
   contents: read
@@ -51,7 +65,7 @@ jobs:
         run: flutter analyze --no-fatal-infos --no-fatal-warnings lib test
 
       - name: Run all Flutter tests
-        run: flutter test
+        run: bash scripts/run_flutter_test_gate.sh flutter
 
       - name: Compile ERP web release
         run: >-

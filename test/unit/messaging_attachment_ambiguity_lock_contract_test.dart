@@ -23,6 +23,9 @@ void main() {
     return chatWindowSource.substring(startIndex, endIndex);
   }
 
+  String withoutWhitespace(String source) =>
+      source.replaceAll(RegExp(r'\s+'), '');
+
   test('unsafe WhatsApp outcome blocks every fresh-attachment path', () {
     expect(
       methodBody(
@@ -105,10 +108,17 @@ void main() {
       chatWindowSource,
       contains('_isSendingPendingAttachments || removalBlocked'),
     );
+    final composerBody = methodBody(
+      'Widget _buildComposer(',
+      'Widget _buildPendingAttachmentTray(',
+    );
     expect(
-      chatWindowSource,
+      withoutWhitespace(composerBody),
       contains(
-          'hasBlockingOutcomeUnknownAttachment\n                      ? null'),
+        'onPressed:hasBlockingOutcomeUnknownAttachment||!composerEnabled?null:',
+      ),
+      reason:
+          'The add-action button must remain disabled while an unsafe attachment reservation is locked.',
     );
   });
 

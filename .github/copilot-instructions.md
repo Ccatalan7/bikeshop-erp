@@ -632,6 +632,9 @@ Primary files:
   secret available to artifact-only builds.
 - `scripts/publish_macos_update.sh` is the developer publish helper used by the
   `Publish macOS Update (all changes)` VS Code task.
+- `scripts/run_flutter_test_gate.sh` is the shared machine-readable Flutter
+  test gate. It prints the exact failed test, file, expectation, and stack
+  location without burying the failure beneath widget debug output.
 - `docs/MACOS_DESKTOP_DISTRIBUTION.md` is the coworker and operator runbook.
 
 The stable app path is `~/Applications/Vinabike ERP.app`; never pin a bundle
@@ -657,6 +660,19 @@ The generated Univer spreadsheet bundles are ignored by Git. The integrity,
 Windows release, and macOS release jobs must each run `npm ci` and
 `npm run build:spreadsheet-engine` in their own clean runner before invoking a
 Flutter build; output from one job is not implicitly available to another.
+
+Release-readiness is an agent-owned requirement. Any agent that changes
+`lib/`, `test/`, or a desktop release contract must run the complete shared
+Flutter gate before handing back or committing release-intended work:
+
+```bash
+bash scripts/run_flutter_test_gate.sh "$(command -v flutter)"
+```
+
+The VS Code Problems count and `flutter analyze` do not execute the test suite
+and are not release evidence. New or edited source-reading contract tests must
+assert behavior or normalize irrelevant whitespace; never make a release gate
+depend on formatter-specific line breaks or indentation.
 
 ### Windows Current Architecture
 

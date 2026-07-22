@@ -117,7 +117,7 @@ support files, and at most one prepared update waiting for restart.
 The normal developer action is the selectable VS Code task:
 
 ```text
-Ctrl+Shift+B -> Publish macOS Update (all changes)
+Cmd+Shift+B -> Publish macOS Update (all changes)
 ```
 
 It runs `scripts/publish_macos_update.sh`, which stays on the current authorized
@@ -136,8 +136,21 @@ needed, pushes, dispatches `.github/workflows/macos-release.yml` with
 published assets.
 
 If the local preflight fails, the task stops before commit, push, or workflow
-dispatch. Fix the reported failure and run the same task again; no partial
-macOS update is published.
+dispatch. The shared machine-readable test gate prints the exact failed test,
+source file, expectation, and stack location while suppressing unrelated widget
+debug noise. Fix the reported failure and run the same task again; no partial
+macOS update is published. `flutter analyze` and VS Code's Problems panel do not
+run this suite, so a zero-error Problems count is not release-readiness proof.
+
+This is intentionally stricter than the Windows developer helper. Windows
+commits and pushes first, then runs the shared integrity gate in GitHub Actions;
+macOS verifies an immutable local snapshot before creating or pushing a release
+commit, and GitHub verifies it again. Agents can exercise only the local macOS
+gate without mutating Git or publishing by running:
+
+```bash
+bash scripts/publish_macos_update.sh --preflight-only
+```
 
 Pushes and ordinary dispatches are artifact-only. They build and verify but
 cannot publish an update. Only the separate `Production` job has write access
