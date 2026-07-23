@@ -610,6 +610,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
       final entry = _InvoiceLineEntry(
         _InvoiceLine(
+          id: item.id,
           productId: item.productId, // Nullable - null for ad-hoc items
           product: product,
           name: item.productName ?? product?.name ?? 'Artículo',
@@ -624,6 +625,12 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           isCatalogProduct: item.isCatalogProduct,
           jobBikeId: item.jobBikeId,
           bikeName: item.bikeName,
+          serviceConfigurationData: item.serviceConfigurationData,
+          systemKey: item.systemKey,
+          componentSlotKey: item.componentSlotKey,
+          locationKey: item.locationKey,
+          interventionType: item.interventionType,
+          createsLifecycle: item.createsLifecycle,
         ),
       );
       entry.attachListeners(_handleLinesChanged);
@@ -3792,6 +3799,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
 class _InvoiceLine {
   _InvoiceLine({
+    this.id,
     this.productId,
     this.product,
     required this.name,
@@ -3806,8 +3814,15 @@ class _InvoiceLine {
     this.isCatalogProduct = true,
     this.jobBikeId,
     this.bikeName,
+    this.serviceConfigurationData,
+    this.systemKey,
+    this.componentSlotKey,
+    this.locationKey,
+    this.interventionType,
+    this.createsLifecycle = false,
   });
 
+  final String? id;
   final String? productId;
   final Product? product;
   double cost;
@@ -3817,6 +3832,12 @@ class _InvoiceLine {
   final bool isCatalogProduct;
   String? jobBikeId;
   String? bikeName;
+  final Map<String, dynamic>? serviceConfigurationData;
+  final String? systemKey;
+  final String? componentSlotKey;
+  final String? locationKey;
+  final String? interventionType;
+  final bool createsLifecycle;
   double quantity;
   double unitPrice;
   double discount;
@@ -3881,6 +3902,7 @@ class _InvoiceLineEntry {
         product?.id ?? line.productId; // Use current product if available
 
     return InvoiceItem(
+      id: line.id,
       productId: currentProductId, // Nullable - null for ad-hoc items
       productName: currentName.isNotEmpty ? currentName : line.name,
       productSku: currentSku.isNotEmpty ? currentSku : line.sku,
@@ -3897,6 +3919,12 @@ class _InvoiceLineEntry {
       isService: line.isService,
       jobBikeId: line.jobBikeId,
       bikeName: line.bikeName,
+      serviceConfigurationData: line.serviceConfigurationData,
+      systemKey: line.systemKey,
+      componentSlotKey: line.componentSlotKey,
+      locationKey: line.locationKey,
+      interventionType: line.interventionType,
+      createsLifecycle: line.createsLifecycle,
     );
   }
 

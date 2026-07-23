@@ -604,6 +604,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
       final entry = _InvoiceLineEntry(
         _InvoiceLine(
+          id: item.id,
           productId: item.productId,
           product: product,
           name: item.productName ?? product?.name ?? 'Artículo',
@@ -618,6 +619,12 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
           isCatalogProduct: item.isCatalogProduct,
           jobBikeId: item.jobBikeId,
           bikeName: item.bikeName,
+          serviceConfigurationData: item.serviceConfigurationData,
+          systemKey: item.systemKey,
+          componentSlotKey: item.componentSlotKey,
+          locationKey: item.locationKey,
+          interventionType: item.interventionType,
+          createsLifecycle: item.createsLifecycle,
         ),
       );
       entry.attachListeners(_handleLinesChanged);
@@ -2790,6 +2797,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 // Private classes copied and adapted
 class _InvoiceLine {
   _InvoiceLine({
+    this.id,
     this.productId,
     this.product,
     required this.name,
@@ -2804,8 +2812,15 @@ class _InvoiceLine {
     this.isCatalogProduct = true,
     this.jobBikeId,
     this.bikeName,
+    this.serviceConfigurationData,
+    this.systemKey,
+    this.componentSlotKey,
+    this.locationKey,
+    this.interventionType,
+    this.createsLifecycle = false,
   });
 
+  final String? id;
   final String? productId;
   final Product? product;
   double cost;
@@ -2815,6 +2830,12 @@ class _InvoiceLine {
   final bool isCatalogProduct;
   String? jobBikeId;
   String? bikeName;
+  final Map<String, dynamic>? serviceConfigurationData;
+  final String? systemKey;
+  final String? componentSlotKey;
+  final String? locationKey;
+  final String? interventionType;
+  final bool createsLifecycle;
   double quantity;
   double unitPrice;
   double discount;
@@ -2869,6 +2890,7 @@ class _InvoiceLineEntry {
 
   InvoiceItem toInvoiceItem() {
     final item = InvoiceItem(
+      id: line.id,
       productId: product?.id ?? line.productId,
       productName: productNameController.text.trim().isEmpty
           ? line.name
@@ -2889,6 +2911,12 @@ class _InvoiceLineEntry {
       isService: line.isService,
       jobBikeId: line.jobBikeId,
       bikeName: line.bikeName,
+      serviceConfigurationData: line.serviceConfigurationData,
+      systemKey: line.systemKey,
+      componentSlotKey: line.componentSlotKey,
+      locationKey: line.locationKey,
+      interventionType: line.interventionType,
+      createsLifecycle: line.createsLifecycle,
     );
     debugPrint(
         '🐛 [InvoiceLineEntry] Converting item: ${item.productName}. ProductId: ${item.productId}');

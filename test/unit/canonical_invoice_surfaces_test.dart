@@ -161,6 +161,29 @@ void main() {
         reason:
             '${invoiceSurface.key} must not hide a best-effort post-save link/sync failure.',
       );
+      for (final preservedField in <String>[
+        'id: item.id',
+        'serviceConfigurationData: item.serviceConfigurationData',
+        'systemKey: item.systemKey',
+        'componentSlotKey: item.componentSlotKey',
+        'locationKey: item.locationKey',
+        'interventionType: item.interventionType',
+        'createsLifecycle: item.createsLifecycle',
+        'id: line.id',
+        'serviceConfigurationData: line.serviceConfigurationData',
+        'systemKey: line.systemKey',
+        'componentSlotKey: line.componentSlotKey',
+        'locationKey: line.locationKey',
+        'interventionType: line.interventionType',
+        'createsLifecycle: line.createsLifecycle',
+      ]) {
+        expect(
+          invoiceSurface.value,
+          contains(preservedField),
+          reason:
+              '${invoiceSurface.key} must round-trip hidden workshop line identity and technical metadata.',
+        );
+      }
     }
     expect(
       form,
