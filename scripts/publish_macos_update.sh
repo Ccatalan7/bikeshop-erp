@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+export VOLTA_HOME="${VOLTA_HOME:-$HOME/.volta}"
+export PATH="$VOLTA_HOME/bin:$PATH"
+
 REPO='Ccatalan7/bikeshop-erp'
 WORKFLOW='macos-release.yml'
 MESSAGE=''
@@ -46,10 +49,24 @@ require_command() {
 require_command git
 require_command gh
 require_command jq
+require_command volta
+require_command node
 require_command npm
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
+
+node_version="$(jq -r .node toolchain.json)"
+npm_version="$(jq -r .npm toolchain.json)"
+actual_node_version="$(node --version | sed 's/^v//')"
+actual_npm_version="$(npm --version)"
+if [[ "$actual_node_version" != "$node_version" ||
+      "$actual_npm_version" != "$npm_version" ]]; then
+  echo "Pinned Node/npm toolchain is unavailable." >&2
+  echo "Expected Node $node_version and npm $npm_version; found Node $actual_node_version and npm $actual_npm_version." >&2
+  echo "Run the macOS bootstrap, then retry the publish task." >&2
+  exit 1
+fi
 
 flutter_bin="$(command -v flutter || true)"
 if [[ -z "$flutter_bin" && -x "$repo_root/.fvm/flutter_sdk/bin/flutter" ]]; then
@@ -110,8 +127,18 @@ git archive "$snapshot_tree" | tar -x -C "$snapshot_root"
 step 'Running the local release integrity preflight on the staged snapshot'
 (
   cd "$snapshot_root"
+  spreadsheet_bundle_js='web/spreadsheet_engine/univer.bundle.js'
+  spreadsheet_bundle_css='web/spreadsheet_engine/univer.bundle.css'
+  bundle_js_hash_before="$(git hash-object "$spreadsheet_bundle_js")"
+  bundle_css_hash_before="$(git hash-object "$spreadsheet_bundle_css")"
   npm ci
   npm run build:spreadsheet-engine
+  if [[ "$(git hash-object "$spreadsheet_bundle_js")" != "$bundle_js_hash_before" ||
+        "$(git hash-object "$spreadsheet_bundle_css")" != "$bundle_css_hash_before" ]]; then
+    echo 'Pinned spreadsheet build changed the committed release assets.' >&2
+    echo "Regenerate them with Node $node_version and npm $npm_version, include them in Source Control, and retry." >&2
+    exit 1
+  fi
   "$flutter_bin" pub get
   "$flutter_bin" analyze --no-fatal-infos --no-fatal-warnings lib test
   bash scripts/run_flutter_test_gate.sh "$flutter_bin"

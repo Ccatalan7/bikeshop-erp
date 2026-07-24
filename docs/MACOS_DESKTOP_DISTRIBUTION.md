@@ -125,15 +125,18 @@ branch and stages pending Source Control changes. Before any commit or push, it
 renders the staged Git tree into an isolated temporary directory and runs the
 same release-integrity commands used by CI there: clean Node dependency
 installation, spreadsheet-engine generation, Flutter dependency resolution,
-analyzer, the complete Flutter test suite, and the ERP web release build. The
-snapshot is immutable, so another agent may continue editing ordinary working
-files without changing or invalidating the release under test; those later
-edits remain pending for the next update. The task stops only if another process
-explicitly changes the staged index during the preflight. After the exact staged
-snapshot passes, the temporary directory is removed and the task commits when
-needed, pushes, dispatches `.github/workflows/macos-release.yml` with
-`publish_release=true`, waits for the guarded workflow, and verifies the
-published assets.
+analyzer, the complete Flutter test suite, and the ERP web release build. It
+selects the Node and npm versions pinned in `toolchain.json` through Volta and
+compares the generated spreadsheet assets with the staged copies. Any mismatch
+stops before publication instead of deferring a deterministic-asset failure to
+GitHub Actions. The snapshot is immutable, so another agent may continue
+editing ordinary working files without changing or invalidating the release
+under test; those later edits remain pending for the next update. The task
+stops only if another process explicitly changes the staged index during the
+preflight. After the exact staged snapshot passes, the temporary directory is
+removed and the task commits when needed, pushes, dispatches
+`.github/workflows/macos-release.yml` with `publish_release=true`, waits for the
+guarded workflow, and verifies the published assets.
 
 If the local preflight fails, the task stops before commit, push, or workflow
 dispatch. The shared machine-readable test gate prints the exact failed test,
@@ -158,9 +161,9 @@ to GitHub Releases and refreshes the `macos-latest` metadata alias.
 
 Both the integrity gate and the macOS runner execute `npm ci` followed by
 `npm run build:spreadsheet-engine` before Flutter. The generated Univer bundles
-are intentionally ignored by Git, so this step is what guarantees that a clean
-release includes the new spreadsheet engine instead of depending on one Mac's
-local files.
+are tracked release assets; the build must reproduce them byte-for-byte with
+the pinned toolchain. This guarantees that a clean release includes the reviewed
+spreadsheet engine instead of depending on one Mac's uncommitted output.
 
 Never create a temporary branch or worktree for publication. Both `main` and
 `smartpegas1.0` are explicitly authorized by the GitHub Production environment.

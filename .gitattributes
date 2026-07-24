@@ -1,0 +1,3 @@
+# Generated release assets are verified byte-for-byte by the pinned build gate.
+web/spreadsheet_engine/univer.bundle.js -whitespace
+web/spreadsheet_engine/univer.bundle.css -whitespace

@@ -89,6 +89,26 @@ void main() {
     expect(npmBuild, greaterThanOrEqualTo(0));
     expect(flutterBuild, greaterThan(npmBuild));
     expect(workflow, contains('npm run build:spreadsheet-engine'));
+    expect(publishHelper, contains('export VOLTA_HOME='));
+    expect(
+      publishHelper,
+      contains('export PATH="\$VOLTA_HOME/bin:\$PATH"'),
+    );
+    expect(
+      publishHelper,
+      contains('node_version="\$(jq -r .node toolchain.json)"'),
+    );
+    expect(
+      publishHelper,
+      contains('npm_version="\$(jq -r .npm toolchain.json)"'),
+    );
+    expect(publishHelper, contains('actual_node_version='));
+    expect(publishHelper, contains('actual_npm_version='));
+    expect(
+      publishHelper,
+      contains(
+          'Pinned spreadsheet build changed the committed release assets.'),
+    );
   });
 
   test('installer keeps Gatekeeper enabled and verifies a narrow target', () {
@@ -196,10 +216,22 @@ void main() {
       'git archive "\$snapshot_tree" | tar -x -C "\$snapshot_root"',
       createTemporaryDirectory,
     );
+    final spreadsheetHashBaseline = publishHelper.indexOf(
+      'bundle_js_hash_before="\$(git hash-object',
+      exportSnapshot,
+    );
+    final stylesheetHashBaseline = publishHelper.indexOf(
+      'bundle_css_hash_before="\$(git hash-object',
+      spreadsheetHashBaseline,
+    );
     final npmInstall = publishHelper.indexOf('npm ci', exportSnapshot);
     final spreadsheetBuild = publishHelper.indexOf(
       'npm run build:spreadsheet-engine',
       npmInstall,
+    );
+    final spreadsheetAssetGuard = publishHelper.indexOf(
+      'Pinned spreadsheet build changed the committed release assets.',
+      spreadsheetBuild,
     );
     final flutterDependencies = publishHelper.indexOf(
       '"\$flutter_bin" pub get',
@@ -234,9 +266,12 @@ void main() {
     expect(writeSnapshot, greaterThan(stage));
     expect(createTemporaryDirectory, greaterThan(writeSnapshot));
     expect(exportSnapshot, greaterThan(createTemporaryDirectory));
-    expect(npmInstall, greaterThan(exportSnapshot));
+    expect(spreadsheetHashBaseline, greaterThan(exportSnapshot));
+    expect(stylesheetHashBaseline, greaterThan(spreadsheetHashBaseline));
+    expect(npmInstall, greaterThan(stylesheetHashBaseline));
     expect(spreadsheetBuild, greaterThan(npmInstall));
-    expect(flutterDependencies, greaterThan(spreadsheetBuild));
+    expect(spreadsheetAssetGuard, greaterThan(spreadsheetBuild));
+    expect(flutterDependencies, greaterThan(spreadsheetAssetGuard));
     expect(analyzer, greaterThan(flutterDependencies));
     expect(tests, greaterThan(analyzer));
     expect(webBuild, greaterThan(tests));
