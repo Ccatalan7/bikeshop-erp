@@ -424,6 +424,11 @@ test("upgrades the fallback only for valid structured AI notes and sends metadat
   assert.equal(serializedRequest.includes("assets/private-preview.png"), false);
   assert.equal(requestBody.text.format.type, "json_schema");
   assert.equal(requestBody.text.format.strict, true);
+  assert.equal(
+    requestBody.text.format.schema.properties.modules.items.properties
+      .evidence_paths.uniqueItems,
+    undefined,
+  );
   assert.deepEqual(JSON.parse(await readFile(outputPath, "utf8")), {
     release_notes: result.release_notes,
   });
