@@ -150,14 +150,14 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
   List<AppStoredFile> _files = const [];
   List<CurrentAttendanceBriefingEntry> _currentAttendances = const [];
   StreamSubscription<AppStoredFile>? _savedFileSubscription;
-  Timer? _attendanceClock;
+  Timer? _briefingClock;
   final GlobalKey _activitySectionKey = GlobalKey();
   int _attendanceLoadEpoch = 0;
   bool _loadingFiles = true;
   bool _loadingAttendances = true;
   Object? _filesError;
   Object? _attendancesError;
-  DateTime _attendanceNow = DateTime.now();
+  DateTime _briefingNow = DateTime.now();
 
   @override
   void initState() {
@@ -165,20 +165,28 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
     unawaited(_loadFiles());
     unawaited(_loadAttendances());
     _savedFileSubscription = _filesService.savedFiles.listen(_recordSavedFile);
-    _attendanceClock = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (!mounted) return;
-      setState(() => _attendanceNow = DateTime.now());
-      if (!_loadingAttendances) {
-        unawaited(_loadAttendances(silent: true));
-      }
-    });
+    _scheduleBriefingTick();
   }
 
   @override
   void dispose() {
     _savedFileSubscription?.cancel();
-    _attendanceClock?.cancel();
+    _briefingClock?.cancel();
     super.dispose();
+  }
+
+  void _scheduleBriefingTick() {
+    final now = DateTime.now();
+    final untilNextMinute = const Duration(minutes: 1) -
+        Duration(seconds: now.second, milliseconds: now.millisecond);
+    _briefingClock = Timer(untilNextMinute, () {
+      if (!mounted) return;
+      setState(() => _briefingNow = DateTime.now());
+      if (!_loadingAttendances) {
+        unawaited(_loadAttendances(silent: true));
+      }
+      _scheduleBriefingTick();
+    });
   }
 
   Future<void> _loadFiles() async {
@@ -229,7 +237,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
       if (!mounted || loadEpoch != _attendanceLoadEpoch) return;
       setState(() {
         _currentAttendances = entries;
-        _attendanceNow = DateTime.now();
+        _briefingNow = DateTime.now();
         _loadingAttendances = false;
         _attendancesError = null;
       });
@@ -337,6 +345,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                           _BriefingHero(
                             period: _period,
                             items: activity,
+                            now: _briefingNow,
                           ),
                           _MetricsRibbon(
                             digest: digest,
@@ -346,12 +355,12 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                             padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
                             child: _AttendanceNowSection(
                               entries: _currentAttendances,
-                              now: _attendanceNow,
+                              now: _briefingNow,
                               loading: _loadingAttendances,
                               hasError: _attendancesError != null,
                               onRetry: _loadAttendances,
                               onOpenAll: () => widget.onNavigate(
-                                _attendanceDayRoute(_attendanceNow),
+                                _attendanceDayRoute(_briefingNow),
                               ),
                               onOpenEntry: (entry) => widget.onNavigate(
                                 _attendanceEntryRoute(entry),
@@ -812,10 +821,15 @@ class _PeriodTab extends StatelessWidget {
 }
 
 class _BriefingHero extends StatelessWidget {
-  const _BriefingHero({required this.period, required this.items});
+  const _BriefingHero({
+    required this.period,
+    required this.items,
+    required this.now,
+  });
 
   final NotificationDigestPeriod period;
   final List<_BriefingActivityItem> items;
+  final DateTime now;
 
   @override
   Widget build(BuildContext context) {
@@ -829,63 +843,150 @@ class _BriefingHero extends StatelessWidget {
         alpha: theme.brightness == Brightness.dark ? 0.14 : 0.065,
       ),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 340;
+          final title = Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  period == NotificationDigestPeriod.today
+                      ? 'Hoy en Viñabike'
+                      : 'Pulso de la semana',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.25,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  period == NotificationDigestPeriod.today
+                      ? todayLabel
+                      : 'Los últimos siete días, en una mirada',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          );
+          final activityTotal = Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      period == NotificationDigestPeriod.today
-                          ? 'Hoy en Viñabike'
-                          : 'Pulso de la semana',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.25,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      period == NotificationDigestPeriod.today
-                          ? todayLabel
-                          : 'Los últimos siete días, en una mirada',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+              Text(
+                '${items.length}',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  color: accent,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
                 ),
               ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '${items.length}',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      color: accent,
-                      fontWeight: FontWeight.w700,
-                      height: 1,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'movimientos',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 3),
+              Text(
+                'movimientos',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
+          );
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  title,
+                  const SizedBox(width: 12),
+                  if (isCompact)
+                    activityTotal
+                  else
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        _ChileClock(now: now, accent: accent),
+                        const SizedBox(width: 12),
+                        activityTotal,
+                      ],
+                    ),
+                ],
+              ),
+              if (isCompact) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _ChileClock(now: now, accent: accent),
+                ),
+              ],
+              const SizedBox(height: 12),
+              _ActivityPulse(period: period, items: items, accent: accent),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ChileClock extends StatelessWidget {
+  const _ChileClock({required this.now, required this.accent});
+
+  final DateTime now;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final time = _chileClockTime(now);
+    return Semantics(
+      label: 'Hora de Chile, $time',
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface.withValues(
+            alpha: theme.brightness == Brightness.dark ? 0.72 : 0.78,
           ),
-          const SizedBox(height: 12),
-          _ActivityPulse(period: period, items: items, accent: accent),
-        ],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: accent.withValues(alpha: 0.18)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.schedule_rounded, size: 14, color: accent),
+            const SizedBox(width: 5),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'HORA CHILE',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.55,
+                    height: 1,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  time,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: accent,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.25,
+                    height: 1,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1328,7 +1429,7 @@ class _AttendanceNowRow extends StatelessWidget {
     return Semantics(
       button: true,
       label: '${title.isEmpty ? 'Trabajador' : title}, entrada '
-          '${_attendanceTime(entry.attendance.checkIn)}, '
+          '${_chileClockTime(entry.attendance.checkIn)}, '
           '${_attendanceDuration(elapsed)}',
       child: InkWell(
         onTap: onTap,
@@ -1437,7 +1538,7 @@ class _AttendanceNowRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Entrada ${_attendanceTime(entry.attendance.checkIn)}'
+                      'Entrada ${_chileClockTime(entry.attendance.checkIn)}'
                       ' · ${_attendanceDuration(elapsed)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -2364,7 +2465,7 @@ tz.TZDateTime _chileBriefingTime(DateTime value) {
   return tz.TZDateTime.from(value.toUtc(), _chileBriefingLocation());
 }
 
-String _attendanceTime(DateTime value) {
+String _chileClockTime(DateTime value) {
   final chile = _chileBriefingTime(value);
   final hour = chile.hour.toString().padLeft(2, '0');
   final minute = chile.minute.toString().padLeft(2, '0');
