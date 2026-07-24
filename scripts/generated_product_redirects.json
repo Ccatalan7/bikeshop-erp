@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-21T21:06:03.343257Z",
+  "generatedAt": "2026-07-24T09:56:33.342246Z",
   "redirects": [
     {
       "source": "/productos/003addb4-e910-4655-8a0b-f87fbc77f1b3",
@@ -254,6 +254,11 @@
     {
       "source": "/productos/149ab3bb-d1d9-4692-8741-79d55baaa903",
       "destination": "/productos/canastillo-rodamiento-para-direccion-20unid/C070",
+      "type": 301
+    },
+    {
+      "source": "/productos/1629b9d6-3a4c-4e04-be6b-02e73c3780d1",
+      "destination": "/productos/maxxis-alambre-27-5x2-25-rekon-race-exo-tanwall/7376",
       "type": 301
     },
     {
@@ -657,6 +662,11 @@
       "type": 301
     },
     {
+      "source": "/productos/34767747-b635-4aa9-b6bc-a1ecd1e3d2f0",
+      "destination": "/productos/camara-ride-26x1-95-2-125-va-35mm/10371",
+      "type": 301
+    },
+    {
       "source": "/productos/34eba7c3-7dc0-4734-9a2b-de0249daffdf",
       "destination": "/productos/luz-delantera-ipx6/AE0321",
       "type": 301
@@ -769,6 +779,11 @@
     {
       "source": "/productos/3ca64e0b-28b0-4c33-b85a-9efb60ce2ec9",
       "destination": "/productos/cinta-tubeless-goldix-1mt-25mm/AE0209",
+      "type": 301
+    },
+    {
+      "source": "/productos/3d3c2639-eeab-46cc-bff1-11553cdaa46e",
+      "destination": "/productos/pinon-sunshine-hr-9v-11-40t/19083",
       "type": 301
     },
     {
@@ -969,6 +984,11 @@
     {
       "source": "/productos/4c278aaa-30bb-4b3f-a4a3-52c0ccf5e19d",
       "destination": "/productos/bombin-de-mano-giyo-modelo-gp-46l/180GP46L",
+      "type": 301
+    },
+    {
+      "source": "/productos/4c2bbbf2-678e-4931-8047-ac4a70c67220",
+      "destination": "/productos/maza-eclipse-gl-b10r-qr-sellada-black-135mm-32h-8v/1200",
       "type": 301
     },
     {
@@ -1962,6 +1982,11 @@
       "type": 301
     },
     {
+      "source": "/productos/b1b8abc4-5c3f-4cae-9e41-e7fbf9153880",
+      "destination": "/productos/cadena-kmc-x9-9-vel/19007",
+      "type": 301
+    },
+    {
       "source": "/productos/b240488f-a655-4482-a143-ba85fc0a3316",
       "destination": "/productos/caliper-freno-trasero-mecanico-bucklos-ae/AE0144",
       "type": 301
@@ -2617,6 +2642,11 @@
       "type": 301
     },
     {
+      "source": "/productos/ed04a3a2-4129-4e4b-a68d-a6c7df836a47",
+      "destination": "/productos/camara-maxxis-27-5x1-75-2-4-av-48mm/8370",
+      "type": 301
+    },
+    {
       "source": "/productos/ed62898c-8843-4224-ab7f-129d7f96d029",
       "destination": "/productos/rodamiento-7-32-en-bolsa-de-1-gruesa/2000000155753",
       "type": 301
@@ -2729,6 +2759,11 @@
     {
       "source": "/productos/fd07b4c2-ac99-4bbc-8636-727b812ca08e",
       "destination": "/productos/cono-trasero-3-8-con-cubrepolvo-compatible-generico/PO02541000036",
+      "type": 301
+    },
+    {
+      "source": "/productos/fdb71bf4-3ecf-433d-8619-81b828643ee1",
+      "destination": "/productos/cambio-sensah-mx-9-vol-compatible-shimano/19379",
       "type": 301
     },
     {

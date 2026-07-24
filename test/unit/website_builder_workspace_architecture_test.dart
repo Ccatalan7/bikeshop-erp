@@ -291,7 +291,15 @@ void main() {
     expect(linkEditor, contains('show_on_website'));
     expect(linkEditor, contains('markedWebProductCount'));
     expect(linkEditor, contains('Oculta del catálogo público'));
-    expect(linkEditor, contains('Catálogo web > Categorías'));
+    expect(
+      linkEditor,
+      contains('Catálogo web > Categorías > Publicación'),
+    );
+    expect(
+      linkEditor,
+      contains('WebsiteWorkspacePanel.catalogCategories'),
+    );
+    expect(linkEditor, contains("actionLabel: 'Configurar categoría'"));
     expect(linkEditor, isNot(contains("'Catálogo: Categoria #\$cat'")));
   });
 
@@ -463,7 +471,7 @@ void main() {
     expect(migration, contains('p_category_ids := null'));
   });
 
-  test('combined category and brand search round-trips in link editor', () {
+  test('combined category and search round-trips in link editor', () {
     final destination = WebsiteDestination.parse(
       '/productos?category=tires-id&q=Maxxis&type=product',
     );
@@ -475,7 +483,13 @@ void main() {
     expect(destination.reference, 'tires-id');
     expect(destination.href, contains('q=Maxxis'));
     expect(editor, contains('hasCompositeCatalogFilter'));
-    expect(editor, contains('Catálogo filtrado: categoría +'));
+    expect(editor, contains('_catalogSearchController.text = q;'));
+    expect(editor, contains('_catalogType = switch (type.toLowerCase())'));
+    expect(
+      editor,
+      contains('_catalogCategoryId = destination.kind'),
+    );
+    expect(editor, contains('return WebsiteDestination.routeForCatalog('));
   });
 
   test('category collection presentation is editor-owned and route-backed', () {

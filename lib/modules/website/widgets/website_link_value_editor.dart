@@ -1471,7 +1471,8 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
 
   String _categoryReadinessMessage(_CategoryOption category) {
     if (!category.showOnWebsite) {
-      return 'La categoría está oculta del catálogo público.';
+      return 'La categoría está oculta del catálogo público. Publícala en '
+          'Catálogo web > Categorías > Publicación antes de usar este enlace.';
     }
     final count = category.countForScope(_catalogCategoryScope);
     if (_catalogCategoryScope == WebsiteCatalogCategoryScope.direct) {
