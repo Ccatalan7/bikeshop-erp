@@ -19,6 +19,7 @@ on:
       - ".github/workflows/erp-integrity-gate.yml"
       - ".github/workflows/windows-release.yml"
       - "scripts/install_vinabike_erp.ps1"
+      - "scripts/releases/**"
   workflow_dispatch:
     inputs:
       publish_release:
@@ -186,6 +187,8 @@ jobs:
         id: package
         shell: pwsh
         env:
+          APP_VERSION: ${{ steps.meta.outputs.app_version }}
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
           ZIP_NAME: ${{ steps.meta.outputs.zip_name }}
         run: |
           $ErrorActionPreference = 'Stop'
@@ -198,18 +201,25 @@ jobs:
 
           Compress-Archive -LiteralPath $releaseDir -DestinationPath $zipPath -Force
 
-          $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
+          $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $env:ZIP_NAME" | Set-Content -LiteralPath "$zipPath.sha256" -NoNewline
 
-          Copy-Item -LiteralPath 'scripts\install_vinabike_erp.ps1' -Destination (Join-Path $dist 'install_vinabike_erp.ps1') -Force
+          $installerName = 'install_vinabike_erp.ps1'
+          $installerPath = Join-Path $dist $installerName
+          Copy-Item -LiteralPath "scripts\$installerName" -Destination $installerPath -Force
+          $installerHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToLowerInvariant()
 
           $manifest = [ordered]@{
+            tag_name = $env:RELEASE_TAG
+            release_name = "Vinabike ERP Windows $env:APP_VERSION"
             commit = $env:GITHUB_SHA
             run_id = $env:GITHUB_RUN_ID
             run_number = $env:GITHUB_RUN_NUMBER
             publish_requested = ('${{ inputs.publish_release == true }}' -eq 'true')
             zip_name = $env:ZIP_NAME
             zip_sha256 = $hash
+            installer_name = $installerName
+            installer_sha256 = $installerHash
             built_at = (Get-Date).ToUniversalTime().ToString('o')
           }
           $manifest |
@@ -234,11 +244,63 @@ jobs:
       contents: write
 
     steps:
+      - name: Check out release verification material
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node for release notes
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+
       - name: Download verified Windows artifact
         uses: actions/download-artifact@v5
         with:
           name: vinabike-erp-windows
           path: dist
+
+      - name: Generate and bind user-friendly release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_RELEASE_NOTES_MODEL: ${{ vars.OPENAI_RELEASE_NOTES_MODEL }}
+        run: |
+          set -euo pipefail
+
+          base_commit="$(
+            bash scripts/releases/resolve_previous_release_commit.sh \
+              windows-v \
+              windows-release-manifest.json \
+              "$GITHUB_SHA"
+          )"
+          node scripts/releases/generate_release_notes.mjs \
+            --from-commit "$base_commit" \
+            --to-commit "$GITHUB_SHA" \
+            --output dist/release-notes.json
+
+          jq -e \
+            --arg base "$base_commit" \
+            --arg head "$GITHUB_SHA" \
+            '
+              .release_notes.schema_version == 1 and
+              .release_notes.locale == "es-CL" and
+              .release_notes.from_commit == $base and
+              .release_notes.to_commit == $head and
+              (.release_notes.modules | type == "array")
+            ' \
+            dist/release-notes.json >/dev/null
+
+          jq -s '.[0] * .[1]' \
+            dist/windows-release-manifest.json \
+            dist/release-notes.json \
+            > dist/windows-release-manifest.json.tmp
+          mv -f \
+            dist/windows-release-manifest.json.tmp \
+            dist/windows-release-manifest.json
+          rm -f dist/release-notes.json
 
       - name: Verify packaged checksum before publication
         working-directory: dist
@@ -255,7 +317,20 @@ jobs:
           set -euo pipefail
 
           notes_file="$RUNNER_TEMP/windows-release-notes.md"
-          cat >"$notes_file" <<EOF
+          {
+            printf '## Novedades\n\n'
+            jq -r '.release_notes.summary' dist/windows-release-manifest.json
+            printf '\n'
+            jq -r '
+              .release_notes.modules[] |
+              "### \(.label)\n\n" +
+              (.items | map("- " + .) | join("\n")) +
+              "\n"
+            ' dist/windows-release-manifest.json
+            cat <<EOF
+
+          ## Instalación interna
+
           Vinabike ERP Windows desktop release.
 
           Install or update from PowerShell:
@@ -266,11 +341,17 @@ jobs:
           The installer downloads $ZIP_NAME and verifies its SHA256 checksum before replacing the local app folder.
           Source commit: $GITHUB_SHA
           EOF
+          } > "$notes_file"
 
           if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" dist/* \
               --repo "$GH_REPO" \
               --clobber
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GH_REPO" \
+              --target "$GITHUB_SHA" \
+              --title "Vinabike ERP Windows $APP_VERSION ($GITHUB_RUN_NUMBER)" \
+              --notes-file "$notes_file"
           else
             gh release create "$RELEASE_TAG" dist/* \
               --repo "$GH_REPO" \

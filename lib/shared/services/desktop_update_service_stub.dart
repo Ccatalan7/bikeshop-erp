@@ -1,17 +1,34 @@
 import 'package:flutter/foundation.dart';
 
+import '../models/desktop_release_notes.dart';
+
 class DesktopUpdateInfo {
   final String tag;
   final String releaseName;
   final String assetName;
   final String installerDownloadUrl;
+  final String commit;
+  final DesktopReleaseNotes? releaseNotes;
 
   const DesktopUpdateInfo({
     required this.tag,
     required this.releaseName,
     required this.assetName,
     required this.installerDownloadUrl,
+    required this.commit,
+    this.releaseNotes,
   });
+
+  DesktopUpdateInfo copyWithReleaseNotes(DesktopReleaseNotes? notes) {
+    return DesktopUpdateInfo(
+      tag: tag,
+      releaseName: releaseName,
+      assetName: assetName,
+      installerDownloadUrl: installerDownloadUrl,
+      commit: commit,
+      releaseNotes: notes,
+    );
+  }
 }
 
 class DesktopUpdateService extends ChangeNotifier {

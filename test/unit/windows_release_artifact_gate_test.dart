@@ -6,6 +6,7 @@ void main() {
   late String workflow;
   late String integrityWorkflow;
   late String publishHelper;
+  late String releaseBaseResolver;
   late String distributionRunbook;
 
   setUpAll(() {
@@ -14,6 +15,9 @@ void main() {
         File('.github/workflows/erp-integrity-gate.yml').readAsStringSync();
     publishHelper =
         File('scripts/publish_windows_update.ps1').readAsStringSync();
+    releaseBaseResolver = File(
+      'scripts/releases/resolve_previous_release_commit.sh',
+    ).readAsStringSync();
     distributionRunbook =
         File('docs/WINDOWS_DESKTOP_DISTRIBUTION.md').readAsStringSync();
   });
@@ -64,6 +68,84 @@ void main() {
       workflow,
       contains(
         r'data\flutter_assets\web\spreadsheet_engine\univer.bundle.js',
+      ),
+    );
+    expect(workflow, contains('tag_name = \$env:RELEASE_TAG'));
+    expect(workflow, contains('installer_sha256 = \$installerHash'));
+  });
+
+  test('protected publish binds release notes to the selected Windows release',
+      () {
+    final publishJob = workflow.indexOf('\n  publish:');
+    final checkout = workflow.indexOf(
+      'Check out release verification material',
+      publishJob,
+    );
+    final releaseNotesSecret = workflow.indexOf(
+      r'OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}',
+    );
+    final baseResolution = workflow.indexOf(
+      'resolve_previous_release_commit.sh',
+      checkout,
+    );
+    final generation = workflow.indexOf(
+      'generate_release_notes.mjs',
+      baseResolution,
+    );
+    final merge = workflow.indexOf(
+      "jq -s '.[0] * .[1]'",
+      generation,
+    );
+    final releaseUpload = workflow.indexOf('gh release upload', merge);
+
+    expect(publishJob, greaterThanOrEqualTo(0));
+    expect(checkout, greaterThan(publishJob));
+    expect(
+      workflow.substring(checkout, baseResolution),
+      allOf(
+        contains(r'ref: ${{ github.sha }}'),
+        contains('fetch-depth: 0'),
+      ),
+    );
+    expect(releaseNotesSecret, greaterThan(publishJob));
+    expect(RegExp(r'secrets\.OPENAI_API_KEY').allMatches(workflow).length, 1);
+    expect(generation, greaterThan(baseResolution));
+    expect(
+      workflow.substring(generation, merge),
+      allOf(
+        contains('--from-commit "\$base_commit"'),
+        contains('--to-commit "\$GITHUB_SHA"'),
+        contains('--output dist/release-notes.json'),
+      ),
+    );
+    expect(merge, greaterThan(generation));
+    expect(releaseUpload, greaterThan(merge));
+    expect(workflow, contains('.release_notes.to_commit == \$head'));
+    expect(workflow, contains("jq -r '.release_notes.summary'"));
+    final normalizedWorkflow = workflow.replaceAll(RegExp(r'\s+'), ' ');
+    expect(
+      normalizedWorkflow,
+      contains(
+        'gh release edit "\$RELEASE_TAG" \\ --repo "\$GH_REPO" '
+        '\\ --target "\$GITHUB_SHA"',
+      ),
+      reason: 'A retry must refresh both assets and their release notes.',
+    );
+  });
+
+  test('release-note baseline ignores a current-SHA retry', () {
+    expect(
+      releaseBaseResolver,
+      contains(r'[[ "$candidate_commit" == "$HEAD_COMMIT" ]]'),
+    );
+    expect(
+      releaseBaseResolver,
+      contains(r'[[ "$candidate_commit" != "$release_target" ]]'),
+    );
+    expect(
+      releaseBaseResolver,
+      contains(
+        'git merge-base --is-ancestor "\$candidate_commit" "\$HEAD_COMMIT"',
       ),
     );
   });

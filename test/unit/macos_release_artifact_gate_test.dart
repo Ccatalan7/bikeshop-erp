@@ -9,6 +9,7 @@ void main() {
   late String updaterService;
   late String publishHelper;
   late String flutterTestGate;
+  late String releaseBaseResolver;
   late String runbook;
   late String infoPlist;
   late String releaseEntitlements;
@@ -25,6 +26,9 @@ void main() {
     publishHelper = File('scripts/publish_macos_update.sh').readAsStringSync();
     flutterTestGate =
         File('scripts/run_flutter_test_gate.sh').readAsStringSync();
+    releaseBaseResolver = File(
+      'scripts/releases/resolve_previous_release_commit.sh',
+    ).readAsStringSync();
     runbook = File('docs/MACOS_DESKTOP_DISTRIBUTION.md').readAsStringSync();
     infoPlist = File('macos/Runner/Info.plist').readAsStringSync();
     releaseEntitlements =
@@ -78,6 +82,81 @@ void main() {
       contains(
         'com.apple.security.temporary-exception.files.home-relative-path.read-write:0',
       ),
+    );
+  });
+
+  test('protected publish binds release notes before signing the manifest', () {
+    final publishJob = workflow.indexOf('\n  publish:');
+    final releaseNotesSecret = workflow.indexOf(
+      r'OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}',
+    );
+    final baseResolution = workflow.indexOf(
+      'resolve_previous_release_commit.sh',
+      publishJob,
+    );
+    final generation = workflow.indexOf(
+      'generate_release_notes.mjs',
+      baseResolution,
+    );
+    final merge = workflow.indexOf(
+      "jq -s '.[0] * .[1]'",
+      generation,
+    );
+    final signing = workflow.indexOf('ssh-keygen -Y sign', merge);
+
+    expect(publishJob, greaterThanOrEqualTo(0));
+    expect(releaseNotesSecret, greaterThan(publishJob));
+    expect(
+      RegExp(r'secrets\.OPENAI_API_KEY').allMatches(workflow).length,
+      1,
+      reason: 'The AI key must only be exposed inside protected publication.',
+    );
+    expect(baseResolution, greaterThan(publishJob));
+    expect(generation, greaterThan(baseResolution));
+    expect(
+      workflow.substring(generation, merge),
+      allOf(
+        contains('--from-commit "\$base_commit"'),
+        contains('--to-commit "\$GITHUB_SHA"'),
+        contains('--output dist/release-notes.json'),
+      ),
+    );
+    expect(merge, greaterThan(generation));
+    expect(signing, greaterThan(merge));
+    expect(
+      workflow,
+      contains('.release_notes.to_commit == \$head'),
+    );
+    expect(workflow, contains("jq -r '.release_notes.summary'"));
+    final normalizedWorkflow = workflow.replaceAll(RegExp(r'\s+'), ' ');
+    expect(
+      normalizedWorkflow,
+      contains(
+        'gh release edit "\$RELEASE_TAG" \\ --repo "\$GH_REPO" '
+        '\\ --target "\$GITHUB_SHA"',
+      ),
+      reason: 'A retry must refresh both assets and their release notes.',
+    );
+  });
+
+  test('release-note baseline skips same-SHA retries and stays ancestral', () {
+    expect(
+      releaseBaseResolver,
+      contains(r'[[ "$candidate_commit" == "$HEAD_COMMIT" ]]'),
+    );
+    expect(
+      releaseBaseResolver,
+      contains(r'[[ "$candidate_commit" != "$release_target" ]]'),
+    );
+    expect(
+      releaseBaseResolver,
+      contains(
+        'git merge-base --is-ancestor "\$candidate_commit" "\$HEAD_COMMIT"',
+      ),
+    );
+    expect(
+      releaseBaseResolver,
+      contains(r'fallback_commit="$(git rev-parse "${HEAD_COMMIT}^"'),
     );
   });
 
@@ -144,6 +223,51 @@ void main() {
       contains(
         r'write_release_state "$CURRENT_STATE" "$previous_current_tag"',
       ),
+    );
+  });
+
+  test('installer atomically persists only signature-verified manifests', () {
+    expect(
+      installer,
+      contains(
+        'PREPARED_MANIFEST="\${COORDINATION_ROOT}/prepared-manifest.json"',
+      ),
+    );
+    expect(
+      installer,
+      contains(
+        'CURRENT_MANIFEST="\${COORDINATION_ROOT}/current-manifest.json"',
+      ),
+    );
+
+    final signatureVerification = installer.indexOf('ssh-keygen -Y verify');
+    final prepareFunction = installer.indexOf('prepare_latest_release()');
+    final preparedManifest = installer.indexOf(
+      'persist_verified_manifest "\$PREPARED_MANIFEST"',
+      prepareFunction,
+    );
+    final preparedState = installer.indexOf(
+      'write_release_state "\$PREPARED_STATE" "\$TAG_NAME"',
+      preparedManifest,
+    );
+    expect(signatureVerification, greaterThanOrEqualTo(0));
+    expect(preparedManifest, greaterThan(prepareFunction));
+    expect(preparedManifest, greaterThan(signatureVerification));
+    expect(preparedState, greaterThan(preparedManifest));
+
+    final atomicCopy = installer.indexOf('write_file_atomically()');
+    final atomicMove = installer.indexOf(
+      'mv -f "\$temporary" "\$destination"',
+      atomicCopy,
+    );
+    expect(atomicCopy, greaterThanOrEqualTo(0));
+    expect(atomicMove, greaterThan(atomicCopy));
+    expect(
+      installer,
+      contains(
+        'write_file_atomically "\$previous_current_manifest" "\$CURRENT_MANIFEST"',
+      ),
+      reason: 'A failed launch must restore the prior trusted manifest.',
     );
   });
 

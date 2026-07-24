@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/desktop_release_notes.dart';
 import '../services/desktop_update_service.dart';
 
 class DesktopUpdatePrompt extends StatefulWidget {
@@ -166,10 +167,35 @@ class _DesktopUpdatePromptState extends State<DesktopUpdatePrompt> {
                     ],
                     if (!service.isUpdating) ...[
                       const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
+                      Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 8,
+                        runSpacing: 4,
                         children: [
+                          if (service.isUpdateReady &&
+                              update.releaseNotes != null) ...[
+                            TextButton(
+                              key: const ValueKey(
+                                'desktop-update-whats-new-button',
+                              ),
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 8,
+                                ),
+                              ),
+                              onPressed: () => showDesktopReleaseNotesDialog(
+                                context,
+                                update.releaseNotes!,
+                              ),
+                              child: const Text('Novedades'),
+                            ),
+                          ],
                           FilledButton.icon(
+                            key: const ValueKey(
+                              'desktop-update-primary-button',
+                            ),
                             style: FilledButton.styleFrom(
                               visualDensity: VisualDensity.compact,
                               padding: const EdgeInsets.symmetric(
@@ -250,5 +276,161 @@ class _DesktopUpdatePromptState extends State<DesktopUpdatePrompt> {
         ),
       );
     }
+  }
+}
+
+Future<void> showDesktopReleaseNotesDialog(
+  BuildContext context,
+  DesktopReleaseNotes notes,
+) {
+  return showDialog<void>(
+    context: context,
+    builder: (_) => DesktopReleaseNotesDialog(notes: notes),
+  );
+}
+
+class DesktopReleaseNotesDialog extends StatefulWidget {
+  final DesktopReleaseNotes notes;
+
+  const DesktopReleaseNotesDialog({
+    super.key,
+    required this.notes,
+  });
+
+  @override
+  State<DesktopReleaseNotesDialog> createState() =>
+      _DesktopReleaseNotesDialogState();
+}
+
+class _DesktopReleaseNotesDialogState extends State<DesktopReleaseNotesDialog> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final availableHeight = MediaQuery.sizeOf(context).height;
+
+    return Dialog(
+      insetPadding: const EdgeInsets.all(24),
+      child: ConstrainedBox(
+        key: const ValueKey('desktop-release-notes-dialog'),
+        constraints: BoxConstraints(
+          maxWidth: 520,
+          maxHeight: availableHeight * 0.78,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.notes.title,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                widget.notes.summary,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Divider(height: 1, color: colorScheme.outlineVariant),
+              const SizedBox(height: 12),
+              Flexible(
+                child: Scrollbar(
+                  controller: _scrollController,
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (var index = 0;
+                            index < widget.notes.modules.length;
+                            index++) ...[
+                          if (index > 0) const SizedBox(height: 16),
+                          _ReleaseNotesModuleSection(
+                            module: widget.notes.modules[index],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cerrar'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReleaseNotesModuleSection extends StatelessWidget {
+  final DesktopReleaseNotesModule module;
+
+  const _ReleaseNotesModuleSection({
+    required this.module,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Column(
+      key: ValueKey('desktop-release-notes-module-${module.id}'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          module.label,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        for (final item in module.items)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '•',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    item,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
   }
 }

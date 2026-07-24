@@ -9,6 +9,8 @@ The setup is intentionally free and low-friction:
 - The zip becomes a public GitHub Release asset only after an explicit manual
   dispatch with `publish_release=true`.
 - A SHA256 file is published next to the zip.
+- An exact-SHA `windows-release-manifest.json` carries the archive identity and
+  optional user-friendly release notes.
 - `scripts/install_vinabike_erp.ps1` downloads the latest release, verifies the SHA256 checksum, installs into the current user's profile, and creates shortcuts.
 - The Flutter app checks for a newer Windows release after staff users enter the workspace.
 - When an update exists, the app prepares it in the background while the user keeps working. The in-app prompt appears only after the update has already been downloaded and staged.
@@ -53,7 +55,18 @@ artifact-only instead of exposing an update.
 
 The workflow is pinned to the GitHub `windows-2022` runner so the Windows build uses the Visual Studio 2022 toolchain instead of whatever `windows-latest` points to that week. Release tags do not trigger this workflow; the workflow creates the release.
 
-The newest non-prerelease GitHub Release that contains `vinabike_erp_windows_*.zip`, its `.sha256` file, and `install_vinabike_erp.ps1` becomes the update source. The next time users open the app, the Flutter workspace prepares the update silently, then shows an update prompt only when the update is ready.
+The newest non-prerelease GitHub Release whose
+`windows-release-manifest.json`, `vinabike_erp_windows_*.zip`, matching
+`.sha256`, and `install_vinabike_erp.ps1` all agree becomes the update source.
+The next time users open the app, the Flutter workspace prepares the update
+silently, then shows an update prompt only when the update is ready.
+
+The protected publish job first creates deterministic Spanish fallback notes
+for the exact previous-release commit range, then may improve them through the
+OpenAI Responses API when `OPENAI_API_KEY` exists in the `Production`
+environment. It sends bounded Git metadata rather than raw source. AI errors or
+invalid output never block publication; the validated fallback remains in the
+manifest.
 
 The CI gate deliberately does not start `vinabike_erp.exe`: application startup
 initializes the production Supabase fallback and notifications before login.
@@ -83,8 +96,10 @@ For coworkers, the normal flow is:
 
 1. Open Vinabike ERP.
 2. If an update exists, the app downloads and stages it in the background.
-3. When the prompt appears, press `Reiniciar`.
-4. The app closes, applies the prepared update, and reopens Vinabike ERP.
+3. When available, press `Novedades` to read a short summary grouped by ERP
+   module.
+4. Press `Reiniciar`.
+5. The app closes, applies the prepared update, and reopens Vinabike ERP.
 
 The updater is separate from Flutter because Windows cannot safely replace the running `vinabike_erp.exe` while the app is open. If the handoff fails, check:
 
@@ -92,6 +107,10 @@ The updater is separate from Flutter because Windows cannot safely replace the r
 - `%LOCALAPPDATA%\VinabikeERP\updater.log`: the PowerShell installer log.
 
 The updater also defends against Windows file-lock timing during restart: it retries the app-folder swap, closes stale updater `cmd` shells left by older builds, and falls back to applying the release in place if the folder itself cannot be renamed. If the install still fails, the bootstrap reopens the existing app instead of leaving the user stranded.
+
+The app shows notes only when the selected release tag, target commit, manifest,
+archive, and prepared state match. Missing or invalid notes hide `Novedades`
+without affecting download, checksum verification, or restart.
 
 ## Why This Instead Of Google Drive
 

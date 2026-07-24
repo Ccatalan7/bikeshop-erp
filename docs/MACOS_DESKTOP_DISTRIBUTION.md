@@ -38,7 +38,9 @@ After the first install:
 3. A per-user LaunchAgent downloads and prepares a new version outside the app
    sandbox.
 4. The in-app prompt appears only after the update is verified and ready.
-5. Press **Reiniciar**. The app exits, the prepared bundle replaces the stable
+5. When the signed manifest contains release notes, **Novedades** opens a short,
+   non-technical summary grouped by ERP module.
+6. Press **Reiniciar**. The app exits, the prepared bundle replaces the stable
    path, and Vinabike ERP reopens.
 
 The Dock remains valid because updates replace the same stable path. Never pin
@@ -55,10 +57,11 @@ Each versioned `macos-v*` release contains:
 - `install_vinabike_erp_macos.sh`
 
 The manifest binds the exact Git commit, release tag, archive URL, archive hash,
-installer hash, bundle ID, build number, and visible version. Only the manual
-GitHub Actions job inside the protected `Production` environment can access the
-private `MACOS_UPDATE_SIGNING_KEY` and sign it. Artifact-only builds cannot use
-the key. The repository and every installed updater contain only the public key.
+installer hash, bundle ID, build number, visible version, and any customer-facing
+release notes. Only the manual GitHub Actions job inside the protected
+`Production` environment can access the private `MACOS_UPDATE_SIGNING_KEY` and
+sign it. Artifact-only builds cannot use the key. The repository and every
+installed updater contain only the public key.
 
 The sandboxed app and the per-user LaunchAgent exchange only update request and
 state JSON files under `~/Library/Application Support/VinabikeERP/coordination`.
@@ -100,7 +103,11 @@ Useful files:
 - `updater.log`: verification, preparation, install, and rollback events.
 - `launch-agent.log`: background process output.
 - `coordination/prepared-release.json`: release waiting for the user to restart.
+- `coordination/prepared-manifest.json`: exact signed manifest verified for that
+  prepared release, including optional release notes.
 - `coordination/current-release.json`: installed release tag.
+- `coordination/current-manifest.json`: verified manifest for the installed
+  release, restored together with the previous app if startup rolls back.
 - `coordination/update-error.json`: user-facing preparation/apply failure.
 - `rollback/Vinabike ERP.previous.app`: previous working bundle.
 
@@ -135,6 +142,17 @@ model as the Windows publisher:
 6. After success, require the `macos-latest` manifest, immutable versioned
    release, workflow run ID, source commit, archive, checksum, signature, and
    installer to identify the same publication.
+
+The protected publish job creates a bounded Spanish change summary from the
+exact previous-release commit through the commit being published. It first
+writes a deterministic fallback, then may improve it through the OpenAI
+Responses API when the `Production` environment contains `OPENAI_API_KEY`.
+Only commit subjects, changed paths, statuses, and size metadata are sent; raw
+source and unrestricted diffs are not. A missing key, timeout, quota error, or
+invalid model response leaves the fallback in place and never blocks the build,
+signature, or publication. The resulting JSON is validated and merged before
+the manifest is signed, so displayed macOS notes belong to the same trust
+boundary as the archive.
 
 The normal publish task no longer installs Node packages, resolves Flutter,
 runs analyzer/tests, or compiles web locally before commit. GitHub Actions is
@@ -175,8 +193,14 @@ on one Mac:
    `build/` cleanup.
 3. Publish the newer release.
 4. Confirm background preparation, the in-app **Reiniciar** action, stable Dock
-   path, relaunch, installed tag, and bundle version.
+   path, signed **Novedades** content, relaunch, installed tag, and bundle
+   version.
 5. Exercise a deliberately invalid local package and confirm signature/hash
    rejection and rollback without publishing it.
 
 Only after this canary should the internal update command be handed to Chile.
+
+The `Novedades` button can only appear before restart once the currently
+installed app already contains this UI. The first update that introduces the
+feature bootstraps that capability; subsequent prepared updates can show their
+notes in the ready prompt.

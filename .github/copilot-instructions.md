@@ -665,6 +665,30 @@ may replace the internal trust bootstrap with notarization, but it must preserve
 the stable install path, signed release evidence, rollback, and no-VS-Code user
 experience.
 
+### Desktop Release Notes Contract
+
+macOS and Windows coworker releases may include a bounded `release_notes`
+object in their exact-SHA manifest. Generate it only in the protected
+`Production` publish job. The generator must write a deterministic `es-CL`
+fallback before any optional AI call, summarize the complete previous-platform-
+release-to-current-SHA range, and validate every AI item against the changed-path
+inventory. Send only bounded Git metadata such as commit subjects, paths,
+statuses, and change counts; do not send raw source, unrestricted diffs,
+credentials, generated bundles, or binary contents.
+
+`OPENAI_API_KEY` is an optional `Production` environment secret and must never
+enter Flutter builds, artifacts, manifests, logs, pull-request jobs, or
+artifact-only release jobs. Missing credentials, timeouts, API errors, invalid
+JSON, unsupported evidence, or oversized text must retain the fallback and must
+not block signing or publication. The app renders validated plain text only; it
+must not interpret model output as Markdown or HTML.
+
+Merge macOS notes before signing the release manifest, then persist that exact
+manifest only after the LaunchAgent verifies its signature. Windows must require
+the selected release tag, target commit, manifest archive name, and prepared
+archive to agree. `Reiniciar` remains the primary action on both platforms;
+`Novedades` is optional and hidden for absent or invalid notes.
+
 The generated Univer spreadsheet bundles are tracked release assets. The integrity,
 Windows release, and macOS release jobs must each run `npm ci` and
 `npm run build:spreadsheet-engine` in their own clean runner before invoking a
@@ -727,9 +751,14 @@ Each Windows release must include:
 
 - `vinabike_erp_windows_<version>-<run>.zip`
 - `vinabike_erp_windows_<version>-<run>.zip.sha256`
+- `windows-release-manifest.json`
 - `install_vinabike_erp.ps1`
 
-The app queries GitHub Releases, finds the latest non-draft/non-prerelease release with a Windows zip and matching `.sha256`, downloads the installer script, and uses that script to prepare/apply the update. Do not send or install only the `.exe`; the full release folder and Flutter DLL/data assets are required.
+The app queries GitHub Releases, finds the latest non-draft/non-prerelease
+release whose exact-SHA manifest agrees with the Windows zip and matching
+`.sha256`, downloads the installer script, and uses that script to prepare/apply
+the update. Do not send or install only the `.exe`; the full release folder and
+Flutter DLL/data assets are required.
 
 ### Developer Publish Flow
 
@@ -782,10 +811,12 @@ The installed Windows app:
 4. Downloads/prepares updates in the background.
 5. Shows a small actionable prompt only when an update is ready, while restarting, or when preparation failed.
 6. Collapses a dismissed ready-update prompt into a compact `Actualizar` control, so the user can reopen `Reiniciar` without restarting the app.
-7. Applies a prepared update only after the user clicks `Reiniciar`.
-8. Starts a hidden handoff process through `wscript.exe` so no terminal window should appear.
-9. Relaunches the app after the installer finishes.
-10. Clears temporary downloaded zip/checksum/extract files from `%LOCALAPPDATA%\VinabikeERP\downloads`.
+7. Shows `Novedades` only for validated, matching release-note metadata and
+   presents a compact plain-language dialog grouped by business module.
+8. Applies a prepared update only after the user clicks `Reiniciar`.
+9. Starts a hidden handoff process through `wscript.exe` so no terminal window should appear.
+10. Relaunches the app after the installer finishes.
+11. Clears temporary downloaded zip/checksum/extract files from `%LOCALAPPDATA%\VinabikeERP\downloads`.
 
 The installer writes local state under:
 

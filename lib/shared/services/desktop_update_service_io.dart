@@ -6,18 +6,35 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
+import '../models/desktop_release_notes.dart';
+
 class DesktopUpdateInfo {
   final String tag;
   final String releaseName;
   final String assetName;
   final String installerDownloadUrl;
+  final String commit;
+  final DesktopReleaseNotes? releaseNotes;
 
   const DesktopUpdateInfo({
     required this.tag,
     required this.releaseName,
     required this.assetName,
     required this.installerDownloadUrl,
+    required this.commit,
+    this.releaseNotes,
   });
+
+  DesktopUpdateInfo copyWithReleaseNotes(DesktopReleaseNotes? notes) {
+    return DesktopUpdateInfo(
+      tag: tag,
+      releaseName: releaseName,
+      assetName: assetName,
+      installerDownloadUrl: installerDownloadUrl,
+      commit: commit,
+      releaseNotes: notes,
+    );
+  }
 }
 
 class DesktopUpdateService extends ChangeNotifier {
@@ -26,6 +43,18 @@ class DesktopUpdateService extends ChangeNotifier {
   static const _macosLatestManifestUrl =
       'https://github.com/$_repo/releases/download/macos-latest/'
       'macos-release-manifest.json';
+  static const _maxReleaseManifestBytes = 128 * 1024;
+
+  final http.Client _httpClient;
+  final bool _ownsHttpClient;
+  final String? _macosUserHomeOverride;
+
+  DesktopUpdateService({
+    http.Client? httpClient,
+    @visibleForTesting String? macosUserHomeOverride,
+  })  : _httpClient = httpClient ?? http.Client(),
+        _ownsHttpClient = httpClient == null,
+        _macosUserHomeOverride = macosUserHomeOverride;
 
   bool _hasChecked = false;
   bool _dismissed = false;
@@ -49,6 +78,14 @@ class DesktopUpdateService extends ChangeNotifier {
       !_dismissed ? _availableUpdate : null;
   String? get errorMessage => _errorMessage;
 
+  @override
+  void dispose() {
+    if (_ownsHttpClient) {
+      _httpClient.close();
+    }
+    super.dispose();
+  }
+
   Future<void> checkForUpdate({
     bool force = false,
     bool revealDismissed = true,
@@ -67,7 +104,7 @@ class DesktopUpdateService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final latest = Platform.isMacOS
+      var latest = Platform.isMacOS
           ? await _fetchLatestMacosRelease()
           : await _fetchLatestWindowsRelease();
       final installedTag = Platform.isMacOS
@@ -80,10 +117,15 @@ class DesktopUpdateService extends ChangeNotifier {
         if (_availableUpdate?.tag != latest.tag) {
           _dismissed = false;
         }
-        _availableUpdate = latest;
         _isUpdateReady = Platform.isMacOS
             ? await _readPreparedMacosReleaseTag() == latest.tag
             : await _readPreparedReleaseTag() == latest.tag;
+        if (Platform.isMacOS && _isUpdateReady) {
+          latest = latest.copyWithReleaseNotes(
+            await _readPreparedMacosReleaseNotes(latest),
+          );
+        }
+        _availableUpdate = latest;
         if (Platform.isMacOS) {
           _errorMessage = await _readMacosUpdateError(latest.tag);
         }
@@ -200,7 +242,7 @@ class DesktopUpdateService extends ChangeNotifier {
   Future<DesktopUpdateInfo> _fetchLatestWindowsRelease() async {
     final uri =
         Uri.parse('https://api.github.com/repos/$_repo/releases?per_page=30');
-    final response = await http.get(
+    final response = await _httpClient.get(
       uri,
       headers: const {'User-Agent': 'VinabikeERP-Updater'},
     );
@@ -235,19 +277,95 @@ class DesktopUpdateService extends ChangeNotifier {
 
       final zipName = zipAsset['name']?.toString() ?? '';
       final hashName = '$zipName.sha256';
-      final hasHash = assets.any((assetValue) {
-        final asset = assetValue as Map<String, dynamic>;
-        return asset['name']?.toString() == hashName;
-      });
+      final hashAsset = _findAsset(assets, hashName);
 
-      if (!hasHash) continue;
+      if (hashAsset == null) continue;
+
+      final tag = release['tag_name']?.toString() ?? '';
+      final releaseCommit = release['target_commitish']?.toString() ?? '';
+      final manifestAsset = _findAsset(assets, 'windows-release-manifest.json');
+      final installerAsset = _findAsset(assets, 'install_vinabike_erp.ps1');
+      if (!RegExp(r'^windows-v.+$').hasMatch(tag) ||
+          !RegExp(r'^[a-f0-9]{40}$').hasMatch(releaseCommit) ||
+          manifestAsset == null ||
+          installerAsset == null) {
+        throw const FormatException('Invalid Windows release metadata.');
+      }
+
+      final manifestUrl =
+          manifestAsset['browser_download_url']?.toString() ?? '';
+      final installerUrl =
+          installerAsset['browser_download_url']?.toString() ?? '';
+      final zipUrl = zipAsset['browser_download_url']?.toString() ?? '';
+      final hashUrl = hashAsset['browser_download_url']?.toString() ?? '';
+      if (!_isImmutableGithubReleaseAssetUrl(
+            zipUrl,
+            tag: tag,
+            assetName: zipName,
+          ) ||
+          !_isImmutableGithubReleaseAssetUrl(
+            hashUrl,
+            tag: tag,
+            assetName: hashName,
+          ) ||
+          !_isImmutableGithubReleaseAssetUrl(
+            manifestUrl,
+            tag: tag,
+            assetName: 'windows-release-manifest.json',
+          ) ||
+          !_isImmutableGithubReleaseAssetUrl(
+            installerUrl,
+            tag: tag,
+            assetName: 'install_vinabike_erp.ps1',
+          )) {
+        throw const FormatException('Invalid Windows release asset URL.');
+      }
+
+      final manifestResponse = await _httpClient.get(
+        Uri.parse(manifestUrl),
+        headers: const {'User-Agent': 'VinabikeERP-Updater'},
+      );
+      if (manifestResponse.statusCode != 200) {
+        throw StateError(
+          'Windows manifest request failed with '
+          '${manifestResponse.statusCode}.',
+        );
+      }
+      if (manifestResponse.bodyBytes.length > _maxReleaseManifestBytes) {
+        throw const FormatException('Windows release manifest is too large.');
+      }
+
+      final manifestValue = jsonDecode(manifestResponse.body);
+      if (manifestValue is! Map<String, dynamic>) {
+        throw const FormatException('Invalid Windows release manifest.');
+      }
+      final manifestTag = manifestValue['tag_name']?.toString() ?? '';
+      final manifestCommit = manifestValue['commit']?.toString() ?? '';
+      final manifestZipName = manifestValue['zip_name']?.toString() ?? '';
+      final manifestZipHash = manifestValue['zip_sha256']?.toString() ?? '';
+      final manifestInstallerName =
+          manifestValue['installer_name']?.toString() ?? '';
+      final manifestInstallerHash =
+          manifestValue['installer_sha256']?.toString() ?? '';
+      if (manifestTag != tag ||
+          manifestCommit != releaseCommit ||
+          manifestZipName != zipName ||
+          manifestInstallerName != 'install_vinabike_erp.ps1' ||
+          !RegExp(r'^[a-f0-9]{64}$').hasMatch(manifestZipHash) ||
+          !RegExp(r'^[a-f0-9]{64}$').hasMatch(manifestInstallerHash)) {
+        throw const FormatException('Mismatched Windows release manifest.');
+      }
 
       return DesktopUpdateInfo(
-        tag: release['tag_name']?.toString() ?? '',
+        tag: tag,
         releaseName: release['name']?.toString() ?? 'Windows release',
         assetName: zipName,
-        installerDownloadUrl:
-            _findInstallerDownloadUrl(assets) ?? _fallbackInstallerDownloadUrl,
+        installerDownloadUrl: installerUrl,
+        commit: manifestCommit,
+        releaseNotes: DesktopReleaseNotes.tryParse(
+          manifestValue['release_notes'],
+          expectedToCommit: manifestCommit,
+        ),
       );
     }
 
@@ -256,7 +374,7 @@ class DesktopUpdateService extends ChangeNotifier {
 
   Future<DesktopUpdateInfo> _fetchLatestMacosRelease() async {
     final uri = Uri.parse(_macosLatestManifestUrl);
-    final response = await http.get(
+    final response = await _httpClient.get(
       uri,
       headers: const {'User-Agent': 'VinabikeERP-Updater'},
     );
@@ -265,6 +383,9 @@ class DesktopUpdateService extends ChangeNotifier {
       throw StateError(
         'macOS stable manifest request failed with ${response.statusCode}.',
       );
+    }
+    if (response.bodyBytes.length > _maxReleaseManifestBytes) {
+      throw const FormatException('macOS stable manifest is too large.');
     }
 
     final decoded = jsonDecode(response.body);
@@ -306,8 +427,21 @@ class DesktopUpdateService extends ChangeNotifier {
       releaseName: 'Vinabike ERP $tag',
       assetName: archiveName,
       installerDownloadUrl: installerUrl.toString(),
+      commit: commit,
+      // The remote stable manifest is discovery metadata. User-facing notes
+      // are loaded only from the local copy persisted after signature
+      // verification by the macOS updater.
+      releaseNotes: null,
     );
   }
+
+  @visibleForTesting
+  Future<DesktopUpdateInfo> fetchLatestWindowsReleaseForTesting() =>
+      _fetchLatestWindowsRelease();
+
+  @visibleForTesting
+  Future<DesktopUpdateInfo> fetchLatestMacosReleaseForTesting() =>
+      _fetchLatestMacosRelease();
 
   Future<String?> _readInstalledReleaseTag() async {
     final installRoot = _installRoot;
@@ -357,6 +491,11 @@ class DesktopUpdateService extends ChangeNotifier {
   }
 
   Future<String> _macosUserHomeDirectory() async {
+    final override = _macosUserHomeOverride?.trim();
+    if (override != null && override.isNotEmpty) {
+      return _userHomeFromMacosPath(override);
+    }
+
     final environmentHome = Platform.environment['HOME']?.trim();
     if (environmentHome != null && environmentHome.isNotEmpty) {
       return _userHomeFromMacosPath(environmentHome);
@@ -398,6 +537,44 @@ class DesktopUpdateService extends ChangeNotifier {
       File(path.join(directory.path, 'prepared-release.json')),
     );
   }
+
+  Future<DesktopReleaseNotes?> _readPreparedMacosReleaseNotes(
+    DesktopUpdateInfo update,
+  ) async {
+    final directory = await _macosUpdateCoordinationDirectory();
+    final manifestFile = File(
+      path.join(directory.path, 'prepared-manifest.json'),
+    );
+
+    try {
+      if (!await manifestFile.exists()) return null;
+      if (await manifestFile.length() > _maxReleaseManifestBytes) return null;
+      final decoded = jsonDecode(await manifestFile.readAsString());
+      if (decoded is! Map<String, dynamic>) return null;
+
+      final tag = decoded['tag_name']?.toString() ?? '';
+      final commit = decoded['commit']?.toString() ?? '';
+      final archiveName = decoded['archive_name']?.toString() ?? '';
+      if (tag != update.tag ||
+          commit != update.commit ||
+          archiveName != update.assetName) {
+        return null;
+      }
+
+      return DesktopReleaseNotes.tryParse(
+        decoded['release_notes'],
+        expectedToCommit: update.commit,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @visibleForTesting
+  Future<DesktopReleaseNotes?> readPreparedMacosReleaseNotesForTesting(
+    DesktopUpdateInfo update,
+  ) =>
+      _readPreparedMacosReleaseNotes(update);
 
   Future<String?> _readTagFromJsonFile(File file) async {
     if (!await file.exists()) return null;
@@ -498,7 +675,7 @@ class DesktopUpdateService extends ChangeNotifier {
     required String downloadUrl,
   }) async {
     final uri = Uri.parse(downloadUrl);
-    final response = await http.get(
+    final response = await _httpClient.get(
       uri,
       headers: const {'User-Agent': 'VinabikeERP-Updater'},
     );
@@ -529,6 +706,11 @@ class DesktopUpdateService extends ChangeNotifier {
         if (_availableUpdate?.tag == update.tag) {
           if (Platform.isMacOS) {
             _isUpdateReady = await _readPreparedMacosReleaseTag() == update.tag;
+            if (_isUpdateReady) {
+              _availableUpdate = update.copyWithReleaseNotes(
+                await _readPreparedMacosReleaseNotes(update),
+              );
+            }
           } else {
             _isUpdateReady = true;
           }
@@ -584,19 +766,30 @@ class DesktopUpdateService extends ChangeNotifier {
     }
   }
 
-  String? _findInstallerDownloadUrl(List<dynamic> assets) {
+  Map<String, dynamic>? _findAsset(
+    List<dynamic> assets,
+    String expectedName,
+  ) {
     for (final assetValue in assets) {
       final asset = assetValue as Map<String, dynamic>;
-      if (asset['name']?.toString() == 'install_vinabike_erp.ps1') {
-        return asset['browser_download_url']?.toString();
+      if (asset['name']?.toString() == expectedName) {
+        return asset;
       }
     }
 
     return null;
   }
 
-  String get _fallbackInstallerDownloadUrl =>
-      'https://raw.githubusercontent.com/$_repo/main/scripts/install_vinabike_erp.ps1';
+  bool _isImmutableGithubReleaseAssetUrl(
+    String value, {
+    required String tag,
+    required String assetName,
+  }) {
+    final uri = Uri.tryParse(value);
+    return uri?.scheme == 'https' &&
+        uri?.host == 'github.com' &&
+        uri?.path == '/$_repo/releases/download/$tag/$assetName';
+  }
 
   String _buildApplyScript({
     required String installerPath,

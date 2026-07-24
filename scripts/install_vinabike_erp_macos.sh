@@ -60,6 +60,8 @@ readonly PREPARE_REQUEST="${COORDINATION_ROOT}/prepare-request.json"
 readonly APPLY_REQUEST="${COORDINATION_ROOT}/apply-request.json"
 readonly PREPARED_STATE="${COORDINATION_ROOT}/prepared-release.json"
 readonly CURRENT_STATE="${COORDINATION_ROOT}/current-release.json"
+readonly PREPARED_MANIFEST="${COORDINATION_ROOT}/prepared-manifest.json"
+readonly CURRENT_MANIFEST="${COORDINATION_ROOT}/current-manifest.json"
 readonly ERROR_STATE="${COORDINATION_ROOT}/update-error.json"
 readonly LAUNCH_AGENTS_ROOT="${VINABIKE_LAUNCH_AGENTS_ROOT:-${USER_HOME}/Library/LaunchAgents}"
 readonly LAUNCH_AGENT_PATH="${LAUNCH_AGENTS_ROOT}/${UPDATE_LABEL}.plist"
@@ -115,6 +117,25 @@ write_release_state() {
   printf '{"tag_name":"%s","updated_at":"%s"}\n' \
     "$tag" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$temporary"
   mv -f "$temporary" "$file"
+}
+
+write_file_atomically() {
+  local source="$1"
+  local destination="$2"
+  local temporary="${destination}.tmp.$$"
+  [[ -f "$source" ]]
+  mkdir -p "$(dirname "$destination")"
+  /bin/cp "$source" "$temporary"
+  chmod 600 "$temporary"
+  mv -f "$temporary" "$destination"
+}
+
+persist_verified_manifest() {
+  local destination="$1"
+  [[ -f "$MANIFEST_PATH" ]]
+  [[ "$(json_value "$MANIFEST_PATH" tag_name)" == "$TAG_NAME" ]]
+  [[ "$(json_value "$MANIFEST_PATH" commit)" == "$COMMIT_SHA" ]]
+  write_file_atomically "$MANIFEST_PATH" "$destination"
 }
 
 write_error_state() {
@@ -323,6 +344,7 @@ prepare_latest_release() {
   if [[ -d "$prepared_app" && -f "$PREPARED_STATE" ]] && \
      [[ "$(json_value "$PREPARED_STATE" tag_name 2>/dev/null || true)" == "$TAG_NAME" ]]; then
     verify_app_bundle "$prepared_app"
+    persist_verified_manifest "$PREPARED_MANIFEST"
     rm -f "$ERROR_STATE" "$PREPARE_REQUEST"
     log "Release $TAG_NAME is already prepared."
     return
@@ -352,6 +374,7 @@ prepare_latest_release() {
   /usr/bin/xattr -dr com.apple.quarantine "$prepared_app" 2>/dev/null || true
 
   refresh_installed_updater
+  persist_verified_manifest "$PREPARED_MANIFEST"
   write_release_state "$PREPARED_STATE" "$TAG_NAME"
   write_release_state "${SUPPORT_ROOT}/prepared-release.json" "$TAG_NAME"
   prune_stale_prepared_releases "$prepared_dir"
@@ -425,6 +448,11 @@ apply_prepared_release() {
     return 1
   fi
 
+  local previous_current_manifest="${WORK_ROOT}/previous-current-manifest.json"
+  if [[ -f "$CURRENT_MANIFEST" ]]; then
+    /bin/cp "$CURRENT_MANIFEST" "$previous_current_manifest"
+  fi
+
   local prepared_app="${PREPARED_ROOT}/${TAG_NAME}/${EXPECTED_APP_NAME}"
   verify_app_bundle "$prepared_app"
   wait_for_process_exit "$process_id"
@@ -455,7 +483,13 @@ apply_prepared_release() {
     return 1
   fi
 
-  rm -f "$APPLY_REQUEST" "$PREPARED_STATE" "${SUPPORT_ROOT}/prepared-release.json" "$ERROR_STATE"
+  persist_verified_manifest "$CURRENT_MANIFEST"
+  rm -f \
+    "$APPLY_REQUEST" \
+    "$PREPARED_STATE" \
+    "$PREPARED_MANIFEST" \
+    "${SUPPORT_ROOT}/prepared-release.json" \
+    "$ERROR_STATE"
 
   # Publish the installed tag before opening the replacement bundle. The app
   # checks for updates immediately at startup; writing this state afterwards
@@ -474,6 +508,11 @@ apply_prepared_release() {
         write_release_state "${SUPPORT_ROOT}/current-release.json" "$previous_current_tag"
       else
         rm -f "$CURRENT_STATE" "${SUPPORT_ROOT}/current-release.json"
+      fi
+      if [[ -f "$previous_current_manifest" ]]; then
+        write_file_atomically "$previous_current_manifest" "$CURRENT_MANIFEST"
+      else
+        rm -f "$CURRENT_MANIFEST"
       fi
       if [[ -d "$APP_PATH" ]]; then
         /usr/bin/open "$APP_PATH" || true
