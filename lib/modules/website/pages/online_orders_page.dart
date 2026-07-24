@@ -22,10 +22,12 @@ class OnlineOrdersPage extends StatefulWidget {
     super.key,
     this.embedded = false,
     this.initialOrderId,
+    this.initialOpenRequestId,
   });
 
   final bool embedded;
   final String? initialOrderId;
+  final String? initialOpenRequestId;
 
   @override
   State<OnlineOrdersPage> createState() => _OnlineOrdersPageState();
@@ -56,7 +58,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
   String _sortKey = 'created';
   bool _sortAscending = false;
   String? _lastMarkedAlertOrderId;
-  String? _lastOpenedInitialOrderId;
+  String? _lastOpenedInitialOrderRequestKey;
 
   Future<void> _handleCancellation(
     OnlineOrder order,
@@ -272,8 +274,10 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
   @override
   void didUpdateWidget(covariant OnlineOrdersPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialOrderId == widget.initialOrderId) return;
-    _lastOpenedInitialOrderId = null;
+    if (oldWidget.initialOrderId == widget.initialOrderId &&
+        oldWidget.initialOpenRequestId == widget.initialOpenRequestId) {
+      return;
+    }
     _markNotificationReadForOrder(widget.initialOrderId);
   }
 
@@ -293,9 +297,10 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
 
   void _openInitialOrderWhenAvailable(List<OnlineOrder> orders) {
     final orderId = widget.initialOrderId?.trim();
+    final requestKey = _currentInitialOrderRequestKey();
     if (orderId == null ||
         orderId.isEmpty ||
-        orderId == _lastOpenedInitialOrderId) {
+        requestKey == _lastOpenedInitialOrderRequestKey) {
       return;
     }
 
@@ -308,11 +313,16 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     }
     if (matchingOrder == null) return;
 
-    _lastOpenedInitialOrderId = orderId;
+    _lastOpenedInitialOrderRequestKey = requestKey;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || widget.initialOrderId?.trim() != orderId) return;
+      if (!mounted || _currentInitialOrderRequestKey() != requestKey) return;
       _showOrderInspector(matchingOrder!);
     });
+  }
+
+  String _currentInitialOrderRequestKey() {
+    return '${widget.initialOrderId?.trim()}:'
+        '${widget.initialOpenRequestId?.trim() ?? ''}';
   }
 
   Future<void> _openInvoice(String invoiceId) async {

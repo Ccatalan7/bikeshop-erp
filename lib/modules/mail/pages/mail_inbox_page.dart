@@ -26,7 +26,16 @@ class _MailSelectionIntent extends Intent {
 
 /// Unified Mail Inbox Page - Shows merged emails from all connected providers
 class MailInboxPage extends StatefulWidget {
-  const MailInboxPage({super.key});
+  const MailInboxPage({
+    super.key,
+    this.initialProviderId,
+    this.initialMessageId,
+    this.initialOpenRequestId,
+  });
+
+  final String? initialProviderId;
+  final String? initialMessageId;
+  final String? initialOpenRequestId;
 
   @override
   State<MailInboxPage> createState() => _MailInboxPageState();
@@ -51,6 +60,8 @@ class _MailInboxPageState extends State<MailInboxPage> {
   String _searchQuery = '';
   _InboxQuickFilter _quickFilter = _InboxQuickFilter.all;
   double _desktopListWidth = _defaultListWidth;
+  String? _handledMessageDeepLink;
+  int _messageOpenRequestEpoch = 0;
 
   @override
   void initState() {
@@ -127,6 +138,8 @@ class _MailInboxPageState extends State<MailInboxPage> {
     // THEN handle OAuth callbacks (providers must exist first!)
     await _handleOAuthCallbacks();
 
+    await _openRequestedMessage();
+
     // If we have cached emails, do a background refresh
     if (_manager.hasCachedEmails) {
       _manager.backgroundRefresh();
@@ -136,7 +149,60 @@ class _MailInboxPageState extends State<MailInboxPage> {
   }
 
   @override
+  void didUpdateWidget(covariant MailInboxPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialProviderId == widget.initialProviderId &&
+        oldWidget.initialMessageId == widget.initialMessageId &&
+        oldWidget.initialOpenRequestId == widget.initialOpenRequestId) {
+      return;
+    }
+    unawaited(_openRequestedMessage());
+  }
+
+  Future<void> _openRequestedMessage() async {
+    final requestEpoch = ++_messageOpenRequestEpoch;
+    final providerId = widget.initialProviderId?.trim();
+    final messageId = widget.initialMessageId?.trim();
+    if (providerId == null ||
+        providerId.isEmpty ||
+        messageId == null ||
+        messageId.isEmpty) {
+      return;
+    }
+
+    final deepLinkKey =
+        '$providerId:$messageId:${widget.initialOpenRequestId ?? ''}';
+    if (_handledMessageDeepLink == deepLinkKey) return;
+    _handledMessageDeepLink = deepLinkKey;
+
+    _searchDebounceTimer?.cancel();
+    if (_searchController.text.isNotEmpty) {
+      _searchController.clear();
+    }
+    _manager.clearSearch();
+    if (mounted && _quickFilter != _InboxQuickFilter.all) {
+      setState(() => _quickFilter = _InboxQuickFilter.all);
+    }
+
+    final opened = await _manager.openEmailByIdentity(
+      providerId: providerId,
+      messageId: messageId,
+      isRequestCurrent: () =>
+          mounted && requestEpoch == _messageOpenRequestEpoch,
+    );
+    if (!mounted || requestEpoch != _messageOpenRequestEpoch || opened) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content:
+            Text('No se pudo encontrar ese correo en la cuenta conectada.'),
+      ),
+    );
+  }
+
+  @override
   void dispose() {
+    _messageOpenRequestEpoch++;
     _manager.removeListener(_onManagerChange);
     _searchDebounceTimer?.cancel();
     _searchController.removeListener(_onSearchChanged);

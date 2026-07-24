@@ -626,7 +626,10 @@ class HRService extends ChangeNotifier {
     AttendanceStatus? status,
   }) async {
     try {
-      var query = _client.from('attendances').select();
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) return [];
+      var query =
+          _client.from('attendances').select().eq('tenant_id', tenantId);
 
       if (employeeId != null) {
         query = query.eq('employee_id', employeeId);
@@ -658,8 +661,14 @@ class HRService extends ChangeNotifier {
 
   Future<Attendance?> getAttendanceById(String id) async {
     try {
-      final response =
-          await _client.from('attendances').select().eq('id', id).single();
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) return null;
+      final response = await _client
+          .from('attendances')
+          .select()
+          .eq('tenant_id', tenantId)
+          .eq('id', id)
+          .single();
       return Attendance.fromMap(response);
     } catch (e) {
       debugPrint('Error getting attendance: $e');
@@ -680,6 +689,63 @@ class HRService extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error getting current attendance: $e');
       return null;
+    }
+  }
+
+  /// Returns the people currently marked in at the tenant.
+  ///
+  /// Open attendance markings are deliberately the only presence source here.
+  /// Default or published shifts are not reliable enough yet to determine who
+  /// is actually at the store; future planning context may enrich this
+  /// projection without replacing the open-marking contract.
+  Future<List<CurrentAttendanceBriefingEntry>>
+      getCurrentAttendanceBriefing() async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) {
+      throw StateError('No se encontró la tienda actual.');
+    }
+
+    try {
+      final responses = await Future.wait<dynamic>([
+        _client
+            .from('attendances')
+            .select()
+            .eq('tenant_id', tenantId)
+            .eq('status', 'ongoing')
+            .isFilter('check_out', null)
+            .order('check_in'),
+        _client
+            .from('employees')
+            .select()
+            .eq('tenant_id', tenantId)
+            .eq('status', 'active'),
+      ]);
+
+      final attendances = (responses[0] as List<dynamic>)
+          .whereType<Map>()
+          .map((row) => Attendance.fromMap(Map<String, dynamic>.from(row)))
+          .toList(growable: false);
+      final employees = <String, Employee>{
+        for (final row in (responses[1] as List<dynamic>).whereType<Map>())
+          if (row['id'] != null)
+            row['id'].toString():
+                Employee.fromMap(Map<String, dynamic>.from(row)),
+      };
+      final entries = <CurrentAttendanceBriefingEntry>[];
+      for (final attendance in attendances) {
+        final employee = employees[attendance.employeeId];
+        if (employee == null) continue;
+        entries.add(
+          CurrentAttendanceBriefingEntry(
+            attendance: attendance,
+            employee: employee,
+          ),
+        );
+      }
+      return entries;
+    } catch (error) {
+      debugPrint('Error getting current attendance briefing: $error');
+      rethrow;
     }
   }
 
@@ -995,7 +1061,7 @@ class HRService extends ChangeNotifier {
       final activeEmployees = await getEmployees(status: EmployeeStatus.active);
       final todayAttendances = await getAttendances(
         startDate: startOfDay,
-        endDate: today,
+        endDate: startOfDay,
       );
 
       if (activeEmployees.isEmpty) return 0.0;

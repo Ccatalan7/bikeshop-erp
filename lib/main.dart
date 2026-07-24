@@ -28,6 +28,7 @@ import 'shared/services/workspace_manager.dart';
 import 'shared/config/supabase_config.dart';
 import 'shared/widgets/workspace_tab_bar.dart';
 import 'shared/utils/web_url.dart';
+import 'shared/utils/notification_deep_link.dart';
 import 'shared/utils/trusted_meta_notification_url.dart';
 import 'modules/inventory/services/category_service.dart';
 import 'modules/inventory/services/inventory_service.dart' as module_inventory;
@@ -1223,7 +1224,7 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
       title: record['title']?.toString() ?? 'Nueva notificación',
       body: record['body']?.toString() ?? '',
       icon: _iconForErpNotification(type),
-      route: record['route']?.toString() ?? '/',
+      route: resolveErpNotificationRoute(record),
       category:
           isMail ? NotificationCategory.email : NotificationCategory.general,
       suppressRoutePrefix: type == 'online_order_created'
@@ -1406,7 +1407,10 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
       title: 'Nuevo correo',
       body: body,
       icon: Icons.email_outlined,
-      route: '/mail',
+      route: buildMailMessageRoute(
+        providerId: email.providerId,
+        messageId: email.id,
+      ),
       category: NotificationCategory.email,
       suppressRoutePrefix: '/mail',
       showSystemNotification: _usesDesktopLocalMailNotifications,

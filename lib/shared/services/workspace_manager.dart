@@ -53,13 +53,38 @@ String? resolveInitialWorkspaceRoute(String? browserUrl) {
   if (!isWorkspaceRoute) return null;
 
   if (uri.hasScheme && uri.hasAuthority) {
-    return uri.toString().replaceFirst(uri.origin, '');
+    return workspaceRouteIdentity(
+      uri.toString().replaceFirst(uri.origin, ''),
+    );
   }
-  return uri.toString();
+  return workspaceRouteIdentity(uri.toString());
 }
 
 String workspaceRoutePath(String route) {
   return Uri.tryParse(route)?.path ?? route.split('?').first;
+}
+
+/// Returns the durable identity of an ERP workspace route.
+///
+/// `openRequest` is a one-use UI signal: it must reach GoRouter so a page can
+/// reopen an already selected record, but it must never create another tab,
+/// become a pinned-tab identity, or remain in Back/Forward history.
+String workspaceRouteIdentity(String route) {
+  final uri = Uri.tryParse(route);
+  if (uri == null || !uri.queryParameters.containsKey('openRequest')) {
+    return route;
+  }
+
+  final durableParameters = <String, dynamic>{
+    for (final entry in uri.queryParametersAll.entries)
+      if (entry.key != 'openRequest')
+        entry.key: entry.value.length == 1 ? entry.value.single : entry.value,
+  };
+  return uri
+      .replace(
+        queryParameters: durableParameters.isEmpty ? null : durableParameters,
+      )
+      .toString();
 }
 
 String buildBrowserWorkspaceRoute({
@@ -343,7 +368,7 @@ class Workspace {
   Workspace({
     required this.id,
     required this.title,
-    required this.initialRoute,
+    required String initialRoute,
     this.isDrawerVisible = true,
     this.drawerWidth = workspaceDefaultDrawerWidth,
     this.isResizingDrawer = false,
@@ -352,9 +377,10 @@ class Workspace {
     this.browserUrl,
     this.browserTitle,
     this.isHydrated = true,
-  })  : currentRoute = initialRoute,
+  })  : initialRoute = workspaceRouteIdentity(initialRoute),
+        currentRoute = workspaceRouteIdentity(initialRoute),
         navigatorKey = GlobalKey<NavigatorState>(),
-        routeHistory = [initialRoute],
+        routeHistory = [workspaceRouteIdentity(initialRoute)],
         routeHistoryIndex = 0,
         isApplyingHistoryNavigation = false;
 
@@ -1064,27 +1090,30 @@ class WorkspaceManager extends ChangeNotifier {
   }
 
   void openRouteInWorkspace(String route, {String? returnRoute}) {
+    final targetRoute = workspaceRouteIdentity(route);
     final existingIndex = _workspaces.indexWhere(
       (workspace) =>
-          workspace.currentRoute == route || workspace.initialRoute == route,
+          workspace.currentRoute == targetRoute ||
+          workspace.initialRoute == targetRoute,
     );
     if (existingIndex != -1) {
       final workspace = _workspaces[existingIndex];
-      final shouldNavigate = workspace.currentRoute != route;
+      final changesWorkspaceRoute = workspace.currentRoute != targetRoute;
+      final shouldNavigate = changesWorkspaceRoute || route != targetRoute;
       _activeIndex = existingIndex;
 
       _installReturnMilestone(
         workspace: workspace,
         returnRoute: returnRoute,
-        targetRoute: route,
-        includeTarget: !shouldNavigate,
+        targetRoute: targetRoute,
+        includeTarget: !changesWorkspaceRoute,
       );
 
       if (shouldNavigate) {
         if (workspace.router != null) {
           workspace.router!.go(route);
         } else {
-          updateWorkspaceRouteById(workspace.id, route);
+          updateWorkspaceRouteById(workspace.id, targetRoute);
           return;
         }
       }
@@ -1093,14 +1122,14 @@ class WorkspaceManager extends ChangeNotifier {
       return;
     }
 
-    final workspaceId =
-        addWorkspace(title: getRouteTitle(route), initialRoute: route);
+    final workspaceId = addWorkspace(
+        title: getRouteTitle(targetRoute), initialRoute: targetRoute);
     final workspace = workspaceById(workspaceId);
     if (workspace != null) {
       _installReturnMilestone(
         workspace: workspace,
         returnRoute: returnRoute,
-        targetRoute: route,
+        targetRoute: targetRoute,
         includeTarget: true,
       );
       notifyListeners();
@@ -1113,7 +1142,13 @@ class WorkspaceManager extends ChangeNotifier {
     required String targetRoute,
     required bool includeTarget,
   }) {
-    if (returnRoute == null || returnRoute == targetRoute) return;
+    final durableReturnRoute =
+        returnRoute == null ? null : workspaceRouteIdentity(returnRoute);
+    final durableTargetRoute = workspaceRouteIdentity(targetRoute);
+    if (durableReturnRoute == null ||
+        durableReturnRoute == durableTargetRoute) {
+      return;
+    }
 
     if (workspace.routeHistoryIndex < workspace.routeHistory.length - 1) {
       workspace.routeHistory.removeRange(
@@ -1124,22 +1159,22 @@ class WorkspaceManager extends ChangeNotifier {
 
     if (includeTarget &&
         workspace.routeHistory.length == 1 &&
-        workspace.routeHistory.first == targetRoute) {
+        workspace.routeHistory.first == durableTargetRoute) {
       workspace.routeHistory
         ..clear()
-        ..add(returnRoute)
-        ..add(targetRoute);
+        ..add(durableReturnRoute)
+        ..add(durableTargetRoute);
       workspace.routeHistoryIndex = 1;
       return;
     }
 
     if (workspace.routeHistory.isEmpty ||
-        workspace.routeHistory.last != returnRoute) {
-      workspace.routeHistory.add(returnRoute);
+        workspace.routeHistory.last != durableReturnRoute) {
+      workspace.routeHistory.add(durableReturnRoute);
     }
 
-    if (includeTarget && workspace.routeHistory.last != targetRoute) {
-      workspace.routeHistory.add(targetRoute);
+    if (includeTarget && workspace.routeHistory.last != durableTargetRoute) {
+      workspace.routeHistory.add(durableTargetRoute);
     }
 
     workspace.routeHistoryIndex = workspace.routeHistory.length - 1;
@@ -1185,14 +1220,15 @@ class WorkspaceManager extends ChangeNotifier {
   void updateWorkspaceRouteById(String workspaceId, String newRoute) {
     final workspace = workspaceById(workspaceId);
     if (workspace == null) return;
+    final durableRoute = workspaceRouteIdentity(newRoute);
 
-    if (workspace.currentRoute == newRoute) {
+    if (workspace.currentRoute == durableRoute) {
       workspace.isApplyingHistoryNavigation = false;
       return;
     }
 
-    workspace.currentRoute = newRoute;
-    workspace.title = getRouteTitle(newRoute);
+    workspace.currentRoute = durableRoute;
+    workspace.title = getRouteTitle(durableRoute);
 
     if (workspace.isApplyingHistoryNavigation) {
       workspace.isApplyingHistoryNavigation = false;
@@ -1204,23 +1240,26 @@ class WorkspaceManager extends ChangeNotifier {
         );
       }
       if (workspace.routeHistory.isEmpty ||
-          workspace.routeHistory.last != newRoute) {
-        workspace.routeHistory.add(newRoute);
+          workspace.routeHistory.last != durableRoute) {
+        workspace.routeHistory.add(durableRoute);
       }
       workspace.routeHistoryIndex = workspace.routeHistory.length - 1;
     }
 
     debugPrint(
-        '📍 [WorkspaceManager] Updated workspace "${workspace.id}" to route: $newRoute → title: "${workspace.title}"');
+        '📍 [WorkspaceManager] Updated workspace "${workspace.id}" to route: $durableRoute → title: "${workspace.title}"');
     notifyListeners();
   }
 
   /// Check if a workspace with the given route already exists
   /// If it does, switch to it instead of creating a new one
   bool switchToExistingWorkspaceWithRoute(String route) {
+    final targetRoute = workspaceRouteIdentity(route);
     debugPrint(
-        '🔍 [WorkspaceManager] Looking for existing workspace with route: $route');
-    final index = _workspaces.indexWhere((w) => w.initialRoute == route);
+        '🔍 [WorkspaceManager] Looking for existing workspace with route: $targetRoute');
+    final index = _workspaces.indexWhere(
+      (workspace) => workspace.initialRoute == targetRoute,
+    );
     if (index != -1) {
       debugPrint(
           '✅ [WorkspaceManager] Found existing workspace at index $index, switching...');

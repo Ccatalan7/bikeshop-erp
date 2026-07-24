@@ -4,8 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../modules/hr/models/hr_models.dart';
+import '../../modules/hr/services/hr_service.dart';
 import '../../modules/mail/providers/email_provider.dart';
 import '../../modules/mail/providers/mail_account_manager.dart';
 import '../../modules/messaging/models/conversation.dart';
@@ -18,6 +22,7 @@ import '../services/notification_service.dart';
 import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
 import '../utils/chilean_utils.dart';
+import '../utils/notification_deep_link.dart';
 import '../utils/trusted_meta_notification_url.dart';
 
 /// Opens the operational briefing as a slide-in panel.
@@ -143,20 +148,36 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
   NotificationDigestPeriod _period = NotificationDigestPeriod.today;
   _ActivityFilter _activityFilter = _ActivityFilter.all;
   List<AppStoredFile> _files = const [];
+  List<CurrentAttendanceBriefingEntry> _currentAttendances = const [];
   StreamSubscription<AppStoredFile>? _savedFileSubscription;
+  Timer? _attendanceClock;
+  final GlobalKey _activitySectionKey = GlobalKey();
+  int _attendanceLoadEpoch = 0;
   bool _loadingFiles = true;
+  bool _loadingAttendances = true;
   Object? _filesError;
+  Object? _attendancesError;
+  DateTime _attendanceNow = DateTime.now();
 
   @override
   void initState() {
     super.initState();
     unawaited(_loadFiles());
+    unawaited(_loadAttendances());
     _savedFileSubscription = _filesService.savedFiles.listen(_recordSavedFile);
+    _attendanceClock = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (!mounted) return;
+      setState(() => _attendanceNow = DateTime.now());
+      if (!_loadingAttendances) {
+        unawaited(_loadAttendances(silent: true));
+      }
+    });
   }
 
   @override
   void dispose() {
     _savedFileSubscription?.cancel();
+    _attendanceClock?.cancel();
     super.dispose();
   }
 
@@ -192,6 +213,33 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
       ];
       _filesError = null;
     });
+  }
+
+  Future<void> _loadAttendances({bool silent = false}) async {
+    final loadEpoch = ++_attendanceLoadEpoch;
+    if (mounted && !silent) {
+      setState(() {
+        _loadingAttendances = true;
+        _attendancesError = null;
+      });
+    }
+    try {
+      final entries =
+          await context.read<HRService>().getCurrentAttendanceBriefing();
+      if (!mounted || loadEpoch != _attendanceLoadEpoch) return;
+      setState(() {
+        _currentAttendances = entries;
+        _attendanceNow = DateTime.now();
+        _loadingAttendances = false;
+        _attendancesError = null;
+      });
+    } catch (error) {
+      if (!mounted || loadEpoch != _attendanceLoadEpoch || silent) return;
+      setState(() {
+        _loadingAttendances = false;
+        _attendancesError = error;
+      });
+    }
   }
 
   @override
@@ -278,6 +326,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                       onRefresh: () async {
                         await Future.wait([
                           _loadFiles(),
+                          _loadAttendances(),
                           _mail.backgroundRefresh(),
                         ]);
                       },
@@ -295,11 +344,28 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                           ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                            child: _AttendanceNowSection(
+                              entries: _currentAttendances,
+                              now: _attendanceNow,
+                              loading: _loadingAttendances,
+                              hasError: _attendancesError != null,
+                              onRetry: _loadAttendances,
+                              onOpenAll: () => widget.onNavigate(
+                                _attendanceDayRoute(_attendanceNow),
+                              ),
+                              onOpenEntry: (entry) => widget.onNavigate(
+                                _attendanceEntryRoute(entry),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
                             child: _AttentionSection(
                               unreadEmails: unreadEmails,
                               unreadChats: unreadChats,
                               operationalAlerts: digest.unreadAlertCount,
                               onNavigate: widget.onNavigate,
+                              onShowOperationalAlerts: _showOperationalAlerts,
                             ),
                           ),
                           Padding(
@@ -316,6 +382,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
                             child: _ActivitySection(
+                              key: _activitySectionKey,
                               items: activity,
                               period: _period,
                               filter: _activityFilter,
@@ -348,6 +415,20 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
     );
   }
 
+  void _showOperationalAlerts() {
+    setState(() => _activityFilter = _ActivityFilter.operational);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final activityContext = _activitySectionKey.currentContext;
+      if (!mounted || activityContext == null) return;
+      Scrollable.ensureVisible(
+        activityContext,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        alignment: 0.06,
+      );
+    });
+  }
+
   List<_BriefingActivityItem> _buildActivity(
     List<Map<String, dynamic>> rows,
     List<Email> emails,
@@ -364,15 +445,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
       if (createdAt == null || !digest.contains(createdAt)) continue;
       final type = row['type']?.toString() ?? '';
       final platformKey = _platformKeyForNotificationType(type);
-      final storedRoute = row['route']?.toString().trim();
-      final entityId = row['entity_id']?.toString().trim();
-      final route = storedRoute == '/sales/payments' &&
-              entityId != null &&
-              entityId.isNotEmpty
-          ? '/sales/payments?paymentId=${Uri.encodeComponent(entityId)}'
-          : storedRoute?.isNotEmpty == true
-              ? storedRoute!
-              : '/';
+      final route = resolveErpNotificationRoute(row);
       items.add(
         _BriefingActivityItem(
           title: row['title']?.toString() ?? 'Actividad',
@@ -401,7 +474,10 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
           title: sender.trim().isEmpty ? 'Correo recibido' : sender,
           subtitle: subject,
           createdAt: email.receivedTime.toLocal(),
-          route: '/mail',
+          route: buildMailMessageRoute(
+            providerId: email.providerId,
+            messageId: email.id,
+          ),
           icon: Icons.mail_outline,
           accent: _mailAccent,
           kind: _BriefingActivityKind.email,
@@ -450,7 +526,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
               ? file.sourceType
               : contextLabel,
           createdAt: file.createdAt.toLocal(),
-          route: '/storage',
+          route: buildStoredFileRoute(file.id),
           icon: _iconForFile(file),
           accent: _filesAccent,
           kind: _BriefingActivityKind.file,
@@ -478,12 +554,14 @@ const _ordersAccent = Color(0xFF7758A6);
 const _filesAccent = Color(0xFFC4772D);
 const _mailAccent = Color(0xFF3D6FA8);
 const _chatAccent = Color(0xFF7559A5);
+const _attendanceAccent = Color(0xFF347E79);
 const _warningAccent = Color(0xFFC27A22);
 
 enum _BriefingActivityKind { job, payment, order, email, chat, file, alert }
 
 enum _ActivityFilter {
   all,
+  operational,
   jobs,
   payments,
   emails,
@@ -498,6 +576,8 @@ extension _ActivityFilterPresentation on _ActivityFilter {
     switch (this) {
       case _ActivityFilter.all:
         return 'Todo';
+      case _ActivityFilter.operational:
+        return 'Operacionales';
       case _ActivityFilter.jobs:
         return 'Trabajos';
       case _ActivityFilter.payments:
@@ -519,6 +599,8 @@ extension _ActivityFilterPresentation on _ActivityFilter {
     switch (this) {
       case _ActivityFilter.all:
         return 'No hay actividad registrada en este período.';
+      case _ActivityFilter.operational:
+        return 'No hay alertas operativas en este período.';
       case _ActivityFilter.jobs:
         return 'No hay trabajos registrados en este período.';
       case _ActivityFilter.payments:
@@ -540,6 +622,8 @@ extension _ActivityFilterPresentation on _ActivityFilter {
     switch (this) {
       case _ActivityFilter.all:
         return Icons.view_timeline_outlined;
+      case _ActivityFilter.operational:
+        return Icons.notifications_active_outlined;
       case _ActivityFilter.jobs:
         return Icons.build_outlined;
       case _ActivityFilter.payments:
@@ -562,6 +646,8 @@ extension _ActivityFilterPresentation on _ActivityFilter {
       case _ActivityFilter.all:
       case _ActivityFilter.jobs:
         return _jobsAccent;
+      case _ActivityFilter.operational:
+        return _warningAccent;
       case _ActivityFilter.payments:
         return _paymentsAccent;
       case _ActivityFilter.emails:
@@ -581,6 +667,11 @@ extension _ActivityFilterPresentation on _ActivityFilter {
     switch (this) {
       case _ActivityFilter.all:
         return true;
+      case _ActivityFilter.operational:
+        return kind == _BriefingActivityKind.job ||
+            kind == _BriefingActivityKind.payment ||
+            kind == _BriefingActivityKind.order ||
+            kind == _BriefingActivityKind.alert;
       case _ActivityFilter.jobs:
         return kind == _BriefingActivityKind.job;
       case _ActivityFilter.payments:
@@ -1050,18 +1141,306 @@ class _MetricDivider extends StatelessWidget {
   }
 }
 
+class _AttendanceNowSection extends StatelessWidget {
+  const _AttendanceNowSection({
+    required this.entries,
+    required this.now,
+    required this.loading,
+    required this.hasError,
+    required this.onRetry,
+    required this.onOpenAll,
+    required this.onOpenEntry,
+  });
+
+  final List<CurrentAttendanceBriefingEntry> entries;
+  final DateTime now;
+  final bool loading;
+  final bool hasError;
+  final Future<void> Function() onRetry;
+  final VoidCallback onOpenAll;
+  final ValueChanged<CurrentAttendanceBriefingEntry> onOpenEntry;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleEntries = entries.take(4).toList(growable: false);
+    final peopleLabel =
+        entries.length == 1 ? '1 persona' : '${entries.length} personas';
+
+    return _OpenSection(
+      title: 'Ahora en el local',
+      trailing: peopleLabel,
+      trailingWidget: _AttendanceSectionLink(
+        label: loading ? 'Actualizando' : peopleLabel,
+        onTap: onOpenAll,
+      ),
+      accent: _attendanceAccent,
+      child: hasError
+          ? _InlineError(
+              message: 'No se pudo actualizar la asistencia.',
+              onRetry: onRetry,
+            )
+          : loading && entries.isEmpty
+              ? LinearProgressIndicator(
+                  minHeight: 2,
+                  color: _attendanceAccent,
+                  backgroundColor: _attendanceAccent.withValues(alpha: 0.12),
+                )
+              : entries.isEmpty
+                  ? const _QuietState(
+                      icon: Icons.person_off_outlined,
+                      text: 'Nadie ha marcado entrada.',
+                      accent: _attendanceAccent,
+                    )
+                  : Column(
+                      children: [
+                        for (var index = 0;
+                            index < visibleEntries.length;
+                            index++) ...[
+                          _AttendanceNowRow(
+                            entry: visibleEntries[index],
+                            now: now,
+                            onTap: () => onOpenEntry(visibleEntries[index]),
+                          ),
+                          if (index < visibleEntries.length - 1)
+                            Divider(
+                              height: 1,
+                              indent: 40,
+                              color: Theme.of(context)
+                                  .dividerColor
+                                  .withValues(alpha: 0.45),
+                            ),
+                        ],
+                        if (entries.length > visibleEntries.length)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton(
+                              onPressed: onOpenAll,
+                              child: Text(
+                                'Ver ${entries.length - visibleEntries.length} '
+                                'más',
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+    );
+  }
+}
+
+class _AttendanceSectionLink extends StatelessWidget {
+  const _AttendanceSectionLink({
+    required this.label,
+    required this.onTap,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Tooltip(
+      message: 'Abrir control de asistencia',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(5, 3, 0, 3),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 2),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 16,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AttendanceNowRow extends StatelessWidget {
+  const _AttendanceNowRow({
+    required this.entry,
+    required this.now,
+    required this.onTap,
+  });
+
+  final CurrentAttendanceBriefingEntry entry;
+  final DateTime now;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final elapsed = _attendanceElapsed(entry.attendance.checkIn, now);
+    final needsReview = elapsed >= const Duration(hours: 18);
+    final accent = needsReview ? _warningAccent : _attendanceAccent;
+    final title = entry.employee.fullName.trim();
+    final jobTitle = entry.employee.jobTitle.trim();
+
+    return Semantics(
+      button: true,
+      label: '${title.isEmpty ? 'Trabajador' : title}, entrada '
+          '${_attendanceTime(entry.attendance.checkIn)}, '
+          '${_attendanceDuration(elapsed)}',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 32,
+                height: 32,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        _employeeInitials(entry.employee),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: accent,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 0,
+                      bottom: 1,
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        decoration: BoxDecoration(
+                          color: accent,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: theme.colorScheme.surface,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title.isEmpty ? 'Trabajador' : title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      jobTitle.isEmpty ? 'Jornada en curso' : jobTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 154),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (needsReview) ...[
+                          Icon(
+                            Icons.error_outline_rounded,
+                            size: 13,
+                            color: accent,
+                          ),
+                          const SizedBox(width: 3),
+                        ],
+                        Flexible(
+                          child: Text(
+                            needsReview
+                                ? 'Revisar marcación'
+                                : 'Jornada en curso',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: accent,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Entrada ${_attendanceTime(entry.attendance.checkIn)}'
+                      ' · ${_attendanceDuration(elapsed)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 2),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 17,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AttentionSection extends StatelessWidget {
   const _AttentionSection({
     required this.unreadEmails,
     required this.unreadChats,
     required this.operationalAlerts,
     required this.onNavigate,
+    required this.onShowOperationalAlerts,
   });
 
   final int unreadEmails;
   final int unreadChats;
   final int operationalAlerts;
   final void Function(String route) onNavigate;
+  final VoidCallback onShowOperationalAlerts;
 
   @override
   Widget build(BuildContext context) {
@@ -1138,8 +1517,7 @@ class _AttentionSection extends StatelessWidget {
                 label: 'Alertas operativas nuevas',
                 count: operationalAlerts,
                 accent: _warningAccent,
-                onTap: () {},
-                showChevron: false,
+                onTap: onShowOperationalAlerts,
               ),
           ],
         ],
@@ -1196,7 +1574,8 @@ class _FilesSection extends StatelessWidget {
                         for (final file in visibleFiles)
                           _FileRow(
                             file: file,
-                            onTap: () => onNavigate('/storage'),
+                            onTap: () =>
+                                onNavigate(buildStoredFileRoute(file.id)),
                           ),
                         if (files.length > visibleFiles.length)
                           Align(
@@ -1214,6 +1593,7 @@ class _FilesSection extends StatelessWidget {
 
 class _ActivitySection extends StatelessWidget {
   const _ActivitySection({
+    super.key,
     required this.items,
     required this.period,
     required this.filter,
@@ -1457,7 +1837,6 @@ class _ActionRow extends StatelessWidget {
     required this.count,
     required this.accent,
     required this.onTap,
-    this.showChevron = true,
   });
 
   final IconData icon;
@@ -1465,7 +1844,6 @@ class _ActionRow extends StatelessWidget {
   final int count;
   final Color accent;
   final VoidCallback onTap;
-  final bool showChevron;
 
   @override
   Widget build(BuildContext context) {
@@ -1496,10 +1874,8 @@ class _ActionRow extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
-            if (showChevron) ...[
-              const SizedBox(width: 3),
-              Icon(Icons.chevron_right, size: 18, color: accent),
-            ],
+            const SizedBox(width: 3),
+            Icon(Icons.chevron_right, size: 18, color: accent),
           ],
         ),
       ),
@@ -1838,12 +2214,13 @@ void _navigateToRoute(BuildContext context, String route) {
     return;
   }
 
+  final requestedRoute = withNotificationOpenRequest(route);
   try {
     context.read<WorkspaceManager>().navigateActiveWorkspaceFromSharedLink(
-          route,
+          requestedRoute,
         );
   } catch (_) {
-    context.go(route);
+    context.go(requestedRoute);
   }
 }
 
@@ -1931,4 +2308,71 @@ String _compactTime(DateTime dateTime) {
   final day = local.day.toString().padLeft(2, '0');
   final month = local.month.toString().padLeft(2, '0');
   return '$day/$month';
+}
+
+tz.Location? _briefingChileLocation;
+
+tz.Location _chileBriefingLocation() {
+  final existing = _briefingChileLocation;
+  if (existing != null) return existing;
+  tzdata.initializeTimeZones();
+  return _briefingChileLocation = tz.getLocation('America/Santiago');
+}
+
+tz.TZDateTime _chileBriefingTime(DateTime value) {
+  return tz.TZDateTime.from(value.toUtc(), _chileBriefingLocation());
+}
+
+String _attendanceTime(DateTime value) {
+  final chile = _chileBriefingTime(value);
+  final hour = chile.hour.toString().padLeft(2, '0');
+  final minute = chile.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
+}
+
+Duration _attendanceElapsed(DateTime checkIn, DateTime now) {
+  final elapsed = now.toUtc().difference(checkIn.toUtc());
+  return elapsed.isNegative ? Duration.zero : elapsed;
+}
+
+String _attendanceDuration(Duration value) {
+  final hours = value.inHours;
+  final minutes = value.inMinutes.remainder(60);
+  if (hours == 0) return '$minutes min';
+  if (minutes == 0) return '$hours h';
+  return '$hours h $minutes min';
+}
+
+String _employeeInitials(Employee employee) {
+  final parts = [
+    employee.firstName.trim(),
+    employee.lastName.trim(),
+  ].where((part) => part.isNotEmpty).toList(growable: false);
+  if (parts.isEmpty) return '—';
+  return parts.take(2).map((part) => part[0].toUpperCase()).join();
+}
+
+String _attendanceDayRoute(DateTime value) {
+  final chile = _chileBriefingTime(value);
+  final date = '${chile.year.toString().padLeft(4, '0')}-'
+      '${chile.month.toString().padLeft(2, '0')}-'
+      '${chile.day.toString().padLeft(2, '0')}';
+  return Uri(
+    path: '/hr/attendances',
+    queryParameters: {'view': 'day', 'date': date},
+  ).toString();
+}
+
+String _attendanceEntryRoute(CurrentAttendanceBriefingEntry entry) {
+  final attendance = entry.attendance;
+  final base = Uri.parse(_attendanceDayRoute(attendance.checkIn));
+  final query = <String, String>{
+    ...base.queryParameters,
+    'employeeId': attendance.employeeId,
+  };
+  final attendanceId = attendance.id?.trim();
+  if (attendanceId != null && attendanceId.isNotEmpty) {
+    query['attendanceId'] = attendanceId;
+  }
+  return base.replace(queryParameters: query).toString();
 }

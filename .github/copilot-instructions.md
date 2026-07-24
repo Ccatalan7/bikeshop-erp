@@ -637,6 +637,15 @@ Primary files:
   location without burying the failure beneath widget debug output.
 - `docs/MACOS_DESKTOP_DISTRIBUTION.md` is the coworker and operator runbook.
 
+The normal macOS publish task intentionally mirrors the Windows developer flow:
+check Production branch permission, stage and commit all Source Control changes,
+push the current branch, reuse or dispatch the exact-SHA guarded publish run,
+wait with concise status/failure diagnostics, and verify that `macos-latest` plus
+the immutable release identify the same commit and run. Do not reintroduce a
+mandatory local npm/Flutter/analyzer/test/web-build preflight into this task.
+GitHub Actions owns the complete integrity gate and clean native build; the
+developer helper owns dispatch, observation, and exact publication evidence.
+
 The stable app path is `~/Applications/Vinabike ERP.app`; never pin a bundle
 under `build/macos/...` to the Dock. The sandboxed Flutter app writes prepare
 and apply requests in its container. A per-user LaunchAgent verifies the signed
@@ -656,10 +665,11 @@ may replace the internal trust bootstrap with notarization, but it must preserve
 the stable install path, signed release evidence, rollback, and no-VS-Code user
 experience.
 
-The generated Univer spreadsheet bundles are ignored by Git. The integrity,
+The generated Univer spreadsheet bundles are tracked release assets. The integrity,
 Windows release, and macOS release jobs must each run `npm ci` and
 `npm run build:spreadsheet-engine` in their own clean runner before invoking a
-Flutter build; output from one job is not implicitly available to another.
+Flutter build; the integrity job must fail if regeneration changes the committed
+copies, and output from one job is not implicitly available to another.
 
 Release-readiness is an agent-owned requirement. Any agent that changes
 `lib/`, `test/`, or a desktop release contract must run the complete shared
@@ -836,20 +846,15 @@ The safe CI substitute checks the complete native runtime bundle without
 executing it; functional launch validation belongs on an installed canary after
 the artifact-only gate.
 
-### macOS Future Path
+### macOS Platform Boundary
 
-macOS updates are intentionally not implemented yet. The current Windows updater must not be reused for macOS as-is because it is built around Windows PowerShell, `.exe`, `%LOCALAPPDATA%`, Windows shortcuts, and Windows process handoff.
-
-If macOS auto-updates are needed later, build a separate macOS release/update pipeline with its own platform gate and artifacts:
-
-- A macOS GitHub Actions workflow or macOS build machine.
-- `.app` packaging, likely `.dmg` or `.zip`.
-- Proper code signing and notarization for a professional coworker/customer install experience.
-- A macOS-specific updater mechanism, ideally Sparkle-style, or a deliberately designed equivalent.
-- Separate state/log paths under macOS app-support directories.
-- A `Platform.isMacOS` updater service path that does not interfere with the existing Windows updater.
-
-Leave the current Windows updater focused on Windows. Add macOS support beside it, not by weakening the Windows-specific safety assumptions.
+macOS updates are implemented beside the Windows updater, not by reusing its
+PowerShell, `.exe`, `%LOCALAPPDATA%`, shortcut, or process-handoff assumptions.
+Keep the macOS `.app` packaging, sandbox entitlements, arm64/code-seal checks,
+Ed25519 manifest signature, app-support state, stable install path, LaunchAgent
+handoff, and rollback behavior platform-specific. Operational parity means both
+developer publish tasks commit, push, and delegate one guarded exact-SHA build
+to GitHub; it does not mean weakening either platform's native verification.
 
 ---
 

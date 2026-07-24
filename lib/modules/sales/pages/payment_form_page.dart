@@ -16,9 +16,14 @@ import '../services/sales_service.dart';
 import '../widgets/payment_detail_view.dart';
 
 class PaymentsPage extends StatefulWidget {
-  const PaymentsPage({super.key, this.highlightPaymentId});
+  const PaymentsPage({
+    super.key,
+    this.highlightPaymentId,
+    this.initialOpenRequestId,
+  });
 
   final String? highlightPaymentId;
+  final String? initialOpenRequestId;
 
   @override
   State<PaymentsPage> createState() => _PaymentsPageState();
@@ -83,7 +88,10 @@ class _PaymentsPageState extends State<PaymentsPage> {
   @override
   void didUpdateWidget(covariant PaymentsPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.highlightPaymentId == widget.highlightPaymentId) return;
+    if (oldWidget.highlightPaymentId == widget.highlightPaymentId &&
+        oldWidget.initialOpenRequestId == widget.initialOpenRequestId) {
+      return;
+    }
     final paymentId = widget.highlightPaymentId?.trim();
     if (paymentId == null || paymentId.isEmpty) return;
     setState(() => _selectedPaymentId = paymentId);

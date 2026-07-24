@@ -46,12 +46,16 @@ class AppFilesPanel extends StatefulWidget {
   final bool compact;
   final bool showHeader;
   final bool runnerMode;
+  final String? initialFileId;
+  final String? initialOpenRequestId;
 
   const AppFilesPanel({
     super.key,
     this.compact = false,
     this.showHeader = true,
     this.runnerMode = false,
+    this.initialFileId,
+    this.initialOpenRequestId,
   });
 
   @override
@@ -78,6 +82,7 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
   bool _isDragging = false;
   final Set<String> _spreadsheetImportIds = <String>{};
   AppStoredFile? _runnerFile;
+  String? _handledInitialFileRequestKey;
 
   @override
   void initState() {
@@ -97,6 +102,16 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant AppFilesPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialFileId == widget.initialFileId &&
+        oldWidget.initialOpenRequestId == widget.initialOpenRequestId) {
+      return;
+    }
+    unawaited(_openInitialFileIfNeeded(_allFiles));
   }
 
   void _onSearchChanged() {
@@ -127,12 +142,62 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
         _allFiles = files;
         _applyCurrentView();
       });
+      unawaited(_openInitialFileIfNeeded(files));
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _openInitialFileIfNeeded(List<AppStoredFile> loadedFiles) async {
+    final fileId = widget.initialFileId?.trim();
+    final requestKey = _currentInitialFileRequestKey();
+    if (fileId == null ||
+        fileId.isEmpty ||
+        requestKey == _handledInitialFileRequestKey ||
+        !mounted) {
+      return;
+    }
+
+    AppStoredFile? file;
+    for (final candidate in loadedFiles) {
+      if (candidate.id == fileId) {
+        file = candidate;
+        break;
+      }
+    }
+    try {
+      file ??= await _service.getFileById(fileId);
+    } catch (_) {
+      if (!mounted || _currentInitialFileRequestKey() != requestKey) return;
+      _handledInitialFileRequestKey = requestKey;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir ese archivo.')),
+      );
+      return;
+    }
+    if (!mounted || _currentInitialFileRequestKey() != requestKey) return;
+
+    _handledInitialFileRequestKey = requestKey;
+    if (file == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ese archivo ya no está disponible.')),
+      );
+      return;
+    }
+
+    final selectedFile = file;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _currentInitialFileRequestKey() != requestKey) return;
+      StorageFilePreviewDialog.show(context, selectedFile);
+    });
+  }
+
+  String _currentInitialFileRequestKey() {
+    return '${widget.initialFileId?.trim()}:'
+        '${widget.initialOpenRequestId?.trim() ?? ''}';
   }
 
   Future<List<AppStoredFile>> _autoTagSupplierDownloads(

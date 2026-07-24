@@ -81,34 +81,37 @@ void main() {
     );
   });
 
-  test('all clean builds generate the packaged spreadsheet engine', () {
+  test('CI owns the complete release integrity gate', () {
     final npmBuild = integrityWorkflow.indexOf(
       'npm run build:spreadsheet-engine',
     );
     final flutterBuild = integrityWorkflow.indexOf('flutter build web');
     expect(npmBuild, greaterThanOrEqualTo(0));
     expect(flutterBuild, greaterThan(npmBuild));
+    expect(
+      integrityWorkflow,
+      contains('Verify packaged spreadsheet assets are committed'),
+    );
+    expect(integrityWorkflow, contains('git diff --exit-code --'));
+    expect(
+      integrityWorkflow,
+      contains('bash scripts/run_flutter_test_gate.sh flutter'),
+    );
     expect(workflow, contains('npm run build:spreadsheet-engine'));
-    expect(publishHelper, contains('export VOLTA_HOME='));
-    expect(
-      publishHelper,
-      contains('export PATH="\$VOLTA_HOME/bin:\$PATH"'),
+
+    final integrityJob = workflow.indexOf('\n  integrity:');
+    final buildJob = workflow.indexOf('\n  build:');
+    final buildNeedsIntegrity = workflow.indexOf(
+      'needs: integrity',
+      buildJob,
     );
-    expect(
-      publishHelper,
-      contains('node_version="\$(jq -r .node toolchain.json)"'),
-    );
-    expect(
-      publishHelper,
-      contains('npm_version="\$(jq -r .npm toolchain.json)"'),
-    );
-    expect(publishHelper, contains('actual_node_version='));
-    expect(publishHelper, contains('actual_npm_version='));
-    expect(
-      publishHelper,
-      contains(
-          'Pinned spreadsheet build changed the committed release assets.'),
-    );
+    final publishJob = workflow.indexOf('\n  publish:');
+    final publishNeedsBuild = workflow.indexOf('needs: build', publishJob);
+    expect(integrityJob, greaterThanOrEqualTo(0));
+    expect(buildJob, greaterThan(integrityJob));
+    expect(buildNeedsIntegrity, greaterThan(buildJob));
+    expect(publishJob, greaterThan(buildNeedsIntegrity));
+    expect(publishNeedsBuild, greaterThan(publishJob));
   });
 
   test('installer keeps Gatekeeper enabled and verifies a narrow target', () {
@@ -196,99 +199,80 @@ void main() {
     expect(publishHelper, contains('-f publish_release=true'));
     expect(publishHelper, contains('git branch --show-current'));
     expect(publishHelper, contains('git push origin "\$branch"'));
+    expect(
+      publishHelper,
+      contains('Existing macOS release build found for current commit'),
+    );
+    expect(publishHelper, contains('startswith("macOS publish")'),
+        reason: 'The helper must bind to a macOS publish run, not any run.');
     expect(publishHelper, isNot(contains('git checkout')));
     expect(publishHelper, isNot(contains('git switch')));
     expect(runbook, contains('smartpegas1.0'));
+    final normalizedRunbook = runbook.replaceAll(RegExp(r'\s+'), ' ');
+    expect(
+      normalizedRunbook,
+      contains('same low-friction operating model as the Windows publisher'),
+    );
+    expect(runbook, isNot(contains('--preflight-only')));
+    expect(runbook, isNot(contains('intentionally stricter than the Windows')));
   });
 
-  test('developer helper verifies the exact local snapshot before publication',
-      () {
+  test('developer helper follows the Windows-like CI publication sequence', () {
     final stage = publishHelper.indexOf('git add -A');
-    final writeSnapshot = publishHelper.indexOf(
-      'snapshot_tree="\$(git write-tree)"',
-      stage,
-    );
-    final createTemporaryDirectory = publishHelper.indexOf(
-      'snapshot_root="\$(mktemp -d',
-      writeSnapshot,
-    );
-    final exportSnapshot = publishHelper.indexOf(
-      'git archive "\$snapshot_tree" | tar -x -C "\$snapshot_root"',
-      createTemporaryDirectory,
-    );
-    final spreadsheetHashBaseline = publishHelper.indexOf(
-      'bundle_js_hash_before="\$(git hash-object',
-      exportSnapshot,
-    );
-    final stylesheetHashBaseline = publishHelper.indexOf(
-      'bundle_css_hash_before="\$(git hash-object',
-      spreadsheetHashBaseline,
-    );
-    final npmInstall = publishHelper.indexOf('npm ci', exportSnapshot);
-    final spreadsheetBuild = publishHelper.indexOf(
-      'npm run build:spreadsheet-engine',
-      npmInstall,
-    );
-    final spreadsheetAssetGuard = publishHelper.indexOf(
-      'Pinned spreadsheet build changed the committed release assets.',
-      spreadsheetBuild,
-    );
-    final flutterDependencies = publishHelper.indexOf(
-      '"\$flutter_bin" pub get',
-      spreadsheetBuild,
-    );
-    final analyzer = publishHelper.indexOf(
-      '"\$flutter_bin" analyze --no-fatal-infos --no-fatal-warnings lib test',
-      flutterDependencies,
-    );
-    final tests = publishHelper.indexOf(
-      'bash scripts/run_flutter_test_gate.sh "\$flutter_bin"',
-      analyzer,
-    );
-    final webBuild = publishHelper.indexOf(
-      '"\$flutter_bin" build web --release --no-wasm-dry-run',
-      tests,
-    );
-    final readCurrentIndex = publishHelper.indexOf(
-      'current_index_tree="\$(git write-tree)"',
-      webBuild,
-    );
-    final snapshotGuard = publishHelper.indexOf(
-      'if [[ "\$current_index_tree" != "\$snapshot_tree" ]]',
-      readCurrentIndex,
-    );
-    final cleanup = publishHelper.indexOf('cleanup_snapshot', snapshotGuard);
-    final commit = publishHelper.indexOf('git commit -m', cleanup);
+    final commit = publishHelper.indexOf('git commit -m', stage);
     final push = publishHelper.indexOf('git push origin', commit);
-    final dispatch = publishHelper.indexOf('gh workflow run', push);
+    final activeRunLookup = publishHelper.indexOf('active_run="\$(', push);
+    final dispatch = publishHelper.indexOf('gh workflow run', activeRunLookup);
+    final wait = publishHelper.indexOf('gh run view "\$run_id"', dispatch);
+    final diagnostics = publishHelper.indexOf(
+      'show_workflow_failure_diagnostics "\$run_id"',
+      wait,
+    );
+    final releaseVerification = publishHelper.indexOf(
+      'verify_published_release "\$head_sha" "\$run_id"',
+      diagnostics,
+    );
 
     expect(stage, greaterThanOrEqualTo(0));
-    expect(writeSnapshot, greaterThan(stage));
-    expect(createTemporaryDirectory, greaterThan(writeSnapshot));
-    expect(exportSnapshot, greaterThan(createTemporaryDirectory));
-    expect(spreadsheetHashBaseline, greaterThan(exportSnapshot));
-    expect(stylesheetHashBaseline, greaterThan(spreadsheetHashBaseline));
-    expect(npmInstall, greaterThan(stylesheetHashBaseline));
-    expect(spreadsheetBuild, greaterThan(npmInstall));
-    expect(spreadsheetAssetGuard, greaterThan(spreadsheetBuild));
-    expect(flutterDependencies, greaterThan(spreadsheetAssetGuard));
-    expect(analyzer, greaterThan(flutterDependencies));
-    expect(tests, greaterThan(analyzer));
-    expect(webBuild, greaterThan(tests));
-    expect(readCurrentIndex, greaterThan(webBuild));
-    expect(snapshotGuard, greaterThan(readCurrentIndex));
-    expect(cleanup, greaterThan(snapshotGuard));
-    expect(commit, greaterThan(snapshotGuard));
+    expect(commit, greaterThan(stage));
     expect(push, greaterThan(commit));
-    expect(dispatch, greaterThan(push));
-    expect(publishHelper, isNot(contains('if ! git diff --quiet')));
+    expect(activeRunLookup, greaterThan(push));
+    expect(dispatch, greaterThan(activeRunLookup));
+    expect(wait, greaterThan(dispatch));
+    expect(diagnostics, greaterThan(wait));
+    expect(releaseVerification, greaterThan(diagnostics));
+
+    expect(publishHelper, contains('require_command git'));
+    expect(publishHelper, contains('require_command gh'));
+    expect(publishHelper, contains('require_command jq'));
+    expect(publishHelper, isNot(contains('require_command volta')));
+    expect(publishHelper, isNot(contains('require_command node')));
+    expect(publishHelper, isNot(contains('require_command npm')));
+    expect(publishHelper, isNot(contains('npm ci')));
+    expect(publishHelper, isNot(contains('flutter analyze')));
+    expect(publishHelper, isNot(contains('run_flutter_test_gate.sh')));
+    expect(publishHelper, isNot(contains('flutter build')));
+    expect(publishHelper, isNot(contains('git archive')));
+    expect(publishHelper, isNot(contains('--preflight-only')));
+  });
+
+  test('developer helper verifies exact run and release evidence', () {
     expect(
       publishHelper,
-      isNot(contains('git ls-files --others --exclude-standard')),
+      contains('repos/\${REPO}/releases/tags/macos-latest'),
     );
+    expect(publishHelper, contains('.commit == \$sha'));
     expect(
       publishHelper,
-      contains('"\$repo_root/.fvm/flutter_sdk/bin/flutter"'),
+      contains('(.run_id | tostring) == \$run_id'),
+    );
+    expect(publishHelper, contains('.archive_name == \$archive'));
+    expect(publishHelper, contains('.target_commitish'));
+    expect(publishHelper, contains('"\${archive_name}.sha256"'));
+    expect(publishHelper, contains('macos-latest is missing'));
+    expect(
+      publishHelper,
+      contains('macos-latest does not identify the completed workflow'),
     );
   });
 
@@ -299,8 +283,27 @@ void main() {
     expect(flutterTestGate, contains('FAILED:'));
     expect(flutterTestGate, contains('split("\\n  Actual:")[0]'));
     expect(flutterTestGate, contains('Nothing was published.'));
-    expect(integrityWorkflow,
-        contains('bash scripts/run_flutter_test_gate.sh flutter'));
-    expect(publishHelper, contains('--preflight-only'));
+    expect(
+      integrityWorkflow,
+      contains('bash scripts/run_flutter_test_gate.sh flutter'),
+    );
+    expect(publishHelper, contains('Failed job:'));
+    expect(publishHelper, contains('Failed step:'));
+    expect(publishHelper, contains('--log-failed'));
+    expect(publishHelper, contains('tail -n 300'));
+    expect(publishHelper, contains('[line truncated]'));
+    final jobsApiFallback = publishHelper.indexOf(
+      'Could not load job/annotation diagnostics',
+    );
+    final failedLogFallback = publishHelper.indexOf(
+      'Failed step log:',
+      jobsApiFallback,
+    );
+    expect(jobsApiFallback, greaterThanOrEqualTo(0));
+    expect(failedLogFallback, greaterThan(jobsApiFallback));
+    expect(
+      publishHelper,
+      contains('Source commit \$head_sha remains pushed'),
+    );
   });
 }

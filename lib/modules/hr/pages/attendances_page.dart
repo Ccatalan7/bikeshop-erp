@@ -36,7 +36,20 @@ Color _getEmployeeColor(int index) {
 }
 
 class AttendancesPage extends StatefulWidget {
-  const AttendancesPage({super.key});
+  const AttendancesPage({
+    super.key,
+    this.initialView,
+    this.initialDate,
+    this.initialEmployeeId,
+    this.initialAttendanceId,
+    this.initialOpenRequestId,
+  });
+
+  final String? initialView;
+  final DateTime? initialDate;
+  final String? initialEmployeeId;
+  final String? initialAttendanceId;
+  final String? initialOpenRequestId;
 
   @override
   State<AttendancesPage> createState() => _AttendancesPageState();
@@ -50,6 +63,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
   bool _isLoading = true;
   Timer? _refreshTimer;
   bool _showPayrollHistory = false; // Toggle to show payroll list inline
+  String? _handledInitialAttendanceRequestKey;
 
   AttendanceDisplayTimeZone _displayTimeZone = AttendanceDisplayTimeZone.chile;
 
@@ -187,6 +201,13 @@ class _AttendancesPageState extends State<AttendancesPage> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialView == 'day') {
+      _currentView = TimeView.day;
+    }
+    final initialDate = widget.initialDate;
+    if (initialDate != null) {
+      _selectedDate = initialDate;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });
@@ -196,6 +217,26 @@ class _AttendancesPageState extends State<AttendancesPage> {
         setState(() {}); // Trigger rebuild to update clock and elapsed times
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant AttendancesPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialAttendanceId == widget.initialAttendanceId &&
+        oldWidget.initialEmployeeId == widget.initialEmployeeId &&
+        oldWidget.initialDate == widget.initialDate &&
+        oldWidget.initialView == widget.initialView &&
+        oldWidget.initialOpenRequestId == widget.initialOpenRequestId) {
+      return;
+    }
+
+    if (widget.initialView == 'day') {
+      _currentView = TimeView.day;
+    }
+    if (widget.initialDate != null) {
+      _selectedDate = widget.initialDate!;
+    }
+    unawaited(_loadData());
   }
 
   @override
@@ -239,6 +280,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
         _attendancesByEmployee = grouped;
         _isLoading = false;
       });
+      unawaited(_openRequestedAttendance(hrService));
     } catch (e) {
       if (!mounted) return;
 
@@ -253,20 +295,73 @@ class _AttendancesPageState extends State<AttendancesPage> {
     }
   }
 
+  Future<void> _openRequestedAttendance(HRService hrService) async {
+    final attendanceId = widget.initialAttendanceId?.trim();
+    final requestKey = _currentInitialAttendanceRequestKey();
+    if (attendanceId == null ||
+        attendanceId.isEmpty ||
+        requestKey == _handledInitialAttendanceRequestKey ||
+        !mounted) {
+      return;
+    }
+
+    Attendance? attendance;
+    for (final entries in _attendancesByEmployee.values) {
+      for (final candidate in entries) {
+        if (candidate.id == attendanceId) {
+          attendance = candidate;
+          break;
+        }
+      }
+      if (attendance != null) break;
+    }
+    attendance ??= await hrService.getAttendanceById(attendanceId);
+    if (!mounted || _currentInitialAttendanceRequestKey() != requestKey) {
+      return;
+    }
+
+    final employeeId = widget.initialEmployeeId?.trim();
+    if (attendance == null ||
+        (employeeId != null &&
+            employeeId.isNotEmpty &&
+            attendance.employeeId != employeeId)) {
+      _handledInitialAttendanceRequestKey = requestKey;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo encontrar esa marcación de asistencia.'),
+        ),
+      );
+      return;
+    }
+
+    _handledInitialAttendanceRequestKey = requestKey;
+    final selectedAttendance = attendance;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _currentInitialAttendanceRequestKey() != requestKey) {
+        return;
+      }
+      _showAttendanceDetailDialog(selectedAttendance);
+    });
+  }
+
+  String _currentInitialAttendanceRequestKey() {
+    return '${widget.initialAttendanceId?.trim()}:'
+        '${widget.initialOpenRequestId?.trim() ?? ''}';
+  }
+
   DateTimeRange _getDateRangeForView() {
     switch (_currentView) {
       case TimeView.day:
         final start = DateTime(
             _selectedDate.year, _selectedDate.month, _selectedDate.day);
-        return DateTimeRange(
-            start: start, end: start.add(const Duration(days: 1)));
+        return DateTimeRange(start: start, end: start);
 
       case TimeView.week:
         final weekStart =
             _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
         final start = DateTime(weekStart.year, weekStart.month, weekStart.day);
         return DateTimeRange(
-            start: start, end: start.add(const Duration(days: 7)));
+            start: start, end: start.add(const Duration(days: 6)));
 
       case TimeView.month:
         final start = DateTime(_selectedDate.year, _selectedDate.month, 1);

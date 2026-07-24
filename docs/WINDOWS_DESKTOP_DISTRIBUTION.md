@@ -60,7 +60,7 @@ initializes the production Supabase fallback and notifications before login.
 Instead it verifies that the executable, Flutter DLL, ICU data and Flutter
 assets exist, including the generated Univer spreadsheet engine, then packages
 and checksums them without credentials or production traffic. The release job
-regenerates that ignored web bundle from `package-lock.json` on its own clean
+regenerates that tracked web bundle from `package-lock.json` on its own clean
 runner. Perform the functional startup check on an installed Windows canary.
 
 ## Local Test Build

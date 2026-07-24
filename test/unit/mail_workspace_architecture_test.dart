@@ -26,7 +26,15 @@ void main() {
     ).readAsStringSync();
 
     expect(router, contains("path: '/mail'"));
-    expect(router, contains('const mail.MailInboxPage()'));
+    expect(router, contains('child: mail.MailInboxPage('));
+    expect(
+      router,
+      contains("initialProviderId: state.uri.queryParameters['providerId']"),
+    );
+    expect(
+      router,
+      contains("initialMessageId: state.uri.queryParameters['messageId']"),
+    );
     expect(registry, contains('## Email Workspace Surfaces'));
     expect(registry, contains('Unified inbox desktop'));
     expect(registry, contains('Unified inbox compact/mobile'));
@@ -49,7 +57,18 @@ void main() {
     expect(page, contains('Ajustar ancho de la lista de correos'));
     expect(page, contains('_confirmDeleteSelectedEmail'));
     expect(page, contains('initialProviderId: email.providerId'));
+    expect(page, contains('_openRequestedMessage()'));
+    expect(page, contains('_manager.openEmailByIdentity('));
+    expect(page, contains('final requestEpoch = ++_messageOpenRequestEpoch'));
+    expect(page, contains('requestEpoch == _messageOpenRequestEpoch'));
     expect(page, contains("label: const Text('Redactar')"));
+    expect(manager, contains('Future<bool> openEmailByIdentity({'));
+    expect(manager, contains('bool Function()? isRequestCurrent'));
+    expect(
+      manager,
+      contains('if (isRequestCurrent?.call() == false) return false;'),
+    );
+    expect(manager, contains('await openKnownEmail(email)'));
     expect(manager, contains('_selectedEmail?.providerId != providerId'));
     expect(manager, contains('_selectionRequestId++'));
     expect(manager, contains('final failedProviders = <EmailProvider>[]'));
@@ -62,6 +81,37 @@ void main() {
       manager,
       isNot(contains('await Future.wait(\n        providersToRefresh')),
     );
+  });
+
+  test('a superseded message request cannot overwrite the latest selection',
+      () {
+    final page = File(
+      'lib/modules/mail/pages/mail_inbox_page.dart',
+    ).readAsStringSync();
+    final manager = File(
+      'lib/modules/mail/providers/mail_account_manager.dart',
+    ).readAsStringSync();
+
+    expect(page, contains('final requestEpoch = ++_messageOpenRequestEpoch'));
+    expect(
+      page,
+      contains(
+        'mounted && requestEpoch == _messageOpenRequestEpoch',
+      ),
+    );
+    expect(
+      page,
+      contains(
+        'requestEpoch != _messageOpenRequestEpoch || opened',
+      ),
+    );
+
+    final latestRequestGuard = manager.lastIndexOf(
+      'if (isRequestCurrent?.call() == false) return false;',
+    );
+    final selection = manager.indexOf('await openKnownEmail(email);');
+    expect(latestRequestGuard, greaterThanOrEqualTo(0));
+    expect(selection, greaterThan(latestRequestGuard));
   });
 
   test('compose and message rendering retain the shared safety contract', () {

@@ -34,7 +34,11 @@ void main() {
     expect(router, contains("state.uri.queryParameters['paymentId']"));
     expect(
       router,
-      contains('erp.PaymentsPage(highlightPaymentId: paymentId)'),
+      contains('highlightPaymentId: paymentId'),
+    );
+    expect(
+      router,
+      contains("state.uri.queryParameters['openRequest']"),
     );
     expect(router, contains("path: '/sales/payments/:id',"));
     expect(router, contains('erp.PaymentDetailPage(paymentId: id)'));
@@ -378,7 +382,7 @@ void main() {
   test('notification and accounting entry points preserve payment identity',
       () {
     final notifications = _read(
-      'lib/shared/widgets/notifications_panel.dart',
+      'lib/shared/utils/notification_deep_link.dart',
     );
     final accounting = _read(
       'lib/modules/accounting/widgets/accounting_dashboard_section.dart',
@@ -386,17 +390,15 @@ void main() {
 
     expect(
       notifications,
-      contains("final entityId = row['entity_id']?.toString().trim();"),
+      contains("'sales_payment_received' => data['payment_id']"),
     );
     expect(
       notifications,
-      contains("storedRoute == '/sales/payments'"),
+      contains("entityType == 'sales_payment'"),
     );
     expect(
       notifications,
-      contains(
-        r"'/sales/payments?paymentId=${Uri.encodeComponent(entityId)}'",
-      ),
+      contains("queryParameters: {'paymentId': entityId}"),
     );
 
     final paymentBranch = _section(

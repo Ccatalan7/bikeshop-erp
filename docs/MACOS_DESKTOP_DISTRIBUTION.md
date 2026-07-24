@@ -120,40 +120,36 @@ The normal developer action is the selectable VS Code task:
 Cmd+Shift+B -> Publish macOS Update (all changes)
 ```
 
-It runs `scripts/publish_macos_update.sh`, which stays on the current authorized
-branch and stages pending Source Control changes. Before any commit or push, it
-renders the staged Git tree into an isolated temporary directory and runs the
-same release-integrity commands used by CI there: clean Node dependency
-installation, spreadsheet-engine generation, Flutter dependency resolution,
-analyzer, the complete Flutter test suite, and the ERP web release build. It
-selects the Node and npm versions pinned in `toolchain.json` through Volta and
-compares the generated spreadsheet assets with the staged copies. Any mismatch
-stops before publication instead of deferring a deterministic-asset failure to
-GitHub Actions. The snapshot is immutable, so another agent may continue
-editing ordinary working files without changing or invalidating the release
-under test; those later edits remain pending for the next update. The task
-stops only if another process explicitly changes the staged index during the
-preflight. After the exact staged snapshot passes, the temporary directory is
-removed and the task commits when needed, pushes, dispatches
-`.github/workflows/macos-release.yml` with `publish_release=true`, waits for the
-guarded workflow, and verifies the published assets.
+It runs `scripts/publish_macos_update.sh` with the same low-friction operating
+model as the Windows publisher:
 
-If the local preflight fails, the task stops before commit, push, or workflow
-dispatch. The shared machine-readable test gate prints the exact failed test,
-source file, expectation, and stack location while suppressing unrelated widget
-debug noise. Fix the reported failure and run the same task again; no partial
-macOS update is published. `flutter analyze` and VS Code's Problems panel do not
-run this suite, so a zero-error Problems count is not release-readiness proof.
+1. Verify that the current branch may enter the protected `Production`
+   environment.
+2. Stage every Source Control change and create a timestamped commit when
+   needed. A clean checkout publishes the already-committed branch head.
+3. Push that exact commit without switching branches or creating a worktree.
+4. Reuse an active publish run for the same commit, or dispatch
+   `.github/workflows/macos-release.yml` once with `publish_release=true`.
+5. Wait with a concise elapsed-time status. If CI fails, print the failed job,
+   failed step, annotations, and failed-step log directly in the task terminal.
+6. After success, require the `macos-latest` manifest, immutable versioned
+   release, workflow run ID, source commit, archive, checksum, signature, and
+   installer to identify the same publication.
 
-This is intentionally stricter than the Windows developer helper. Windows
-commits and pushes first, then runs the shared integrity gate in GitHub Actions;
-macOS verifies an immutable local snapshot before creating or pushing a release
-commit, and GitHub verifies it again. Agents can exercise only the local macOS
-gate without mutating Git or publishing by running:
+The normal publish task no longer installs Node packages, resolves Flutter,
+runs analyzer/tests, or compiles web locally before commit. GitHub Actions is
+the one authoritative release gate: it regenerates the tracked spreadsheet
+assets, verifies that they match the commit, runs analyzer, the complete Flutter
+test suite and the ERP web build, then performs the clean native macOS build,
+bundle validation, packaging, signing, and protected publication. This removes
+the duplicated macOS-only local gauntlet without bypassing any condition that
+guards a coworker update.
 
-```bash
-bash scripts/publish_macos_update.sh --preflight-only
-```
+`flutter analyze` and VS Code's Problems panel do not run the full test suite,
+so a zero-error Problems count still cannot guarantee that CI will accept the
+commit. If CI rejects it, the source commit remains pushed, no successful
+promotion is reported, and the task shows the failing GitHub job/step. Fix that
+specific failure and run the same task again, exactly as with Windows.
 
 Pushes and ordinary dispatches are artifact-only. They build and verify but
 cannot publish an update. Only the separate `Production` job has write access
@@ -161,9 +157,10 @@ to GitHub Releases and refreshes the `macos-latest` metadata alias.
 
 Both the integrity gate and the macOS runner execute `npm ci` followed by
 `npm run build:spreadsheet-engine` before Flutter. The generated Univer bundles
-are tracked release assets; the build must reproduce them byte-for-byte with
-the pinned toolchain. This guarantees that a clean release includes the reviewed
-spreadsheet engine instead of depending on one Mac's uncommitted output.
+are tracked release assets; the integrity gate requires the pinned build to
+reproduce the committed copies byte-for-byte. This guarantees that a clean
+release includes the reviewed spreadsheet engine instead of depending on one
+Mac's uncommitted output.
 
 Never create a temporary branch or worktree for publication. Both `main` and
 `smartpegas1.0` are explicitly authorized by the GitHub Production environment.

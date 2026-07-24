@@ -22,6 +22,9 @@ void main() {
     expect(panel, contains('_ActivityFilter.files'));
     expect(panel, isNot(contains('ChoiceChip(')));
     expect(panel, isNot(contains('FilterChip(')));
+    expect(panel, contains('onShowOperationalAlerts'));
+    expect(panel, contains('Scrollable.ensureVisible('));
+    expect(panel, isNot(contains('onTap: () {},')));
     expect(
       registry,
       contains('one compact icon dropdown for quickly filtering'),

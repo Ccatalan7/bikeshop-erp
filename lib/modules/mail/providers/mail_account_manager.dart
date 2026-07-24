@@ -778,6 +778,61 @@ class MailAccountManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Opens a concrete message already present in the unified read model.
+  ///
+  /// Filter/search state is normalized before selection so the canonical
+  /// inbox can never display a message excluded by its active provider scope.
+  Future<void> openKnownEmail(Email email) async {
+    clearSearch();
+    if (_providerFilter != email.providerId) {
+      setProviderFilter(email.providerId);
+    }
+    await selectEmail(email);
+  }
+
+  /// Resolves a durable provider/message deep link into the canonical inbox.
+  Future<bool> openEmailByIdentity({
+    required String providerId,
+    required String messageId,
+    bool Function()? isRequestCurrent,
+  }) async {
+    final normalizedProviderId = providerId.trim();
+    final normalizedMessageId = messageId.trim();
+    if (normalizedProviderId.isEmpty || normalizedMessageId.isEmpty) {
+      return false;
+    }
+
+    await initialize();
+    if (isRequestCurrent?.call() == false) return false;
+
+    Email? email = _findEmailByIdentity(
+      normalizedProviderId,
+      normalizedMessageId,
+    );
+    if (email == null) {
+      await refreshInbox(background: true);
+      if (isRequestCurrent?.call() == false) return false;
+      email = _findEmailByIdentity(
+        normalizedProviderId,
+        normalizedMessageId,
+      );
+    }
+    if (email == null) return false;
+    if (isRequestCurrent?.call() == false) return false;
+
+    await openKnownEmail(email);
+    return true;
+  }
+
+  Email? _findEmailByIdentity(String providerId, String messageId) {
+    for (final email in _unifiedEmails) {
+      if (email.providerId == providerId && email.id == messageId) {
+        return email;
+      }
+    }
+    return null;
+  }
+
   Future<void> _hydrateSelectedGmailInlineImages({
     required GmailProvider provider,
     required Email email,

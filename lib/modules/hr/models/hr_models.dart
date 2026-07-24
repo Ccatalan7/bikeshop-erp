@@ -970,6 +970,22 @@ class Attendance {
   }
 }
 
+/// Tenant-scoped present-state projection used by compact operational surfaces.
+///
+/// For the current operating model, an open attendance marking is the only
+/// source of truth for presence. Published and default shifts are intentionally
+/// excluded until weekly planning is consistently maintained. Scheduling
+/// context can be added later without changing this presence contract.
+class CurrentAttendanceBriefingEntry {
+  const CurrentAttendanceBriefingEntry({
+    required this.attendance,
+    required this.employee,
+  });
+
+  final Attendance attendance;
+  final Employee employee;
+}
+
 // ============================================================================
 // ATTENDANCE SUMMARY MODEL (for reports)
 // ============================================================================

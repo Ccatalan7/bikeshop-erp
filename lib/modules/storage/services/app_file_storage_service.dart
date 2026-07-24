@@ -66,6 +66,21 @@ class AppFileStorageService {
         .toList(growable: false);
   }
 
+  Future<AppStoredFile?> getFileById(String fileId) async {
+    final tenantId = await _requireTenantId();
+    final normalizedFileId = fileId.trim();
+    if (normalizedFileId.isEmpty) return null;
+
+    final row = await _supabase
+        .from('app_files')
+        .select()
+        .eq('tenant_id', tenantId)
+        .eq('id', normalizedFileId)
+        .isFilter('deleted_at', null)
+        .maybeSingle();
+    return row == null ? null : AppStoredFile.fromJson(row);
+  }
+
   Future<AppStoredFile> saveFile({
     required Uint8List bytes,
     required String fileName,

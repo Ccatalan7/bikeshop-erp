@@ -2125,7 +2125,10 @@ class AppRouter {
               context,
               state,
               erp.loadLibrary(),
-              () => erp.PaymentsPage(highlightPaymentId: paymentId),
+              () => erp.PaymentsPage(
+                highlightPaymentId: paymentId,
+                initialOpenRequestId: state.uri.queryParameters['openRequest'],
+              ),
             );
           },
         ),
@@ -2658,7 +2661,14 @@ class AppRouter {
             context,
             state,
             erp.loadLibrary(),
-            () => erp.AttendancesPage(),
+            () => erp.AttendancesPage(
+              initialView: state.uri.queryParameters['view'],
+              initialDate:
+                  DateTime.tryParse(state.uri.queryParameters['date'] ?? ''),
+              initialEmployeeId: state.uri.queryParameters['employeeId'],
+              initialAttendanceId: state.uri.queryParameters['attendanceId'],
+              initialOpenRequestId: state.uri.queryParameters['openRequest'],
+            ),
           ),
         ),
         GoRoute(
@@ -2821,7 +2831,11 @@ class AppRouter {
                   context,
                   state,
                   erp.loadLibrary(),
-                  () => erp.OnlineOrdersPage(initialOrderId: initialOrderId),
+                  () => erp.OnlineOrdersPage(
+                    initialOrderId: initialOrderId,
+                    initialOpenRequestId:
+                        state.uri.queryParameters['openRequest'],
+                  ),
                 );
               },
             ),
@@ -2844,7 +2858,11 @@ class AppRouter {
           path: '/mail',
           pageBuilder: (context, state) => CustomTransitionPage<void>(
             key: state.pageKey,
-            child: const mail.MailInboxPage(),
+            child: mail.MailInboxPage(
+              initialProviderId: state.uri.queryParameters['providerId'],
+              initialMessageId: state.uri.queryParameters['messageId'],
+              initialOpenRequestId: state.uri.queryParameters['openRequest'],
+            ),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) => child,
           ),
@@ -2855,7 +2873,10 @@ class AppRouter {
           path: '/storage',
           pageBuilder: (context, state) => CustomTransitionPage<void>(
             key: state.pageKey,
-            child: const storage.StoragePage(),
+            child: storage.StoragePage(
+              initialFileId: state.uri.queryParameters['file'],
+              initialOpenRequestId: state.uri.queryParameters['openRequest'],
+            ),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) => child,
           ),
