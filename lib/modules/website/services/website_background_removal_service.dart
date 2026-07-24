@@ -4,14 +4,17 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../shared/constants/storage_constants.dart';
-import '../../../shared/services/image_service.dart';
 import 'website_background_removal_processor.dart';
+import 'website_media_service.dart';
 
 class WebsiteBackgroundRemovalSmartResult {
   final String imageUrl;
+  final String sourceUrl;
 
-  const WebsiteBackgroundRemovalSmartResult(this.imageUrl);
+  const WebsiteBackgroundRemovalSmartResult({
+    required this.imageUrl,
+    required this.sourceUrl,
+  });
 }
 
 class WebsiteBackgroundRemovalService {
@@ -57,18 +60,18 @@ class WebsiteBackgroundRemovalService {
   Future<String> uploadTransparentPng(
     Uint8List pngBytes, {
     String prefix = 'website-no-bg',
+    String? originalUrl,
   }) async {
-    final url = await ImageService.uploadBytes(
+    final asset = await WebsiteMediaService(client: _supabase).uploadImage(
       bytes: pngBytes,
       fileName: '${prefix}_${DateTime.now().millisecondsSinceEpoch}.png',
-      bucket: StorageConfig.defaultBucket,
-      folder: 'website-images/background-removed',
-      contentType: 'image/png',
+      operation: 'background-removal-local',
+      originalUrl: originalUrl,
     );
-    if (url == null || url.isEmpty) {
-      throw Exception('No se pudo guardar el PNG transparente.');
+    if (asset.publicUrl.isEmpty) {
+      throw Exception('No se pudo guardar la imagen transparente.');
     }
-    return url;
+    return asset.publicUrl;
   }
 
   Future<WebsiteBackgroundRemovalSmartResult> removeSmartBackground({
@@ -86,11 +89,23 @@ class WebsiteBackgroundRemovalService {
     if (response.status < 200 || response.status >= 300 || data is! Map) {
       throw Exception(_smartErrorMessage(data, response.status));
     }
-    final resultUrl = data['imageUrl']?.toString().trim() ?? '';
-    if (resultUrl.isEmpty) {
+    final sourceUrl = data['imageUrl']?.toString().trim() ?? '';
+    final sourcePath = data['sourcePath']?.toString().trim() ?? '';
+    if (sourceUrl.isEmpty || sourcePath.isEmpty) {
       throw Exception('El servicio inteligente no devolvió una imagen.');
     }
-    return WebsiteBackgroundRemovalSmartResult(resultUrl);
+    final optimized =
+        await WebsiteMediaService(client: _supabase).optimizeStoredImage(
+      sourcePath: sourcePath,
+      sourceUrl: sourceUrl,
+      fileName: 'smart-no-bg.png',
+      operation: 'background-removal-smart',
+      originalUrl: imageUrl,
+    );
+    return WebsiteBackgroundRemovalSmartResult(
+      imageUrl: optimized.publicUrl,
+      sourceUrl: sourceUrl,
+    );
   }
 
   String _smartErrorMessage(dynamic data, int status) {

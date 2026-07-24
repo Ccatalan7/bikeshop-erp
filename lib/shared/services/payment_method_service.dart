@@ -9,6 +9,7 @@ class PaymentMethodService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   List<PaymentMethod> _paymentMethods = [];
+  final Map<String, PaymentMethod> _historicalMethods = {};
   bool _isLoading = false;
   String? _error;
 
@@ -30,7 +31,7 @@ class PaymentMethodService extends ChangeNotifier {
       // Debug: Check if user is authenticated
       final user = _supabase.auth.currentUser;
       debugPrint('🔐 Current user: ${user?.id ?? "NOT AUTHENTICATED"}');
-      
+
       final response = await _supabase
           .from('payment_methods')
           .select()
@@ -38,7 +39,7 @@ class PaymentMethodService extends ChangeNotifier {
           .order('sort_order', ascending: true);
 
       debugPrint('📦 Raw response: $response');
-      
+
       _paymentMethods = (response as List)
           .map((json) => PaymentMethod.fromJson(json as Map<String, dynamic>))
           .toList();
@@ -64,7 +65,34 @@ class PaymentMethodService extends ChangeNotifier {
     try {
       return _paymentMethods.firstWhere((pm) => pm.id == id);
     } catch (e) {
-      return null;
+      return _historicalMethods[id];
+    }
+  }
+
+  /// Hydrates deactivated methods referenced by historical documents without
+  /// making them selectable for new payments.
+  Future<void> loadReferencedPaymentMethods(Iterable<String> ids) async {
+    final missing = ids
+        .where((id) => id.isNotEmpty && getPaymentMethodById(id) == null)
+        .toSet();
+    if (missing.isEmpty) return;
+
+    try {
+      final response = await _supabase
+          .from('payment_methods')
+          .select()
+          .inFilter('id', missing.toList());
+      for (final row in response as List) {
+        final method = PaymentMethod.fromJson(
+          Map<String, dynamic>.from(row as Map),
+        );
+        _historicalMethods[method.id] = method;
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint(
+        'PaymentMethodService.loadReferencedPaymentMethods error: $e',
+      );
     }
   }
 

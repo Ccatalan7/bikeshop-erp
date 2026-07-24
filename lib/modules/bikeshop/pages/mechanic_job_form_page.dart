@@ -739,6 +739,7 @@ class MechanicJobFormPage extends StatefulWidget {
   final String? initialBikeId; // Pre-select an active bike owned by customer
   final String?
       initialJobType; // Pre-select type: 'service'|'warranty'|'quotation'|'item_service'
+  final String? initialTab; // 'general'|'diagnosis'|'products'
   final bool isEmbedded;
   final VoidCallback? onSaved;
   final VoidCallback? onCanceled;
@@ -749,6 +750,7 @@ class MechanicJobFormPage extends StatefulWidget {
     this.customerId,
     this.initialBikeId,
     this.initialJobType,
+    this.initialTab,
     this.isEmbedded = false,
     this.onSaved,
     this.onCanceled,
@@ -978,6 +980,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   @override
   void initState() {
     super.initState();
+    _selectedWorkbenchTab = switch (widget.initialTab) {
+      'diagnosis' => _JobWorkbenchTab.diagnosis,
+      'products' => _JobWorkbenchTab.products,
+      _ => _JobWorkbenchTab.general,
+    };
     // Prevent a blank/partial form from flashing before the async edit load starts.
     // This avoids the "form opens fast, then shows loader again" flicker.
     _isLoading = true;

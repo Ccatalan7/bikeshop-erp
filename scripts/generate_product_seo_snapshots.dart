@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:vinabike_erp/modules/website/models/website_catalog_presentation.dart';
+import 'package:vinabike_erp/public_store/models/public_commerce_product_projection.dart';
+
 /// Generates static HTML "SEO snapshots" for product routes.
 ///
 /// Why: Firebase Hosting is configured as an SPA (rewrite ** -> /index.html).
@@ -111,6 +114,32 @@ void main(List<String> args) async {
       'inventory_qty': quantity,
     };
   }).toList(growable: false);
+  final resolvedBrandNamesById = await _fetchProductBrandNames(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
+    brandIds: products
+        .map((product) => (product['brand_id'] ?? '').toString())
+        .where((id) => id.trim().isNotEmpty),
+  );
+  final activeCategoryRows = await _fetchActiveProductCategories(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
+  );
+  final presentationRegistry = WebsiteCatalogPresentationRegistry.decode(
+    settings[websiteCatalogPresentationsSettingKey],
+  );
+  final categories = buildCanonicalCategorySeoProjections(
+    products: products,
+    activeCategories: activeCategoryRows,
+    presentationRegistry: presentationRegistry,
+    storeUrl: storeUrl,
+    resolvedBrandNamesById: resolvedBrandNamesById,
+  );
+  final categoriesById = {
+    for (final category in categories) category.categoryId: category,
+  };
   final productUrlAliases = await _fetchProductUrlAliases(
     supabaseUrl: supabaseUrl,
     tenantId: tenantId,
@@ -147,50 +176,33 @@ void main(List<String> args) async {
   final canonicalPathByProductId = <String, String>{};
   var written = 0;
   for (final product in products) {
-    final id = (product['id'] ?? '').toString();
+    final canonicalCategory =
+        categoriesById[(product['category_id'] ?? '').toString()];
+    final commerce = projectSeoSnapshotCommerceProduct(
+      product,
+      resolvedBrandNamesById: resolvedBrandNamesById,
+      categoryPath: canonicalCategory?.fullPath,
+    );
+    final id = commerce.id;
     if (id.isEmpty) continue;
 
-    final productName =
-        _cleanText(_firstNonEmpty(product['website_name'], product['name']));
-    final productSku = (product['sku'] ?? '').toString().trim();
-    final productBrand = _firstNonEmpty(
-      product['website_merchant_brand'],
-      product['brand'],
-    ).trim();
-    final productCategory = (product['category_name'] ?? '').toString().trim();
-    final productDescriptionRaw =
-        _firstNonEmpty(product['website_description'], product['description']);
+    final productName = _cleanText(commerce.title);
+    final productSku = commerce.sku;
+    final productBrand = commerce.brand;
+    final productCategory = commerce.categoryPath;
     final productSearchTerms = _stringList(product['website_search_terms']);
-    final fallbackDescription = _fallbackProductDescription(
-      productName: productName,
-      productBrand: productBrand,
-      productCategory: productCategory,
-      storeName: storeName,
-    );
-    final baseProductDescription = _cleanText(productDescriptionRaw).isNotEmpty
-        ? _cleanText(productDescriptionRaw)
-        : fallbackDescription;
-    final productSearchPhrase = _productLocalSearchPhrase(
-      productName: productName,
-      productCategory: productCategory,
-      searchTerms: productSearchTerms,
-    );
+    final baseProductDescription = _cleanText(commerce.description);
+    final productSearchPhrase =
+        _productLocalSearchPhrase(searchTerms: productSearchTerms);
     final productDescription = _appendProductSearchPhrase(
       description: baseProductDescription,
       searchPhrase: productSearchPhrase,
     );
 
-    final priceNum =
-        _toNum(product['website_price']) ?? _toNum(product['price']);
-    final currency = (product['price_currency'] ?? 'CLP').toString();
-
-    final stockQty = _toInt(product['stock_quantity']) ??
-        _toInt(product['inventory_qty']) ??
-        0;
-    final trackStock = product['track_stock'] != false;
-    final inStock = !trackStock || stockQty > 0;
-
-    final imageUrls = _productImageUrls(product);
+    final priceNum = commerce.price > 0 ? commerce.price : null;
+    final currency = commerce.currency;
+    final inStock = commerce.availability == PublicCommerceAvailability.inStock;
+    final imageUrls = commerce.imageUrls;
     final imageUrl = imageUrls.isEmpty ? '' : imageUrls.first;
 
     final productPath = _publicProductPath(product);
@@ -237,20 +249,12 @@ void main(List<String> args) async {
         productUrl: productUrl,
         storeUrl: storeUrl,
         storeName: _cleanText(storeName),
-        product: product,
-        description: baseProductDescription,
-        inStock: inStock,
-        currency: currency,
-        priceNum: priceNum,
-        imageUrls: imageUrls,
-        productBrand: productBrand,
-        productSku: productSku,
+        commerce: commerce,
+        canonicalCategory: canonicalCategory,
       ),
       fallbackHtml: _buildProductFallbackHtml(
-        title: title.isNotEmpty ? title : productName,
-        description: description.isNotEmpty
-            ? description
-            : _truncate(productDescription, 320),
+        title: productName,
+        description: baseProductDescription,
         canonicalUrl: productUrl,
         imageUrl: imageUrl,
         productBrand: productBrand,
@@ -294,6 +298,10 @@ void main(List<String> args) async {
     aliases: productUrlAliases,
     canonicalPathByProductId: canonicalPathByProductId,
   );
+  final categoryRedirectAliases = buildCanonicalCategoryRouteAliasProjections(
+    presentationRegistry: presentationRegistry,
+    activeCategories: activeCategoryRows,
+  );
   var aliasSnapshotsWritten = 0;
   for (final redirect in redirectAliases) {
     final html = productHtmlById[redirect.productId];
@@ -307,34 +315,46 @@ void main(List<String> args) async {
     );
     aliasSnapshotsWritten++;
   }
-  final firebaseRedirectsWritten = await _writeFirebaseProductRedirects(
+  final firebaseRedirectsWritten = await _writeFirebaseStorefrontRedirects(
     firebaseConfigFile: File(parsed['firebase-config'] ?? 'firebase.json'),
     manifestFile: File(
       parsed['redirect-manifest'] ?? 'scripts/generated_product_redirects.json',
     ),
-    redirects: redirectAliases,
+    productRedirects: redirectAliases,
+    categoryRedirects: categoryRedirectAliases,
     canonicalPathByProductId: canonicalPathByProductId,
   );
 
-  final categories = _buildProductCategories(
-    products: products,
-    storeUrl: storeUrl,
-  );
   final catalogUrl = _joinUrl(storeUrl, '/productos');
-  final catalogTitle = 'Productos para bicicletas | $storeName Viña del Mar';
+  final catalogPresentation = presentationRegistry.forCatalogRoot(
+        WebsiteCatalogRoot.products,
+      ) ??
+      WebsiteCatalogPresentation.catalogRoot(WebsiteCatalogRoot.products);
+  final catalogTitle = catalogPresentation.seoTitle.trim().isNotEmpty
+      ? catalogPresentation.seoTitle.trim()
+      : 'Productos para bicicletas | $storeName Viña del Mar';
   final catalogDescription =
-      'Compra bicicletas, repuestos y accesorios en $storeName. Catálogo online con precios en CLP, retiro en tienda y despacho en Chile.';
+      catalogPresentation.seoDescription.trim().isNotEmpty
+          ? catalogPresentation.seoDescription.trim()
+          : 'Compra bicicletas, repuestos y accesorios en $storeName. '
+              'Catálogo online con precios en CLP, retiro en tienda y '
+              'despacho en Chile.';
+  final catalogIndexable =
+      catalogPresentation.allowIndexing && products.isNotEmpty;
   await File(pathJoin(outDir.path, 'index.html')).writeAsString(
     _buildCategoryHtml(
       baseHtml: baseHtml,
       title: catalogTitle,
       description: catalogDescription,
       canonicalUrl: catalogUrl,
+      ogImageUrl: catalogPresentation.socialImageUrl,
+      allowIndexing: catalogIndexable,
       jsonLd: _buildCatalogJsonLd(
         products: products,
         storeUrl: storeUrl,
         storeName: storeName,
         catalogUrl: catalogUrl,
+        resolvedBrandNamesById: resolvedBrandNamesById,
       ),
       fallbackHtml: _buildCatalogFallbackHtml(
         products: products,
@@ -346,9 +366,9 @@ void main(List<String> args) async {
   final categoryOutDir = Directory(pathJoin(outDir.path, 'categoria'));
   categoryOutDir.createSync(recursive: true);
   var categoryPagesWritten = 0;
+  var categoryAliasPagesWritten = 0;
   for (final category in categories) {
-    final categoryUrl =
-        _joinUrl(storeUrl, '/productos/categoria/${category.slug}');
+    final categoryUrl = _joinUrl(storeUrl, category.canonicalPath);
     final title = _buildCategorySeoTitle(
       category: category,
       storeName: storeName,
@@ -362,13 +382,15 @@ void main(List<String> args) async {
       title: _truncate(_cleanText(title), 120),
       description: _truncate(_cleanText(description), 320),
       canonicalUrl: categoryUrl,
+      ogImageUrl: category.socialImageUrl,
+      allowIndexing: category.allowIndexing,
       jsonLd: _buildCategoryJsonLd(
         category: category,
         categoryUrl: categoryUrl,
         storeName: storeName,
       ),
       fallbackHtml: _buildCategoryFallbackHtml(
-        title: _truncate(_cleanText(title), 120),
+        title: category.displayTitle,
         description: _truncate(_cleanText(description), 320),
         category: category,
       ),
@@ -377,12 +399,43 @@ void main(List<String> args) async {
         .writeAsString(html);
     categoryPagesWritten++;
   }
+  for (final redirect in categoryRedirectAliases) {
+    final categoryUrl = _joinUrl(storeUrl, redirect.canonicalPath);
+    final title = '${redirect.name} | $storeName';
+    final description = redirect.description.isNotEmpty
+        ? redirect.description
+        : 'Explora la colección ${redirect.name} de $storeName.';
+    final aliasHtml = _buildCategoryHtml(
+      baseHtml: baseHtml,
+      title: _truncate(_cleanText(title), 120),
+      description: _truncate(_cleanText(description), 320),
+      canonicalUrl: categoryUrl,
+      ogImageUrl: redirect.imageUrl,
+      allowIndexing: false,
+      jsonLd: jsonEncode({
+        '@context': 'https://schema.org',
+        '@type': 'WebPage',
+        'name': redirect.name,
+        'url': categoryUrl,
+      }),
+      fallbackHtml: '',
+    );
+    await _writeRedirectSnapshot(
+      buildDir: buildDir,
+      aliasPath: redirect.aliasPath,
+      html: aliasHtml,
+      canonicalUrl: categoryUrl,
+    );
+    categoryAliasPagesWritten++;
+  }
 
   stdout.writeln('✅ Product SEO snapshots generated: $written');
   stdout.writeln('✅ Product alias snapshots generated: $aliasSnapshotsWritten');
   stdout.writeln(
-      '✅ Firebase product 301 redirects generated: $firebaseRedirectsWritten');
+      '✅ Firebase storefront 301 redirects generated: $firebaseRedirectsWritten');
   stdout.writeln('✅ Category SEO pages generated: $categoryPagesWritten');
+  stdout.writeln(
+      '✅ Category alias noindex snapshots generated: $categoryAliasPagesWritten');
   final staticTrustPagesWritten = await _writeStaticTrustPages(
     buildDir: buildDir,
     baseHtml: baseHtml,
@@ -400,6 +453,8 @@ void main(List<String> args) async {
     products: products,
     categories: categories,
     pages: pages,
+    productsCatalogIndexable: catalogIndexable,
+    resolvedBrandNamesById: resolvedBrandNamesById,
   );
   stdout.writeln('✅ robots.txt and sitemap.xml generated');
 }
@@ -553,6 +608,8 @@ String _buildCategoryHtml({
   required String title,
   required String description,
   required String canonicalUrl,
+  required String ogImageUrl,
+  required bool allowIndexing,
   required String jsonLd,
   required String fallbackHtml,
 }) {
@@ -564,12 +621,34 @@ String _buildCategoryHtml({
   html = _replaceMetaContent(html, name: 'title', content: title);
   html = _replaceMetaContent(html, name: 'description', content: description);
   html = _replaceLinkHref(html, rel: 'canonical', href: canonicalUrl);
+  html = _replaceOrInsertMetaName(
+    html,
+    name: 'robots',
+    content: allowIndexing ? 'index,follow' : 'noindex,follow',
+  );
+  html = _replaceOrInsertMetaName(
+    html,
+    name: 'googlebot',
+    content: allowIndexing ? 'index,follow' : 'noindex,follow',
+  );
 
   html = _replaceMetaProperty(html, property: 'og:type', content: 'website');
   html = _replaceMetaProperty(html, property: 'og:url', content: canonicalUrl);
   html = _replaceMetaProperty(html, property: 'og:title', content: title);
   html = _replaceMetaProperty(html,
       property: 'og:description', content: description);
+  if (ogImageUrl.isNotEmpty) {
+    html = _replaceOrInsertMetaProperty(
+      html,
+      property: 'og:image',
+      content: ogImageUrl,
+    );
+    html = _replaceOrInsertMetaName(
+      html,
+      name: 'twitter:image',
+      content: ogImageUrl,
+    );
+  }
 
   html = _replaceMetaName(html, name: 'twitter:url', content: canonicalUrl);
   html = _replaceMetaName(html, name: 'twitter:title', content: title);
@@ -1360,57 +1439,35 @@ String? _buildProductJsonLd({
   required String productUrl,
   required String storeUrl,
   required String storeName,
-  required Map<String, dynamic> product,
-  required String description,
-  required bool inStock,
-  required String currency,
-  required num? priceNum,
-  required List<String> imageUrls,
-  required String productBrand,
-  required String productSku,
+  required PublicCommerceProductProjection commerce,
+  required SeoCategoryProjection? canonicalCategory,
 }) {
-  final name =
-      _cleanText(_firstNonEmpty(product['website_name'], product['name']));
-  if (imageUrls.isEmpty) {
+  if (commerce.imageUrls.isEmpty) {
     return null;
   }
 
-  final gtin = _validGtin(_firstNonEmpty(
-    product['website_merchant_gtin'],
-    product['gtin'],
-    product['barcode'],
-  ));
-  final cleanDescription = _cleanText(description);
-  final category = (product['category_name'] ?? '').toString().trim();
-  // A missing catalog brand is unknown, not evidence that the manufacturer is
-  // "Genérico" or that the retailer is the brand. Omit it rather than invent
-  // structured data that can contradict a named manufacturer in the title.
-  final structuredBrandName = productBrand;
-
   final productData = <String, dynamic>{
     '@type': 'Product',
-    'name': name,
-    'description': cleanDescription,
+    'name': _cleanText(commerce.title),
+    if (commerce.description.isNotEmpty)
+      'description': _cleanText(commerce.description),
     'url': productUrl,
-    'image': imageUrls,
-    if (productSku.isNotEmpty) 'sku': productSku,
-    if ((product['website_merchant_mpn'] ?? '').toString().trim().isNotEmpty)
-      'mpn': (product['website_merchant_mpn'] ?? '').toString().trim(),
-    if (category.isNotEmpty) 'category': category,
-    if (structuredBrandName.isNotEmpty)
+    'image': commerce.imageUrls,
+    if (commerce.sku.isNotEmpty) 'sku': commerce.sku,
+    if (commerce.mpn.isNotEmpty) 'mpn': commerce.mpn,
+    if (commerce.categoryPath.isNotEmpty) 'category': commerce.categoryPath,
+    if (commerce.brand.isNotEmpty)
       'brand': {
         '@type': 'Brand',
-        'name': structuredBrandName,
+        'name': commerce.brand,
       },
-    if (gtin != null) 'gtin': gtin,
+    if (commerce.gtin.isNotEmpty) 'gtin': commerce.gtin,
     'offers': {
       '@type': 'Offer',
       'url': productUrl,
-      'priceCurrency': currency,
-      if (priceNum != null) 'price': priceNum.toString(),
-      'availability': inStock
-          ? 'https://schema.org/InStock'
-          : 'https://schema.org/OutOfStock',
+      'priceCurrency': commerce.currency,
+      if (commerce.price > 0) 'price': commerce.formattedPrice,
+      'availability': commerce.availability.schemaValue,
       'itemCondition': 'https://schema.org/NewCondition',
       'hasMerchantReturnPolicy': _buildMerchantReturnPolicyJsonLd(storeUrl),
       'seller': {
@@ -1427,9 +1484,12 @@ String? _buildProductJsonLd({
       items: [
         ('Inicio', '/'),
         ('Productos', '/productos'),
-        if (category.isNotEmpty)
-          (category, '/productos/categoria/${_slugify(category)}'),
-        (name, productUrl),
+        if (canonicalCategory != null)
+          (
+            canonicalCategory.displayTitle,
+            canonicalCategory.canonicalPath,
+          ),
+        (commerce.title, productUrl),
       ],
     ),
   ];
@@ -1459,7 +1519,7 @@ Map<String, dynamic> _buildMerchantReturnPolicyJsonLd(String storeUrl) {
 }
 
 String _buildCategoryJsonLd({
-  required _ProductCategorySeo category,
+  required SeoCategoryProjection category,
   required String categoryUrl,
   required String storeName,
 }) {
@@ -1469,22 +1529,25 @@ String _buildCategoryJsonLd({
     '@graph': [
       {
         '@type': 'CollectionPage',
-        'name': '${category.name} para bicicletas',
+        'name': category.displayTitle,
         'url': categoryUrl,
-        'description':
-            'Productos de ${category.name} disponibles en $storeName.',
+        'description': _buildCategorySeoDescription(
+          category: category,
+          storeName: storeName,
+        ),
+        if (category.imageUrl.isNotEmpty) 'image': category.imageUrl,
       },
       _buildBreadcrumbListJsonLd(
         storeUrl: categoryUrl,
         items: [
           ('Inicio', '/'),
           ('Productos', '/productos'),
-          (category.name, categoryUrl),
+          (category.displayTitle, categoryUrl),
         ],
       ),
       {
         '@type': 'ItemList',
-        'name': '${category.name} en $storeName',
+        'name': '${category.displayTitle} en $storeName',
         'numberOfItems': category.productCount,
         'itemListElement': [
           for (var i = 0; i < itemList.length; i++)
@@ -1506,6 +1569,7 @@ String _buildCatalogJsonLd({
   required String storeUrl,
   required String storeName,
   required String catalogUrl,
+  required Map<String, String> resolvedBrandNamesById,
 }) {
   final visibleProducts = products.take(24).toList(growable: false);
   return jsonEncode({
@@ -1535,10 +1599,12 @@ String _buildCatalogJsonLd({
                 storeUrl,
                 _publicProductPath(visibleProducts[i]),
               ),
-              'name': _cleanText(_firstNonEmpty(
-                visibleProducts[i]['website_name'],
-                visibleProducts[i]['name'],
-              )),
+              'name': _cleanText(
+                projectSeoSnapshotCommerceProduct(
+                  visibleProducts[i],
+                  resolvedBrandNamesById: resolvedBrandNamesById,
+                ).title,
+              ),
             },
         ],
       },
@@ -1631,7 +1697,7 @@ Future<List<Map<String, dynamic>>> _fetchProducts({
       '&is_published=eq.true'
       '&show_on_website=eq.true'
       '&product_type=eq.product'
-      '&select=id,name,description,website_description,website_name,website_price,website_image_url,website_image_url_optimized,website_image_urls,website_seo_title,website_seo_description,website_search_terms,website_merchant_gtin,website_merchant_mpn,website_merchant_brand,price,price_currency,sku,gtin,barcode,image_url,image_url_optimized,image_urls,brand,category_name,stock_quantity,inventory_qty,track_stock,updated_at,created_at'
+      '&select=id,name,description,website_description,website_name,website_price,website_image_url,website_image_url_optimized,website_image_urls,website_seo_title,website_seo_description,website_search_terms,website_merchant_title,website_merchant_description,website_merchant_gtin,website_merchant_mpn,website_merchant_brand,website_google_product_category,price,price_currency,sku,gtin,barcode,image_url,image_url_optimized,image_urls,brand_id,brand,category_id,category_name,stock_quantity,inventory_qty,track_stock,is_set,product_type,updated_at,created_at'
       '&limit=$pageSize'
       '&offset=$offset',
     );
@@ -1650,6 +1716,97 @@ Future<List<Map<String, dynamic>>> _fetchProducts({
   }
 
   return products;
+}
+
+Future<Map<String, String>> _fetchProductBrandNames({
+  required String supabaseUrl,
+  required String tenantId,
+  required String serviceRoleKey,
+  required Iterable<String> brandIds,
+}) async {
+  final requestedIds = brandIds
+      .map((id) => id.trim())
+      .where((id) => id.isNotEmpty)
+      .toSet()
+      .toList(growable: false);
+  if (requestedIds.isEmpty) return const {};
+
+  // Keep REST URLs bounded even when a large catalog references many brands.
+  const batchSize = 200;
+  final namesById = <String, String>{};
+  for (var start = 0; start < requestedIds.length; start += batchSize) {
+    final end = start + batchSize < requestedIds.length
+        ? start + batchSize
+        : requestedIds.length;
+    final batch = requestedIds.sublist(start, end);
+    final url = Uri.parse('$supabaseUrl/rest/v1/product_brands').replace(
+      queryParameters: {
+        'select': 'id,name,tenant_id,is_active',
+        'id': 'in.(${batch.join(',')})',
+        // Brands may be shared (tenant_id NULL) or owned by this tenant.
+        // Service-role snapshot generation must never resolve another
+        // tenant's brand even if an invalid foreign ID reaches a product row.
+        'or': '(tenant_id.eq.$tenantId,tenant_id.is.null)',
+        'is_active': 'eq.true',
+        'limit': batch.length.toString(),
+      },
+    );
+    final response = await _httpGet(
+      url,
+      headers: {
+        'apikey': serviceRoleKey,
+        'Authorization': 'Bearer $serviceRoleKey',
+      },
+    );
+    final decoded = jsonDecode(response) as List<dynamic>;
+    namesById.addAll(
+      buildTenantSafeProductBrandNameMap(
+        brandRows: decoded
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .toList(growable: false),
+        tenantId: tenantId,
+        requestedBrandIds: batch,
+      ),
+    );
+  }
+
+  return Map.unmodifiable(namesById);
+}
+
+Future<List<Map<String, dynamic>>> _fetchActiveProductCategories({
+  required String supabaseUrl,
+  required String tenantId,
+  required String serviceRoleKey,
+}) async {
+  const pageSize = 1000;
+  final categories = <Map<String, dynamic>>[];
+  for (var offset = 0;; offset += pageSize) {
+    final url = Uri.parse(
+      '$supabaseUrl/rest/v1/product_categories'
+      '?tenant_id=eq.$tenantId'
+      '&is_active=eq.true'
+      '&select=id,name,full_path,parent_id,level,description,image_url,'
+      'sort_order,is_active,show_on_website,updated_at'
+      '&order=sort_order.asc,full_path.asc,id.asc'
+      '&limit=$pageSize'
+      '&offset=$offset',
+    );
+
+    final response = await _httpGet(
+      url,
+      headers: {
+        'apikey': serviceRoleKey,
+        'Authorization': 'Bearer $serviceRoleKey',
+      },
+    );
+
+    final decoded = jsonDecode(response) as List<dynamic>;
+    categories.addAll(
+      decoded.map((row) => Map<String, dynamic>.from(row as Map)),
+    );
+    if (decoded.length < pageSize) break;
+  }
+  return categories;
 }
 
 Future<Map<String, int>> _fetchPublicProductAvailability({
@@ -1879,66 +2036,6 @@ String _firstNonEmpty(
   return '';
 }
 
-List<String> _productImageUrls(Map<String, dynamic> product) {
-  final urls = <String>[];
-
-  void add(dynamic value) {
-    final url = (value ?? '').toString().trim();
-    if (url.isEmpty || urls.contains(url)) return;
-    if (!url.startsWith('https://') && !url.startsWith('http://')) return;
-    urls.add(url);
-  }
-
-  add(_firstNonEmpty(
-    product['website_image_url_optimized'],
-    product['image_url_optimized'],
-  ));
-  add(_firstNonEmpty(product['website_image_url'], product['image_url']));
-
-  final websiteImageUrls = product['website_image_urls'];
-  final baseImageUrls = product['image_urls'];
-  final gallerySource = websiteImageUrls is List && websiteImageUrls.isNotEmpty
-      ? websiteImageUrls
-      : baseImageUrls;
-  if (gallerySource is List) {
-    for (final image in gallerySource) {
-      add(image);
-    }
-  }
-
-  // Google supports many images per URL, but keeping this capped prevents
-  // oversized sitemap entries while still exposing useful product alternates.
-  return urls.take(10).toList(growable: false);
-}
-
-String? _validGtin(String rawValue) {
-  final value = rawValue.trim().replaceAll(RegExp(r'[\s-]+'), '');
-  if (!RegExp(r'^\d+$').hasMatch(value)) return null;
-  if (!(value.length == 8 ||
-      value.length == 12 ||
-      value.length == 13 ||
-      value.length == 14)) {
-    return null;
-  }
-  if (!_hasValidGtinCheckDigit(value)) return null;
-  return value;
-}
-
-bool _hasValidGtinCheckDigit(String value) {
-  final digits = value.split('').map(int.parse).toList(growable: false);
-  final checkDigit = digits.last;
-  var sum = 0;
-  var positionFromRight = 1;
-
-  for (var i = digits.length - 2; i >= 0; i--) {
-    sum += digits[i] * (positionFromRight.isOdd ? 3 : 1);
-    positionFromRight++;
-  }
-
-  final calculatedCheckDigit = (10 - (sum % 10)) % 10;
-  return calculatedCheckDigit == checkDigit;
-}
-
 List<String> _stringList(dynamic value) {
   if (value is! List) return const [];
   return value
@@ -1947,57 +2044,14 @@ List<String> _stringList(dynamic value) {
       .toList(growable: false);
 }
 
-String _fallbackProductDescription({
-  required String productName,
-  required String productBrand,
-  required String productCategory,
-  required String storeName,
-}) {
-  final parts = <String>[
-    'Compra $productName online en $storeName.',
-    if (productBrand.isNotEmpty) 'Marca: $productBrand.',
-    if (productCategory.isNotEmpty) 'Categoría: $productCategory.',
-    'Retiro en tienda y atención especializada para bicicletas en Viña del Mar.',
-  ];
-  return _cleanText(parts.join(' '));
-}
-
 String _productLocalSearchPhrase({
-  required String productName,
-  required String productCategory,
   required List<String> searchTerms,
 }) {
-  if (searchTerms.isNotEmpty) {
-    return _cleanText(searchTerms.first);
-  }
-
-  final haystack = _normalizeSearchText('$productName $productCategory');
-  final kind = _productSearchKind(haystack, productCategory);
-  if (kind.isEmpty) return '';
-
-  final wheelSize = _extractWheelSize('$productName $productCategory');
-  if (wheelSize.isNotEmpty) {
-    return '$kind aro $wheelSize para bicicleta en Viña del Mar';
-  }
-  return '$kind para bicicleta en Viña del Mar';
-}
-
-String _productSearchKind(String normalizedHaystack, String productCategory) {
-  if (normalizedHaystack.contains('camara')) return 'cámara';
-  if (normalizedHaystack.contains('neumatico') ||
-      normalizedHaystack.contains('cubierta')) {
-    return 'neumático';
-  }
-  if (normalizedHaystack.contains('cadena')) return 'cadena';
-  if (normalizedHaystack.contains('cable')) return 'cable';
-  if (normalizedHaystack.contains('pastilla')) return 'pastillas de freno';
-  if (normalizedHaystack.contains('freno')) return 'freno';
-  if (normalizedHaystack.contains('bolso')) return 'bolso';
-  if (normalizedHaystack.contains('luz')) return 'luz';
-
-  final category = _cleanText(productCategory).trim();
-  if (category.isEmpty) return '';
-  return category.toLowerCase();
+  // Search terms are an explicit product-owned website field. Do not infer
+  // wheel size, material, component family, or any other SEO attribute from a
+  // product title/category string: those guesses can contradict the visible
+  // landing page and Merchant facts.
+  return searchTerms.isEmpty ? '' : _cleanText(searchTerms.first);
 }
 
 String _appendProductSearchPhrase({
@@ -2098,13 +2152,15 @@ String _buildProductFallbackHtml({
       ? ''
       : '<img src="${_escapeHtml(imageUrl)}" alt="${_escapeHtml(title)}" '
           'loading="lazy" style="max-width:240px;height:auto;">';
+  final descriptionHtml =
+      description.trim().isEmpty ? '' : '<p>${_escapeHtml(description)}</p>';
 
   return '''
   <noscript id="seo-product-fallback">
     <main>
       <article>
         <h1>${_escapeHtml(title)}</h1>
-        <p>${_escapeHtml(description)}</p>
+        $descriptionHtml
         $imageHtml
         <ul>
           ${details.map((item) => '<li>${_escapeHtml(item)}</li>').join('\n          ')}
@@ -2118,40 +2174,38 @@ String _buildProductFallbackHtml({
 }
 
 String _buildCategorySeoTitle({
-  required _ProductCategorySeo category,
+  required SeoCategoryProjection category,
   required String storeName,
 }) {
-  final sizeSummary = _categoryWheelSizeSummary(category);
+  if (category.seoTitle.trim().isNotEmpty) return category.seoTitle.trim();
   final cleanStoreName = _cleanText(storeName);
-  final suffix =
-      cleanStoreName.isEmpty ? 'Viña del Mar' : '$cleanStoreName Viña del Mar';
-
-  if (sizeSummary.isNotEmpty && _isWheelProductCategory(category.name)) {
-    return '${category.name} para bicicletas aro $sizeSummary | $suffix';
-  }
-  return '${category.name} para bicicletas | $suffix';
+  return cleanStoreName.isEmpty
+      ? category.displayTitle
+      : '${category.displayTitle} | $cleanStoreName';
 }
 
 String _buildCategorySeoDescription({
-  required _ProductCategorySeo category,
+  required SeoCategoryProjection category,
   required String storeName,
 }) {
-  final sizeSummary = _categoryWheelSizeSummary(category);
-  final sizeText =
-      sizeSummary.isNotEmpty && _isWheelProductCategory(category.name)
-          ? ' aro $sizeSummary'
-          : '';
+  if (category.seoDescription.trim().isNotEmpty) {
+    return category.seoDescription.trim();
+  }
+  if (category.description.isNotEmpty) return category.description;
+
+  // This is a factual fallback projected from canonical owners and is also
+  // rendered in the snapshot body. It deliberately does not infer technical
+  // attributes or buying claims from product titles.
   return _cleanText(
-    'Compra ${category.name} para bicicletas$sizeText en $storeName. '
-    '${category.productCount} productos disponibles online con retiro en tienda '
-    'y atención especializada en Viña del Mar.',
+    '${category.productCount} productos publicados en '
+    '${category.displayTitle}${storeName.trim().isEmpty ? '' : ' de $storeName'}.',
   );
 }
 
 String _buildCategoryFallbackHtml({
   required String title,
   required String description,
-  required _ProductCategorySeo category,
+  required SeoCategoryProjection category,
 }) {
   final items = category.products.take(24).map((product) {
     return '<li><a href="${_escapeHtml(product.url)}">'
@@ -2198,49 +2252,6 @@ String _buildCatalogFallbackHtml({
   </noscript>''';
 }
 
-String _categoryWheelSizeSummary(_ProductCategorySeo category) {
-  final sizes = <String>{};
-  for (final product in category.products) {
-    final size = _extractWheelSize(product.name);
-    if (size.isNotEmpty) sizes.add(size);
-  }
-
-  final ordered = sizes.toList()
-    ..sort((a, b) => _wheelSizeOrder(a).compareTo(_wheelSizeOrder(b)));
-  if (ordered.isEmpty) return '';
-
-  final selected = ordered.take(5).toList(growable: false);
-  if (selected.length == 1) return selected.first;
-  if (selected.length == 2) return '${selected.first} y ${selected.last}';
-  return '${selected.take(selected.length - 1).join(', ')} y ${selected.last}';
-}
-
-bool _isWheelProductCategory(String categoryName) {
-  final normalized = _normalizeSearchText(categoryName);
-  return normalized.contains('camara') ||
-      normalized.contains('neumatico') ||
-      normalized.contains('cubierta') ||
-      normalized.contains('llanta') ||
-      normalized.contains('aro');
-}
-
-int _wheelSizeOrder(String size) {
-  const order = {
-    '12': 12,
-    '14': 14,
-    '16': 16,
-    '18': 18,
-    '20': 20,
-    '24': 24,
-    '26': 26,
-    '27.5': 275,
-    '28': 280,
-    '29': 290,
-    '700c': 700,
-  };
-  return order[_normalizeWheelSize(size)] ?? 999;
-}
-
 String _extractWheelSize(String text) {
   final normalized = _normalizeSearchText(text);
   final patterns = <RegExp>[
@@ -2281,54 +2292,196 @@ String _normalizeSearchText(String text) {
   return normalized.trim();
 }
 
-List<_ProductCategorySeo> _buildProductCategories({
+/// Builds crawler category pages from the same stable category IDs, saved
+/// presentation registry, and already-canonical public product result used by
+/// the storefront.
+///
+/// [products] must be the result after `get_public_products` eligibility has
+/// been applied. Display names alone never establish category membership.
+List<SeoCategoryProjection> buildCanonicalCategorySeoProjections({
   required List<Map<String, dynamic>> products,
+  required List<Map<String, dynamic>> activeCategories,
+  required WebsiteCatalogPresentationRegistry presentationRegistry,
   required String storeUrl,
+  Map<String, String> resolvedBrandNamesById = const {},
 }) {
-  final bySlug = <String, _MutableProductCategorySeo>{};
-
-  for (final product in products) {
-    final name = _cleanText((product['category_name'] ?? '').toString());
-    if (name.isEmpty) continue;
-
-    final slug = _slugify(name);
-    if (slug.isEmpty) continue;
-
-    final productPath = _publicProductPath(product);
-    if (productPath == '/productos') continue;
-
-    final item = _CategoryProductSeo(
-      name: _cleanText((product['name'] ?? '').toString()),
-      url: _joinUrl(storeUrl, productPath),
-    );
-
-    final existing = bySlug.putIfAbsent(
-      slug,
-      () => _MutableProductCategorySeo(
-        name: name,
-        slug: slug,
-      ),
-    );
-    existing.products.add(item);
+  final categoryRowsById = <String, Map<String, dynamic>>{};
+  for (final row in activeCategories) {
+    final id = (row['id'] ?? '').toString().trim();
+    if (id.isEmpty || row['is_active'] != true) {
+      continue;
+    }
+    categoryRowsById[id] = row;
   }
 
-  final categories = bySlug.values
-      .where((category) => category.products.length >= 2)
-      .map(
-        (category) => _ProductCategorySeo(
-          name: category.name,
-          slug: category.slug,
-          products: category.products.toList(growable: false),
-        ),
-      )
-      .toList(growable: false);
+  final childIdsByParentId = <String, Set<String>>{};
+  for (final entry in categoryRowsById.entries) {
+    final parentId = (entry.value['parent_id'] ?? '').toString().trim();
+    if (parentId.isEmpty || !categoryRowsById.containsKey(parentId)) continue;
+    childIdsByParentId.putIfAbsent(parentId, () => <String>{}).add(entry.key);
+  }
 
-  categories.sort((a, b) {
-    final byCount = b.productCount.compareTo(a.productCount);
-    if (byCount != 0) return byCount;
-    return a.name.compareTo(b.name);
+  Set<String> descendantIdsFor(String rootId) {
+    final ids = <String>{};
+    final pending = <String>[rootId];
+    while (pending.isNotEmpty) {
+      final current = pending.removeLast();
+      if (!ids.add(current)) continue;
+      pending.addAll(childIdsByParentId[current] ?? const <String>{});
+    }
+    return ids;
+  }
+
+  final projections = <SeoCategoryProjection>[];
+  final categoryIdBySlug = <String, String>{};
+  for (final entry in categoryRowsById.entries) {
+    final row = entry.value;
+    // Category publication owns discoverable collection pages. Hidden active
+    // descendants still contribute products to a published ancestor, matching
+    // the storefront hierarchy and the separate visible-category product rule.
+    if (row['show_on_website'] != true) continue;
+    final name = _cleanText((row['name'] ?? '').toString());
+    if (name.isEmpty) continue;
+
+    final presentation = presentationRegistry.forCategory(entry.key) ??
+        WebsiteCatalogPresentation.fallback(
+          categoryId: entry.key,
+          categoryName: name,
+        );
+    if (presentation.slug.isEmpty) continue;
+
+    final descendantIds = descendantIdsFor(entry.key);
+    final categoryProducts = <SeoCategoryProductProjection>[];
+    for (final product in products) {
+      final categoryId = (product['category_id'] ?? '').toString().trim();
+      if (categoryId.isEmpty || !descendantIds.contains(categoryId)) continue;
+      final productPath = _publicProductPath(product);
+      if (productPath == '/productos') continue;
+      final productName = _cleanText(
+        projectSeoSnapshotCommerceProduct(
+          product,
+          resolvedBrandNamesById: resolvedBrandNamesById,
+        ).title,
+      );
+      if (productName.isEmpty) continue;
+      categoryProducts.add(
+        SeoCategoryProductProjection(
+          name: productName,
+          url: _joinUrl(storeUrl, productPath),
+        ),
+      );
+    }
+
+    // Empty public categories are not indexable and must not survive through
+    // a stale presentation record.
+    if (categoryProducts.isEmpty) continue;
+
+    for (final routeSlug in {
+      presentation.slug,
+      ...presentation.slugAliases,
+    }) {
+      final previousCategoryId = categoryIdBySlug[routeSlug];
+      if (previousCategoryId != null && previousCategoryId != entry.key) {
+        throw StateError(
+          'Las categorías públicas $previousCategoryId y ${entry.key} '
+          'comparten la ruta o alias $routeSlug. Configura rutas únicas en '
+          'Catálogo web > Categorías > Presentación.',
+        );
+      }
+      categoryIdBySlug[routeSlug] = entry.key;
+    }
+
+    final categoryDescription =
+        _cleanText((row['description'] ?? '').toString());
+    final categoryImageUrl = (row['image_url'] ?? '').toString().trim();
+    projections.add(
+      SeoCategoryProjection(
+        categoryId: entry.key,
+        name: name,
+        fullPath: _cleanText((row['full_path'] ?? '').toString()).isNotEmpty
+            ? _cleanText((row['full_path'] ?? '').toString())
+            : name,
+        slug: presentation.slug,
+        slugAliases: presentation.slugAliases,
+        canonicalPath: publicCategoryPath(presentation: presentation),
+        displayTitle:
+            presentation.heroTitle.isNotEmpty ? presentation.heroTitle : name,
+        description: presentation.heroDescription.isNotEmpty
+            ? presentation.heroDescription
+            : categoryDescription,
+        seoTitle: presentation.seoTitle,
+        seoDescription: presentation.seoDescription,
+        imageUrl: presentation.heroImageUrl.isNotEmpty
+            ? presentation.heroImageUrl
+            : categoryImageUrl,
+        socialImageUrl: presentation.socialImageUrl.isNotEmpty
+            ? presentation.socialImageUrl
+            : presentation.heroImageUrl.isNotEmpty
+                ? presentation.heroImageUrl
+                : categoryImageUrl,
+        allowIndexing: presentation.allowIndexing,
+        sortOrder: _toInt(row['sort_order']) ?? 0,
+        products: List.unmodifiable(categoryProducts),
+      ),
+    );
+  }
+
+  projections.sort((a, b) {
+    final byOrder = a.sortOrder.compareTo(b.sortOrder);
+    if (byOrder != 0) return byOrder;
+    return a.fullPath.compareTo(b.fullPath);
   });
-  return categories;
+  return List.unmodifiable(projections);
+}
+
+/// Resolves the exact public-commerce facts used by every generated snapshot.
+///
+/// Linked brands are canonical `product_brands` facts. The denormalized
+/// `products.brand` value remains only the projection's final legacy fallback,
+/// matching Merchant precedence without inventing manufacturer identity.
+PublicCommerceProductProjection projectSeoSnapshotCommerceProduct(
+  Map<String, dynamic> product, {
+  Map<String, String> resolvedBrandNamesById = const {},
+  String? categoryPath,
+}) {
+  final brandId = (product['brand_id'] ?? '').toString().trim();
+  return PublicCommerceProductProjection.fromJson(
+    product,
+    resolvedBrand:
+        brandId.isEmpty ? null : resolvedBrandNamesById[brandId]?.trim(),
+    categoryPath: categoryPath,
+  );
+}
+
+/// Defensively filters brand rows after the tenant-scoped REST query.
+///
+/// `product_brands` supports both tenant-owned and shared (`tenant_id NULL`)
+/// records. Rows belonging to another tenant are never returned to the
+/// snapshot projection, even if a malformed response or foreign ID is passed.
+Map<String, String> buildTenantSafeProductBrandNameMap({
+  required List<Map<String, dynamic>> brandRows,
+  required String tenantId,
+  required Iterable<String> requestedBrandIds,
+}) {
+  final requested = requestedBrandIds
+      .map((id) => id.trim())
+      .where((id) => id.isNotEmpty)
+      .toSet();
+  final namesById = <String, String>{};
+  for (final row in brandRows) {
+    final id = (row['id'] ?? '').toString().trim();
+    final name = (row['name'] ?? '').toString().trim();
+    final rowTenantId = (row['tenant_id'] ?? '').toString().trim();
+    final belongsToScope =
+        rowTenantId.isEmpty || rowTenantId == tenantId.trim();
+    if (requested.contains(id) &&
+        name.isNotEmpty &&
+        row['is_active'] == true &&
+        belongsToScope) {
+      namesById[id] = name;
+    }
+  }
+  return Map.unmodifiable(namesById);
 }
 
 String _slugify(String value) {
@@ -2367,8 +2520,10 @@ Future<void> _writeCrawlerFiles({
   required Directory buildDir,
   required String storeUrl,
   required List<Map<String, dynamic>> products,
-  required List<_ProductCategorySeo> categories,
+  required List<SeoCategoryProjection> categories,
   required List<Map<String, dynamic>> pages,
+  required bool productsCatalogIndexable,
+  required Map<String, String> resolvedBrandNamesById,
 }) async {
   final normalizedStoreUrl = storeUrl.replaceAll(RegExp(r'/+$'), '');
   final now = DateTime.now().toUtc();
@@ -2392,7 +2547,7 @@ Future<void> _writeCrawlerFiles({
     String? priority,
     List<_SitemapImage> images = const [],
   }) {
-    if (path.isEmpty) return;
+    if (!isIndexableStorefrontPathForSitemap(path)) return;
     final normalizedPath =
         path == '/' ? '/' : '/${path.replaceAll(RegExp(r'^/+|/+$'), '')}';
     urls[normalizedPath] = _SitemapUrl(
@@ -2405,7 +2560,9 @@ Future<void> _writeCrawlerFiles({
   }
 
   addUrl('/', changefreq: 'weekly', priority: '1.0');
-  addUrl('/productos', changefreq: 'daily', priority: '0.9');
+  if (productsCatalogIndexable) {
+    addUrl('/productos', changefreq: 'daily', priority: '0.9');
+  }
   addUrl('/servicios', changefreq: 'monthly', priority: '0.7');
   addUrl('/contacto', changefreq: 'monthly', priority: '0.6');
   addUrl('/nosotros', changefreq: 'monthly', priority: '0.5');
@@ -2429,14 +2586,17 @@ Future<void> _writeCrawlerFiles({
   for (final product in products) {
     final productPath = _publicProductPath(product);
     if (productPath == '/productos') continue;
-    final productName =
-        _cleanText(_firstNonEmpty(product['website_name'], product['name']));
+    final commerce = projectSeoSnapshotCommerceProduct(
+      product,
+      resolvedBrandNamesById: resolvedBrandNamesById,
+    );
+    final productName = _cleanText(commerce.title);
     addUrl(
       productPath,
       lastmod: now,
       changefreq: 'weekly',
       priority: '0.8',
-      images: _productImageUrls(product)
+      images: commerce.imageUrls
           .map(
             (url) => _SitemapImage(
               loc: url,
@@ -2448,8 +2608,9 @@ Future<void> _writeCrawlerFiles({
   }
 
   for (final category in categories) {
+    if (!category.allowIndexing) continue;
     addUrl(
-      '/productos/categoria/${category.slug}',
+      category.canonicalPath,
       changefreq: 'weekly',
       priority: '0.7',
     );
@@ -2503,6 +2664,28 @@ Sitemap: $normalizedStoreUrl/sitemap.xml
 ''';
 
   await File(pathJoin(buildDir.path, 'robots.txt')).writeAsString(robots);
+}
+
+/// Sitemap inputs are public canonical paths only.
+///
+/// Search, sort, facet, Preview, Edit and ERP-mounted URLs are transient
+/// application state. They must never become discovery entries; a valuable
+/// combination needs its own editor-owned collection instead.
+bool isIndexableStorefrontPathForSitemap(String rawPath) {
+  final value = rawPath.trim();
+  if (value.isEmpty) return false;
+  final uri = Uri.tryParse(value);
+  if (uri == null ||
+      uri.hasScheme ||
+      uri.host.isNotEmpty ||
+      uri.hasQuery ||
+      uri.hasFragment) {
+    return false;
+  }
+  final path = uri.path;
+  if (path.isEmpty || !path.startsWith('/')) return false;
+  if (path == '/tienda' || path.startsWith('/tienda/')) return false;
+  return true;
 }
 
 String? _routeForWebsitePage(Map<String, dynamic> page) {
@@ -2581,36 +2764,49 @@ class _SitemapImage {
   });
 }
 
-class _MutableProductCategorySeo {
+class SeoCategoryProjection {
+  final String categoryId;
   final String name;
+  final String fullPath;
   final String slug;
-  final List<_CategoryProductSeo> products = [];
+  final List<String> slugAliases;
+  final String canonicalPath;
+  final String displayTitle;
+  final String description;
+  final String seoTitle;
+  final String seoDescription;
+  final String imageUrl;
+  final String socialImageUrl;
+  final bool allowIndexing;
+  final int sortOrder;
+  final List<SeoCategoryProductProjection> products;
 
-  _MutableProductCategorySeo({
+  const SeoCategoryProjection({
+    required this.categoryId,
     required this.name,
+    required this.fullPath,
     required this.slug,
-  });
-}
-
-class _ProductCategorySeo {
-  final String name;
-  final String slug;
-  final List<_CategoryProductSeo> products;
-
-  const _ProductCategorySeo({
-    required this.name,
-    required this.slug,
+    required this.slugAliases,
+    required this.canonicalPath,
+    required this.displayTitle,
+    required this.description,
+    required this.seoTitle,
+    required this.seoDescription,
+    required this.imageUrl,
+    required this.socialImageUrl,
+    required this.allowIndexing,
+    required this.sortOrder,
     required this.products,
   });
 
   int get productCount => products.length;
 }
 
-class _CategoryProductSeo {
+class SeoCategoryProductProjection {
   final String name;
   final String url;
 
-  const _CategoryProductSeo({
+  const SeoCategoryProductProjection({
     required this.name,
     required this.url,
   });
@@ -2624,6 +2820,24 @@ class _ProductRedirectAlias {
 
   final String productId;
   final String aliasPath;
+}
+
+class SeoCategoryRouteAliasProjection {
+  const SeoCategoryRouteAliasProjection({
+    required this.categoryId,
+    required this.name,
+    required this.description,
+    required this.imageUrl,
+    required this.aliasPath,
+    required this.canonicalPath,
+  });
+
+  final String categoryId;
+  final String name;
+  final String description;
+  final String imageUrl;
+  final String aliasPath;
+  final String canonicalPath;
 }
 
 class _TrustPageFallback {
@@ -2645,14 +2859,6 @@ String _cleanText(String text) {
   // Collapse whitespace.
   t = t.replaceAll(RegExp(r'\s+'), ' ').trim();
   return t;
-}
-
-num? _toNum(dynamic v) {
-  if (v == null) return null;
-  if (v is num) return v;
-  final s = v.toString().trim();
-  if (s.isEmpty) return null;
-  return num.tryParse(s);
 }
 
 int? _toInt(dynamic v) {
@@ -2731,6 +2937,60 @@ List<_ProductRedirectAlias> _buildProductRedirectAliases({
   return redirects;
 }
 
+List<SeoCategoryRouteAliasProjection>
+    buildCanonicalCategoryRouteAliasProjections({
+  required WebsiteCatalogPresentationRegistry presentationRegistry,
+  required List<Map<String, dynamic>> activeCategories,
+}) {
+  final redirects = <SeoCategoryRouteAliasProjection>[];
+  final categoryIdByClaim = <String, String>{};
+  for (final row in activeCategories) {
+    if (row['is_active'] != true || row['show_on_website'] != true) continue;
+    final categoryId = (row['id'] ?? '').toString().trim();
+    final name = _cleanText((row['name'] ?? '').toString());
+    if (categoryId.isEmpty || name.isEmpty) continue;
+    final presentation = presentationRegistry.forCategory(categoryId);
+    if (presentation == null) continue;
+
+    for (final claim in {presentation.slug, ...presentation.slugAliases}) {
+      final previousCategoryId = categoryIdByClaim[claim];
+      if (previousCategoryId != null && previousCategoryId != categoryId) {
+        throw StateError(
+          'Las categorías públicas $previousCategoryId y $categoryId '
+          'comparten la ruta o alias $claim.',
+        );
+      }
+      categoryIdByClaim[claim] = categoryId;
+    }
+
+    for (final alias in presentation.slugAliases) {
+      for (final services in const [false, true]) {
+        final root = services ? 'servicios' : 'productos';
+        final aliasPath = _normalizePublicPath(
+          '/$root/categoria/$alias',
+        );
+        final canonicalPath = publicCategoryPath(
+          presentation: presentation,
+          services: services,
+        );
+        if (aliasPath.isEmpty || aliasPath == canonicalPath) continue;
+        redirects.add(
+          SeoCategoryRouteAliasProjection(
+            categoryId: categoryId,
+            name: name,
+            description: _cleanText((row['description'] ?? '').toString()),
+            imageUrl: (row['image_url'] ?? '').toString().trim(),
+            aliasPath: aliasPath,
+            canonicalPath: canonicalPath,
+          ),
+        );
+      }
+    }
+  }
+  redirects.sort((a, b) => a.aliasPath.compareTo(b.aliasPath));
+  return redirects;
+}
+
 Future<void> _writeRedirectSnapshot({
   required Directory buildDir,
   required String aliasPath,
@@ -2756,15 +3016,16 @@ Future<void> _writeRedirectSnapshot({
   );
 }
 
-Future<int> _writeFirebaseProductRedirects({
+Future<int> _writeFirebaseStorefrontRedirects({
   required File firebaseConfigFile,
   required File manifestFile,
-  required List<_ProductRedirectAlias> redirects,
+  required List<_ProductRedirectAlias> productRedirects,
+  required List<SeoCategoryRouteAliasProjection> categoryRedirects,
   required Map<String, String> canonicalPathByProductId,
 }) async {
   if (!firebaseConfigFile.existsSync()) return 0;
 
-  final generated = redirects
+  final generatedProductRedirects = productRedirects
       .map((redirect) {
         // The old published product URLs used /productos/<uuid>. Keep
         // /producto/* and ERP-mounted aliases available through generated HTML
@@ -2783,6 +3044,26 @@ Future<int> _writeFirebaseProductRedirects({
       })
       .whereType<Map<String, dynamic>>()
       .toList(growable: false);
+  final generatedCategoryRedirects = categoryRedirects
+      .map(
+        (redirect) => <String, dynamic>{
+          'source': redirect.aliasPath,
+          'destination': redirect.canonicalPath,
+          'type': 301,
+        },
+      )
+      .toList(growable: false);
+  final generatedBySource = <String, Map<String, dynamic>>{};
+  for (final redirect in [
+    ...generatedProductRedirects,
+    ...generatedCategoryRedirects,
+  ]) {
+    generatedBySource[redirect['source'].toString()] = redirect;
+  }
+  final generated = generatedBySource.values.toList(growable: false)
+    ..sort(
+      (a, b) => a['source'].toString().compareTo(b['source'].toString()),
+    );
 
   final previousSources = <String>{};
   if (manifestFile.existsSync()) {

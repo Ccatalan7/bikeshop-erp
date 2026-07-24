@@ -63,6 +63,19 @@ void main() {
     expect(line.validate(), contains('supera'));
   });
 
+  test('receipt resolution clamps quantity to its exact open case balance', () {
+    final line = const PurchaseCreditNoteLineDraft(
+      balance: balance,
+      receiptResolutionCaseId: 'case-1',
+      receiptResolutionMaximum: 2,
+    ).withQuantity(6);
+
+    expect(line.quantity, 2);
+    expect(line.netAmount, 2000);
+    expect(line.taxAmount, 380);
+    expect(line.validate(), isNull);
+  });
+
   test('issued records cannot use an internal void action', () {
     final record = PurchaseCreditNoteRecord.fromJson({
       'id': 'credit-1',

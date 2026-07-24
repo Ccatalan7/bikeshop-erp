@@ -6,11 +6,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
 import '../models/website_block_definition.dart';
@@ -36,19 +34,6 @@ import 'website_background_removal_dialog.dart';
 import 'website_color_picker.dart';
 import 'website_media_picker.dart';
 import 'website_workspace_scope.dart';
-
-/// Sanitize filename for Supabase Storage (remove spaces and special chars)
-String _sanitizeFileName(String fileName) {
-  String sanitized = fileName
-      .replaceAll(RegExp(r'[^\w\s\-\.]'), '_') // Replace special chars
-      .replaceAll(RegExp(r'\s+'), '_') // Replace spaces with underscore
-      .replaceAll(RegExp(r'_+'), '_') // Collapse multiple underscores
-      .replaceAll(RegExp(r'^_+|_+$'), ''); // Trim leading/trailing underscores
-  if (!sanitized.contains('.')) {
-    sanitized = '$sanitized.png';
-  }
-  return sanitized;
-}
 
 /// Professional side panel editor for website blocks
 /// Clean, functional, and elegant interface
@@ -8434,6 +8419,9 @@ class _ThemeTabState extends State<_ThemeTab> {
   // Colors
   final _primaryColorController = TextEditingController();
   final _accentColorController = TextEditingController();
+  String _productDetailAccent = '#123F68';
+  String _productDetailText = '#1E293B';
+  String _productDetailLine = '#E8E2D8';
 
   // Typography
   String _headingFont = WebsiteFontRegistry.headingDefault;
@@ -8534,6 +8522,18 @@ class _ThemeTabState extends State<_ThemeTab> {
               service.getSetting('theme_primary_color', '#00A09D');
           _accentColorController.text =
               service.getSetting('theme_accent_color', '#FF6D00');
+          _productDetailAccent = service.getSetting(
+            'theme_product_detail_accent_color',
+            '#123F68',
+          );
+          _productDetailText = service.getSetting(
+            'theme_product_detail_text_color',
+            '#1E293B',
+          );
+          _productDetailLine = service.getSetting(
+            'theme_product_detail_line_color',
+            '#E8E2D8',
+          );
           _headingFont = WebsiteFontRegistry.resolveHeadingFont(
             service.getSetting(
               'theme_heading_font',
@@ -8743,6 +8743,54 @@ class _ThemeTabState extends State<_ThemeTab> {
                 context
                     .read<WebsiteEditModeProvider>()
                     .updateThemeSetting('theme_accent_color', val);
+              },
+            ),
+            const SizedBox(height: 28),
+            const Divider(color: Colors.white12),
+            const SizedBox(height: 20),
+            const _SectionHeader('FICHA DE PRODUCTO'),
+            const SizedBox(height: 8),
+            const Text(
+              'Paleta de precio, acciones, títulos y divisores de la ficha.',
+              style: TextStyle(color: Colors.white38, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            WebsiteColorPickerField(
+              label: 'Acciones y precio',
+              value: _productDetailAccent,
+              allowAlpha: false,
+              onChanged: (val) {
+                setState(() => _productDetailAccent = val);
+                context.read<WebsiteEditModeProvider>().updateThemeSetting(
+                      'theme_product_detail_accent_color',
+                      val,
+                    );
+              },
+            ),
+            const SizedBox(height: 16),
+            WebsiteColorPickerField(
+              label: 'Títulos y texto principal',
+              value: _productDetailText,
+              allowAlpha: false,
+              onChanged: (val) {
+                setState(() => _productDetailText = val);
+                context.read<WebsiteEditModeProvider>().updateThemeSetting(
+                      'theme_product_detail_text_color',
+                      val,
+                    );
+              },
+            ),
+            const SizedBox(height: 16),
+            WebsiteColorPickerField(
+              label: 'Divisores',
+              value: _productDetailLine,
+              allowAlpha: false,
+              onChanged: (val) {
+                setState(() => _productDetailLine = val);
+                context.read<WebsiteEditModeProvider>().updateThemeSetting(
+                      'theme_product_detail_line_color',
+                      val,
+                    );
               },
             ),
           ],
@@ -8987,41 +9035,12 @@ class _LogoUploaderState extends State<_LogoUploader> {
 
   Future<void> _pickAndUploadLogo() async {
     try {
-      final picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 500,
-        maxHeight: 200,
-        imageQuality: 90,
+      final asset = await showWebsiteMediaPicker(
+        context: context,
+        currentUrl: widget.currentUrl,
       );
-
-      if (image == null) return;
-
-      setState(() => _isUploading = true);
-
-      final bytes = await image.readAsBytes();
-      final sanitizedName = _sanitizeFileName(image.name);
-      final fileName =
-          'logo_${DateTime.now().millisecondsSinceEpoch}_$sanitizedName';
-      final filePath = 'website-images/$fileName';
-
-      final supabase = Supabase.instance.client;
-
-      await supabase.storage.from(StorageConfig.defaultBucket).uploadBinary(
-            filePath,
-            bytes,
-            fileOptions: FileOptions(
-              contentType: _getContentType(image.name),
-              upsert: true,
-            ),
-          );
-
-      final publicUrl = supabase.storage
-          .from(StorageConfig.defaultBucket)
-          .getPublicUrl(filePath);
-
-      setState(() => _isUploading = false);
-      widget.onChanged(publicUrl);
+      if (asset == null) return;
+      widget.onChanged(asset.publicUrl);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -9045,23 +9064,6 @@ class _LogoUploaderState extends State<_LogoUploader> {
       } else {
         _isUploading = false;
       }
-    }
-  }
-
-  String _getContentType(String fileName) {
-    final ext = fileName.split('.').last.toLowerCase();
-    switch (ext) {
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      case 'gif':
-        return 'image/gif';
-      case 'webp':
-        return 'image/webp';
-      default:
-        return 'image/jpeg';
     }
   }
 
@@ -9957,12 +9959,13 @@ class _ImagePickerState extends State<_ImagePicker> {
           await service.uploadTransparentPng(
             selection.pngBytes!,
             prefix: 'block-no-bg',
+            originalUrl: currentUrl,
           );
       if (!mounted) return;
       _emitUrl(resultUrl);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Fondo eliminado y PNG guardado en la biblioteca.'),
+          content: Text('Fondo eliminado y versión web optimizada guardada.'),
         ),
       );
     } catch (error) {
@@ -10089,7 +10092,7 @@ class _ImagePickerState extends State<_ImagePicker> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'JPG, PNG, WebP • Máx 1920x1080',
+                        'JPG, PNG, WebP • Optimización automática',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.4),
                           fontSize: 11,
@@ -10132,11 +10135,13 @@ class _ImagePickerState extends State<_ImagePicker> {
 class _ColorField extends StatefulWidget {
   final String label;
   final TextEditingController controller;
+  final bool allowAlpha;
   final VoidCallback? onChanged;
 
   const _ColorField({
     required this.label,
     required this.controller,
+    this.allowAlpha = true,
     this.onChanged,
   });
 
@@ -10146,7 +10151,10 @@ class _ColorField extends StatefulWidget {
 
 class _ColorFieldState extends State<_ColorField> {
   String _colorToHex(Color color) {
-    return serializeWebsiteEditorColor(color, includeAlpha: true);
+    return serializeWebsiteEditorColor(
+      color,
+      includeAlpha: widget.allowAlpha,
+    );
   }
 
   @override
@@ -10159,7 +10167,7 @@ class _ColorFieldState extends State<_ColorField> {
           value: widget.controller.text.isEmpty
               ? '#FFFFFF'
               : widget.controller.text,
-          allowAlpha: true,
+          allowAlpha: widget.allowAlpha,
           onChanged: (value) {
             widget.controller.text = value;
             widget.onChanged?.call();
@@ -11187,40 +11195,13 @@ class _BrandLogoEditorState extends State<_BrandLogoEditor> {
   bool _isUploading = false;
 
   Future<void> _pickAndUploadImage() async {
-    final picker = ImagePicker();
-
     try {
-      final pickedFile = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 400,
-        maxHeight: 200,
+      final asset = await showWebsiteMediaPicker(
+        context: context,
+        currentUrl: widget.brand['imageUrl']?.toString(),
       );
-
-      if (pickedFile == null) return;
-
-      setState(() => _isUploading = true);
-
-      final bytes = await pickedFile.readAsBytes();
-      final fileName = pickedFile.name;
-
-      // Upload to Supabase Storage
-      final supabase = Supabase.instance.client;
-      final uniqueName = '${DateTime.now().millisecondsSinceEpoch}_$fileName';
-      final path = 'brand-logos/$uniqueName';
-
-      await supabase.storage.from('vinabike-assets').uploadBinary(
-            path,
-            bytes,
-            fileOptions: const FileOptions(
-              cacheControl: '3600',
-              upsert: true,
-            ),
-          );
-
-      final publicUrl =
-          supabase.storage.from('vinabike-assets').getPublicUrl(path);
-
-      widget.onUpdateField('imageUrl', publicUrl);
+      if (asset == null) return;
+      widget.onUpdateField('imageUrl', asset.publicUrl);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -11428,40 +11409,13 @@ class _BrandLogoEditorCompactState extends State<_BrandLogoEditorCompact> {
   bool _isUploading = false;
 
   Future<void> _pickAndUploadImage() async {
-    final picker = ImagePicker();
-
     try {
-      final pickedFile = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 400,
-        maxHeight: 200,
+      final asset = await showWebsiteMediaPicker(
+        context: context,
+        currentUrl: widget.brand['imageUrl']?.toString(),
       );
-
-      if (pickedFile == null) return;
-
-      setState(() => _isUploading = true);
-
-      final bytes = await pickedFile.readAsBytes();
-      final fileName = pickedFile.name;
-
-      // Upload to Supabase Storage
-      final supabase = Supabase.instance.client;
-      final uniqueName = '${DateTime.now().millisecondsSinceEpoch}_$fileName';
-      final path = 'brand-logos/$uniqueName';
-
-      await supabase.storage.from('vinabike-assets').uploadBinary(
-            path,
-            bytes,
-            fileOptions: const FileOptions(
-              cacheControl: '3600',
-              upsert: true,
-            ),
-          );
-
-      final publicUrl =
-          supabase.storage.from('vinabike-assets').getPublicUrl(path);
-
-      widget.onUpdateField('imageUrl', publicUrl);
+      if (asset == null) return;
+      widget.onUpdateField('imageUrl', asset.publicUrl);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -11663,6 +11617,8 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
   final _logoUrlController = TextEditingController();
   final _topBannerController = TextEditingController();
   final _headerBgColorController = TextEditingController();
+  final _headerMenuSurfaceColorController = TextEditingController();
+  final _headerMenuRailColorController = TextEditingController();
 
   // Header style options
   String _headerStyle = 'solid';
@@ -11691,6 +11647,8 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     _logoUrlController.addListener(_onFieldChanged);
     _topBannerController.addListener(_onFieldChanged);
     _headerBgColorController.addListener(_onFieldChanged);
+    _headerMenuSurfaceColorController.addListener(_onFieldChanged);
+    _headerMenuRailColorController.addListener(_onFieldChanged);
   }
 
   void _onFieldChanged() {
@@ -11720,6 +11678,8 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
       'header_show_top_banner': _showTopBanner.toString(),
       'header_shadow': _headerShadow.toString(),
       'header_bg_color': _headerBgColorController.text,
+      'header_menu_surface_color': _headerMenuSurfaceColorController.text,
+      'header_menu_rail_color': _headerMenuRailColorController.text,
     });
   }
 
@@ -11740,6 +11700,10 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
         service.getSetting('top_banner_text', 'Envíos a Chile continental');
     _headerBgColorController.text =
         service.getSetting('header_bg_color', '#FFFFFF');
+    _headerMenuSurfaceColorController.text =
+        service.getSetting('header_menu_surface_color', '#000000');
+    _headerMenuRailColorController.text =
+        service.getSetting('header_menu_rail_color', '#64748B');
 
     _headerStyle = service.getSetting('header_style', 'solid');
     _headerColorMode = service.getSetting('header_color_mode', 'auto');
@@ -11757,6 +11721,8 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     _logoUrlController.dispose();
     _topBannerController.dispose();
     _headerBgColorController.dispose();
+    _headerMenuSurfaceColorController.dispose();
+    _headerMenuRailColorController.dispose();
     super.dispose();
   }
 
@@ -11885,6 +11851,33 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           _ColorField(
             label: 'Color de fondo',
             controller: _headerBgColorController,
+            onChanged: () => _markChanged(),
+          ),
+
+          const SizedBox(height: 20),
+
+          const _SectionHeader('Menú desplegado'),
+          const SizedBox(height: 8),
+          const Text(
+            'Estos colores se aplican sólo cuando se abre la navegación.',
+            style: TextStyle(
+              color: Colors.white54,
+              fontSize: 11,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _ColorField(
+            label: 'Header y panel principal',
+            controller: _headerMenuSurfaceColorController,
+            allowAlpha: false,
+            onChanged: () => _markChanged(),
+          ),
+          const SizedBox(height: 12),
+          _ColorField(
+            label: 'Franja de categorías',
+            controller: _headerMenuRailColorController,
+            allowAlpha: false,
             onChanged: () => _markChanged(),
           ),
           const SizedBox(height: 16),

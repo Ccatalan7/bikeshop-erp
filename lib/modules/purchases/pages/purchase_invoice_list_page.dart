@@ -14,9 +14,17 @@ import '../../../shared/services/tenant_service.dart';
 import '../models/purchase_invoice.dart';
 import '../models/purchase_payment.dart';
 import '../models/purchase_receipt.dart';
+import '../models/purchase_receipt_resolution.dart';
+import '../services/purchase_credit_note_service.dart';
+import '../services/purchase_receipt_resolution_service.dart';
 import '../services/purchase_receiving_service.dart';
+import '../services/purchase_supplier_return_service.dart';
 import '../services/purchase_service.dart';
+import '../widgets/purchase_invoice_evidence_dropdown.dart';
+import '../widgets/purchase_receipt_resolution_register.dart';
+import 'purchase_credit_note_page.dart';
 import 'purchase_receiving_page.dart';
+import 'purchase_supplier_return_page.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../../shared/models/tax_treatment.dart';
@@ -50,11 +58,20 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   String _selectedStatus = 'all'; // all, draft, pending, paid, overdue
 
   PurchaseInvoice? _selectedInvoice;
+  PurchaseInvoice? _receiptWorkspaceInvoice;
+  Map<String, PurchaseReceiptFulfillment> _receiptFulfillments = const {};
   bool _isHydratingSelectedInvoice = false;
   final DocumentAccountingContextService _documentAccountingContextService =
       DocumentAccountingContextService();
   Future<DocumentAccountingContext>? _accountingContextFuture;
   String? _accountingContextInvoiceId;
+  Future<List<PurchaseReceiptRecord>>? _receiptHistoryFuture;
+  String? _receiptHistoryInvoiceId;
+  Future<List<PurchaseReceiptResolutionCase>>? _receiptResolutionFuture;
+  String? _receiptResolutionInvoiceId;
+  String? _focusedPurchaseCreditNoteId;
+  String? _focusedPurchaseRefundId;
+  String? _focusedSupplierReturnId;
   // When true, the right pane shows the inline payment form instead of the PDF
   bool _showingPaymentForm = false;
   // Payment form state
@@ -166,6 +183,60 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   bool _isAccountedInvoice(PurchaseInvoice invoice) {
     return invoice.status == PurchaseInvoiceStatus.received ||
         invoice.status == PurchaseInvoiceStatus.paid;
+  }
+
+  PurchaseReceiptFulfillment _fulfillmentFor(PurchaseInvoice invoice) {
+    final invoiceId = invoice.id;
+    if (invoiceId != null) {
+      final fulfillment = _receiptFulfillments[invoiceId];
+      if (fulfillment != null) return fulfillment;
+    }
+    final readModelFulfillment = invoice.receiptFulfillment;
+    if (readModelFulfillment != null) return readModelFulfillment;
+    return PurchaseReceiptFulfillment.derive(
+      expectedQuantities: invoice.items
+          .map((item) => item.quantity.round())
+          .toList(growable: false),
+      acceptedByLine: const {},
+      legacyReceived: invoice.status == PurchaseInvoiceStatus.received ||
+          invoice.receivedDate != null,
+    );
+  }
+
+  Future<void> _loadReceiptFulfillments(
+    Iterable<PurchaseInvoice> invoices,
+  ) async {
+    final byId = <String, PurchaseInvoice>{};
+    for (final invoice in invoices) {
+      final invoiceId = invoice.id;
+      if (invoiceId != null && invoiceId.isNotEmpty) {
+        byId[invoiceId] = invoice;
+      }
+    }
+    final targets = byId.values.toList(growable: false);
+    if (targets.isEmpty || !mounted) return;
+
+    try {
+      final fulfillments =
+          await PurchaseReceivingService().getFulfillments(targets);
+      if (!mounted) return;
+      setState(() {
+        _receiptFulfillments = {
+          ..._receiptFulfillments,
+          ...fulfillments,
+        };
+      });
+    } catch (error) {
+      debugPrint(
+        'No se pudo cargar el estado físico de facturas de compra: $error',
+      );
+    }
+  }
+
+  Future<void> _refreshInvoiceList() async {
+    await context
+        .read<PurchaseService>()
+        .getPurchaseInvoicesForList(forceRefresh: true);
   }
 
   double _taxCreditBase(PurchaseInvoice invoice) {
@@ -320,9 +391,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         _buildMobileFilterTabs(invoices),
         Expanded(
           child: RefreshIndicator(
-            onRefresh: () => context
-                .read<PurchaseService>()
-                .getPurchaseInvoicesForList(forceRefresh: true),
+            onRefresh: _refreshInvoiceList,
             child: _buildInvoiceCardsList(invoices),
           ),
         ),
@@ -338,20 +407,36 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       if (!mounted) return;
       setState(() {
         _selectedInvoice = null;
+        _receiptWorkspaceInvoice = null;
         _showingPaymentForm = false;
         _isHydratingSelectedInvoice = false;
         _accountingContextInvoiceId = null;
         _accountingContextFuture = null;
+        _receiptHistoryInvoiceId = null;
+        _receiptHistoryFuture = null;
+        _receiptResolutionInvoiceId = null;
+        _receiptResolutionFuture = null;
+        _focusedPurchaseCreditNoteId = null;
+        _focusedPurchaseRefundId = null;
+        _focusedSupplierReturnId = null;
       });
       return;
     }
 
     setState(() {
       _selectedInvoice = invoice;
+      _receiptWorkspaceInvoice = null;
       _showingPaymentForm = false;
       _isHydratingSelectedInvoice = true;
       _accountingContextInvoiceId = null;
       _accountingContextFuture = null;
+      _receiptHistoryInvoiceId = null;
+      _receiptHistoryFuture = null;
+      _receiptResolutionInvoiceId = null;
+      _receiptResolutionFuture = null;
+      _focusedPurchaseCreditNoteId = null;
+      _focusedPurchaseRefundId = null;
+      _focusedSupplierReturnId = null;
     });
 
     final fullInvoice =
@@ -363,8 +448,17 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       return;
     }
 
+    final hydratedInvoice = (fullInvoice ?? invoice).copyWith(
+      receiptFulfillment: invoice.receiptFulfillment,
+    );
+    if (hydratedInvoice.receiptFulfillment == null) {
+      await _loadReceiptFulfillments([hydratedInvoice]);
+      if (!mounted || _selectedInvoice?.id != invoice.id) {
+        return;
+      }
+    }
+
     setState(() {
-      final hydratedInvoice = fullInvoice ?? invoice;
       _selectedInvoice = hydratedInvoice;
       _isHydratingSelectedInvoice = false;
       _primeAccountingContext(hydratedInvoice);
@@ -376,6 +470,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     if (invoiceId == null || invoiceId.isEmpty) {
       _accountingContextInvoiceId = null;
       _accountingContextFuture = null;
+      _receiptHistoryInvoiceId = null;
+      _receiptHistoryFuture = null;
+      _receiptResolutionInvoiceId = null;
+      _receiptResolutionFuture = null;
       return;
     }
 
@@ -385,6 +483,11 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       invoiceId: invoiceId,
       invoiceNumber: invoice.invoiceNumber,
     );
+    _receiptHistoryInvoiceId = invoiceId;
+    _receiptHistoryFuture = PurchaseReceivingService().getHistory(invoiceId);
+    _receiptResolutionInvoiceId = invoiceId;
+    _receiptResolutionFuture =
+        PurchaseReceiptResolutionService().getCasesForInvoice(invoiceId);
   }
 
   void _openLinkedPayment(DocumentPaymentRecord payment) {
@@ -402,6 +505,141 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       case DocumentPaymentSourceType.salesPayment:
       case DocumentPaymentSourceType.unknown:
         break;
+    }
+  }
+
+  Future<void> _openLinkedReceipt(PurchaseReceiptRecord receipt) async {
+    await _openReceiptById(receipt.id);
+  }
+
+  Future<void> _openReceiptById(String receiptId) async {
+    if (receiptId.isEmpty) return;
+    await context.push(
+      '/purchases/receipts/${Uri.encodeComponent(receiptId)}',
+    );
+    if (!mounted || _selectedInvoice?.id == null) return;
+    final current = _selectedInvoice!;
+    setState(() => _primeAccountingContext(current));
+    await _loadReceiptFulfillments([current]);
+  }
+
+  Future<void> _refreshSelectedInvoiceResolutionContext() async {
+    final selected = _selectedInvoice;
+    final invoiceId = selected?.id;
+    if (selected == null || invoiceId == null || invoiceId.isEmpty) return;
+    setState(() {
+      _focusedPurchaseCreditNoteId = null;
+      _focusedPurchaseRefundId = null;
+      _focusedSupplierReturnId = null;
+    });
+    try {
+      final refreshed = await context
+          .read<PurchaseService>()
+          .getPurchaseInvoice(invoiceId, refresh: true);
+      final current = refreshed ?? selected;
+      final fulfillment =
+          await PurchaseReceivingService().getFulfillment(current);
+      if (!mounted || _selectedInvoice?.id != invoiceId) return;
+      setState(() {
+        _selectedInvoice = current;
+        _receiptFulfillments = {
+          ..._receiptFulfillments,
+          invoiceId: fulfillment,
+        };
+        _primeAccountingContext(current);
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'El documento se cerró, pero no se pudo actualizar la factura: '
+            '$error',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openResolutionCase(
+    PurchaseReceiptResolutionCase resolutionCase,
+  ) =>
+      _openReceiptById(resolutionCase.purchaseReceiptId);
+
+  Future<void> _openResolutionDocument(
+    PurchaseReceiptResolutionCase resolutionCase,
+    PurchaseReceiptResolutionAllocation allocation,
+    PurchaseReceiptResolutionDocumentReference document,
+  ) async {
+    switch (document.kind) {
+      case PurchaseReceiptResolutionDocumentKind.creditNote:
+      case PurchaseReceiptResolutionDocumentKind.supplierRefund:
+        final creditNoteId = allocation.purchaseCreditNoteId;
+        if (creditNoteId != null && creditNoteId.isNotEmpty) {
+          setState(() {
+            _focusedPurchaseCreditNoteId = creditNoteId;
+            _focusedPurchaseRefundId = document.kind ==
+                    PurchaseReceiptResolutionDocumentKind.supplierRefund
+                ? document.id
+                : null;
+            _focusedSupplierReturnId = null;
+            _receiptWorkspaceInvoice = null;
+            _showingPaymentForm = false;
+          });
+          return;
+        }
+        break;
+      case PurchaseReceiptResolutionDocumentKind.laterReceipt:
+        if (document.id.isNotEmpty) {
+          await _openReceiptById(document.id);
+          return;
+        }
+        break;
+      case PurchaseReceiptResolutionDocumentKind.supplierReturn:
+        if (document.id.isNotEmpty) {
+          setState(() {
+            _focusedSupplierReturnId = document.id;
+            _focusedPurchaseCreditNoteId = null;
+            _focusedPurchaseRefundId = null;
+            _receiptWorkspaceInvoice = null;
+            _showingPaymentForm = false;
+          });
+          return;
+        }
+        break;
+      case PurchaseReceiptResolutionDocumentKind.documentedLoss:
+      case PurchaseReceiptResolutionDocumentKind.documentedLossReversal:
+        break;
+    }
+
+    await _openReceiptById(resolutionCase.purchaseReceiptId);
+  }
+
+  Future<void> _openFirstPendingResolution(PurchaseInvoice invoice) async {
+    final invoiceId = invoice.id;
+    if (invoiceId == null || invoiceId.isEmpty) return;
+    try {
+      final cases = await PurchaseReceiptResolutionService()
+          .getCasesForInvoice(invoiceId);
+      PurchaseReceiptResolutionCase? pending;
+      for (final resolutionCase in cases) {
+        if (resolutionCase.isOpen) {
+          pending = resolutionCase;
+          break;
+        }
+      }
+      if (pending != null) {
+        await _openResolutionCase(pending);
+        return;
+      }
+      if (mounted) await _receiveProducts(invoice);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudieron abrir las diferencias: $error'),
+        ),
+      );
     }
   }
 
@@ -661,7 +899,36 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         Expanded(
           child: _isHydratingSelectedInvoice
               ? const Center(child: BrandedLoading())
-              : _buildInvoicePreview(_selectedInvoice!),
+              : _focusedSupplierReturnId != null && _selectedInvoice != null
+                  ? PurchaseSupplierReturnPage(
+                      invoice: _selectedInvoice!,
+                      service: PurchaseSupplierReturnService(),
+                      focusReturnId: _focusedSupplierReturnId,
+                      embedded: true,
+                      onClose: _refreshSelectedInvoiceResolutionContext,
+                    )
+                  : _focusedPurchaseCreditNoteId != null &&
+                          _selectedInvoice != null
+                      ? PurchaseCreditNotePage(
+                          invoice: _selectedInvoice!,
+                          service: PurchaseCreditNoteService(),
+                          focusCreditNoteId: _focusedPurchaseCreditNoteId,
+                          focusRefundId: _focusedPurchaseRefundId,
+                          embedded: true,
+                          onClose: _refreshSelectedInvoiceResolutionContext,
+                        )
+                      : _receiptWorkspaceInvoice != null
+                          ? PurchaseReceivingWorkspace(
+                              key: ValueKey(
+                                'receipt-${_receiptWorkspaceInvoice!.id}',
+                              ),
+                              invoice: _receiptWorkspaceInvoice!,
+                              onCancel: () => setState(
+                                () => _receiptWorkspaceInvoice = null,
+                              ),
+                              onCompleted: _handleReceiptCompleted,
+                            )
+                          : _buildInvoicePreview(_selectedInvoice!),
         ),
       ],
     );
@@ -890,7 +1157,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                         ),
                       ),
                       const Spacer(),
-                      _buildStatusChip(invoice.status),
+                      _buildStatusChip(invoice),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -1015,9 +1282,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualizar',
-            onPressed: () => context
-                .read<PurchaseService>()
-                .getPurchaseInvoicesForList(forceRefresh: true),
+            onPressed: _refreshInvoiceList,
           ),
         ],
       ),
@@ -1279,10 +1544,21 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                     child: Row(
                       children: [
                         Icon(Icons.delete_outline,
-                            size: 18, color: Colors.red[700]),
+                            size: 18,
+                            color: invoice.status == PurchaseInvoiceStatus.draft
+                                ? Colors.red[700]
+                                : Colors.grey[700]),
                         const SizedBox(width: 12),
-                        Text('Eliminar',
-                            style: TextStyle(color: Colors.red[700])),
+                        Text(
+                          invoice.status == PurchaseInvoiceStatus.draft
+                              ? 'Eliminar borrador'
+                              : 'Revisar reversión',
+                          style: TextStyle(
+                            color: invoice.status == PurchaseInvoiceStatus.draft
+                                ? Colors.red[700]
+                                : Colors.grey[800],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1311,6 +1587,33 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   }
 
   Future<void> _confirmDeleteInvoice(PurchaseInvoice invoice) async {
+    if (invoice.status != PurchaseInvoiceStatus.draft) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          icon: const Icon(Icons.account_tree_outlined),
+          title: const Text('Esta factura conserva evidencia contable'),
+          content: const SizedBox(
+            width: 560,
+            child: Text(
+              'Una factura confirmada, pagada o recibida no se elimina. '
+              'Primero deben anularse, mediante sus propias reversas, los '
+              'documentos dependientes en este orden: reembolsos, notas de '
+              'crédito, pérdidas documentadas o entregas posteriores, '
+              'recepciones de stock y pagos. Cuando la factura vuelva a '
+              'Borrador podrá eliminarse sin borrar evidencia histórica.',
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1371,6 +1674,13 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             _selectedInvoice = null;
             _accountingContextInvoiceId = null;
             _accountingContextFuture = null;
+            _receiptHistoryInvoiceId = null;
+            _receiptHistoryFuture = null;
+            _receiptResolutionInvoiceId = null;
+            _receiptResolutionFuture = null;
+            _focusedPurchaseCreditNoteId = null;
+            _focusedPurchaseRefundId = null;
+            _focusedSupplierReturnId = null;
           });
         }
 
@@ -1456,7 +1766,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         );
         break;
       case 'status':
-        content = _buildStatusChip(invoice.status);
+        content = _buildStatusChip(invoice);
         break;
       case 'total':
         content = Text(
@@ -1495,7 +1805,13 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     );
   }
 
-  Widget _buildStatusChip(PurchaseInvoiceStatus status) {
+  ({
+    String label,
+    Color foreground,
+    Color background,
+  }) _statusPresentationFor(PurchaseInvoice invoice) {
+    final status = invoice.status;
+    final fulfillment = _fulfillmentFor(invoice);
     final labels = {
       PurchaseInvoiceStatus.draft: 'BORRADOR',
       PurchaseInvoiceStatus.sent: 'ENVIADA',
@@ -1505,6 +1821,30 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       PurchaseInvoiceStatus.cancelled: 'ANULADA',
     };
 
+    final isPaid = status == PurchaseInvoiceStatus.paid ||
+        (invoice.paidAmount > 0 && _effectiveBalance(invoice) <= 1);
+    if (fulfillment.isClosedWithDifference) {
+      return (
+        label: isPaid ? 'PAGADA · CERRADA CON DIF.' : 'CERRADA CON DIF.',
+        foreground: const Color(0xFF6F480B),
+        background: const Color(0xFFF0D9A7),
+      );
+    }
+    if (fulfillment.isComplete) {
+      return (
+        label: isPaid ? 'PAGADA · RECIBIDA' : 'RECIBIDA',
+        foreground: const Color(0xFF165F52),
+        background: const Color(0xFFCFE8DF),
+      );
+    }
+    if (fulfillment.isOpen) {
+      return (
+        label: isPaid ? 'PAGADA · PARCIAL' : 'RECEP. PARCIAL',
+        foreground: const Color(0xFF6F480B),
+        background: const Color(0xFFF0D9A7),
+      );
+    }
+
     final colors = {
       PurchaseInvoiceStatus.draft: Colors.grey,
       PurchaseInvoiceStatus.sent: Colors.blue,
@@ -1513,19 +1853,30 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       PurchaseInvoiceStatus.paid: Colors.blue,
       PurchaseInvoiceStatus.cancelled: Colors.red,
     };
-
     final color = colors[status] ?? Colors.grey;
+    return (
+      label: labels[status] ?? status.name.toUpperCase(),
+      foreground: color,
+      background: color.withValues(alpha: 0.12),
+    );
+  }
+
+  Widget _buildStatusChip(PurchaseInvoice invoice) {
+    final presentation = _statusPresentationFor(invoice);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: presentation.background,
+        border: Border.all(
+          color: presentation.foreground.withValues(alpha: 0.32),
+        ),
         borderRadius: BorderRadius.circular(3),
       ),
       child: Text(
-        labels[status] ?? status.name.toUpperCase(),
+        presentation.label,
         style: TextStyle(
-          color: color,
+          color: presentation.foreground,
           fontSize: 10.5,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.2,
@@ -1611,32 +1962,32 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         throw StateError('No se pudo cargar la factura completa.');
       }
       if (!mounted) return;
-      final result = await Navigator.of(context).push<PurchaseReceiptResult>(
-        MaterialPageRoute(
-          builder: (_) => PurchaseReceivingPage(
-            invoice: fullInvoice,
-            service: receivingService,
-          ),
-        ),
-      );
-      if (result != null && mounted) {
-        final refreshed =
-            await purchaseService.getPurchaseInvoice(invoiceId, refresh: true);
-        if (refreshed != null && mounted) {
-          setState(() {
-            _selectedInvoice = refreshed;
-            _primeAccountingContext(refreshed);
-          });
-        }
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Recepción ${result.receiptNumber} registrada'),
-              backgroundColor: Colors.green,
+      final fulfillment = await receivingService.getFulfillment(fullInvoice);
+      if (!mounted) return;
+      setState(() {
+        _receiptFulfillments = {
+          ..._receiptFulfillments,
+          invoiceId: fulfillment,
+        };
+      });
+      if (fulfillment.isClosed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              fulfillment.isClosedWithDifference
+                  ? 'La recepción ya está cerrada mediante una resolución de '
+                      'diferencia. No se registró nada.'
+                  : 'La recepción física ya está completa. '
+                      'No se registró nada.',
             ),
-          );
-        }
+          ),
+        );
+        return;
       }
+      setState(() {
+        _receiptWorkspaceInvoice = fullInvoice;
+        _showingPaymentForm = false;
+      });
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1649,6 +2000,129 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     } finally {
       if (mounted) setState(() => _isOpeningReceipt = false);
     }
+  }
+
+  Future<void> _handleReceiptCompleted(PurchaseReceiptResult result) async {
+    final invoice = _receiptWorkspaceInvoice;
+    final invoiceId = invoice?.id;
+    if (invoice == null || invoiceId == null) return;
+
+    try {
+      final purchaseService = context.read<PurchaseService>();
+      final refreshed =
+          await purchaseService.getPurchaseInvoice(invoiceId, refresh: true);
+      final current = refreshed ?? invoice;
+      final fulfillment =
+          await PurchaseReceivingService().getFulfillment(current);
+      if (!mounted) return;
+      setState(() {
+        _selectedInvoice = current;
+        _receiptFulfillments = {
+          ..._receiptFulfillments,
+          invoiceId: fulfillment,
+        };
+        _receiptWorkspaceInvoice = null;
+        _primeAccountingContext(current);
+      });
+
+      final openDifferenceQuantity = fulfillment.unresolvedDifferenceQuantity;
+      if (openDifferenceQuantity <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Recepción ${result.receiptNumber} registrada'),
+          ),
+        );
+        return;
+      }
+
+      final resolveNow = await _showReceiptRegisteredDecision(
+        result: result,
+        openDifferenceQuantity: openDifferenceQuantity,
+      );
+      if (!mounted) return;
+      if (resolveNow) {
+        await _openFirstPendingResolution(current);
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${result.receiptNumber} quedó con '
+            '$openDifferenceQuantity '
+            '${openDifferenceQuantity == 1 ? 'unidad pendiente' : 'unidades pendientes'}. '
+            'Quedó disponible en Diferencias y resoluciones dentro de la '
+            'factura para cuando tengas respuesta del proveedor.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _receiptWorkspaceInvoice = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'La recepción ${result.receiptNumber} quedó registrada, pero no '
+            'se pudo actualizar la vista. Usa Actualizar. Detalle: $error',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<bool> _showReceiptRegisteredDecision({
+    required PurchaseReceiptResult result,
+    required int openDifferenceQuantity,
+  }) async {
+    final resolveNow = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          icon: const Icon(Icons.fact_check_outlined),
+          title: const Text('Recepción registrada'),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${result.receiptNumber} quedó registrada y '
+                  '$openDifferenceQuantity '
+                  '${openDifferenceQuantity == 1 ? 'unidad quedó con diferencia' : 'unidades quedaron con diferencia'}.',
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Las diferencias quedaron abiertas. Registrar la recepción '
+                  'no genera automáticamente una nota de crédito, una entrega '
+                  'posterior ni una pérdida contable.',
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Puedes abrir ahora el caso pendiente y su recepción de '
+                  'origen, o dejarlo en Diferencias y resoluciones hasta '
+                  'tener una respuesta del proveedor.',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Resolver después'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Resolver ahora'),
+            ),
+          ],
+        ),
+      ),
+    );
+    return resolveNow ?? false;
   }
 
   Future<void> _openPaymentForm(PurchaseInvoice invoice) async {
@@ -1752,8 +2226,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
       messenger.showSnackBar(
         const SnackBar(
-            content: Text('Pago registrado correctamente'),
-            backgroundColor: Colors.green),
+          content: Text('Pago registrado correctamente'),
+          backgroundColor: Colors.green,
+        ),
       );
 
       final updated = await purchaseService.getPurchaseInvoice(invoice.id!);
@@ -1845,8 +2320,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       });
       messenger.showSnackBar(
         const SnackBar(
-            content: Text('Pago eliminado correctamente'),
-            backgroundColor: Colors.green),
+          content: Text('Pago eliminado correctamente'),
+          backgroundColor: Colors.green,
+        ),
       );
     } catch (e) {
       if (mounted) {
@@ -1875,6 +2351,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     final List<Widget> secondaryActions = [];
 
     final effectiveBalance = _effectiveBalance(invoice);
+    final fulfillment = _fulfillmentFor(invoice);
 
     switch (invoice.status) {
       case PurchaseInvoiceStatus.draft:
@@ -1916,7 +2393,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
         if (invoice.prepaymentModel) {
           if (effectiveBalance <= 0) {
-            nextActionLabel = 'Marcar como Recibida';
+            nextActionLabel = 'Registrar recepción';
             subLabel =
                 'Factura prepagada pagada en su totalidad. Registra la recepción física para ingresar al inventario.';
             onActionPressed = () => _receiveProducts(invoice);
@@ -1927,7 +2404,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             onActionPressed = () => _openPaymentForm(invoice);
           }
         } else {
-          nextActionLabel = 'Marcar como Recibida';
+          nextActionLabel = 'Registrar recepción';
           subLabel =
               'Confirma la recepción física para ingresar al inventario antes del pago.';
           onActionPressed = () => _receiveProducts(invoice);
@@ -1977,7 +2454,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       case PurchaseInvoiceStatus.paid:
         subLabel = 'Esta factura ha sido pagada en su totalidad.';
         if (invoice.prepaymentModel) {
-          nextActionLabel = 'Marcar como Recibida';
+          nextActionLabel = 'Registrar recepción';
           subLabel =
               'Factura prepagada pagada. Registra la recepción física para ingresar al inventario.';
           onActionPressed = () => _receiveProducts(invoice);
@@ -1999,6 +2476,52 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
       default:
         return const SizedBox.shrink();
+    }
+
+    final hasPhysicalWorkflow =
+        invoice.status == PurchaseInvoiceStatus.confirmed ||
+            invoice.status == PurchaseInvoiceStatus.received ||
+            invoice.status == PurchaseInvoiceStatus.paid;
+    if (hasPhysicalWorkflow && fulfillment.isClosedWithDifference) {
+      subLabel = 'Cerrada con diferencia: ${fulfillment.acceptedQuantity} de '
+          '${fulfillment.expectedQuantity} unidades ingresaron físicamente; '
+          '${fulfillment.resolvedDifferenceQuantity} se cerraron mediante '
+          'resolución vinculada.';
+      if (effectiveBalance > 0) {
+        nextActionLabel = 'Registrar pago';
+        onActionPressed = () => _openPaymentForm(invoice);
+      } else {
+        nextActionLabel = null;
+        onActionPressed = null;
+      }
+    } else if (hasPhysicalWorkflow && fulfillment.isComplete) {
+      subLabel = fulfillment.hasReportedDifferences
+          ? 'Recepción física completa con diferencias informadas. '
+              'Inventario y resolución comercial se controlan por separado.'
+          : 'Recepción física completa. El inventario ya fue actualizado.';
+      if (effectiveBalance > 0) {
+        nextActionLabel = 'Registrar pago';
+        onActionPressed = () => _openPaymentForm(invoice);
+      } else {
+        nextActionLabel = null;
+        onActionPressed = null;
+      }
+    } else if (hasPhysicalWorkflow && fulfillment.isOpen) {
+      final openDifferences = fulfillment.unresolvedDifferenceQuantity;
+      if (openDifferences > 0) {
+        nextActionLabel = 'Resolver diferencias';
+        subLabel = '$openDifferences '
+            '${openDifferences == 1 ? 'unidad quedó pendiente' : 'unidades quedaron pendientes'} '
+            'de resolución. No se aplicará ninguna consecuencia contable o '
+            'logística hasta que elijas una resolución.';
+        onActionPressed = () => _openFirstPendingResolution(invoice);
+      } else {
+        nextActionLabel = 'Registrar recepción';
+        subLabel =
+            'Recepción parcial: ${fulfillment.remainingQuantity} unidades '
+            'siguen pendientes de recepción física.';
+        onActionPressed = () => _receiveProducts(invoice);
+      }
     }
 
     return Container(
@@ -2073,6 +2596,11 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     final accountingFuture = _accountingContextInvoiceId == invoice.id
         ? _accountingContextFuture
         : null;
+    final receiptHistoryFuture =
+        _receiptHistoryInvoiceId == invoice.id ? _receiptHistoryFuture : null;
+    final receiptResolutionFuture = _receiptResolutionInvoiceId == invoice.id
+        ? _receiptResolutionFuture
+        : null;
 
     return Container(
       color: const Color(0xFFF4F6FA),
@@ -2099,42 +2627,152 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                                   snapshot.connectionState ==
                                       ConnectionState.waiting;
 
-                          return SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(24, 18, 24, 34),
-                            child: Center(
-                              child: ConstrainedBox(
-                                constraints:
-                                    const BoxConstraints(maxWidth: 1240),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    if (isLoadingAccounting)
-                                      const DocumentAccountingLoadingStrip()
-                                    else
-                                      DocumentPaymentsDropdown(
-                                        title: 'Pagos realizados',
-                                        payments: accounting.payments,
-                                        onPaymentTap: _openLinkedPayment,
-                                      ),
-                                    const SizedBox(height: 24),
-                                    DocumentPaperShell(
-                                      width: paperWidth,
-                                      status: _documentPreviewStatus(invoice),
-                                      child: _buildInvoiceDocument(
-                                        invoice,
-                                        paperWidth,
+                          return FutureBuilder<List<PurchaseReceiptRecord>>(
+                            future: receiptHistoryFuture,
+                            builder: (context, receiptSnapshot) {
+                              final receipts = receiptSnapshot.data ?? const [];
+                              final isLoadingReceipts =
+                                  receiptHistoryFuture != null &&
+                                      receiptSnapshot.connectionState ==
+                                          ConnectionState.waiting;
+
+                              return FutureBuilder<
+                                  List<PurchaseReceiptResolutionCase>>(
+                                future: receiptResolutionFuture,
+                                builder: (context, resolutionSnapshot) {
+                                  final resolutionCases =
+                                      resolutionSnapshot.data ?? const [];
+                                  final isLoadingResolutions =
+                                      receiptResolutionFuture != null &&
+                                          resolutionSnapshot.connectionState ==
+                                              ConnectionState.waiting;
+
+                                  return SingleChildScrollView(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      24,
+                                      18,
+                                      24,
+                                      34,
+                                    ),
+                                    child: Center(
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 1240,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            if (isLoadingAccounting ||
+                                                isLoadingReceipts ||
+                                                isLoadingResolutions)
+                                              const DocumentAccountingLoadingStrip()
+                                            else ...[
+                                              PurchaseInvoiceEvidenceDropdown(
+                                                key: ValueKey(
+                                                  'purchase-invoice-evidence-${invoice.id}',
+                                                ),
+                                                payments: accounting.payments,
+                                                receipts: receipts,
+                                                resolutionCases:
+                                                    resolutionCases,
+                                                onPaymentTap:
+                                                    _openLinkedPayment,
+                                                onReceiptTap:
+                                                    _openLinkedReceipt,
+                                                onResolutionCaseTap:
+                                                    _openResolutionCase,
+                                                onResolutionDocumentTap:
+                                                    _openResolutionDocument,
+                                              ),
+                                              if (snapshot.hasError ||
+                                                  receiptSnapshot.hasError ||
+                                                  resolutionSnapshot.hasError)
+                                                Container(
+                                                  width: double.infinity,
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 10,
+                                                  ),
+                                                  decoration:
+                                                      const BoxDecoration(
+                                                    color: Color(0xFFF8F3F3),
+                                                    border:
+                                                        Border.fromBorderSide(
+                                                      BorderSide(
+                                                        color:
+                                                            Color(0xFFE2C9CA),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    children: [
+                                                      const Icon(
+                                                        Icons
+                                                            .warning_amber_rounded,
+                                                        size: 18,
+                                                        color:
+                                                            Color(0xFF874B4E),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      const Expanded(
+                                                        child: Text(
+                                                          'No se pudo cargar el '
+                                                          'registro completo de '
+                                                          'pagos, recepciones y '
+                                                          'resoluciones.',
+                                                          style: TextStyle(
+                                                            fontSize: 12.5,
+                                                            color: Color(
+                                                                0xFF713F42),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      TextButton(
+                                                        onPressed: invoice.id ==
+                                                                null
+                                                            ? null
+                                                            : () => setState(
+                                                                  () =>
+                                                                      _primeAccountingContext(
+                                                                    invoice,
+                                                                  ),
+                                                                ),
+                                                        child: const Text(
+                                                            'Reintentar'),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                            ],
+                                            const SizedBox(height: 24),
+                                            DocumentPaperShell(
+                                              width: paperWidth,
+                                              status: _documentPreviewStatus(
+                                                  invoice),
+                                              child: _buildInvoiceDocument(
+                                                invoice,
+                                                paperWidth,
+                                              ),
+                                            ),
+                                            if (!isLoadingAccounting)
+                                              DocumentJournalEntriesSection(
+                                                entries:
+                                                    accounting.journalEntries,
+                                                documentLabel:
+                                                    'Factura de compra',
+                                                emptyReference:
+                                                    invoice.invoiceNumber,
+                                              ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                    if (!isLoadingAccounting)
-                                      DocumentJournalEntriesSection(
-                                        entries: accounting.journalEntries,
-                                        documentLabel: 'Factura de compra',
-                                        emptyReference: invoice.invoiceNumber,
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
+                                  );
+                                },
+                              );
+                            },
                           );
                         },
                       );
@@ -2148,6 +2786,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
   DocumentPaperStatus _documentPreviewStatus(PurchaseInvoice invoice) {
     final effectiveBalance = _effectiveBalance(invoice);
+    final fulfillment = _fulfillmentFor(invoice);
     final now = DateTime.now();
     final isPaid = invoice.status == PurchaseInvoiceStatus.paid ||
         (invoice.paidAmount > 0 && effectiveBalance <= 1);
@@ -2162,6 +2801,33 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         foreground: Color(0xFF991B1B),
         background: Color(0xFFFFF1F2),
         border: Color(0xFFFECACA),
+      );
+    }
+
+    if (fulfillment.isClosedWithDifference) {
+      return DocumentPaperStatus(
+        label: isPaid ? 'PAGADA · CERRADA CON DIF.' : 'CERRADA CON DIF.',
+        foreground: const Color(0xFF6B4C12),
+        background: const Color(0xFFFFFBEB),
+        border: const Color(0xFFE5C574),
+      );
+    }
+
+    if (fulfillment.isComplete) {
+      return DocumentPaperStatus(
+        label: isPaid ? 'PAGADA · RECIBIDA' : 'RECIBIDA',
+        foreground: isPaid ? const Color(0xFF047857) : const Color(0xFF0F766E),
+        background: isPaid ? const Color(0xFFECFDF5) : const Color(0xFFF0FDFA),
+        border: isPaid ? const Color(0xFFA7F3D0) : const Color(0xFF99F6E4),
+      );
+    }
+
+    if (fulfillment.isOpen) {
+      return DocumentPaperStatus(
+        label: isPaid ? 'PAGADA · RECEPCIÓN PARCIAL' : 'RECEPCIÓN PARCIAL',
+        foreground: const Color(0xFF92400E),
+        background: const Color(0xFFFFFBEB),
+        border: const Color(0xFFFDE68A),
       );
     }
 
@@ -2510,6 +3176,13 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   _showingPaymentForm = false;
                   _accountingContextInvoiceId = null;
                   _accountingContextFuture = null;
+                  _receiptHistoryInvoiceId = null;
+                  _receiptHistoryFuture = null;
+                  _receiptResolutionInvoiceId = null;
+                  _receiptResolutionFuture = null;
+                  _focusedPurchaseCreditNoteId = null;
+                  _focusedPurchaseRefundId = null;
+                  _focusedSupplierReturnId = null;
                 }),
                 tooltip: 'Cerrar',
                 color: Colors.grey[600],

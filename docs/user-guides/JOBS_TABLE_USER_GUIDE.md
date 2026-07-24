@@ -47,10 +47,14 @@ cambies el estado editando datos por fuera de ese control.
 ### Presupuesto y cotización
 
 1. Agrega al menos un producto o servicio.
-2. Envía o descarga el PDF correspondiente.
-3. Registra la decisión desde el chip de propuesta.
-4. Si se aprueba un **Presupuesto**, usa `Facturar presupuesto`.
-5. Si se aprueba una **Cotización**, elige Venta, Bicicleta o Componente según
+2. Presiona el nombre **Presupuesto** o **Cotización** en la columna Factura
+   para abrir directamente sus Productos y Servicios y editarlos mientras la
+   propuesta siga pendiente.
+3. Usa la flecha mínima del lado derecho del chip para `Descargar` el PDF.
+4. Registra la decisión desde el chip de propuesta.
+5. Si se aprueba un **Presupuesto**, abre la misma flecha y usa
+   `Facturar presupuesto`.
+6. Si se aprueba una **Cotización**, elige Venta, Bicicleta o Componente según
    lo que realmente se recibirá.
 
 Una propuesta no aprobada no crea factura, movimiento de stock, IVA, ingreso ni
@@ -59,8 +63,10 @@ cuenta por cobrar. La conversión mantiene el mismo trabajo y su historial.
 ## 4. Acciones seguras dentro de la tabla
 
 - **Estado:** avanza o corrige el ciclo operacional.
-- **Factura / Presupuesto / Cotización:** abre el documento o las acciones
-  permitidas para ese momento.
+- **Presupuesto / Cotización:** el nombre abre Productos y Servicios; la flecha
+  derecha descarga el PDF y, después de aprobar, muestra la conversión
+  permitida.
+- **Factura:** abre el documento comercial vinculado.
 - **Bicicleta:** abre directamente la ficha cuando existe una sola bicicleta.
 - **REVISAR MODO:** clasifica el registro como Bicicleta, Componente o Venta.
 - **Garantía:** registra `Cubierto` o `No cubierto`. Si existen pagos vigentes,
@@ -128,7 +134,6 @@ los KPIs estratégicos.
 
 | Necesitas | Acción correcta |
 |---|---|
-| Priorizar el día | Combina `Activos`, `Vencidos` o `Sin pagar` con la búsqueda. |
-| Registrar un hito | Usa el chip Estado; no edites el estado por fuera de la tabla. |
-| Revisar el respaldo comercial | Abre Factura, Presupuesto o Cotización desde su columna. |
-| Corregir el contenido del trabajo | Abre la fila y usa la ficha completa o el panel dividido. |
+| Priorizar y registrar hitos | Combina `Activos`, `Vencidos` o `Sin pagar` con la búsqueda; usa el chip Estado para cada hito. |
+| Revisar, editar o descargar una propuesta | El nombre abre directamente Productos y Servicios; la flecha derecha ofrece Descargar. |
+| Revisar factura u otro contenido | Abre la factura desde su columna; para el resto, abre la fila y usa la ficha completa o el panel dividido. |

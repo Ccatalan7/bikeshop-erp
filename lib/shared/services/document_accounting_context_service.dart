@@ -94,15 +94,19 @@ class DocumentAccountingContextService {
     required String invoiceId,
     required String invoiceNumber,
   }) async {
+    final tenantId = await _resolveTenantId();
+    if (tenantId == null) return DocumentAccountingContext.empty;
     final payments = await _loadPayments(
       table: 'sales_payments',
       invoiceId: invoiceId,
+      tenantId: tenantId,
       paymentPrefix: 'COB',
       sourceType: DocumentPaymentSourceType.salesPayment,
     );
     final journalEntries = await _loadJournalEntries(
       sourceModule: 'sales_invoices',
       sourceReferences: [invoiceNumber, invoiceId],
+      tenantId: tenantId,
     );
 
     return DocumentAccountingContext(
@@ -111,22 +115,43 @@ class DocumentAccountingContextService {
     );
   }
 
+  /// Loads the accounting evidence owned by one received payment. Revenue,
+  /// IVA and inventory remain on the invoice journal; this context contains
+  /// only the receivable-settlement journal sourced by the payment UUID.
+  Future<DocumentAccountingContext> loadSalesPayment({
+    required String paymentId,
+  }) async {
+    final tenantId = await _resolveTenantId();
+    if (tenantId == null) return DocumentAccountingContext.empty;
+    final journalEntries = await _loadJournalEntries(
+      sourceModule: 'sales_payments',
+      sourceReferences: [paymentId],
+      tenantId: tenantId,
+    );
+    return DocumentAccountingContext(journalEntries: journalEntries);
+  }
+
   Future<DocumentAccountingContext> loadPurchaseInvoice({
     required String invoiceId,
     required String invoiceNumber,
   }) async {
+    final tenantId = await _resolveTenantId();
+    if (tenantId == null) return DocumentAccountingContext.empty;
     final payments = await _loadPayments(
       table: 'purchase_payments',
       invoiceId: invoiceId,
+      tenantId: tenantId,
       paymentPrefix: 'PAG',
       sourceType: DocumentPaymentSourceType.purchasePayment,
     );
     final linkedExpenses = await _loadLinkedPurchaseExpenses(
       purchaseInvoiceId: invoiceId,
+      tenantId: tenantId,
     );
     final journalEntries = await _loadJournalEntries(
       sourceModule: 'purchase_invoices',
       sourceReferences: [invoiceNumber, invoiceId],
+      tenantId: tenantId,
     );
 
     return DocumentAccountingContext(
@@ -136,9 +161,26 @@ class DocumentAccountingContextService {
     );
   }
 
+  /// Loads the accounts-payable settlement journal owned by one supplier
+  /// payment. The purchase invoice remains the owner of inventory, expense,
+  /// recoverable IVA and the original accounts-payable recognition.
+  Future<DocumentAccountingContext> loadPurchasePayment({
+    required String paymentId,
+  }) async {
+    final tenantId = await _resolveTenantId();
+    if (tenantId == null) return DocumentAccountingContext.empty;
+    final journalEntries = await _loadJournalEntries(
+      sourceModule: 'purchase_payments',
+      sourceReferences: [paymentId],
+      tenantId: tenantId,
+    );
+    return DocumentAccountingContext(journalEntries: journalEntries);
+  }
+
   Future<List<DocumentPaymentRecord>> _loadPayments({
     required String table,
     required String invoiceId,
+    required String tenantId,
     required String paymentPrefix,
     required DocumentPaymentSourceType sourceType,
   }) async {
@@ -146,6 +188,7 @@ class DocumentAccountingContextService {
       final response = await _client
           .from(table)
           .select()
+          .eq('tenant_id', tenantId)
           .eq('invoice_id', invoiceId)
           .order('date', ascending: false);
 
@@ -159,7 +202,7 @@ class DocumentAccountingContextService {
           .whereType<String>()
           .where((id) => id.isNotEmpty)
           .toSet();
-      final methodsById = await _loadPaymentMethods(methodIds);
+      final methodsById = await _loadPaymentMethods(methodIds, tenantId);
 
       return rows.map((row) {
         final id = row['id']?.toString() ?? '';
@@ -183,6 +226,7 @@ class DocumentAccountingContextService {
 
   Future<List<DocumentPaymentRecord>> _loadLinkedPurchaseExpenses({
     required String purchaseInvoiceId,
+    required String tenantId,
   }) async {
     try {
       final response = await _client
@@ -190,6 +234,7 @@ class DocumentAccountingContextService {
           .select(
             'expense_id, link_kind, allocated_amount, notes, expenses(id, expense_number, supplier_name, issue_date, total_amount, payment_status, payment_method_id)',
           )
+          .eq('tenant_id', tenantId)
           .eq('purchase_invoice_id', purchaseInvoiceId)
           .order('created_at', ascending: false);
 
@@ -203,7 +248,7 @@ class DocumentAccountingContextService {
           .whereType<String>()
           .where((id) => id.isNotEmpty)
           .toSet();
-      final methodsById = await _loadPaymentMethods(methodIds);
+      final methodsById = await _loadPaymentMethods(methodIds, tenantId);
 
       return rows.map((row) {
         final expense = _parseNestedMap(row['expenses']) ?? const {};
@@ -243,13 +288,17 @@ class DocumentAccountingContextService {
     }
   }
 
-  Future<Map<String, String>> _loadPaymentMethods(Set<String> ids) async {
+  Future<Map<String, String>> _loadPaymentMethods(
+    Set<String> ids,
+    String tenantId,
+  ) async {
     if (ids.isEmpty) return const {};
 
     try {
       final response = await _client
           .from('payment_methods')
           .select('id,name')
+          .eq('tenant_id', tenantId)
           .inFilter('id', ids.toList());
 
       return {
@@ -267,6 +316,7 @@ class DocumentAccountingContextService {
   Future<List<DocumentJournalEntryRecord>> _loadJournalEntries({
     required String sourceModule,
     required List<String?> sourceReferences,
+    required String tenantId,
   }) async {
     final uniqueRefs = sourceReferences
         .whereType<String>()
@@ -282,6 +332,7 @@ class DocumentAccountingContextService {
         final response = await _client
             .from('journal_entries')
             .select()
+            .eq('tenant_id', tenantId)
             .eq('source_module', sourceModule)
             .eq('source_reference', reference)
             .order('entry_date', ascending: false);
@@ -299,6 +350,7 @@ class DocumentAccountingContextService {
       final lineResponse = await _client
           .from('journal_lines')
           .select()
+          .eq('tenant_id', tenantId)
           .inFilter('entry_id', entryIds);
 
       final linesByEntry = <String, List<DocumentJournalLineRecord>>{};
@@ -362,6 +414,24 @@ class DocumentAccountingContextService {
         ? compact.padLeft(6, '0')
         : compact.substring(compact.length - 6);
     return '$prefix-$suffix';
+  }
+
+  Future<String?> _resolveTenantId() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return null;
+    final appTenant = user.appMetadata['tenant_id']?.toString().trim();
+    if (appTenant?.isNotEmpty == true) return appTenant;
+    final userTenant = user.userMetadata?['tenant_id']?.toString().trim();
+    if (userTenant?.isNotEmpty == true) return userTenant;
+
+    final profile = await _client
+        .from('user_profiles')
+        .select('tenant_id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .maybeSingle();
+    final tenantId = profile?['tenant_id']?.toString().trim();
+    return tenantId?.isNotEmpty == true ? tenantId : null;
   }
 
   static DateTime _parseDate(dynamic value) {

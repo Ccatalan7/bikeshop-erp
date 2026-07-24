@@ -102,182 +102,195 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
 
     return WebsiteAdminShell(
       embedded: widget.embedded,
+      showHeaderWhenEmbedded: false,
       title: 'Productos destacados',
-      description: 'Elige hasta ocho productos para la portada y ordénalos.',
-      actions: [
-        IconButton.outlined(
-          icon: const Icon(Icons.refresh_rounded, size: 19),
-          onPressed: () {
-            websiteService.loadFeaturedProducts();
-            _loadProducts();
-          },
-          tooltip: 'Actualizar productos',
-        ),
-      ],
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: websiteService.isLoading && featured.isEmpty
-                ? const Center(child: BrandedLoading())
-                : Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.star_outline_rounded,
-                              color: theme.colorScheme.primary,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                '${featured.length} de 8 espacios ocupados',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              'La portada respeta este orden',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Current featured products
-                      if (featured.isNotEmpty) ...[
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.star, color: Colors.amber),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Destacados Actuales',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const Spacer(),
-                              Text(
-                                'Arrastra para reordenar',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          height: 140,
-                          child: ReorderableListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: featuredProductDetails.length,
-                            onReorder: (oldIndex, newIndex) {
-                              _reorderFeatured(
-                                  websiteService, oldIndex, newIndex);
-                            },
-                            itemBuilder: (context, index) {
-                              final product = featuredProductDetails[index];
-                              final featuredItem = featured[index];
-                              return _buildFeaturedProductCard(
-                                context,
-                                product,
-                                featuredItem,
-                                websiteService,
-                              );
-                            },
-                          ),
-                        ),
-                        const Divider(height: 32),
-                      ],
-
-                      // Add products section
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Row(
-                          children: [
-                            Icon(Icons.add_circle_outline,
-                                color: theme.colorScheme.primary),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Agregar Productos',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Search bar
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: TextField(
-                          controller: _searchController,
-                          decoration: InputDecoration(
-                            hintText: 'Buscar por nombre, SKU...',
-                            prefixIcon: const Icon(Icons.search),
-                            suffixIcon: _searchController.text.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Icons.clear),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                    },
-                                  )
-                                : null,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Products list
-                      Expanded(
-                        child: _isLoadingProducts
-                            ? const Center(child: BrandedLoading())
-                            : _filteredProducts.isEmpty
-                                ? Center(
-                                    child: Text(
-                                      _searchController.text.isEmpty
-                                          ? 'No hay productos'
-                                          : 'No se encontraron productos',
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
-                                  )
-                                : ListView.builder(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16),
-                                    itemCount: _filteredProducts.length,
-                                    itemBuilder: (context, index) {
-                                      final product = _filteredProducts[index];
-                                      final isFeatured = featured.any(
-                                        (fp) => fp.productId == product.id,
-                                      );
-                                      return _buildProductListItem(
-                                        context,
-                                        product,
-                                        isFeatured,
-                                        websiteService,
-                                        featured.length >= 8,
-                                      );
-                                    },
-                                  ),
-                      ),
-                    ],
+      description:
+          'Elige hasta ocho productos para los bloques con fuente Destacados.',
+      child: websiteService.isLoading && featured.isEmpty
+          ? const Center(child: BrandedLoading())
+          : Column(
+              children: [
+                _buildFeaturedToolbar(
+                  theme,
+                  featuredCount: featured.length,
+                  onRefresh: () {
+                    websiteService.loadFeaturedProducts();
+                    _loadProducts();
+                  },
+                ),
+                if (featured.isNotEmpty)
+                  _buildFeaturedOrder(
+                    theme,
+                    featured: featured,
+                    products: featuredProductDetails,
+                    service: websiteService,
                   ),
+                Divider(height: 1, color: theme.colorScheme.outlineVariant),
+                Expanded(
+                  child: _isLoadingProducts
+                      ? const Center(child: BrandedLoading())
+                      : _filteredProducts.isEmpty
+                          ? Center(
+                              child: Text(
+                                _searchController.text.isEmpty
+                                    ? 'No hay productos disponibles.'
+                                    : 'No se encontraron productos.',
+                                style: TextStyle(color: Colors.grey[600]),
+                              ),
+                            )
+                          : ListView.builder(
+                              padding:
+                                  const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                              itemCount: _filteredProducts.length,
+                              itemBuilder: (context, index) {
+                                final product = _filteredProducts[index];
+                                final isFeatured = featured.any(
+                                  (item) => item.productId == product.id,
+                                );
+                                return _buildProductListItem(
+                                  context,
+                                  product,
+                                  isFeatured,
+                                  websiteService,
+                                  featured.length >= 8,
+                                );
+                              },
+                            ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildFeaturedToolbar(
+    ThemeData theme, {
+    required int featuredCount,
+    required VoidCallback onRefresh,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      color: theme.colorScheme.surface,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 820;
+          final status = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.star_rounded, color: Colors.amber.shade700, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                '$featuredCount de 8 en portada',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          );
+          final search = SizedBox(
+            width: compact ? constraints.maxWidth : 380,
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Buscar producto por nombre o SKU',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                suffixIcon: _searchController.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Limpiar búsqueda',
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: _searchController.clear,
+                      ),
+              ),
+            ),
+          );
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: status),
+                    IconButton.outlined(
+                      tooltip: 'Actualizar productos',
+                      onPressed: onRefresh,
+                      icon: const Icon(Icons.refresh_rounded, size: 19),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                search,
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              status,
+              const SizedBox(width: 18),
+              Expanded(child: search),
+              const SizedBox(width: 8),
+              IconButton.outlined(
+                tooltip: 'Actualizar productos',
+                onPressed: onRefresh,
+                icon: const Icon(Icons.refresh_rounded, size: 19),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFeaturedOrder(
+    ThemeData theme, {
+    required List<FeaturedProduct> featured,
+    required List<Product> products,
+    required WebsiteService service,
+  }) {
+    return Container(
+      height: 132,
+      padding: const EdgeInsets.only(top: 8),
+      color: theme.colorScheme.surfaceContainerLow,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Text(
+                  'Orden en portada',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  'Arrastra para ordenar',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Expanded(
+            child: ReorderableListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              itemCount: products.length,
+              onReorder: (oldIndex, newIndex) {
+                _reorderFeatured(service, oldIndex, newIndex);
+              },
+              itemBuilder: (context, index) => _buildFeaturedProductCard(
+                context,
+                products[index],
+                featured[index],
+                service,
+              ),
+            ),
           ),
         ],
       ),
@@ -293,9 +306,9 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
     final warningColor = Colors.orange.shade700;
     return Card(
       key: ValueKey(featuredItem.id),
-      margin: const EdgeInsets.only(right: 12),
+      margin: const EdgeInsets.only(right: 8),
       child: SizedBox(
-        width: 120,
+        width: 150,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -306,24 +319,24 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
               child: product.imageUrl != null
                   ? CachedNetworkImage(
                       imageUrl: product.imageUrl!,
-                      height: 80,
-                      width: 120,
+                      height: 54,
+                      width: 150,
                       fit: BoxFit.cover,
                       placeholder: (context, url) => Container(
-                        height: 80,
+                        height: 54,
                         color: Colors.white,
                         child: const Center(
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                       ),
                       errorWidget: (context, url, error) => Container(
-                        height: 80,
+                        height: 54,
                         color: Colors.white,
                         child: const Icon(Icons.image, color: Colors.grey),
                       ),
                     )
                   : Container(
-                      height: 80,
+                      height: 54,
                       color: Colors.white,
                       child: const Icon(Icons.image, color: Colors.grey),
                     ),
@@ -331,43 +344,35 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
 
             // Info
             Padding(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    product.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  if (!product.isPublished || !product.isActive) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.visibility_off_outlined,
-                          size: 14,
-                          color: warningColor,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            !product.isActive ? 'Inactivo' : 'No publicado',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: warningColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          product.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      if (!product.isPublished || !product.isActive)
+                        Tooltip(
+                          message:
+                              !product.isActive ? 'Inactivo' : 'No publicado',
+                          child: Icon(
+                            Icons.visibility_off_outlined,
+                            size: 14,
+                            color: warningColor,
+                          ),
+                        ),
+                    ],
+                  ),
                   const SizedBox(height: 4),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -413,9 +418,15 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
     final theme = Theme.of(context);
     final warningColor = Colors.orange.shade700;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+      ),
       child: ListTile(
+        dense: true,
         leading: product.imageUrl != null
             ? ClipRRect(
                 borderRadius: BorderRadius.circular(4),
@@ -489,17 +500,17 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
           ],
         ),
         trailing: isFeatured
-            ? const Chip(
-                label: Text('Destacado'),
-                backgroundColor: Colors.amber,
-                avatar: Icon(Icons.star, size: 16),
+            ? const Tooltip(
+                message: 'Ya está en la portada',
+                child: Icon(Icons.star_rounded, color: Colors.amber),
               )
             : maxReached
-                ? Chip(
-                    label: const Text('Máx. 8'),
-                    backgroundColor: Colors.grey[300],
+                ? const Tooltip(
+                    message: 'Ya hay 8 productos; quita uno para agregar otro',
+                    child: Icon(Icons.block_outlined),
                   )
                 : IconButton(
+                    tooltip: 'Agregar a la portada',
                     icon: const Icon(Icons.add_circle),
                     color: theme.colorScheme.primary,
                     onPressed: () => _addFeatured(service, product.id),

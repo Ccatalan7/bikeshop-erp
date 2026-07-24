@@ -1279,15 +1279,31 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Future<void> _openJobEditor(MechanicJob job) async {
+    await _openJobEditorAt(job);
+  }
+
+  Future<void> _openJobEditorAt(
+    MechanicJob job, {
+    String? initialTab,
+  }) async {
     final jobId = job.id;
     if (jobId == null || jobId.isEmpty) return;
 
     _markNeedsRefresh();
-    final result = await context.push('/taller/pegas/$jobId');
+    final route = Uri(
+      path: '/taller/pegas/$jobId',
+      queryParameters:
+          initialTab == null ? null : <String, String>{'tab': initialTab},
+    ).toString();
+    final result = await context.push(route);
     if (!mounted) return;
     if (result == true) {
       await _loadData();
     }
+  }
+
+  Future<void> _openJobProductsAndServices(MechanicJob job) {
+    return _openJobEditorAt(job, initialTab: 'products');
   }
 
   void _openJobFromTable(MechanicJob job) {
@@ -6153,105 +6169,159 @@ class _PegasTablePageState extends State<PegasTablePage>
             final canConvertApprovedProposal =
                 job.effectiveQuotationStatus == QuotationStatus.approved;
             final isBusy = isGenerating || isConverting;
-            final proposalChip = Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: badgeColor.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: badgeColor.withValues(alpha: 0.4),
-                  width: 1,
+            final proposalChip = SizedBox(
+              width: 84,
+              height: 24,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: badgeColor.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: badgeColor.withValues(alpha: 0.4),
+                    width: 1,
+                  ),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Semantics(
+                          button: true,
+                          excludeSemantics: true,
+                          label:
+                              'Ver productos y servicios de ${job.proposalDocumentLabelLower}',
+                          child: Tooltip(
+                            excludeFromSemantics: true,
+                            message:
+                                'Ver productos y servicios de ${job.proposalDocumentLabelLower}',
+                            child: InkWell(
+                              onTap: isBusy
+                                  ? null
+                                  : () => unawaited(
+                                        _openJobProductsAndServices(job),
+                                      ),
+                              borderRadius: const BorderRadius.horizontal(
+                                left: Radius.circular(5),
+                              ),
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                child: isBusy
+                                    ? Center(
+                                        child: SizedBox(
+                                          width: 13,
+                                          height: 13,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 1.8,
+                                            color: badgeColor,
+                                          ),
+                                        ),
+                                      )
+                                    : FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: Text(
+                                          job.proposalDocumentLabel,
+                                          maxLines: 1,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: badgeColor,
+                                          ),
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Container(
+                        width: 1,
+                        height: 20,
+                        color: badgeColor.withValues(alpha: 0.24),
+                      ),
+                      Semantics(
+                        button: true,
+                        excludeSemantics: true,
+                        label:
+                            'Descargar o ver más acciones de ${job.proposalDocumentLabelLower}',
+                        child: Tooltip(
+                          excludeFromSemantics: true,
+                          message: 'Descargar / más',
+                          waitDuration: const Duration(milliseconds: 800),
+                          preferBelow: false,
+                          child: PopupMenuButton<String>(
+                            enabled: !isBusy,
+                            tooltip: '',
+                            position: PopupMenuPosition.under,
+                            padding: EdgeInsets.zero,
+                            onSelected: (action) {
+                              switch (action) {
+                                case 'download_proposal':
+                                  unawaited(_downloadQuotationPdf(job));
+                                  break;
+                                case 'convert_proposal':
+                                  unawaited(_convertToService(job));
+                                  break;
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              PopupMenuItem(
+                                value: 'download_proposal',
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.picture_as_pdf_outlined,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Descargar ${job.proposalDocumentLabelLower}',
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (canConvertApprovedProposal)
+                                PopupMenuItem(
+                                  value: 'convert_proposal',
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.receipt_long_outlined,
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        job.isServiceBudget
+                                            ? 'Facturar presupuesto'
+                                            : 'Facturar o convertir cotización',
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                            child: SizedBox(
+                              width: 22,
+                              height: 24,
+                              child: Center(
+                                child: Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 18,
+                                  color: isBusy
+                                      ? badgeColor.withValues(alpha: 0.45)
+                                      : badgeColor,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isBusy)
-                    SizedBox(
-                      width: 13,
-                      height: 13,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.8,
-                        color: badgeColor,
-                      ),
-                    )
-                  else
-                    Icon(
-                      Icons.picture_as_pdf_outlined,
-                      size: 13,
-                      color: badgeColor,
-                    ),
-                  const SizedBox(width: 4),
-                  Text(
-                    job.proposalDocumentLabel,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: badgeColor,
-                    ),
-                  ),
-                  if (canConvertApprovedProposal) ...[
-                    const SizedBox(width: 2),
-                    Icon(Icons.arrow_drop_down, size: 15, color: badgeColor),
-                  ],
-                ],
-              ),
             );
-
-            if (canConvertApprovedProposal) {
-              return PopupMenuButton<String>(
-                enabled: !isBusy,
-                tooltip: job.isServiceBudget
-                    ? 'Descargar o facturar presupuesto'
-                    : 'Descargar o convertir cotización',
-                position: PopupMenuPosition.under,
-                onSelected: (action) {
-                  switch (action) {
-                    case 'download_approved_budget':
-                      unawaited(_downloadQuotationPdf(job));
-                      break;
-                    case 'invoice_approved_budget':
-                      unawaited(_convertToService(job));
-                      break;
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'download_approved_budget',
-                    child: Row(
-                      children: [
-                        Icon(Icons.picture_as_pdf_outlined, size: 18),
-                        SizedBox(width: 8),
-                        Text('Descargar presupuesto'),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'invoice_approved_budget',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.receipt_long_outlined, size: 18),
-                        const SizedBox(width: 8),
-                        Text(
-                          job.isServiceBudget
-                              ? 'Facturar presupuesto'
-                              : 'Facturar o convertir cotización',
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                child: proposalChip,
-              );
-            }
-
-            return _buildInteractiveTableField(
-              onTap: isBusy ? null : () => _downloadQuotationPdf(job),
-              accentColor: badgeColor,
-              padding: EdgeInsets.zero,
-              borderRadius: BorderRadius.circular(6),
-              child: proposalChip,
-            );
+            return proposalChip;
           }
 
           return _buildInteractiveTableField(

@@ -10,10 +10,16 @@ class PurchaseSupplierReturnPage extends StatefulWidget {
     super.key,
     required this.invoice,
     this.service,
+    this.focusReturnId,
+    this.embedded = false,
+    this.onClose,
   });
 
   final PurchaseInvoice invoice;
   final PurchaseSupplierReturnService? service;
+  final String? focusReturnId;
+  final bool embedded;
+  final VoidCallback? onClose;
 
   @override
   State<PurchaseSupplierReturnPage> createState() =>
@@ -65,6 +71,14 @@ class _PurchaseSupplierReturnPageState
       ]);
       final receipts = results[0] as List<PurchaseReturnableReceipt>;
       final history = results[1] as List<PurchaseSupplierReturnRecord>;
+      final focusedId = widget.focusReturnId;
+      if (focusedId != null) {
+        history.sort((a, b) {
+          if (a.id == focusedId) return -1;
+          if (b.id == focusedId) return 1;
+          return b.returnedAt.compareTo(a.returnedAt);
+        });
+      }
       if (!mounted) return;
       setState(() {
         _receipts = receipts;
@@ -207,6 +221,7 @@ class _PurchaseSupplierReturnPageState
     final reason = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
+        icon: const Icon(Icons.warning_amber_rounded),
         title: Text('Anular ${record.returnNumber}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -214,7 +229,15 @@ class _PurchaseSupplierReturnPageState
           children: [
             const Text(
               'El stock se restaurará mediante movimientos enlazados. '
-              'El documento original permanecerá visible como anulado.',
+              'También se revertirá la reclasificación contable entre '
+              'Inventarios y Reclamos a Proveedores. El documento original '
+              'permanecerá visible como anulado.',
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Si existe una nota de crédito vinculada, debes anular primero '
+              'sus reembolsos y luego la nota.',
+              style: TextStyle(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -274,74 +297,221 @@ class _PurchaseSupplierReturnPageState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Devolver al proveedor')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _loadError != null
-              ? _ReturnErrorState(message: _loadError!, onRetry: _load)
-              : _receipts.isEmpty && _history.isEmpty
-                  ? const _EmptyReturnState()
-                  : _receipts.isEmpty
-                      ? ListView(
-                          padding: const EdgeInsets.all(24),
-                          children: [_buildHistory()],
-                        )
-                      : Form(
-                          key: _formKey,
-                          child: Column(
-                            children: [
-                              Expanded(
-                                child: ListView(
-                                  padding: const EdgeInsets.all(24),
-                                  children: [
-                                    Center(
-                                      child: ConstrainedBox(
-                                        constraints: const BoxConstraints(
-                                            maxWidth: 1000),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            _buildHeader(),
-                                            const SizedBox(height: 16),
-                                            _buildReturnFields(),
-                                            const SizedBox(height: 20),
-                                            Text(
-                                              'Productos a devolver',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleLarge,
-                                            ),
-                                            const SizedBox(height: 8),
-                                            ..._lines.asMap().entries.map(
-                                                  (entry) => Padding(
-                                                    padding:
-                                                        const EdgeInsets.only(
-                                                            bottom: 12),
-                                                    child: _ReturnLineCard(
-                                                      line: entry.value,
-                                                      onChanged: (line) =>
-                                                          _replaceLine(
-                                                              entry.key, line),
+    final body = _loading
+        ? const Center(child: CircularProgressIndicator())
+        : _loadError != null
+            ? _ReturnErrorState(message: _loadError!, onRetry: _load)
+            : widget.focusReturnId != null
+                ? _buildFocusedReturn()
+                : _receipts.isEmpty && _history.isEmpty
+                    ? const _EmptyReturnState()
+                    : _receipts.isEmpty
+                        ? ListView(
+                            padding: const EdgeInsets.all(24),
+                            children: [_buildHistory()],
+                          )
+                        : Form(
+                            key: _formKey,
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: ListView(
+                                    padding: const EdgeInsets.all(24),
+                                    children: [
+                                      Center(
+                                        child: ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                              maxWidth: 1000),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              _buildHeader(),
+                                              const SizedBox(height: 16),
+                                              _buildReturnFields(),
+                                              const SizedBox(height: 20),
+                                              Text(
+                                                'Productos a devolver',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleLarge,
+                                              ),
+                                              const SizedBox(height: 8),
+                                              ..._lines.asMap().entries.map(
+                                                    (entry) => Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              bottom: 12),
+                                                      child: _ReturnLineCard(
+                                                        line: entry.value,
+                                                        onChanged: (line) =>
+                                                            _replaceLine(
+                                                                entry.key,
+                                                                line),
+                                                      ),
                                                     ),
                                                   ),
-                                                ),
-                                            if (_history.isNotEmpty) ...[
-                                              const SizedBox(height: 20),
-                                              _buildHistory(),
+                                              if (_history.isNotEmpty) ...[
+                                                const SizedBox(height: 20),
+                                                _buildHistory(),
+                                              ],
                                             ],
-                                          ],
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              _buildFooter(),
-                            ],
+                                _buildFooter(),
+                              ],
+                            ),
+                          );
+    if (!widget.embedded) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Devolver al proveedor')),
+        body: body,
+      );
+    }
+    return Column(
+      children: [
+        Container(
+          height: 66,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: Color(0xFFD8DEE3)),
+            ),
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: widget.onClose,
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Volver a la factura',
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  widget.focusReturnId == null
+                      ? 'Devolver al proveedor'
+                      : 'Documento de devolución',
+                  style: const TextStyle(
+                    color: Color(0xFF26323A),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: body),
+      ],
+    );
+  }
+
+  Widget _buildFocusedReturn() {
+    final record =
+        _history.where((item) => item.id == widget.focusReturnId).firstOrNull;
+    if (record == null) {
+      return const Center(
+        child: Text('No se encontró la devolución vinculada.'),
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border.fromBorderSide(
+                  BorderSide(color: Color(0xFFD8DEE3)),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(22),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            record.returnNumber,
+                            style: const TextStyle(
+                              color: Color(0xFF26323A),
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
+                        Text(
+                          record.canVoid ? 'VIGENTE' : 'ANULADA',
+                          style: TextStyle(
+                            color: record.canVoid
+                                ? const Color(0xFF2F6F62)
+                                : const Color(0xFF874B4E),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Factura ${widget.invoice.invoiceNumber} · '
+                      '${widget.invoice.supplierName ?? 'Sin proveedor'}',
+                      style: const TextStyle(color: Color(0xFF68747D)),
+                    ),
+                    const Divider(height: 28),
+                    _FocusedReturnField(
+                      label: 'Fecha',
+                      value:
+                          '${record.returnedAt.day.toString().padLeft(2, '0')}/'
+                          '${record.returnedAt.month.toString().padLeft(2, '0')}/'
+                          '${record.returnedAt.year}',
+                    ),
+                    _FocusedReturnField(
+                      label: 'Cantidad',
+                      value: '${record.quantity} unidades',
+                    ),
+                    _FocusedReturnField(
+                      label: 'Motivo',
+                      value: record.reason,
+                    ),
+                    if ((record.shipmentReference ?? '').isNotEmpty)
+                      _FocusedReturnField(
+                        label: 'Guía / envío',
+                        value: record.shipmentReference!,
+                      ),
+                    if ((record.voidReason ?? '').isNotEmpty)
+                      _FocusedReturnField(
+                        label: 'Motivo de anulación',
+                        value: record.voidReason!,
+                      ),
+                    if (record.canVoid) ...[
+                      const Divider(height: 28),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: OutlinedButton.icon(
+                          onPressed:
+                              _submitting ? null : () => _voidReturn(record),
+                          icon: const Icon(Icons.undo, size: 18),
+                          label: const Text('Anular devolución'),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -531,6 +701,48 @@ class _PurchaseSupplierReturnPageState
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _FocusedReturnField extends StatelessWidget {
+  const _FocusedReturnField({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 160,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF68747D),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: Color(0xFF26323A),
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

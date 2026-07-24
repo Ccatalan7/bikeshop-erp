@@ -1078,6 +1078,11 @@ source of business rules.
 
 - A job containing 2+ bicycles has one linked sales invoice and one shared payment balance. Payments are not allocated to an individual `mechanic_job_bikes` row.
 - `job_bike_id` must survive job→invoice and invoice→job item synchronization so per-bike work and totals remain attributable even though payment is job-level. Invoice JSON does not own that physical attribution: when it omits the field, sends an empty value, or sends JSON `null`, invoice→job sync preserves the existing value for the same stable `mechanic_job_items.id`. A non-empty explicit value must resolve to `mechanic_job_bikes` inside that exact job and tenant or the transaction aborts.
+- Routed and embedded invoice editors must preserve the stable line `id`,
+  `service_configuration_data`, `system_key`, `component_slot_key`,
+  `location_key`, `intervention_type`, and `creates_lifecycle` on every
+  load/save round trip. Those fields may be hidden from the invoice form, but
+  dropping them makes an unchanged linked job look stale at payment time.
 - Partial payment keeps the invoice `confirmed` and `mechanic_jobs.is_paid = false`; exact full payment sets `paid` and `is_paid = true`; reducing/deleting the final payment returns both states atomically.
 - Payment actions must never consume, restore, or reapply inventory. Their trace root must connect the payment snapshot, shared invoice before/after status, job paid flag, journal replacement/reversal, and a zero-stock-effect checkpoint.
 - Production inspection on 2026-07-10 found 12 multi-bike jobs, all currently fully paid with matching job flags. Historical attribution remains incomplete: 25 of 67 linked invoice item rows lack `job_bike_id`.
@@ -2575,10 +2580,13 @@ the retained audit row.
   received bicycle; only standalone Cotización chooses its approved outcome.
   A product-only Cotización may become `sale/none` without inventing physical
   intake; otherwise it uses the bicycle/component intake picker. The approved
-  `Presupuesto` chip in the table's existing invoice column exposes
-  only `Descargar presupuesto` and `Facturar presupuesto`; the billing choice
-  delegates to that same idempotent conversion command, while an unapproved
-  proposal cannot expose the shortcut. Approval is rejected atomically when
+  `Presupuesto` or `Cotización` chip in the table's existing invoice column is
+  split deliberately: its main label opens the canonical job form directly on
+  Products and Services, while the minimal right chevron always exposes PDF
+  download. An approved proposal adds `Facturar presupuesto` or the matching
+  quotation conversion choice in that same secondary menu; the billing choice
+  delegates to the idempotent conversion command, while an unapproved proposal
+  cannot expose the billing shortcut. Approval is rejected atomically when
   the proposal has no product/service lines. Every newer proposal-status
   result replaces older transient feedback, so an earlier approval message
   cannot survive after the proposal has been reopened as pending, conversion

@@ -9,10 +9,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   filterMerchantProductsByCheckoutTax,
-  isVerifiableMerchantBrand,
-  resolveMerchantAvailability,
-  resolveMerchantIdentifiers,
-  resolveMerchantPrice,
+  projectPublicCommerceProduct,
 } from "../_shared/google_merchant_feed.ts";
 import { publicProductUrl } from "../_shared/product_url.ts";
 import { mergeCanonicalAvailableQuantities } from "../_shared/product_availability.ts";
@@ -206,11 +203,16 @@ serve(async (req) => {
     let brandsMap = new Map<string, string>();
 
     if (brandIds.length > 0) {
-      const { data: brands } = await supabase
+      const { data: brands, error: brandsError } = await supabase
         .from("product_brands")
-        .select("id, name")
-        .in("id", brandIds);
+        .select("id, name, tenant_id, is_active")
+        .in("id", brandIds)
+        .eq("is_active", true)
+        .or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
 
+      if (brandsError) {
+        console.error("Canonical brands error:", brandsError);
+      }
       brandsMap = new Map((brands || []).map((b) => [b.id, b.name]));
     }
 
@@ -221,27 +223,36 @@ serve(async (req) => {
     let categoriesMap = new Map<string, string>();
 
     if (categoryIds.length > 0) {
-      const { data: categories } = await supabase
+      const { data: categories, error: categoriesError } = await supabase
         .from("product_categories")
-        .select("id, full_path")
-        .in("id", categoryIds);
+        .select("id, full_path, tenant_id, is_active")
+        .in("id", categoryIds)
+        .eq("tenant_id", tenantId)
+        .eq("is_active", true);
 
+      if (categoriesError) {
+        console.error("Canonical categories error:", categoriesError);
+      }
       categoriesMap = new Map((categories || []).map((c) => [c.id, c.full_path]));
     }
 
     // Step 6: Keep only products whose effective storefront data is eligible.
     const feedCandidates = filterMerchantProductsByCheckoutTax(
       (products || []) as MerchantProduct[],
-    )
-      .filter((p) => resolveMerchantPrice(p) !== null)
-      .filter((p) => productImageUrls(p).length > 0)
-      .filter((p) => isVerifiableMerchantBrand(resolveMerchantBrand(p, brandsMap)));
+    ).filter((product) => {
+      const projection = commerceProjection(
+        product,
+        brandsMap,
+        categoriesMap,
+      );
+      return projection.merchant_eligible;
+    });
 
     // The public catalog RPC subtracts live online-order reservations and
-    // enforces the same stock visibility policy as the landing pages. Omit
-    // unavailable products conservatively: otherwise Merchant could follow an
-    // out-of-stock offer to a landing page that the storefront resolves as
-    // "Producto no encontrado" under the current available-only policy.
+    // enforces the same publication, image, category, and stock policy as the
+    // landing pages. Products hidden by those rules stay out of Merchant.
+    // When the editor's public stock policy keeps an out-of-stock landing page
+    // visible, retain it with g:availability=out_of_stock as Google requires.
     let validProducts: MerchantProduct[] = [];
     if (feedCandidates.length > 0) {
       const { data: publicProducts, error: publicProductsError } = await supabase
@@ -270,8 +281,9 @@ serve(async (req) => {
             available_quantity: product.stock_quantity,
           }),
         ),
-      )
-        .filter((product) => resolveMerchantAvailability(product) === "in_stock");
+      ).filter((product) =>
+        commerceProjection(product, brandsMap, categoriesMap).merchant_eligible
+      );
     }
 
     // Step 7: Generate XML feed
@@ -281,11 +293,7 @@ serve(async (req) => {
     <title>${escapeXml(storeName)}</title>
     <link>${escapeXml(storeUrl)}</link>
     <description>${escapeXml(storeDescription)}</description>
-${
-      validProducts.map((p) =>
-        generateProductItem(p, storeUrl, storeName, brandsMap, categoriesMap)
-      ).join("\n")
-    }
+${validProducts.map((p) => generateProductItem(p, storeUrl, brandsMap, categoriesMap)).join("\n")}
   </channel>
 </rss>`;
 
@@ -313,85 +321,32 @@ ${
 function generateProductItem(
   product: MerchantProduct,
   storeUrl: string,
-  storeName: string,
   brandsMap: Map<string, string>,
   categoriesMap: Map<string, string>,
 ): string {
   const productUrl = publicProductUrl(storeUrl, product);
+  const projection = commerceProjection(product, brandsMap, categoriesMap);
+  if (!projection.merchant_eligible) {
+    throw new Error(
+      `Merchant product ${product.id} is ineligible: ${projection.merchant_issues.join(",")}`,
+    );
+  }
 
-  const images = productImageUrls(product);
+  const images = projection.image_urls;
   const imageUrl = images[0];
   const additionalImages = images.slice(1, 10);
 
-  // Title - fix excessive caps (convert ALL CAPS to Title Case)
-  const rawTitle = firstNonEmpty(
-    product.website_merchant_title,
-    product.website_name,
-    product.name,
-  );
-  const title = fixExcessiveCaps(rawTitle);
-
-  // Description - must be at least 150 characters for Google
-  // If too short, expand with brand, category, and store info
-  let description = firstNonEmpty(
-    product.website_merchant_description,
-    product.website_description,
-    product.description,
-  );
-  if (description.length < 150) {
-    // Build a proper description
-    const brand = firstNonEmpty(product.website_merchant_brand) ||
-      (product.brand_id && brandsMap.has(product.brand_id)
-        ? brandsMap.get(product.brand_id)!
-        : (product.brand || storeName));
-    const category = product.category_id && categoriesMap.has(product.category_id)
-      ? categoriesMap.get(product.category_id)!
-      : (product.category_name || "Ciclismo");
-
-    description = `${title}. ${
-      description ? description + ". " : ""
-    }Producto de la marca ${brand}, categoría ${category}. Disponible en ${storeName}, tu tienda de bicicletas y accesorios en Chile. Envíos a Chile continental.`;
-  }
-  // Ensure minimum 150 chars
-  while (description.length < 150) {
-    description += ` Compra online en ${storeName}.`;
-  }
-
   // Price with currency (default CLP)
-  const currency = product.price_currency || "CLP";
-  const effectivePrice = resolveMerchantPrice(product);
-  if (effectivePrice === null) {
-    throw new Error(`Merchant product ${product.id} has no positive storefront price`);
-  }
-  const price = `${Math.round(effectivePrice)} ${currency}`;
-
-  // Availability based on stock
-  const availability = resolveMerchantAvailability(product);
-
-  // Never invent the retailer as a manufacturer. Eligibility already requires
-  // an explicit Merchant, linked catalog, or product brand.
-  const brand = resolveMerchantBrand(product, brandsMap);
-  if (!brand) {
-    throw new Error(`Merchant product ${product.id} has no explicit brand`);
-  }
-
-  // Category path from categories table
-  let categoryPath = "";
-  if (product.category_id && categoriesMap.has(product.category_id)) {
-    categoryPath = categoriesMap.get(product.category_id)!;
-  } else if (product.category_name) {
-    categoryPath = product.category_name;
-  }
-
-  // Only send identifiers with verified provenance. A store SKU is not an MPN,
-  // and lack of locally recorded identifiers does not prove that none exist.
-  const { gtin, mpn } = resolveMerchantIdentifiers(product);
+  const priceValue = Number.isInteger(projection.price)
+    ? projection.price.toFixed(0)
+    : projection.price.toFixed(2);
+  const price = `${priceValue} ${projection.currency}`;
 
   // Build item XML
   let itemXml = `    <item>
-      <g:id>${escapeXml(product.id)}</g:id>
-      <g:title>${escapeXml(title)}</g:title>
-      <g:description>${escapeXml(description)}</g:description>
+      <g:id>${escapeXml(projection.id)}</g:id>
+      <g:title>${escapeXml(projection.title)}</g:title>
+      <g:description>${escapeXml(projection.description)}</g:description>
       <g:link>${escapeXml(productUrl)}</g:link>
       <g:image_link>${escapeXml(imageUrl)}</g:image_link>`;
 
@@ -401,85 +356,37 @@ function generateProductItem(
   }
 
   itemXml += `
-      <g:availability>${availability}</g:availability>
+      <g:availability>${projection.availability}</g:availability>
       <g:price>${price}</g:price>
-      <g:brand>${escapeXml(brand)}</g:brand>
+      <g:brand>${escapeXml(projection.brand)}</g:brand>
       <g:condition>new</g:condition>`;
 
   // Add GTIN if available (preferred by Google)
-  if (gtin) {
-    itemXml += `\n      <g:gtin>${escapeXml(gtin)}</g:gtin>`;
+  if (projection.gtin) {
+    itemXml += `\n      <g:gtin>${escapeXml(projection.gtin)}</g:gtin>`;
   }
 
   // Add only an explicitly recorded manufacturer part number.
-  if (mpn) {
-    itemXml += `\n      <g:mpn>${escapeXml(mpn)}</g:mpn>`;
+  if (projection.mpn) {
+    itemXml += `\n      <g:mpn>${escapeXml(projection.mpn)}</g:mpn>`;
   }
 
   // Add category path as product_type (merchant's own category)
-  if (categoryPath) {
-    itemXml += `\n      <g:product_type>${escapeXml(categoryPath)}</g:product_type>`;
+  if (projection.category_path) {
+    itemXml += `\n      <g:product_type>${escapeXml(projection.category_path)}</g:product_type>`;
   }
 
   // Let Google categorize automatically unless staff recorded an exact
   // taxonomy value. One bicycle-parts fallback is not correct for every item.
-  const googleProductCategory = firstNonEmpty(
-    product.website_google_product_category,
-  );
-  if (googleProductCategory) {
+  if (projection.google_product_category) {
     itemXml += `\n      <g:google_product_category>${
-      escapeXml(googleProductCategory)
+      escapeXml(projection.google_product_category)
     }</g:google_product_category>`;
   }
 
   itemXml += `\n    </item>`;
 
   return itemXml;
-}
-
-// Fix titles with excessive capitalization (ALL CAPS → Title Case)
-function fixExcessiveCaps(text: string): string {
-  if (!text) return "";
-
-  // Count uppercase vs lowercase letters
-  const letters = text.replace(/[^a-zA-Z]/g, "");
-  const upperCount = (letters.match(/[A-Z]/g) || []).length;
-
-  // If more than 60% uppercase, convert to Title Case
-  if (letters.length > 0 && upperCount / letters.length > 0.6) {
-    return text
-      .toLowerCase()
-      .split(" ")
-      .map((word) => {
-        if (word.length === 0) return word;
-        // Keep certain words lowercase (Spanish articles/prepositions)
-        const lowercaseWords = [
-          "de",
-          "del",
-          "la",
-          "el",
-          "las",
-          "los",
-          "y",
-          "e",
-          "o",
-          "u",
-          "a",
-          "con",
-          "sin",
-          "para",
-          "por",
-        ];
-        if (lowercaseWords.includes(word)) return word;
-        // Capitalize first letter
-        return word.charAt(0).toUpperCase() + word.slice(1);
-      })
-      .join(" ")
-      // Ensure first character is always uppercase
-      .replace(/^./, (c) => c.toUpperCase());
-  }
-
-  return text;
 }
 
 function escapeXml(unsafe: string | null | undefined): string {
@@ -491,14 +398,6 @@ function escapeXml(unsafe: string | null | undefined): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
-}
-
-function firstNonEmpty(...values: Array<string | null | undefined>): string {
-  for (const value of values) {
-    const text = String(value ?? "").trim();
-    if (text.length > 0) return text;
-  }
-  return "";
 }
 
 function resolveMerchantBrand(
@@ -513,30 +412,21 @@ function resolveMerchantBrand(
   return firstNonEmpty(product.brand);
 }
 
-function productImageUrls(product: MerchantProduct): string[] {
-  const urls: string[] = [];
-
-  const add = (value: unknown) => {
-    const url = String(value ?? "").trim();
-    if (!isPublicImageUrl(url) || urls.includes(url)) return;
-    urls.push(url);
-  };
-
-  add(product.website_image_url_optimized);
-  add(product.image_url_optimized);
-  add(product.website_image_url);
-  add(product.image_url);
-
-  const gallery = product.website_image_urls?.length
-    ? product.website_image_urls
-    : (product.image_urls || []);
-  for (const image of gallery || []) {
-    add(image);
-  }
-
-  return urls.slice(0, 10);
+function commerceProjection(
+  product: MerchantProduct,
+  brandsMap: Map<string, string>,
+  categoriesMap: Map<string, string>,
+) {
+  return projectPublicCommerceProduct(product, {
+    resolvedBrand: resolveMerchantBrand(product, brandsMap),
+    categoryPath: product.category_id ? categoriesMap.get(product.category_id) : undefined,
+  });
 }
 
-function isPublicImageUrl(value: string): boolean {
-  return value.startsWith("https://") || value.startsWith("http://");
+function firstNonEmpty(...values: Array<string | null | undefined>): string {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text.length > 0) return text;
+  }
+  return "";
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/utils/chilean_utils.dart';
@@ -8,10 +9,34 @@ import '../models/purchase_invoice.dart';
 import '../services/purchase_credit_note_service.dart';
 
 class PurchaseCreditNotePage extends StatefulWidget {
-  const PurchaseCreditNotePage(
-      {super.key, required this.invoice, this.service});
+  const PurchaseCreditNotePage({
+    super.key,
+    required this.invoice,
+    this.service,
+    this.initialReceiptResolutionCaseId,
+    this.initialSourceLineIndex,
+    this.initialResolutionQuantity,
+    this.initialResolutionLabel,
+    this.initialReceiptId,
+    this.initialReceiptNumber,
+    this.focusCreditNoteId,
+    this.focusRefundId,
+    this.embedded = false,
+    this.onClose,
+  });
+
   final PurchaseInvoice invoice;
   final PurchaseCreditNoteService? service;
+  final String? initialReceiptResolutionCaseId;
+  final int? initialSourceLineIndex;
+  final int? initialResolutionQuantity;
+  final String? initialResolutionLabel;
+  final String? initialReceiptId;
+  final String? initialReceiptNumber;
+  final String? focusCreditNoteId;
+  final String? focusRefundId;
+  final bool embedded;
+  final VoidCallback? onClose;
 
   @override
   State<PurchaseCreditNotePage> createState() => _PurchaseCreditNotePageState();
@@ -26,6 +51,7 @@ class _PurchaseCreditNotePageState extends State<PurchaseCreditNotePage> {
   List<PurchaseCreditNoteLineDraft> _lines = const [];
   List<PurchaseCreditReturnOption> _returnOptions = const [];
   List<PurchaseCreditNoteRecord> _history = const [];
+  List<PurchaseCreditNoteLineRecord> _focusedLines = const [];
   List<PurchaseSupplierRefundRecord> _refunds = const [];
   List<PurchaseRefundPaymentMethod> _refundMethods = const [];
   final DateTime _issueDate = DateTime.now();
@@ -40,6 +66,12 @@ class _PurchaseCreditNotePageState extends State<PurchaseCreditNotePage> {
     super.initState();
     _service = widget.service ?? PurchaseCreditNoteService();
     _idempotencyKey = const Uuid().v4();
+    if (widget.initialReceiptResolutionCaseId != null) {
+      _reasonCode = 'invoice_correction';
+      _reason.text =
+          'Resolución de diferencia de recepción ${widget.initialResolutionLabel ?? ''}'
+              .trim();
+    }
     _load();
   }
 
@@ -61,19 +93,51 @@ class _PurchaseCreditNotePageState extends State<PurchaseCreditNotePage> {
         _service.getRefunds(id),
         _service.getRefundPaymentMethods(),
         _service.isRefundEnabled(),
+        widget.focusCreditNoteId == null
+            ? Future<List<PurchaseCreditNoteLineRecord>>.value(const [])
+            : _service.getLines(widget.focusCreditNoteId!),
       ]);
       if (!mounted) return;
       final balances = results[0] as List<PurchaseCreditNoteLineBalance>;
       setState(() {
         _lines = balances
-            .where((line) => line.remainingNet + line.remainingTax > 0)
-            .map((line) => PurchaseCreditNoteLineDraft(balance: line))
-            .toList(growable: false);
+            .where(
+          (line) =>
+              line.remainingNet + line.remainingTax > 0 &&
+              (widget.initialReceiptResolutionCaseId == null ||
+                  line.lineIndex == widget.initialSourceLineIndex),
+        )
+            .map((line) {
+          var draft = PurchaseCreditNoteLineDraft(balance: line);
+          if (widget.initialReceiptResolutionCaseId != null &&
+              line.lineIndex == widget.initialSourceLineIndex) {
+            final requested = widget.initialResolutionQuantity ?? 0;
+            final maximum = requested.clamp(0, line.remainingQuantity).toInt();
+            draft = draft.withQuantity(maximum).copyWith(
+                  receiptResolutionCaseId:
+                      widget.initialReceiptResolutionCaseId,
+                  receiptResolutionMaximum: maximum,
+                );
+          }
+          return draft;
+        }).toList(growable: false);
         _returnOptions = results[1] as List<PurchaseCreditReturnOption>;
-        _history = results[2] as List<PurchaseCreditNoteRecord>;
+        final history = List<PurchaseCreditNoteRecord>.from(
+          results[2] as List<PurchaseCreditNoteRecord>,
+        );
+        final focusedId = widget.focusCreditNoteId;
+        if (focusedId != null) {
+          history.sort((a, b) {
+            if (a.id == focusedId) return -1;
+            if (b.id == focusedId) return 1;
+            return b.issueDate.compareTo(a.issueDate);
+          });
+        }
+        _history = history;
         _refunds = results[3] as List<PurchaseSupplierRefundRecord>;
         _refundMethods = results[4] as List<PurchaseRefundPaymentMethod>;
         _refundEnabled = results[5] as bool;
+        _focusedLines = results[6] as List<PurchaseCreditNoteLineRecord>;
         _loading = false;
         _error = null;
       });
@@ -176,12 +240,46 @@ class _PurchaseCreditNotePageState extends State<PurchaseCreditNotePage> {
     final reason = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
+        icon: const Icon(Icons.warning_amber_rounded),
         title: Text('Anular ${record.number}'),
-        content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration:
-                const InputDecoration(labelText: 'Motivo de anulación')),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Se creará un asiento inverso y se restaurarán cuentas por '
+                'pagar, inventario contable e IVA. No se modificará stock '
+                'físico.',
+              ),
+              if (widget.focusCreditNoteId == record.id &&
+                  widget.initialReceiptId?.isNotEmpty == true) ...[
+                const SizedBox(height: 10),
+                const Text(
+                  'Esta nota resuelve una diferencia de recepción. Al '
+                  'anularla, esa cantidad volverá a quedar abierta y podrá '
+                  'recibirse o resolverse mediante otro documento.',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ],
+              const SizedBox(height: 10),
+              const Text(
+                'Los reembolsos vinculados deben anularse primero. Una nota '
+                'tributaria ya emitida requiere su documento oficial de '
+                'reversa y no puede anularse aquí.',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                decoration:
+                    const InputDecoration(labelText: 'Motivo de anulación'),
+              ),
+            ],
+          ),
+        ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
@@ -251,7 +349,14 @@ class _PurchaseCreditNotePageState extends State<PurchaseCreditNotePage> {
   }
 
   Future<void> _voidRefund(PurchaseSupplierRefundRecord refund) async {
-    final reason = await _askVoidReason('Anular reembolso ${refund.number}');
+    final reason = await _askVoidReason(
+      'Anular reembolso ${refund.number}',
+      consequence:
+          'Se revertirá el asiento y se restaurará el saldo financiero. '
+          'Esta acción en el ERP no revierte ni recupera una transferencia '
+          'real ya ejecutada en el banco; esa operación debe gestionarse por '
+          'separado.',
+    );
     if (reason == null || !mounted) return;
     setState(() => _submitting = true);
     try {
@@ -267,16 +372,36 @@ class _PurchaseCreditNotePageState extends State<PurchaseCreditNotePage> {
     }
   }
 
-  Future<String?> _askVoidReason(String title) async {
+  Future<String?> _askVoidReason(
+    String title, {
+    String? consequence,
+  }) async {
     final controller = TextEditingController();
     final value = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
+        icon: consequence == null
+            ? null
+            : const Icon(Icons.warning_amber_rounded),
         title: Text(title),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Motivo obligatorio'),
+        content: SizedBox(
+          width: consequence == null ? null : 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (consequence != null) ...[
+                Text(consequence),
+                const SizedBox(height: 16),
+              ],
+              TextField(
+                controller: controller,
+                autofocus: true,
+                decoration:
+                    const InputDecoration(labelText: 'Motivo obligatorio'),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -304,81 +429,577 @@ class _PurchaseCreditNotePageState extends State<PurchaseCreditNotePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Nota de crédito de compra')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(child: Text(_error!, textAlign: TextAlign.center))
-              : Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: ListView(
-                          padding: const EdgeInsets.all(24),
-                          children: [
-                            Center(
-                              child: ConstrainedBox(
-                                constraints:
-                                    const BoxConstraints(maxWidth: 1100),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    _buildHeader(),
-                                    const SizedBox(height: 16),
-                                    _buildFields(),
-                                    const SizedBox(height: 20),
-                                    Text('Líneas acreditables',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleLarge),
-                                    const SizedBox(height: 8),
-                                    if (_lines.isEmpty)
-                                      const Card(
-                                          child: Padding(
-                                              padding: EdgeInsets.all(20),
-                                              child: Text(
-                                                  'No quedan montos acreditables.'))),
-                                    ..._lines
-                                        .asMap()
-                                        .entries
-                                        .map((entry) => Padding(
-                                              padding: const EdgeInsets.only(
-                                                  bottom: 12),
-                                              child: _CreditLineCard(
-                                                line: entry.value,
-                                                returnOptions: _returnOptions
-                                                    .where((option) =>
-                                                        option.sourceLineKey ==
-                                                        entry.value.balance
-                                                            .sourceLineKey)
-                                                    .toList(),
-                                                onChanged: (line) =>
-                                                    _replace(entry.key, line),
-                                              ),
-                                            )),
-                                    if (_history.isNotEmpty) ...[
+    final body = _loading
+        ? const Center(child: CircularProgressIndicator())
+        : _error != null
+            ? Center(child: Text(_error!, textAlign: TextAlign.center))
+            : widget.focusCreditNoteId != null
+                ? _buildFocusedDocument()
+                : Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: ListView(
+                            padding: const EdgeInsets.all(24),
+                            children: [
+                              Center(
+                                child: ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 1100),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      _buildHeader(),
+                                      if (widget
+                                              .initialReceiptResolutionCaseId !=
+                                          null) ...[
+                                        const SizedBox(height: 12),
+                                        _buildReceiptResolutionNotice(),
+                                      ],
+                                      const SizedBox(height: 16),
+                                      _buildFields(),
                                       const SizedBox(height: 20),
-                                      Text('Historial',
+                                      Text('Líneas acreditables',
                                           style: Theme.of(context)
                                               .textTheme
                                               .titleLarge),
                                       const SizedBox(height: 8),
-                                      ..._history.map(_historyCard),
+                                      if (_lines.isEmpty)
+                                        const Card(
+                                            child: Padding(
+                                                padding: EdgeInsets.all(20),
+                                                child: Text(
+                                                    'No quedan montos acreditables.'))),
+                                      ..._lines
+                                          .asMap()
+                                          .entries
+                                          .map((entry) => Padding(
+                                                padding: const EdgeInsets.only(
+                                                    bottom: 12),
+                                                child: _CreditLineCard(
+                                                  line: entry.value,
+                                                  returnOptions: _returnOptions
+                                                      .where((option) =>
+                                                          option
+                                                              .sourceLineKey ==
+                                                          entry.value.balance
+                                                              .sourceLineKey)
+                                                      .toList(),
+                                                  onChanged: (line) =>
+                                                      _replace(entry.key, line),
+                                                ),
+                                              )),
+                                      if (_history.isNotEmpty) ...[
+                                        const SizedBox(height: 20),
+                                        Text('Historial',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleLarge),
+                                        const SizedBox(height: 8),
+                                        ..._history.map(_historyCard),
+                                      ],
                                     ],
-                                  ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
+                        ),
+                        _footer(),
+                      ],
+                    ),
+                  );
+    if (widget.embedded) return body;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Nota de crédito de compra')),
+      body: body,
+    );
+  }
+
+  Widget _buildFocusedDocument() {
+    final record = _history
+        .where((item) => item.id == widget.focusCreditNoteId)
+        .firstOrNull;
+    if (record == null) {
+      return const Center(
+        child: Text('No se encontró la nota de crédito vinculada.'),
+      );
+    }
+    final refunds = _refunds
+        .where((refund) => refund.purchaseCreditNoteId == record.id)
+        .toList(growable: false);
+    if (widget.focusRefundId != null) {
+      refunds.sort((a, b) {
+        if (a.id == widget.focusRefundId) return -1;
+        if (b.id == widget.focusRefundId) return 1;
+        return b.refundedAt.compareTo(a.refundedAt);
+      });
+    }
+    final statusColor = record.status == 'posted'
+        ? const Color(0xFF2F6F62)
+        : const Color(0xFF874B4E);
+
+    return ColoredBox(
+      color: const Color(0xFFF6F8FA),
+      child: Column(
+        children: [
+          Container(
+            height: 66,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                bottom: BorderSide(color: Color(0xFFD8DEE3)),
+              ),
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: widget.onClose ??
+                      () {
+                        if (Navigator.of(context).canPop()) {
+                          Navigator.of(context).pop();
+                        }
+                      },
+                  tooltip: 'Volver a la recepción',
+                  icon: const Icon(Icons.arrow_back, size: 20),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Nota de crédito ${record.number}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF20262C),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      _footer(),
+                      Text(
+                        'Factura ${widget.invoice.invoiceNumber} · '
+                        '${widget.invoice.supplierName ?? 'Proveedor'}',
+                        style: const TextStyle(
+                          color: Color(0xFF68747D),
+                          fontSize: 12.5,
+                        ),
+                      ),
                     ],
                   ),
                 ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.08),
+                    border: Border.all(
+                      color: statusColor.withValues(alpha: 0.42),
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    record.status == 'posted' ? 'VIGENTE' : 'ANULADA',
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 36),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1100),
+                  child: Container(
+                    color: Colors.white,
+                    foregroundDecoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFFD8DEE3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(26, 24, 26, 20),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'NOTA DE CRÉDITO DE COMPRA',
+                                      style: TextStyle(
+                                        color: Color(0xFF20262C),
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'Documento financiero vinculado',
+                                      style: TextStyle(
+                                        color: Color(0xFF68747D),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    ChileanUtils.formatDate(
+                                      record.issueDate.toLocal(),
+                                    ),
+                                    style: const TextStyle(
+                                      color: Color(0xFF37434B),
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  if (record.supplierNumber?.isNotEmpty == true)
+                                    Text(
+                                      'Proveedor: ${record.supplierNumber}',
+                                      style: const TextStyle(
+                                        color: Color(0xFF68747D),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (widget.initialReceiptId?.isNotEmpty == true)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 26,
+                              vertical: 11,
+                            ),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEAF1F4),
+                              border: Border.symmetric(
+                                horizontal: BorderSide(
+                                  color: Color(0xFFB8CBD3),
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.link,
+                                  size: 18,
+                                  color: Color(0xFF235466),
+                                ),
+                                const SizedBox(width: 9),
+                                const Expanded(
+                                  child: Text(
+                                    'Esta nota resuelve una diferencia exacta '
+                                    'de recepción y no mueve stock físico.',
+                                    style: TextStyle(
+                                      color: Color(0xFF304B56),
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: widget.onClose ??
+                                      () => context.push(
+                                            '/purchases/receipts/'
+                                            '${Uri.encodeComponent(widget.initialReceiptId!)}',
+                                          ),
+                                  child: Text(
+                                    'Abrir '
+                                    '${widget.initialReceiptNumber ?? 'recepción'}',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(26, 18, 26, 14),
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                const TextSpan(
+                                  text: 'Motivo: ',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                TextSpan(text: record.reason),
+                              ],
+                            ),
+                            style: const TextStyle(
+                              color: Color(0xFF37434B),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        _buildFocusedLineTable(),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(26, 18, 26, 18),
+                          child: Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'EFECTO',
+                                  style: TextStyle(
+                                    color: Color(0xFF68747D),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.35,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                'Total acreditado  '
+                                '${ChileanUtils.formatCurrency(record.totalAmount.toDouble())}',
+                                style: const TextStyle(
+                                  color: Color(0xFF20262C),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (refunds.isNotEmpty) _buildFocusedRefunds(refunds),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 26,
+                            vertical: 14,
+                          ),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFF7F9FA),
+                            border: Border(
+                              top: BorderSide(color: Color(0xFFD8DEE3)),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'DTE ${record.officialStatus} · '
+                                  'Reembolsado '
+                                  '${ChileanUtils.formatCurrency(record.refundedAmount.toDouble())}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF52606A),
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                              ),
+                              if (record.canRefund && _refundEnabled)
+                                FilledButton.tonalIcon(
+                                  onPressed: _submitting
+                                      ? null
+                                      : () => _recordRefund(record),
+                                  icon: const Icon(
+                                    Icons.payments_outlined,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Registrar reembolso'),
+                                ),
+                              if (record.canVoid) ...[
+                                const SizedBox(width: 8),
+                                OutlinedButton.icon(
+                                  onPressed:
+                                      _submitting ? null : () => _void(record),
+                                  icon: const Icon(Icons.undo, size: 18),
+                                  label: const Text('Anular nota'),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFocusedLineTable() {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(
+          width: constraints.maxWidth < 760 ? 760 : constraints.maxWidth,
+          child: Column(
+            children: [
+              Container(
+                height: 38,
+                padding: const EdgeInsets.symmetric(horizontal: 26),
+                color: const Color(0xFFF1F4F6),
+                child: const Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'PRODUCTO',
+                        style: TextStyle(
+                          color: Color(0xFF235466),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 80, child: Text('CANT.')),
+                    SizedBox(width: 120, child: Text('NETO')),
+                    SizedBox(width: 110, child: Text('IVA')),
+                    SizedBox(width: 120, child: Text('TOTAL')),
+                  ],
+                ),
+              ),
+              for (final line in _focusedLines)
+                Container(
+                  constraints: const BoxConstraints(minHeight: 54),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 26,
+                    vertical: 8,
+                  ),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: Color(0xFFE3E8EC)),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              line.productName,
+                              style: const TextStyle(
+                                color: Color(0xFF20262C),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (line.productSku?.isNotEmpty == true)
+                              Text(
+                                'SKU ${line.productSku}',
+                                style: const TextStyle(
+                                  color: Color(0xFF68747D),
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(
+                        width: 80,
+                        child: Text('${line.quantity}'),
+                      ),
+                      SizedBox(
+                        width: 120,
+                        child: Text(
+                          ChileanUtils.formatCurrency(
+                            line.netAmount.toDouble(),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 110,
+                        child: Text(
+                          ChileanUtils.formatCurrency(
+                            line.taxAmount.toDouble(),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 120,
+                        child: Text(
+                          ChileanUtils.formatCurrency(
+                            line.totalAmount.toDouble(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFocusedRefunds(List<PurchaseSupplierRefundRecord> refunds) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(26, 14, 26, 10),
+      decoration: const BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Color(0xFFD8DEE3)),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'REEMBOLSOS VINCULADOS',
+            style: TextStyle(
+              color: Color(0xFF52606A),
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.35,
+            ),
+          ),
+          for (final refund in refunds)
+            Container(
+              margin: const EdgeInsets.only(top: 9),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: refund.id == widget.focusRefundId
+                    ? const Color(0xFFEAF1F4)
+                    : null,
+                border: refund.id == widget.focusRefundId
+                    ? Border.all(color: const Color(0xFF8FAEB9))
+                    : null,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${refund.number} · ${refund.paymentMethodName} · '
+                      '${ChileanUtils.formatCurrency(refund.amount.toDouble())}',
+                      style: const TextStyle(
+                        color: Color(0xFF37434B),
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+                  Text(refund.status == 'posted' ? 'Vigente' : 'Anulado'),
+                  if (refund.canVoid) ...[
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _submitting ? null : () => _voidRefund(refund),
+                      child: const Text('Anular'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -397,6 +1018,46 @@ class _PurchaseCreditNotePageState extends State<PurchaseCreditNotePage> {
           ]),
         ),
       );
+
+  Widget _buildReceiptResolutionNotice() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFEAF1F4),
+        border: Border.fromBorderSide(
+          BorderSide(color: Color(0xFFB8CBD3)),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.link, size: 19, color: Color(0xFF235466)),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Esta nota quedará vinculada a la diferencia exacta de la '
+              'recepción. Reducirá cuentas por pagar, inventario contable e '
+              'IVA según la línea; no moverá stock físico.',
+              style: TextStyle(
+                color: Color(0xFF304B56),
+                fontSize: 13,
+              ),
+            ),
+          ),
+          if (widget.initialReceiptId?.isNotEmpty == true)
+            TextButton(
+              onPressed: () => context.push(
+                '/purchases/receipts/'
+                '${Uri.encodeComponent(widget.initialReceiptId!)}',
+              ),
+              child: Text(
+                'Abrir ${widget.initialReceiptNumber ?? 'recepción'}',
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildFields() => Card(
         child: Padding(
@@ -449,7 +1110,15 @@ class _PurchaseCreditNotePageState extends State<PurchaseCreditNotePage> {
     final refunds = _refunds
         .where((refund) => refund.purchaseCreditNoteId == record.id)
         .toList(growable: false);
+    final focused = widget.focusCreditNoteId == record.id;
     return Card(
+      color: focused ? const Color(0xFFEAF1F4) : null,
+      shape: focused
+          ? const RoundedRectangleBorder(
+              side: BorderSide(color: Color(0xFF235466), width: 1.5),
+              borderRadius: BorderRadius.all(Radius.circular(8)),
+            )
+          : null,
       child: Column(
         children: [
           ListTile(
@@ -573,31 +1242,57 @@ class _CreditLineCard extends StatelessWidget {
               'Disponible: ${line.balance.remainingQuantity} un. · Neto ${ChileanUtils.formatCurrency(line.balance.remainingNet.toDouble())} · IVA ${ChileanUtils.formatCurrency(line.balance.remainingTax.toDouble())}'),
           const SizedBox(height: 12),
           Wrap(spacing: 12, runSpacing: 12, children: [
-            _number('Cantidad', line.quantity,
-                (value) => onChanged(line.withQuantity(value))),
-            _number('Neto crédito', line.netAmount,
-                (value) => onChanged(line.copyWith(netAmount: value))),
-            _number('IVA crédito', line.taxAmount,
-                (value) => onChanged(line.copyWith(taxAmount: value))),
-            SizedBox(
-              width: 210,
-              child: DropdownButtonFormField<PurchaseCreditDisposition>(
-                initialValue: line.disposition,
-                decoration: const InputDecoration(labelText: 'Respaldo físico'),
-                items: const [
-                  DropdownMenuItem(
-                      value: PurchaseCreditDisposition.financialOnly,
-                      child: Text('Solo financiero')),
-                  DropdownMenuItem(
-                      value: PurchaseCreditDisposition.supplierReturn,
-                      child: Text('Devolución registrada')),
-                ],
-                onChanged: (value) => onChanged(line.copyWith(
-                    disposition: value,
-                    clearSupplierReturn:
-                        value == PurchaseCreditDisposition.financialOnly)),
-              ),
+            _number(
+              line.receiptResolutionMaximum == null
+                  ? 'Cantidad'
+                  : 'Cantidad (máx. ${line.receiptResolutionMaximum})',
+              line.quantity,
+              (value) => onChanged(line.withQuantity(value)),
             ),
+            _number(
+              'Neto crédito',
+              line.netAmount,
+              line.receiptResolutionCaseId == null
+                  ? (value) => onChanged(line.copyWith(netAmount: value))
+                  : null,
+            ),
+            _number(
+              'IVA crédito',
+              line.taxAmount,
+              line.receiptResolutionCaseId == null
+                  ? (value) => onChanged(line.copyWith(taxAmount: value))
+                  : null,
+            ),
+            if (line.receiptResolutionCaseId != null)
+              const SizedBox(
+                width: 210,
+                child: InputDecorator(
+                  decoration:
+                      InputDecoration(labelText: 'Origen de la corrección'),
+                  child: Text('Diferencia de recepción'),
+                ),
+              )
+            else
+              SizedBox(
+                width: 210,
+                child: DropdownButtonFormField<PurchaseCreditDisposition>(
+                  initialValue: line.disposition,
+                  decoration:
+                      const InputDecoration(labelText: 'Respaldo físico'),
+                  items: const [
+                    DropdownMenuItem(
+                        value: PurchaseCreditDisposition.financialOnly,
+                        child: Text('Solo financiero')),
+                    DropdownMenuItem(
+                        value: PurchaseCreditDisposition.supplierReturn,
+                        child: Text('Devolución registrada')),
+                  ],
+                  onChanged: (value) => onChanged(line.copyWith(
+                      disposition: value,
+                      clearSupplierReturn:
+                          value == PurchaseCreditDisposition.financialOnly)),
+                ),
+              ),
             if (line.disposition == PurchaseCreditDisposition.supplierReturn)
               SizedBox(
                 width: 260,
@@ -621,7 +1316,7 @@ class _CreditLineCard extends StatelessWidget {
     );
   }
 
-  Widget _number(String label, int value, ValueChanged<int> changed) =>
+  Widget _number(String label, int value, ValueChanged<int>? changed) =>
       SizedBox(
         width: 145,
         child: TextFormField(
@@ -629,7 +1324,9 @@ class _CreditLineCard extends StatelessWidget {
           initialValue: value.toString(),
           keyboardType: TextInputType.number,
           decoration: InputDecoration(labelText: label),
-          onChanged: (raw) => changed(int.tryParse(raw) ?? 0),
+          enabled: changed != null,
+          onChanged:
+              changed == null ? null : (raw) => changed(int.tryParse(raw) ?? 0),
         ),
       );
 }

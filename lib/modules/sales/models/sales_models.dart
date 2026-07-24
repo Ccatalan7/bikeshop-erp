@@ -742,3 +742,80 @@ class Payment {
   /// True if this payment includes IVA
   bool get hasIva => taxTreatment == 'tax_included' && ivaAmount > 0;
 }
+
+/// Durable audit receipt emitted by the atomic sales-payment correction
+/// command. The payment itself remains the accounting source identity; these
+/// events explain who changed it, why, and which journal replaced the prior
+/// settlement evidence.
+class SalesPaymentEditEvent {
+  const SalesPaymentEditEvent({
+    required this.id,
+    required this.tenantId,
+    required this.paymentId,
+    required this.invoiceId,
+    required this.operationKey,
+    required this.reason,
+    required this.source,
+    required this.financialFieldsChanged,
+    required this.beforeSnapshot,
+    required this.afterSnapshot,
+    required this.createdAt,
+    this.priorJournalEntryId,
+    this.currentJournalEntryId,
+    this.createdBy,
+  });
+
+  final String id;
+  final String tenantId;
+  final String paymentId;
+  final String invoiceId;
+  final String operationKey;
+  final String reason;
+  final String source;
+  final bool financialFieldsChanged;
+  final Map<String, dynamic> beforeSnapshot;
+  final Map<String, dynamic> afterSnapshot;
+  final String? priorJournalEntryId;
+  final String? currentJournalEntryId;
+  final String? createdBy;
+  final DateTime createdAt;
+
+  factory SalesPaymentEditEvent.fromJson(Map<String, dynamic> json) {
+    Map<String, dynamic> snapshot(dynamic value) {
+      if (value is Map<String, dynamic>) return value;
+      if (value is Map) return Map<String, dynamic>.from(value);
+      return const {};
+    }
+
+    return SalesPaymentEditEvent(
+      id: json['id']?.toString() ?? '',
+      tenantId: json['tenant_id']?.toString() ?? '',
+      paymentId: json['payment_id']?.toString() ?? '',
+      invoiceId: json['invoice_id']?.toString() ?? '',
+      operationKey: json['operation_key']?.toString() ?? '',
+      reason: json['reason']?.toString() ?? '',
+      source: json['source']?.toString() ?? '',
+      financialFieldsChanged: json['financial_fields_changed'] == true,
+      beforeSnapshot: snapshot(json['before_snapshot']),
+      afterSnapshot: snapshot(json['after_snapshot']),
+      priorJournalEntryId: json['prior_journal_entry_id']?.toString(),
+      currentJournalEntryId: json['current_journal_entry_id']?.toString(),
+      createdBy: json['created_by']?.toString(),
+      createdAt: _parseDate(json['created_at']),
+    );
+  }
+}
+
+class SalesPaymentCorrectionResult {
+  const SalesPaymentCorrectionResult({
+    required this.payment,
+    required this.event,
+    required this.replayed,
+    required this.financialFieldsChanged,
+  });
+
+  final Payment payment;
+  final SalesPaymentEditEvent event;
+  final bool replayed;
+  final bool financialFieldsChanged;
+}

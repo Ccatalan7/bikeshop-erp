@@ -259,6 +259,7 @@ String getRouteTitle(String path) {
     }
     if (cleanPath.startsWith('/inventory/brands/')) return 'Editar Marca';
     if (cleanPath.startsWith('/sales/invoices/')) return 'Editar Factura';
+    if (cleanPath.startsWith('/sales/payments/')) return 'Editar Pago';
     if (cleanPath.startsWith('/purchases/invoices/')) return 'Editar Compra';
     if (cleanPath.startsWith('/purchases/suppliers/')) {
       return 'Editar Proveedor';
@@ -287,6 +288,9 @@ String getRouteTitle(String path) {
   }
   if (RegExp(r'^/sales/invoices/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Factura';
+  }
+  if (RegExp(r'^/sales/payments/[^/]+$').hasMatch(cleanPath)) {
+    return 'Detalle Pago';
   }
   if (RegExp(r'^/purchases/invoices/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Compra';

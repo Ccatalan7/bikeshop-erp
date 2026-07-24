@@ -326,33 +326,40 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
     ),
     BulkCustomProductFieldDefinition(
       key: 'website_merchant_title',
-      label: 'Título Merchant',
+      label: 'Título comercial público',
       group: BulkCustomProductFieldGroup.seoMerchant,
       type: BulkCustomProductFieldType.text,
+      helperText:
+          'Título común para ficha pública, datos estructurados y Merchant.',
     ),
     BulkCustomProductFieldDefinition(
       key: 'website_merchant_description',
-      label: 'Descripción Merchant',
+      label: 'Descripción comercial pública',
       group: BulkCustomProductFieldGroup.seoMerchant,
       type: BulkCustomProductFieldType.longText,
+      helperText:
+          'Descripción común para ficha pública, datos estructurados y Merchant.',
     ),
     BulkCustomProductFieldDefinition(
       key: 'website_merchant_brand',
-      label: 'Marca Merchant',
+      label: 'Marca del fabricante',
       group: BulkCustomProductFieldGroup.seoMerchant,
       type: BulkCustomProductFieldType.text,
+      helperText: 'Solo la marca real del fabricante; nunca un placeholder.',
     ),
     BulkCustomProductFieldDefinition(
       key: 'website_merchant_gtin',
-      label: 'GTIN Merchant',
+      label: 'GTIN / EAN verificado',
       group: BulkCustomProductFieldGroup.seoMerchant,
       type: BulkCustomProductFieldType.text,
+      helperText: 'GTIN verificado con dígito de control.',
     ),
     BulkCustomProductFieldDefinition(
       key: 'website_merchant_mpn',
-      label: 'MPN Merchant',
+      label: 'MPN del fabricante',
       group: BulkCustomProductFieldGroup.seoMerchant,
       type: BulkCustomProductFieldType.text,
+      helperText: 'Obligatorio junto a marca cuando no existe GTIN.',
     ),
     BulkCustomProductFieldDefinition(
       key: 'website_google_product_category',

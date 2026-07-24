@@ -24,6 +24,7 @@ import 'deferred_canvas_block.dart';
 import 'premium_product_card.dart';
 import 'text_formatting_toolbar.dart';
 import 'google_reviews_carousel.dart';
+import 'website_carousel_media.dart';
 
 // Conditional import for web platform
 import 'video_banner_stub.dart' if (dart.library.html) 'video_banner_web.dart'
@@ -4339,6 +4340,9 @@ class _CarouselBannerState extends State<_CarouselBanner> {
   late Duration _transitionDuration;
   late _CarouselAnimation _animation;
   Timer? _timer;
+  final Set<String> _requestedPrecacheUrls = <String>{};
+  int _mediaPreloadGeneration = 0;
+  bool _initialMediaPreloadScheduled = false;
 
   @override
   void initState() {
@@ -4347,15 +4351,66 @@ class _CarouselBannerState extends State<_CarouselBanner> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialMediaPreloadScheduled) return;
+    _initialMediaPreloadScheduled = true;
+    _scheduleMediaPreload();
+  }
+
+  @override
   void didUpdateWidget(covariant _CarouselBanner oldWidget) {
     super.didUpdateWidget(oldWidget);
     setState(_refreshConfiguration);
+    _scheduleMediaPreload();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _mediaPreloadGeneration++;
     super.dispose();
+  }
+
+  void _scheduleMediaPreload() {
+    final generation = ++_mediaPreloadGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _mediaPreloadGeneration) return;
+      unawaited(_preloadSlideMedia(generation));
+    });
+  }
+
+  Future<void> _preloadSlideMedia(int generation) async {
+    if (_slides.isEmpty) return;
+
+    if (_slides.any(websiteCarouselSlideUsesComposition)) {
+      unawaited(preloadDeferredCanvasLibrary());
+    }
+
+    // Respect the visible slide first, then warm every following slide in its
+    // real playback order. Images within a slide load concurrently so a
+    // layered composition appears atomically when the carousel reaches it.
+    for (var offset = 0; offset < _slides.length; offset++) {
+      if (!mounted || generation != _mediaPreloadGeneration) return;
+      final slideIndex = (_currentIndex + offset) % _slides.length;
+      final urls = collectWebsiteCarouselSlideImageUrls(_slides[slideIndex])
+          .where(_requestedPrecacheUrls.add)
+          .toList(growable: false);
+      if (urls.isEmpty) continue;
+
+      await Future.wait<void>(
+        urls.map(
+          (url) => precacheImage(
+            NetworkImage(url),
+            context,
+            onError: (_, __) {
+              // Rendering keeps the existing per-image error UI. A failed
+              // speculative request must never break carousel playback.
+            },
+          ),
+        ),
+      );
+    }
   }
 
   void _refreshConfiguration({bool resetIndex = false}) {

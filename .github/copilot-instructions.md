@@ -4712,10 +4712,12 @@ Include the following modules:
 > **MANDATORY CURRENT CONTRACT:** Before any Website Builder, storefront,
 > campaign, editor-control, Preview, page-navigation, or public-renderer work,
 > read and follow
-> [`docs/architecture/website-editor-contract.md`](../docs/architecture/website-editor-contract.md)
+> [`docs/architecture/website-editor-contract.md`](../docs/architecture/website-editor-contract.md),
+> [`docs/architecture/website-builder-agent-handoff.md`](../docs/architecture/website-builder-agent-handoff.md),
 > and `docs/architecture/canonical-ui-surfaces.md`. The contract is the current
-> source of truth and supersedes older dated limitations or code snippets below
-> whenever they conflict.
+> source of truth; the handoff is the mandatory operational summary and future
+> evolution plan. Together they supersede older dated limitations or code
+> snippets below whenever they conflict.
 
 ## 🚨 MANDATORY: Editor-Owned Website Changes (June 2026)
 
@@ -4735,15 +4737,50 @@ Before changing website rendering code, identify the editable owner for the chan
 
 If the editable owner does not exist yet, add or extend the editor feature first. Do not ship a renderer-only, widget-only, CSS-only, SQL-only, or hardcoded Dart change that the user cannot adjust later from the UI.
 
-Every public website change must complete the same three-part contract:
+Every public website change must complete the same four-part contract:
 
 1. **Owner:** a persisted editor-owned value exists.
 2. **Control:** the user can discover and change that value in the active editor.
-3. **Consumer:** every affected public renderer reads that value, while the editor/default value is only a fallback.
+3. **Operation:** the editor and agent automation use the same defaults,
+   validation, persisted schema, and save/publication invariants; automation
+   acting on a live draft also uses the normal staging/history path.
+4. **Consumer:** every affected public renderer reads that value, while the editor/default value is only a fallback.
 
 A change is incomplete if any one of those parts is missing. Do not claim a visual change is finished after editing a renderer alone, and do not add an editor control whose value is ignored by the public renderer.
 
 When implementing a requested website change, set it through the same provider/schema/settings path that the user will use later. The code change may add the capability, but the resulting website state must not depend on a hidden constant or an agent-only code path.
+
+### AI action-equivalence rule
+
+“Create it as if a normal user built it in the editor” does **not** require an
+agent to reproduce every mouse click. Fast automation, typed JSON, provider or
+service calls, seed helpers, and repository scripts are allowed only when they
+are action-equivalent to the visible editor workflow:
+
+1. they write the same canonical owner and schema used by the editor;
+2. they pass the same defaults, validation, persisted schema, and durable
+   save/publication rules; automation inside a live draft also uses its normal
+   staging/history path;
+3. every durable value reopens in a visible editor or connected management
+   control;
+4. Edit, Preview, and public rendering consume that same saved value; and
+5. save/reload reproduces the result without a seed-specific or agent-only
+   runtime branch.
+
+Hidden JSON keys, category-name conditionals, renderer-only widgets/styles,
+hardcoded internal routes/query strings, direct-SQL content authoring, and
+agent-only mutation paths fail this rule even when the public result looks
+correct. A seed is acceptable only as an authoring accelerator: after it runs,
+its output must be indistinguishable from data created through the editor and
+must remain fully editable/removable there. A seed/import that creates initial
+state outside an open editor session does not need to invent undo history, but
+it must use the canonical normalized schema/writer and pass the same reload,
+control, renderer, and publication checks.
+
+For every non-trivial website task, explicitly identify **Owner, Control,
+Operation, and Consumers** before implementation. If the current editor cannot
+represent the result, build the reusable schema + control + canonical operation
+and shared consumers first, then create the requested content through that path.
 
 ### Agent-created campaigns and periodic website content
 
@@ -4853,6 +4890,33 @@ Website Builder surface or ownership boundary changes.
 - Header/footer/menu changes must use `website_navigation` and the editor controls for label, destination, hierarchy, visibility, ordering, and presentation.
 - Do not create a menu, submenu, mega menu, or navigation behavior only in renderer code.
 - If a menu needs a new presentation mode (for example dropdown vs mega menu), model it as an editable stored option and expose it in the navigation editor. Do not rely on hidden CSS classes or "has children therefore mega menu" behavior as the only control.
+
+### Catalog category/collection presentation rule
+
+A professional category destination is not merely `/productos` with a hidden
+filter or a category-name chip, and it is not a hand-built duplicate CMS page.
+When category landing/collection presentation is added or changed:
+
+- keep the real category as the canonical catalog owner and link presentation
+  state to its stable ID;
+- expose hero/editorial presentation, subcategory navigation, grid behavior,
+  facet policy, and category SEO through `Catálogo web > Categorías >
+  Presentación web` (or the canonical successor workspace);
+- reuse typed `WebsiteDestination` category/catalog-filter routes, preserving
+  combined filters visibly in `WebsiteLinkValueEditor`;
+- use the canonical public inventory/visibility query for products, counts,
+  descendants, sorting, and facets—never copy a category result set into block
+  JSON;
+- treat the base category as route/page context (title, breadcrumb, hero), while
+  user-added secondary facets remain visible and removable;
+- keep menu placement in `website_navigation` and do not create a duplicate
+  `website_pages` record only to obtain the category route; and
+- render the same presentation + real product grid in Edit, Preview, and
+  public mode, including loading, empty, unpublished, and invalid states.
+
+Follow the phased implementation and verification plan in
+`docs/architecture/website-builder-agent-handoff.md`; do not implement special
+cases such as `if category == Cámaras`.
 
 ### Universal controls rule
 

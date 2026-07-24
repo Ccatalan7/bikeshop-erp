@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -256,7 +257,15 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   }
 
   Future<void> _navigateToReference(StockMovement movement) async {
-    if (!movement.hasNavigableReference || movement.referenceId == null) {
+    final referenceId = movement.navigableReferenceId;
+    if (!movement.hasNavigableReference || referenceId == null) {
+      return;
+    }
+
+    if (movement.isPurchaseReceiptMovement) {
+      await context.push(
+        '/purchases/receipts/${Uri.encodeComponent(referenceId)}',
+      );
       return;
     }
 
@@ -276,7 +285,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       if (movement.category == StockMovementCategory.adjustment) {
         final adjustment = await context
             .read<module_inventory.InventoryService>()
-            .getStockAdjustmentDetails(movement.referenceId!);
+            .getStockAdjustmentDetails(referenceId);
         if (!mounted) return;
 
         setState(() {
@@ -289,7 +298,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       if (movement.category == StockMovementCategory.purchase) {
         final invoice = await context
             .read<PurchaseService>()
-            .getPurchaseInvoice(movement.referenceId!);
+            .getPurchaseInvoice(referenceId);
         if (!mounted) return;
 
         if (invoice == null) {
@@ -305,7 +314,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
 
       final salesService = context.read<SalesService>();
       final invoice = await salesService.fetchInvoice(
-        movement.referenceId!,
+        referenceId,
         refresh: true,
       );
       await salesService.loadPayments(forceRefresh: false);
@@ -3196,7 +3205,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 // Reference
-                if (movement.referenceNumber != null)
+                if (movement.referenceNumber != null ||
+                    movement.hasNavigableReference)
                   InkWell(
                     onTap: movement.hasNavigableReference
                         ? () => _navigateToReference(movement)

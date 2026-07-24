@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/website_service.dart';
+import '../models/website_catalog_query.dart';
 import '../models/website_page_models.dart';
 import '../models/website_destination.dart';
 import '../widgets/website_link_value_editor.dart';
@@ -394,7 +395,12 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
                 menuLocation: link.menuLocation,
                 label: sub.name,
                 linkType: NavLinkType.category,
-                linkValue: '/productos?category=${sub.id}',
+                linkValue: WebsiteDestination.routeForCatalog(
+                  categoryId: sub.id,
+                  categorySlug: service.catalogPresentationRegistry
+                      .forCategory(sub.id)
+                      ?.slug,
+                ),
                 orderIndex: orderIndex++,
                 isVisible: true,
                 parentId: link.parentId,
@@ -417,7 +423,12 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
                       menuLocation: link.menuLocation,
                       label: gc.name,
                       linkType: NavLinkType.category,
-                      linkValue: '/productos?category=${gc.id}',
+                      linkValue: WebsiteDestination.routeForCatalog(
+                        categoryId: gc.id,
+                        categorySlug: service.catalogPresentationRegistry
+                            .forCategory(gc.id)
+                            ?.slug,
+                      ),
                       orderIndex: gcOrder++,
                       isVisible: true,
                       parentId:
@@ -450,7 +461,12 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
                 menuLocation: link.menuLocation,
                 label: sub.name,
                 linkType: NavLinkType.category,
-                linkValue: '/productos?category=${sub.id}',
+                linkValue: WebsiteDestination.routeForCatalog(
+                  categoryId: sub.id,
+                  categorySlug: service.catalogPresentationRegistry
+                      .forCategory(sub.id)
+                      ?.slug,
+                ),
                 orderIndex: orderIndex++,
                 isVisible: true,
                 parentId: createdParent.id,
@@ -489,7 +505,12 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
                 menuLocation: updatedLink.menuLocation,
                 label: sub.name,
                 linkType: NavLinkType.category,
-                linkValue: '/productos?category=${sub.id}',
+                linkValue: WebsiteDestination.routeForCatalog(
+                  categoryId: sub.id,
+                  categorySlug: service.catalogPresentationRegistry
+                      .forCategory(sub.id)
+                      ?.slug,
+                ),
                 orderIndex: orderIndex++,
                 isVisible: true,
                 parentId: updatedLink.id,
@@ -541,6 +562,8 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
   late bool _isMegaMenu;
   String? _selectedParentId;
   bool _isSaving = false;
+  WebsiteCatalogCategoryScope _selectedCategoryScope =
+      WebsiteCatalogCategoryScope.subtree;
 
   // Category picker state
   List<cat_models.Category> _rootCategories = [];
@@ -550,9 +573,50 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
   bool _isLoadingCategories = false;
   bool _isLoadingSubcategories = false;
 
+  bool get _canUseMegaMenu =>
+      widget.location == MenuLocation.header &&
+      _selectedParentId == null &&
+      (_linkType == NavLinkType.category || _linkType == NavLinkType.page);
+
+  String? _resolvedCssClass() {
+    final tokens = (widget.link?.cssClass ?? '')
+        .split(RegExp(r'\s+'))
+        .map((token) => token.trim())
+        .where((token) => token.isNotEmpty)
+        .where((token) => token.toLowerCase() != 'megamenu')
+        .toList();
+    if (_canUseMegaMenu && _isMegaMenu) {
+      tokens.add('megamenu');
+    }
+    return tokens.isEmpty ? null : tokens.join(' ');
+  }
+
   // Bulk Add State
   final bool _isBulkAddMode = false;
   List<cat_models.Category> _bulkAvailableSubcategories = [];
+
+  String? _categoryIdFromHref(String rawHref) {
+    final uri = Uri.tryParse(WebsiteDestination.normalizeHref(rawHref));
+    final queryCategory = uri?.queryParameters['category']?.trim();
+    if (queryCategory != null && queryCategory.isNotEmpty) {
+      return queryCategory;
+    }
+
+    final destination = WebsiteDestination.parse(rawHref);
+    if (destination.kind != WebsiteDestinationKind.category) return null;
+    final slug = destination.reference?.trim() ?? '';
+    if (slug.isEmpty) return null;
+
+    // Clean category routes carry a slug rather than an ID. Resolve that slug
+    // through the same presentation registry used by public routing so the
+    // navigation editor can reopen canonical and historical-alias links.
+    return context
+        .read<WebsiteService>()
+        .catalogPresentationRegistry
+        .resolveSlug(slug)
+        ?.presentation
+        .ownerId;
+  }
 
   @override
   void initState() {
@@ -577,10 +641,13 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
 
         // If adding to a category, we want to show its children
         if (widget.parentLink!.linkValue != null) {
-          final uri = Uri.tryParse(widget.parentLink!.linkValue!);
-          final parentCatId = uri?.queryParameters['category'];
+          final parentCatId = _categoryIdFromHref(
+            widget.parentLink!.href ?? widget.parentLink!.linkValue!,
+          );
           if (parentCatId != null) {
             loadRoots = false;
+            _selectedRootCategoryId = parentCatId;
+            _selectedCategoryScope = WebsiteCatalogCategoryScope.direct;
             // Load children of the parent context
             _initParentSubcategories(parentCatId);
           }
@@ -588,8 +655,14 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
       }
     } else if (widget.link?.linkType == NavLinkType.category &&
         widget.link?.linkValue != null) {
-      final uri = Uri.tryParse(widget.link!.linkValue!);
-      _selectedRootCategoryId = uri?.queryParameters['category'];
+      final destination = WebsiteDestination.parse(
+        widget.link!.href ?? widget.link!.linkValue!,
+      );
+      _selectedRootCategoryId = _categoryIdFromHref(destination.href);
+      final uri = Uri.tryParse(destination.href);
+      final query = uri == null ? null : WebsiteCatalogQuery.tryParse(uri);
+      _selectedCategoryScope =
+          query?.categoryScope ?? WebsiteCatalogCategoryScope.subtree;
       _checkForBulkAddOpportunity();
     }
 
@@ -602,23 +675,24 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
     setState(() => _isLoadingCategories = true);
     try {
       final categoryService = context.read<CategoryService>();
+      final parent = await categoryService.getCategoryById(parentId);
       final children = await categoryService.getSubcategories(parentId);
 
-      // Safety: Remove the parent itself if it was returned (prevents infinite recursion/duplication)
-      final validChildren = children
-          .where((c) => c.id != parentId && c.name != widget.parentLink?.label)
-          .toList();
+      // The parent itself is a valid direct-membership destination. Keeping it
+      // in this picker lets an editor create a real, removable child such as
+      // `Cadenas · solo esta categoría` beside its taxonomic children.
+      final validChildren = children.where((c) => c.id != parentId).toList();
 
       if (mounted) {
         setState(() {
-          // Populate Dropdown Options
-          _rootCategories = validChildren;
+          _rootCategories = [
+            if (parent != null) parent,
+            ...validChildren,
+          ];
 
-          // Populate Bulk Add Options
+          // Bulk actions remain taxonomic children only. The homonymous direct
+          // destination is created through the explicit scope control.
           _bulkAvailableSubcategories = validChildren;
-          if (validChildren.isNotEmpty) {
-            _selectedSubcategoryIds = validChildren.map((c) => c.id!).toSet();
-          }
 
           _isLoadingCategories = false;
         });
@@ -630,6 +704,17 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
   }
 
   Future<void> _checkForBulkAddOpportunity() async {
+    if (_selectedCategoryScope == WebsiteCatalogCategoryScope.direct) {
+      if (mounted) {
+        setState(() {
+          _bulkAvailableSubcategories = [];
+          _selectedSubcategoryIds.clear();
+          _isLoadingSubcategories = false;
+        });
+      }
+      return;
+    }
+
     String? catId;
 
     if (_linkType == NavLinkType.category) {
@@ -690,7 +775,7 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
     setState(() => _isLoadingCategories = true);
     try {
       final categoryService = context.read<CategoryService>();
-      final roots = await categoryService.getRootCategories();
+      final roots = await categoryService.getCategories(activeOnly: true);
       setState(() {
         _rootCategories = roots;
         _isLoadingCategories = false;
@@ -894,24 +979,39 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                         ),
                       )
                     else ...[
-                      // Root category dropdown
+                      // Canonical category destination
                       DropdownButtonFormField<String>(
                         initialValue: _selectedRootCategoryId,
                         isExpanded: true,
                         decoration: const InputDecoration(
-                          labelText: 'Categoría Principal *',
+                          labelText: 'Categoría *',
                           border: OutlineInputBorder(),
                           prefixIcon: Icon(Icons.category),
                         ),
                         items: _rootCategories.map((c) {
                           return DropdownMenuItem(
                             value: c.id,
-                            child: Text(c.name),
+                            child: Text(
+                              c.fullPath,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           );
                         }).toList(),
                         onChanged: (id) async {
                           setState(() {
                             _selectedRootCategoryId = id;
+                            final parentCategoryId = widget.parentLink == null
+                                ? null
+                                : _categoryIdFromHref(
+                                    widget.parentLink!.href ??
+                                        widget.parentLink!.linkValue ??
+                                        '',
+                                  );
+                            _selectedCategoryScope =
+                                id != null && id == parentCategoryId
+                                    ? WebsiteCatalogCategoryScope.direct
+                                    : WebsiteCatalogCategoryScope.subtree;
                           });
                           // Only clear if we are NOT in the special mode of pre-loaded options
                           // Actually, if they change the root, we should probably check for subcategories of THAT root.
@@ -926,8 +1026,50 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                                 : null,
                       ),
                       const SizedBox(height: 16),
-
-                      // Existing Subcategory logic removed in favor of _buildBulkAddUI below
+                      DropdownButtonFormField<WebsiteCatalogCategoryScope>(
+                        initialValue: _selectedCategoryScope,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Qué incluye este enlace',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.filter_alt_outlined),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: WebsiteCatalogCategoryScope.subtree,
+                            child: Text('Categoría y subcategorías'),
+                          ),
+                          DropdownMenuItem(
+                            value: WebsiteCatalogCategoryScope.direct,
+                            child: Text(
+                              'Solo productos asignados a esta categoría',
+                            ),
+                          ),
+                        ],
+                        onChanged: (scope) {
+                          if (scope == null) return;
+                          setState(() {
+                            _selectedCategoryScope = scope;
+                            if (scope == WebsiteCatalogCategoryScope.direct) {
+                              _bulkAvailableSubcategories = [];
+                              _selectedSubcategoryIds.clear();
+                            }
+                          });
+                          if (scope == WebsiteCatalogCategoryScope.subtree) {
+                            _checkForBulkAddOpportunity();
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _selectedCategoryScope ==
+                                WebsiteCatalogCategoryScope.direct
+                            ? 'No incluye productos asignados a categorías hijas.'
+                            : 'Incluye esta categoría y toda su descendencia.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     ],
                     // Hidden validator field
                     Offstage(
@@ -982,12 +1124,13 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                           contentPadding: EdgeInsets.zero,
                         ),
                       ),
-                      if (_linkType == NavLinkType.category ||
-                          _linkType == NavLinkType.page)
+                      if (_canUseMegaMenu)
                         Expanded(
                           child: SwitchListTile(
-                            title: const Text('Mega Menú'),
-                            subtitle: const Text('Forzar despliegue ancho'),
+                            title: const Text('Panel ancho'),
+                            subtitle: const Text(
+                              'Navegación editorial integrada al header; desactívalo para un desplegable compacto',
+                            ),
                             value: _isMegaMenu,
                             onChanged: (v) => setState(() => _isMegaMenu = v),
                             contentPadding: EdgeInsets.zero,
@@ -1164,7 +1307,17 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
 
       if (_linkType == NavLinkType.category &&
           _selectedRootCategoryId != null) {
-        linkValue = '/productos?category=$_selectedRootCategoryId';
+        final presentation = context
+            .read<WebsiteService>()
+            .catalogPresentationRegistry
+            .forCategory(_selectedRootCategoryId);
+        linkValue = WebsiteDestination.routeForCatalog(
+          categoryId: _selectedRootCategoryId,
+          categorySlug: presentation?.slug,
+          catalogQuery: WebsiteCatalogQuery(
+            categoryScope: _selectedCategoryScope,
+          ),
+        );
       } else {
         linkValue = _linkValueController.text.trim();
       }
@@ -1188,16 +1341,17 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
         label: _labelController.text.trim().isEmpty
             ? 'BULK_ADD_PLACEHOLDER'
             : _labelController.text.trim(),
+        icon: widget.link?.icon,
         linkType: effectiveLinkType,
         linkValue: linkValue,
         orderIndex: widget.link?.orderIndex ?? 0,
         isVisible: _isVisible,
-        showOnDesktop: true,
-        showOnMobile: true,
+        showOnDesktop: widget.link?.showOnDesktop ?? true,
+        showOnMobile: widget.link?.showOnMobile ?? true,
         openInNewTab: _openInNewTab,
         parentId: _selectedParentId ?? widget.parentId,
-        // Append 'megamenu' class if selected
-        cssClass: _isMegaMenu ? 'megamenu' : null,
+        cssClass: _resolvedCssClass(),
+        highlight: widget.link?.highlight ?? false,
         createdAt: widget.link?.createdAt ?? DateTime.now(),
         updatedAt: DateTime.now(),
       );

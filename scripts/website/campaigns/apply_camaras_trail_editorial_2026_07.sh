@@ -20,8 +20,8 @@ PAGE_ID="99b789da-9b2b-44f3-b8d5-5c7bbaf7d5c4"
 BLOCK_ID="0d155450-981e-4afd-8c74-c5bff74837b8"
 CATEGORY_ID="f8f5bf86-0ec9-47e7-9c8c-d05a28ba36a4"
 CAMPAIGN_KEY="camaras-2026-07"
-BEFORE_MD5="9630a286ea13b945545d21d08b6811bd"
-AFTER_MD5="40f5aa625389acf74860ada289c7f507"
+BEFORE_MD5="40f5aa625389acf74860ada289c7f507"
+AFTER_MD5="5cfd4bd7d19e918a28cba3bc5ffce06c"
 
 BEFORE_JSON="$ROOT/scripts/website/campaigns/camaras_trail_editorial_2026_07.v2.json"
 AFTER_JSON="$ROOT/scripts/website/campaigns/camaras_trail_editorial_2026_07.after.json"
@@ -37,18 +37,33 @@ MAXXIS_SHA256="f7669020d911761b53631eddf0a6101996575be89bc5752ada52afa2084021e0"
 MAXXIS_MD5="48e3a42ffabe0bc3266dd140cc6a1acb"
 MAXXIS_STORAGE_OBJECT="website-images/camaras-maxxis-welter-weight-29-cutout.png"
 MAXXIS_PUBLIC_URL="https://${EXPECTED_PROJECT_REF}.supabase.co/storage/v1/object/public/${STORAGE_BUCKET}/${MAXXIS_STORAGE_OBJECT}"
+MAXXIS_OPTIMIZED_ASSET="$ROOT/assets/images/campaigns/products/maxxis-welter-weight-29-cutout-optimized.webp"
+MAXXIS_OPTIMIZED_SHA256="39a670ad8a6653bffd9e14812dd8353305355c75d2fc746bbbbb88f0ba127b77"
+MAXXIS_OPTIMIZED_MD5="5ef3e83704a3ec4b7ed8e0548884276c"
+MAXXIS_OPTIMIZED_STORAGE_OBJECT="website/media/camaras-maxxis-welter-weight-29-cutout-optimized.webp"
+MAXXIS_OPTIMIZED_PUBLIC_URL="https://${EXPECTED_PROJECT_REF}.supabase.co/storage/v1/object/public/${STORAGE_BUCKET}/${MAXXIS_OPTIMIZED_STORAGE_OBJECT}"
 
 RIDEXC_ASSET="$ROOT/assets/images/campaigns/products/ridexc-butyl-29-cutout.png"
 RIDEXC_SHA256="bb62c42d58cdd02207050f17147fd9d783fb38d081c8eef3f65ad717e26ef245"
 RIDEXC_MD5="b9dd4d60cdcbee5bc20fdd25f66a83f7"
 RIDEXC_STORAGE_OBJECT="website-images/camaras-ridexc-butyl-29-cutout.png"
 RIDEXC_PUBLIC_URL="https://${EXPECTED_PROJECT_REF}.supabase.co/storage/v1/object/public/${STORAGE_BUCKET}/${RIDEXC_STORAGE_OBJECT}"
+RIDEXC_OPTIMIZED_ASSET="$ROOT/assets/images/campaigns/products/ridexc-butyl-29-cutout-optimized.webp"
+RIDEXC_OPTIMIZED_SHA256="f2ac69e5bd638c06cf71739970edd8ef41f81a61992f4537ef286886dcfd10b2"
+RIDEXC_OPTIMIZED_MD5="2bd6d67243256229aee1ef2d27dbde4f"
+RIDEXC_OPTIMIZED_STORAGE_OBJECT="website/media/camaras-ridexc-butyl-29-cutout-optimized.webp"
+RIDEXC_OPTIMIZED_PUBLIC_URL="https://${EXPECTED_PROJECT_REF}.supabase.co/storage/v1/object/public/${STORAGE_BUCKET}/${RIDEXC_OPTIMIZED_STORAGE_OBJECT}"
 
 TENTEN_ASSET="$ROOT/assets/images/campaigns/products/10ten-butyl-26-cutout.png"
 TENTEN_SHA256="7f9b251e255c96ab31b22c7b03078d9067d6ad41af5d8ea2fb2ced6bfd3b2693"
 TENTEN_MD5="4dc6b05c160e6bb89b97c2d18bf57c16"
 TENTEN_STORAGE_OBJECT="website-images/camaras-10ten-butyl-26-cutout.png"
 TENTEN_PUBLIC_URL="https://${EXPECTED_PROJECT_REF}.supabase.co/storage/v1/object/public/${STORAGE_BUCKET}/${TENTEN_STORAGE_OBJECT}"
+TENTEN_OPTIMIZED_ASSET="$ROOT/assets/images/campaigns/products/10ten-butyl-26-cutout-optimized.webp"
+TENTEN_OPTIMIZED_SHA256="70fbb1030043a2d41a6a73bc0810f48aac1efebb1d477df45e024a7cffdf67e4"
+TENTEN_OPTIMIZED_MD5="63f8e4a47f0451d23ca561726d6d9f1b"
+TENTEN_OPTIMIZED_STORAGE_OBJECT="website/media/camaras-10ten-butyl-26-cutout-optimized.webp"
+TENTEN_OPTIMIZED_PUBLIC_URL="https://${EXPECTED_PROJECT_REF}.supabase.co/storage/v1/object/public/${STORAGE_BUCKET}/${TENTEN_OPTIMIZED_STORAGE_OBJECT}"
 
 for command in jq supabase shasum md5; do
   command -v "$command" >/dev/null 2>&1 || {
@@ -58,7 +73,9 @@ for command in jq supabase shasum md5; do
 done
 
 [[ -f "$BEFORE_JSON" && -f "$AFTER_JSON" && -f "$ASSET" &&
-   -f "$MAXXIS_ASSET" && -f "$RIDEXC_ASSET" && -f "$TENTEN_ASSET" ]] || {
+   -f "$MAXXIS_ASSET" && -f "$RIDEXC_ASSET" && -f "$TENTEN_ASSET" &&
+   -f "$MAXXIS_OPTIMIZED_ASSET" && -f "$RIDEXC_OPTIMIZED_ASSET" &&
+   -f "$TENTEN_OPTIMIZED_ASSET" ]] || {
   printf 'Campaign fixture or media asset is missing.\n' >&2
   exit 66
 }
@@ -68,7 +85,7 @@ done
   exit 65
 }
 
-for expected_url in "$MAXXIS_PUBLIC_URL" "$RIDEXC_PUBLIC_URL" "$TENTEN_PUBLIC_URL"; do
+for expected_url in "$MAXXIS_OPTIMIZED_PUBLIC_URL" "$RIDEXC_OPTIMIZED_PUBLIC_URL" "$TENTEN_OPTIMIZED_PUBLIC_URL"; do
   [[ "$(jq --arg url "$expected_url" '[.elements[] | select(.type == "image" and .imageUrl == $url)] | length' "$AFTER_JSON")" == "2" ]] || {
     printf 'Refusing: each reviewed cutout must own one desktop and one mobile layer: %s\n' "$expected_url" >&2
     exit 65
@@ -103,6 +120,9 @@ verify_asset_checksum() {
 verify_asset_checksum "$MAXXIS_ASSET" "$MAXXIS_SHA256" "$MAXXIS_MD5"
 verify_asset_checksum "$RIDEXC_ASSET" "$RIDEXC_SHA256" "$RIDEXC_MD5"
 verify_asset_checksum "$TENTEN_ASSET" "$TENTEN_SHA256" "$TENTEN_MD5"
+verify_asset_checksum "$MAXXIS_OPTIMIZED_ASSET" "$MAXXIS_OPTIMIZED_SHA256" "$MAXXIS_OPTIMIZED_MD5"
+verify_asset_checksum "$RIDEXC_OPTIMIZED_ASSET" "$RIDEXC_OPTIMIZED_SHA256" "$RIDEXC_OPTIMIZED_MD5"
+verify_asset_checksum "$TENTEN_OPTIMIZED_ASSET" "$TENTEN_OPTIMIZED_SHA256" "$TENTEN_OPTIMIZED_MD5"
 
 current_slide_md5() {
   "$ROOT/scripts/db/query.sh" production --format csv --sql \
@@ -127,11 +147,12 @@ ensure_storage_asset() {
   local asset="$1"
   local storage_object="$2"
   local expected_md5="$3"
+  local content_type="${4:-image/png}"
   local existing_etag
   existing_etag="$(storage_etag "$storage_object")"
   if [[ -z "$existing_etag" || "$existing_etag" == "etag" ]]; then
     supabase --experimental storage cp --linked \
-      --content-type image/png \
+      --content-type "$content_type" \
       --cache-control 'public,max-age=31536000,immutable' \
       "$asset" "ss:///${STORAGE_BUCKET}/${storage_object}"
     existing_etag="$(storage_etag "$storage_object")"
@@ -179,7 +200,10 @@ validate() {
          '${STORAGE_OBJECT}',
          '${MAXXIS_STORAGE_OBJECT}',
          '${RIDEXC_STORAGE_OBJECT}',
-         '${TENTEN_STORAGE_OBJECT}'
+         '${TENTEN_STORAGE_OBJECT}',
+         '${MAXXIS_OPTIMIZED_STORAGE_OBJECT}',
+         '${RIDEXC_OPTIMIZED_STORAGE_OBJECT}',
+         '${TENTEN_OPTIMIZED_STORAGE_OBJECT}'
        )
      order by name;
 
@@ -225,6 +249,9 @@ if [[ "$MODE" == "apply" ]]; then
   ensure_storage_asset "$MAXXIS_ASSET" "$MAXXIS_STORAGE_OBJECT" "$MAXXIS_MD5"
   ensure_storage_asset "$RIDEXC_ASSET" "$RIDEXC_STORAGE_OBJECT" "$RIDEXC_MD5"
   ensure_storage_asset "$TENTEN_ASSET" "$TENTEN_STORAGE_OBJECT" "$TENTEN_MD5"
+  ensure_storage_asset "$MAXXIS_OPTIMIZED_ASSET" "$MAXXIS_OPTIMIZED_STORAGE_OBJECT" "$MAXXIS_OPTIMIZED_MD5" image/webp
+  ensure_storage_asset "$RIDEXC_OPTIMIZED_ASSET" "$RIDEXC_OPTIMIZED_STORAGE_OBJECT" "$RIDEXC_OPTIMIZED_MD5" image/webp
+  ensure_storage_asset "$TENTEN_OPTIMIZED_ASSET" "$TENTEN_OPTIMIZED_STORAGE_OBJECT" "$TENTEN_OPTIMIZED_MD5" image/webp
 
   payload="$(jq -c . "$AFTER_JSON")"
   expected_from="$BEFORE_MD5"

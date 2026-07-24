@@ -30,6 +30,61 @@ String buildPublicProductPath({
   return '/productos/$slug/$encodedSku';
 }
 
+/// Adapts a canonical product route to the active storefront runtime.
+///
+/// Public links remain canonically rooted at `/productos`. The ERP mounts the
+/// same storefront below `/tienda`, so Preview/Edit navigation needs the
+/// mounted route while preserving the exact slug, SKU, query, and fragment.
+String normalizePublicProductRouteForRuntime(
+  String href, {
+  required bool isErpMounted,
+}) {
+  return _normalizeCatalogRootForRuntime(
+    href,
+    isErpMounted: isErpMounted,
+    roots: const ['productos'],
+  );
+}
+
+/// Mounts canonical product and service catalog routes under `/tienda` when
+/// the storefront is rendered inside the ERP.
+String normalizePublicCatalogRouteForRuntime(
+  String href, {
+  required bool isErpMounted,
+}) {
+  return _normalizeCatalogRootForRuntime(
+    href,
+    isErpMounted: isErpMounted,
+    roots: const ['productos', 'servicios'],
+  );
+}
+
+String _normalizeCatalogRootForRuntime(
+  String href, {
+  required bool isErpMounted,
+  required List<String> roots,
+}) {
+  final uri = Uri.tryParse(href);
+  if (uri == null || uri.scheme.isNotEmpty) return href;
+
+  var path = uri.path;
+  final canonical = roots.any(
+    (root) => path == '/$root' || path.startsWith('/$root/'),
+  );
+  final mounted = roots.any(
+    (root) => path == '/tienda/$root' || path.startsWith('/tienda/$root/'),
+  );
+  if (isErpMounted) {
+    if (canonical) {
+      path = '/tienda$path';
+    }
+  } else if (mounted) {
+    path = path.substring('/tienda'.length);
+  }
+
+  return uri.replace(path: path).toString();
+}
+
 String productUrlSlug(String value) {
   var slug = value.trim().toLowerCase();
 

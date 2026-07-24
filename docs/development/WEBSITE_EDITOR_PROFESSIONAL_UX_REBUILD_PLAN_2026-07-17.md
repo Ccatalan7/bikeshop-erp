@@ -7,6 +7,12 @@ responsive, Preview y los 24 tipos de bloque registrados
 **Contrato obligatorio:**
 [`docs/architecture/website-editor-contract.md`](../architecture/website-editor-contract.md)
 
+**Handoff operativo y plan de evolución vigente (2026-07-22):**
+[`docs/architecture/website-builder-agent-handoff.md`](../architecture/website-builder-agent-handoff.md).
+Este documento anterior conserva la auditoría y el plan histórico del refactor;
+el handoff nuevo gobierna la equivalencia de acciones de agentes y las próximas
+fases de rutas, categorías, filtros, SEO y páginas de colección.
+
 ## Entrega implementada el 2026-07-17
 
 La primera entrega funcional ya cubre el flujo principal que estaba roto:

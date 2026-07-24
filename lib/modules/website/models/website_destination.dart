@@ -1,4 +1,6 @@
 import 'website_page_models.dart';
+import 'website_catalog_presentation.dart';
+import 'website_catalog_query.dart';
 
 /// Semantic type of a destination selected by a Website Builder link control.
 enum WebsiteDestinationKind {
@@ -195,18 +197,37 @@ class WebsiteDestination {
   /// public catalog, so this can represent campaigns such as Tires + Maxxis.
   static String routeForCatalog({
     String? categoryId,
+    String? categorySlug,
     String? searchQuery,
     String? productType,
+    WebsiteCatalogQuery? catalogQuery,
   }) {
-    final query = <String, String>{};
     final category = categoryId?.trim() ?? '';
-    final search = searchQuery?.trim() ?? '';
-    final type = productType?.trim() ?? '';
-    if (category.isNotEmpty) query['category'] = category;
-    if (search.isNotEmpty) query['q'] = search;
-    if (type.isNotEmpty) query['type'] = type;
+    final slug = websiteCategorySlug(categorySlug ?? '');
+    final legacyType = WebsiteCatalogProductTypeFilterX.tryParse(productType);
+    if (catalogQuery == null &&
+        productType != null &&
+        productType.trim().isNotEmpty &&
+        legacyType == null) {
+      throw ArgumentError.value(
+        productType,
+        'productType',
+        'Tipo de catálogo no compatible.',
+      );
+    }
+    final effectiveQuery = catalogQuery ??
+        WebsiteCatalogQuery(
+          searchQuery: searchQuery ?? '',
+          productType: legacyType,
+        );
+    final query = <String, String>{};
+    if (category.isNotEmpty && slug.isEmpty) query['category'] = category;
+    query.addAll(effectiveQuery.toQueryParameters());
+    final services =
+        effectiveQuery.productType == WebsiteCatalogProductTypeFilter.service;
+    final root = services ? '/servicios' : '/productos';
     return Uri(
-      path: '/productos',
+      path: slug.isEmpty ? root : '$root/categoria/$slug',
       queryParameters: query.isEmpty ? null : query,
     ).toString();
   }

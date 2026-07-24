@@ -1,19 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../theme/public_store_theme.dart';
+import '../theme/public_store_surface_theme.dart';
 import '../providers/cart_provider.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 import '../utils/product_url.dart';
+import '../widgets/public_store_layout.dart';
 
 class CartPage extends StatelessWidget {
-  static const Color _logoBlue = Color(0xFF093357);
-  static const Color _warmLine = Color(0xFFE8E2D8);
-  static const Color _warmSurface = Color(0xFFF7F4EE);
-  static const Color _softSurface = Color(0xFFFCFBF8);
-
   const CartPage({super.key});
 
   @override
@@ -89,26 +85,25 @@ class CartPage extends StatelessWidget {
   }
 
   Widget _buildPageHeader(BuildContext context, CartProvider cart) {
+    final storeTheme = PublicStoreSurfaceTheme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeading('Carrito de compras'),
+        _buildSectionHeading(context, 'Carrito de compras'),
         const SizedBox(height: 12),
         Text(
           '${cart.itemCount} ${cart.itemCount == 1 ? 'producto' : 'productos'} en revisión',
-          style: const TextStyle(
-            fontFamily: null,
+          style: storeTheme.text.bodyLarge?.copyWith(
             fontSize: 18,
-            color: PublicStoreTheme.textSecondary,
+            color: storeTheme.textSecondary,
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           'Ajusta cantidades y confirma disponibilidad antes de continuar al pago.',
-          style: TextStyle(
-            fontFamily: null,
+          style: storeTheme.text.bodyMedium?.copyWith(
             fontSize: 14,
-            color: PublicStoreTheme.textSecondary,
+            color: storeTheme.textSecondary,
             height: 1.5,
           ),
         ),
@@ -121,6 +116,7 @@ class CartPage extends StatelessWidget {
     required double horizontalMargin,
     required double verticalMargin,
   }) {
+    final storeTheme = PublicStoreSurfaceTheme.of(context);
     return Container(
       constraints: const BoxConstraints(maxWidth: 1320),
       margin: EdgeInsets.symmetric(
@@ -139,24 +135,23 @@ class CartPage extends StatelessWidget {
                 width: 148,
                 height: 148,
                 decoration: BoxDecoration(
-                  color: _softSurface,
-                  border: Border.all(color: _warmLine),
+                  color: storeTheme.softSurface,
+                  border: Border.all(color: storeTheme.line),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.shopping_cart_outlined,
                   size: 62,
-                  color: PublicStoreTheme.textMuted,
+                  color: storeTheme.textMuted,
                 ),
               ),
               const SizedBox(height: 32),
-              _buildSectionHeading('Tu carrito está vacío'),
+              _buildSectionHeading(context, 'Tu carrito está vacío'),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'Agrega productos para comenzar tu compra. El carro mantendrá las cantidades y el resumen mientras recorres la tienda.',
-                style: TextStyle(
-                  fontFamily: null,
+                style: storeTheme.text.bodyMedium?.copyWith(
                   fontSize: 15,
-                  color: PublicStoreTheme.textSecondary,
+                  color: storeTheme.textSecondary,
                   height: 1.6,
                 ),
                 textAlign: TextAlign.center,
@@ -167,8 +162,8 @@ class CartPage extends StatelessWidget {
                 icon: const Icon(Icons.shopping_bag_outlined),
                 label: const Text('EXPLORAR PRODUCTOS'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: _logoBlue,
-                  foregroundColor: Colors.white,
+                  backgroundColor: storeTheme.primary,
+                  foregroundColor: storeTheme.onPrimary,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 30, vertical: 18),
                   shape: RoundedRectangleBorder(
@@ -180,8 +175,8 @@ class CartPage extends StatelessWidget {
               OutlinedButton(
                 onPressed: () => context.go('/tienda'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _logoBlue,
-                  side: const BorderSide(color: _logoBlue),
+                  foregroundColor: storeTheme.primary,
+                  side: BorderSide(color: storeTheme.primary),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(6),
                   ),
@@ -221,14 +216,19 @@ class CartPage extends StatelessWidget {
     required bool isMobile,
     required bool showTopBorder,
   }) {
+    final storeTheme = PublicStoreSurfaceTheme.of(context);
     final product = item.product;
-    final isOutOfStock = product.availableStockQuantity < item.quantity;
-    final displayImageUrl = product.imageUrlOptimized ?? product.imageUrl;
+    final commerce = item.commerce;
+    final isOutOfStock =
+        commerce.availability.merchantValue == 'out_of_stock' ||
+            product.availableStockQuantity < item.quantity;
+    final displayImageUrl =
+        commerce.imageUrls.isNotEmpty ? commerce.imageUrls.first : null;
 
     final imageStage = Container(
       width: isMobile ? 116 : 168,
       height: isMobile ? 108 : 144,
-      color: _softSurface,
+      color: storeTheme.softSurface,
       padding: const EdgeInsets.all(12),
       child: displayImageUrl != null
           ? Image.network(
@@ -236,20 +236,20 @@ class CartPage extends StatelessWidget {
               fit: BoxFit.contain,
               alignment: Alignment.center,
               errorBuilder: (context, error, stackTrace) {
-                return const Center(
+                return Center(
                   child: Icon(
                     Icons.image_not_supported_outlined,
                     size: 42,
-                    color: PublicStoreTheme.textMuted,
+                    color: storeTheme.textMuted,
                   ),
                 );
               },
             )
-          : const Center(
+          : Center(
               child: Icon(
                 Icons.pedal_bike_outlined,
                 size: 42,
-                color: PublicStoreTheme.textMuted,
+                color: storeTheme.textMuted,
               ),
             ),
     );
@@ -269,36 +269,41 @@ class CartPage extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        if (product.categoryName?.trim().isNotEmpty ?? false)
+                        if (commerce.categoryPath.isNotEmpty)
                           _buildMetaPill(
-                            product.categoryName!.trim().toUpperCase(),
+                            context,
+                            commerce.categoryPath.toUpperCase(),
                           ),
-                        if (product.brand?.trim().isNotEmpty ?? false)
-                          _buildMetaPill(product.brand!.trim().toUpperCase()),
+                        if (commerce.brand.isNotEmpty)
+                          _buildMetaPill(
+                            context,
+                            commerce.brand.toUpperCase(),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 14),
                     InkWell(
-                      onTap: () => context.go(publicProductPath(product)),
+                      onTap: () => PublicStoreLayout.navigateToHref(
+                        context,
+                        publicProductPath(product),
+                      ),
                       child: Text(
-                        product.name.toUpperCase(),
-                        style: TextStyle(
-                          fontFamily: null,
+                        commerce.title.toUpperCase(),
+                        style: storeTheme.text.headlineSmall?.copyWith(
                           fontSize: isMobile ? 24 : 28,
                           fontWeight: FontWeight.w700,
-                          color: Colors.black87,
+                          color: storeTheme.textPrimary,
                           height: 1.08,
                         ),
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'SKU ${product.sku}',
-                      style: const TextStyle(
-                        fontFamily: null,
+                      'SKU ${commerce.sku}',
+                      style: storeTheme.text.labelSmall?.copyWith(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: PublicStoreTheme.textMuted,
+                        color: storeTheme.textMuted,
                         letterSpacing: 0.7,
                       ),
                     ),
@@ -310,7 +315,7 @@ class CartPage extends StatelessWidget {
                 onPressed: () => _showRemoveDialog(context, cart, item),
                 icon: const Icon(Icons.close, size: 18),
                 tooltip: 'Eliminar',
-                color: PublicStoreTheme.error,
+                color: storeTheme.error,
                 splashRadius: 20,
               ),
             ],
@@ -321,18 +326,17 @@ class CartPage extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: PublicStoreTheme.error.withValues(alpha: 0.08),
+                color: storeTheme.error.withValues(alpha: 0.08),
                 border: Border.all(
-                  color: PublicStoreTheme.error.withValues(alpha: 0.25),
+                  color: storeTheme.error.withValues(alpha: 0.25),
                 ),
               ),
               child: Text(
                 'Stock insuficiente. Solo ${product.availableStockQuantity} disponibles.',
-                style: const TextStyle(
-                  fontFamily: null,
+                style: storeTheme.text.bodySmall?.copyWith(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: PublicStoreTheme.error,
+                  color: storeTheme.error,
                 ),
               ),
             ),
@@ -342,13 +346,12 @@ class CartPage extends StatelessWidget {
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'CANTIDAD',
-                      style: TextStyle(
-                        fontFamily: null,
+                      style: storeTheme.text.labelSmall?.copyWith(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: PublicStoreTheme.textSecondary,
+                        color: storeTheme.textSecondary,
                         letterSpacing: 0.7,
                       ),
                     ),
@@ -360,14 +363,13 @@ class CartPage extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          '${ChileanUtils.formatCurrency(product.price)} c/u',
-                          style: const TextStyle(
-                            fontFamily: null,
+                          '${ChileanUtils.formatCurrency(commerce.price)} c/u',
+                          style: storeTheme.text.bodySmall?.copyWith(
                             fontSize: 13,
-                            color: PublicStoreTheme.textMuted,
+                            color: storeTheme.textMuted,
                           ),
                         ),
-                        _buildSubtotalBlock(item.subtotal),
+                        _buildSubtotalBlock(context, item.subtotal),
                       ],
                     ),
                   ],
@@ -378,13 +380,12 @@ class CartPage extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'CANTIDAD',
-                          style: TextStyle(
-                            fontFamily: null,
+                          style: storeTheme.text.labelSmall?.copyWith(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: PublicStoreTheme.textSecondary,
+                            color: storeTheme.textSecondary,
                             letterSpacing: 0.7,
                           ),
                         ),
@@ -394,8 +395,9 @@ class CartPage extends StatelessWidget {
                     ),
                     const Spacer(),
                     _buildSubtotalBlock(
+                      context,
                       item.subtotal,
-                      unitPrice: product.price,
+                      unitPrice: commerce.price,
                     ),
                   ],
                 ),
@@ -408,9 +410,9 @@ class CartPage extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(
-            color: showTopBorder ? _warmLine : Colors.transparent,
+            color: showTopBorder ? storeTheme.line : Colors.transparent,
           ),
-          bottom: const BorderSide(color: _warmLine),
+          bottom: BorderSide(color: storeTheme.line),
         ),
       ),
       child: isMobile
@@ -443,15 +445,16 @@ class CartPage extends StatelessWidget {
     CartProvider cart, {
     required bool isMobile,
   }) {
+    final storeTheme = PublicStoreSurfaceTheme.of(context);
     final taxSummary = cart.taxSummary;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(isMobile ? 20 : 24),
       decoration: BoxDecoration(
-        color: _warmSurface.withValues(alpha: 0.56),
-        border: const Border(
-          top: BorderSide(color: _warmLine),
-          bottom: BorderSide(color: _warmLine),
+        color: storeTheme.raisedSurface,
+        border: Border(
+          top: BorderSide(color: storeTheme.line),
+          bottom: BorderSide(color: storeTheme.line),
         ),
       ),
       child: Column(
@@ -459,27 +462,29 @@ class CartPage extends StatelessWidget {
         children: [
           Text(
             'RESUMEN DEL PEDIDO',
-            style: TextStyle(
-              fontFamily: null,
+            style: storeTheme.text.headlineMedium?.copyWith(
               fontSize: isMobile ? 28 : 32,
               fontWeight: FontWeight.w700,
-              color: Colors.black87,
+              color: storeTheme.textPrimary,
             ),
           ),
           const SizedBox(height: 18),
           if (taxSummary.isValid) ...[
             _buildSummaryMetric(
+              context,
               taxSummary.netLabel,
               ChileanUtils.formatCurrency(taxSummary.netAmount.toDouble()),
             ),
             const SizedBox(height: 12),
             _buildSummaryMetric(
+              context,
               taxSummary.ivaLabel,
               ChileanUtils.formatCurrency(taxSummary.taxAmount.toDouble()),
               secondary: true,
             ),
           ] else ...[
             _buildTaxConfigurationWarning(
+              context,
               taxSummary.checkoutBlockMessage ??
                   'No podemos validar los impuestos de este carrito.',
             ),
@@ -488,30 +493,28 @@ class CartPage extends StatelessWidget {
           Container(
             width: double.infinity,
             height: 1,
-            color: _warmLine,
+            color: storeTheme.line,
           ),
           const SizedBox(height: 18),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const Text(
+              Text(
                 'TOTAL',
-                style: TextStyle(
-                  fontFamily: null,
+                style: storeTheme.text.labelSmall?.copyWith(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: PublicStoreTheme.textSecondary,
+                  color: storeTheme.textSecondary,
                   letterSpacing: 0.8,
                 ),
               ),
               Text(
                 ChileanUtils.formatCurrency(cart.total),
-                style: const TextStyle(
-                  fontFamily: null,
+                style: storeTheme.text.displaySmall?.copyWith(
                   fontSize: 44,
                   fontWeight: FontWeight.w700,
-                  color: _logoBlue,
+                  color: storeTheme.primary,
                   height: 0.95,
                 ),
               ),
@@ -525,8 +528,8 @@ class CartPage extends StatelessWidget {
                   ? () => context.go('/tienda/checkout')
                   : null,
               style: FilledButton.styleFrom(
-                backgroundColor: _logoBlue,
-                foregroundColor: Colors.white,
+                backgroundColor: storeTheme.primary,
+                foregroundColor: storeTheme.onPrimary,
                 padding: const EdgeInsets.symmetric(vertical: 18),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(6),
@@ -541,8 +544,8 @@ class CartPage extends StatelessWidget {
             child: OutlinedButton(
               onPressed: () => context.go('/productos'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: _logoBlue,
-                side: const BorderSide(color: _logoBlue),
+                foregroundColor: storeTheme.primary,
+                side: BorderSide(color: storeTheme.primary),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(6),
@@ -555,13 +558,17 @@ class CartPage extends StatelessWidget {
           Container(
             width: double.infinity,
             height: 1,
-            color: _warmLine,
+            color: storeTheme.line,
           ),
           const SizedBox(height: 18),
-          _buildBenefitRow('Envío a Chile continental'),
-          _buildBenefitRow('Retiro en tienda sin costo'),
-          _buildBenefitRow('Compra 100% segura'),
-          _buildBenefitRow('Atención personalizada', isLast: true),
+          _buildBenefitRow(context, 'Envío a Chile continental'),
+          _buildBenefitRow(context, 'Retiro en tienda sin costo'),
+          _buildBenefitRow(context, 'Compra 100% segura'),
+          _buildBenefitRow(
+            context,
+            'Atención personalizada',
+            isLast: true,
+          ),
         ],
       ),
     );
@@ -572,17 +579,19 @@ class CartPage extends StatelessWidget {
     CartProvider cart,
     CartItem item,
   ) {
+    final storeTheme = PublicStoreSurfaceTheme.of(context);
     final product = item.product;
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: _warmLine),
+        color: storeTheme.surface,
+        border: Border.all(color: storeTheme.line),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           _buildQuantityButton(
+            context: context,
             icon: Icons.remove,
             enabled: item.quantity > 1,
             onTap: item.quantity > 1
@@ -593,22 +602,22 @@ class CartPage extends StatelessWidget {
             width: 50,
             height: 46,
             alignment: Alignment.center,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border.symmetric(
-                vertical: BorderSide(color: _warmLine),
+                vertical: BorderSide(color: storeTheme.line),
               ),
             ),
             child: Text(
               '${item.quantity}',
-              style: const TextStyle(
-                fontFamily: null,
+              style: storeTheme.text.labelLarge?.copyWith(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: Colors.black87,
+                color: storeTheme.textPrimary,
               ),
             ),
           ),
           _buildQuantityButton(
+            context: context,
             icon: Icons.add,
             enabled: item.quantity < product.availableStockQuantity,
             onTap: item.quantity < product.availableStockQuantity
@@ -621,10 +630,12 @@ class CartPage extends StatelessWidget {
   }
 
   Widget _buildQuantityButton({
+    required BuildContext context,
     required IconData icon,
     required bool enabled,
     required VoidCallback? onTap,
   }) {
+    final storeTheme = PublicStoreSurfaceTheme.of(context);
     return InkWell(
       onTap: enabled ? onTap : null,
       child: SizedBox(
@@ -633,26 +644,27 @@ class CartPage extends StatelessWidget {
         child: Icon(
           icon,
           size: 16,
-          color: enabled ? Colors.black87 : PublicStoreTheme.textMuted,
+          color: enabled ? storeTheme.textPrimary : storeTheme.disabled,
         ),
       ),
     );
   }
 
   Widget _buildSubtotalBlock(
+    BuildContext context,
     double subtotal, {
     double? unitPrice,
   }) {
+    final storeTheme = PublicStoreSurfaceTheme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Text(
           ChileanUtils.formatCurrency(subtotal),
-          style: const TextStyle(
-            fontFamily: null,
+          style: storeTheme.text.headlineMedium?.copyWith(
             fontSize: 34,
             fontWeight: FontWeight.w700,
-            color: _logoBlue,
+            color: storeTheme.primary,
             height: 0.95,
           ),
         ),
@@ -660,10 +672,9 @@ class CartPage extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             '${ChileanUtils.formatCurrency(unitPrice)} c/u',
-            style: const TextStyle(
-              fontFamily: null,
+            style: storeTheme.text.bodySmall?.copyWith(
               fontSize: 12,
-              color: PublicStoreTheme.textMuted,
+              color: storeTheme.textMuted,
             ),
           ),
         ],
@@ -672,10 +683,12 @@ class CartPage extends StatelessWidget {
   }
 
   Widget _buildSummaryMetric(
+    BuildContext context,
     String label,
     String value, {
     bool secondary = false,
   }) {
+    final storeTheme = PublicStoreSurfaceTheme.of(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -684,9 +697,8 @@ class CartPage extends StatelessWidget {
           style: TextStyle(
             fontFamily: null,
             fontSize: 15,
-            color: secondary
-                ? PublicStoreTheme.textSecondary
-                : PublicStoreTheme.textPrimary,
+            color:
+                secondary ? storeTheme.textSecondary : storeTheme.textPrimary,
           ),
         ),
         Text(
@@ -695,64 +707,73 @@ class CartPage extends StatelessWidget {
             fontFamily: null,
             fontSize: 15,
             fontWeight: FontWeight.w700,
-            color: secondary ? PublicStoreTheme.textSecondary : Colors.black87,
+            color:
+                secondary ? storeTheme.textSecondary : storeTheme.textPrimary,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildTaxConfigurationWarning(String message) {
+  Widget _buildTaxConfigurationWarning(
+    BuildContext context,
+    String message,
+  ) {
+    final storeTheme = PublicStoreSurfaceTheme.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFFF8E8),
+      decoration: BoxDecoration(
+        color: storeTheme.warningSurface,
         border: Border(
-          left: BorderSide(color: Color(0xFFB7791F), width: 3),
+          left: BorderSide(color: storeTheme.warning, width: 3),
         ),
       ),
       child: Text(
         message,
-        style: const TextStyle(
-          fontFamily: null,
+        style: storeTheme.text.bodySmall?.copyWith(
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF6B4F19),
+          color: storeTheme.onWarningSurface,
           height: 1.45,
         ),
       ),
     );
   }
 
-  Widget _buildMetaPill(String label) {
+  Widget _buildMetaPill(BuildContext context, String label) {
+    final storeTheme = PublicStoreSurfaceTheme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: _softSurface,
+        color: storeTheme.softSurface,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          fontFamily: null,
+        style: storeTheme.text.labelSmall?.copyWith(
           fontSize: 10,
           fontWeight: FontWeight.w700,
-          color: PublicStoreTheme.textSecondary,
+          color: storeTheme.textSecondary,
           letterSpacing: 0.8,
         ),
       ),
     );
   }
 
-  Widget _buildBenefitRow(String text, {bool isLast = false}) {
+  Widget _buildBenefitRow(
+    BuildContext context,
+    String text, {
+    bool isLast = false,
+  }) {
+    final storeTheme = PublicStoreSurfaceTheme.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: isLast ? Colors.transparent : _warmLine,
+            color: isLast ? Colors.transparent : storeTheme.line,
           ),
         ),
       ),
@@ -763,8 +784,8 @@ class CartPage extends StatelessWidget {
             width: 7,
             height: 7,
             margin: const EdgeInsets.only(top: 6),
-            decoration: const BoxDecoration(
-              color: _logoBlue,
+            decoration: BoxDecoration(
+              color: storeTheme.primary,
               shape: BoxShape.circle,
             ),
           ),
@@ -772,11 +793,10 @@ class CartPage extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                fontFamily: null,
+              style: storeTheme.text.bodyMedium?.copyWith(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Colors.black87,
+                color: storeTheme.textPrimary,
               ),
             ),
           ),
@@ -785,17 +805,17 @@ class CartPage extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionHeading(String title) {
+  Widget _buildSectionHeading(BuildContext context, String title) {
+    final storeTheme = PublicStoreSurfaceTheme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title.toUpperCase(),
-          style: const TextStyle(
-            fontFamily: null,
+          style: storeTheme.text.headlineMedium?.copyWith(
             fontSize: 32,
             fontWeight: FontWeight.w700,
-            color: Colors.black,
+            color: storeTheme.textPrimary,
             height: 1,
           ),
         ),
@@ -803,7 +823,7 @@ class CartPage extends StatelessWidget {
         Container(
           width: 72,
           height: 2,
-          color: Colors.black,
+          color: storeTheme.primary,
         ),
       ],
     );
@@ -819,7 +839,7 @@ class CartPage extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: const Text('Eliminar producto'),
         content: Text(
-          '¿Estás seguro que deseas eliminar "${item.product.name}" del carrito?',
+          '¿Estás seguro que deseas eliminar "${item.commerce.title}" del carrito?',
         ),
         actions: [
           TextButton(
@@ -838,7 +858,8 @@ class CartPage extends StatelessWidget {
               );
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: PublicStoreTheme.error,
+              backgroundColor: PublicStoreSurfaceTheme.of(context).error,
+              foregroundColor: PublicStoreSurfaceTheme.of(context).onError,
             ),
             child: const Text('ELIMINAR'),
           ),

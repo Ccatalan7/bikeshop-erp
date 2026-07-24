@@ -100,6 +100,24 @@ class PurchaseCreditNoteService {
         .toList(growable: false);
   }
 
+  Future<List<PurchaseCreditNoteLineRecord>> getLines(String noteId) async {
+    final rows = await _client
+        .from('purchase_credit_note_lines')
+        .select(
+          'id,product_name,product_sku,credited_quantity,net_amount,'
+          'tax_amount,total_amount,disposition',
+        )
+        .eq('purchase_credit_note_id', noteId)
+        .order('source_line_index');
+    return rows
+        .map(
+          (row) => PurchaseCreditNoteLineRecord.fromJson(
+            Map<String, dynamic>.from(row),
+          ),
+        )
+        .toList(growable: false);
+  }
+
   Future<List<PurchaseSupplierRefundRecord>> getRefunds(
       String invoiceId) async {
     final rows = await _client
@@ -135,15 +153,33 @@ class PurchaseCreditNoteService {
     required String idempotencyKey,
     String? supplierNumber,
   }) async {
-    final response = await _client.rpc('create_purchase_credit_note', params: {
+    final resolvesReceiptDifference =
+        lines.any((line) => line.receiptResolutionCaseId != null);
+    final params = <String, dynamic>{
       'p_purchase_invoice_id': invoiceId,
-      'p_lines': lines.map((line) => line.toRpcJson()).toList(),
+      if (resolvesReceiptDifference)
+        'p_cases': lines
+            .map(
+              (line) => {
+                'case_id': line.receiptResolutionCaseId,
+                'quantity': line.quantity,
+              },
+            )
+            .toList()
+      else
+        'p_lines': lines.map((line) => line.toRpcJson()).toList(),
       'p_issue_date': issueDate.toUtc().toIso8601String(),
       'p_reason_code': reasonCode,
       'p_reason': reason.trim(),
       'p_supplier_credit_note_number': _nullable(supplierNumber),
       'p_idempotency_key': idempotencyKey,
-    });
+    };
+    final response = await _client.rpc(
+      resolvesReceiptDifference
+          ? 'resolve_purchase_receipt_with_credit_note'
+          : 'create_purchase_credit_note',
+      params: params,
+    );
     return PurchaseCreditNoteResult.fromJson(
         Map<String, dynamic>.from(response as Map));
   }

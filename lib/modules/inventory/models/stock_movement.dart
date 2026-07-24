@@ -41,6 +41,10 @@ class StockMovement {
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
   );
   static final RegExp _hashReferencePattern = RegExp(r'#([A-Za-z0-9-]+)');
+  static final RegExp _purchaseReceiptNumberPattern = RegExp(
+    r'(?:^|[^A-Za-z0-9-])(REC-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\b',
+    caseSensitive: false,
+  );
 
   final String id;
   final String productId;
@@ -369,7 +373,35 @@ class StockMovement {
       stock_adjustment_origin.stockAdjustmentOriginDisplay(adjustmentOrigin);
   bool get hasAdjustmentOrigin => adjustmentOriginDisplay != null;
 
+  /// Receipt stock rows are owned by the formal receipt document, even though
+  /// older read-model projections can describe them as generic adjustments.
+  bool get isPurchaseReceiptMovement {
+    final documentType = sourceDocumentType?.trim().toLowerCase();
+    if (documentType != null && documentType.isNotEmpty) {
+      return documentType == 'purchase_receipt' ||
+          documentType == 'purchase_receipt_component';
+    }
+
+    return movementType == 'purchase_receipt' ||
+        movementType == 'purchase_receipt_component' ||
+        movementType == 'purchase_receipt_reversal' ||
+        source == 'purchase_receipt' ||
+        source == 'purchase_receipt_component' ||
+        source == 'purchase_receipt_reversal';
+  }
+
+  bool get isPurchaseReceiptReversal {
+    if (!isPurchaseReceiptMovement) return false;
+    return movementType == 'purchase_receipt_reversal' ||
+        source == 'purchase_receipt_reversal' ||
+        (referenceNumber?.trim().toLowerCase().endsWith(':void') ?? false);
+  }
+
   StockMovementCategory get category {
+    if (isPurchaseReceiptMovement) {
+      return StockMovementCategory.purchase;
+    }
+
     switch (movementType) {
       case 'purchase':
       case 'purchase_invoice':
@@ -416,15 +448,31 @@ class StockMovement {
         : movementCategory == categoryKey;
   }
 
+  /// The source document is authoritative for receipt navigation. In
+  /// particular, [referenceId] may be null or point at a generic adjustment
+  /// because it comes from a legacy projection.
+  String? get navigableReferenceId {
+    if (isPurchaseReceiptMovement) {
+      final receiptId = sourceDocumentId?.trim();
+      return receiptId == null || receiptId.isEmpty ? null : receiptId;
+    }
+
+    final legacyId = referenceId?.trim();
+    return legacyId == null || legacyId.isEmpty ? null : legacyId;
+  }
+
   bool get hasNavigableReference {
-    return referenceId != null &&
-        referenceId!.isNotEmpty &&
+    return navigableReferenceId != null &&
         (category == StockMovementCategory.sale ||
             category == StockMovementCategory.purchase ||
             category == StockMovementCategory.adjustment);
   }
 
   String get referenceDisplay {
+    if (isPurchaseReceiptMovement) {
+      return _purchaseReceiptReferenceDisplay;
+    }
+
     final trimmed = referenceNumber?.trim();
     if (trimmed == null || trimmed.isEmpty) {
       return _legacyReferenceFallback;
@@ -450,6 +498,22 @@ class StockMovement {
     }
 
     return _legacyReferenceFallback;
+  }
+
+  String get _purchaseReceiptReferenceDisplay {
+    for (final candidate in [referenceNumber, notes]) {
+      final value = candidate?.trim();
+      if (value == null || value.isEmpty) continue;
+      final match = _purchaseReceiptNumberPattern.firstMatch(value);
+      final receiptNumber = match?.group(1);
+      if (receiptNumber != null && receiptNumber.isNotEmpty) {
+        return receiptNumber.toUpperCase();
+      }
+    }
+
+    // Never expose the technical `purchase_receipt:<uuid>` transport value.
+    // The exact UUID remains available through [navigableReferenceId].
+    return 'Recepción de compra';
   }
 
   bool _isFriendlyReference(String value) {
@@ -503,10 +567,19 @@ class StockMovement {
   }
 
   String get movementTypeDisplay {
+    if (isPurchaseReceiptMovement) {
+      return isPurchaseReceiptReversal ? 'Reversión de recepción' : 'Recepción';
+    }
     return category.displayName;
   }
 
   String get sourceDisplay {
+    if (isPurchaseReceiptMovement) {
+      return isPurchaseReceiptReversal
+          ? 'Reversión de recepción'
+          : 'Recepción de compra';
+    }
+
     switch (source) {
       case 'pos':
         return 'POS';

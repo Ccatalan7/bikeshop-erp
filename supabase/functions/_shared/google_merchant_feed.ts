@@ -19,9 +19,131 @@ type MerchantPriceFields = {
   website_price?: unknown;
 };
 
+export type PublicCommerceProjectionInput =
+  & MerchantIdentifierFields
+  & MerchantPriceFields
+  & ProductAvailabilityFields
+  & {
+    id?: unknown;
+    name?: unknown;
+    website_name?: unknown;
+    website_merchant_title?: unknown;
+    description?: unknown;
+    website_description?: unknown;
+    website_merchant_description?: unknown;
+    price_currency?: unknown;
+    image_url?: unknown;
+    image_url_optimized?: unknown;
+    website_image_url?: unknown;
+    website_image_url_optimized?: unknown;
+    image_urls?: unknown;
+    website_image_urls?: unknown;
+    brand?: unknown;
+    website_merchant_brand?: unknown;
+    category_id?: unknown;
+    website_google_product_category?: unknown;
+  };
+
+export type PublicCommerceProjectionContext = {
+  resolvedBrand?: unknown;
+  categoryPath?: unknown;
+};
+
+export type PublicCommerceProjection = {
+  id: string;
+  sku: string;
+  title: string;
+  description: string;
+  price: number;
+  currency: string;
+  availability: "in_stock" | "out_of_stock";
+  image_urls: string[];
+  brand: string;
+  gtin: string;
+  mpn: string;
+  category_id: string;
+  category_path: string;
+  google_product_category: string;
+  merchant_eligible: boolean;
+  merchant_issues: string[];
+};
+
 /**
- * Merchant may advertise only products the public checkout can actually sell.
- * Other publication/image/stock rules remain owned by the feed itself.
+ * Resolve the same factual public-commerce contract used by landing pages,
+ * Product structured data, deploy snapshots, checkout mirrors, and Merchant.
+ *
+ * Merchant-specific fields are explicit staff-owned overrides. This function
+ * never derives identity, brand, category, GTIN, or MPN from product copy.
+ */
+export function projectPublicCommerceProduct(
+  product: PublicCommerceProjectionInput,
+  context: PublicCommerceProjectionContext = {},
+): PublicCommerceProjection {
+  const id = firstNonEmpty(String(product.id ?? ""));
+  const sku = firstNonEmpty(product.sku);
+  const title = firstNonEmpty(
+    String(product.website_merchant_title ?? ""),
+    String(product.website_name ?? ""),
+    String(product.name ?? ""),
+  );
+  const description = firstNonEmpty(
+    String(product.website_merchant_description ?? ""),
+    String(product.website_description ?? ""),
+    String(product.description ?? ""),
+  );
+  const price = resolveMerchantPrice(product) ?? 0;
+  const currency = firstNonEmpty(
+    String(product.price_currency ?? ""),
+    "CLP",
+  ).toUpperCase();
+  const availability = resolveMerchantAvailability(product);
+  const imageUrls = publicProductImageUrls(product);
+  const brand = firstNonEmpty(
+    String(product.website_merchant_brand ?? ""),
+    String(context.resolvedBrand ?? ""),
+    String(product.brand ?? ""),
+  );
+  const { gtin, mpn } = resolveMerchantIdentifiers(product);
+  const categoryId = firstNonEmpty(String(product.category_id ?? ""));
+  const categoryPath = categoryId ? firstNonEmpty(String(context.categoryPath ?? "")) : "";
+  const googleProductCategory = firstNonEmpty(
+    String(product.website_google_product_category ?? ""),
+  );
+  const hasVerifiableBrand = isVerifiableMerchantBrand(brand);
+  const merchantIssues = [
+    ...(!id ? ["missing_identity"] : []),
+    ...(!title ? ["missing_title"] : []),
+    ...(!description ? ["missing_description"] : []),
+    ...(!(price > 0) ? ["invalid_price"] : []),
+    ...(imageUrls.length === 0 ? ["missing_image"] : []),
+    ...(!hasVerifiableBrand ? ["missing_brand"] : []),
+    ...(gtin || (hasVerifiableBrand && mpn) ? [] : ["missing_product_identifiers"]),
+  ];
+
+  return {
+    id,
+    sku,
+    title,
+    description,
+    price,
+    currency,
+    availability,
+    image_urls: imageUrls,
+    brand,
+    gtin,
+    mpn,
+    category_id: categoryId,
+    category_path: categoryPath,
+    google_product_category: googleProductCategory,
+    merchant_eligible: merchantIssues.length === 0,
+    merchant_issues: merchantIssues,
+  };
+}
+
+/**
+ * Merchant and checkout share the same supported tax classifications.
+ * Publication and stock visibility remain owned by the canonical public RPC;
+ * an accessible out-of-stock offer is still a valid Merchant item.
  */
 export function filterMerchantProductsByCheckoutTax<
   T extends { tax_rate?: unknown },
@@ -79,6 +201,43 @@ export function isVerifiableMerchantBrand(value: unknown): boolean {
     .has(normalized);
 }
 
+function publicProductImageUrls(
+  product: PublicCommerceProjectionInput,
+): string[] {
+  const urls: string[] = [];
+  const add = (value: unknown) => {
+    const url = String(value ?? "").trim();
+    if (
+      (!url.startsWith("https://") && !url.startsWith("http://")) ||
+      urls.includes(url)
+    ) {
+      return;
+    }
+    urls.push(url);
+  };
+
+  add(firstNonEmpty(
+    String(product.website_image_url_optimized ?? ""),
+    String(product.image_url_optimized ?? ""),
+  ));
+  add(firstNonEmpty(
+    String(product.website_image_url ?? ""),
+    String(product.image_url ?? ""),
+  ));
+
+  const websiteGallery = Array.isArray(product.website_image_urls)
+    ? product.website_image_urls
+    : [];
+  const baseGallery = Array.isArray(product.image_urls) ? product.image_urls : [];
+  for (
+    const image of websiteGallery.length > 0 ? websiteGallery : baseGallery
+  ) {
+    add(image);
+  }
+
+  return urls.slice(0, 10);
+}
+
 function firstNonEmpty(...values: Array<string | null | undefined>): string {
   for (const value of values) {
     const text = String(value ?? "").trim();
@@ -92,10 +251,17 @@ function validGtin(...values: Array<string | null | undefined>): string {
     const value = String(rawValue ?? "").trim().replace(/[\s-]+/g, "");
     if (!/^\d+$/.test(value)) continue;
     if (![8, 12, 13, 14].includes(value.length)) continue;
+    if (hasRestrictedGs1Prefix(value)) continue;
     if (!hasValidGtinCheckDigit(value)) continue;
     return value;
   }
   return "";
+}
+
+function hasRestrictedGs1Prefix(value: string): boolean {
+  // GTIN-14 begins with a packaging indicator; the GS1 prefix follows it.
+  const gs1Payload = value.length === 14 ? value.slice(1) : value;
+  return ["02", "04", "2", "98", "99"].some((prefix) => gs1Payload.startsWith(prefix));
 }
 
 function hasValidGtinCheckDigit(value: string): boolean {

@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/services/tenant_service.dart';
+import '../models/website_catalog_presentation.dart';
+import '../models/website_catalog_query.dart';
 import '../models/website_destination.dart';
+import '../services/website_destination_audit_service.dart';
 import 'website_workspace_scope.dart';
 
 // ==============================================================================
@@ -196,12 +199,16 @@ class WebsiteLinkValueEditor extends StatelessWidget {
     }
     if (destination.kind == WebsiteDestinationKind.category) {
       final uri = Uri.tryParse(destination.href);
-      final query =
+      final catalogQuery =
+          uri == null ? null : WebsiteCatalogQuery.tryParse(uri);
+      final query = catalogQuery?.searchQuery ??
           (uri?.queryParameters['q'] ?? uri?.queryParameters['search'] ?? '')
               .trim();
-      return query.isEmpty
-          ? 'Categoría del catálogo'
-          : 'Catálogo filtrado: categoría + "$query"';
+      final scopeLabel =
+          catalogQuery?.categoryScope == WebsiteCatalogCategoryScope.direct
+              ? 'Solo productos asignados a esta categoría'
+              : 'Categoría y subcategorías';
+      return query.isEmpty ? scopeLabel : '$scopeLabel · "$query"';
     }
     if (destination.kind == WebsiteDestinationKind.product) {
       return 'Producto específico';
@@ -284,7 +291,11 @@ class _CategoryOption {
   final String name;
   final String fullPath;
   final bool showOnWebsite;
+
+  /// Products assigned directly to this category.
   final int markedWebProductCount;
+  final int subtreeMarkedWebProductCount;
+  final String? publicSlug;
 
   const _CategoryOption({
     required this.id,
@@ -292,10 +303,21 @@ class _CategoryOption {
     required this.fullPath,
     required this.showOnWebsite,
     required this.markedWebProductCount,
+    required this.subtreeMarkedWebProductCount,
+    required this.publicSlug,
   });
 
   String get label => fullPath.trim().isEmpty ? name : fullPath;
-  bool get isReady => showOnWebsite && markedWebProductCount > 0;
+
+  int countForScope(WebsiteCatalogCategoryScope scope) {
+    return switch (scope) {
+      WebsiteCatalogCategoryScope.direct => markedWebProductCount,
+      WebsiteCatalogCategoryScope.subtree => subtreeMarkedWebProductCount,
+    };
+  }
+
+  bool isReadyForScope(WebsiteCatalogCategoryScope scope) =>
+      showOnWebsite && countForScope(scope) > 0;
 }
 
 class _PageOption {
@@ -397,6 +419,8 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
       TextEditingController();
   _CatalogTypeFilter _catalogType = _CatalogTypeFilter.any;
   String? _catalogCategoryId;
+  WebsiteCatalogCategoryScope _catalogCategoryScope =
+      WebsiteCatalogCategoryScope.subtree;
 
   // Anchor
   final TextEditingController _anchorController = TextEditingController();
@@ -436,6 +460,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
       _mode = WebsiteLinkEditMode.external;
       _externalController.text = v;
       _isCatalog = false;
+      _catalogCategoryScope = WebsiteCatalogCategoryScope.subtree;
       return;
     }
 
@@ -443,6 +468,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
       _mode = WebsiteLinkEditMode.anchor;
       _anchorController.text = v.substring(1);
       _isCatalog = false;
+      _catalogCategoryScope = WebsiteCatalogCategoryScope.subtree;
       return;
     }
 
@@ -451,8 +477,19 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
     final normalizedValue = WebsiteDestination.normalizeHref(v);
     final destination = WebsiteDestination.parse(normalizedValue);
     final uri = Uri.tryParse(normalizedValue);
+    final parsedCatalogQuery =
+        uri == null ? null : WebsiteCatalogQuery.tryParse(uri);
+    _catalogCategoryScope = parsedCatalogQuery?.categoryScope ??
+        WebsiteCatalogCategoryScope.subtree;
     final path = uri?.path ?? normalizedValue;
-    final isCatalogPath = path == '/productos' || path == '/tienda/productos';
+    final isCatalogPath = path == '/productos' ||
+        path == '/tienda/productos' ||
+        path.startsWith('/productos/categoria/') ||
+        path.startsWith('/tienda/productos/categoria/') ||
+        path == '/servicios' ||
+        path == '/tienda/servicios' ||
+        path.startsWith('/servicios/categoria/') ||
+        path.startsWith('/tienda/servicios/categoria/');
     final catalogParameters = uri?.queryParameters ?? const <String, String>{};
     final hasCompositeCatalogFilter = isCatalogPath &&
         [
@@ -484,6 +521,9 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
       _selectedSpecialHref = '/productos';
       _selectedPageHref = '';
       _customInternalHref = '';
+      _catalogCategoryId = destination.kind == WebsiteDestinationKind.category
+          ? destination.reference
+          : null;
     } else if (destination.kind == WebsiteDestinationKind.category) {
       _internalType = _InternalDestinationType.category;
       _catalogCategoryId = destination.reference;
@@ -526,11 +566,13 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
       final q = (qp['q'] ?? qp['search'] ?? '').trim();
       final type =
           (qp['type'] ?? qp['product_type'] ?? qp['tipo'] ?? '').trim();
-      final category = (qp['category'] ??
-              qp['category_id'] ??
-              qp['cat'] ??
-              qp['categoria'] ??
-              '')
+      final category = (destination.kind == WebsiteDestinationKind.category
+              ? destination.reference ?? ''
+              : qp['category'] ??
+                  qp['category_id'] ??
+                  qp['cat'] ??
+                  qp['categoria'] ??
+                  '')
           .trim();
 
       _catalogSearchController.text = q;
@@ -539,16 +581,19 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
         'service' || 'servicio' || 'servicios' => _CatalogTypeFilter.service,
         _ => _CatalogTypeFilter.any,
       };
-      if (_internalType != _InternalDestinationType.category) {
-        _catalogCategoryId = category.isEmpty ? null : category;
-      }
+      _catalogCategoryId = category.isEmpty ? null : category;
 
       // We only try to load categories if the user is editing catalog filters.
       _ensureCategoriesLoaded();
     } else {
       _catalogSearchController.clear();
       _catalogType = _CatalogTypeFilter.any;
-      _catalogCategoryId = null;
+      // A category destination still owns its selected category and scope even
+      // when it is not using the composite catalog-filter editor.
+      if (_internalType != _InternalDestinationType.category) {
+        _catalogCategoryId = null;
+        _catalogCategoryScope = WebsiteCatalogCategoryScope.subtree;
+      }
     }
   }
 
@@ -577,27 +622,29 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
   }
 
   String _buildCatalogHref() {
-    final qp = <String, String>{};
-
     final q = _catalogSearchController.text.trim();
-    if (q.isNotEmpty) qp['q'] = q;
-
-    switch (_catalogType) {
-      case _CatalogTypeFilter.any:
-        break;
-      case _CatalogTypeFilter.product:
-        qp['type'] = 'product';
-      case _CatalogTypeFilter.service:
-        qp['type'] = 'service';
-    }
-
     final category = (_catalogCategoryId ?? '').trim();
-    if (category.isNotEmpty) qp['category'] = category;
+    final categorySlug = _categories
+        .where((item) => item.id == category)
+        .map((item) => item.publicSlug)
+        .firstOrNull;
+    final productType = switch (_catalogType) {
+      _CatalogTypeFilter.any => null,
+      _CatalogTypeFilter.product => WebsiteCatalogProductTypeFilter.product,
+      _CatalogTypeFilter.service => WebsiteCatalogProductTypeFilter.service,
+    };
+    final catalogQuery = WebsiteCatalogQuery(
+      searchQuery: q,
+      productType: productType,
+      categoryScope: category.isEmpty
+          ? WebsiteCatalogCategoryScope.subtree
+          : _catalogCategoryScope,
+    );
 
     return WebsiteDestination.routeForCatalog(
-      categoryId: qp['category'],
-      searchQuery: qp['q'],
-      productType: qp['type'],
+      categoryId: category.isEmpty ? null : category,
+      categorySlug: categorySlug,
+      catalogQuery: catalogQuery,
     );
   }
 
@@ -609,6 +656,13 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
           ? ''
           : WebsiteDestination.routeForCatalog(
               categoryId: _catalogCategoryId,
+              categorySlug: _categories
+                  .where((item) => item.id == _catalogCategoryId)
+                  .map((item) => item.publicSlug)
+                  .firstOrNull,
+              catalogQuery: WebsiteCatalogQuery(
+                categoryScope: _catalogCategoryScope,
+              ),
             ),
       _InternalDestinationType.product =>
         _selectedProductId == null ? '' : '/productos/$_selectedProductId',
@@ -653,7 +707,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
 
       final rows = await Supabase.instance.client
           .from('product_categories')
-          .select('id,name,full_path,is_active,show_on_website')
+          .select('id,name,full_path,parent_id,is_active,show_on_website')
           .eq('tenant_id', tenantId)
           .order('name', ascending: true);
       final productRows = await Supabase.instance.client
@@ -663,18 +717,29 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
           .eq('is_active', true)
           .eq('is_published', true)
           .eq('show_on_website', true);
+      final presentationSetting = await Supabase.instance.client
+          .from('website_settings')
+          .select('value')
+          .eq('tenant_id', tenantId)
+          .eq('key', websiteCatalogPresentationsSettingKey)
+          .maybeSingle();
+      final presentations = WebsiteCatalogPresentationRegistry.decode(
+        presentationSetting?['value']?.toString(),
+      );
 
-      final markedWebCounts = <String, int>{};
-      for (final row in (productRows as List)) {
-        final categoryId =
-            (row as Map<String, dynamic>)['category_id']?.toString();
-        if (categoryId == null || categoryId.isEmpty) continue;
-        markedWebCounts[categoryId] = (markedWebCounts[categoryId] ?? 0) + 1;
-      }
+      final categoryRows = (rows as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList(growable: false);
+      final markedProducts = (productRows as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList(growable: false);
+      final productCounts = WebsiteCategoryProductCounts.fromRows(
+        categories: categoryRows,
+        markedProducts: markedProducts,
+      );
 
       final parsed = <_CategoryOption>[];
-      for (final row in (rows as List)) {
-        final map = row as Map<String, dynamic>;
+      for (final map in categoryRows) {
         final id = map['id']?.toString();
         final name = map['name']?.toString();
         final fullPath = map['full_path']?.toString();
@@ -686,7 +751,10 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
           name: name,
           fullPath: fullPath ?? name,
           showOnWebsite: map['show_on_website'] == true,
-          markedWebProductCount: markedWebCounts[id] ?? 0,
+          markedWebProductCount: productCounts.directByCategoryId[id] ?? 0,
+          subtreeMarkedWebProductCount:
+              productCounts.subtreeByCategoryId[id] ?? 0,
+          publicSlug: presentations.forCategory(id)?.slug,
         ));
       }
       parsed.sort((a, b) => a.label.compareTo(b.label));
@@ -694,6 +762,17 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
       if (!mounted) return;
       setState(() {
         _categories = parsed;
+        final selectedToken = _catalogCategoryId;
+        if (selectedToken != null &&
+            !parsed.any((category) => category.id == selectedToken)) {
+          final bySlug = parsed
+              .where(
+                (category) =>
+                    category.publicSlug == websiteCategorySlug(selectedToken),
+              )
+              .firstOrNull;
+          if (bySlug != null) _catalogCategoryId = bySlug.id;
+        }
         _loadingCategories = false;
       });
     } catch (e) {
@@ -1288,7 +1367,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                                         fontWeight: FontWeight.w500)),
                                 subtitle: Text(
                                   c.showOnWebsite
-                                      ? '${c.markedWebProductCount} productos marcados para web'
+                                      ? '${c.countForScope(_catalogCategoryScope)} productos web en este alcance'
                                       : 'Oculta del catálogo público',
                                   style: TextStyle(
                                     color: isDark
@@ -1298,12 +1377,13 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                                   ),
                                 ),
                                 trailing: Icon(
-                                  c.isReady
+                                  c.isReadyForScope(_catalogCategoryScope)
                                       ? Icons.check_circle_outline
                                       : Icons.warning_amber_rounded,
-                                  color: c.isReady
-                                      ? Colors.green.shade600
-                                      : Colors.amber.shade700,
+                                  color:
+                                      c.isReadyForScope(_catalogCategoryScope)
+                                          ? Colors.green.shade600
+                                          : Colors.amber.shade700,
                                   size: 20,
                                 ),
                                 hoverColor: isDark
@@ -1347,6 +1427,61 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
       border: const OutlineInputBorder(),
       isDense: true,
     );
+  }
+
+  Widget _buildCategoryScopeControl() {
+    return DropdownButtonFormField<WebsiteCatalogCategoryScope>(
+      key: const ValueKey<String>('website-catalog-category-scope'),
+      initialValue: _catalogCategoryScope,
+      isExpanded: true,
+      decoration: _decoration('Productos incluidos').copyWith(
+        suffixIcon: const Tooltip(
+          message:
+              'Elige si el enlace muestra toda la rama o solo los productos asignados directamente.',
+          child: Icon(Icons.help_outline, size: 18),
+        ),
+      ),
+      items: const [
+        DropdownMenuItem(
+          value: WebsiteCatalogCategoryScope.subtree,
+          child: Text(
+            'Categoría y subcategorías',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        DropdownMenuItem(
+          value: WebsiteCatalogCategoryScope.direct,
+          child: Text(
+            'Solo productos asignados a esta categoría',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+      onChanged: (scope) {
+        if (scope == null) return;
+        setState(() {
+          _catalogCategoryScope = scope;
+          _validationMessage = null;
+        });
+      },
+    );
+  }
+
+  String _categoryReadinessMessage(_CategoryOption category) {
+    if (!category.showOnWebsite) {
+      return 'La categoría está oculta del catálogo público.';
+    }
+    final count = category.countForScope(_catalogCategoryScope);
+    if (_catalogCategoryScope == WebsiteCatalogCategoryScope.direct) {
+      return count == 0
+          ? 'No hay productos web asignados directamente a esta categoría.'
+          : '$count productos web asignados directamente a esta categoría.';
+    }
+    return count == 0
+        ? 'No hay productos web en esta categoría ni en sus subcategorías.'
+        : '$count productos web entre esta categoría y sus subcategorías.';
   }
 
   @override
@@ -1592,17 +1727,17 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
           Text('No se pudieron cargar las categorías.',
               style: TextStyle(color: Theme.of(context).colorScheme.error)),
         ],
+        if (_catalogCategoryId != null) ...[
+          const SizedBox(height: 12),
+          _buildCategoryScopeControl(),
+        ],
         if (category != null || missingSelection) ...[
           const SizedBox(height: 8),
           _buildReadinessCard(
-            ready: category?.isReady ?? false,
+            ready: category?.isReadyForScope(_catalogCategoryScope) ?? false,
             message: missingSelection
                 ? 'La categoría guardada ya no existe o no está activa.'
-                : category!.isReady
-                    ? 'Categoría visible con ${category.markedWebProductCount} productos marcados para web.'
-                    : category.showOnWebsite
-                        ? 'La categoría está visible, pero no tiene productos marcados para web.'
-                        : 'La categoría está oculta del catálogo público.',
+                : _categoryReadinessMessage(category!),
             actionLabel: 'Configurar categoría',
             panel: WebsiteWorkspacePanel.catalogCategories,
           ),
@@ -1823,6 +1958,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                   _catalogSearchController.clear();
                   _catalogType = _CatalogTypeFilter.any;
                   _catalogCategoryId = null;
+                  _catalogCategoryScope = WebsiteCatalogCategoryScope.subtree;
                 }
               });
             },
@@ -1896,7 +2032,14 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                     ),
                   ],
                   onChanged: (v) {
-                    setState(() => _catalogCategoryId = v);
+                    setState(() {
+                      _catalogCategoryId = v;
+                      if (v == null) {
+                        _catalogCategoryScope =
+                            WebsiteCatalogCategoryScope.subtree;
+                      }
+                      _validationMessage = null;
+                    });
                   },
                 ),
               ),
@@ -1915,45 +2058,17 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
               ),
             ],
           ),
+          if (_catalogCategoryId != null) ...[
+            const SizedBox(height: 12),
+            _buildCategoryScopeControl(),
+          ],
           if (_selectedCategoryOption case final category?) ...[
             const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: category.isReady
-                    ? Colors.green.withValues(alpha: 0.08)
-                    : Colors.amber.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: category.isReady
-                      ? Colors.green.withValues(alpha: 0.35)
-                      : Colors.amber.withValues(alpha: 0.45),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    category.isReady
-                        ? Icons.check_circle_outline
-                        : Icons.warning_amber_rounded,
-                    size: 18,
-                    color: category.isReady
-                        ? Colors.green.shade700
-                        : Colors.amber.shade800,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      category.isReady
-                          ? 'Categoría visible con ${category.markedWebProductCount} productos marcados para web.'
-                          : category.showOnWebsite
-                              ? 'La categoría está visible, pero no tiene productos marcados para web.'
-                              : 'La categoría está oculta. Publícala en Catálogo web > Categorías antes de usar este enlace.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                ],
-              ),
+            _buildReadinessCard(
+              ready: category.isReadyForScope(_catalogCategoryScope),
+              message: _categoryReadinessMessage(category),
+              actionLabel: 'Configurar categoría',
+              panel: WebsiteWorkspacePanel.catalogCategories,
             ),
           ],
         ],

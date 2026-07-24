@@ -2,6 +2,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../shared/models/supplier.dart' as shared_supplier;
 import '../../../shared/services/database_service.dart';
@@ -97,6 +98,7 @@ class PurchaseService extends ChangeNotifier {
       discountValue: invoice.discountValue,
       discountAmount: invoice.discountAmount,
       isDiscountBeforeTax: invoice.isDiscountBeforeTax,
+      items: invoice.items,
       createdAt: invoice.createdAt,
       updatedAt: invoice.updatedAt,
       prepaymentModel: invoice.prepaymentModel,
@@ -109,6 +111,7 @@ class PurchaseService extends ChangeNotifier {
       paidAmount: invoice.paidAmount,
       creditedAmount: invoice.creditedAmount,
       supplierCreditBalance: invoice.supplierCreditBalance,
+      receiptFulfillment: invoice.receiptFulfillment,
       balance: invoice.balance,
     );
   }
@@ -125,15 +128,44 @@ class PurchaseService extends ChangeNotifier {
     _invoiceCache = fullInvoices;
 
     final listInvoices = List<PurchaseInvoice>.from(_listInvoiceCache);
-    final previewInvoice = _toListPreviewInvoice(invoice);
     final listIndex = listInvoices.indexWhere((inv) => inv.id == invoice.id);
-    if (listIndex >= 0) {
-      listInvoices[listIndex] = previewInvoice;
-    } else {
-      listInvoices.add(previewInvoice);
+    final existingFulfillment =
+        listIndex >= 0 ? listInvoices[listIndex].receiptFulfillment : null;
+    final authoritativeFulfillment =
+        invoice.receiptFulfillment ?? existingFulfillment;
+
+    // The list cache is owned by purchase_invoice_list_read_model. A full
+    // purchase_invoices fetch does not contain physical receiving state, so it
+    // must never introduce a financial-only row that will be corrected a frame
+    // later. It may refresh an existing authoritative row only while preserving
+    // that row's fulfillment snapshot.
+    if (authoritativeFulfillment != null) {
+      final previewInvoice = _toListPreviewInvoice(
+        invoice.copyWith(receiptFulfillment: authoritativeFulfillment),
+      );
+      if (listIndex >= 0) {
+        listInvoices[listIndex] = previewInvoice;
+      } else {
+        listInvoices.add(previewInvoice);
+      }
+    } else if (listIndex >= 0) {
+      listInvoices.removeAt(listIndex);
+      _listInvoicesCacheTime = null;
     }
     listInvoices.sort((a, b) => b.date.compareTo(a.date));
     _listInvoiceCache = listInvoices;
+  }
+
+  void _upsertPayment(PurchasePayment payment) {
+    final payments = List<PurchasePayment>.from(_paymentCache);
+    final index = payments.indexWhere((item) => item.id == payment.id);
+    if (index >= 0) {
+      payments[index] = payment;
+    } else {
+      payments.add(payment);
+    }
+    payments.sort((a, b) => b.date.compareTo(a.date));
+    _paymentCache = payments;
   }
 
   /// Invalidate payment cache (call after create/update/delete)
@@ -150,6 +182,7 @@ class PurchaseService extends ChangeNotifier {
   // Realtime channels
   RealtimeChannel? _purchaseInvoicesChannel;
   RealtimeChannel? _purchasePaymentsChannel;
+  RealtimeChannel? _purchaseReceivingChannel;
 
   // Public getters for reactive UI
   UnmodifiableListView<PurchaseInvoice> get purchaseInvoices =>
@@ -324,11 +357,8 @@ class PurchaseService extends ChangeNotifier {
       final data = await _db.select('purchase_invoices');
       _invoiceCache = data.map((row) => PurchaseInvoice.fromJson(row)).toList()
         ..sort((a, b) => b.date.compareTo(a.date));
-      _listInvoiceCache =
-          _invoiceCache.map(_toListPreviewInvoice).toList(growable: false);
       _invoicesLoaded = true;
       _invoicesCacheTime = DateTime.now();
-      _listInvoicesCacheTime = _invoicesCacheTime;
       debugPrint('✅ [PurchaseService] Cached ${_invoiceCache.length} invoices');
       _setupPurchaseRealtime(); // Setup realtime after first load
       notifyListeners(); // Notify UI to rebuild after loading invoices
@@ -357,8 +387,8 @@ class PurchaseService extends ChangeNotifier {
 
     try {
       final data = await _db.select(
-        'purchase_invoices',
-        selectColumns: PurchaseInvoice.listPreviewSelect,
+        'purchase_invoice_list_read_model',
+        selectColumns: PurchaseInvoice.listReadModelSelect,
         fetchAll: true,
       );
       _listInvoiceCache = data
@@ -641,7 +671,10 @@ class PurchaseService extends ChangeNotifier {
     }
 
     try {
-      final data = await _db.select('purchase_payments');
+      final data = await _db.select(
+        'purchase_payments',
+        fetchAll: true,
+      );
       _paymentCache = data
           .map((row) => PurchasePayment.fromJson(row))
           .where((payment) => payment.deletedAt == null)
@@ -654,6 +687,30 @@ class PurchaseService extends ChangeNotifier {
     } catch (e) {
       throw Exception('No se pudieron cargar los pagos de compras: $e');
     }
+  }
+
+  Future<PurchasePayment?> getPurchasePayment(String id,
+      {bool refresh = false}) async {
+    if (!refresh) {
+      for (final payment in _paymentCache) {
+        if (payment.id == id && payment.deletedAt == null) return payment;
+      }
+    }
+
+    try {
+      final data = await _db.selectById('purchase_payments', id);
+      if (data == null) return null;
+      final payment = PurchasePayment.fromJson(data);
+      if (payment.deletedAt != null) return null;
+      return payment;
+    } catch (e) {
+      throw Exception('No se pudo obtener el pago de compra: $e');
+    }
+  }
+
+  Future<PurchasePayment?> fetchPurchasePayment(String id,
+      {bool refresh = false}) {
+    return getPurchasePayment(id, refresh: refresh);
   }
 
   Future<List<PurchasePayment>> getPaymentsForInvoice(String invoiceId) async {
@@ -693,6 +750,139 @@ class PurchaseService extends ChangeNotifier {
     } catch (e) {
       throw Exception('No se pudo registrar el pago: $e');
     }
+  }
+
+  /// Applies an explicit correction to an existing supplier payment through
+  /// the database-owned accounting command. The command preserves payment and
+  /// invoice identities, checks optimistic concurrency, records the reason,
+  /// and rebuilds settlement evidence only when a financial field changed.
+  Future<PurchasePaymentCorrectionResult> correctPurchasePayment({
+    required PurchasePayment current,
+    required String paymentMethodId,
+    required double amount,
+    required DateTime date,
+    required String? reference,
+    required String? notes,
+    required String reason,
+    String? operationKey,
+  }) async {
+    final paymentId = current.id;
+    if (paymentId == null || paymentId.isEmpty) {
+      throw ArgumentError('El pago no tiene una identidad persistida.');
+    }
+
+    final key = operationKey?.trim().isNotEmpty == true
+        ? operationKey!.trim()
+        : const Uuid().v4();
+    final params = <String, dynamic>{
+      'p_payment_id': paymentId,
+      'p_expected_updated_at': current.updatedAt.toUtc().toIso8601String(),
+      'p_operation_key': key,
+      'p_payment_method_id': paymentMethodId,
+      'p_amount': amount.round(),
+      'p_date': date.toUtc().toIso8601String(),
+      'p_reference': _blankToNull(reference),
+      'p_notes': _blankToNull(notes),
+      'p_reason': reason.trim(),
+    };
+
+    dynamic raw;
+    try {
+      raw = await _db.rpc(
+        'correct_purchase_payment',
+        params: params,
+      );
+    } catch (error, stackTrace) {
+      if (!_isOutcomeAmbiguous(error)) rethrow;
+      try {
+        raw = await _db.rpc(
+          'get_purchase_payment_edit_operation',
+          params: {'p_operation_key': key},
+        );
+      } catch (_) {
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+      if (raw == null) Error.throwWithStackTrace(error, stackTrace);
+    }
+
+    final result = _parsePaymentCorrectionResult(raw);
+    _upsertPayment(result.payment);
+    invalidateInvoicesCache();
+    invalidatePaymentsCache();
+    AccountingDashboardSection.invalidateCache();
+    notifyListeners();
+
+    // The correction is already durably committed and acknowledged. Refresh
+    // failures must not turn that success into a false save failure or invite
+    // an unsafe second correction.
+    try {
+      await getPurchaseInvoice(result.payment.invoiceId, refresh: true);
+      await getPurchasePayments(forceRefresh: true);
+      await getPurchaseInvoices(forceRefresh: true);
+      if (_accountingService != null) {
+        await _accountingService!.initialize();
+        await _accountingService!.journalEntries.loadJournalEntries();
+      }
+    } catch (error) {
+      debugPrint(
+        'PurchaseService.correctPurchasePayment post-commit refresh failed: '
+        '$error',
+      );
+    }
+    return result;
+  }
+
+  Future<List<PurchasePaymentEditEvent>> loadPurchasePaymentEditEvents(
+    String paymentId,
+  ) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) return const [];
+
+    final response = await _supabase
+        .from('purchase_payment_edit_events')
+        .select()
+        .eq('tenant_id', tenantId)
+        .eq('payment_id', paymentId)
+        .order('created_at', ascending: false);
+    return (response as List)
+        .map(
+          (row) => PurchasePaymentEditEvent.fromJson(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  PurchasePaymentCorrectionResult _parsePaymentCorrectionResult(dynamic raw) {
+    if (raw is! Map || raw['payment'] is! Map || raw['event'] is! Map) {
+      throw StateError('La respuesta de corrección del pago es inválida.');
+    }
+    final payment = PurchasePayment.fromJson(
+      Map<String, dynamic>.from(raw['payment'] as Map),
+    );
+    final event = PurchasePaymentEditEvent.fromJson(
+      Map<String, dynamic>.from(raw['event'] as Map),
+    );
+    return PurchasePaymentCorrectionResult(
+      payment: payment,
+      event: event,
+      replayed: raw['replayed'] == true,
+      financialFieldsChanged: raw['financial_fields_changed'] == true ||
+          event.financialFieldsChanged,
+      legacyJournalRelinked:
+          raw['legacy_journal_relinked'] == true || event.legacyJournalRelinked,
+    );
+  }
+
+  bool _isOutcomeAmbiguous(Object error) {
+    return error is! PostgrestException ||
+        error.code == null ||
+        error.code!.isEmpty;
+  }
+
+  String? _blankToNull(String? value) {
+    final normalized = value?.trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
   }
 
   bool _isPaymentIdempotencyConflict(PostgrestException error) {
@@ -999,6 +1189,7 @@ class PurchaseService extends ChangeNotifier {
 
       await _purchaseInvoicesChannel?.unsubscribe();
       await _purchasePaymentsChannel?.unsubscribe();
+      await _purchaseReceivingChannel?.unsubscribe();
 
       _purchaseInvoicesChannel = _supabase
           .channel('purchase_invoices_changes')
@@ -1045,6 +1236,53 @@ class PurchaseService extends ChangeNotifier {
           )
           .subscribe();
 
+      void refreshReceiptReadModel(PostgresChangePayload payload) {
+        if (!kReleaseMode) {
+          debugPrint(
+            '🔔 [PurchaseService] Purchase receiving evidence changed: '
+            '${payload.table} ${payload.eventType}',
+          );
+        }
+        getPurchaseInvoicesForList(forceRefresh: true);
+      }
+
+      _purchaseReceivingChannel = _supabase
+          .channel('purchase_receiving_changes')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'purchase_receipts',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'tenant_id',
+              value: tenantId,
+            ),
+            callback: refreshReceiptReadModel,
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'purchase_receipt_resolution_allocations',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'tenant_id',
+              value: tenantId,
+            ),
+            callback: refreshReceiptReadModel,
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'purchase_credit_notes',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'tenant_id',
+              value: tenantId,
+            ),
+            callback: refreshReceiptReadModel,
+          )
+          .subscribe();
+
       if (!kReleaseMode) {
         debugPrint('✅ [PurchaseService] Realtime subscriptions active');
       }
@@ -1059,6 +1297,7 @@ class PurchaseService extends ChangeNotifier {
   void dispose() {
     _purchaseInvoicesChannel?.unsubscribe();
     _purchasePaymentsChannel?.unsubscribe();
+    _purchaseReceivingChannel?.unsubscribe();
     super.dispose();
   }
 }

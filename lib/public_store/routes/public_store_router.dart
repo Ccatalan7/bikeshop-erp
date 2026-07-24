@@ -172,34 +172,36 @@ class _PublicStoreNavObserver extends NavigatorObserver {
 // PAGE BUILDER HELPER
 // ============================================================================
 
-/// Generates a unique page key that includes the edit/preview mode.
-/// This forces Flutter to create a NEW page when mode changes,
-/// avoiding element reactivation conflicts during layout passes.
-///
-/// NUCLEAR FIX: We now use UniqueKey when mode changes to completely prevent
-/// element reactivation. The _lastMode tracking ensures we only generate new
-/// UniqueKeys when the mode actually changes, not on every rebuild.
-String? _lastModeForKey;
-LocalKey? _cachedModeKey;
-
-LocalKey _modeAwarePageKey(GoRouterState state) {
+String _storefrontMode(GoRouterState state) {
   final uri = state.uri;
   final isEdit = uri.queryParameters['edit'] == 'true';
   final isPreview = uri.queryParameters['preview'] == 'true';
-  final mode = isEdit ? 'edit' : (isPreview ? 'preview' : 'normal');
-  final currentModeLocation = '${state.matchedLocation}_$mode';
+  return isEdit ? 'edit' : (isPreview ? 'preview' : 'normal');
+}
 
-  // If mode+location changed, create a brand new UniqueKey
-  // This completely prevents element reactivation by giving the widget
-  // a new identity that can't possibly match any cached elements.
-  if (_lastModeForKey != currentModeLocation) {
-    _lastModeForKey = currentModeLocation;
-    _cachedModeKey = UniqueKey();
-    debugPrint(
-        '🔑 [Router] NEW UniqueKey for mode change: $currentModeLocation');
-  }
+/// Keeps the routed [Page] identity owned by go_router.
+///
+/// A previous implementation cached one process-wide [UniqueKey]. During a
+/// category -> catalog-root replacement, go_router can build the outgoing and
+/// incoming pages in the same Navigator update. Both pages then received that
+/// cached key and tripped Navigator's duplicated-page-key assertion.
+@visibleForTesting
+LocalKey publicStoreRoutePageKey(GoRouterState state) => state.pageKey;
 
-  return _cachedModeKey!;
+/// Recreates only the storefront layout when Edit/Preview mode changes.
+///
+/// This key is intentionally separate from the Navigator [Page] key. Its
+/// parent page scopes it, so two routes can coexist safely while a replacement
+/// is being reconciled.
+@visibleForTesting
+LocalKey publicStoreModeContentKey(GoRouterState state) {
+  return ValueKey<(LocalKey, String, String)>(
+    (
+      state.pageKey,
+      state.matchedLocation,
+      _storefrontMode(state),
+    ),
+  );
 }
 
 Page<dynamic> _buildPage(
@@ -228,15 +230,12 @@ Page<dynamic> _buildPage(
     }
   }
 
-  // Use mode-aware key to force full page recreation on mode changes.
-  // This prevents element reactivation conflicts during layout passes.
-  final pageKey = _modeAwarePageKey(state);
+  final pageKey = publicStoreRoutePageKey(state);
 
-  // CRITICAL: Wrap in KeyedSubtree to ensure the ENTIRE widget subtree is
-  // recreated (not reactivated from cache) when mode changes. This prevents
-  // LayoutBuilder.didChangeDependencies from triggering during a layout pass.
+  // Recreate the layout on mode changes without changing or sharing the
+  // Navigator Page identity.
   final pageChild = KeyedSubtree(
-    key: pageKey,
+    key: publicStoreModeContentKey(state),
     child: PublicStoreLayout(
       routePath: state.uri.path,
       enablePageViewScrolling: true,
@@ -323,13 +322,12 @@ Page<dynamic> _buildPageNoScroll(
     }
   }
 
-  // Use mode-aware key to force full page recreation on mode changes.
-  final pageKey = _modeAwarePageKey(state);
+  final pageKey = publicStoreRoutePageKey(state);
 
-  // CRITICAL: Wrap in KeyedSubtree to ensure the ENTIRE widget subtree is
-  // recreated (not reactivated from cache) when mode changes.
+  // Recreate the layout on mode changes without changing or sharing the
+  // Navigator Page identity.
   final pageChild = KeyedSubtree(
-    key: pageKey,
+    key: publicStoreModeContentKey(state),
     child: PublicStoreLayout(
       routePath: state.uri.path,
       enablePageViewScrolling: false,

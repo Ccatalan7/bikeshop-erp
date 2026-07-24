@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { hasSupportedEcommerceTaxRate } from "../_shared/ecommerce_tax.ts";
-import { isVerifiableMerchantBrand } from "../_shared/google_merchant_feed.ts";
+import { projectPublicCommerceProduct } from "../_shared/google_merchant_feed.ts";
 import {
   mergeCanonicalAvailableQuantities,
   resolveAvailableProductQuantity,
@@ -369,7 +369,7 @@ async function getMerchantFeedEligibility(offerId: string) {
   const { data, error } = await client
     .from("products")
     .select(
-      "id, tenant_id, name, is_active, is_published, show_on_website, is_google_merchant, lifecycle_status, product_type, price, website_price, price_currency, stock_quantity, inventory_qty, track_stock, is_set, tax_rate, image_url, image_url_optimized, website_image_url, website_image_url_optimized, image_urls, website_image_urls, brand_id, brand, website_merchant_brand",
+      "id, tenant_id, name, website_name, website_merchant_title, sku, description, website_description, website_merchant_description, is_active, is_published, show_on_website, is_google_merchant, lifecycle_status, product_type, price, website_price, price_currency, stock_quantity, inventory_qty, track_stock, is_set, tax_rate, image_url, image_url_optimized, website_image_url, website_image_url_optimized, image_urls, website_image_urls, brand_id, brand, website_merchant_brand, website_merchant_gtin, gtin, barcode, website_merchant_mpn, category_id, website_google_product_category",
     )
     .eq("id", offerId)
     .maybeSingle();
@@ -400,10 +400,32 @@ async function getMerchantFeedEligibility(offerId: string) {
     [data],
     (availabilityRows || []) as unknown as Array<Record<string, unknown>>,
   )[0];
+  const { data: publicRows, error: publicCatalogError } = await client.rpc(
+    "get_public_products",
+    {
+      p_tenant_id: data.tenant_id,
+      p_product_ids: [data.id],
+      p_only_in_stock: true,
+      p_sort_by: "name",
+      p_limit: 1,
+      p_offset: 0,
+    },
+  );
 
   const reasons: string[] = [];
   if (availabilityError) {
     reasons.push("No se pudo calcular la disponibilidad vendible del producto.");
+  }
+  if (publicCatalogError) {
+    reasons.push(
+      "No se pudo verificar la misma regla pública que usa la landing del producto.",
+    );
+  } else if (
+    !(publicRows || []).some((row: { id?: unknown }) => cleanText(row.id) === cleanText(data.id))
+  ) {
+    reasons.push(
+      "Las reglas actuales del catálogo web no mantienen una landing pública para este producto.",
+    );
   }
   if (data.is_active !== true) reasons.push("El producto no esta activo.");
   if (data.is_published !== true) {
@@ -423,57 +445,47 @@ async function getMerchantFeedEligibility(offerId: string) {
   if (data.product_type !== "product") {
     reasons.push("Solo los productos fisicos entran al feed Merchant.");
   }
-  const effectivePrice = Number(data.website_price ?? data.price);
-  if (!Number.isFinite(effectivePrice) || effectivePrice <= 0) {
-    reasons.push("El precio efectivo de la tienda debe ser mayor a 0.");
-  }
-  const currency = cleanText(data.price_currency || "CLP").toUpperCase();
-  if (currency !== "CLP") {
-    reasons.push("La moneda de la tienda para Chile debe ser CLP.");
-  }
   if (!hasSupportedEcommerceTaxRate(data.tax_rate)) {
     reasons.push("La clasificación tributaria debe ser exenta (0) o afecta a IVA (19).");
-  }
-  const scalarImages = [
-    data.website_image_url_optimized,
-    data.image_url_optimized,
-    data.website_image_url,
-    data.image_url,
-  ];
-  const galleryImages = Array.isArray(data.website_image_urls) &&
-      data.website_image_urls.length > 0
-    ? data.website_image_urls
-    : Array.isArray(data.image_urls)
-    ? data.image_urls
-    : [];
-  const hasPublicImage = [...scalarImages, ...galleryImages].some((value) => {
-    const url = cleanText(value);
-    return url.startsWith("https://") || url.startsWith("http://");
-  });
-  if (!hasPublicImage) {
-    reasons.push("El producto necesita una imagen publica HTTP(S).");
   }
   let linkedBrand = "";
   if (cleanText(data.brand_id)) {
     const { data: brandRow } = await client
       .from("product_brands")
-      .select("name")
+      .select("name, tenant_id, is_active")
       .eq("id", data.brand_id)
+      .eq("is_active", true)
+      .or(`tenant_id.eq.${data.tenant_id},tenant_id.is.null`)
       .maybeSingle();
     linkedBrand = cleanText(brandRow?.name);
   }
-  const explicitBrand = cleanText(data.website_merchant_brand) || linkedBrand ||
-    cleanText(data.brand);
-  const hasExplicitBrand = isVerifiableMerchantBrand(explicitBrand);
-  if (!hasExplicitBrand) {
-    reasons.push(
-      "El producto necesita una marca de fabricante verificable; origen, marketplace o Generico no sirven como marca.",
-    );
+  const commerce = projectPublicCommerceProduct(canonicalProduct, {
+    resolvedBrand: linkedBrand,
+  });
+  const issueMessages: Record<string, string> = {
+    missing_identity: "El producto no tiene una identidad local válida.",
+    missing_title: "El producto necesita un título público.",
+    missing_description: "El producto necesita una descripción pública.",
+    invalid_price: "El precio efectivo de la tienda debe ser mayor a 0.",
+    missing_image: "El producto necesita una imagen pública HTTP(S).",
+    missing_brand:
+      "El producto necesita una marca de fabricante verificable; origen, marketplace o Genérico no sirven como marca.",
+    missing_product_identifiers:
+      "El producto necesita un GTIN válido o la combinación de marca y MPN del fabricante.",
+  };
+  reasons.push(
+    ...commerce.merchant_issues.map((issue) =>
+      issueMessages[issue] || `El producto no cumple la regla Merchant: ${issue}.`
+    ),
+  );
+
+  const currency = commerce.currency;
+  if (currency !== "CLP") {
+    reasons.push("La moneda de la tienda para Chile debe ser CLP.");
   }
   const availableQuantity = resolveAvailableProductQuantity(canonicalProduct);
-  if (data.track_stock !== false && availableQuantity <= 0) {
-    reasons.push("El producto no tiene disponibilidad vendible en el catálogo público.");
-  }
+  const hasPublicImage = commerce.image_urls.length > 0;
+  const hasExplicitBrand = !commerce.merchant_issues.includes("missing_brand");
 
   return {
     known: true,
@@ -481,19 +493,19 @@ async function getMerchantFeedEligibility(offerId: string) {
     reasons,
     product: {
       id: data.id,
-      name: data.name,
+      name: commerce.title,
       isActive: data.is_active === true,
       isPublished: data.is_published === true,
       showOnWebsite: data.show_on_website === true,
       isGoogleMerchant: data.is_google_merchant === true,
       lifecycleStatus: data.lifecycle_status,
       productType: data.product_type,
-      price: effectivePrice,
+      price: commerce.price,
       currency,
       stockQuantity: availableQuantity,
       hasPublicImage,
       hasExplicitBrand,
-      merchantBrand: explicitBrand || null,
+      merchantBrand: commerce.brand || null,
       taxRate: data.tax_rate,
     },
   };

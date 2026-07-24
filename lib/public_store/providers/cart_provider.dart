@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../shared/models/product.dart';
+import '../models/public_commerce_product_projection.dart';
 import '../models/storefront_tax_summary.dart';
 import '../services/meta_pixel_service.dart';
 
@@ -12,11 +13,17 @@ class CartItem {
     required this.quantity,
   });
 
-  double get subtotal => product.price * quantity;
+  PublicCommerceProductProjection get commerce =>
+      PublicCommerceProductProjection.fromProduct(
+        product,
+        categoryPath: product.categoryName,
+      );
+
+  double get subtotal => commerce.price * quantity;
 
   StorefrontTaxLineInput get taxInput => StorefrontTaxLineInput(
-        label: product.name,
-        grossUnitPrice: product.price,
+        label: commerce.title,
+        grossUnitPrice: commerce.price,
         quantity: quantity,
         taxRate: product.taxRate,
       );
@@ -72,13 +79,17 @@ class CartProvider with ChangeNotifier {
       _items.add(CartItem(product: product, quantity: quantity));
     }
 
+    final commerce = PublicCommerceProductProjection.fromProduct(
+      product,
+      categoryPath: product.categoryName,
+    );
     MetaPixelService.instance.trackAddToCart(
       contentId: MetaPixelService.catalogContentId(
         sku: product.sku,
         productId: product.id,
       ),
-      contentName: product.websiteName ?? product.name,
-      itemPrice: product.price,
+      contentName: commerce.title,
+      itemPrice: commerce.price,
       quantity: quantity,
     );
     notifyListeners();

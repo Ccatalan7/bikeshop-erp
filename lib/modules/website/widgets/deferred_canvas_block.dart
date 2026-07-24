@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 
 import 'canvas_block.dart' deferred as canvas_lib;
 
+/// Starts fetching the deferred Canvas runtime before a composed carousel
+/// slide becomes visible. `loadLibrary` is idempotent, so the active
+/// `DeferredCanvasBlock` will reuse the same completed load.
+Future<void> preloadDeferredCanvasLibrary() => canvas_lib.loadLibrary();
+
 class DeferredCanvasBlock extends StatefulWidget {
   final Map<String, dynamic> data;
   final Color accentColor;

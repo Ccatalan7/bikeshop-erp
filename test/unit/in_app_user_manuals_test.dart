@@ -67,6 +67,8 @@ void main() {
     expect(jobs, contains('`Cubierto` queda bloqueado'));
     expect(jobs, contains('REINTENTAR desde el mismo aviso'));
     expect(jobs, contains('copia al portapapeles, en formato CSV'));
+    expect(jobs, contains('abre directamente Productos y Servicios'));
+    expect(jobs, contains('flecha mínima del lado derecho del chip'));
 
     expect(website, contains('```flow'));
     expect(website, contains('Mercado Pago'));

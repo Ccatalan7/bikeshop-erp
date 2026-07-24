@@ -15,6 +15,7 @@ class WebsiteAdminShell extends StatelessWidget {
     required this.child,
     this.actions = const [],
     this.embedded = false,
+    this.showHeaderWhenEmbedded = true,
     this.showBack = true,
     this.onBack,
   });
@@ -24,6 +25,7 @@ class WebsiteAdminShell extends StatelessWidget {
   final Widget child;
   final List<Widget> actions;
   final bool embedded;
+  final bool showHeaderWhenEmbedded;
   final bool showBack;
   final VoidCallback? onBack;
 
@@ -90,13 +92,14 @@ class WebsiteAdminShell extends StatelessWidget {
         color: scheme.surfaceContainerLowest,
         child: Column(
           children: [
-            _WebsiteAdminHeader(
-              title: title,
-              description: description,
-              actions: actions,
-              showBack: showBack && !embedded,
-              onBack: onBack ?? () => context.go('/website'),
-            ),
+            if (!embedded || showHeaderWhenEmbedded)
+              _WebsiteAdminHeader(
+                title: title,
+                description: description,
+                actions: actions,
+                showBack: showBack && !embedded,
+                onBack: onBack ?? () => context.go('/website'),
+              ),
             Expanded(child: child),
           ],
         ),

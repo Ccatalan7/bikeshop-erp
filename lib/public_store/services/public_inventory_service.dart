@@ -24,6 +24,44 @@ class PublicCategoryCountSnapshot {
   });
 }
 
+class PublicCatalogBrandFacet {
+  final String id;
+  final String label;
+  final int itemCount;
+
+  const PublicCatalogBrandFacet({
+    required this.id,
+    required this.label,
+    required this.itemCount,
+  });
+}
+
+class PublicCatalogFacetSnapshot {
+  final List<PublicCatalogBrandFacet> brands;
+  final Map<String, int> directCategoryCounts;
+  final int? filteredTotalCount;
+  final double? minPrice;
+  final double? maxPrice;
+  final bool isAvailable;
+
+  const PublicCatalogFacetSnapshot({
+    required this.brands,
+    this.directCategoryCounts = const {},
+    this.filteredTotalCount,
+    required this.minPrice,
+    required this.maxPrice,
+    this.isAvailable = true,
+  });
+
+  const PublicCatalogFacetSnapshot.unavailable()
+      : brands = const [],
+        directCategoryCounts = const {},
+        filteredTotalCount = null,
+        minPrice = null,
+        maxPrice = null,
+        isAvailable = false;
+}
+
 /// Public-facing inventory service for the storefront
 ///
 /// This service does NOT require authentication - it works for anonymous users.
@@ -137,6 +175,55 @@ class PublicInventoryService extends ChangeNotifier {
     }
   }
 
+  /// Resolves the canonical catalog brand for the public product projection.
+  ///
+  /// The public product RPC still exposes the legacy denormalized `brand`
+  /// column. Merchant and static SEO resolve `brand_id` through
+  /// `product_brands`, so the live storefront must do the same before a
+  /// [Product] reaches the detail page, cart or checkout.
+  Future<List<Map<String, dynamic>>> _attachCanonicalBrandNames({
+    required String tenantId,
+    required List<Map<String, dynamic>> rows,
+  }) async {
+    if (rows.isEmpty) return rows;
+    final brandIds = rows
+        .map((row) => row['brand_id']?.toString().trim() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (brandIds.isEmpty) return rows;
+
+    try {
+      final response = await _supabase
+          .from('product_brands')
+          .select('id,name,tenant_id,is_active')
+          .inFilter('id', brandIds)
+          .eq('is_active', true);
+      final canonicalNames = canonicalPublicProductBrandNames(
+        rows: (response as List)
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .toList(growable: false),
+        tenantId: tenantId,
+        requestedBrandIds: brandIds,
+      );
+      if (canonicalNames.isEmpty) return rows;
+
+      return rows.map((row) {
+        final brandId = row['brand_id']?.toString().trim() ?? '';
+        final canonicalName = canonicalNames[brandId];
+        return canonicalName == null
+            ? row
+            : <String, dynamic>{...row, 'brand': canonicalName};
+      }).toList(growable: false);
+    } catch (error) {
+      debugPrint(
+        '⚠️ PublicInventoryService: canonical brand unavailable; '
+        'using the catalog fallback: $error',
+      );
+      return rows;
+    }
+  }
+
   Future<List<Map<String, dynamic>>> _attachSetIdentity({
     required String tenantId,
     required List<Map<String, dynamic>> rows,
@@ -154,7 +241,12 @@ class PublicInventoryService extends ChangeNotifier {
       final response = await _supabase
           .from('products')
           .select(
-            'id,is_set,set_type,parent_set_id,component_label,component_position',
+            'id,is_set,set_type,parent_set_id,component_label,component_position,'
+            'website_name,website_price,website_description,'
+            'website_seo_title,website_seo_description,'
+            'website_merchant_title,website_merchant_description,'
+            'website_merchant_brand,website_merchant_gtin,website_merchant_mpn,'
+            'website_google_product_category,price_currency',
           )
           .eq('tenant_id', tenantId)
           .inFilter('id', ids);
@@ -209,26 +301,53 @@ class PublicInventoryService extends ChangeNotifier {
     ProductType? productType,
     PublicProductVisibilityPolicy? policy,
     bool onlyInStock = true,
+    // `onlyInStock` is also a legacy canonical-policy input. Keep this
+    // separate so a missing visitor filter does not accidentally become an
+    // additional availability restriction in the faceted facade.
+    bool applyAvailabilityFacet = false,
+    List<String>? brandIds,
+    double? minPrice,
+    double? maxPrice,
     String sortBy = 'name',
     int limit = 20,
     int offset = 0,
   }) async {
     final sw = Stopwatch()..start();
     try {
+      final hasProfessionalFacets = applyAvailabilityFacet ||
+          brandIds?.isNotEmpty == true ||
+          minPrice != null ||
+          maxPrice != null;
       final response = await _supabase.rpc(
-        'get_public_products',
-        params: _cleanRpcParams({
-          'p_tenant_id': tenantId,
-          'p_category_ids': categoryIds,
-          'p_product_ids': productIds,
-          'p_sku': sku,
-          'p_search_term': searchQuery?.trim(),
-          'p_product_type': productType?.name,
-          'p_only_in_stock': onlyInStock,
-          'p_sort_by': sortBy,
-          'p_limit': limit,
-          'p_offset': offset,
-        }),
+        hasProfessionalFacets
+            ? 'get_public_products_faceted_v1'
+            : 'get_public_products',
+        params: _cleanRpcParams(hasProfessionalFacets
+            ? {
+                'p_tenant_id': tenantId,
+                'p_category_ids': categoryIds,
+                'p_search_term': searchQuery?.trim(),
+                'p_product_type': productType?.name,
+                'p_only_in_stock': applyAvailabilityFacet && onlyInStock,
+                'p_brand_ids': brandIds,
+                'p_min_price': minPrice,
+                'p_max_price': maxPrice,
+                'p_sort_by': sortBy,
+                'p_limit': limit,
+                'p_offset': offset,
+              }
+            : {
+                'p_tenant_id': tenantId,
+                'p_category_ids': categoryIds,
+                'p_product_ids': productIds,
+                'p_sku': sku,
+                'p_search_term': searchQuery?.trim(),
+                'p_product_type': productType?.name,
+                'p_only_in_stock': onlyInStock,
+                'p_sort_by': sortBy,
+                'p_limit': limit,
+                'p_offset': offset,
+              }),
       );
 
       final rows = (response as List)
@@ -242,7 +361,11 @@ class PublicInventoryService extends ChangeNotifier {
         tenantId: tenantId,
         rows: classifiedRows,
       );
-      final products = setAwareRows.map(Product.fromJson).toList();
+      final brandAwareRows = await _attachCanonicalBrandNames(
+        tenantId: tenantId,
+        rows: setAwareRows,
+      );
+      final products = brandAwareRows.map(Product.fromJson).toList();
       final totalCount = classifiedRows.isEmpty
           ? 0
           : (classifiedRows.first['total_count'] as num?)?.toInt() ??
@@ -254,7 +377,92 @@ class PublicInventoryService extends ChangeNotifier {
     } catch (e) {
       debugPrint(
           '❌ PublicInventoryService: Error fetching product page: $e (${sw.elapsedMilliseconds}ms)');
-      return const PublicProductPage(products: [], totalCount: 0);
+      // A transport/schema/RPC failure is not a legitimate zero-result page.
+      // Let the storefront render an explicit retry state instead of telling
+      // the visitor that no products match. This is especially important
+      // during database-first rollout of the additive faceted RPC.
+      rethrow;
+    }
+  }
+
+  Future<PublicCatalogFacetSnapshot> getCatalogFacetsForTenant({
+    required String tenantId,
+    List<String>? categoryIds,
+    String? searchQuery,
+    ProductType? productType,
+    bool onlyInStock = true,
+    // True only when the visitor explicitly selected the availability facet.
+    bool applyAvailabilityFacet = false,
+    List<String>? brandIds,
+    double? minPrice,
+    double? maxPrice,
+  }) async {
+    try {
+      final response = await _supabase.rpc(
+        'get_public_product_facets_v1',
+        params: _cleanRpcParams({
+          'p_tenant_id': tenantId,
+          'p_category_ids': categoryIds,
+          'p_search_term': searchQuery?.trim(),
+          'p_product_type': productType?.name,
+          'p_only_in_stock': applyAvailabilityFacet && onlyInStock,
+          'p_brand_ids': brandIds,
+          'p_min_price': minPrice,
+          'p_max_price': maxPrice,
+        }),
+      );
+
+      final brands = <PublicCatalogBrandFacet>[];
+      final directCategoryCounts = <String, int>{};
+      int? filteredTotalCount;
+      double? rangeMin;
+      double? rangeMax;
+      for (final raw in response as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        switch (row['facet_key']?.toString()) {
+          case 'brand':
+            final id = row['value_id']?.toString().trim() ?? '';
+            final label = row['value_label']?.toString().trim() ?? '';
+            if (id.isNotEmpty && label.isNotEmpty) {
+              brands.add(PublicCatalogBrandFacet(
+                id: id,
+                label: label,
+                itemCount: (row['item_count'] as num?)?.toInt() ?? 0,
+              ));
+            }
+            break;
+          case 'price':
+            rangeMin = (row['range_min'] as num?)?.toDouble();
+            rangeMax = (row['range_max'] as num?)?.toDouble();
+            break;
+          case 'category':
+            final id = row['value_id']?.toString().trim() ?? '';
+            if (id.isNotEmpty) {
+              directCategoryCounts[id] =
+                  (row['item_count'] as num?)?.toInt() ?? 0;
+            }
+            break;
+          case 'summary':
+            filteredTotalCount = (row['item_count'] as num?)?.toInt() ?? 0;
+            break;
+        }
+      }
+      brands.sort((a, b) => a.label.toLowerCase().compareTo(
+            b.label.toLowerCase(),
+          ));
+      return PublicCatalogFacetSnapshot(
+        brands: List.unmodifiable(brands),
+        directCategoryCounts: Map.unmodifiable(directCategoryCounts),
+        filteredTotalCount: filteredTotalCount,
+        minPrice: rangeMin,
+        maxPrice: rangeMax,
+      );
+    } catch (error) {
+      debugPrint(
+        '⚠️ PublicInventoryService: professional catalog facets unavailable: '
+        '$error',
+      );
+      return const PublicCatalogFacetSnapshot.unavailable();
     }
   }
 
@@ -440,7 +648,11 @@ class PublicInventoryService extends ChangeNotifier {
         rows: rows,
         deriveAvailability: true,
       );
-      var products = setAwareRows.map(Product.fromJson).toList();
+      final brandAwareRows = await _attachCanonicalBrandNames(
+        tenantId: tenantId,
+        rows: setAwareRows,
+      );
+      var products = brandAwareRows.map(Product.fromJson).toList();
       if (onlyInStock) {
         products = products
             .where(
@@ -527,7 +739,7 @@ class PublicInventoryService extends ChangeNotifier {
         .from('product_categories')
         // Only fetch what the public store needs (smaller payload = faster).
         .select(
-            'id,tenant_id,name,full_path,parent_id,level,image_url,sort_order')
+            'id,tenant_id,name,full_path,parent_id,level,description,image_url,show_on_website,sort_order')
         .eq('tenant_id', tenantId)
         .eq('is_active', true)
         .order('sort_order', ascending: true)
@@ -665,7 +877,11 @@ class PublicInventoryService extends ChangeNotifier {
         tenantId: tenantId,
         rows: classifiedRows,
       );
-      final products = setAwareRows.map(Product.fromJson).toList();
+      final brandAwareRows = await _attachCanonicalBrandNames(
+        tenantId: tenantId,
+        rows: setAwareRows,
+      );
+      final products = brandAwareRows.map(Product.fromJson).toList();
 
       debugPrint(
           '✅ PublicInventoryService: Found ${products.length} featured products');
@@ -779,7 +995,11 @@ class PublicInventoryService extends ChangeNotifier {
         tenantId: tenantId,
         rows: classifiedRows,
       );
-      final products = setAwareRows.map(Product.fromJson).toList();
+      final brandAwareRows = await _attachCanonicalBrandNames(
+        tenantId: tenantId,
+        rows: setAwareRows,
+      );
+      final products = brandAwareRows.map(Product.fromJson).toList();
       final visibleProducts = policy == null
           ? products
           : products.where(policy.allowsProduct).toList();
@@ -799,4 +1019,35 @@ class PublicInventoryService extends ChangeNotifier {
       );
     }
   }
+}
+
+/// Builds the tenant-safe linked-brand map shared by public product consumers.
+///
+/// `product_brands` can contain tenant-owned and global (`tenant_id = null`)
+/// rows. The caller may use a public client, so this defensive boundary also
+/// rejects active rows from another tenant and rows that were not requested.
+Map<String, String> canonicalPublicProductBrandNames({
+  required List<Map<String, dynamic>> rows,
+  required String tenantId,
+  required Iterable<String> requestedBrandIds,
+}) {
+  final requested = requestedBrandIds
+      .map((id) => id.trim())
+      .where((id) => id.isNotEmpty)
+      .toSet();
+  final normalizedTenantId = tenantId.trim();
+  final namesById = <String, String>{};
+  for (final row in rows) {
+    final id = row['id']?.toString().trim() ?? '';
+    final name = row['name']?.toString().trim() ?? '';
+    final rowTenantId = row['tenant_id']?.toString().trim() ?? '';
+    if (!requested.contains(id) ||
+        name.isEmpty ||
+        row['is_active'] != true ||
+        (rowTenantId.isNotEmpty && rowTenantId != normalizedTenantId)) {
+      continue;
+    }
+    namesById[id] = name;
+  }
+  return Map.unmodifiable(namesById);
 }

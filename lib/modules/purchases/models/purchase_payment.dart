@@ -124,3 +124,89 @@ class PurchasePayment {
     return DateTime.now();
   }
 }
+
+/// Durable audit receipt emitted by the atomic purchase-payment correction
+/// command. The payment remains the accounting source identity; these events
+/// preserve who changed it, why, and which settlement journal replaced the
+/// prior evidence.
+class PurchasePaymentEditEvent {
+  const PurchasePaymentEditEvent({
+    required this.id,
+    required this.tenantId,
+    required this.paymentId,
+    required this.invoiceId,
+    required this.operationKey,
+    required this.reason,
+    required this.financialFieldsChanged,
+    required this.legacyJournalRelinked,
+    required this.beforeSnapshot,
+    required this.afterSnapshot,
+    required this.createdAt,
+    this.traceOperationId,
+    this.priorJournalEntryId,
+    this.currentJournalEntryId,
+    this.createdBy,
+  });
+
+  final String id;
+  final String tenantId;
+  final String paymentId;
+  final String invoiceId;
+  final String operationKey;
+  final String reason;
+  final bool financialFieldsChanged;
+  final bool legacyJournalRelinked;
+  final Map<String, dynamic> beforeSnapshot;
+  final Map<String, dynamic> afterSnapshot;
+  final String? traceOperationId;
+  final String? priorJournalEntryId;
+  final String? currentJournalEntryId;
+  final String? createdBy;
+  final DateTime createdAt;
+
+  factory PurchasePaymentEditEvent.fromJson(Map<String, dynamic> json) {
+    Map<String, dynamic> snapshot(dynamic value) {
+      if (value is Map<String, dynamic>) return Map.unmodifiable(value);
+      if (value is Map) {
+        return Map.unmodifiable(Map<String, dynamic>.from(value));
+      }
+      return const {};
+    }
+
+    return PurchasePaymentEditEvent(
+      id: json['id']?.toString() ?? '',
+      tenantId: json['tenant_id']?.toString() ?? '',
+      paymentId: json['payment_id']?.toString() ?? '',
+      invoiceId: json['invoice_id']?.toString() ?? '',
+      operationKey: json['operation_key']?.toString() ?? '',
+      reason: json['reason']?.toString() ?? '',
+      financialFieldsChanged: json['financial_fields_changed'] == true,
+      legacyJournalRelinked: json['legacy_journal_relinked'] == true,
+      beforeSnapshot: snapshot(json['before_snapshot']),
+      afterSnapshot: snapshot(json['after_snapshot']),
+      traceOperationId: json['trace_operation_id']?.toString(),
+      priorJournalEntryId: json['prior_journal_entry_id']?.toString(),
+      currentJournalEntryId: json['current_journal_entry_id']?.toString(),
+      createdBy: json['created_by']?.toString(),
+      createdAt: PurchasePayment._parseDate(json['created_at']),
+    );
+  }
+}
+
+/// Immutable result returned by the audited purchase-payment correction
+/// command, including the durable event receipt and replay status.
+class PurchasePaymentCorrectionResult {
+  const PurchasePaymentCorrectionResult({
+    required this.payment,
+    required this.event,
+    required this.replayed,
+    required this.financialFieldsChanged,
+    required this.legacyJournalRelinked,
+  });
+
+  final PurchasePayment payment;
+  final PurchasePaymentEditEvent event;
+  final bool replayed;
+  final bool financialFieldsChanged;
+  final bool legacyJournalRelinked;
+}

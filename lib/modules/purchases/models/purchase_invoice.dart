@@ -1,6 +1,7 @@
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/models/product.dart'
     show PurchaseTreatment, parsePurchaseTreatment;
+import 'purchase_receipt.dart';
 
 Map<String, dynamic> _ensureMap(dynamic value) {
   if (value is Map<String, dynamic>) return value;
@@ -33,7 +34,15 @@ class PurchaseInvoice {
       'date,due_date,status,subtotal,tax,total,net_amount,paid_amount,balance,'
       'supplier_refunded_amount,credited_amount,supplier_credit_balance,'
       'prepayment_model,sent_date,confirmed_date,received_date,paid_date,'
-      'created_at,updated_at';
+      'items,created_at,updated_at';
+  static const String listReadModelSelect =
+      '$listPreviewSelect,receipt_state,receipt_expected_quantity,'
+      'receipt_accepted_quantity,receipt_reported_difference_quantity,'
+      'receipt_resolved_difference_quantity,'
+      'receipt_nonphysical_resolution_quantity,'
+      'receipt_unresolved_difference_quantity,'
+      'receipt_physical_remaining_quantity,receipt_remaining_quantity,'
+      'receipt_count,receipt_latest_received_at,receipt_legacy_received';
 
   final String? id;
   final String tenantId;
@@ -75,6 +84,7 @@ class PurchaseInvoice {
   final double balance;
   final double creditedAmount;
   final double supplierCreditBalance;
+  final PurchaseReceiptFulfillment? receiptFulfillment;
 
   PurchaseInvoice({
     this.id,
@@ -112,6 +122,7 @@ class PurchaseInvoice {
     this.supplierRefundedAmount = 0,
     this.creditedAmount = 0,
     this.supplierCreditBalance = 0,
+    this.receiptFulfillment,
     double? balance,
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now(),
@@ -153,6 +164,7 @@ class PurchaseInvoice {
     double? supplierRefundedAmount,
     double? creditedAmount,
     double? supplierCreditBalance,
+    PurchaseReceiptFulfillment? receiptFulfillment,
     double? balance,
   }) {
     return PurchaseInvoice(
@@ -194,6 +206,7 @@ class PurchaseInvoice {
       creditedAmount: creditedAmount ?? this.creditedAmount,
       supplierCreditBalance:
           supplierCreditBalance ?? this.supplierCreditBalance,
+      receiptFulfillment: receiptFulfillment ?? this.receiptFulfillment,
       balance: balance ?? this.balance,
     );
   }
@@ -253,6 +266,9 @@ class PurchaseInvoice {
       creditedAmount: (json['credited_amount'] as num?)?.toDouble() ?? 0,
       supplierCreditBalance:
           (json['supplier_credit_balance'] as num?)?.toDouble() ?? 0,
+      receiptFulfillment: json.containsKey('receipt_state')
+          ? PurchaseReceiptFulfillment.fromListReadModel(json)
+          : null,
       balance: (json['balance'] as num?)?.toDouble(),
     );
   }

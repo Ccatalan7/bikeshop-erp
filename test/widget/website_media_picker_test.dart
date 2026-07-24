@@ -95,4 +95,40 @@ void main() {
     expect(result!.productId, 'product-1');
     expect(result!.linksProduct, isTrue);
   });
+
+  testWidgets('upload explains the automatic web optimization', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () => showWebsiteMediaPicker(
+                context: context,
+                mediaService: _FakeWebsiteMediaService(),
+              ),
+              child: const Text('Abrir picker'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Abrir picker'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Subir'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'El editor ajusta el tamaño y publica WebP automáticamente.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'JPG, PNG o WebP. Transparencia y calidad visual se conservan.',
+      ),
+      findsOneWidget,
+    );
+  });
 }

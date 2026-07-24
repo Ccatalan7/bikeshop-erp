@@ -5,15 +5,20 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/public_store_theme.dart';
+import '../theme/public_store_surface_theme.dart';
+import '../models/public_commerce_product_projection.dart';
 import '../providers/cart_provider.dart';
-import '../providers/public_store_tenant_provider.dart';
 import '../services/public_inventory_service.dart';
+import '../utils/public_store_tenant_resolver.dart';
 import '../widgets/full_page_loading.dart';
+import '../widgets/public_store_layout.dart';
 import '../../shared/models/product.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../../shared/utils/seo_helper.dart';
+import '../../modules/inventory/models/category_models.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
+import 'package:vinabike_erp/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/public_store/utils/product_url.dart';
 import 'package:vinabike_erp/public_store/utils/structured_data.dart';
@@ -34,10 +39,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   // Static product snapshots use the same ID. A hydrated product replaces that
   // snapshot instead of leaving Google two conflicting Product entities.
   static const _structuredDataScriptId = 'seo-product-jsonld';
-  static const Color _catalogBlue = Color(0xFF123F68);
-  static const Color _logoBlue = Color(0xFF093357);
-  static const Color _warmLine = Color(0xFFE8E2D8);
+
+  PublicStoreSurfaceTheme get _storeTheme =>
+      PublicStoreSurfaceTheme.of(context);
   Product? _product;
+  List<Category> _categoryTrail = const [];
   List<Product> _relatedProducts = [];
   bool _isLoading = true;
   bool _isLoadingRelated = false;
@@ -60,7 +66,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   @override
   void initState() {
     super.initState();
-    _loadProduct();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_loadProduct());
+    });
   }
 
   @override
@@ -69,6 +78,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     if (widget.productId != oldWidget.productId) {
       removeStructuredDataScript(_structuredDataScriptId);
       _product = null;
+      _categoryTrail = const [];
       _relatedProducts = [];
       _technicalSpecs = const [];
       _isLoadingTechnicalSpecs = false;
@@ -95,14 +105,20 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       _relatedProducts = [];
       _technicalSpecs = const [];
     });
+    // Product detail is the canonical SEO owner for every product route.
+    // Install a restrictive state immediately so a slow, missing or rejected
+    // product can never inherit indexable metadata from the previous page.
+    _updateUnavailableSeo(token);
 
     try {
       final inventoryService = context.read<PublicInventoryService>();
-      final tenantProvider = context.read<PublicStoreTenantProvider>();
-      final tenantId = tenantProvider.tenantId;
+      final tenantId = await resolvePublicStoreTenantId(context);
+      if (!mounted || token != _loadToken) return;
 
       if (tenantId == null) {
         debugPrint('❌ [ProductDetail] No tenant ID available');
+        setState(() => _isLoading = false);
+        _updateUnavailableSeo(token);
         return;
       }
       final visibilityPolicy = _readVisibilityPolicy();
@@ -143,7 +159,17 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
       if (!mounted || token != _loadToken) return;
 
+      final categoryTrail = loadedProduct == null
+          ? const <Category>[]
+          : await _resolveCategoryTrail(
+              inventoryService: inventoryService,
+              tenantId: tenantId,
+              product: loadedProduct,
+            );
+      if (!mounted || token != _loadToken) return;
+
       _product = loadedProduct;
+      _categoryTrail = categoryTrail;
 
       if (_product != null) {
         MetaPixelService.instance.trackViewContent(
@@ -151,8 +177,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             sku: _product!.sku,
             productId: _product!.id,
           ),
-          contentName: _product!.websiteName ?? _product!.name,
-          value: _product!.price,
+          contentName: _commerceProjection(_product!).title,
+          value: _commerceProjection(_product!).price,
         );
         debugPrint('✅ [ProductDetail] Found product: ${_product!.name}');
         // Render immediately, then load related products in background.
@@ -176,19 +202,52 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         debugPrint('❌ [ProductDetail] Product not found: ${widget.productId}');
         removeStructuredDataScript(_structuredDataScriptId);
         setState(() => _isLoading = false);
+        _updateUnavailableSeo(token);
       }
     } catch (e) {
       debugPrint('[ProductDetailPage] Error loading product: $e');
       removeStructuredDataScript(_structuredDataScriptId);
       if (mounted) {
         setState(() => _isLoading = false);
+        _updateUnavailableSeo(token);
       }
     }
   }
 
+  Future<List<Category>> _resolveCategoryTrail({
+    required PublicInventoryService inventoryService,
+    required String tenantId,
+    required Product product,
+  }) async {
+    final categoryId = product.categoryId?.trim() ?? '';
+    if (categoryId.isEmpty) return const [];
+
+    final categories = await inventoryService.getCategoriesForTenant(
+      tenantId: tenantId,
+    );
+    final byId = {
+      for (final category in categories)
+        if (category.id?.trim().isNotEmpty == true)
+          category.id!.trim(): category,
+    };
+    final reversedTrail = <Category>[];
+    final visited = <String>{};
+    var currentId = categoryId;
+    while (currentId.isNotEmpty && visited.add(currentId)) {
+      final category = byId[currentId];
+      if (category == null) break;
+      reversedTrail.add(category);
+      currentId = category.parentId?.trim() ?? '';
+    }
+    return List.unmodifiable(reversedTrail.reversed);
+  }
+
   Future<String?> _resolveProductAlias(String tenantId) async {
     try {
-      final aliasPath = GoRouterState.of(context).uri.path;
+      final aliasPath = normalizePublicProductRouteForRuntime(
+        GoRouterState.of(context).uri.path,
+        isErpMounted: false,
+      );
       final result = await Supabase.instance.client.rpc(
         'resolve_public_product_url_alias',
         params: {
@@ -208,8 +267,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || token != _loadToken) return;
 
-      final canonicalPath = publicProductPath(product);
       final currentUri = GoRouterState.of(context).uri;
+      final canonicalPath = normalizePublicProductRouteForRuntime(
+        publicProductPath(product),
+        isErpMounted: currentUri.path == '/tienda' ||
+            currentUri.path.startsWith('/tienda/'),
+      );
       if (currentUri.path == canonicalPath) return;
 
       final canonicalUri = currentUri.replace(path: canonicalPath);
@@ -313,62 +376,33 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
     final normalizedStoreUrl = storeUrl.replaceAll(RegExp(r'/+$'), '');
     final productUrl = '$normalizedStoreUrl${publicProductPath(product)}';
-    final isStockTracked =
-        product.productType != ProductType.service && product.trackStock;
-    final availability = isStockTracked
-        ? (product.availableStockQuantity > 0
-            ? 'https://schema.org/InStock'
-            : 'https://schema.org/OutOfStock')
-        : 'https://schema.org/InStock';
-
-    final imageList = _structuredDataImageUrls(product);
-    if (imageList.isEmpty) {
+    final commerce = _commerceProjection(product);
+    if (commerce.imageUrls.isEmpty) {
       removeStructuredDataScript(_structuredDataScriptId);
       return;
     }
 
-    final description = (product.websiteDescription?.trim().isNotEmpty ?? false)
-        ? product.websiteDescription!.trim()
-        : (product.description?.trim().isNotEmpty ?? false)
-            ? product.description!.trim()
-            : 'Encuentra $storeName online: ${product.name}';
-    final cleanDescription = _cleanSeoText(description);
-
-    final gtin = _validGtin(
-      product.websiteMerchantGtin,
-      product.gtin,
-      product.barcode,
-    );
-
-    final priceString = product.price % 1 == 0
-        ? product.price.toStringAsFixed(0)
-        : product.price.toStringAsFixed(2);
-    final structuredBrandName =
-        product.websiteMerchantBrand?.trim().isNotEmpty == true
-            ? product.websiteMerchantBrand!.trim()
-            : product.brand?.trim() ?? '';
-
     final structuredData = <String, dynamic>{
       '@context': 'https://schema.org/',
       '@type': 'Product',
-      'name': product.name,
-      'description': cleanDescription,
+      'name': commerce.title,
+      if (commerce.description.isNotEmpty)
+        'description': _cleanSeoText(commerce.description),
       'url': productUrl,
-      'sku': product.sku,
-      'image': imageList,
-      if (gtin != null) 'gtin': gtin,
-      if (product.websiteMerchantMpn?.trim().isNotEmpty == true)
-        'mpn': product.websiteMerchantMpn!.trim(),
-      if (structuredBrandName.isNotEmpty)
+      if (commerce.sku.isNotEmpty) 'sku': commerce.sku,
+      'image': commerce.imageUrls,
+      if (commerce.gtin.isNotEmpty) 'gtin': commerce.gtin,
+      if (commerce.mpn.isNotEmpty) 'mpn': commerce.mpn,
+      if (commerce.brand.isNotEmpty)
         'brand': {
           '@type': 'Brand',
-          'name': structuredBrandName,
+          'name': commerce.brand,
         },
       'offers': {
         '@type': 'Offer',
-        'priceCurrency': product.priceCurrency,
-        'price': priceString,
-        'availability': availability,
+        'priceCurrency': commerce.currency,
+        if (commerce.price > 0) 'price': commerce.formattedPrice,
+        'availability': commerce.availability.schemaValue,
         'url': productUrl,
         'seller': {
           '@type': 'Organization',
@@ -378,71 +412,20 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       },
     };
 
-    if (product.categoryName != null && product.categoryName!.isNotEmpty) {
-      structuredData['category'] = product.categoryName;
+    if (commerce.categoryPath.isNotEmpty) {
+      structuredData['category'] = commerce.categoryPath;
     }
 
     setStructuredDataScript(_structuredDataScriptId, structuredData);
   }
 
-  List<String> _structuredDataImageUrls(Product product) {
-    final urls = <String>[];
-
-    void add(String? value) {
-      final url = value?.trim() ?? '';
-      if (url.isEmpty || urls.contains(url)) return;
-      if (!url.startsWith('https://') && !url.startsWith('http://')) return;
-      urls.add(url);
-    }
-
-    add(product.websiteImageUrlOptimized);
-    add(product.imageUrlOptimized);
-    add(product.websiteImageUrl);
-    add(product.imageUrl);
-    for (final url in product.websiteImageUrls) {
-      add(url);
-    }
-    for (final url in product.imageUrls) {
-      add(url);
-    }
-
-    return urls.take(10).toList(growable: false);
-  }
-
-  String? _validGtin(String? preferred, String? fallback, String? barcode) {
-    for (final value in [preferred, fallback, barcode]) {
-      final valid = _normalizeValidGtin(value);
-      if (valid != null) return valid;
-    }
-    return null;
-  }
-
-  String? _normalizeValidGtin(String? rawValue) {
-    final value = (rawValue ?? '').trim().replaceAll(RegExp(r'[\s-]+'), '');
-    if (!RegExp(r'^\d+$').hasMatch(value)) return null;
-    if (!(value.length == 8 ||
-        value.length == 12 ||
-        value.length == 13 ||
-        value.length == 14)) {
-      return null;
-    }
-    if (!_hasValidGtinCheckDigit(value)) return null;
-    return value;
-  }
-
-  bool _hasValidGtinCheckDigit(String value) {
-    final digits = value.split('').map(int.parse).toList(growable: false);
-    final checkDigit = digits.last;
-    var sum = 0;
-    var positionFromRight = 1;
-
-    for (var i = digits.length - 2; i >= 0; i--) {
-      sum += digits[i] * (positionFromRight.isOdd ? 3 : 1);
-      positionFromRight++;
-    }
-
-    final calculatedCheckDigit = (10 - (sum % 10)) % 10;
-    return calculatedCheckDigit == checkDigit;
+  PublicCommerceProductProjection _commerceProjection(Product product) {
+    return PublicCommerceProductProjection.fromProduct(
+      product,
+      categoryPath: _categoryTrail.isNotEmpty
+          ? _categoryTrail.last.fullPath
+          : product.categoryName,
+    );
   }
 
   void _updateSeo() {
@@ -457,6 +440,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     );
     final canonicalUrl =
         '${storeUrl.replaceAll(RegExp(r'/+$'), '')}${publicProductPath(product)}';
+    final commerce = _commerceProjection(product);
+    final routeProjection = _productSeoRouteProjection(
+      hasEligibleContent: true,
+    );
 
     // Templates are configurable via website_settings (and later via SEO editor UI).
     final titleTemplate = websiteService.getSetting(
@@ -468,29 +455,32 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       '{product_description}',
     );
 
-    final resolvedTitle = _cleanSeoText(_applySeoTemplate(
-      template: titleTemplate,
-      storeName: storeName,
-      product: product,
-    ).trim());
+    final seoTitleOverride = product.websiteSeoTitle?.trim() ?? '';
+    final resolvedTitle = _cleanSeoText(
+      (seoTitleOverride.isNotEmpty
+              ? seoTitleOverride
+              : _applySeoTemplate(
+                  template: titleTemplate,
+                  storeName: storeName,
+                  commerce: commerce,
+                ))
+          .trim(),
+    );
 
-    final fallbackDescription = (product.description?.trim().isNotEmpty ??
-            false)
-        ? product.description!.trim()
-        : 'Compra ${product.name} online en $storeName. Envíos y retiro en tienda.';
-
-    final resolvedDescription = _applySeoTemplate(
-      template: descriptionTemplate,
-      storeName: storeName,
-      product: product,
-      fallbackDescription: fallbackDescription,
-    ).trim();
+    final seoDescriptionOverride = product.websiteSeoDescription?.trim() ?? '';
+    final resolvedDescription = (seoDescriptionOverride.isNotEmpty
+            ? seoDescriptionOverride
+            : _applySeoTemplate(
+                template: descriptionTemplate,
+                storeName: storeName,
+                commerce: commerce,
+              ))
+        .trim();
 
     final cleanResolvedDescription = _cleanSeoText(resolvedDescription);
 
-    final image = (product.imageUrls.isNotEmpty)
-        ? product.imageUrls.first
-        : (product.imageUrl?.isNotEmpty == true ? product.imageUrl : null);
+    final image =
+        commerce.imageUrls.isNotEmpty ? commerce.imageUrls.first : null;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -501,8 +491,65 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             : null,
         imageUrl: image,
         canonicalUrl: canonicalUrl,
+        robots: routeProjection.robots,
       );
     });
+  }
+
+  void _updateUnavailableSeo(int token) {
+    final websiteService = context.read<WebsiteService>();
+    final storeName =
+        websiteService.getSetting('store_name', 'Vinabike').trim();
+    final routeProjection = _productSeoRouteProjection(
+      hasEligibleContent: false,
+    );
+    final configuredStoreUrl =
+        websiteService.getSetting('store_url', '').trim();
+    final baseUri = configuredStoreUrl.isNotEmpty
+        ? Uri.tryParse(configuredStoreUrl)
+        : Uri.base.host.isEmpty
+            ? null
+            : Uri(
+                scheme: Uri.base.scheme,
+                host: Uri.base.host,
+                port: Uri.base.hasPort ? Uri.base.port : null,
+              );
+    final canonicalUrl = baseUri
+        ?.resolve(routeProjection.canonicalPath)
+        .replace(query: null, fragment: null)
+        .toString();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || token != _loadToken || _product != null) return;
+      SeoHelper.updateSeo(
+        title:
+            'Producto no disponible | ${storeName.isEmpty ? 'Tienda' : storeName}',
+        canonicalUrl: canonicalUrl,
+        robots: routeProjection.robots,
+      );
+    });
+  }
+
+  StorefrontSeoRouteProjection _productSeoRouteProjection({
+    required bool hasEligibleContent,
+  }) {
+    final currentUri = GoRouterState.of(context).uri;
+    var editorIsPrivate = false;
+    try {
+      final editProvider = context.read<WebsiteEditModeProvider>();
+      editorIsPrivate = editProvider.isEditMode || editProvider.isPreviewMode;
+    } catch (_) {
+      // Standalone public storefronts do not need an editor provider.
+    }
+    final isErpMounted =
+        currentUri.path == '/tienda' || currentUri.path.startsWith('/tienda/');
+    return projectStorefrontSeoRoute(
+      currentUri,
+      isErpMounted: isErpMounted || editorIsPrivate,
+      ownerAllowsIndexing: true,
+      ownerIsPublished: hasEligibleContent,
+      hasEligibleContent: hasEligibleContent,
+    );
   }
 
   String _cleanSeoText(String text) {
@@ -519,25 +566,17 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   String _applySeoTemplate({
     required String template,
     required String storeName,
-    required Product product,
-    String? fallbackDescription,
+    required PublicCommerceProductProjection commerce,
   }) {
-    final priceText = ChileanUtils.formatCurrency(product.price);
-    final brandText = (product.brand?.trim().isNotEmpty ?? false)
-        ? product.brand!.trim()
-        : storeName;
-
-    final descriptionText = (product.description?.trim().isNotEmpty ?? false)
-        ? product.description!.trim()
-        : (fallbackDescription ?? '');
+    final priceText = ChileanUtils.formatCurrency(commerce.price);
 
     return template
         .replaceAll('{store_name}', storeName)
-        .replaceAll('{product_name}', product.name)
-        .replaceAll('{product_sku}', product.sku.isNotEmpty ? product.sku : '')
+        .replaceAll('{product_name}', commerce.title)
+        .replaceAll('{product_sku}', commerce.sku)
         .replaceAll('{product_price}', priceText)
-        .replaceAll('{product_brand}', brandText)
-        .replaceAll('{product_description}', descriptionText);
+        .replaceAll('{product_brand}', commerce.brand)
+        .replaceAll('{product_description}', commerce.description);
   }
 
   void _addToCart() {
@@ -548,7 +587,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     if (isStockTracked && _product!.availableStockQuantity < _quantity) {
       _showProductFeedbackBanner(
         message: 'Stock insuficiente',
-        backgroundColor: PublicStoreTheme.error,
+        backgroundColor: _storeTheme.error,
+        foregroundColor: _storeTheme.onError,
       );
       return;
     }
@@ -557,8 +597,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     cart.addProduct(_product!, quantity: _quantity);
 
     _showProductFeedbackBanner(
-      message: '${_product!.name} agregado al carrito',
-      backgroundColor: _logoBlue,
+      message: '${_commerceProjection(_product!).title} agregado al carrito',
+      backgroundColor: _storeTheme.commerceAccent,
+      foregroundColor: _storeTheme.onCommerceAccent,
       actionLabel: 'Ver carrito',
       onActionPressed: () => context.go('/carrito'),
     );
@@ -574,7 +615,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     if (isStockTracked && _product!.availableStockQuantity < _quantity) {
       _showProductFeedbackBanner(
         message: 'Stock insuficiente',
-        backgroundColor: PublicStoreTheme.error,
+        backgroundColor: _storeTheme.error,
+        foregroundColor: _storeTheme.onError,
       );
       return;
     }
@@ -587,6 +629,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   void _showProductFeedbackBanner({
     required String message,
     required Color backgroundColor,
+    required Color foregroundColor,
     String? actionLabel,
     VoidCallback? onActionPressed,
   }) {
@@ -654,10 +697,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                             message,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontFamily: null,
+                            style: _storeTheme.text.bodyMedium?.copyWith(
                               fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                              color: foregroundColor,
                             ),
                           ),
                         ),
@@ -669,15 +711,14 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                               onActionPressed();
                             },
                             style: TextButton.styleFrom(
-                              foregroundColor: Colors.white,
+                              foregroundColor: foregroundColor,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 10,
                                 vertical: 8,
                               ),
                               minimumSize: const Size(0, 0),
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              textStyle: const TextStyle(
-                                fontFamily: null,
+                              textStyle: _storeTheme.text.labelMedium?.copyWith(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13,
                               ),
@@ -761,10 +802,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               Icons.error_outline,
               size: 64,
-              color: PublicStoreTheme.textMuted,
+              color: _storeTheme.commerceTextMuted,
             ),
             const SizedBox(height: 16),
             Text(
@@ -897,6 +938,24 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final isService = _product?.productType == ProductType.service;
     final catalogLabel = isService ? 'Servicios' : 'Productos';
     final catalogHref = isService ? '/servicios' : '/productos';
+    final categoryId = _product?.categoryId?.trim() ?? '';
+    final categoryName = _product?.categoryName?.trim() ?? '';
+    final fallbackCategory = _categoryTrail.isEmpty &&
+            categoryId.isNotEmpty &&
+            categoryName.isNotEmpty
+        ? Category(
+            id: categoryId,
+            tenantId: '',
+            name: categoryName,
+            fullPath: categoryName,
+            showOnWebsite: true,
+          )
+        : null;
+    final breadcrumbCategories = _categoryTrail.isNotEmpty
+        ? _categoryTrail
+        : fallbackCategory == null
+            ? const <Category>[]
+            : [fallbackCategory];
 
     return Wrap(
       spacing: 8,
@@ -907,13 +966,53 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         _buildBreadcrumbSeparator(),
         _buildBreadcrumbLink(catalogLabel, () => context.go(catalogHref)),
         _buildBreadcrumbSeparator(),
+        for (final category in breadcrumbCategories) ...[
+          Builder(
+            builder: (context) {
+              if (!category.showOnWebsite) {
+                return Text(
+                  category.name,
+                  style: _storeTheme.text.bodyMedium?.copyWith(
+                    color: _storeTheme.commerceTextMuted,
+                  ),
+                );
+              }
+              WebsiteCatalogPresentation presentation;
+              try {
+                presentation = context
+                        .read<WebsiteService>()
+                        .catalogPresentationRegistry
+                        .forCategory(category.id) ??
+                    WebsiteCatalogPresentation.fallback(
+                      categoryId: category.id!,
+                      categoryName: category.name,
+                    );
+              } catch (_) {
+                presentation = WebsiteCatalogPresentation.fallback(
+                  categoryId: category.id!,
+                  categoryName: category.name,
+                );
+              }
+              return _buildBreadcrumbLink(
+                category.name,
+                () => PublicStoreLayout.navigateToHref(
+                  context,
+                  publicCategoryPath(
+                    presentation: presentation,
+                    services: isService,
+                  ),
+                ),
+              );
+            },
+          ),
+          _buildBreadcrumbSeparator(),
+        ],
         Text(
-          _product!.name,
-          style: const TextStyle(
-            fontFamily: null,
+          _commerceProjection(_product!).title,
+          style: _storeTheme.text.bodyMedium?.copyWith(
             fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: PublicStoreTheme.textMuted,
+            color: _storeTheme.commerceTextMuted,
           ),
         ),
       ],
@@ -921,11 +1020,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   }
 
   Widget _buildImageGallery({bool isMobile = false}) {
-    final images = _product!.imageUrls.isNotEmpty
-        ? _product!.imageUrls
-        : _product!.imageUrl != null
-            ? [_product!.imageUrl!]
-            : <String>[];
+    final images = _commerceProjection(_product!).imageUrls;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -946,7 +1041,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               child: Icon(
                 Icons.pedal_bike_outlined,
                 size: isMobile ? 60 : 100,
-                color: Colors.grey,
+                color: _storeTheme.commerceTextMuted,
               ),
             ),
           );
@@ -961,11 +1056,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             fit: BoxFit.contain,
             filterQuality: FilterQuality.medium,
             errorBuilder: (context, error, stackTrace) {
-              return const Center(
+              return Center(
                 child: Icon(
                   Icons.broken_image_outlined,
                   size: 64,
-                  color: PublicStoreTheme.textMuted,
+                  color: _storeTheme.commerceTextMuted,
                 ),
               );
             },
@@ -1022,7 +1117,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       height: height,
       width: double.infinity,
       child: Container(
-        color: Colors.white,
+        color: _storeTheme.surface,
         padding: EdgeInsets.symmetric(
           horizontal: isMobile ? 2 : 4,
           vertical: isMobile ? 2 : 4,
@@ -1037,9 +1132,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   Widget _buildProductInfo({bool isMobile = false}) {
     final cart = context.watch<CartProvider>();
     final inCart = cart.hasProduct(_product!.id);
+    final commerce = _commerceProjection(_product!);
     final isStockTracked = _product!.tracksInventory;
-    final inStock =
-        isStockTracked ? _product!.availableStockQuantity > 0 : true;
+    final inStock = commerce.availability == PublicCommerceAvailability.inStock;
     final canIncrease =
         !isStockTracked || _quantity < _product!.availableStockQuantity;
 
@@ -1047,40 +1142,37 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          _product!.name.toUpperCase(),
-          style: TextStyle(
-            fontFamily: null,
+          commerce.title.toUpperCase(),
+          style: _storeTheme.text.headlineMedium?.copyWith(
             fontSize: isMobile ? 30 : 34,
             fontWeight: FontWeight.w700,
-            color: Colors.black87,
+            color: _storeTheme.commerceTextPrimary,
             height: isMobile ? 1.18 : 1.2,
             letterSpacing: 0.2,
           ),
         ),
         SizedBox(height: isMobile ? 20 : 24),
-        const Divider(height: 1, color: _warmLine),
+        Divider(height: 1, color: _storeTheme.commerceLine),
         SizedBox(height: isMobile ? 20 : 24),
         Text(
-          _formatHeroPrice(_product!.price),
-          style: TextStyle(
-            fontFamily: null,
+          _formatHeroPrice(commerce.price),
+          style: _storeTheme.text.displaySmall?.copyWith(
             fontSize: isMobile ? 38 : 40,
             fontWeight: FontWeight.w700,
-            color: _catalogBlue,
+            color: _storeTheme.commerceAccent,
             height: 0.95,
           ),
         ),
         const SizedBox(height: 6),
-        const Text(
+        Text(
           'Precio final con IVA incluido',
-          style: TextStyle(
-            fontFamily: null,
+          style: _storeTheme.text.bodySmall?.copyWith(
             fontSize: 13,
-            color: PublicStoreTheme.textSecondary,
+            color: _storeTheme.commerceTextSecondary,
           ),
         ),
         SizedBox(height: isMobile ? 20 : 24),
-        const Divider(height: 1, color: _warmLine),
+        Divider(height: 1, color: _storeTheme.commerceLine),
         SizedBox(height: isMobile ? 18 : 22),
         _buildStockSkuRow(inStock: inStock),
         SizedBox(height: isMobile ? 18 : 22),
@@ -1118,26 +1210,25 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.shopping_bag_outlined,
                       size: 16,
-                      color: _catalogBlue,
+                      color: _storeTheme.commerceAccent,
                     ),
                     const SizedBox(width: 8),
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         'Ya tienes este producto en el carrito.',
-                        style: TextStyle(
-                          fontFamily: null,
+                        style: _storeTheme.text.bodySmall?.copyWith(
                           fontSize: 13,
-                          color: PublicStoreTheme.textSecondary,
+                          color: _storeTheme.commerceTextSecondary,
                         ),
                       ),
                     ),
                     TextButton(
                       onPressed: () => context.go('/carrito'),
                       style: TextButton.styleFrom(
-                        foregroundColor: _catalogBlue,
+                        foregroundColor: _storeTheme.commerceAccent,
                         padding: EdgeInsets.zero,
                         minimumSize: const Size(0, 0),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1157,24 +1248,23 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             ],
           )
         else
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
               'NO DISPONIBLE',
-              style: TextStyle(
-                fontFamily: null,
+              style: _storeTheme.text.labelMedium?.copyWith(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.0,
-                color: PublicStoreTheme.textSecondary,
+                color: _storeTheme.commerceTextSecondary,
               ),
             ),
           ),
         const SizedBox(height: 28),
         Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             border: Border(
-              top: BorderSide(color: _warmLine),
+              top: BorderSide(color: _storeTheme.commerceLine),
             ),
           ),
           child: Column(
@@ -1201,15 +1291,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     required bool isMobile,
     required double horizontalMargin,
   }) {
-    final description = _cleanSeoText(
-      _product!.websiteDescription?.trim().isNotEmpty == true
-          ? _product!.websiteDescription!
-          : (_product!.description ?? ''),
-    );
+    final description =
+        _cleanSeoText(_commerceProjection(_product!).description);
 
     return Container(
       width: double.infinity,
-      color: Colors.white,
+      color: _storeTheme.surface,
       padding: EdgeInsets.symmetric(vertical: isMobile ? 42 : 54),
       child: Align(
         alignment: Alignment.topCenter,
@@ -1221,8 +1308,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             children: [
               _buildSectionHeading(
                 'Detalles del producto',
-                foreground: _catalogBlue,
-                lineColor: _catalogBlue,
+                foreground: _storeTheme.commerceAccent,
+                lineColor: _storeTheme.commerceAccent,
               ),
               SizedBox(height: isMobile ? 22 : 28),
               _buildDetailsTabs(),
@@ -1242,9 +1329,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
   Widget _buildDetailsTabs() {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: _warmLine),
+          bottom: BorderSide(color: _storeTheme.commerceLine),
         ),
       ),
       child: Row(
@@ -1267,7 +1354,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           decoration: BoxDecoration(
             border: Border(
               bottom: BorderSide(
-                color: selected ? _catalogBlue : Colors.transparent,
+                color:
+                    selected ? _storeTheme.commerceAccent : Colors.transparent,
                 width: 2,
               ),
             ),
@@ -1276,11 +1364,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             padding: const EdgeInsets.only(bottom: 9),
             child: Text(
               label.toUpperCase(),
-              style: TextStyle(
-                fontFamily: null,
+              style: _storeTheme.text.labelSmall?.copyWith(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
-                color: selected ? _catalogBlue : PublicStoreTheme.textSecondary,
+                color: selected
+                    ? _storeTheme.commerceAccent
+                    : _storeTheme.commerceTextSecondary,
                 letterSpacing: 0.9,
               ),
             ),
@@ -1298,10 +1387,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         description.isNotEmpty
             ? description
             : 'Estamos actualizando la descripción extendida de este producto.',
-        style: const TextStyle(
-          fontFamily: null,
+        style: _storeTheme.text.bodyMedium?.copyWith(
           fontSize: 15,
-          color: PublicStoreTheme.textPrimary,
+          color: _storeTheme.commerceTextPrimary,
           height: 1.7,
         ),
       ),
@@ -1310,8 +1398,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
   Widget _buildTechnicalFichaTab({required bool isMobile}) {
     if (_isLoadingTechnicalSpecs) {
-      return const SizedBox(
-        key: ValueKey('product_technical_specs_loading'),
+      return SizedBox(
+        key: const ValueKey('product_technical_specs_loading'),
         height: 96,
         child: Center(
           child: SizedBox(
@@ -1319,7 +1407,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             height: 26,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: _catalogBlue,
+              color: _storeTheme.commerceAccent,
             ),
           ),
         ),
@@ -1328,13 +1416,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
     final groups = _buildTechnicalFichaGroups();
     if (groups.isEmpty) {
-      return const Text(
-        key: ValueKey('product_technical_specs_empty'),
+      return Text(
+        key: const ValueKey('product_technical_specs_empty'),
         'La ficha técnica de este producto está en actualización.',
-        style: TextStyle(
-          fontFamily: null,
+        style: _storeTheme.text.bodyMedium?.copyWith(
           fontSize: 15,
-          color: PublicStoreTheme.textSecondary,
+          color: _storeTheme.commerceTextSecondary,
           height: 1.6,
         ),
       );
@@ -1361,11 +1448,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       children: [
         Text(
           group.title.toUpperCase(),
-          style: const TextStyle(
-            fontFamily: null,
+          style: _storeTheme.text.labelSmall?.copyWith(
             fontSize: 12,
             fontWeight: FontWeight.w800,
-            color: _catalogBlue,
+            color: _storeTheme.commerceAccent,
             letterSpacing: 1.0,
           ),
         ),
@@ -1697,10 +1783,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   }) {
     return Container(
       padding: const EdgeInsets.only(top: 14, bottom: 12),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
           top: BorderSide(
-            color: _warmLine,
+            color: _storeTheme.commerceLine,
           ),
         ),
       ),
@@ -1709,22 +1795,20 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         children: [
           Text(
             label.toUpperCase(),
-            style: const TextStyle(
-              fontFamily: null,
+            style: _storeTheme.text.labelSmall?.copyWith(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: PublicStoreTheme.textSecondary,
+              color: _storeTheme.commerceTextSecondary,
               letterSpacing: 0.8,
             ),
           ),
           const SizedBox(height: 10),
           Text(
             value,
-            style: const TextStyle(
-              fontFamily: null,
+            style: _storeTheme.text.bodyMedium?.copyWith(
               fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: Colors.black87,
+              color: _storeTheme.commerceTextPrimary,
               height: 1.45,
             ),
           ),
@@ -1774,19 +1858,24 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   }
 
   Widget _buildRelatedProductCard(Product product) {
-    final brand = product.brand?.trim();
-    final hasBrand = brand != null && brand.isNotEmpty;
-    final displayImageUrl = product.imageUrlOptimized ?? product.imageUrl;
+    final commerce = _commerceProjection(product);
+    final brand = commerce.brand;
+    final hasBrand = brand.isNotEmpty;
+    final displayImageUrl =
+        commerce.imageUrls.isNotEmpty ? commerce.imageUrls.first : null;
     final hasImage = displayImageUrl != null && displayImageUrl.isNotEmpty;
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: () {
-          context.go(publicProductPath(product));
+          PublicStoreLayout.navigateToHref(
+            context,
+            publicProductPath(product),
+          );
         },
         child: Container(
-          color: Colors.white,
+          color: _storeTheme.surface,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1794,7 +1883,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                 child: Stack(
                   children: [
                     Container(
-                      color: Colors.white,
+                      color: _storeTheme.surface,
                       padding: EdgeInsets.fromLTRB(
                         12,
                         10,
@@ -1810,7 +1899,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                                   child: Icon(
                                     Icons.pedal_bike_outlined,
                                     size: 40,
-                                    color: Colors.grey.shade400,
+                                    color: _storeTheme.commerceTextMuted,
                                   ),
                                 );
                               },
@@ -1819,7 +1908,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                               child: Icon(
                                 Icons.pedal_bike_outlined,
                                 size: 48,
-                                color: Colors.grey.shade400,
+                                color: _storeTheme.commerceTextMuted,
                               ),
                             ),
                     ),
@@ -1830,11 +1919,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                         bottom: 6,
                         child: Text(
                           brand.toUpperCase(),
-                          style: TextStyle(
-                            fontFamily: null,
+                          style: _storeTheme.text.labelSmall?.copyWith(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade500,
+                            color: _storeTheme.commerceTextMuted,
                             letterSpacing: 0.45,
                           ),
                           maxLines: 1,
@@ -1847,9 +1935,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               SizedBox(
                 height: 88,
                 child: Container(
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     border: Border(
-                      top: BorderSide(color: _warmLine),
+                      top: BorderSide(color: _storeTheme.commerceLine),
                     ),
                   ),
                   padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
@@ -1857,12 +1945,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        product.name.toUpperCase(),
-                        style: const TextStyle(
-                          fontFamily: null,
+                        commerce.title.toUpperCase(),
+                        style: _storeTheme.text.bodySmall?.copyWith(
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
-                          color: Colors.black87,
+                          color: _storeTheme.commerceTextPrimary,
                           height: 1.3,
                           letterSpacing: 0.2,
                         ),
@@ -1871,12 +1958,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        ChileanUtils.formatCurrency(product.price),
-                        style: const TextStyle(
-                          fontFamily: null,
+                        ChileanUtils.formatCurrency(commerce.price),
+                        style: _storeTheme.text.bodyLarge?.copyWith(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
-                          color: Colors.black,
+                          color: _storeTheme.commerceTextPrimary,
                         ),
                       ),
                     ],
@@ -1895,24 +1981,22 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       onTap: onTap,
       child: Text(
         label,
-        style: const TextStyle(
-          fontFamily: null,
+        style: _storeTheme.text.bodyMedium?.copyWith(
           fontSize: 14,
           fontWeight: FontWeight.w600,
-          color: _catalogBlue,
+          color: _storeTheme.commerceAccent,
         ),
       ),
     );
   }
 
   Widget _buildBreadcrumbSeparator() {
-    return const Text(
+    return Text(
       '/',
-      style: TextStyle(
-        fontFamily: null,
+      style: _storeTheme.text.bodySmall?.copyWith(
         fontSize: 13,
         fontWeight: FontWeight.w600,
-        color: PublicStoreTheme.textMuted,
+        color: _storeTheme.commerceTextMuted,
       ),
     );
   }
@@ -1929,11 +2013,14 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color:
-              isSelected ? _catalogBlue.withValues(alpha: 0.04) : Colors.white,
+          color: isSelected
+              ? _storeTheme.commerceAccent.withValues(alpha: 0.04)
+              : _storeTheme.surface,
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
-            color: isSelected ? _catalogBlue : _warmLine,
+            color: isSelected
+                ? _storeTheme.commerceAccent
+                : _storeTheme.commerceLine,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -1942,10 +2029,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           imageUrl,
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) {
-            return const Icon(
+            return Icon(
               Icons.broken_image_outlined,
               size: 20,
-              color: PublicStoreTheme.textMuted,
+              color: _storeTheme.commerceTextMuted,
             );
           },
         ),
@@ -1963,8 +2050,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           height: 6,
           decoration: BoxDecoration(
             color: inStock
-                ? PublicStoreTheme.successGreen
-                : PublicStoreTheme.textMuted,
+                ? PublicStoreTheme.success
+                : _storeTheme.commerceTextMuted,
             shape: BoxShape.circle,
           ),
         ),
@@ -1972,12 +2059,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         Text(
           inStock ? 'En stock' : 'Agotado',
           style: TextStyle(
-            fontFamily: null,
             fontSize: 14,
             fontWeight: FontWeight.w700,
             color: inStock
-                ? PublicStoreTheme.successGreen
-                : PublicStoreTheme.textSecondary,
+                ? PublicStoreTheme.success
+                : _storeTheme.commerceTextSecondary,
           ),
         ),
         if (sku.isNotEmpty) ...[
@@ -1987,11 +2073,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               'SKU: $sku',
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.right,
-              style: const TextStyle(
-                fontFamily: null,
+              style: _storeTheme.text.labelSmall?.copyWith(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: PublicStoreTheme.textSecondary,
+                color: _storeTheme.commerceTextSecondary,
                 letterSpacing: 0.5,
               ),
             ),
@@ -2010,8 +2095,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       constraints: const BoxConstraints(minWidth: 152),
       height: 50,
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: _warmLine),
+        color: _storeTheme.surface,
+        border: Border.all(color: _storeTheme.commerceLine),
       ),
       child: Row(
         children: [
@@ -2023,18 +2108,17 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           Expanded(
             child: Container(
               alignment: Alignment.center,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border.symmetric(
-                  vertical: BorderSide(color: _warmLine),
+                  vertical: BorderSide(color: _storeTheme.commerceLine),
                 ),
               ),
               child: Text(
                 '$_quantity',
-                style: const TextStyle(
-                  fontFamily: null,
+                style: _storeTheme.text.labelLarge?.copyWith(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: Colors.black87,
+                  color: _storeTheme.commerceTextPrimary,
                 ),
               ),
             ),
@@ -2062,7 +2146,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         child: Icon(
           icon,
           size: 16,
-          color: enabled ? Colors.black87 : PublicStoreTheme.textMuted,
+          color: enabled
+              ? _storeTheme.commerceTextPrimary
+              : _storeTheme.commerceTextMuted,
         ),
       ),
     );
@@ -2075,9 +2161,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       child: OutlinedButton(
         onPressed: _buyNow,
         style: OutlinedButton.styleFrom(
-          foregroundColor: _catalogBlue,
-          backgroundColor: Colors.white,
-          side: const BorderSide(color: _warmLine),
+          foregroundColor: _storeTheme.commerceAccent,
+          backgroundColor: _storeTheme.surface,
+          side: BorderSide(color: _storeTheme.commerceLine),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(5),
           ),
@@ -2105,8 +2191,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       child: FilledButton.icon(
         onPressed: _addToCart,
         style: FilledButton.styleFrom(
-          backgroundColor: _catalogBlue,
-          foregroundColor: Colors.white,
+          backgroundColor: _storeTheme.commerceAccent,
+          foregroundColor: _storeTheme.onCommerceAccent,
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(5),
@@ -2138,19 +2224,19 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: isLast ? Colors.transparent : _warmLine,
+            color: isLast ? Colors.transparent : _storeTheme.commerceLine,
           ),
         ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 1),
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
             child: Icon(
               Icons.circle,
               size: 8,
-              color: _catalogBlue,
+              color: _storeTheme.commerceAccent,
             ),
           ),
           const SizedBox(width: 12),
@@ -2160,27 +2246,29 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    fontFamily: null,
+                  style: _storeTheme.text.bodySmall?.copyWith(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: Colors.black87,
+                    color: _storeTheme.commerceTextPrimary,
                   ),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   subtitle,
-                  style: const TextStyle(
-                    fontFamily: null,
+                  style: _storeTheme.text.bodySmall?.copyWith(
                     fontSize: 13,
-                    color: PublicStoreTheme.textSecondary,
+                    color: _storeTheme.commerceTextSecondary,
                     height: 1.45,
                   ),
                 ),
               ],
             ),
           ),
-          Icon(icon, size: 18, color: PublicStoreTheme.textSecondary),
+          Icon(
+            icon,
+            size: 18,
+            color: _storeTheme.commerceTextSecondary,
+          ),
         ],
       ),
     );
@@ -2188,27 +2276,28 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
   Widget _buildSectionHeading(
     String title, {
-    Color foreground = Colors.black,
-    Color lineColor = Colors.black,
+    Color? foreground,
+    Color? lineColor,
   }) {
+    final effectiveForeground = foreground ?? _storeTheme.commerceTextPrimary;
+    final effectiveLineColor = lineColor ?? _storeTheme.commerceAccent;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title.toUpperCase(),
-          style: TextStyle(
-            fontFamily: null,
+          style: _storeTheme.text.headlineMedium?.copyWith(
             fontSize: 28,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.2,
-            color: foreground,
+            color: effectiveForeground,
           ),
         ),
         const SizedBox(height: 10),
         Container(
           width: 72,
           height: 2,
-          color: lineColor,
+          color: effectiveLineColor,
         ),
       ],
     );

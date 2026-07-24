@@ -13,6 +13,20 @@ import 'package:file_picker/file_picker.dart';
 import 'image_service_mobile.dart'
     if (dart.library.html) 'image_service_web.dart';
 
+class ImageUploadResult {
+  const ImageUploadResult({
+    required this.publicUrl,
+    required this.objectPath,
+    required this.contentType,
+    required this.byteLength,
+  });
+
+  final String publicUrl;
+  final String objectPath;
+  final String contentType;
+  final int byteLength;
+}
+
 class ImageService {
   static final SupabaseClient _client = Supabase.instance.client;
 
@@ -60,6 +74,36 @@ class ImageService {
     required String bucket,
     required String folder,
     String? contentType,
+    String cacheControl = '3600',
+    bool upsert = true,
+    Map<String, dynamic>? metadata,
+  }) async {
+    final result = await uploadBytesWithDetails(
+      bytes: bytes,
+      fileName: fileName,
+      bucket: bucket,
+      folder: folder,
+      contentType: contentType,
+      cacheControl: cacheControl,
+      upsert: upsert,
+      metadata: metadata,
+    );
+    return result.publicUrl;
+  }
+
+  /// Uploads image bytes and returns the exact immutable Storage object.
+  ///
+  /// Website Builder media uses this detailed result so the editor can retain
+  /// its source object while publishing a separate optimized derivative.
+  static Future<ImageUploadResult> uploadBytesWithDetails({
+    required Uint8List bytes,
+    required String fileName,
+    required String bucket,
+    required String folder,
+    String? contentType,
+    String cacheControl = '3600',
+    bool upsert = true,
+    Map<String, dynamic>? metadata,
   }) async {
     try {
       final sanitizedFileName = _sanitizeFileName(fileName);
@@ -79,15 +123,21 @@ class ImageService {
           contentType ?? _inferContentType(bytes, sanitizedFileName);
 
       final options = FileOptions(
-        cacheControl: '3600',
-        upsert: true,
+        cacheControl: cacheControl,
+        upsert: upsert,
         contentType: detectedContentType,
+        metadata: metadata,
       );
 
       await storageFile.uploadBinary(objectPath, bytes, fileOptions: options);
 
       final publicUrl = storageFile.getPublicUrl(objectPath);
-      return publicUrl;
+      return ImageUploadResult(
+        publicUrl: publicUrl,
+        objectPath: objectPath,
+        contentType: detectedContentType,
+        byteLength: bytes.length,
+      );
     } catch (e, stackTrace) {
       ErrorReportingService.report('Image upload failed: $e', stackTrace);
       rethrow;

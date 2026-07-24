@@ -162,7 +162,7 @@ class DocumentPaymentsDropdown extends StatelessWidget {
             ],
           ),
           children: [
-            _PaymentRows(
+            DocumentPaymentRecordsTable(
               payments: payments,
               onPaymentTap: onPaymentTap,
             ),
@@ -250,11 +250,12 @@ class DocumentAccountingLoadingStrip extends StatelessWidget {
   }
 }
 
-class _PaymentRows extends StatelessWidget {
+class DocumentPaymentRecordsTable extends StatelessWidget {
   final List<DocumentPaymentRecord> payments;
   final ValueChanged<DocumentPaymentRecord>? onPaymentTap;
 
-  const _PaymentRows({
+  const DocumentPaymentRecordsTable({
+    super.key,
     required this.payments,
     this.onPaymentTap,
   });

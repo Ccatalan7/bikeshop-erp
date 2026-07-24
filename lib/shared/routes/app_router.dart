@@ -77,6 +77,8 @@ import 'erp_routes_barrel.dart' deferred as erp
         PaymentMethodsSettingsPage,
         MetaSettingsPage,
         WhatsAppSettingsPage,
+        PaymentDetailPage,
+        PaymentEditPage,
         PaymentsPage,
         PegasTablePage,
         ProductFormPage,
@@ -89,8 +91,11 @@ import 'erp_routes_barrel.dart' deferred as erp
         ServiceListPage,
         PurchaseInvoiceFormPage,
         PurchaseInvoiceListPage,
+        PurchasePaymentDetailPage,
+        PurchasePaymentEditPage,
         PurchasePaymentFormPage,
         PurchasePaymentsListPage,
+        PurchaseReceiptDetailPage,
         RemoteScannerPage,
         ResetPasswordScreen,
         SalesByCustomerPage,
@@ -147,10 +152,10 @@ import '../../public_store/pages/customer_chat_hub_page.dart';
 import '../../public_store/pages/customer_chat_detail_page.dart';
 import '../../public_store/pages/customer_dashboard_page.dart';
 import '../../public_store/widgets/public_store_layout.dart';
+import '../../public_store/utils/product_url.dart';
+import '../../public_store/utils/public_store_tenant_resolver.dart';
 import '../../public_store/services/public_store_scroll_state.dart';
-import '../../public_store/providers/public_store_tenant_provider.dart';
 import '../../modules/website/services/website_service.dart';
-import '../services/tenant_service.dart';
 import '../utils/mercadopago_reference.dart';
 
 class _EnsurePublicStoreScrollState extends StatelessWidget {
@@ -264,19 +269,10 @@ class _PublicStoreShellState extends State<_PublicStoreShell> {
   }
 
   Future<String?> _resolveStoreTenantId() async {
-    try {
-      final tenantProvider = context.read<PublicStoreTenantProvider>();
-      final tenantId = tenantProvider.tenantId;
-      if (tenantId != null && tenantId.isNotEmpty) return tenantId;
-    } on ProviderNotFoundException {
-      // ERP host may resolve tenant through the authenticated tenant service.
-    }
-
-    try {
-      return await context.read<TenantService>().getTenantId();
-    } on ProviderNotFoundException {
-      return null;
-    }
+    return resolvePublicStoreTenantId(
+      context,
+      allowAuthenticatedFallback: true,
+    );
   }
 
   Future<void> _ensureStoreDataLoaded() async {
@@ -462,6 +458,7 @@ class AppRouter {
             '/auth/callback',
             '/app/open',
             '/productos',
+            '/servicios',
             '/producto',
             '/carrito',
             '/checkout',
@@ -511,7 +508,17 @@ class AppRouter {
           if (!policyPaths.contains(p)) {
             String? legacyPath;
 
-            if (p == '/productos') legacyPath = '/tienda/productos';
+            if (p == '/productos' ||
+                p.startsWith('/productos/') ||
+                p == '/servicios' ||
+                p.startsWith('/servicios/')) {
+              legacyPath = Uri.parse(
+                normalizePublicCatalogRouteForRuntime(
+                  p,
+                  isErpMounted: true,
+                ),
+              ).path;
+            }
             if (p == '/carrito') legacyPath = '/tienda/carrito';
             if (p == '/checkout') legacyPath = '/tienda/checkout';
             if (p == '/contacto') legacyPath = '/tienda/contacto';
@@ -691,7 +698,66 @@ class AppRouter {
           ),
         ),
 
-        // Product Detail (clean URL)
+        GoRoute(
+          path: '/productos/categoria/:category',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: ProductCatalogPage()),
+          ),
+        ),
+
+        GoRoute(
+          path: '/servicios',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: ProductCatalogPage()),
+          ),
+        ),
+
+        GoRoute(
+          path: '/servicios/categoria/:category',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: ProductCatalogPage()),
+          ),
+        ),
+
+        // Canonical product detail. The ERP redirect above mounts this same
+        // route under /tienda while the standalone store keeps the clean URL.
+        GoRoute(
+          path: '/productos/:slug/:sku',
+          pageBuilder: (context, state) {
+            final sku = state.pathParameters['sku']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PublicStoreWrapper(
+                child: ProductDetailPage(productId: 'sku:$sku'),
+              ),
+            );
+          },
+        ),
+
+        // UUID/legacy product detail. ProductDetailPage upgrades it to the
+        // canonical readable route after resolving the product.
+        GoRoute(
+          path: '/productos/:id',
+          pageBuilder: (context, state) {
+            final productId = state.pathParameters['id']!;
+            return _buildPageWithNoTransition(
+              context,
+              state,
+              PublicStoreWrapper(
+                child: ProductDetailPage(productId: productId),
+              ),
+            );
+          },
+        ),
+
+        // Legacy product detail (clean URL)
         GoRoute(
           path: '/producto/:id',
           pageBuilder: (context, state) {
@@ -819,6 +885,55 @@ class AppRouter {
                       'public_store_shell_tienda_productos',
                       const ProductCatalogPage(),
                     ),
+                    routes: [
+                      GoRoute(
+                        path: 'categoria/:category',
+                        pageBuilder: (context, state) => _buildShellPage(
+                          'public_store_shell_tienda_category_${state.pathParameters['category']}',
+                          const ProductCatalogPage(),
+                        ),
+                      ),
+                      GoRoute(
+                        path: ':slug/:sku',
+                        pageBuilder: (context, state) {
+                          final sku = state.pathParameters['sku']!;
+                          return _buildShellPage(
+                            'public_store_shell_tienda_product_$sku',
+                            ProductDetailPage(productId: 'sku:$sku'),
+                          );
+                        },
+                      ),
+                      GoRoute(
+                        path: ':id',
+                        pageBuilder: (context, state) {
+                          final productId = state.pathParameters['id']!;
+                          return _buildShellPage(
+                            'public_store_shell_tienda_product_$productId',
+                            ProductDetailPage(productId: productId),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              StatefulShellBranch(
+                routes: [
+                  GoRoute(
+                    path: '/tienda/servicios',
+                    pageBuilder: (context, state) => _buildShellPage(
+                      'public_store_shell_tienda_servicios',
+                      const ProductCatalogPage(),
+                    ),
+                    routes: [
+                      GoRoute(
+                        path: 'categoria/:category',
+                        pageBuilder: (context, state) => _buildShellPage(
+                          'public_store_shell_tienda_service_category_${state.pathParameters['category']}',
+                          const ProductCatalogPage(),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1223,18 +1338,15 @@ class AppRouter {
         // Keep only legacy detail/checkout/order routes here.
         // ========================================
 
-        // Product Detail
+        // Legacy mounted product detail.
         GoRoute(
           path: '/tienda/producto/:id',
-          pageBuilder: (context, state) {
-            final productId = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
-              context,
-              state,
-              PublicStoreWrapper(
-                child: ProductDetailPage(productId: productId),
-              ),
-            );
+          redirect: (context, state) {
+            final query = state.uri.queryParameters;
+            return Uri(
+              path: '/tienda/productos/${state.pathParameters['id']!}',
+              queryParameters: query.isEmpty ? null : query,
+            ).toString();
           },
         ),
 
@@ -1620,7 +1732,10 @@ class AppRouter {
               context,
               state,
               erp.loadLibrary(),
-              () => erp.MechanicJobFormPage(jobId: jobId),
+              () => erp.MechanicJobFormPage(
+                jobId: jobId,
+                initialTab: state.uri.queryParameters['tab'],
+              ),
             );
           },
         ),
@@ -2014,6 +2129,30 @@ class AppRouter {
             );
           },
         ),
+        GoRoute(
+          path: '/sales/payments/:id/edit',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildDeferredPageWithNoTransition(
+              context,
+              state,
+              erp.loadLibrary(),
+              () => erp.PaymentEditPage(paymentId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/sales/payments/:id',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildDeferredPageWithNoTransition(
+              context,
+              state,
+              erp.loadLibrary(),
+              () => erp.PaymentDetailPage(paymentId: id),
+            );
+          },
+        ),
 
         // Sales Reports
         GoRoute(
@@ -2163,6 +2302,30 @@ class AppRouter {
           },
         ),
         GoRoute(
+          path: '/purchases/payments/:id/edit',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildDeferredPageWithNoTransition(
+              context,
+              state,
+              erp.loadLibrary(),
+              () => erp.PurchasePaymentEditPage(paymentId: id),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/purchases/payments/:id',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildDeferredPageWithNoTransition(
+              context,
+              state,
+              erp.loadLibrary(),
+              () => erp.PurchasePaymentDetailPage(paymentId: id),
+            );
+          },
+        ),
+        GoRoute(
           path: '/purchases/smart-list',
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
@@ -2170,6 +2333,18 @@ class AppRouter {
             erp.loadLibrary(),
             () => erp.SmartPurchaseListPage(),
           ),
+        ),
+        GoRoute(
+          path: '/purchases/receipts/:receiptId',
+          pageBuilder: (context, state) {
+            final receiptId = state.pathParameters['receiptId']!;
+            return _buildDeferredPageWithNoTransition(
+              context,
+              state,
+              erp.loadLibrary(),
+              () => erp.PurchaseReceiptDetailPage(receiptId: receiptId),
+            );
+          },
         ),
         // Dynamic route for viewing/editing invoices
         GoRoute(

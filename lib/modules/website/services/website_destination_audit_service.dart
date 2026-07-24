@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/services/tenant_service.dart';
+import '../models/website_catalog_presentation.dart';
+import '../models/website_catalog_query.dart';
 import '../models/website_destination.dart';
 
 enum WebsiteDestinationHealth { ready, warning, broken }
@@ -61,6 +63,91 @@ class WebsiteDestinationAudit {
       .length;
 }
 
+/// Direct and descendant-aware product counts for active catalog categories.
+///
+/// The public category tree includes every active descendant when resolving a
+/// collection, even when a descendant is hidden from navigation. Keeping this
+/// projection shared prevents the link editor and destination audit from
+/// describing a different result set than the storefront.
+class WebsiteCategoryProductCounts {
+  WebsiteCategoryProductCounts._({
+    required Map<String, int> directByCategoryId,
+    required Map<String, int> subtreeByCategoryId,
+  })  : directByCategoryId = Map.unmodifiable(directByCategoryId),
+        subtreeByCategoryId = Map.unmodifiable(subtreeByCategoryId);
+
+  factory WebsiteCategoryProductCounts.fromRows({
+    required Iterable<Map<String, dynamic>> categories,
+    required Iterable<Map<String, dynamic>> markedProducts,
+  }) {
+    final activeCategoryIds = <String>{};
+    final parentByCategoryId = <String, String?>{};
+    for (final category in categories) {
+      if (category['is_active'] != true) continue;
+      final id = _rowText(category['id']);
+      if (id.isEmpty) continue;
+      final parentId = _rowText(category['parent_id']);
+      activeCategoryIds.add(id);
+      parentByCategoryId[id] = parentId.isEmpty ? null : parentId;
+    }
+
+    final directByCategoryId = <String, int>{};
+    for (final product in markedProducts) {
+      final categoryId = _rowText(product['category_id']);
+      if (!activeCategoryIds.contains(categoryId)) continue;
+      directByCategoryId[categoryId] =
+          (directByCategoryId[categoryId] ?? 0) + 1;
+    }
+
+    final childrenByParentId = <String, List<String>>{};
+    for (final entry in parentByCategoryId.entries) {
+      final parentId = entry.value;
+      if (parentId == null || !activeCategoryIds.contains(parentId)) continue;
+      childrenByParentId.putIfAbsent(parentId, () => []).add(entry.key);
+    }
+
+    final subtreeByCategoryId = <String, int>{};
+    final visiting = <String>{};
+
+    int countSubtree(String categoryId) {
+      final cached = subtreeByCategoryId[categoryId];
+      if (cached != null) return cached;
+      if (!visiting.add(categoryId)) return 0;
+
+      var count = directByCategoryId[categoryId] ?? 0;
+      for (final childId
+          in childrenByParentId[categoryId] ?? const <String>[]) {
+        count += countSubtree(childId);
+      }
+      visiting.remove(categoryId);
+      subtreeByCategoryId[categoryId] = count;
+      return count;
+    }
+
+    for (final categoryId in activeCategoryIds) {
+      countSubtree(categoryId);
+    }
+
+    return WebsiteCategoryProductCounts._(
+      directByCategoryId: directByCategoryId,
+      subtreeByCategoryId: subtreeByCategoryId,
+    );
+  }
+
+  final Map<String, int> directByCategoryId;
+  final Map<String, int> subtreeByCategoryId;
+
+  int countFor(String categoryId, WebsiteCatalogCategoryScope scope) {
+    return switch (scope) {
+      WebsiteCatalogCategoryScope.direct => directByCategoryId[categoryId] ?? 0,
+      WebsiteCatalogCategoryScope.subtree =>
+        subtreeByCategoryId[categoryId] ?? 0,
+    };
+  }
+
+  static String _rowText(dynamic value) => value?.toString().trim() ?? '';
+}
+
 /// Builds a read-only integrity view of every persisted CTA and navigation
 /// destination. It never creates pages or menu entries implicitly.
 class WebsiteDestinationAuditService {
@@ -103,13 +190,19 @@ class WebsiteDestinationAuditService {
           .eq('tenant_id', tenantId),
       _client
           .from('product_categories')
-          .select('id,name,full_path,is_active,show_on_website')
+          .select('id,name,full_path,parent_id,is_active,show_on_website')
           .eq('tenant_id', tenantId),
       _client
           .from('products')
           .select(
               'id,name,sku,category_id,is_active,is_published,show_on_website')
           .eq('tenant_id', tenantId),
+      _client
+          .from('website_settings')
+          .select('value')
+          .eq('tenant_id', tenantId)
+          .eq('key', websiteCatalogPresentationsSettingKey)
+          .maybeSingle(),
     ]);
 
     final pages = _maps(responses[0]);
@@ -117,6 +210,12 @@ class WebsiteDestinationAuditService {
     final navigation = _maps(responses[2]);
     final categories = _maps(responses[3]);
     final products = _maps(responses[4]);
+    final presentationRow = responses[5] is Map
+        ? Map<String, dynamic>.from(responses[5] as Map)
+        : null;
+    final presentationRegistry = WebsiteCatalogPresentationRegistry.decode(
+      presentationRow?['value']?.toString(),
+    );
 
     final pageById = <String, Map<String, dynamic>>{
       for (final page in pages)
@@ -131,20 +230,16 @@ class WebsiteDestinationAuditService {
         if (_text(category['id']).isNotEmpty) _text(category['id']): category,
     };
     final productByToken = <String, Map<String, dynamic>>{};
-    final markedProductCountByCategory = <String, int>{};
     for (final product in products) {
       final id = _text(product['id']);
       final sku = _text(product['sku']);
       if (id.isNotEmpty) productByToken[id] = product;
       if (sku.isNotEmpty) productByToken[sku] = product;
-      if (_isMarkedForWebsite(product)) {
-        final categoryId = _text(product['category_id']);
-        if (categoryId.isNotEmpty) {
-          markedProductCountByCategory[categoryId] =
-              (markedProductCountByCategory[categoryId] ?? 0) + 1;
-        }
-      }
     }
+    final categoryProductCounts = WebsiteCategoryProductCounts.fromRows(
+      categories: categories,
+      markedProducts: products.where(_isMarkedForWebsite),
+    );
 
     final usages = <String, _UsageBuilder>{};
     void addUsage({
@@ -204,8 +299,9 @@ class WebsiteDestinationAuditService {
         usage: usage,
         pageBySlug: pageBySlug,
         categoryById: categoryById,
+        presentationRegistry: presentationRegistry,
         productByToken: productByToken,
-        markedProductCountByCategory: markedProductCountByCategory,
+        categoryProductCounts: categoryProductCounts,
       );
     }).toList();
 
@@ -251,8 +347,9 @@ class WebsiteDestinationAuditService {
     required _UsageBuilder usage,
     required Map<String, Map<String, dynamic>> pageBySlug,
     required Map<String, Map<String, dynamic>> categoryById,
+    required WebsiteCatalogPresentationRegistry presentationRegistry,
     required Map<String, Map<String, dynamic>> productByToken,
-    required Map<String, int> markedProductCountByCategory,
+    required WebsiteCategoryProductCounts categoryProductCounts,
   }) {
     var title = destination.href;
     var health = WebsiteDestinationHealth.ready;
@@ -291,7 +388,12 @@ class WebsiteDestinationAuditService {
         break;
       case WebsiteDestinationKind.category:
         owner = WebsiteDestinationOwner.catalogCategories;
-        final category = categoryById[destination.reference];
+        var category = categoryById[destination.reference];
+        if (category == null) {
+          final resolution =
+              presentationRegistry.resolveSlug(destination.reference ?? '');
+          category = categoryById[resolution?.presentation.ownerId];
+        }
         if (category == null) {
           health = WebsiteDestinationHealth.broken;
           message =
@@ -301,17 +403,30 @@ class WebsiteDestinationAuditService {
           title = _text(category['full_path']).isEmpty
               ? _text(category['name'])
               : _text(category['full_path']);
-          final count =
-              markedProductCountByCategory[destination.reference] ?? 0;
-          if (category['is_active'] != true ||
+          final categoryId = _text(category['id']);
+          final uri = Uri.tryParse(destination.href);
+          final catalogQuery =
+              uri == null ? null : WebsiteCatalogQuery.tryParse(uri);
+          final scope = catalogQuery?.categoryScope;
+          final count = scope == null
+              ? 0
+              : categoryProductCounts.countFor(categoryId, scope);
+          if (catalogQuery == null) {
+            health = WebsiteDestinationHealth.broken;
+            message = 'El destino contiene filtros de catálogo inválidos.';
+          } else if (category['is_active'] != true ||
               category['show_on_website'] != true) {
             health = WebsiteDestinationHealth.warning;
             message = 'La categoría está oculta del catálogo público.';
           } else if (count == 0) {
             health = WebsiteDestinationHealth.warning;
-            message = 'La categoría está visible, pero no tiene productos web.';
+            message = scope == WebsiteCatalogCategoryScope.direct
+                ? 'Solo esta categoría: no tiene productos web asignados directamente.'
+                : 'Categoría y subcategorías: no tienen productos web.';
           } else {
-            message = 'Categoría visible con $count productos web.';
+            message = scope == WebsiteCatalogCategoryScope.direct
+                ? 'Solo esta categoría: $count productos web asignados directamente.'
+                : 'Categoría y subcategorías: $count productos web.';
           }
         }
         break;

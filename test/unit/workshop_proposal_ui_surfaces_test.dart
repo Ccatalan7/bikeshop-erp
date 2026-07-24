@@ -14,6 +14,9 @@ void main() {
     final form = File(
       'lib/modules/bikeshop/pages/mechanic_job_form_page.dart',
     ).readAsStringSync();
+    final router = File(
+      'lib/shared/routes/app_router.dart',
+    ).readAsStringSync();
 
     expect(table, contains("child: const Text('Cotización')"));
     expect(table, contains("'Presupuestos', budgets"));
@@ -31,9 +34,12 @@ void main() {
       reason:
           'The invoice-column shortcut must only offer conversion after the proposal is approved.',
     );
-    expect(table, contains("value: 'download_approved_budget'"));
-    expect(table, contains("Text('Descargar presupuesto')"));
-    expect(table, contains("value: 'invoice_approved_budget'"));
+    expect(table, contains("value: 'download_proposal'"));
+    expect(
+      table,
+      contains("'Descargar \${job.proposalDocumentLabelLower}'"),
+    );
+    expect(table, contains("value: 'convert_proposal'"));
     expect(table, contains("? 'Facturar presupuesto'"));
     expect(table, contains(": 'Facturar o convertir cotización'"));
     expect(
@@ -41,6 +47,51 @@ void main() {
       contains('unawaited(_convertToService(job))'),
       reason:
           'The chip must reuse the audited idempotent conversion instead of creating a parallel invoice path.',
+    );
+    expect(
+      table,
+      contains('_openJobEditorAt(job, initialTab: \'products\')'),
+      reason:
+          'The main proposal-chip segment must open the canonical Products and Services editor.',
+    );
+    expect(
+      table,
+      contains("Icons.keyboard_arrow_down_rounded"),
+      reason:
+          'Every proposal state must expose a clearly visible secondary-actions affordance.',
+    );
+    expect(
+      table,
+      contains(
+        'final proposalChip = SizedBox(\n'
+        '              width: 84,\n'
+        '              height: 24,',
+      ),
+      reason:
+          'The split chip must have a bounded width that fits the invoice column instead of clipping its dropdown segment.',
+    );
+    expect(
+      table,
+      contains('fit: BoxFit.scaleDown'),
+      reason:
+          'Long proposal labels must yield space to the dropdown without overflowing the dense table cell.',
+    );
+    expect(
+      table,
+      contains("message: 'Descargar / más'"),
+      reason: 'The dropdown hint must stay concise in the dense table.',
+    );
+    expect(
+      table,
+      contains("tooltip: ''"),
+      reason:
+          'The popup must suppress its long built-in tooltip; the concise delayed tooltip and semantics label own that guidance.',
+    );
+    expect(form, contains('final String? initialTab;'));
+    expect(form, contains("'products' => _JobWorkbenchTab.products"));
+    expect(
+      router,
+      contains("initialTab: state.uri.queryParameters['tab']"),
     );
     expect(table, contains('void _showReplacingQuotationSnackBar('));
     expect(table, contains('void _clearQuotationSnackBars()'));

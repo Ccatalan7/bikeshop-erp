@@ -41,4 +41,65 @@ void main() {
       );
     });
   });
+
+  group('normalizePublicProductRouteForRuntime', () {
+    test('mounts a canonical detail route for ERP Preview', () {
+      expect(
+        normalizePublicProductRouteForRuntime(
+          '/productos/camara-rbx/6927116100148?preview=true',
+          isErpMounted: true,
+        ),
+        '/tienda/productos/camara-rbx/6927116100148?preview=true',
+      );
+    });
+
+    test('restores the clean route for the standalone storefront', () {
+      expect(
+        normalizePublicProductRouteForRuntime(
+          '/tienda/productos/camara-rbx/6927116100148?edit=true',
+          isErpMounted: false,
+        ),
+        '/productos/camara-rbx/6927116100148?edit=true',
+      );
+    });
+
+    test('does not rewrite unrelated storefront routes', () {
+      expect(
+        normalizePublicProductRouteForRuntime(
+          '/productos?category=camaras&preview=true',
+          isErpMounted: true,
+        ),
+        '/tienda/productos?category=camaras&preview=true',
+      );
+      expect(
+        normalizePublicProductRouteForRuntime(
+          '/contacto?preview=true',
+          isErpMounted: true,
+        ),
+        '/contacto?preview=true',
+      );
+    });
+  });
+
+  group('normalizePublicCatalogRouteForRuntime', () {
+    test('mounts clean category routes inside ERP Preview', () {
+      expect(
+        normalizePublicCatalogRouteForRuntime(
+          '/productos/categoria/camaras?q=29#catalogo',
+          isErpMounted: true,
+        ),
+        '/tienda/productos/categoria/camaras?q=29#catalogo',
+      );
+    });
+
+    test('restores clean service collection routes for the public app', () {
+      expect(
+        normalizePublicCatalogRouteForRuntime(
+          '/tienda/servicios/categoria/mantenciones?preview=true',
+          isErpMounted: false,
+        ),
+        '/servicios/categoria/mantenciones?preview=true',
+      );
+    });
+  });
 }

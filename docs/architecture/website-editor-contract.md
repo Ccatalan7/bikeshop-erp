@@ -9,6 +9,12 @@ Editor. Read it before changing website editor controls, blocks, renderers,
 routes, preview behavior, campaigns, catalog destinations, or storefront theme
 behavior. It supersedes older dated notes and code snippets when they conflict.
 
+After this contract, read
+[`website-builder-agent-handoff.md`](website-builder-agent-handoff.md). It is
+the operational summary of the refactor, defines AI action equivalence, maps
+the connected configuration owners, and contains the current catalog/category
+evolution plan.
+
 The editor is not a mockup layered over a separate website. It is the CMS for
 the real website. A result is complete only when the saved editor state fully
 explains the editor canvas, Preview, and the published storefront.
@@ -28,12 +34,15 @@ targets. Those are the only intentional visual differences. Content layout,
 fonts, colors, images, transforms, clipping, responsive visibility, CTA
 destinations, and animation settings must mean the same thing in every mode.
 
-Every change must satisfy all three parts of the existing editor-owned contract:
+Every change must satisfy all four parts of the editor-owned contract:
 
 1. **Owner:** one canonical persisted model owns the value.
 2. **Control:** the user can find and change it through the real editor or its
    connected management workspace.
-3. **Consumer:** every editor, Preview, and public renderer reads the same value.
+3. **Operation:** the editor and agent automation use the same defaults,
+   validation, persisted schema, and save/publication invariants; automation
+   acting on a live draft also uses the normal staging/history path.
+4. **Consumer:** every editor, Preview, and public renderer reads the same value.
 
 ## Canonical system map
 
@@ -395,10 +404,11 @@ primary action.
   the current catalog image; a manual asset may be an explicit fallback.
 - Background removal is a shared media operation, not a campaign-specific
   workaround. Canvas image toolbars and schema image controls open the same
-  non-destructive Before/After workflow. Applying it creates a new transparent
-  PNG in the normal Website Builder media path, keeps the original URL
-  restorable, sets a linked Canvas image to the explicit `manual` source, and
-  remains undoable through the page draft.
+  non-destructive Before/After workflow. Applying it keeps the transparent
+  source in the normal Website Builder media path, automatically creates the
+  bounded WebP delivery asset and its lightweight library thumbnail, keeps the
+  pre-removal URL restorable, sets a linked Canvas image to the explicit
+  `manual` source, and remains undoable through the page draft.
 - The free local path removes only a near-uniform background connected to the
   image border and exposes its tolerance. It must run before any paid provider.
   An asset that already contains meaningful transparency is a no-op: preview
@@ -459,6 +469,11 @@ Required behavior:
   guard. Never discard a draft silently.
 - Route filters selected by a CTA, including category plus brand/search, must
   survive navigation and reopen visibly in `WebsiteLinkValueEditor`.
+- Category collections use the clean typed route
+  `/productos/categoria/<configured-slug>` (or the service equivalent), with
+  the ERP-mounted `/tienda/...` variant produced only by the shared runtime
+  normalizer. Routers register collection routes before product-detail
+  parameters so a category can never fall through to the product screen.
 - The page selector controls which storefront surface is being viewed/edited.
   `Estructura > Páginas` owns page records, and
   `Estructura > Navegación y menús` owns header/footer placement. These are
@@ -474,6 +489,11 @@ structure, settings, and operations use full-width management workspaces while
 preserving the current page draft and return context.
 
 - `Catálogo web` owns product/category publication and the featured collection.
+- `Catálogo web > Categorías > Presentación` owns the optional presentation
+  attached to a real category: stable public slug, inherited/overridden hero,
+  breadcrumbs, subcategory navigation, supported facets, and grid density.
+  Removing it restores the polished shared default; it never removes or
+  unpublishes the category.
 - `Estructura > Páginas` owns CMS page records.
 - `Estructura > Navegación y menús` and `website_navigation` own header/footer
   placement and hierarchy.
@@ -580,11 +600,12 @@ debt:
 - Canvas edit content still passes through editor decoration that can introduce
   a small inset absent from public rendering. Editor chrome must be overlaid
   around the same content geometry, not change its padding or dimensions.
-- Media upload is not yet one public shared component everywhere:
-  `InlineEditableImage` and the inspector's private picker use different upload
-  paths, and legacy URL-only fields remain. Consolidate them behind one shared
-  picker/storage service before describing the media system as a searchable
-  library.
+- Canonical picker uploads now converge on `WebsiteMediaService`: the client
+  bounds the editable source, the authenticated `website-optimize-image`
+  operation creates an immutable 1920 px WebP plus a library thumbnail, and
+  the saved image field receives the WebP URL while source metadata remains
+  available for reprocessing. Legacy URL-only fields still need conversion to
+  the shared picker when they are touched.
 - Save orchestration exists in both `PublicStoreLayout` and
   `PersistentEditorShell`. They currently reach the same service but can drift;
   converge on one save coordinator/result finalizer and verify that failures
@@ -641,6 +662,7 @@ Before completion:
 | Bounded clipping | No content paints into adjacent blocks | Same boundary | Same boundary |
 | Selection | Block, nested element, repeat click, and background open correct inspector | No edit selection | No edit selection |
 | Page navigation | Page selector keeps editor context and loads correct data | Correct routed page and filters | Correct routed page and filters |
+| Category collection | Presentation controls and actual catalog preview are visible in the canonical catalog workspace | Same hero, breadcrumb, subcategories, facets and grid over public products | Same saved presentation and query-backed products after reload |
 | Responsive behavior | Desktop/tablet/mobile controls remain editable | Same visibility and composition | Same visibility and composition |
 | Persistence | Global save owns content/config | Saved Preview survives reload | Public result survives reload/cache refresh |
 

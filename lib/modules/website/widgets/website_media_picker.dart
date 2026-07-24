@@ -313,7 +313,7 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
                                 child: ColoredBox(
                                   color: const Color(0xFFF3F4F5),
                                   child: Image.network(
-                                    asset.publicUrl,
+                                    asset.thumbnailUrl,
                                     fit: BoxFit.contain,
                                     errorBuilder: (_, __, ___) => const Icon(
                                       Icons.broken_image_outlined,
@@ -675,7 +675,7 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
             onTap: _uploading ? null : _upload,
             borderRadius: BorderRadius.circular(16),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 64),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
               decoration: BoxDecoration(
                 color: const Color(0xFF00A09D).withValues(alpha: .05),
                 borderRadius: BorderRadius.circular(16),
@@ -701,9 +701,25 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'PNG, WebP, JPG o GIF. Los formatos transparentes se conservan.',
+                    'JPG, PNG o WebP. Transparencia y calidad visual se conservan.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.black54, fontSize: 12),
+                  ),
+                  const SizedBox(height: 10),
+                  const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.compress_rounded,
+                          size: 15, color: Colors.black45),
+                      SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'El editor ajusta el tamaño y publica WebP automáticamente.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.black54, fontSize: 11),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -809,11 +825,30 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
             runSpacing: 8,
             children: actions,
           );
-          final selectedLabel = Text(
-            _selected?.name ?? '',
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-            style: const TextStyle(fontSize: 12, color: Colors.black54),
+          final selectedLabel = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_selected?.isWebOptimized == true) ...[
+                const Icon(
+                  Icons.check_circle_outline_rounded,
+                  size: 15,
+                  color: Colors.black45,
+                ),
+                const SizedBox(width: 5),
+              ],
+              Flexible(
+                child: Text(
+                  _selected == null
+                      ? ''
+                      : _selected!.isWebOptimized
+                          ? '${_selected!.name} · Optimizada para web'
+                          : _selected!.name,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+              ),
+            ],
           );
 
           if (constraints.maxWidth < 760) {
@@ -887,11 +922,14 @@ class _WebsiteImagePickerFieldState extends State<WebsiteImagePickerField> {
           await WebsiteBackgroundRemovalService().uploadTransparentPng(
             selection.pngBytes!,
             prefix: 'block-no-bg',
+            originalUrl: url,
           );
       if (!mounted) return;
       widget.onChanged(resultUrl);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PNG sin fondo guardado en Biblioteca.')),
+        const SnackBar(
+          content: Text('Imagen sin fondo optimizada y guardada.'),
+        ),
       );
     } catch (error) {
       if (mounted) {

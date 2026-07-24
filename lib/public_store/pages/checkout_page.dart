@@ -6,7 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart' as typeahead;
 import 'package:uuid/uuid.dart';
 import '../utils/web_utils.dart' as web_utils;
-import '../theme/public_store_theme.dart';
+import '../theme/public_store_surface_theme.dart';
+import '../models/public_commerce_product_projection.dart';
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/customer_account_service.dart';
@@ -30,11 +31,10 @@ class CheckoutPage extends StatefulWidget {
 
 class _CheckoutPageState extends State<CheckoutPage>
     with AutomaticKeepAliveClientMixin {
-  static const Color _logoBlue = Color(0xFF093357);
-  static const Color _warmLine = Color(0xFFE8E2D8);
-  static const Color _warmSurface = Color(0xFFF7F4EE);
-  static const Color _softSurface = Color(0xFFFCFBF8);
   static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+  PublicStoreSurfaceTheme get _storeTheme =>
+      PublicStoreSurfaceTheme.of(context);
 
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -100,14 +100,17 @@ class _CheckoutPageState extends State<CheckoutPage>
       MetaPixelService.instance.trackInitiateCheckout(
         items: cart.items
             .map(
-              (item) => MetaCatalogEventItem(
-                contentId: MetaPixelService.catalogContentId(
-                  sku: item.product.sku,
-                  productId: item.product.id,
-                ),
-                quantity: item.quantity,
-                itemPrice: item.product.price,
-              ),
+              (item) {
+                final commerce = item.commerce;
+                return MetaCatalogEventItem(
+                  contentId: MetaPixelService.catalogContentId(
+                    sku: commerce.sku,
+                    productId: commerce.id,
+                  ),
+                  quantity: item.quantity,
+                  itemPrice: commerce.price,
+                );
+              },
             )
             .where((item) => item.contentId.isNotEmpty)
             .toList(),
@@ -413,7 +416,7 @@ class _CheckoutPageState extends State<CheckoutPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
-            backgroundColor: Colors.red,
+            backgroundColor: _storeTheme.error,
           ),
         );
       } else if (status == 'pending' && orderId != null) {
@@ -596,6 +599,18 @@ class _CheckoutPageState extends State<CheckoutPage>
       return;
     }
 
+    if (cart.items.any((item) =>
+        item.commerce.availability == PublicCommerceAvailability.outOfStock)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Uno de los productos ya no está disponible. Vuelve al carrito para actualizarlo.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final taxSummary = cart.taxSummary;
     if (!taxSummary.isValid) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -728,14 +743,15 @@ class _CheckoutPageState extends State<CheckoutPage>
 
       debugPrint('🔵 [Checkout] Creating orderItems...');
       final orderItems = cart.items.map((item) {
+        final commerce = item.commerce;
         return {
           'tenant_id': tenantId, // ⚠️ REQUIRED for multi-tenant isolation
-          'product_id': item.product.id,
-          'product_name': item.product.name,
-          'product_sku': item.product.sku,
+          'product_id': commerce.id,
+          'product_name': commerce.title,
+          'product_sku': commerce.sku,
           'quantity': item.quantity,
-          'unit_price': item.product.price,
-          'subtotal': item.product.price * item.quantity,
+          'unit_price': commerce.price,
+          'subtotal': commerce.price * item.quantity,
         };
       }).toList();
       debugPrint(
@@ -846,7 +862,7 @@ class _CheckoutPageState extends State<CheckoutPage>
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Error al procesar pago con MercadoPago: $e'),
-              backgroundColor: Colors.red,
+              backgroundColor: _storeTheme.error,
               duration: const Duration(seconds: 10),
             ),
           );
@@ -962,12 +978,11 @@ class _CheckoutPageState extends State<CheckoutPage>
       children: [
         _buildSectionHeading('Finalizar compra'),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'Completa tus datos de contacto, entrega y pago para confirmar tu pedido con el mismo lenguaje claro del resto de la tienda.',
-          style: TextStyle(
-            fontFamily: null,
+          style: _storeTheme.text.bodyMedium?.copyWith(
             fontSize: 15,
-            color: PublicStoreTheme.textSecondary,
+            color: _storeTheme.textSecondary,
             height: 1.55,
           ),
         ),
@@ -998,24 +1013,23 @@ class _CheckoutPageState extends State<CheckoutPage>
                 width: 148,
                 height: 148,
                 decoration: BoxDecoration(
-                  color: _softSurface,
-                  border: Border.all(color: _warmLine),
+                  color: _storeTheme.softSurface,
+                  border: Border.all(color: _storeTheme.line),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.shopping_cart_outlined,
                   size: 62,
-                  color: PublicStoreTheme.textMuted,
+                  color: _storeTheme.textMuted,
                 ),
               ),
               const SizedBox(height: 32),
               _buildSectionHeading('No hay productos para finalizar'),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'Vuelve al catálogo, revisa productos y agrega artículos antes de continuar al checkout.',
-                style: TextStyle(
-                  fontFamily: null,
+                style: _storeTheme.text.bodyMedium?.copyWith(
                   fontSize: 15,
-                  color: PublicStoreTheme.textSecondary,
+                  color: _storeTheme.textSecondary,
                   height: 1.6,
                 ),
                 textAlign: TextAlign.center,
@@ -1026,8 +1040,8 @@ class _CheckoutPageState extends State<CheckoutPage>
                 icon: const Icon(Icons.shopping_bag_outlined),
                 label: const Text('EXPLORAR PRODUCTOS'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: _logoBlue,
-                  foregroundColor: Colors.white,
+                  backgroundColor: _storeTheme.primary,
+                  foregroundColor: _storeTheme.onPrimary,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 30, vertical: 18),
                   shape: RoundedRectangleBorder(
@@ -1110,8 +1124,8 @@ class _CheckoutPageState extends State<CheckoutPage>
                     width: double.infinity,
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: _warmLine),
+                      color: _storeTheme.surface,
+                      border: Border.all(color: _storeTheme.line),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Column(
@@ -1126,11 +1140,11 @@ class _CheckoutPageState extends State<CheckoutPage>
                           },
                           contentPadding: EdgeInsets.zero,
                           controlAffinity: ListTileControlAffinity.leading,
-                          title: const Text(
+                          title: Text(
                             'Crear una cuenta con estos datos',
-                            style: TextStyle(
+                            style: _storeTheme.text.bodyMedium?.copyWith(
                               fontWeight: FontWeight.w700,
-                              color: Colors.black87,
+                              color: _storeTheme.textPrimary,
                             ),
                           ),
                           subtitle: const Text(
@@ -1357,21 +1371,19 @@ class _CheckoutPageState extends State<CheckoutPage>
               },
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Selecciona una sugerencia y revisa los datos antes de confirmar.',
-              style: TextStyle(
-                fontFamily: null,
+              style: _storeTheme.text.bodySmall?.copyWith(
                 fontSize: 12,
-                color: PublicStoreTheme.textSecondary,
+                color: _storeTheme.textSecondary,
               ),
             ),
           ] else if (_addressAutocompleteService != null) ...[
-            const Text(
+            Text(
               'Puedes escribir tu dirección manualmente. Separarla nos ayuda a guardarla mejor en tu cuenta.',
-              style: TextStyle(
-                fontFamily: null,
+              style: _storeTheme.text.bodySmall?.copyWith(
                 fontSize: 12,
-                color: PublicStoreTheme.textSecondary,
+                color: _storeTheme.textSecondary,
               ),
             ),
           ],
@@ -1404,7 +1416,7 @@ class _CheckoutPageState extends State<CheckoutPage>
               child: TextButton.icon(
                 onPressed: () => context.go('/tienda/cuenta/direcciones'),
                 style: TextButton.styleFrom(
-                  foregroundColor: _logoBlue,
+                  foregroundColor: _storeTheme.primary,
                   padding: EdgeInsets.zero,
                   minimumSize: const Size(0, 0),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1431,7 +1443,9 @@ class _CheckoutPageState extends State<CheckoutPage>
     return Container(
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: isLast ? Colors.transparent : _warmLine),
+          bottom: BorderSide(
+            color: isLast ? Colors.transparent : _storeTheme.line,
+          ),
         ),
       ),
       child: InkWell(
@@ -1443,13 +1457,15 @@ class _CheckoutPageState extends State<CheckoutPage>
             children: [
               Radio<String>(
                 value: value,
-                activeColor: _logoBlue,
+                activeColor: _storeTheme.primary,
               ),
               const SizedBox(width: 8),
               Icon(
                 icon,
                 size: 22,
-                color: isSelected ? _logoBlue : PublicStoreTheme.textSecondary,
+                color: isSelected
+                    ? _storeTheme.primary
+                    : _storeTheme.textSecondary,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1458,21 +1474,19 @@ class _CheckoutPageState extends State<CheckoutPage>
                   children: [
                     Text(
                       title,
-                      style: TextStyle(
-                        fontFamily: null,
+                      style: _storeTheme.text.bodyMedium?.copyWith(
                         fontSize: 15,
                         fontWeight:
                             isSelected ? FontWeight.w700 : FontWeight.w600,
-                        color: Colors.black87,
+                        color: _storeTheme.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: const TextStyle(
-                        fontFamily: null,
+                      style: _storeTheme.text.bodySmall?.copyWith(
                         fontSize: 13,
-                        color: PublicStoreTheme.textSecondary,
+                        color: _storeTheme.textSecondary,
                         height: 1.45,
                       ),
                     ),
@@ -1504,8 +1518,8 @@ class _CheckoutPageState extends State<CheckoutPage>
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: _warmLine),
+        color: _storeTheme.surface,
+        border: Border.all(color: _storeTheme.line),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Column(
@@ -1514,7 +1528,11 @@ class _CheckoutPageState extends State<CheckoutPage>
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.storefront_outlined, color: _logoBlue, size: 22),
+              Icon(
+                Icons.storefront_outlined,
+                color: _storeTheme.primary,
+                size: 22,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -1522,20 +1540,18 @@ class _CheckoutPageState extends State<CheckoutPage>
                   children: [
                     Text(
                       'Retiro en $storeName',
-                      style: const TextStyle(
-                        fontFamily: null,
+                      style: _storeTheme.text.bodyMedium?.copyWith(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
-                        color: Colors.black87,
+                        color: _storeTheme.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
+                    Text(
                       'La tienda preparará tu pedido y te avisará antes de que pases a buscarlo.',
-                      style: TextStyle(
-                        fontFamily: null,
+                      style: _storeTheme.text.bodySmall?.copyWith(
                         fontSize: 13,
-                        color: PublicStoreTheme.textSecondary,
+                        color: _storeTheme.textSecondary,
                         height: 1.45,
                       ),
                     ),
@@ -1553,22 +1569,20 @@ class _CheckoutPageState extends State<CheckoutPage>
                   width: 128,
                   child: Text(
                     row.$1,
-                    style: const TextStyle(
-                      fontFamily: null,
+                    style: _storeTheme.text.labelSmall?.copyWith(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: PublicStoreTheme.textSecondary,
+                      color: _storeTheme.textSecondary,
                     ),
                   ),
                 ),
                 Expanded(
                   child: Text(
                     row.$2,
-                    style: const TextStyle(
-                      fontFamily: null,
+                    style: _storeTheme.text.bodySmall?.copyWith(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                      color: _storeTheme.textPrimary,
                       height: 1.35,
                     ),
                   ),
@@ -1732,10 +1746,10 @@ class _CheckoutPageState extends State<CheckoutPage>
       width: double.infinity,
       padding: EdgeInsets.all(isMobile ? 20 : 24),
       decoration: BoxDecoration(
-        color: _warmSurface.withValues(alpha: 0.56),
-        border: const Border(
-          top: BorderSide(color: _warmLine),
-          bottom: BorderSide(color: _warmLine),
+        color: _storeTheme.raisedSurface,
+        border: Border(
+          top: BorderSide(color: _storeTheme.line),
+          bottom: BorderSide(color: _storeTheme.line),
         ),
       ),
       child: Column(
@@ -1743,11 +1757,10 @@ class _CheckoutPageState extends State<CheckoutPage>
         children: [
           Text(
             'RESUMEN DEL PEDIDO',
-            style: TextStyle(
-              fontFamily: null,
+            style: _storeTheme.text.headlineMedium?.copyWith(
               fontSize: isMobile ? 28 : 32,
               fontWeight: FontWeight.w700,
-              color: Colors.black87,
+              color: _storeTheme.textPrimary,
             ),
           ),
           const SizedBox(height: 18),
@@ -1760,7 +1773,7 @@ class _CheckoutPageState extends State<CheckoutPage>
           Container(
             width: double.infinity,
             height: 1,
-            color: _warmLine,
+            color: _storeTheme.line,
           ),
           const SizedBox(height: 18),
           if (taxSummary.isValid) ...[
@@ -1792,10 +1805,9 @@ class _CheckoutPageState extends State<CheckoutPage>
               'IVA incluido · entrega estimada entre '
               '${shippingQuote.estimatedMinBusinessDays} y '
               '${shippingQuote.estimatedMaxBusinessDays} días hábiles.',
-              style: const TextStyle(
-                fontFamily: null,
+              style: _storeTheme.text.bodySmall?.copyWith(
                 fontSize: 12,
-                color: PublicStoreTheme.textMuted,
+                color: _storeTheme.textMuted,
                 height: 1.45,
               ),
             ),
@@ -1809,19 +1821,18 @@ class _CheckoutPageState extends State<CheckoutPage>
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
+                Icon(
                   Icons.error_outline,
                   size: 18,
-                  color: PublicStoreTheme.error,
+                  color: _storeTheme.error,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _shippingQuoteError!,
-                    style: const TextStyle(
-                      fontFamily: null,
+                    style: _storeTheme.text.bodySmall?.copyWith(
                       fontSize: 13,
-                      color: PublicStoreTheme.error,
+                      color: _storeTheme.error,
                       height: 1.4,
                     ),
                   ),
@@ -1839,30 +1850,28 @@ class _CheckoutPageState extends State<CheckoutPage>
           Container(
             width: double.infinity,
             height: 1,
-            color: _warmLine,
+            color: _storeTheme.line,
           ),
           const SizedBox(height: 18),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const Text(
+              Text(
                 'TOTAL',
-                style: TextStyle(
-                  fontFamily: null,
+                style: _storeTheme.text.labelSmall?.copyWith(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: PublicStoreTheme.textSecondary,
+                  color: _storeTheme.textSecondary,
                   letterSpacing: 0.8,
                 ),
               ),
               Text(
                 orderTotalLabel,
-                style: const TextStyle(
-                  fontFamily: null,
+                style: _storeTheme.text.displaySmall?.copyWith(
                   fontSize: 44,
                   fontWeight: FontWeight.w700,
-                  color: _logoBlue,
+                  color: _storeTheme.primary,
                   height: 0.95,
                 ),
               ),
@@ -1879,20 +1888,20 @@ class _CheckoutPageState extends State<CheckoutPage>
                   ? null
                   : _placeOrder,
               style: FilledButton.styleFrom(
-                backgroundColor: _logoBlue,
-                foregroundColor: Colors.white,
+                backgroundColor: _storeTheme.primary,
+                foregroundColor: _storeTheme.onPrimary,
                 padding: const EdgeInsets.symmetric(vertical: 18),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(6),
                 ),
               ),
               child: _isProcessing
-                  ? const SizedBox(
+                  ? SizedBox(
                       height: 20,
                       width: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        color: _storeTheme.onPrimary,
                       ),
                     )
                   : const Text('REALIZAR PEDIDO'),
@@ -1904,8 +1913,8 @@ class _CheckoutPageState extends State<CheckoutPage>
             child: OutlinedButton(
               onPressed: _isProcessing ? null : () => context.go('/carrito'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: _logoBlue,
-                side: const BorderSide(color: _logoBlue),
+                foregroundColor: _storeTheme.primary,
+                side: BorderSide(color: _storeTheme.primary),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(6),
@@ -1918,7 +1927,7 @@ class _CheckoutPageState extends State<CheckoutPage>
           Container(
             width: double.infinity,
             height: 1,
-            color: _warmLine,
+            color: _storeTheme.line,
           ),
           const SizedBox(height: 18),
           Row(
@@ -1928,20 +1937,19 @@ class _CheckoutPageState extends State<CheckoutPage>
                 width: 7,
                 height: 7,
                 margin: const EdgeInsets.only(top: 6),
-                decoration: const BoxDecoration(
-                  color: _logoBlue,
+                decoration: BoxDecoration(
+                  color: _storeTheme.primary,
                   shape: BoxShape.circle,
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Tus datos están protegidos y serán utilizados únicamente para procesar tu pedido.',
-                  style: TextStyle(
-                    fontFamily: null,
+                  style: _storeTheme.text.bodyMedium?.copyWith(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    color: _storeTheme.textPrimary,
                     height: 1.5,
                   ),
                 ),
@@ -1961,10 +1969,10 @@ class _CheckoutPageState extends State<CheckoutPage>
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: _softSurface.withValues(alpha: 0.62),
-        border: const Border(
-          top: BorderSide(color: _warmLine),
-          bottom: BorderSide(color: _warmLine),
+        color: _storeTheme.softSurface,
+        border: Border(
+          top: BorderSide(color: _storeTheme.line),
+          bottom: BorderSide(color: _storeTheme.line),
         ),
       ),
       child: Column(
@@ -1972,11 +1980,10 @@ class _CheckoutPageState extends State<CheckoutPage>
         children: [
           Text(
             title.toUpperCase(),
-            style: const TextStyle(
-              fontFamily: null,
+            style: _storeTheme.text.headlineSmall?.copyWith(
               fontSize: 24,
               fontWeight: FontWeight.w700,
-              color: Colors.black87,
+              color: _storeTheme.textPrimary,
             ),
           ),
           const SizedBox(height: 18),
@@ -1994,29 +2001,29 @@ class _CheckoutPageState extends State<CheckoutPage>
     return InputDecoration(
       labelText: label,
       hintText: hintText,
-      prefixIcon: Icon(icon, color: PublicStoreTheme.textSecondary, size: 20),
+      prefixIcon: Icon(icon, color: _storeTheme.textSecondary, size: 20),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: _storeTheme.surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(6),
-        borderSide: const BorderSide(color: _warmLine),
+        borderSide: BorderSide(color: _storeTheme.line),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(6),
-        borderSide: const BorderSide(color: _warmLine),
+        borderSide: BorderSide(color: _storeTheme.line),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(6),
-        borderSide: const BorderSide(color: _logoBlue, width: 1.5),
+        borderSide: BorderSide(color: _storeTheme.primary, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(6),
-        borderSide: const BorderSide(color: PublicStoreTheme.error),
+        borderSide: BorderSide(color: _storeTheme.error),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(6),
-        borderSide: const BorderSide(color: PublicStoreTheme.error, width: 1.5),
+        borderSide: BorderSide(color: _storeTheme.error, width: 1.5),
       ),
     );
   }
@@ -2034,7 +2041,7 @@ class _CheckoutPageState extends State<CheckoutPage>
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: isLast ? Colors.transparent : _warmLine,
+            color: isLast ? Colors.transparent : _storeTheme.line,
           ),
         ),
       ),
@@ -2047,7 +2054,7 @@ class _CheckoutPageState extends State<CheckoutPage>
             children: [
               Radio<String>(
                 value: value,
-                activeColor: _logoBlue,
+                activeColor: _storeTheme.primary,
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -2060,13 +2067,12 @@ class _CheckoutPageState extends State<CheckoutPage>
                         Flexible(
                           child: Text(
                             title,
-                            style: TextStyle(
-                              fontFamily: null,
+                            style: _storeTheme.text.bodyMedium?.copyWith(
                               fontSize: 15,
                               fontWeight: isSelected
                                   ? FontWeight.w700
                                   : FontWeight.w600,
-                              color: Colors.black87,
+                              color: _storeTheme.textPrimary,
                             ),
                           ),
                         ),
@@ -2079,10 +2085,9 @@ class _CheckoutPageState extends State<CheckoutPage>
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: const TextStyle(
-                        fontFamily: null,
+                      style: _storeTheme.text.bodySmall?.copyWith(
                         fontSize: 13,
-                        color: PublicStoreTheme.textSecondary,
+                        color: _storeTheme.textSecondary,
                         height: 1.45,
                       ),
                     ),
@@ -2097,15 +2102,16 @@ class _CheckoutPageState extends State<CheckoutPage>
   }
 
   Widget _buildSummaryProductRow(CartItem item, {bool isLast = false}) {
+    final commerce = item.commerce;
     final displayImageUrl =
-        item.product.imageUrlOptimized ?? item.product.imageUrl;
+        commerce.imageUrls.isNotEmpty ? commerce.imageUrls.first : null;
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: isLast ? Colors.transparent : _warmLine,
+            color: isLast ? Colors.transparent : _storeTheme.line,
           ),
         ),
       ),
@@ -2115,7 +2121,7 @@ class _CheckoutPageState extends State<CheckoutPage>
           Container(
             width: 62,
             height: 62,
-            color: _softSurface,
+            color: _storeTheme.softSurface,
             padding: const EdgeInsets.all(8),
             child: displayImageUrl != null
                 ? Image.network(
@@ -2123,17 +2129,17 @@ class _CheckoutPageState extends State<CheckoutPage>
                     fit: BoxFit.contain,
                     alignment: Alignment.center,
                     errorBuilder: (context, error, stackTrace) {
-                      return const Icon(
+                      return Icon(
                         Icons.image_not_supported_outlined,
                         size: 22,
-                        color: PublicStoreTheme.textMuted,
+                        color: _storeTheme.textMuted,
                       );
                     },
                   )
-                : const Icon(
+                : Icon(
                     Icons.pedal_bike_outlined,
                     size: 22,
-                    color: PublicStoreTheme.textMuted,
+                    color: _storeTheme.textMuted,
                   ),
           ),
           const SizedBox(width: 12),
@@ -2142,12 +2148,11 @@ class _CheckoutPageState extends State<CheckoutPage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.product.name,
-                  style: const TextStyle(
-                    fontFamily: null,
+                  commerce.title,
+                  style: _storeTheme.text.bodyMedium?.copyWith(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    color: _storeTheme.textPrimary,
                     height: 1.45,
                   ),
                   maxLines: 2,
@@ -2156,10 +2161,9 @@ class _CheckoutPageState extends State<CheckoutPage>
                 const SizedBox(height: 6),
                 Text(
                   'Cantidad: ${item.quantity}',
-                  style: const TextStyle(
-                    fontFamily: null,
+                  style: _storeTheme.text.bodySmall?.copyWith(
                     fontSize: 12,
-                    color: PublicStoreTheme.textSecondary,
+                    color: _storeTheme.textSecondary,
                   ),
                 ),
               ],
@@ -2168,11 +2172,10 @@ class _CheckoutPageState extends State<CheckoutPage>
           const SizedBox(width: 12),
           Text(
             ChileanUtils.formatCurrency(item.subtotal),
-            style: const TextStyle(
-              fontFamily: null,
+            style: _storeTheme.text.bodyMedium?.copyWith(
               fontSize: 14,
               fontWeight: FontWeight.w700,
-              color: Colors.black87,
+              color: _storeTheme.textPrimary,
             ),
           ),
         ],
@@ -2193,9 +2196,8 @@ class _CheckoutPageState extends State<CheckoutPage>
           style: TextStyle(
             fontFamily: null,
             fontSize: 15,
-            color: secondary
-                ? PublicStoreTheme.textSecondary
-                : PublicStoreTheme.textPrimary,
+            color:
+                secondary ? _storeTheme.textSecondary : _storeTheme.textPrimary,
           ),
         ),
         Text(
@@ -2204,7 +2206,8 @@ class _CheckoutPageState extends State<CheckoutPage>
             fontFamily: null,
             fontSize: 15,
             fontWeight: FontWeight.w700,
-            color: secondary ? PublicStoreTheme.textSecondary : Colors.black87,
+            color:
+                secondary ? _storeTheme.textSecondary : _storeTheme.textPrimary,
           ),
         ),
       ],
@@ -2215,19 +2218,18 @@ class _CheckoutPageState extends State<CheckoutPage>
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFFF8E8),
+      decoration: BoxDecoration(
+        color: _storeTheme.warningSurface,
         border: Border(
-          left: BorderSide(color: Color(0xFFB7791F), width: 3),
+          left: BorderSide(color: _storeTheme.warning, width: 3),
         ),
       ),
       child: Text(
         message,
-        style: const TextStyle(
-          fontFamily: null,
+        style: _storeTheme.text.bodySmall?.copyWith(
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF6B4F19),
+          color: _storeTheme.onWarningSurface,
           height: 1.45,
         ),
       ),
@@ -2238,16 +2240,15 @@ class _CheckoutPageState extends State<CheckoutPage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: _logoBlue.withValues(alpha: 0.08),
+        color: _storeTheme.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          fontFamily: null,
+        style: _storeTheme.text.labelSmall?.copyWith(
           fontSize: 10,
           fontWeight: FontWeight.w700,
-          color: _logoBlue,
+          color: _storeTheme.primary,
           letterSpacing: 0.7,
         ),
       ),
@@ -2260,11 +2261,10 @@ class _CheckoutPageState extends State<CheckoutPage>
       children: [
         Text(
           title.toUpperCase(),
-          style: const TextStyle(
-            fontFamily: null,
+          style: _storeTheme.text.headlineMedium?.copyWith(
             fontSize: 32,
             fontWeight: FontWeight.w700,
-            color: Colors.black,
+            color: _storeTheme.textPrimary,
             height: 1,
           ),
         ),
@@ -2272,7 +2272,7 @@ class _CheckoutPageState extends State<CheckoutPage>
         Container(
           width: 72,
           height: 2,
-          color: Colors.black,
+          color: _storeTheme.primary,
         ),
       ],
     );

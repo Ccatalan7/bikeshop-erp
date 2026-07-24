@@ -3,6 +3,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -250,7 +251,17 @@ class SalesService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final data = await _databaseService.select(_invoicesCollection);
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null || tenantId.isEmpty) {
+        throw StateError('No se pudo resolver la empresa activa.');
+      }
+      final data = await _databaseService.select(
+        _invoicesCollection,
+        where: 'tenant_id=$tenantId',
+        orderBy: 'date',
+        descending: true,
+        fetchAll: true,
+      );
       final invoices = data.map((raw) => Invoice.fromJson(raw)).toList()
         ..sort((a, b) => b.date.compareTo(a.date));
 
@@ -309,6 +320,33 @@ class SalesService extends ChangeNotifier {
       debugPrint('SalesService.fetchInvoice error: $e');
       return null;
     }
+  }
+
+  Future<Payment?> fetchPayment(String id, {bool refresh = false}) async {
+    if (!refresh) {
+      for (final payment in _payments) {
+        if (payment.id == id && payment.deletedAt == null) return payment;
+      }
+    }
+
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No se pudo resolver la empresa activa.');
+    }
+
+    final raw = await _databaseService.supabase
+        .from(_paymentsCollection)
+        .select()
+        .eq('tenant_id', tenantId)
+        .eq('id', id)
+        .isFilter('deleted_at', null)
+        .maybeSingle();
+    if (raw == null) return null;
+
+    final payment = Payment.fromJson(Map<String, dynamic>.from(raw));
+    _upsertPayment(payment);
+    notifyListeners();
+    return payment;
   }
 
   Future<Invoice> saveInvoice(Invoice invoice) async {
@@ -555,7 +593,17 @@ class SalesService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final data = await _databaseService.select(_paymentsCollection);
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null || tenantId.isEmpty) {
+        throw StateError('No se pudo resolver la empresa activa.');
+      }
+      final data = await _databaseService.select(
+        _paymentsCollection,
+        where: 'tenant_id=$tenantId',
+        orderBy: 'date',
+        descending: true,
+        fetchAll: true,
+      );
 
       final payments = data
           .map(Payment.fromJson)
@@ -625,16 +673,14 @@ class SalesService extends ChangeNotifier {
 
   Future<Payment> registerPayment(Payment payment) async {
     try {
-      final payload = payment.toFirestoreMap();
-      final isNew = payment.id == null;
-      Map<String, dynamic> result;
-
-      if (isNew) {
-        result = await _databaseService.insert(_paymentsCollection, payload);
-      } else {
-        result = await _databaseService.update(
-            _paymentsCollection, payment.id!, payload);
+      if (payment.id != null && payment.id!.isNotEmpty) {
+        throw StateError(
+          'Los pagos existentes se corrigen mediante el comando auditado.',
+        );
       }
+      final payload = payment.toFirestoreMap();
+      final result =
+          await _databaseService.insert(_paymentsCollection, payload);
 
       final savedPayment = Payment.fromJson(result);
       _upsertPayment(savedPayment);
@@ -722,6 +768,131 @@ class SalesService extends ChangeNotifier {
     } catch (e) {
       throw Exception('No se pudo registrar el pago: $e');
     }
+  }
+
+  /// Applies an explicit correction to an existing payment through the
+  /// database-owned accounting command. The command preserves the payment and
+  /// invoice identities, checks optimistic concurrency, records the reason and
+  /// rebuilds settlement evidence only when a financial field changed.
+  Future<SalesPaymentCorrectionResult> correctSalesPayment({
+    required Payment current,
+    required String paymentMethodId,
+    required double amount,
+    required DateTime date,
+    required String? reference,
+    required String? notes,
+    required String reason,
+    String? operationKey,
+  }) async {
+    final paymentId = current.id;
+    if (paymentId == null || paymentId.isEmpty) {
+      throw ArgumentError('El pago no tiene una identidad persistida.');
+    }
+
+    final key = operationKey?.trim().isNotEmpty == true
+        ? operationKey!.trim()
+        : const Uuid().v4();
+    final params = <String, dynamic>{
+      'p_payment_id': paymentId,
+      'p_expected_updated_at': current.updatedAt.toUtc().toIso8601String(),
+      'p_operation_key': key,
+      'p_payment_method_id': paymentMethodId,
+      'p_amount': amount.round(),
+      'p_date': date.toUtc().toIso8601String(),
+      'p_reference': _blankToNull(reference),
+      'p_notes': _blankToNull(notes),
+      'p_reason': reason.trim(),
+    };
+
+    dynamic raw;
+    try {
+      raw = await _databaseService.rpc(
+        'correct_sales_payment',
+        params: params,
+      );
+    } catch (error, stackTrace) {
+      if (!_isOutcomeAmbiguous(error)) rethrow;
+      try {
+        raw = await _databaseService.rpc(
+          'get_sales_payment_edit_operation',
+          params: {'p_operation_key': key},
+        );
+      } catch (_) {
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+      if (raw == null) Error.throwWithStackTrace(error, stackTrace);
+    }
+
+    final result = _parsePaymentCorrectionResult(raw);
+    _upsertPayment(result.payment);
+    invalidateInvoicesCache();
+    invalidatePaymentsCache();
+    AccountingDashboardSection.invalidateCache();
+    notifyListeners();
+
+    // The correction is already committed and acknowledged at this point.
+    // Cache/accounting refresh failures must not turn that durable success into
+    // a false save failure or invite a second correction attempt.
+    try {
+      await fetchInvoice(result.payment.invoiceId, refresh: true);
+      await loadPayments(forceRefresh: true);
+      await _accountingService.initialize();
+      await _accountingService.journalEntries.loadJournalEntries();
+    } catch (error) {
+      debugPrint(
+        'SalesService.correctSalesPayment post-commit refresh failed: $error',
+      );
+    }
+    return result;
+  }
+
+  Future<List<SalesPaymentEditEvent>> loadPaymentEditEvents(
+    String paymentId,
+  ) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) return const [];
+
+    final response = await _databaseService.supabase
+        .from('sales_payment_edit_events')
+        .select()
+        .eq('tenant_id', tenantId)
+        .eq('payment_id', paymentId)
+        .order('created_at', ascending: false);
+    return (response as List)
+        .map((row) => SalesPaymentEditEvent.fromJson(
+              Map<String, dynamic>.from(row as Map),
+            ))
+        .toList(growable: false);
+  }
+
+  SalesPaymentCorrectionResult _parsePaymentCorrectionResult(dynamic raw) {
+    if (raw is! Map || raw['payment'] is! Map || raw['event'] is! Map) {
+      throw StateError('La respuesta de corrección del pago es inválida.');
+    }
+    final payment = Payment.fromJson(
+      Map<String, dynamic>.from(raw['payment'] as Map),
+    );
+    final event = SalesPaymentEditEvent.fromJson(
+      Map<String, dynamic>.from(raw['event'] as Map),
+    );
+    return SalesPaymentCorrectionResult(
+      payment: payment,
+      event: event,
+      replayed: raw['replayed'] == true,
+      financialFieldsChanged: raw['financial_fields_changed'] == true ||
+          event.financialFieldsChanged,
+    );
+  }
+
+  bool _isOutcomeAmbiguous(Object error) {
+    return error is! PostgrestException ||
+        error.code == null ||
+        error.code!.isEmpty;
+  }
+
+  String? _blankToNull(String? value) {
+    final normalized = value?.trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
   }
 
   bool _isPaymentIdempotencyConflict(PostgrestException error) {

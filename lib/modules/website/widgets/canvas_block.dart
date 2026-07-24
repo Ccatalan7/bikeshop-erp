@@ -621,6 +621,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
           await service.uploadTransparentPng(
             selection.pngBytes!,
             prefix: 'canvas-no-bg',
+            originalUrl: imageUrl,
           );
       if (!mounted) return;
 
@@ -636,7 +637,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Fondo eliminado y PNG guardado en la biblioteca.'),
+          content: Text('Fondo eliminado y versión web optimizada guardada.'),
         ),
       );
     } catch (error) {

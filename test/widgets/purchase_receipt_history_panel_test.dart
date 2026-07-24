@@ -8,12 +8,14 @@ void main() {
       (tester) async {
     var voidedReceiptId = '';
     var voidReason = '';
+    PurchaseReceiptRecord? openedReceipt;
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: PurchaseReceiptHistoryPanel(
             invoiceId: 'invoice-1',
+            onReceiptTap: (receipt) => openedReceipt = receipt,
             historyLoader: (_) async => [
               PurchaseReceiptRecord(
                 id: 'receipt-1',
@@ -25,6 +27,7 @@ void main() {
                 locationLabel: 'Bodega principal',
               ),
             ],
+            resolutionLoader: (_) async => const [],
             receiptVoider: ({
               required receiptId,
               required reason,
@@ -39,7 +42,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('REC-00001 · 2 aceptadas'), findsOneWidget);
+    expect(find.text('REC-00001'), findsOneWidget);
+    expect(find.text(' · 2 aceptadas'), findsOneWidget);
+    await tester.tap(find.text('REC-00001'));
+    expect(openedReceipt?.id, 'receipt-1');
     await tester.tap(find.widgetWithText(OutlinedButton, 'Anular'));
     await tester.pumpAndSettle();
     expect(find.text('Anular recepción REC-00001'), findsOneWidget);
@@ -48,7 +54,16 @@ void main() {
       find.byType(TextField),
       'Recepción duplicada de prueba',
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Anular con reversión'));
+    await tester.pump();
+    expect(
+      find.textContaining('retirará del inventario las unidades aceptadas'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('primero debes anular esas operaciones dependientes'),
+      findsOneWidget,
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Crear reversa'));
     await tester.pumpAndSettle();
 
     expect(voidedReceiptId, 'receipt-1');

@@ -424,6 +424,10 @@ verify_jwt = true
 # Website editors invoke this with the current authenticated ERP session.
 verify_jwt = true
 
+[functions.website-optimize-image]
+# Every Website Builder upload invokes the authenticated canonical optimizer.
+verify_jwt = true
+
 [functions.mercadopago-refund-payment]
 # Only authenticated ERP staff can begin/retry a refund saga. The function
 # independently revalidates the user and tenant-scoped correction through RLS.

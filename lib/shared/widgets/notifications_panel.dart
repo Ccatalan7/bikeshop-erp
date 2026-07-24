@@ -364,14 +364,21 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
       if (createdAt == null || !digest.contains(createdAt)) continue;
       final type = row['type']?.toString() ?? '';
       final platformKey = _platformKeyForNotificationType(type);
+      final storedRoute = row['route']?.toString().trim();
+      final entityId = row['entity_id']?.toString().trim();
+      final route = storedRoute == '/sales/payments' &&
+              entityId != null &&
+              entityId.isNotEmpty
+          ? '/sales/payments?paymentId=${Uri.encodeComponent(entityId)}'
+          : storedRoute?.isNotEmpty == true
+              ? storedRoute!
+              : '/';
       items.add(
         _BriefingActivityItem(
           title: row['title']?.toString() ?? 'Actividad',
           subtitle: row['body']?.toString() ?? '',
           createdAt: createdAt,
-          route: row['route']?.toString().trim().isNotEmpty == true
-              ? row['route'].toString()
-              : '/',
+          route: route,
           icon: _iconForNotificationType(type),
           accent: _accentForNotificationType(type),
           kind: _kindForNotificationType(type),

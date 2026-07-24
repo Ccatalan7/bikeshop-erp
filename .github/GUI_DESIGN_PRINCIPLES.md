@@ -79,7 +79,7 @@ Colors.grey[900]     // Primary text
 
 // Deliberate accent
 // Choose one restrained accent for the experience if truly needed.
-// Do not assume bright blue or green as the default visual answer.
+// Follow the established module/brand palette outside the requested surface.
 
 // Semantic colors (use sparingly)
 Colors.green[700]    // Success, confirmations
@@ -100,6 +100,12 @@ Colors.amber[800]    // Secondary caution states
 - ❌ Don't use color as the only indicator (add icons/text)
 - ❌ Don't build dashboards from rows of saturated KPI cards unless the color carries real operational meaning
 - ❌ Don't use bright green and bright blue as the app's generic personality layer
+- ❌ A localized redesign must never replace the global app theme, host-page
+  palette, navigation styling, list styling, or unrelated status treatments.
+- ✅ Sobriety does not mean monochrome. Use a restrained accent, warm/cool
+  surface variation, and semantic color to create hierarchy and identity.
+- ✅ Preserve the established module/brand palette outside the exact surface
+  the user requested to change.
 - ✅ Use color to reinforce meaning, not create it
 - ✅ Prefer neutral surfaces with small semantic markers over full-surface color fills
 
@@ -107,6 +113,8 @@ Colors.amber[800]    // Secondary caution states
 - ✅ Prefer concise summaries, tabular metrics, and restrained section headers over colorful scorecard grids
 - ✅ If a KPI card is truly needed, keep the card surface neutral and let status color live in a border, icon, label, or small highlight
 - ❌ Avoid "dashboard candy": multicolor stat cards, oversized badges, glowing trend chips, and decorative gradients with little informational value
+- ✅ Restrained color families and subtle tonal surfaces are appropriate when
+  they create hierarchy; removing all color is not a substitute for design.
 
 ---
 
@@ -208,8 +216,19 @@ Row(
 - ✅ Mark required fields with `*` (not color alone)
 - ✅ Show validation errors below the field
 - ✅ Use placeholder text sparingly (prefer labels)
+- ✅ Design around the operator's decision, not the persistence model. Historical
+  totals, derived balances and internal state buckets belong in secondary
+  context unless the operator can act on them directly.
+- ✅ Separate observation from disposition in exception workflows. First record
+  what physically happened; then offer a distinct, optional step for the
+  commercial, accounting or logistics resolution.
+- ✅ Let unresolved exceptions remain explicit and discoverable. A user must be
+  able to choose `Resolver después` without the UI inventing a credit, loss,
+  return or future delivery.
 - ❌ Avoid excessive helper text (keep it minimal)
 - ❌ Don't use floating labels (use fixed labels above)
+- ❌ Don't expose one editable table column per backend enum or quantity bucket
+  when one calculated difference plus a reason selector expresses the task.
 
 ---
 
@@ -312,6 +331,10 @@ Row(
 - ✅ Show "Select an item" placeholder when nothing selected
 - ✅ Highlight selected row in list
 - ✅ Add keyboard navigation (arrow keys)
+- ✅ Preserve the host while a document workflow is open: an action launched
+  from a split detail replaces that detail pane inline, not the entire route.
+- ✅ The same workflow launched from a routed form stays inside its existing
+  `MainLayout`; it must not mount a nested top-level `Scaffold` or `AppBar`.
 - ❌ Don't use split-pane on mobile (< 900px width)
 - ❌ Don't make both panes scrollable independently (confusing)
 
@@ -533,7 +556,9 @@ LayoutBuilder(
 - Wide tables with many columns (>8 columns)
 - Forms with complex layouts
 - Reports with charts/graphs
-- Data entry screens (POS, inventory intake)
+- Standalone high-throughput data entry screens (for example POS). A workflow
+  launched from an existing master/detail document keeps that host and context,
+  even when the inner table is horizontally scrollable.
 
 ---
 
@@ -551,7 +576,8 @@ Before implementing ANY new module UI:
 - [ ] Typography follows size/weight standards
 - [ ] Responsive breakpoints implemented
 - [ ] Split-pane only if module fits use case
-- [ ] No gradients, heavy shadows, or decorative elements
+- [ ] No loud decorative gradients or heavy shadows; subtle localized tonal
+      depth is allowed when it improves hierarchy
 - [ ] Data density optimized (10-15 rows visible)
 
 ---

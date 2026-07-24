@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/tenant_service.dart';
+import 'website_image_upload_processor.dart';
 
 /// A reusable image stored in the Website Builder media library.
 class WebsiteMediaAsset {
@@ -33,6 +34,23 @@ class WebsiteMediaAsset {
   int get productImageIndex => (metadata['imageIndex'] as num?)?.round() ?? 0;
   bool get linksProduct => metadata['linkProduct'] == true;
   bool get comesFromProduct => metadata['source'] == 'product';
+  bool get isWebOptimized =>
+      metadata['websiteVariant'] == 'web' ||
+      metadata['website_variant'] == 'web' ||
+      name.toLowerCase().endsWith('.webp');
+  String? get sourceUrl =>
+      (metadata['sourceUrl'] ?? metadata['source_url'])?.toString();
+  String? get sourcePath =>
+      (metadata['sourcePath'] ?? metadata['source_path'])?.toString();
+  String get thumbnailUrl =>
+      (metadata['thumbnailUrl'] ?? metadata['thumbnail_url'])?.toString() ??
+      publicUrl;
+  int? get sourceByteLength =>
+      ((metadata['sourceBytes'] ?? metadata['source_bytes']) as num?)?.round();
+  int? get webByteLength =>
+      ((metadata['webBytes'] ?? metadata['web_bytes']) as num?)?.round();
+  int? get width => (metadata['width'] as num?)?.round();
+  int? get height => (metadata['height'] as num?)?.round();
 }
 
 /// A catalog product and every image already associated with it.
@@ -167,6 +185,7 @@ class WebsiteMediaService {
   final TenantService? _tenantService;
 
   static const String libraryFolder = 'website/media';
+  static const String sourceFolder = '$libraryFolder/sources';
   static const List<String> _legacyFolders = <String>[
     'website/blocks',
     'website/blocks/optimized',
@@ -178,8 +197,14 @@ class WebsiteMediaService {
   Future<List<WebsiteMediaAsset>> listAssets({String query = ''}) async {
     final assets = <WebsiteMediaAsset>[];
     final seenUrls = <String>{};
+    final tenantId = await (_tenantService ?? TenantService()).getTenantId();
+    final folders = <String>[
+      if (tenantId != null && tenantId.isNotEmpty) '$libraryFolder/$tenantId',
+      libraryFolder,
+      ..._legacyFolders,
+    ];
 
-    for (final folder in <String>[libraryFolder, ..._legacyFolders]) {
+    for (final folder in folders) {
       try {
         final objects = await _client.storage
             .from(StorageConfig.defaultBucket)
@@ -271,22 +296,133 @@ class WebsiteMediaService {
   Future<WebsiteMediaAsset> uploadImage({
     required Uint8List bytes,
     required String fileName,
+    String operation = 'upload',
+    String? originalUrl,
   }) async {
-    final publicUrl = await ImageService.uploadBytes(
+    final tenantId = await (_tenantService ?? TenantService()).getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No se pudo determinar la tienda activa.');
+    }
+    final prepared = await WebsiteImageUploadProcessor.prepare(
       bytes: bytes,
       fileName: fileName,
-      bucket: StorageConfig.defaultBucket,
-      folder: libraryFolder,
     );
-    if (publicUrl == null) {
-      throw StateError('No se pudo guardar la imagen.');
+    final uploadedSource = await ImageService.uploadBytesWithDetails(
+      bytes: prepared.bytes,
+      fileName: prepared.fileName,
+      bucket: StorageConfig.defaultBucket,
+      folder: '$sourceFolder/$tenantId',
+      contentType: prepared.contentType,
+      cacheControl: '31536000',
+      upsert: false,
+      metadata: <String, dynamic>{
+        'website_variant': 'source',
+        'tenant_id': tenantId,
+        'operation': operation,
+        'original_file_name': fileName,
+        'original_width': prepared.originalWidth,
+        'original_height': prepared.originalHeight,
+        'source_width': prepared.width,
+        'source_height': prepared.height,
+        'original_bytes': prepared.originalByteLength,
+        'source_bytes': prepared.bytes.length,
+        'has_transparency': prepared.hasTransparency,
+        'was_normalized': prepared.wasNormalized,
+        if (originalUrl != null && originalUrl.isNotEmpty)
+          'original_url': originalUrl,
+      },
+    );
+
+    try {
+      return await optimizeStoredImage(
+        sourcePath: uploadedSource.objectPath,
+        sourceUrl: uploadedSource.publicUrl,
+        fileName: fileName,
+        operation: operation,
+        originalUrl: originalUrl,
+        sourceMetadata: <String, dynamic>{
+          'originalWidth': prepared.originalWidth,
+          'originalHeight': prepared.originalHeight,
+          'sourceWidth': prepared.width,
+          'sourceHeight': prepared.height,
+          'originalBytes': prepared.originalByteLength,
+          'sourceBytes': prepared.bytes.length,
+          'hasTransparency': prepared.hasTransparency,
+          'wasNormalized': prepared.wasNormalized,
+        },
+      );
+    } catch (_) {
+      try {
+        await _client.storage
+            .from(StorageConfig.defaultBucket)
+            .remove(<String>[uploadedSource.objectPath]);
+      } catch (_) {
+        // The hidden source remains recoverable if cleanup is not permitted.
+      }
+      rethrow;
     }
+  }
+
+  Future<WebsiteMediaAsset> optimizeStoredImage({
+    required String sourcePath,
+    required String sourceUrl,
+    required String fileName,
+    String operation = 'upload',
+    String? originalUrl,
+    Map<String, dynamic> sourceMetadata = const <String, dynamic>{},
+  }) async {
+    final response = await _client.functions.invoke(
+      'website-optimize-image',
+      body: <String, dynamic>{
+        'sourcePath': sourcePath,
+        'sourceUrl': sourceUrl,
+        'fileName': fileName,
+        'operation': operation,
+        if (originalUrl != null && originalUrl.isNotEmpty)
+          'originalUrl': originalUrl,
+        'sourceMetadata': sourceMetadata,
+      },
+    );
+    final data = response.data;
+    if (response.status < 200 || response.status >= 300 || data is! Map) {
+      final message = data is Map
+          ? data['error']?.toString()
+          : 'No se pudo optimizar la imagen.';
+      throw StateError(message ?? 'No se pudo optimizar la imagen.');
+    }
+
+    final path = data['path']?.toString().trim() ?? '';
+    final publicUrl = data['publicUrl']?.toString().trim() ?? '';
+    if (path.isEmpty || publicUrl.isEmpty) {
+      throw StateError('El optimizador no devolvió una imagen válida.');
+    }
+    final metadata = <String, dynamic>{
+      'websiteVariant': 'web',
+      'sourcePath': sourcePath,
+      'sourceUrl': sourceUrl,
+      'operation': operation,
+      if (originalUrl != null && originalUrl.isNotEmpty)
+        'originalUrl': originalUrl,
+      ...sourceMetadata,
+      if (data['width'] is num) 'width': data['width'],
+      if (data['height'] is num) 'height': data['height'],
+      if (data['sourceBytes'] is num) 'sourceBytes': data['sourceBytes'],
+      if (data['webBytes'] is num) 'webBytes': data['webBytes'],
+      if (data['quality'] is num) 'quality': data['quality'],
+      if (data['thumbnailPath'] != null) 'thumbnailPath': data['thumbnailPath'],
+      if (data['thumbnailUrl'] != null) 'thumbnailUrl': data['thumbnailUrl'],
+      if (data['thumbnailBytes'] is num)
+        'thumbnailBytes': data['thumbnailBytes'],
+    };
     return WebsiteMediaAsset(
-      name: fileName,
-      path: '$libraryFolder/$fileName',
+      name: data['name']?.toString().trim().isNotEmpty == true
+          ? data['name'].toString()
+          : fileName,
+      path: path,
       publicUrl: publicUrl,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
+      metadata: metadata,
     );
   }
 

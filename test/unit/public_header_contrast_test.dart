@@ -14,6 +14,29 @@ void main() {
       );
     });
 
+    test(
+        'transparent header and its light configured panel resolve independently',
+        () {
+      const configuredHeaderBackground = Color(0xFFF7F5F1);
+
+      expect(
+        PublicHeaderContrastMode.automatic.usesLightForeground(
+          isOverlay: true,
+          backgroundColor: configuredHeaderBackground,
+        ),
+        isTrue,
+        reason: 'The transparent header protects text over the hero',
+      );
+      expect(
+        PublicHeaderContrastMode.automatic.usesLightForeground(
+          isOverlay: false,
+          backgroundColor: configuredHeaderBackground,
+        ),
+        isFalse,
+        reason: 'The solid menu panel follows its configured light surface',
+      );
+    });
+
     test('automatic follows the luminance of a solid header', () {
       expect(
         PublicHeaderContrastMode.automatic.usesLightForeground(
@@ -28,6 +51,14 @@ void main() {
           backgroundColor: Colors.white,
         ),
         isFalse,
+      );
+      expect(
+        PublicHeaderContrastMode.automatic.usesLightForeground(
+          isOverlay: false,
+          backgroundColor: const Color(0xFF8B9A78),
+        ),
+        isFalse,
+        reason: 'Mid-tone surfaces need the higher-contrast dark foreground',
       );
     });
 

@@ -1146,7 +1146,7 @@ end $$;
 
 create table if not exists product_brands (
   id uuid primary key default gen_random_uuid(),
-  tenant_id uuid references tenants(id) on delete cascade not null,
+  tenant_id uuid references tenants(id) on delete cascade,
   name text not null,
   description text,
   website text,
@@ -1154,8 +1154,68 @@ create table if not exists product_brands (
   is_active boolean not null default true,
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
-  unique(tenant_id, name) -- Each tenant can have their own brands
+  unique(name)
 );
+
+alter table product_brands
+  alter column tenant_id drop not null;
+alter table product_brands
+  drop constraint if exists product_brands_tenant_id_name_key;
+do $$
+declare
+  v_name_attnum smallint;
+  v_constraint_type "char";
+  v_constraint_key smallint[];
+  v_named_constraint_exists boolean;
+begin
+  select attribute.attnum
+  into v_name_attnum
+  from pg_attribute attribute
+  where attribute.attrelid = 'public.product_brands'::regclass
+    and attribute.attname = 'name'
+    and not attribute.attisdropped;
+
+  if v_name_attnum is null then
+    raise exception 'product_brands.name is required by the canonical brand contract'
+      using errcode = 'check_violation';
+  end if;
+
+  select constraint_record.contype, constraint_record.conkey
+  into v_constraint_type, v_constraint_key
+  from pg_constraint constraint_record
+  where constraint_record.conrelid = 'public.product_brands'::regclass
+    and constraint_record.conname = 'product_brands_name_key';
+  v_named_constraint_exists := found;
+
+  if v_named_constraint_exists
+     and (
+       v_constraint_type is distinct from 'u'
+       or v_constraint_key is distinct from array[v_name_attnum]::smallint[]
+     ) then
+    raise exception
+      'product_brands_name_key has an unexpected shape: type %, key %',
+      v_constraint_type,
+      v_constraint_key
+      using errcode = 'check_violation';
+  end if;
+
+  if exists (
+    select 1
+    from public.product_brands brand
+    group by brand.name
+    having count(*) > 1
+  ) then
+    raise exception
+      'Cannot install canonical brand uniqueness: duplicate product_brands.name rows exist'
+      using errcode = 'unique_violation';
+  end if;
+
+  if not v_named_constraint_exists then
+    alter table public.product_brands
+      add constraint product_brands_name_key unique (name);
+  end if;
+end;
+$$;
 
 do $$ begin
   create index if not exists idx_product_brands_tenant on product_brands(tenant_id);
@@ -26541,12 +26601,188 @@ begin
   end if;
 end $$;
 
+-- Minimal exact read-side closure from
+-- 20260718290000_add_online_inventory_reservations.sql. The public catalog
+-- wrapper below must never exist without the reservation ledger and canonical
+-- availability projection it calls. Reservation write/lifecycle orchestration
+-- remains owned by its forward migration and is intentionally not duplicated
+-- into this focused closure.
+create unique index if not exists uq_online_orders_tenant_id_id
+  on public.online_orders(tenant_id, id);
+create unique index if not exists uq_products_tenant_id_id
+  on public.products(tenant_id, id);
+create unique index if not exists uq_online_order_items_tenant_id_id
+  on public.online_order_items(tenant_id, id);
+
+create table if not exists public.online_order_inventory_reservations (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete restrict,
+  order_id uuid not null,
+  order_item_id uuid not null,
+  product_id uuid not null,
+  quantity integer not null check (quantity > 0),
+  state text not null default 'active' check (
+    state in ('active', 'consuming', 'consumed', 'released', 'expired')
+  ),
+  cycle integer not null default 1 check (cycle > 0),
+  version bigint not null default 0 check (version >= 0),
+  reserved_at timestamptz not null default clock_timestamp(),
+  expires_at timestamptz not null,
+  consumption_started_at timestamptz,
+  consumed_at timestamptz,
+  released_at timestamptz,
+  expired_at timestamptz,
+  release_reason text,
+  sales_invoice_id uuid references public.sales_invoices(id) on delete restrict,
+  stock_movement_ids uuid[] not null default array[]::uuid[],
+  created_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default clock_timestamp(),
+  unique (tenant_id, id),
+  unique (tenant_id, order_item_id, product_id),
+  foreign key (tenant_id, order_id)
+    references public.online_orders(tenant_id, id) on delete restrict,
+  foreign key (tenant_id, order_item_id)
+    references public.online_order_items(tenant_id, id) on delete restrict,
+  foreign key (tenant_id, product_id)
+    references public.products(tenant_id, id) on delete restrict,
+  check (expires_at > reserved_at),
+  check (state <> 'consuming' or consumption_started_at is not null),
+  check (state <> 'consumed' or consumed_at is not null),
+  check (state <> 'released' or released_at is not null),
+  check (state <> 'expired' or expired_at is not null)
+);
+
+create index if not exists idx_online_inventory_reservations_product_active
+  on public.online_order_inventory_reservations(
+    tenant_id, product_id, expires_at, order_id
+  ) where state = 'active';
+create index if not exists idx_online_inventory_reservations_order
+  on public.online_order_inventory_reservations(
+    tenant_id, order_id, state, product_id
+  );
+create index if not exists idx_online_inventory_reservations_expiry
+  on public.online_order_inventory_reservations(expires_at, tenant_id, id)
+  where state = 'active';
+create index if not exists idx_online_inventory_reservations_invoice
+  on public.online_order_inventory_reservations(tenant_id, sales_invoice_id)
+  where sales_invoice_id is not null;
+
+alter table public.online_order_inventory_reservations enable row level security;
+
+drop policy if exists online_inventory_reservations_select
+  on public.online_order_inventory_reservations;
+create policy online_inventory_reservations_select
+  on public.online_order_inventory_reservations
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+revoke all on public.online_order_inventory_reservations
+  from public, anon, authenticated, service_role;
+grant select on public.online_order_inventory_reservations to authenticated;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'codex_test_runner') then
+    grant select on public.online_order_inventory_reservations
+      to codex_test_runner;
+  end if;
+end;
+$$;
+
+create or replace function public.online_product_available_quantity(
+  p_tenant_id uuid,
+  p_product_id uuid
+)
+returns integer
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_product public.products%rowtype;
+  v_available integer;
+begin
+  select product.* into v_product
+    from public.products product
+   where product.id = p_product_id
+     and product.tenant_id = p_tenant_id;
+  if not found then
+    return 0;
+  end if;
+
+  if coalesce(v_product.is_service, false)
+     or v_product.product_type = 'service'
+     or not coalesce(v_product.track_stock, true) then
+    return greatest(
+      coalesce(v_product.stock_quantity, v_product.inventory_qty, 0),
+      0
+    );
+  end if;
+
+  if coalesce(v_product.is_set, false) then
+    select min(greatest(floor(
+      (
+        coalesce(component.stock_quantity, component.inventory_qty, 0)
+        - coalesce(reserved.quantity, 0)
+      )::numeric / set_component.quantity_in_set
+    ), 0))::integer
+      into v_available
+      from public.product_set_components set_component
+      join public.products component
+        on component.id = set_component.component_product_id
+       and component.tenant_id = set_component.tenant_id
+      left join lateral (
+        select coalesce(sum(reservation.quantity), 0)::integer as quantity
+          from public.online_order_inventory_reservations reservation
+         where reservation.tenant_id = component.tenant_id
+           and reservation.product_id = component.id
+           and reservation.state = 'active'
+           and reservation.expires_at > clock_timestamp()
+      ) reserved on true
+     where set_component.tenant_id = p_tenant_id
+       and set_component.set_product_id = p_product_id;
+    return greatest(coalesce(v_available, 0), 0);
+  end if;
+
+  select greatest(
+    coalesce(v_product.stock_quantity, v_product.inventory_qty, 0)
+      - coalesce(sum(reservation.quantity), 0),
+    0
+  )::integer
+    into v_available
+    from public.online_order_inventory_reservations reservation
+   where reservation.tenant_id = p_tenant_id
+     and reservation.product_id = p_product_id
+     and reservation.state = 'active'
+     and reservation.expires_at > clock_timestamp();
+
+  return greatest(coalesce(v_available,
+    coalesce(v_product.stock_quantity, v_product.inventory_qty, 0)), 0);
+end;
+$$;
+
+revoke all on function public.online_product_available_quantity(uuid, uuid)
+  from public, anon, authenticated, service_role;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'codex_test_runner') then
+    revoke all on function public.online_product_available_quantity(uuid, uuid)
+      from codex_test_runner;
+  end if;
+end;
+$$;
+
+comment on table public.online_order_inventory_reservations is
+  'Current tenant-scoped online stock commitments. Rows do not change physical stock; active commitments become consumed only after matching invoice stock movements exist.';
+comment on function public.online_product_available_quantity(uuid, uuid) is
+  'Physical quantity minus live online commitments. Sets resolve the minimum available component bundle; services and non-stock products are never invented as reservations.';
+
 drop function if exists public.get_public_products(uuid, uuid[], uuid[], text, text, text, boolean, text, boolean, boolean, boolean, text, integer, integer);
 drop function if exists public.search_public_products(text, uuid, integer, text, boolean, boolean, boolean);
 drop function if exists public.get_public_featured_products(uuid, integer, text, boolean, boolean, boolean);
 drop function if exists public.get_public_product_category_counts(uuid, text, boolean, text, boolean, boolean, boolean);
 
-create or replace function public.get_public_products(
+create or replace function public.get_public_products_without_inventory_reservations(
   p_tenant_id uuid,
   p_category_ids uuid[] default null,
   p_product_ids uuid[] default null,
@@ -26605,23 +26841,8 @@ as $$
       lower(coalesce(nullif(trim(p_sort_by), ''), 'name')) as sort_by,
       nullif(trim(coalesce(p_sku, '')), '') as wanted_sku,
       nullif(trim(coalesce(p_product_type, '')), '') as wanted_product_type,
-      case lower(coalesce(
-        nullif(trim(coalesce((
-          select ws.value
-          from public.website_settings ws
-          where ws.tenant_id = p_tenant_id
-            and ws.key = 'product_visibility_stock_policy'
-          limit 1
-        ), '')), ''),
-        case when p_only_in_stock then 'available_only' else 'all' end
-      ))
-        when 'all' then 'all'
-        when 'both' then 'all'
-        when 'out_of_stock_only' then 'out_of_stock_only'
-        when 'out_of_stock' then 'out_of_stock_only'
-        when 'sin_stock' then 'out_of_stock_only'
-        else 'available_only'
-      end as stock_policy,
+      -- The outer reservation-aware wrapper is the sole stock-policy owner.
+      'all'::text as stock_policy,
       lower(coalesce((
           select ws.value
           from public.website_settings ws
@@ -26896,7 +27117,8 @@ as $$
         m.phrase_strong_score +
         m.token_strong_score +
         m.weak_description_score +
-        case when m.product_type = 'service' and not m.service_intent then -260 else 0 end
+        case when m.product_type = 'service' and not m.service_intent
+          then -260 else 0 end
       ) as search_score
     from matched m
   ),
@@ -26957,18 +27179,188 @@ as $$
   from counted p
   order by
     case when p.term <> '' then p.search_score end desc nulls last,
-    case when p.term = '' and p.sort_by = 'price_asc' then coalesce(p.website_price, p.price) end asc nulls last,
-    case when p.term = '' and p.sort_by = 'price_desc' then coalesce(p.website_price, p.price) end desc nulls last,
-    case when p.term = '' and p.sort_by = 'newest' then p.created_at end desc nulls last,
+    case when p.term = '' and p.sort_by = 'price_asc'
+      then coalesce(p.website_price, p.price) end asc nulls last,
+    case when p.term = '' and p.sort_by = 'price_desc'
+      then coalesce(p.website_price, p.price) end desc nulls last,
+    case when p.term = '' and p.sort_by = 'newest'
+      then p.created_at end desc nulls last,
     coalesce(nullif(btrim(p.website_name), ''), p.name) asc,
     p.id asc
   limit (select page_limit from args)
   offset (select page_offset from args);
 $$;
 
+revoke all on function public.get_public_products_without_inventory_reservations(
+  uuid, uuid[], uuid[], text, text, text, boolean, text, integer, integer
+) from public, anon, authenticated, service_role;
+
+create or replace function public.get_public_products(
+  p_tenant_id uuid,
+  p_category_ids uuid[] default null,
+  p_product_ids uuid[] default null,
+  p_sku text default null,
+  p_search_term text default null,
+  p_product_type text default null,
+  p_only_in_stock boolean default true,
+  p_sort_by text default 'name',
+  p_limit integer default 20,
+  p_offset integer default 0
+)
+returns table (
+  id uuid,
+  tenant_id uuid,
+  name text,
+  sku text,
+  barcode text,
+  price numeric,
+  cost numeric,
+  inventory_qty integer,
+  stock_quantity integer,
+  image_url text,
+  image_url_optimized text,
+  image_urls text[],
+  description text,
+  website_description text,
+  category text,
+  category_id uuid,
+  category_name text,
+  brand_id uuid,
+  brand text,
+  model text,
+  manufacturer text,
+  manufacturer_sku text,
+  gtin text,
+  product_type text,
+  track_stock boolean,
+  is_active boolean,
+  is_published boolean,
+  show_on_website boolean,
+  created_at timestamptz,
+  updated_at timestamptz,
+  total_count bigint
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with policy as (
+    select case lower(coalesce(
+      nullif(btrim(coalesce((
+        select setting.value
+          from public.website_settings setting
+         where setting.tenant_id = p_tenant_id
+           and setting.key = 'product_visibility_stock_policy'
+         limit 1
+      ), '')), ''),
+      case when p_only_in_stock then 'available_only' else 'all' end
+    ))
+      when 'all' then 'all'
+      when 'both' then 'all'
+      when 'out_of_stock_only' then 'out_of_stock_only'
+      when 'out_of_stock' then 'out_of_stock_only'
+      when 'sin_stock' then 'out_of_stock_only'
+      else 'available_only'
+    end as stock_policy
+  ), base_rows as (
+    select raw.*,
+           case
+             when raw.product_type = 'service'
+               or not coalesce(raw.track_stock, true)
+               then greatest(coalesce(raw.stock_quantity, raw.inventory_qty, 0), 0)
+             else public.online_product_available_quantity(
+               raw.tenant_id,
+               raw.id
+             )
+           end as available_quantity
+      from public.get_public_products_without_inventory_reservations(
+        p_tenant_id,
+        p_category_ids,
+        p_product_ids,
+        p_sku,
+        p_search_term,
+        p_product_type,
+        false,
+        p_sort_by,
+        2147483647,
+        0
+      ) with ordinality as raw
+  ), filtered as (
+    select base.*
+      from base_rows base
+      cross join policy
+     where policy.stock_policy = 'all'
+        or base.product_type = 'service'
+        or not coalesce(base.track_stock, true)
+        or (
+          policy.stock_policy = 'available_only'
+          and base.available_quantity > 0
+        )
+        or (
+          policy.stock_policy = 'out_of_stock_only'
+          and base.available_quantity <= 0
+        )
+  ), paged as (
+    select filtered.*,
+           count(*) over() as filtered_total
+      from filtered
+     order by filtered.ordinality
+     limit greatest(coalesce(p_limit, 20), 0)
+     offset greatest(coalesce(p_offset, 0), 0)
+  )
+  select
+    paged.id,
+    paged.tenant_id,
+    paged.name,
+    paged.sku,
+    paged.barcode,
+    paged.price,
+    paged.cost,
+    case
+      when paged.product_type = 'service'
+        or not coalesce(paged.track_stock, true)
+        then paged.inventory_qty
+      else paged.available_quantity
+    end as inventory_qty,
+    case
+      when paged.product_type = 'service'
+        or not coalesce(paged.track_stock, true)
+        then paged.stock_quantity
+      else paged.available_quantity
+    end as stock_quantity,
+    paged.image_url,
+    paged.image_url_optimized,
+    paged.image_urls,
+    paged.description,
+    paged.website_description,
+    paged.category,
+    paged.category_id,
+    paged.category_name,
+    paged.brand_id,
+    paged.brand,
+    paged.model,
+    paged.manufacturer,
+    paged.manufacturer_sku,
+    paged.gtin,
+    paged.product_type,
+    paged.track_stock,
+    paged.is_active,
+    paged.is_published,
+    paged.show_on_website,
+    paged.created_at,
+    paged.updated_at,
+    paged.filtered_total as total_count
+  from paged
+  order by paged.ordinality;
+$$;
+
+revoke all on function public.get_public_products(
+  uuid, uuid[], uuid[], text, text, text, boolean, text, integer, integer
+) from public, anon, authenticated, service_role;
 grant execute on function public.get_public_products(
   uuid, uuid[], uuid[], text, text, text, boolean, text, integer, integer
-) to anon, authenticated;
+) to anon, authenticated, service_role;
 
 create or replace function public.search_public_products(
   p_search_term text,
@@ -27184,6 +27576,385 @@ $$;
 
 grant execute on function public.get_public_product_category_counts(
   uuid, text, boolean
+) to anon, authenticated;
+
+-- Server-backed visitor facets. The canonical public product RPC remains the
+-- publication, visibility, search and availability owner; these additive v1
+-- facades filter its complete result before counting and pagination.
+create or replace function public.get_public_products_faceted_v1(
+  p_tenant_id uuid,
+  p_category_ids uuid[] default null,
+  p_search_term text default null,
+  p_product_type text default null,
+  p_only_in_stock boolean default true,
+  p_brand_ids uuid[] default null,
+  p_min_price numeric default null,
+  p_max_price numeric default null,
+  p_sort_by text default 'name',
+  p_limit integer default 20,
+  p_offset integer default 0
+)
+returns table (
+  id uuid,
+  tenant_id uuid,
+  name text,
+  sku text,
+  barcode text,
+  price numeric,
+  cost numeric,
+  inventory_qty integer,
+  stock_quantity integer,
+  image_url text,
+  image_url_optimized text,
+  image_urls text[],
+  description text,
+  website_description text,
+  category text,
+  category_id uuid,
+  category_name text,
+  brand_id uuid,
+  brand text,
+  model text,
+  manufacturer text,
+  manufacturer_sku text,
+  gtin text,
+  product_type text,
+  track_stock boolean,
+  is_active boolean,
+  is_published boolean,
+  show_on_website boolean,
+  created_at timestamptz,
+  updated_at timestamptz,
+  total_count bigint
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with args as (
+    select
+      case
+        when p_min_price is null then null
+        when p_min_price >= 0 then p_min_price
+        else null
+      end as min_price,
+      case
+        when p_max_price is null then null
+        when p_max_price >= 0 then p_max_price
+        else null
+      end as max_price,
+      (
+        (p_min_price is null or p_min_price >= 0)
+        and (p_max_price is null or p_max_price >= 0)
+        and (
+          p_min_price is null
+          or p_max_price is null
+          or p_min_price <= p_max_price
+        )
+      ) as is_valid
+  ), base_rows as (
+    select product.*
+    from public.get_public_products(
+      p_tenant_id := p_tenant_id,
+      p_category_ids := p_category_ids,
+      p_search_term := p_search_term,
+      p_product_type := p_product_type,
+      -- The canonical RPC applies the site's publication stock policy first.
+      -- Request its rule-allowed universe here, then apply the visitor's
+      -- optional availability facet to the reservation-aware quantities it
+      -- returns. A visitor can narrow a rule, never widen it.
+      p_only_in_stock := true,
+      p_sort_by := p_sort_by,
+      p_limit := 2147483647,
+      p_offset := 0
+    ) with ordinality as product
+  ), available_rows as (
+    select base.*
+    from base_rows base
+    where not coalesce(p_only_in_stock, true)
+      or base.product_type = 'service'
+      or not coalesce(base.track_stock, true)
+      or coalesce(base.stock_quantity, base.inventory_qty, 0) > 0
+  ), filtered as (
+    select base.*
+    from available_rows base
+    cross join args
+    where args.is_valid
+      and (
+        p_brand_ids is null
+        or cardinality(p_brand_ids) = 0
+        or base.brand_id = any(p_brand_ids)
+      )
+      and (args.min_price is null or base.price >= args.min_price)
+      and (args.max_price is null or base.price <= args.max_price)
+  ), page_contract as (
+    select
+      least(greatest(coalesce(p_limit, 20), 1), 100)::bigint as page_limit,
+      greatest(coalesce(p_offset, 0), 0)::bigint as requested_offset,
+      count(*)::bigint as total_count
+    from filtered
+  ), page_window as (
+    -- The row contract carries total_count, so a non-empty result can never
+    -- disappear solely because limit is zero or the requested offset is stale.
+    -- Clamp to at least one row and to the start of the final valid page.
+    select
+      contract.page_limit,
+      contract.total_count,
+      case
+        when contract.total_count = 0 then 0::bigint
+        else least(
+          contract.requested_offset,
+          (
+            (contract.total_count - 1) / contract.page_limit
+          ) * contract.page_limit
+        )
+      end as page_offset
+    from page_contract contract
+  ), paged as (
+    select filtered.*, page.total_count as filtered_total
+    from filtered
+    cross join page_window page
+    order by filtered.ordinality
+    limit (select page_limit from page_window)
+    offset (select page_offset from page_window)
+  )
+  select
+    paged.id,
+    paged.tenant_id,
+    paged.name,
+    paged.sku,
+    paged.barcode,
+    paged.price,
+    paged.cost,
+    paged.inventory_qty,
+    paged.stock_quantity,
+    paged.image_url,
+    paged.image_url_optimized,
+    paged.image_urls,
+    paged.description,
+    paged.website_description,
+    paged.category,
+    paged.category_id,
+    paged.category_name,
+    paged.brand_id,
+    paged.brand,
+    paged.model,
+    paged.manufacturer,
+    paged.manufacturer_sku,
+    paged.gtin,
+    paged.product_type,
+    paged.track_stock,
+    paged.is_active,
+    paged.is_published,
+    paged.show_on_website,
+    paged.created_at,
+    paged.updated_at,
+    paged.filtered_total
+  from paged
+  order by paged.ordinality;
+$$;
+
+comment on function public.get_public_products_faceted_v1(
+  uuid, uuid[], text, text, boolean, uuid[], numeric, numeric, text, integer,
+  integer
+) is
+  'Server-paged public catalog facade. Applies stable brand IDs and effective storefront price filters after canonical public eligibility and reservation-aware availability. Clamps page size to 1..100 and stale offsets to the final valid page so every non-empty response carries total_count.';
+
+revoke all on function public.get_public_products_faceted_v1(
+  uuid, uuid[], text, text, boolean, uuid[], numeric, numeric, text, integer,
+  integer
+) from public, anon, authenticated, service_role;
+grant execute on function public.get_public_products_faceted_v1(
+  uuid, uuid[], text, text, boolean, uuid[], numeric, numeric, text, integer,
+  integer
+) to anon, authenticated;
+
+create or replace function public.get_public_product_facets_v1(
+  p_tenant_id uuid,
+  p_category_ids uuid[] default null,
+  p_search_term text default null,
+  p_product_type text default null,
+  p_only_in_stock boolean default true,
+  p_brand_ids uuid[] default null,
+  p_min_price numeric default null,
+  p_max_price numeric default null
+)
+returns table (
+  facet_key text,
+  value_id text,
+  value_label text,
+  item_count bigint,
+  range_min numeric,
+  range_max numeric
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with args as (
+    select
+      case
+        when p_min_price is null then null
+        when p_min_price >= 0 then p_min_price
+        else null
+      end as min_price,
+      case
+        when p_max_price is null then null
+        when p_max_price >= 0 then p_max_price
+        else null
+      end as max_price,
+      (
+        (p_min_price is null or p_min_price >= 0)
+        and (p_max_price is null or p_max_price >= 0)
+        and (
+          p_min_price is null
+          or p_max_price is null
+          or p_min_price <= p_max_price
+        )
+      ) as is_valid
+  ), canonical_universe as materialized (
+    -- Load the canonical search/type/publication/site-stock universe exactly
+    -- once. Every facet projection below is derived from this same
+    -- reservation-aware snapshot, preventing duplicate full catalog scans.
+    select product.*
+    from public.get_public_products(
+      p_tenant_id := p_tenant_id,
+      p_category_ids := null,
+      p_search_term := p_search_term,
+      p_product_type := p_product_type,
+      p_only_in_stock := true,
+      p_sort_by := 'name',
+      p_limit := 2147483647,
+      p_offset := 0
+    ) product
+  ), available_universe as materialized (
+    select base.*
+    from canonical_universe base
+    where not coalesce(p_only_in_stock, true)
+      or base.product_type = 'service'
+      or not coalesce(base.track_stock, true)
+      or coalesce(base.stock_quantity, base.inventory_qty, 0) > 0
+  ), selected_category_rows as materialized (
+    -- Brand and price metadata respect the active category selection. This is
+    -- the exact direct-ID predicate owned by the canonical product RPC, now
+    -- applied after its single unselected-universe call.
+    select base.*
+    from available_universe base
+    where p_category_ids is null
+      or cardinality(p_category_ids) = 0
+      or base.category_id = any(p_category_ids)
+  ), category_filtered_rows as materialized (
+    -- Category options and the summary deliberately exclude the current
+    -- category selection while respecting every other active facet.
+    select base.*
+    from available_universe base
+    cross join args
+    where args.is_valid
+      and (
+        p_brand_ids is null
+        or cardinality(p_brand_ids) = 0
+        or base.brand_id = any(p_brand_ids)
+      )
+      and (args.min_price is null or base.price >= args.min_price)
+      and (args.max_price is null or base.price <= args.max_price)
+  ), category_rows as (
+    -- Keep direct counts for every active canonical category. The category
+    -- publication owner decides which IDs become visible filter options, so a
+    -- hidden descendant can still roll up into its visible published ancestor.
+    select
+      'category'::text as facet_key,
+      base.category_id::text as value_id,
+      nullif(btrim(canonical_category.name), '') as value_label,
+      count(*)::bigint as item_count,
+      null::numeric as range_min,
+      null::numeric as range_max
+    from category_filtered_rows base
+    join public.product_categories canonical_category
+      on canonical_category.id = base.category_id
+     and canonical_category.tenant_id = p_tenant_id
+     and canonical_category.is_active = true
+    group by base.category_id, canonical_category.name
+  ), summary_rows as (
+    -- This is the exact total for the category-option universe. It includes
+    -- uncategorized products, so consumers must not derive "Todas" by summing
+    -- only the category rows.
+    select
+      'summary'::text as facet_key,
+      null::text as value_id,
+      null::text as value_label,
+      count(*)::bigint as item_count,
+      null::numeric as range_min,
+      null::numeric as range_max
+    from category_filtered_rows
+  ), brand_rows as (
+    -- Brand counts exclude the current brand selection, but respect every
+    -- other active facet so alternatives remain useful and truthful.
+    select
+      'brand'::text as facet_key,
+      base.brand_id::text as value_id,
+      coalesce(nullif(btrim(canonical_brand.name), ''), nullif(btrim(base.brand), ''))
+        as value_label,
+      count(*)::bigint as item_count,
+      null::numeric as range_min,
+      null::numeric as range_max
+    from selected_category_rows base
+    cross join args
+    left join public.product_brands canonical_brand
+      on canonical_brand.id = base.brand_id
+     and (
+       canonical_brand.tenant_id is null
+       or canonical_brand.tenant_id = p_tenant_id
+     )
+    where args.is_valid
+      and base.brand_id is not null
+      and (args.min_price is null or base.price >= args.min_price)
+      and (args.max_price is null or base.price <= args.max_price)
+    group by
+      base.brand_id,
+      coalesce(nullif(btrim(canonical_brand.name), ''), nullif(btrim(base.brand), ''))
+  ), price_rows as (
+    -- Price bounds exclude the current price range, but respect the selected
+    -- brands and every route/publication/availability filter.
+    select
+      'price'::text as facet_key,
+      null::text as value_id,
+      null::text as value_label,
+      count(*)::bigint as item_count,
+      min(base.price)::numeric as range_min,
+      max(base.price)::numeric as range_max
+    from selected_category_rows base
+    cross join args
+    where args.is_valid
+      and (
+        p_brand_ids is null
+        or cardinality(p_brand_ids) = 0
+        or base.brand_id = any(p_brand_ids)
+      )
+  )
+  select * from category_rows
+  where value_label is not null
+  union all
+  select * from brand_rows
+  where value_label is not null
+  union all
+  select * from price_rows
+  union all
+  select * from summary_rows
+  order by facet_key, value_label nulls first, value_id nulls first;
+$$;
+
+comment on function public.get_public_product_facets_v1(
+  uuid, uuid[], text, text, boolean, uuid[], numeric, numeric
+) is
+  'Public category, brand, price and total-summary facet metadata derived from the complete canonical eligible catalog. Counts exclude their own facet and respect all other filters.';
+
+revoke all on function public.get_public_product_facets_v1(
+  uuid, uuid[], text, text, boolean, uuid[], numeric, numeric
+) from public, anon, authenticated, service_role;
+grant execute on function public.get_public_product_facets_v1(
+  uuid, uuid[], text, text, boolean, uuid[], numeric, numeric
 ) to anon, authenticated;
 
 notify pgrst, 'reload schema';
@@ -38703,3 +39474,794 @@ commit;
 \ir ../migrations/20260722062000_fix_messaging_read_trigger_regression.sql
 
 commit;
+
+-- ============================================================================
+-- AUDITED SALES-PAYMENT CORRECTIONS (20260723023000)
+-- Canonical mirror of the payment-owned, replay-safe correction contract.
+-- Payments settle accounts receivable only; invoice/source flows continue to
+-- own revenue, IVA, inventory, and provider identity.
+-- Recovery: roll the client back to read-only payment details, remove the
+-- correction-command guard trigger, and revoke the two RPC grants. Preserve
+-- the immutable event table and its accounting evidence; never drop history.
+-- ============================================================================
+create table if not exists public.sales_payment_edit_events (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  payment_id uuid not null,
+  invoice_id uuid not null
+    references public.sales_invoices(id) on delete restrict,
+  operation_key text not null,
+  request_hash text not null check (request_hash ~ '^[0-9a-f]{64}$'),
+  request_snapshot jsonb not null,
+  reason text not null check (length(btrim(reason)) between 3 and 1000),
+  source text not null,
+  source_managed boolean not null,
+  financial_fields_changed boolean not null,
+  before_snapshot jsonb not null,
+  after_snapshot jsonb not null,
+  trace_operation_id uuid not null,
+  prior_journal_entry_id uuid not null,
+  current_journal_entry_id uuid not null,
+  response_snapshot jsonb not null,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default clock_timestamp(),
+  unique (tenant_id, operation_key),
+  foreign key (tenant_id, payment_id)
+    references public.sales_payments(tenant_id, id) on delete restrict,
+  foreign key (tenant_id, trace_operation_id)
+    references public.inventory_accounting_operations(tenant_id, id)
+    on delete restrict
+);
+
+comment on table public.sales_payment_edit_events is
+  'Immutable tenant-scoped command receipts and before/after evidence for audited sales-payment corrections.';
+comment on column public.sales_payment_edit_events.financial_fields_changed is
+  'True when amount, payment date, or payment method changed and the receivable-settlement journal was superseded.';
+comment on column public.sales_payment_edit_events.source_managed is
+  'True for POS, quick-sale, ecommerce, online-order, or provider-owned payments; these commands may change notes only.';
+comment on column public.sales_payment_edit_events.response_snapshot is
+  'Exact successful RPC response used for committed-but-unacknowledged readback and replay.';
+
+create index if not exists idx_sales_payment_edit_events_payment
+  on public.sales_payment_edit_events(
+    tenant_id, payment_id, created_at desc, id desc
+  );
+create index if not exists idx_sales_payment_edit_events_trace
+  on public.sales_payment_edit_events(tenant_id, trace_operation_id);
+
+alter table public.sales_payment_edit_events enable row level security;
+
+drop policy if exists sales_payment_edit_events_select
+  on public.sales_payment_edit_events;
+create policy sales_payment_edit_events_select
+  on public.sales_payment_edit_events
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+revoke all on public.sales_payment_edit_events
+  from public, anon, authenticated, service_role;
+grant select on public.sales_payment_edit_events to authenticated;
+
+create or replace function public.guard_sales_payment_edit_event()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  raise exception 'Sales payment edit events are immutable'
+    using errcode = '55000';
+end;
+$$;
+
+drop trigger if exists trg_sales_payment_edit_events_immutable
+  on public.sales_payment_edit_events;
+create trigger trg_sales_payment_edit_events_immutable
+  before update or delete on public.sales_payment_edit_events
+  for each row execute function public.guard_sales_payment_edit_event();
+
+revoke all on function public.guard_sales_payment_edit_event()
+  from public, anon, authenticated, service_role;
+
+-- Authenticated clients must use the audited RPC for editable payment fields.
+-- Server/provider flows run without an employee auth.uid() and retain their
+-- existing ability to bind durable provider identity after settlement.
+create or replace function public.guard_sales_payment_correction_command()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    return NEW;
+  end if;
+
+  if NEW.id is distinct from OLD.id
+     or NEW.tenant_id is distinct from OLD.tenant_id
+     or NEW.invoice_id is distinct from OLD.invoice_id
+     or NEW.invoice_reference is distinct from OLD.invoice_reference
+     or NEW.idempotency_key is distinct from OLD.idempotency_key
+     or NEW.tax_treatment is distinct from OLD.tax_treatment
+     or NEW.net_amount is distinct from OLD.net_amount
+     or NEW.iva_amount is distinct from OLD.iva_amount
+     or NEW.deleted_at is distinct from OLD.deleted_at
+     or NEW.deleted_by is distinct from OLD.deleted_by
+     or NEW.created_at is distinct from OLD.created_at then
+    raise exception 'Payment identity and server-owned tax fields are immutable'
+      using errcode = 'check_violation';
+  end if;
+
+  if (
+    NEW.payment_method_id is distinct from OLD.payment_method_id
+    or NEW.amount is distinct from OLD.amount
+    or NEW.date is distinct from OLD.date
+    or NEW.reference is distinct from OLD.reference
+    or NEW.notes is distinct from OLD.notes
+  ) and current_setting('app.sales_payment_correction_command', true)
+        is distinct from 'true' then
+    raise exception 'Use the audited sales-payment correction command'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_sales_payments_01_correction_command
+  on public.sales_payments;
+create trigger trg_sales_payments_01_correction_command
+  before update on public.sales_payments
+  for each row execute function public.guard_sales_payment_correction_command();
+
+revoke all on function public.guard_sales_payment_correction_command()
+  from public, anon, authenticated, service_role;
+
+-- Historical payment methods may be deactivated after their payments post.
+-- Preserve that method on metadata/amount/date corrections, but never permit a
+-- correction to select a different inactive method.
+create or replace function public.validate_sales_payment_integrity()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invoice public.sales_invoices%rowtype;
+  v_existing_paid numeric(12,2);
+  v_remaining numeric(12,2);
+  v_amount numeric(12,2);
+  v_net numeric(12,2);
+begin
+  if TG_OP = 'DELETE' then
+    perform public.assert_sales_payment_access(OLD.tenant_id);
+    return OLD;
+  end if;
+
+  if NEW.invoice_id is null then
+    raise exception 'El pago debe pertenecer a una factura de venta.';
+  end if;
+
+  select * into v_invoice
+    from public.sales_invoices
+   where id = NEW.invoice_id
+   for update;
+
+  if not found then
+    raise exception 'La factura de venta asociada al pago no existe.';
+  end if;
+
+  if NEW.tenant_id is null then
+    NEW.tenant_id := v_invoice.tenant_id;
+  end if;
+  if NEW.tenant_id is distinct from v_invoice.tenant_id then
+    raise exception 'El pago no pertenece al mismo tenant que la factura de venta.';
+  end if;
+
+  perform public.assert_sales_payment_access(NEW.tenant_id);
+
+  v_amount := public.clp_round(NEW.amount);
+  if v_amount <= 0 then
+    raise exception 'El monto del pago debe ser mayor a cero.';
+  end if;
+  NEW.amount := v_amount;
+  NEW.invoice_reference := coalesce(
+    nullif(btrim(coalesce(NEW.invoice_reference, '')), ''),
+    v_invoice.invoice_number
+  );
+
+  -- The payment is cash settlement only. Tax and revenue stay invoice-owned;
+  -- this row mirrors the whole-document classification for reporting.
+  NEW.tax_treatment := v_invoice.tax_treatment;
+  if v_invoice.tax_treatment = 'tax_included' then
+    v_net := public.clp_round(v_amount / 1.19);
+    NEW.net_amount := v_net;
+    NEW.iva_amount := v_amount - v_net;
+  else
+    NEW.net_amount := v_amount;
+    NEW.iva_amount := 0;
+  end if;
+
+  if NEW.deleted_at is not null then
+    return NEW;
+  end if;
+
+  if NEW.payment_method_id is null or not exists (
+    select 1
+      from public.payment_methods method
+     where method.id = NEW.payment_method_id
+       and method.tenant_id = NEW.tenant_id
+       and (
+         coalesce(method.is_active, true)
+         or (
+           TG_OP = 'UPDATE'
+           and NEW.payment_method_id is not distinct from OLD.payment_method_id
+           and current_setting(
+             'app.sales_payment_correction_command',
+             true
+           ) = 'true'
+         )
+       )
+  ) then
+    raise exception 'Medio de pago no encontrado o inactivo para el tenant activo.';
+  end if;
+
+  select public.clp_round(coalesce(sum(payment.amount), 0))
+    into v_existing_paid
+    from public.sales_payments payment
+   where payment.invoice_id = NEW.invoice_id
+     and payment.tenant_id = NEW.tenant_id
+     and payment.deleted_at is null
+     and payment.id is distinct from NEW.id;
+
+  v_remaining := public.clp_round(
+    greatest(coalesce(v_invoice.total, 0) - v_existing_paid, 0)
+  );
+  if v_amount > v_remaining then
+    raise exception 'El pago excede el saldo pendiente de la factura de venta. Saldo pendiente: %, monto enviado: %.',
+      v_remaining, v_amount;
+  end if;
+
+  return NEW;
+end;
+$$;
+
+revoke all on function public.validate_sales_payment_integrity()
+  from public, anon, authenticated, service_role;
+
+create or replace function public.get_sales_payment_edit_operation(
+  p_operation_key text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_actor uuid := auth.uid();
+  v_tenant uuid;
+  v_active_profile_count integer;
+  v_key text := nullif(btrim(p_operation_key), '');
+  v_event public.sales_payment_edit_events%rowtype;
+begin
+  select count(*)::integer
+    into v_active_profile_count
+    from public.user_profiles profile
+   where profile.user_id = v_actor
+     and profile.is_active is true;
+
+  if v_actor is null or v_active_profile_count <> 1 then
+    raise exception 'Exactly one active employee tenant is required'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  select profile.tenant_id
+    into v_tenant
+    from public.user_profiles profile
+   where profile.user_id = v_actor
+     and profile.is_active is true;
+
+  perform public.assert_sales_payment_access(v_tenant);
+
+  if v_key is null or length(v_key) > 128 then
+    raise exception 'A valid payment correction operation key is required';
+  end if;
+
+  select * into v_event
+    from public.sales_payment_edit_events event
+   where event.tenant_id = v_tenant
+     and event.operation_key = v_key;
+
+  if not found then
+    return null;
+  end if;
+
+  return v_event.response_snapshot || jsonb_build_object('replayed', true);
+end;
+$$;
+
+create or replace function public.correct_sales_payment(
+  p_payment_id uuid,
+  p_expected_updated_at timestamptz,
+  p_operation_key text,
+  p_payment_method_id uuid,
+  p_amount numeric,
+  p_date timestamptz,
+  p_reference text,
+  p_notes text,
+  p_reason text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_actor uuid := auth.uid();
+  v_tenant uuid;
+  v_role text;
+  v_permissions jsonb := '{}'::jsonb;
+  v_active_profile_count integer;
+  v_key text := nullif(btrim(p_operation_key), '');
+  v_reference text := nullif(btrim(coalesce(p_reference, '')), '');
+  v_notes text := nullif(btrim(coalesce(p_notes, '')), '');
+  v_reason text := nullif(btrim(coalesce(p_reason, '')), '');
+  v_amount numeric := public.clp_round(p_amount);
+  v_payload jsonb;
+  v_payload_hash text;
+  v_receipt public.sales_payment_edit_events%rowtype;
+  v_before public.sales_payments%rowtype;
+  v_saved public.sales_payments%rowtype;
+  v_invoice public.sales_invoices%rowtype;
+  v_source text;
+  v_source_managed boolean;
+  v_financial_changed boolean;
+  v_reference_changed boolean;
+  v_notes_changed boolean;
+  v_prior_journal_count integer;
+  v_prior_journal_id uuid;
+  v_prior_journal_balanced boolean;
+  v_current_journal_count integer;
+  v_current_journal_id uuid;
+  v_current_journal_balanced boolean;
+  v_line_debit numeric;
+  v_line_credit numeric;
+  v_method_debit_count integer;
+  v_receivable_credit_count integer;
+  v_trace_operation_id uuid;
+  v_stock_movement_count integer;
+  v_expected_net numeric;
+  v_expected_iva numeric;
+  v_event_id uuid := gen_random_uuid();
+  v_event_created_at timestamptz := clock_timestamp();
+  v_event_snapshot jsonb;
+  v_result jsonb;
+begin
+  select count(*)::integer
+    into v_active_profile_count
+    from public.user_profiles profile
+   where profile.user_id = v_actor
+     and profile.is_active is true;
+
+  if v_actor is null or v_active_profile_count <> 1 then
+    raise exception 'Exactly one active employee tenant is required'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  select profile.tenant_id, profile.role,
+         coalesce(profile.permissions, '{}'::jsonb)
+    into v_tenant, v_role, v_permissions
+    from public.user_profiles profile
+   where profile.user_id = v_actor
+     and profile.is_active is true;
+
+  perform public.assert_sales_payment_access(v_tenant);
+
+  if v_key is null or length(v_key) > 128 then
+    raise exception 'A valid payment correction operation key is required';
+  end if;
+  if p_payment_id is null or p_expected_updated_at is null then
+    raise exception 'Payment id and expected updated_at are required';
+  end if;
+  if p_payment_method_id is null then
+    raise exception 'Payment method is required';
+  end if;
+  if p_amount is null or v_amount <= 0 then
+    raise exception 'Payment amount must be greater than zero';
+  end if;
+  if p_date is null then
+    raise exception 'Payment date is required';
+  end if;
+  if v_reason is null or length(v_reason) < 3 or length(v_reason) > 1000 then
+    raise exception 'A correction reason between 3 and 1000 characters is required';
+  end if;
+  if length(coalesce(v_reference, '')) > 512 then
+    raise exception 'Payment reference allows at most 512 characters';
+  end if;
+  if length(coalesce(v_notes, '')) > 4000 then
+    raise exception 'Payment notes allow at most 4000 characters';
+  end if;
+
+  v_payload := jsonb_build_object(
+    'payment_id', p_payment_id,
+    'expected_updated_at', p_expected_updated_at,
+    'payment_method_id', p_payment_method_id,
+    'amount_clp', v_amount,
+    'date', p_date,
+    'reference', v_reference,
+    'notes', v_notes,
+    'reason', v_reason
+  );
+  v_payload_hash := encode(
+    extensions.digest(v_payload::text, 'sha256'),
+    'hex'
+  );
+
+  perform pg_advisory_xact_lock(hashtextextended(
+    v_tenant::text || ':sales-payment-correction:' || v_key,
+    0
+  ));
+
+  select * into v_receipt
+    from public.sales_payment_edit_events event
+   where event.tenant_id = v_tenant
+     and event.operation_key = v_key;
+  if found then
+    if v_receipt.request_hash is distinct from v_payload_hash then
+      raise exception 'Payment correction key was already used with different content'
+        using errcode = 'integrity_constraint_violation';
+    end if;
+    return v_receipt.response_snapshot || jsonb_build_object('replayed', true);
+  end if;
+
+  select * into v_before
+    from public.sales_payments payment
+   where payment.id = p_payment_id
+     and payment.tenant_id = v_tenant
+   for update;
+  if not found then
+    raise exception 'Payment not found for the active tenant'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  if v_before.updated_at is distinct from p_expected_updated_at then
+    raise exception 'Payment was modified after this form was loaded'
+      using errcode = 'serialization_failure';
+  end if;
+  if v_before.deleted_at is not null then
+    raise exception 'Deleted payments cannot be corrected'
+      using errcode = 'check_violation';
+  end if;
+
+  select * into v_invoice
+    from public.sales_invoices invoice
+   where invoice.id = v_before.invoice_id
+     and invoice.tenant_id = v_tenant
+   for update;
+  if not found then
+    raise exception 'Payment invoice is missing or belongs to another tenant'
+      using errcode = 'foreign_key_violation';
+  end if;
+  if lower(coalesce(v_invoice.status, '')) in (
+    'cancelled', 'cancelado', 'cancelada', 'anulado', 'anulada'
+  ) then
+    raise exception 'Payments on cancelled invoices cannot be corrected'
+      using errcode = 'check_violation';
+  end if;
+  if v_before.tax_treatment is distinct from v_invoice.tax_treatment then
+    raise exception 'Payment tax classification requires accounting review before correction'
+      using errcode = 'check_violation';
+  end if;
+
+  v_source := coalesce(nullif(btrim(v_invoice.source), ''), 'manual_sale');
+  v_source_managed := v_source in ('pos', 'ecommerce', 'quick_sale')
+    or exists (
+      select 1
+        from public.online_orders orders
+       where orders.tenant_id = v_tenant
+         and (
+           orders.manual_payment_id = v_before.id
+           or orders.sales_invoice_id = v_before.invoice_id
+         )
+    )
+    or lower(coalesce(v_before.idempotency_key, ''))
+         ~ '^(mercadopago|online_order|provider)[_:]';
+
+  v_financial_changed :=
+    p_payment_method_id is distinct from v_before.payment_method_id
+    or v_amount is distinct from public.clp_round(v_before.amount)
+    or p_date is distinct from v_before.date;
+  v_reference_changed := v_reference is distinct from
+    nullif(btrim(coalesce(v_before.reference, '')), '');
+  v_notes_changed := v_notes is distinct from
+    nullif(btrim(coalesce(v_before.notes, '')), '');
+
+  if not v_financial_changed
+     and not v_reference_changed
+     and not v_notes_changed then
+    raise exception 'Payment correction contains no changes'
+      using errcode = 'check_violation';
+  end if;
+
+  if v_source_managed
+     and (v_financial_changed or v_reference_changed) then
+    raise exception 'Source-managed payments allow notes-only corrections; use the source correction workflow for financial or reference changes'
+      using errcode = 'check_violation';
+  end if;
+
+  if v_financial_changed
+     and v_role not in ('admin', 'manager', 'accountant')
+     and coalesce(v_permissions->'access_accounting', 'false'::jsonb)
+           is distinct from 'true'::jsonb then
+    raise exception 'Financial payment corrections require accounting authorization'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  if not exists (
+    select 1
+      from public.payment_methods method
+     where method.id = p_payment_method_id
+       and method.tenant_id = v_tenant
+       and (
+         p_payment_method_id = v_before.payment_method_id
+         or method.is_active is true
+       )
+  ) then
+    raise exception 'Payment method is unavailable for the current tenant'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  select count(*)::integer,
+         (array_agg(entry.id order by entry.created_at, entry.id))[1],
+         coalesce(bool_and(
+           public.clp_round(entry.total_debit)
+             = public.clp_round(v_before.amount)
+           and public.clp_round(entry.total_credit)
+             = public.clp_round(v_before.amount)
+           and lower(entry.status) = 'posted'
+         ), false)
+    into v_prior_journal_count, v_prior_journal_id,
+         v_prior_journal_balanced
+    from public.journal_entries entry
+   where entry.tenant_id = v_tenant
+     and entry.source_module = 'sales_payments'
+     and entry.source_reference = v_before.id::text;
+
+  if v_prior_journal_count <> 1 or not v_prior_journal_balanced then
+    raise exception 'Payment current journal requires accounting review before correction'
+      using errcode = 'check_violation';
+  end if;
+
+  perform set_config('app.sales_payment_correction_command', 'true', true);
+  perform set_config('app.inventory_idempotency_key', v_key, true);
+  perform set_config(
+    'app.journal_supersession_reason',
+    'sales_payment_audited_correction',
+    true
+  );
+
+  update public.sales_payments payment
+     set payment_method_id = p_payment_method_id,
+         amount = v_amount,
+         date = p_date,
+         reference = v_reference,
+         notes = v_notes,
+         updated_at = clock_timestamp()
+   where payment.id = v_before.id
+     and payment.tenant_id = v_tenant
+  returning * into v_saved;
+
+  if v_saved.tenant_id is distinct from v_before.tenant_id
+     or v_saved.invoice_id is distinct from v_before.invoice_id
+     or v_saved.idempotency_key is distinct from v_before.idempotency_key
+     or v_saved.created_at is distinct from v_before.created_at
+     or v_saved.deleted_at is distinct from v_before.deleted_at
+     or v_saved.deleted_by is distinct from v_before.deleted_by
+     or v_saved.invoice_reference is distinct from coalesce(
+       v_before.invoice_reference,
+       v_invoice.invoice_number
+     )
+     or v_saved.tax_treatment is distinct from v_invoice.tax_treatment then
+    raise exception 'Payment identity changed during correction'
+      using errcode = 'check_violation';
+  end if;
+
+  if v_invoice.tax_treatment = 'tax_included' then
+    v_expected_net := public.clp_round(v_saved.amount / 1.19);
+    v_expected_iva := public.clp_round(v_saved.amount) - v_expected_net;
+  else
+    v_expected_net := public.clp_round(v_saved.amount);
+    v_expected_iva := 0;
+  end if;
+  if public.clp_round(v_saved.net_amount) is distinct from v_expected_net
+     or public.clp_round(v_saved.iva_amount) is distinct from v_expected_iva then
+    raise exception 'Payment tax mirrors do not reconcile after correction'
+      using errcode = 'check_violation';
+  end if;
+
+  select count(*)::integer,
+         (array_agg(entry.id order by entry.created_at, entry.id))[1],
+         coalesce(bool_and(
+           public.clp_round(entry.total_debit)
+             = public.clp_round(v_saved.amount)
+           and public.clp_round(entry.total_credit)
+             = public.clp_round(v_saved.amount)
+           and lower(entry.status) = 'posted'
+         ), false)
+    into v_current_journal_count, v_current_journal_id,
+         v_current_journal_balanced
+    from public.journal_entries entry
+   where entry.tenant_id = v_tenant
+     and entry.source_module = 'sales_payments'
+     and entry.source_reference = v_saved.id::text;
+
+  if v_current_journal_count <> 1 or not v_current_journal_balanced then
+    raise exception 'Payment correction did not leave exactly one balanced current journal'
+      using errcode = 'check_violation';
+  end if;
+
+  select public.clp_round(coalesce(sum(line.debit_amount), 0)),
+         public.clp_round(coalesce(sum(line.credit_amount), 0)),
+         count(*) filter (
+           where line.account_id = method.account_id
+             and public.clp_round(line.debit_amount)
+                   = public.clp_round(v_saved.amount)
+             and public.clp_round(line.credit_amount) = 0
+         )::integer,
+         count(*) filter (
+           where line.account_code = '1130'
+             and public.clp_round(line.credit_amount)
+                   = public.clp_round(v_saved.amount)
+             and public.clp_round(line.debit_amount) = 0
+         )::integer
+    into v_line_debit, v_line_credit, v_method_debit_count,
+         v_receivable_credit_count
+    from public.journal_lines line
+    cross join public.payment_methods method
+   where line.entry_id = v_current_journal_id
+     and line.tenant_id = v_tenant
+     and method.id = v_saved.payment_method_id
+     and method.tenant_id = v_tenant;
+
+  if v_line_debit is distinct from public.clp_round(v_saved.amount)
+     or v_line_credit is distinct from public.clp_round(v_saved.amount)
+     or v_method_debit_count <> 1
+     or v_receivable_credit_count <> 1 then
+    raise exception 'Payment journal lines do not reconcile to cash and accounts receivable'
+      using errcode = 'check_violation';
+  end if;
+
+  select operation.id into v_trace_operation_id
+    from public.inventory_accounting_operations operation
+   where operation.tenant_id = v_tenant
+     and operation.operation_key = format(
+       'sales_payment:%s:update:%s',
+       v_saved.id,
+       v_key
+     )
+     and operation.document_type = 'sales_payment'
+     and operation.document_id = v_saved.id
+     and operation.action = 'update'
+     and operation.outcome = 'completed';
+  if not found then
+    raise exception 'Completed payment correction trace was not recorded'
+      using errcode = 'check_violation';
+  end if;
+
+  select count(*)::integer into v_stock_movement_count
+    from public.stock_movements movement
+   where movement.tenant_id = v_tenant
+     and movement.operation_id = v_trace_operation_id;
+  if v_stock_movement_count <> 0 then
+    raise exception 'Payment correction created an inventory movement'
+      using errcode = 'check_violation';
+  end if;
+
+  if v_financial_changed then
+    if v_current_journal_id = v_prior_journal_id then
+      raise exception 'Financial payment correction did not supersede its journal'
+        using errcode = 'check_violation';
+    end if;
+    if not exists (
+      select 1
+        from public.journal_supersession_evidence evidence
+       where evidence.tenant_id = v_tenant
+         and evidence.journal_entry_id = v_prior_journal_id
+         and evidence.operation_id = v_trace_operation_id
+         and evidence.source_module = 'sales_payments'
+         and evidence.source_reference = v_saved.id::text
+         and evidence.captured_reason = 'sales_payment_audited_correction'
+    ) then
+      raise exception 'Superseded payment journal evidence was not preserved'
+        using errcode = 'check_violation';
+    end if;
+  elsif v_current_journal_id is distinct from v_prior_journal_id then
+    raise exception 'Metadata-only payment correction replaced its journal'
+      using errcode = 'check_violation';
+  end if;
+
+  v_event_snapshot := jsonb_build_object(
+    'id', v_event_id,
+    'tenant_id', v_tenant,
+    'payment_id', v_saved.id,
+    'invoice_id', v_saved.invoice_id,
+    'operation_key', v_key,
+    'reason', v_reason,
+    'source', v_source,
+    'source_managed', v_source_managed,
+    'financial_fields_changed', v_financial_changed,
+    'trace_operation_id', v_trace_operation_id,
+    'prior_journal_entry_id', v_prior_journal_id,
+    'current_journal_entry_id', v_current_journal_id,
+    'created_by', v_actor,
+    'created_at', v_event_created_at
+  );
+  v_result := jsonb_build_object(
+    'payment', to_jsonb(v_saved),
+    'event', v_event_snapshot,
+    'replayed', false
+  );
+
+  insert into public.sales_payment_edit_events (
+    id, tenant_id, payment_id, invoice_id, operation_key,
+    request_hash, request_snapshot, reason, source, source_managed,
+    financial_fields_changed, before_snapshot, after_snapshot,
+    trace_operation_id, prior_journal_entry_id, current_journal_entry_id,
+    response_snapshot, created_by, created_at
+  ) values (
+    v_event_id, v_tenant, v_saved.id, v_saved.invoice_id, v_key,
+    v_payload_hash, v_payload, v_reason, v_source, v_source_managed,
+    v_financial_changed, to_jsonb(v_before), to_jsonb(v_saved),
+    v_trace_operation_id, v_prior_journal_id, v_current_journal_id,
+    v_result, v_actor, v_event_created_at
+  );
+
+  perform set_config('app.sales_payment_correction_command', '', true);
+  perform set_config('app.inventory_idempotency_key', '', true);
+  perform set_config('app.journal_supersession_reason', '', true);
+  return v_result;
+exception
+  when others then
+    perform set_config('app.sales_payment_correction_command', '', true);
+    perform set_config('app.inventory_idempotency_key', '', true);
+    perform set_config('app.journal_supersession_reason', '', true);
+    raise;
+end;
+$$;
+
+revoke all on function public.get_sales_payment_edit_operation(text)
+  from public, anon, authenticated, service_role;
+revoke all on function public.correct_sales_payment(
+  uuid, timestamptz, text, uuid, numeric, timestamptz,
+  text, text, text
+) from public, anon, authenticated, service_role;
+
+grant execute on function public.get_sales_payment_edit_operation(text)
+  to authenticated;
+grant execute on function public.correct_sales_payment(
+  uuid, timestamptz, text, uuid, numeric, timestamptz,
+  text, text, text
+) to authenticated;
+
+comment on function public.get_sales_payment_edit_operation(text) is
+  'Reads the active tenant immutable correction receipt after a lost RPC acknowledgement; returns null when the key is unknown.';
+comment on function public.correct_sales_payment(
+  uuid, timestamptz, text, uuid, numeric, timestamptz,
+  text, text, text
+) is
+  'Replay-safe optimistic sales-payment correction. Preserves invoice/payment identity, blocks source-owned financial edits, rebuilds and archives settlement journals when needed, and proves zero inventory effects.';
+
+-- Append-only purchase-receipt discrepancy cases and their exact economic or
+-- physical resolution documents. This runs after the canonical receipt/void,
+-- supplier-return, purchase-credit/refund, checkpoint/enforcement, and
+-- component-owned inventory stack already mirrored above.
+\ir ../migrations/20260724043000_link_purchase_receipt_discrepancy_resolutions.sql
+
+-- Audited supplier-payment corrections, including immutable command receipts,
+-- unique legacy-journal relinking, and credit/refund-aware payment tracing.
+\ir ../migrations/20260724050000_add_audited_purchase_payment_corrections.sql
+
+-- One-snapshot purchase invoice list projection. Physical fulfillment is
+-- derived per source line from posted receipts and effective resolutions, so
+-- list consumers never need a second asynchronous status query.
+\ir ../migrations/20260724053000_add_purchase_invoice_list_read_model.sql

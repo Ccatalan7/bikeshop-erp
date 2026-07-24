@@ -16,6 +16,7 @@ import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/error_reporting_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/utils/gtin_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -42,11 +43,14 @@ import '../../bikeshop/models/bikeshop_models.dart';
 import '../../bikeshop/services/service_wizard_service.dart';
 import '../../bikeshop/widgets/service_wizard_dialog.dart';
 
+enum ProductFormSection { general, website }
+
 class ProductFormPage extends StatefulWidget {
   final String? productId;
   final bool showInDialog; // Hide MainLayout when true
   final ProductType initialProductType;
   final bool lockProductType;
+  final ProductFormSection initialSection;
 
   const ProductFormPage({
     super.key,
@@ -54,6 +58,7 @@ class ProductFormPage extends StatefulWidget {
     this.showInDialog = false,
     this.initialProductType = ProductType.product,
     this.lockProductType = false,
+    this.initialSection = ProductFormSection.general,
   });
 
   @override
@@ -384,7 +389,9 @@ class _ProductFormPageState extends State<ProductFormPage>
       _isGoogleMerchant = false;
       _isWhatsappCatalog = false;
     }
-    _createTabController();
+    _createTabController(
+      initialIndex: widget.initialSection == ProductFormSection.website ? 1 : 0,
+    );
     _inventoryService = Provider.of<inventory_services.InventoryService>(
         context,
         listen: false);
@@ -5358,8 +5365,18 @@ class _ProductFormPageState extends State<ProductFormPage>
   }
 
   Widget _buildHeader(ThemeData theme) {
-    final title =
-        _existingProduct != null ? 'Editar producto' : 'Nuevo producto';
+    final openedForWebsite =
+        widget.initialSection == ProductFormSection.website;
+    final title = _existingProduct != null
+        ? openedForWebsite
+            ? 'Editar página web del producto'
+            : 'Editar producto'
+        : 'Nuevo producto';
+    final description = openedForWebsite
+        ? 'Edita la publicación, el contenido, los medios y el SEO que verá el cliente.'
+        : 'Mantén los datos comerciales y de inventario al día para el POS y la contabilidad.';
+    final closeIcon = widget.showInDialog ? Icons.close : Icons.arrow_back;
+    final closeTooltip = widget.showInDialog ? 'Cerrar' : 'Volver';
     final isMobile = MediaQuery.of(context).size.width < 600;
 
     if (isMobile) {
@@ -5372,8 +5389,8 @@ class _ProductFormPageState extends State<ProductFormPage>
               children: [
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(false),
-                  icon: const Icon(Icons.arrow_back),
-                  tooltip: 'Volver',
+                  icon: Icon(closeIcon),
+                  tooltip: closeTooltip,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -5395,7 +5412,7 @@ class _ProductFormPageState extends State<ProductFormPage>
             ),
             const SizedBox(height: 8),
             Text(
-              'Mantén los datos comerciales y de inventario al día.',
+              description,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -5448,8 +5465,8 @@ class _ProductFormPageState extends State<ProductFormPage>
         children: [
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.arrow_back),
-            tooltip: 'Volver',
+            icon: Icon(closeIcon),
+            tooltip: closeTooltip,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -5464,7 +5481,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Mantén los datos comerciales y de inventario al día para el POS y la contabilidad.',
+                  description,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -8162,9 +8179,8 @@ class _ProductFormPageState extends State<ProductFormPage>
         keyboardType: TextInputType.number,
         validator: (value) {
           if (value == null || value.trim().isEmpty) return null;
-          final trimmed = value.trim();
-          if (!RegExp(r'^[0-9]{8,14}$').hasMatch(trimmed)) {
-            return 'GTIN debe ser entre 8 y 14 dígitos';
+          if (!isValidGtin(value)) {
+            return 'GTIN inválido: revisa longitud, checksum y prefijo GS1';
           }
           return null;
         },
@@ -9077,7 +9093,6 @@ class _ProductFormPageState extends State<ProductFormPage>
         _brandController.text,
         _selectedBrand?.name,
         _existingProduct?.brand,
-        'Vinabike',
       ]);
 
   String get _effectiveMerchantGtin => _firstNonEmptyText([
@@ -9089,6 +9104,10 @@ class _ProductFormPageState extends State<ProductFormPage>
   String get _effectiveMerchantMpn => _firstNonEmptyText([
         _websiteMerchantMpnController.text,
       ]);
+
+  bool get _hasRequiredMerchantIdentifiers =>
+      isValidGtin(_effectiveMerchantGtin) ||
+      (_effectiveMerchantBrand.isNotEmpty && _effectiveMerchantMpn.isNotEmpty);
 
   String get _effectiveWhatsappCatalogTitle => _firstNonEmptyText([
         _whatsappCatalogTitleController.text,
@@ -9503,9 +9522,18 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
     final hasImage = _selectedWebsiteImageBytes != null ||
         _websitePreviewImageUrl.trim().isNotEmpty;
     final price = _effectiveWebsitePrice;
-    final gtin = _effectiveMerchantGtin;
 
     return [
+      Text(
+        'Estos datos describen la misma oferta que verá el cliente. Si completas '
+        'un título o una descripción comercial, se usarán de forma coherente en '
+        'la ficha pública, los datos estructurados, el checkout y Google Merchant.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          height: 1.4,
+        ),
+      ),
+      const SizedBox(height: 12),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: Row(
@@ -9588,9 +9616,9 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
             detail: 'Debe ser clara y accesible públicamente.',
           ),
           (
-            ok: gtin.isNotEmpty || _effectiveMerchantBrand.isNotEmpty,
-            label: 'Identificador o marca',
-            detail: 'GTIN es ideal; si no existe, marca + MPN ayuda.',
+            ok: _hasRequiredMerchantIdentifiers,
+            label: 'Identificadores de producto',
+            detail: 'Usa un GTIN válido o la combinación marca + MPN.',
           ),
         ],
       ),
@@ -9604,9 +9632,10 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
               child: TextFormField(
                 controller: _websiteMerchantTitleController,
                 decoration: InputDecoration(
-                  labelText: 'Título Merchant',
+                  labelText: 'Título comercial público',
                   hintText: _effectiveMerchantTitle,
-                  helperText: 'Vacío = nombre web/normal.',
+                  helperText:
+                      'Vacío = nombre web/normal. También se envía a Merchant.',
                 ),
               ),
             ),
@@ -9616,9 +9645,10 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
               child: TextFormField(
                 controller: _websiteMerchantBrandController,
                 decoration: InputDecoration(
-                  labelText: 'Marca Merchant',
+                  labelText: 'Marca del fabricante',
                   hintText: _effectiveMerchantBrand,
-                  helperText: 'Vacío = marca normal o Vinabike.',
+                  helperText:
+                      'Vacío = marca vinculada/normal. No inventes una marca.',
                 ),
               ),
             ),
@@ -9641,10 +9671,10 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
       TextFormField(
         controller: _websiteMerchantDescriptionController,
         decoration: InputDecoration(
-          labelText: 'Descripción Merchant',
+          labelText: 'Descripción comercial pública',
           hintText: _effectiveMerchantDescription,
           helperText:
-              'Vacío = descripción web/normal, expandida en el feed si queda corta.',
+              'Vacío = descripción web/normal. También se envía a Merchant.',
         ),
         maxLines: 4,
       ),
@@ -9658,12 +9688,19 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
               child: TextFormField(
                 controller: _websiteMerchantGtinController,
                 decoration: InputDecoration(
-                  labelText: 'GTIN / EAN',
+                  labelText: 'GTIN / EAN verificado',
                   hintText: _effectiveMerchantGtin.isEmpty
                       ? 'Opcional si no existe'
                       : _effectiveMerchantGtin,
                   helperText: 'Mejor identificador para Google Shopping.',
                 ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) return null;
+                  if (!isValidGtin(value)) {
+                    return 'GTIN inválido: revisa checksum y prefijo GS1';
+                  }
+                  return null;
+                },
               ),
             ),
             SizedBox(width: 16, height: isNarrow ? 16 : 0),
@@ -9672,7 +9709,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
               child: TextFormField(
                 controller: _websiteMerchantMpnController,
                 decoration: InputDecoration(
-                  labelText: 'MPN',
+                  labelText: 'MPN del fabricante',
                   hintText: _effectiveMerchantMpn.isEmpty
                       ? 'Solo si lo asignó el fabricante'
                       : _effectiveMerchantMpn,
@@ -10329,7 +10366,8 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${inStock ? 'En stock' : 'Agotado'} · $_effectiveMerchantBrand',
+                  '${inStock ? 'En stock' : 'Agotado'} · '
+                  '${_effectiveMerchantBrand.isEmpty ? 'Marca pendiente' : _effectiveMerchantBrand}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

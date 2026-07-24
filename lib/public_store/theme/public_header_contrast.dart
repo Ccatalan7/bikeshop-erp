@@ -9,6 +9,14 @@ import 'package:flutter/material.dart';
 enum PublicHeaderContrastMode { automatic, light, dark }
 
 extension PublicHeaderContrastModeX on PublicHeaderContrastMode {
+  static double _contrastRatio(Color a, Color b) {
+    final aLuminance = a.computeLuminance();
+    final bLuminance = b.computeLuminance();
+    final lighter = aLuminance > bLuminance ? aLuminance : bLuminance;
+    final darker = aLuminance > bLuminance ? bLuminance : aLuminance;
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
   static PublicHeaderContrastMode parse(String value) {
     switch (value.trim().toLowerCase()) {
       case 'light':
@@ -32,7 +40,9 @@ extension PublicHeaderContrastModeX on PublicHeaderContrastMode {
       case PublicHeaderContrastMode.dark:
         return true;
       case PublicHeaderContrastMode.automatic:
-        return isOverlay || backgroundColor.computeLuminance() < 0.42;
+        if (isOverlay) return true;
+        return _contrastRatio(Colors.white, backgroundColor) >=
+            _contrastRatio(const Color(0xFF17211B), backgroundColor);
     }
   }
 }

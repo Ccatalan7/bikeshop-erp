@@ -86,6 +86,8 @@ class PurchaseCreditNoteLineDraft {
     this.taxAmount = 0,
     this.disposition = PurchaseCreditDisposition.financialOnly,
     this.supplierReturnLineId,
+    this.receiptResolutionCaseId,
+    this.receiptResolutionMaximum,
   });
 
   final PurchaseCreditNoteLineBalance balance;
@@ -94,12 +96,17 @@ class PurchaseCreditNoteLineDraft {
   final int taxAmount;
   final PurchaseCreditDisposition disposition;
   final String? supplierReturnLineId;
+  final String? receiptResolutionCaseId;
+  final int? receiptResolutionMaximum;
 
   int get totalAmount => netAmount + taxAmount;
   bool get isSelected => totalAmount > 0;
 
   PurchaseCreditNoteLineDraft withQuantity(int value) {
-    final quantity = value.clamp(0, balance.remainingQuantity);
+    final maximum = receiptResolutionMaximum == null
+        ? balance.remainingQuantity
+        : receiptResolutionMaximum!.clamp(0, balance.remainingQuantity);
+    final quantity = value.clamp(0, maximum);
     final net = balance.originalQuantity == 0
         ? 0
         : (balance.originalNet * quantity / balance.originalQuantity).round();
@@ -128,6 +135,16 @@ class PurchaseCreditNoteLineDraft {
         return 'La cantidad supera la devolución física seleccionada.';
       }
     }
+    if (receiptResolutionCaseId != null &&
+        disposition != PurchaseCreditDisposition.financialOnly) {
+      return 'Una diferencia de recepción se acredita como ajuste financiero; '
+          'la devolución física usa su propio documento.';
+    }
+    if (receiptResolutionMaximum != null &&
+        quantity > receiptResolutionMaximum!) {
+      return 'La cantidad supera el saldo abierto de la diferencia de '
+          '${balance.productName}.';
+    }
     return null;
   }
 
@@ -137,7 +154,10 @@ class PurchaseCreditNoteLineDraft {
     int? taxAmount,
     PurchaseCreditDisposition? disposition,
     String? supplierReturnLineId,
+    String? receiptResolutionCaseId,
+    int? receiptResolutionMaximum,
     bool clearSupplierReturn = false,
+    bool clearReceiptResolution = false,
   }) {
     return PurchaseCreditNoteLineDraft(
       balance: balance,
@@ -148,6 +168,12 @@ class PurchaseCreditNoteLineDraft {
       supplierReturnLineId: clearSupplierReturn
           ? null
           : supplierReturnLineId ?? this.supplierReturnLineId,
+      receiptResolutionCaseId: clearReceiptResolution
+          ? null
+          : receiptResolutionCaseId ?? this.receiptResolutionCaseId,
+      receiptResolutionMaximum: clearReceiptResolution
+          ? null
+          : receiptResolutionMaximum ?? this.receiptResolutionMaximum,
     );
   }
 
@@ -159,6 +185,8 @@ class PurchaseCreditNoteLineDraft {
         'disposition': disposition.databaseValue,
         if (supplierReturnLineId != null)
           'supplier_return_line_id': supplierReturnLineId,
+        if (receiptResolutionCaseId != null)
+          'receipt_resolution_case_id': receiptResolutionCaseId,
       };
 }
 
@@ -212,6 +240,41 @@ class PurchaseCreditNoteRecord {
           (json['invoice_credit_balance'] as num?)?.round() ?? 0,
       supplierNumber: json['supplier_credit_note_number']?.toString(),
       voidReason: json['void_reason']?.toString(),
+    );
+  }
+}
+
+class PurchaseCreditNoteLineRecord {
+  const PurchaseCreditNoteLineRecord({
+    required this.id,
+    required this.productName,
+    required this.quantity,
+    required this.netAmount,
+    required this.taxAmount,
+    required this.totalAmount,
+    required this.disposition,
+    this.productSku,
+  });
+
+  final String id;
+  final String productName;
+  final String? productSku;
+  final int quantity;
+  final int netAmount;
+  final int taxAmount;
+  final int totalAmount;
+  final String disposition;
+
+  factory PurchaseCreditNoteLineRecord.fromJson(Map<String, dynamic> json) {
+    return PurchaseCreditNoteLineRecord(
+      id: json['id']?.toString() ?? '',
+      productName: json['product_name']?.toString() ?? 'Producto',
+      productSku: json['product_sku']?.toString(),
+      quantity: (json['credited_quantity'] as num?)?.round() ?? 0,
+      netAmount: (json['net_amount'] as num?)?.round() ?? 0,
+      taxAmount: (json['tax_amount'] as num?)?.round() ?? 0,
+      totalAmount: (json['total_amount'] as num?)?.round() ?? 0,
+      disposition: json['disposition']?.toString() ?? 'financial_only',
     );
   }
 }

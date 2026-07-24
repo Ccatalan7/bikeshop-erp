@@ -198,7 +198,7 @@ class _WebsiteBackgroundRemovalDialogState
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'El original se conserva. Se guardará un PNG nuevo.',
+                          'El original se conserva. La versión web se optimiza automáticamente.',
                           style: TextStyle(fontSize: 12),
                         ),
                       ],
@@ -403,7 +403,7 @@ class _WebsiteBackgroundRemovalDialogState
                     key: const ValueKey('background_removal_apply'),
                     onPressed:
                         canApply && !_loading && !_smartLoading ? _apply : null,
-                    child: const Text('Aplicar PNG'),
+                    child: const Text('Aplicar versión'),
                   ),
                 ],
               ),

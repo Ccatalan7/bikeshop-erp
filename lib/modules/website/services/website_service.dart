@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
 import '../models/website_action.dart';
+import '../models/website_catalog_presentation.dart';
 import '../models/website_models.dart';
 import '../models/public_order_access.dart';
 import '../models/public_shipping_quote.dart';
@@ -1669,6 +1670,134 @@ class WebsiteService extends ChangeNotifier {
 
   String getSetting(String key, [String defaultValue = '']) {
     return _settings[key] ?? defaultValue;
+  }
+
+  WebsiteCatalogPresentationRegistry get catalogPresentationRegistry =>
+      WebsiteCatalogPresentationRegistry.decode(
+        _settings[websiteCatalogPresentationsSettingKey],
+      );
+
+  /// Saves presentation owned by one real category or canonical catalog root.
+  ///
+  /// Taxonomy and publication remain on `product_categories`; this operation
+  /// persists only public collection presentation in website settings so it is
+  /// included in the existing website backup and restore workflow.
+  Future<void> saveCatalogPresentation(
+    WebsiteCatalogPresentation presentation,
+  ) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw Exception('No se pudo determinar el tenant activo.');
+    }
+    final normalized = presentation.normalizedForOwner();
+    if (normalized.ownerId.trim().isEmpty || normalized.slug.isEmpty) {
+      throw Exception('El propietario y su ruta pública son obligatorios.');
+    }
+
+    final root = normalized.catalogRoot;
+    if (root != null) {
+      if (!presentation.hasSamePersistedValue(normalized)) {
+        throw Exception(
+          'El catálogo raíz sólo admite densidad, filtros y SEO configurables.',
+        );
+      }
+    }
+
+    // This setting is a registry. Refresh before the read-modify-write so a
+    // workspace opened from a direct route cannot overwrite entries that were
+    // not yet present in this service instance's cache.
+    await loadSettings();
+    if (_error != null) {
+      throw Exception(
+        'No se pudo recargar la configuración antes de guardar.',
+      );
+    }
+    final registry = catalogPresentationRegistry;
+    final validation = normalized.isCategoryPresentation
+        ? await _catalogPresentationRegistryWithFallbacks(
+            tenantId: tenantId,
+            registry: registry,
+          )
+        : null;
+    if (normalized.isCategoryPresentation &&
+        !validation!.activeCategoryIds.contains(normalized.ownerId)) {
+      throw Exception('La categoría ya no existe en el catálogo activo.');
+    }
+    final prepared =
+        (validation?.registry ?? registry).prepareForSave(normalized);
+
+    await saveSetting(
+      websiteCatalogPresentationsSettingKey,
+      registry.put(prepared).encode(),
+    );
+  }
+
+  Future<void> removeCatalogPresentation(String ownerId) async {
+    final id = ownerId.trim();
+    if (id.isEmpty) return;
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw Exception('No se pudo determinar el tenant activo.');
+    }
+    await loadSettings();
+    if (_error != null) {
+      throw Exception(
+        'No se pudo recargar la configuración antes de restablecer.',
+      );
+    }
+    final registry = catalogPresentationRegistry;
+    final next = registry.remove(id);
+    final isCategoryOwner = WebsiteCatalogRootX.fromPresentationId(id) == null;
+    if (isCategoryOwner) {
+      final validation = await _catalogPresentationRegistryWithFallbacks(
+        tenantId: tenantId,
+        registry: next,
+      );
+      final fallback = validation.registry.forCategory(id);
+      if (fallback != null) {
+        validation.registry.prepareForSave(fallback);
+      }
+    }
+    await saveSetting(
+      websiteCatalogPresentationsSettingKey,
+      next.encode(),
+    );
+  }
+
+  Future<
+      ({
+        WebsiteCatalogPresentationRegistry registry,
+        Set<String> activeCategoryIds,
+      })> _catalogPresentationRegistryWithFallbacks({
+    required String tenantId,
+    required WebsiteCatalogPresentationRegistry registry,
+  }) async {
+    final response = await _supabase
+        .from('product_categories')
+        .select('id,name')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true);
+    var validationRegistry = registry;
+    final activeCategoryIds = <String>{};
+    for (final rawRow in response as List) {
+      final row = Map<String, dynamic>.from(rawRow as Map);
+      final categoryId = row['id']?.toString().trim() ?? '';
+      final categoryName = row['name']?.toString().trim() ?? '';
+      if (categoryId.isEmpty || categoryName.isEmpty) continue;
+      activeCategoryIds.add(categoryId);
+      if (validationRegistry.forCategory(categoryId) == null) {
+        validationRegistry = validationRegistry.put(
+          WebsiteCatalogPresentation.fallback(
+            categoryId: categoryId,
+            categoryName: categoryName,
+          ),
+        );
+      }
+    }
+    return (
+      registry: validationRegistry,
+      activeCategoryIds: Set<String>.unmodifiable(activeCategoryIds),
+    );
   }
 
   List<ThemePreset> _parseThemePresets(String? raw) {
