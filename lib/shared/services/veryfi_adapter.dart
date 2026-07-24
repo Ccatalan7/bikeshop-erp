@@ -424,6 +424,10 @@ class VeryfiAdapter {
     final date = parseDateNullable(veryfiJson['date']);
     final total = (veryfiJson['total'] as num?)?.toDouble() ??
         (veryfiJson['grand_total'] as num?)?.toDouble();
+    final netAmount = (veryfiJson['subtotal'] as num?)?.toDouble() ??
+        (veryfiJson['net_amount'] as num?)?.toDouble();
+    final taxAmount = (veryfiJson['tax_amount'] as num?)?.toDouble() ??
+        (veryfiJson['total_tax'] as num?)?.toDouble();
 
     final rawLines = (veryfiJson['line_items'] ??
             veryfiJson['lines'] ??
@@ -683,6 +687,8 @@ class VeryfiAdapter {
       invoiceNumber: invoiceNumber,
       date: date,
       total: finalTotal,
+      netAmount: netAmount,
+      taxAmount: taxAmount,
       supplierName: supplierName,
       lineItems: parsedItems,
       rawText: buffer.toString(),

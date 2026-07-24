@@ -27,6 +27,18 @@ void main() {
       );
     });
 
+    test('opens the exact expense', () {
+      expect(
+        resolveErpNotificationRoute({
+          'type': 'expense_recorded',
+          'entity_type': 'expense',
+          'entity_id': 'expense/42',
+          'route': '/accounting/expenses',
+        }),
+        '/accounting/expenses/expense%2F42',
+      );
+    });
+
     test('opens the exact online order and catalog product', () {
       expect(
         resolveErpNotificationRoute({
@@ -109,6 +121,13 @@ void main() {
           requestId: 'request-c',
         ),
         '/taller/pegas/job-42?openRequest=request-c',
+      );
+      expect(
+        withNotificationOpenRequest(
+          '/accounting/expenses/expense-42',
+          requestId: 'request-d',
+        ),
+        '/accounting/expenses/expense-42?openRequest=request-d',
       );
       expect(
         withNotificationOpenRequest(

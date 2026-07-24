@@ -13,6 +13,8 @@ class NotificationDigestSnapshot {
     required this.jobCount,
     required this.paymentCount,
     required this.paymentTotal,
+    required this.expenseCount,
+    required this.expenseTotal,
     required this.onlineOrderCount,
     required this.catalogApprovalCount,
     required this.fileCount,
@@ -35,6 +37,8 @@ class NotificationDigestSnapshot {
     var jobCount = 0;
     var paymentCount = 0;
     var paymentTotal = 0.0;
+    var expenseCount = 0;
+    var expenseTotal = 0.0;
     var onlineOrderCount = 0;
     var catalogApprovalCount = 0;
     var unreadAlertCount = 0;
@@ -62,6 +66,13 @@ class NotificationDigestSnapshot {
             paymentTotal += (data['amount'] as num).toDouble();
           }
           break;
+        case 'expense_recorded':
+          expenseCount++;
+          final data = row['data'];
+          if (data is Map && data['total_amount'] is num) {
+            expenseTotal += (data['total_amount'] as num).toDouble();
+          }
+          break;
         case 'online_order_created':
           onlineOrderCount++;
           break;
@@ -83,6 +94,8 @@ class NotificationDigestSnapshot {
       jobCount: jobCount,
       paymentCount: paymentCount,
       paymentTotal: paymentTotal,
+      expenseCount: expenseCount,
+      expenseTotal: expenseTotal,
       onlineOrderCount: onlineOrderCount,
       catalogApprovalCount: catalogApprovalCount,
       fileCount: fileCount,
@@ -96,6 +109,8 @@ class NotificationDigestSnapshot {
   final int jobCount;
   final int paymentCount;
   final double paymentTotal;
+  final int expenseCount;
+  final double expenseTotal;
   final int onlineOrderCount;
   final int catalogApprovalCount;
   final int fileCount;

@@ -6,6 +6,8 @@ class ParsedInvoice {
   final String? invoiceNumber; // Folio or invoice number
   final DateTime? date; // Invoice date
   final double? total; // Total amount
+  final double? netAmount; // Document net amount, when explicitly stated
+  final double? taxAmount; // Document tax amount, when explicitly stated
   final String? supplierName; // Vendor/supplier name
   final List<ParsedLineItem> lineItems; // Extracted line items
   final String rawText; // Full extracted text for debugging
@@ -15,6 +17,8 @@ class ParsedInvoice {
     this.invoiceNumber,
     this.date,
     this.total,
+    this.netAmount,
+    this.taxAmount,
     this.supplierName,
     this.lineItems = const [],
     required this.rawText,
@@ -25,6 +29,8 @@ class ParsedInvoice {
     String? invoiceNumber,
     DateTime? date,
     double? total,
+    double? netAmount,
+    double? taxAmount,
     String? supplierName,
     List<ParsedLineItem>? lineItems,
     String? rawText,
@@ -34,6 +40,8 @@ class ParsedInvoice {
       invoiceNumber: invoiceNumber ?? this.invoiceNumber,
       date: date ?? this.date,
       total: total ?? this.total,
+      netAmount: netAmount ?? this.netAmount,
+      taxAmount: taxAmount ?? this.taxAmount,
       supplierName: supplierName ?? this.supplierName,
       lineItems: lineItems ?? this.lineItems,
       rawText: rawText ?? this.rawText,
@@ -42,7 +50,9 @@ class ParsedInvoice {
 
   @override
   String toString() {
-    return 'ParsedInvoice(rut: $rut, number: $invoiceNumber, date: $date, total: $total, supplier: $supplierName, items: $lineItems)';
+    return 'ParsedInvoice(rut: $rut, number: $invoiceNumber, date: $date, '
+        'net: $netAmount, tax: $taxAmount, total: $total, '
+        'supplier: $supplierName, items: $lineItems)';
   }
 }
 
@@ -192,6 +202,8 @@ class InvoiceParserService {
       invoiceNumber: _extractInvoiceNumber(lines),
       date: _extractDate(lines),
       total: _extractTotal(lines),
+      netAmount: _extractNetAmount(lines),
+      taxAmount: _extractTaxAmount(lines),
       supplierName: _extractSupplierName(lines, recognizedText.blocks),
       lineItems: _extractLineItems(lines),
       rawText: fullText,
@@ -220,6 +232,8 @@ class InvoiceParserService {
       invoiceNumber: _extractInvoiceNumber(lines),
       date: _extractDate(lines),
       total: _extractTotal(lines),
+      netAmount: _extractNetAmount(lines),
+      taxAmount: _extractTaxAmount(lines),
       supplierName: _extractSupplierNameFromLines(lines),
       lineItems: _extractLineItems(lines),
       rawText: text,
@@ -229,6 +243,12 @@ class InvoiceParserService {
   /// Extract Chilean RUT (e.g., "76.123.456-7", "12345678-9")
   /// Patterns: XX.XXX.XXX-X or XXXXXXXX-X
   String? _extractRUT(List<String> lines) {
+    final delegatedSellerRut = _extractDelegatedMarketplaceSellerRut(lines);
+    if (delegatedSellerRut != null) {
+      print('✅ Found delegated marketplace seller RUT: $delegatedSellerRut');
+      return delegatedSellerRut;
+    }
+
     // Pattern: digits with optional dots/hyphens
     final rutPattern =
         RegExp(r'\b(\d{1,2}\.?\d{3}\.?\d{3}-[\dkK])\b', caseSensitive: false);
@@ -440,6 +460,120 @@ class InvoiceParserService {
     return maxAmount;
   }
 
+  double? _extractNetAmount(List<String> lines) {
+    final breakdown = _extractDocumentTaxBreakdown(lines);
+    if (breakdown != null) return breakdown.$1;
+    return _extractLabeledDocumentAmount(
+      lines,
+      labels: const ['monto neto', 'total neto', 'neto'],
+    );
+  }
+
+  double? _extractTaxAmount(List<String> lines) {
+    final breakdown = _extractDocumentTaxBreakdown(lines);
+    if (breakdown != null) return breakdown.$2;
+    return _extractLabeledDocumentAmount(
+      lines,
+      labels: const ['iva', 'i v a', 'monto iva', 'total iva'],
+    );
+  }
+
+  (double, double)? _extractDocumentTaxBreakdown(List<String> lines) {
+    var netLabelIndex = -1;
+    var taxLabelIndex = -1;
+    for (var i = 0; i < lines.length; i++) {
+      final normalized = _normalizeInvoiceSearchText(lines[i]);
+      if (netLabelIndex < 0 &&
+          (normalized == 'neto' ||
+              normalized.contains('monto neto') ||
+              normalized.contains('total neto'))) {
+        netLabelIndex = i;
+      }
+      final compact = normalized.replaceAll(' ', '');
+      if (taxLabelIndex < 0 &&
+          (compact == 'iva' ||
+              compact.endsWith('iva') ||
+              compact.contains('montoiva') ||
+              compact.contains('totaliva'))) {
+        taxLabelIndex = i;
+      }
+    }
+    if (netLabelIndex < 0 || taxLabelIndex < 0) return null;
+
+    final start =
+        netLabelIndex < taxLabelIndex ? netLabelIndex : taxLabelIndex;
+    final amounts = <double>[];
+    for (var i = start + 1; i < lines.length && amounts.length < 2; i++) {
+      final normalized = _normalizeInvoiceSearchText(lines[i]);
+      if (i > netLabelIndex &&
+          i > taxLabelIndex &&
+          (normalized == 'total' ||
+              normalized == 'monto total' ||
+              normalized == 'total a pagar')) {
+        break;
+      }
+      final amount = _parseStandaloneDocumentAmount(lines[i].trim());
+      if (amount != null) amounts.add(amount);
+    }
+    if (amounts.length < 2) return null;
+
+    final netAmount =
+        amounts[0] >= amounts[1] ? amounts[0] : amounts[1];
+    final taxAmount =
+        amounts[0] < amounts[1] ? amounts[0] : amounts[1];
+    return (netAmount, taxAmount);
+  }
+
+  double? _extractLabeledDocumentAmount(
+    List<String> lines, {
+    required List<String> labels,
+  }) {
+    for (var i = 0; i < lines.length; i++) {
+      final normalized = _normalizeInvoiceSearchText(lines[i]);
+      final matchedLabel = labels.firstWhere(
+        (label) =>
+            normalized == label ||
+            normalized.startsWith('$label ') ||
+            normalized.endsWith(' $label'),
+        orElse: () => '',
+      );
+      if (matchedLabel.isEmpty) continue;
+
+      final currentTail = lines[i]
+          .replaceFirst(
+            RegExp(RegExp.escape(matchedLabel), caseSensitive: false),
+            '',
+          )
+          .replaceAll(RegExp(r'\(\s*\d+(?:[.,]\d+)?\s*%\s*\)'), '')
+          .trim();
+      final currentAmount = _parseStandaloneDocumentAmount(currentTail);
+      if (currentAmount != null) return currentAmount;
+
+      final end = (i + 4).clamp(0, lines.length).toInt();
+      for (var j = i + 1; j < end; j++) {
+        final candidate = lines[j].trim();
+        if (RegExp(r'^\(?\s*\d+(?:[.,]\d+)?\s*%\s*\)?$').hasMatch(candidate)) {
+          continue;
+        }
+        final amount = _parseStandaloneDocumentAmount(candidate);
+        if (amount != null) return amount;
+      }
+    }
+    return null;
+  }
+
+  double? _parseStandaloneDocumentAmount(String value) {
+    if (value.isEmpty) return null;
+    final match = RegExp(
+      r'^(?:CLP\s*)?\$?\s*([0-9]{1,3}(?:[.,][0-9]{3})+|[0-9]{4,})(?:[.,]00)?$',
+      caseSensitive: false,
+    ).firstMatch(value);
+    if (match == null) return null;
+    final amount = _parseAmount(match.group(1)!);
+    if (amount == null || amount <= 0 || amount >= 1000000000) return null;
+    return amount;
+  }
+
   /// Parse amount string (handles Chilean format: 12.345,67 or US format: 12,345.67)
   double? _parseAmount(String amountStr) {
     try {
@@ -476,6 +610,12 @@ class InvoiceParserService {
   /// Extract supplier name (usually at the top of the invoice)
   /// Takes first 1-3 text blocks (header area)
   String? _extractSupplierName(List<String> lines, List<TextBlock> blocks) {
+    final delegatedSeller = _extractDelegatedMarketplaceSellerName(lines);
+    if (delegatedSeller != null) {
+      print('✅ Found delegated marketplace seller: $delegatedSeller');
+      return delegatedSeller;
+    }
+
     if (blocks.isEmpty) return null;
 
     // Take first text block (usually company name)
@@ -501,6 +641,12 @@ class InvoiceParserService {
   /// For purchase orders: Supplier is usually at the BOTTOM (sender info)
   /// For invoices: Supplier is usually at the TOP
   String? _extractSupplierNameFromLines(List<String> lines) {
+    final delegatedSeller = _extractDelegatedMarketplaceSellerName(lines);
+    if (delegatedSeller != null) {
+      print('✅ Found delegated marketplace seller: $delegatedSeller');
+      return delegatedSeller;
+    }
+
     for (final line in lines) {
       if (line.toUpperCase().contains('ALIEXPRESS MARKETPLACE')) {
         print('✅ Found supplier name (AliExpress): AliExpress Marketplace');
@@ -554,6 +700,7 @@ class InvoiceParserService {
       }
 
       if (text.length > 3 &&
+          !_looksLikePdfPageHeader(text) &&
           !text.toUpperCase().contains('FACTURA') &&
           !text.toUpperCase().contains('BOLETA') &&
           !text.toUpperCase().contains('DOCUMENTO') &&
@@ -588,6 +735,119 @@ class InvoiceParserService {
     return null;
   }
 
+  String? _extractDelegatedMarketplaceSellerName(List<String> lines) {
+    final markerIndex = _delegatedMarketplaceSellerMarkerIndex(lines);
+    if (markerIndex < 0) return null;
+
+    final marker = lines[markerIndex].trim();
+    final inlineName = marker.replaceFirst(
+      RegExp(
+        r'^.*por\s+cuenta\s+y\s+orden\s+del\s+vendedor\s*:?\s*',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    if (inlineName != marker && _isPlausibleDelegatedSellerName(inlineName)) {
+      return _cleanDelegatedSellerName(inlineName);
+    }
+
+    final nameLines = <String>[];
+    final end = (markerIndex + 6).clamp(0, lines.length).toInt();
+    for (var i = markerIndex + 1; i < end; i++) {
+      final value = lines[i].trim();
+      final normalized = _normalizeInvoiceSearchText(value);
+      if (normalized == 'cliente' ||
+          normalized.startsWith('rut') ||
+          RegExp(
+            r'\b\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]\b',
+            caseSensitive: false,
+          ).hasMatch(value)) {
+        break;
+      }
+      if (_isPlausibleDelegatedSellerName(value)) {
+        nameLines.add(value);
+      }
+    }
+
+    if (nameLines.isEmpty) return null;
+    return _cleanDelegatedSellerName(nameLines.join(' '));
+  }
+
+  String? _extractDelegatedMarketplaceSellerRut(List<String> lines) {
+    final markerIndex = _delegatedMarketplaceSellerMarkerIndex(lines);
+    if (markerIndex < 0) return null;
+
+    final rutPattern =
+        RegExp(r'\b(\d{1,2}\.?\d{3}\.?\d{3}-[\dkK])\b', caseSensitive: false);
+    final end = (markerIndex + 8).clamp(0, lines.length).toInt();
+    for (var i = markerIndex; i < end; i++) {
+      if (i > markerIndex &&
+          _normalizeInvoiceSearchText(lines[i]) == 'cliente') {
+        break;
+      }
+      final match = rutPattern.firstMatch(lines[i]);
+      if (match != null) return _normalizeRutFormat(match.group(1)!);
+    }
+    return null;
+  }
+
+  int _delegatedMarketplaceSellerMarkerIndex(List<String> lines) {
+    for (var i = 0; i < lines.length; i++) {
+      if (_normalizeInvoiceSearchText(lines[i])
+          .contains('por cuenta y orden del vendedor')) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  String _normalizeInvoiceSearchText(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[áàäâ]'), 'a')
+        .replaceAll(RegExp(r'[éèëê]'), 'e')
+        .replaceAll(RegExp(r'[íìïî]'), 'i')
+        .replaceAll(RegExp(r'[óòöô]'), 'o')
+        .replaceAll(RegExp(r'[úùüû]'), 'u')
+        .replaceAll('ñ', 'n')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  bool _isPlausibleDelegatedSellerName(String value) {
+    final normalized = _normalizeInvoiceSearchText(value);
+    if (normalized.length < 3) return false;
+    return normalized != 'cliente' &&
+        normalized != 'nombre' &&
+        normalized != 'rut' &&
+        !normalized.startsWith('fecha') &&
+        !RegExp(r'^\d+$').hasMatch(normalized);
+  }
+
+  String _cleanDelegatedSellerName(String value) {
+    return value
+        .replaceAll(RegExp(r'^[\s:.-]+'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(RegExp(r'\.$'), '')
+        .trim();
+  }
+
+  String _normalizeRutFormat(String rut) {
+    if (rut.contains('.')) return rut;
+    return rut.replaceAllMapped(
+      RegExp(r'(\d{1,2})(\d{3})(\d{3})(-.+)'),
+      (match) => '${match[1]}.${match[2]}.${match[3]}${match[4]}',
+    );
+  }
+
+  bool _looksLikePdfPageHeader(String value) {
+    final normalized = _normalizeInvoiceSearchText(value);
+    return RegExp(r'^\d{1,2}\s+\d{1,2}\s+\d{2,4}\b').hasMatch(normalized) &&
+        (normalized.contains('pagina') ||
+            RegExp(r'\b\d{1,2}\s+\d{2}\b').hasMatch(normalized));
+  }
+
   bool _isKnownRecipientLine(String value) {
     final normalized =
         value.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9K]+'), '');
@@ -609,6 +869,15 @@ class InvoiceParserService {
       print(
           '📦 Extracted ${aliExpressItems.length} AliExpress generated line items');
       return aliExpressItems;
+    }
+
+    final delegatedMarketplaceItems =
+        _extractDelegatedMarketplaceLineItems(lines);
+    if (delegatedMarketplaceItems.isNotEmpty) {
+      print(
+        '📦 Extracted ${delegatedMarketplaceItems.length} delegated marketplace line items',
+      );
+      return delegatedMarketplaceItems;
     }
 
     // Find table boundaries
@@ -777,6 +1046,115 @@ class InvoiceParserService {
 
     print('📦 Extracted ${items.length} line items');
     return items;
+  }
+
+  List<ParsedLineItem> _extractDelegatedMarketplaceLineItems(
+    List<String> lines,
+  ) {
+    if (_delegatedMarketplaceSellerMarkerIndex(lines) < 0) return const [];
+
+    var startIndex = -1;
+    for (var i = 0; i < lines.length; i++) {
+      final normalized = _normalizeInvoiceSearchText(lines[i]);
+      if (normalized == 'imp ad' || normalized == 'detalle') {
+        startIndex = i + 1;
+      }
+      if (startIndex >= 0 && normalized == 'importes totales') {
+        break;
+      }
+    }
+    if (startIndex < 0) return const [];
+
+    var endIndex = lines.length;
+    for (var i = startIndex; i < lines.length; i++) {
+      final normalized = _normalizeInvoiceSearchText(lines[i]);
+      if (normalized == 'importes totales' ||
+          normalized == 'monto neto' ||
+          normalized == 'transporte') {
+        endIndex = i;
+        break;
+      }
+    }
+    if (startIndex >= endIndex) return const [];
+
+    final items = <ParsedLineItem>[];
+    var cursor = startIndex;
+    while (cursor < endIndex && items.length < 100) {
+      if (!RegExp(r'^\d{1,3}$').hasMatch(lines[cursor].trim())) {
+        cursor++;
+        continue;
+      }
+
+      var quantityIndex = -1;
+      for (var i = cursor + 2; i < endIndex && i <= cursor + 8; i++) {
+        if (!_looksLikeDelegatedMarketplaceQuantity(lines[i])) continue;
+        final moneyCount = lines
+            .sublist(i + 1, (i + 5).clamp(0, endIndex).toInt())
+            .where(_looksLikeCurrencyAmountLine)
+            .length;
+        if (moneyCount >= 2) {
+          quantityIndex = i;
+          break;
+        }
+      }
+      if (quantityIndex < 0) {
+        cursor++;
+        continue;
+      }
+
+      final description = lines
+          .sublist(cursor + 1, quantityIndex)
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .join(' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      if (description.isEmpty) {
+        cursor = quantityIndex + 1;
+        continue;
+      }
+
+      final moneyLines = <String>[];
+      var nextCursor = quantityIndex + 1;
+      while (nextCursor < endIndex && moneyLines.length < 2) {
+        final value = lines[nextCursor].trim();
+        if (_looksLikeCurrencyAmountLine(value)) {
+          moneyLines.add(value);
+        }
+        nextCursor++;
+      }
+      if (moneyLines.length < 2) {
+        cursor = quantityIndex + 1;
+        continue;
+      }
+
+      final quantity = _parseAmount(lines[quantityIndex]);
+      final unitPrice = _parseAmount(moneyLines.first);
+      final total = _parseAmount(moneyLines.last);
+      items.add(
+        ParsedLineItem(
+          description: description,
+          rawRowText: lines
+              .sublist(cursor, nextCursor)
+              .map((line) => line.trim())
+              .join('\n'),
+          quantity: quantity,
+          unitPrice: unitPrice,
+          total: total,
+        ),
+      );
+      cursor = nextCursor;
+    }
+
+    return items;
+  }
+
+  bool _looksLikeDelegatedMarketplaceQuantity(String value) {
+    return RegExp(r'^\d{1,6}(?:[.,]\d{1,3})?$').hasMatch(value.trim());
+  }
+
+  bool _looksLikeCurrencyAmountLine(String value) {
+    return RegExp(r'^\$\s*\d[\d.,]*$').hasMatch(value.trim());
   }
 
   List<ParsedLineItem> _extractGeneratedAliExpressLineItems(

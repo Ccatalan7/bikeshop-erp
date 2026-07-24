@@ -50,6 +50,7 @@ class _QuickExpenseOcrResult {
     this.utilityKind,
     this.isTransportExpense = false,
     this.isDigitalInfrastructureExpense = false,
+    this.isOfficeSupplyExpense = false,
     this.paymentMethodHint,
     this.sourceSupplierId,
     this.sourceSupplierName,
@@ -62,6 +63,7 @@ class _QuickExpenseOcrResult {
   final _UtilityExpenseKind? utilityKind;
   final bool isTransportExpense;
   final bool isDigitalInfrastructureExpense;
+  final bool isOfficeSupplyExpense;
   final String? paymentMethodHint;
   final String? sourceSupplierId;
   final String? sourceSupplierName;
@@ -118,6 +120,11 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   String? _bannerMessage;
   String? _lastAutoDescription;
   String? _ocrFileName;
+  double? _ocrNetAmount;
+  double? _ocrTaxAmount;
+  double? _ocrTotalAmount;
+  String? _ocrSupplierName;
+  String? _ocrSupplierRut;
   _QuickExpenseTab _activeTab = _QuickExpenseTab.capture;
 
   DateTime _expenseDate = DateTime.now();
@@ -175,12 +182,48 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
 
   double get _netAmount {
     if (!_hasIva || _totalAmount <= 0) return _totalAmount;
+    if (_hasExactOcrTaxBreakdown) return _ocrNetAmount!;
     return _totalAmount / 1.19;
   }
 
   double get _ivaAmount {
     if (!_hasIva || _totalAmount <= 0) return 0;
+    if (_hasExactOcrTaxBreakdown) return _ocrTaxAmount!;
     return _totalAmount - _netAmount;
+  }
+
+  bool get _hasExactOcrTaxBreakdown {
+    final netAmount = _ocrNetAmount;
+    final taxAmount = _ocrTaxAmount;
+    final ocrTotal = _ocrTotalAmount;
+    if (netAmount == null ||
+        taxAmount == null ||
+        ocrTotal == null ||
+        netAmount < 0 ||
+        taxAmount < 0 ||
+        ocrTotal <= 0) {
+      return false;
+    }
+    return (_totalAmount - ocrTotal).abs() < 0.01 &&
+        (netAmount + taxAmount - ocrTotal).abs() <= 1;
+  }
+
+  String? get _resolvedSupplierRut {
+    final selectedRut = _selectedSupplier?.rut?.trim();
+    if (selectedRut != null && selectedRut.isNotEmpty) return selectedRut;
+
+    final ocrRut = _ocrSupplierRut?.trim();
+    final ocrSupplierName = _ocrSupplierName?.trim();
+    if (ocrRut == null ||
+        ocrRut.isEmpty ||
+        ocrSupplierName == null ||
+        ocrSupplierName.isEmpty) {
+      return null;
+    }
+    return _normalizeSearchText(_supplierController.text) ==
+            _normalizeSearchText(ocrSupplierName)
+        ? ocrRut
+        : null;
   }
 
   Iterable<shared_supplier.Supplier> get _supplierSuggestions {
@@ -417,11 +460,11 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
 
   Account? _resolveDefaultAccount(List<Account> accounts) {
     if (accounts.isEmpty) return null;
-    for (final preferredCode in ['5200', '6100', '6101']) {
+    for (final preferredCode in ['6205', '6801']) {
       final match = accounts.where((account) => account.code == preferredCode);
       if (match.isNotEmpty) return match.first;
     }
-    return accounts.first;
+    return null;
   }
 
   ExpenseCategory? _resolveDefaultCategory(
@@ -791,7 +834,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
         categoryId: _selectedCategory?.id,
         supplierId: _selectedSupplier?.id,
         supplierName: supplierName.isEmpty ? null : supplierName,
-        supplierRut: _selectedSupplier?.rut,
+        supplierRut: _resolvedSupplierRut,
         documentType: _documentType,
         documentNumber: _referenceController.text.trim().isEmpty
             ? null
@@ -1547,24 +1590,42 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
     try {
       final normalizedExtension =
           extension.isNotEmpty ? extension : _inferQuickOcrExtension(bytes);
-      ParsedInvoice? parsedInvoice;
+      ParsedInvoice? directInvoice;
+      ParsedInvoice? cloudInvoice;
 
       if (normalizedExtension == 'pdf') {
-        parsedInvoice = await _pdfParserService.parseInvoiceFromBytes(
+        directInvoice = await _pdfParserService.parseInvoiceFromBytes(
           bytes,
           filename: fileName,
         );
       }
 
-      if (parsedInvoice == null ||
-          _quickExpenseNeedsCloudOcr(parsedInvoice, normalizedExtension)) {
-        final response =
-            await _veryfiProxyService.parseInvoiceFromBytes(bytes, fileName);
-        parsedInvoice = VeryfiAdapter.toParsedInvoice(response);
+      if (directInvoice == null ||
+          _quickExpenseNeedsCloudOcr(directInvoice, normalizedExtension)) {
+        try {
+          final response =
+              await _veryfiProxyService.parseInvoiceFromBytes(bytes, fileName);
+          cloudInvoice = VeryfiAdapter.toParsedInvoice(response);
+        } catch (error) {
+          if (!_quickExpenseHasUsableData(directInvoice)) rethrow;
+          debugPrint(
+            '⚠️ Cloud OCR failed; keeping usable PDF extraction: $error',
+          );
+        }
       }
 
+      final parsedInvoice = _mergeQuickExpenseOcrInvoices(
+        directInvoice,
+        cloudInvoice,
+      );
+      if (!_quickExpenseHasUsableData(parsedInvoice)) {
+        throw Exception(
+          'No se reconocieron datos utilizables. Revisa que el documento sea '
+          'legible e inténtalo nuevamente.',
+        );
+      }
       final ocrResult = _buildQuickExpenseOcrResult(
-        parsedInvoice,
+        parsedInvoice!,
         fileName: fileName,
         sourceSupplierId: sourceSupplierId,
         sourceSupplierName: sourceSupplierName,
@@ -1575,6 +1636,13 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
     } finally {
       if (mounted) {
         setState(() => _isProcessingOcrFile = false);
+        if (_ocrFileHandoffService.hasPendingFor(
+          OcrFileHandoffTarget.quickExpense,
+        )) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            unawaited(_consumePendingQuickExpenseOcrFile());
+          });
+        }
       }
     }
   }
@@ -1585,13 +1653,78 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   ) {
     if (extension != 'pdf') return true;
     if (_looksLikePaymentReceipt(parsedInvoice.rawText)) return false;
-    if (_quickExpenseReceiptParser
-        .isGenericSupplierName(parsedInvoice.supplierName)) {
-      return parsedInvoice.total == null && parsedInvoice.date == null;
+
+    final total = parsedInvoice.total;
+    final supplierName = (parsedInvoice.supplierName ?? '').trim();
+    final hasDocumentIdentity =
+        (parsedInvoice.invoiceNumber ?? '').trim().isNotEmpty ||
+            (parsedInvoice.rut ?? '').trim().isNotEmpty;
+    return total == null ||
+        total <= 0 ||
+        parsedInvoice.date == null ||
+        !_isPlausibleOcrSupplierName(supplierName) ||
+        !hasDocumentIdentity;
+  }
+
+  bool _quickExpenseHasUsableData(ParsedInvoice? parsedInvoice) {
+    if (parsedInvoice == null) return false;
+    return (parsedInvoice.total ?? 0) > 0 ||
+        parsedInvoice.date != null ||
+        (parsedInvoice.invoiceNumber ?? '').trim().isNotEmpty ||
+        (parsedInvoice.rut ?? '').trim().isNotEmpty ||
+        _isPlausibleOcrSupplierName(parsedInvoice.supplierName);
+  }
+
+  ParsedInvoice? _mergeQuickExpenseOcrInvoices(
+    ParsedInvoice? directInvoice,
+    ParsedInvoice? cloudInvoice,
+  ) {
+    if (directInvoice == null) return cloudInvoice;
+    if (cloudInvoice == null) return directInvoice;
+
+    final directSupplier = directInvoice.supplierName;
+    return ParsedInvoice(
+      rut: (directInvoice.rut ?? '').trim().isNotEmpty
+          ? directInvoice.rut
+          : cloudInvoice.rut,
+      invoiceNumber: (directInvoice.invoiceNumber ?? '').trim().isNotEmpty
+          ? directInvoice.invoiceNumber
+          : cloudInvoice.invoiceNumber,
+      date: directInvoice.date ?? cloudInvoice.date,
+      total: (directInvoice.total ?? 0) > 0
+          ? directInvoice.total
+          : cloudInvoice.total,
+      netAmount: (directInvoice.netAmount ?? 0) > 0
+          ? directInvoice.netAmount
+          : cloudInvoice.netAmount,
+      taxAmount: (directInvoice.taxAmount ?? 0) > 0
+          ? directInvoice.taxAmount
+          : cloudInvoice.taxAmount,
+      supplierName: _isPlausibleOcrSupplierName(directSupplier)
+          ? directSupplier
+          : cloudInvoice.supplierName,
+      lineItems: directInvoice.lineItems.isNotEmpty
+          ? directInvoice.lineItems
+          : cloudInvoice.lineItems,
+      rawText: directInvoice.rawText.trim().isNotEmpty
+          ? directInvoice.rawText
+          : cloudInvoice.rawText,
+    );
+  }
+
+  bool _isPlausibleOcrSupplierName(String? value) {
+    final supplierName = (value ?? '').trim();
+    if (supplierName.isEmpty ||
+        _quickExpenseReceiptParser.isGenericSupplierName(supplierName)) {
+      return false;
     }
-    return parsedInvoice.total == null &&
-        parsedInvoice.date == null &&
-        (parsedInvoice.supplierName ?? '').trim().isEmpty;
+    final normalized = _normalizeSearchText(supplierName);
+    if (normalized.contains('pagina') &&
+        RegExp(r'\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}').hasMatch(supplierName)) {
+      return false;
+    }
+    return !normalized.contains('factura electronica') &&
+        !normalized.contains('boleta electronica');
   }
 
   _QuickExpenseOcrResult _buildQuickExpenseOcrResult(
@@ -1635,6 +1768,8 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
           invoiceNumber: reference ?? parsedInvoice.invoiceNumber,
           date: date,
           total: total,
+          netAmount: parsedInvoice.netAmount,
+          taxAmount: parsedInvoice.taxAmount,
           supplierName: supplierName,
           lineItems: parsedInvoice.lineItems,
           rawText: rawText,
@@ -1652,13 +1787,18 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
     }
 
     final documentText = '${parsedInvoice.supplierName ?? ''}\n$rawText';
+    final isOfficeSupplyExpense = _looksLikeOfficeSupplyExpense(parsedInvoice);
+    final isMercadoLibreInvoice = _looksLikeMercadoLibreInvoice(parsedInvoice);
     return _QuickExpenseOcrResult(
       parsedInvoice: parsedInvoice,
       documentType: ExpenseDocumentType.invoice,
       reference: parsedInvoice.invoiceNumber,
       description: _defaultOcrDescription(parsedInvoice),
       utilityKind: _inferUtilityKind(documentText),
-      isTransportExpense: _looksLikeTransportExpense(documentText),
+      isTransportExpense: !isOfficeSupplyExpense &&
+          _looksLikeTransportOnlyExpense(parsedInvoice),
+      isOfficeSupplyExpense: isOfficeSupplyExpense,
+      paymentMethodHint: isMercadoLibreInvoice ? 'card' : null,
       sourceSupplierId: sourceSupplierId,
       sourceSupplierName: sourceSupplierName,
     );
@@ -1686,6 +1826,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
         : _findTemplateForSupplier(supplier) ??
             _findTemplateForText(parsedInvoice.rawText);
 
+    setState(_resetDraftForNewOcrResult);
     if (template != null) {
       _applyTemplate(
         template,
@@ -1695,7 +1836,8 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
       );
     }
 
-    final resolvedAccount = _resolveTransportAccount(ocrResult) ??
+    final resolvedAccount = _resolveOfficeSupplyAccount(ocrResult) ??
+        _resolveTransportAccount(ocrResult) ??
         _resolveDigitalInfrastructureAccount(ocrResult) ??
         _resolveUtilityAccount(ocrResult);
     final resolvedCategory = _resolveCategoryForAccount(resolvedAccount);
@@ -1705,17 +1847,24 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
 
     setState(() {
       _documentType = ocrResult.documentType;
+      _ocrNetAmount = parsedInvoice.netAmount;
+      _ocrTaxAmount = parsedInvoice.taxAmount;
+      _ocrTotalAmount = parsedInvoice.total;
+      _ocrSupplierName = parsedInvoice.supplierName;
+      _ocrSupplierRut = parsedInvoice.rut;
       if (parsedInvoice.total != null && parsedInvoice.total! > 0) {
         _amountController.text =
             _numberFormat.format(parsedInvoice.total!.round());
+      } else {
+        _amountController.clear();
       }
       final reference = ocrResult.reference ?? parsedInvoice.invoiceNumber;
       if (reference != null && reference.trim().isNotEmpty) {
         _referenceController.text = reference.trim();
+      } else {
+        _referenceController.clear();
       }
-      if (parsedInvoice.date != null) {
-        _expenseDate = parsedInvoice.date!;
-      }
+      _expenseDate = parsedInvoice.date ?? DateTime.now();
       if (resolvedAccount != null) {
         _selectedAccount = resolvedAccount;
       }
@@ -1730,24 +1879,54 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
         _supplierController.text = supplier.name;
       } else if ((parsedInvoice.supplierName ?? '').trim().isNotEmpty) {
         _supplierController.text = parsedInvoice.supplierName!.trim();
+      } else {
+        _selectedSupplier = null;
+        _supplierController.clear();
       }
-      final canReplaceDescription =
-          _descriptionController.text.trim().isEmpty ||
-              _descriptionWasAutoGenerated;
-      if (canReplaceDescription) {
-        _setDescriptionText(
-          _descriptionForOcrResult(ocrResult, supplier),
-          autoGenerated: true,
-        );
-      }
+      _setDescriptionText(
+        _descriptionForOcrResult(ocrResult, supplier),
+        autoGenerated: true,
+      );
     });
 
+    final missingFields = <String>[
+      if ((parsedInvoice.total ?? 0) <= 0) 'monto',
+      if (parsedInvoice.date == null) 'fecha',
+      if (supplier == null &&
+          !_isPlausibleOcrSupplierName(parsedInvoice.supplierName))
+        'proveedor',
+    ];
+    final status = missingFields.isEmpty
+        ? 'OCR aplicado al gasto.'
+        : 'OCR parcial: revisa ${missingFields.join(', ')}.';
     _showMessage(
-      template == null
-          ? 'OCR aplicado al gasto.'
-          : 'OCR aplicado con plantilla: ${template.name}',
+      template == null ? status : '$status Plantilla: ${template.name}.',
       isError: false,
     );
+  }
+
+  void _resetDraftForNewOcrResult() {
+    _amountController.clear();
+    _ocrNetAmount = null;
+    _ocrTaxAmount = null;
+    _ocrTotalAmount = null;
+    _ocrSupplierName = null;
+    _ocrSupplierRut = null;
+    _setDescriptionText('');
+    _referenceController.clear();
+    _supplierController.clear();
+    _expenseDate = DateTime.now();
+    _documentType = ExpenseDocumentType.invoice;
+    _selectedAccount = null;
+    _selectedCategory = null;
+    _selectedPaymentMethodId = null;
+    _selectedSupplier = null;
+    _appliedTemplate = null;
+    _selectedPurchaseInvoice = null;
+    _linkToPurchaseInvoice = false;
+    _selectedLinkKind = 'general';
+    _isPurchaseInvoicePickerOpen = false;
+    _purchaseInvoiceSearchController.clear();
   }
 
   String _dropFileName(DropItem file) {
@@ -1799,6 +1978,17 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
 
   String _defaultOcrDescription(ParsedInvoice parsedInvoice) {
     final supplierName = parsedInvoice.supplierName?.trim();
+    final itemDescriptions = parsedInvoice.lineItems
+        .map((item) => item.description.trim())
+        .where((description) => description.isNotEmpty)
+        .take(2)
+        .toList(growable: false);
+    if (itemDescriptions.isNotEmpty) {
+      return [
+        itemDescriptions.join(' + '),
+        if (supplierName != null && supplierName.isNotEmpty) supplierName,
+      ].join(' · ');
+    }
     if (supplierName != null && supplierName.isNotEmpty) {
       return 'Gasto $supplierName';
     }
@@ -1835,6 +2025,57 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
         normalized.contains('transporte') ||
         normalized.contains('despacho') ||
         normalized.contains('envio');
+  }
+
+  bool _looksLikeTransportOnlyExpense(ParsedInvoice parsedInvoice) {
+    final supplierText = _normalizeSearchText(parsedInvoice.supplierName ?? '');
+    if (supplierText.contains('starken') ||
+        supplierText.contains('kaudat') ||
+        supplierText.contains('courier') ||
+        supplierText.contains('transportes') ||
+        supplierText.contains('encomiendas')) {
+      return true;
+    }
+
+    if (parsedInvoice.lineItems.isNotEmpty) {
+      final hasNonTransportItem = parsedInvoice.lineItems.any((item) {
+        final text = _normalizeSearchText(item.description);
+        return !(text.contains('envio') ||
+            text.contains('despacho') ||
+            text.contains('flete') ||
+            text.contains('transporte'));
+      });
+      if (hasNonTransportItem) return false;
+    }
+
+    final documentText = parsedInvoice.rawText;
+    final normalizedDocument = _normalizeSearchText(documentText);
+    if ((normalizedDocument.contains('nombre del producto') ||
+            normalizedDocument.contains('detalle')) &&
+        (normalizedDocument.contains('costo de envio') ||
+            normalizedDocument.contains('despacho por cuenta del emisor'))) {
+      return false;
+    }
+    return _looksLikeTransportExpense(
+      '${parsedInvoice.supplierName ?? ''}\n$documentText',
+    );
+  }
+
+  bool _looksLikeOfficeSupplyExpense(ParsedInvoice parsedInvoice) {
+    final text = _normalizeSearchText([
+      ...parsedInvoice.lineItems.map((item) => item.description),
+      parsedInvoice.rawText,
+    ].join('\n'));
+    return text.contains('rj45') ||
+        text.contains('cable de red') ||
+        text.contains('cable ethernet') ||
+        text.contains('patch cord');
+  }
+
+  bool _looksLikeMercadoLibreInvoice(ParsedInvoice parsedInvoice) {
+    final text = _normalizeSearchText(parsedInvoice.rawText);
+    return (text.contains('mercadolibre') || text.contains('mercado libre')) &&
+        text.contains('por cuenta y orden del vendedor');
   }
 
   _UtilityExpenseKind? _inferUtilityKind(String text) {
@@ -1912,6 +2153,26 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
     return null;
   }
 
+  Account? _resolveOfficeSupplyAccount(_QuickExpenseOcrResult result) {
+    if (!result.isOfficeSupplyExpense) return null;
+
+    for (final account in _accounts) {
+      if (account.code == '6205') return account;
+    }
+
+    for (final account in _accounts) {
+      final normalized = _normalizeSearchText(
+        '${account.name} ${account.description ?? ''}',
+      );
+      if (normalized.contains('suministro') ||
+          normalized.contains('insumo') ||
+          normalized.contains('oficina')) {
+        return account;
+      }
+    }
+    return null;
+  }
+
   Account? _resolveTransportAccount(_QuickExpenseOcrResult result) {
     if (!result.isTransportExpense) return null;
 
@@ -1975,6 +2236,23 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
       return 'Servicios Básicos';
     }
 
+    if (code == '6203' ||
+        normalized.contains('telefon') ||
+        normalized.contains('internet')) {
+      return 'Telefonía e Internet';
+    }
+
+    if (code == '6204' || normalized.contains('mantencion')) {
+      return 'Mantención y Reparaciones';
+    }
+
+    if (code == '6205' ||
+        normalized.contains('suministro') ||
+        normalized.contains('insumo') ||
+        normalized.contains('oficina')) {
+      return 'Suministros de Oficina';
+    }
+
     if (code == '6207' ||
         code == '6207-01' ||
         normalized.contains('dominio') ||
@@ -2006,6 +2284,17 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   }
 
   PaymentMethod? _findCardPaymentMethod({String? preferredKind}) {
+    if (preferredKind == null) {
+      for (final method in _paymentMethods) {
+        final code = _normalizeSearchText(method.code);
+        final text = _normalizeSearchText('${method.code} ${method.name}');
+        final isCombinedCard = code == 'card' ||
+            ((text.contains('debito') || text.contains('debit')) &&
+                (text.contains('credito') || text.contains('credit')));
+        if (isCombinedCard) return method;
+      }
+    }
+
     final preferredNeedles = switch (preferredKind) {
       'debit' => const ['debit_card', 'debit', 'debito'],
       'credit' => const ['credit_card', 'credit', 'credito'],
@@ -3411,7 +3700,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
             ),
             decoration: _fieldDecoration(
               theme,
-              label: '45.000',
+              label: 'Ingresa el monto',
               icon: Icons.payments_outlined,
             ).copyWith(suffixText: 'CLP'),
           ),
@@ -3425,7 +3714,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
             maxLines: 2,
             decoration: _fieldDecoration(
               theme,
-              label: 'Insumos, combustible, mensajería…',
+              label: 'Describe la compra o servicio',
               icon: Icons.notes_rounded,
             ),
           ),

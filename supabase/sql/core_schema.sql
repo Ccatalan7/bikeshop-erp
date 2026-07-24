@@ -21693,6 +21693,111 @@ create trigger trg_sales_payment_erp_notification
   for each row execute function public.create_sales_payment_erp_notification();
 
 -- ============================================================
+-- Notification source: new expense recorded
+-- ============================================================
+create or replace function public.create_expense_erp_notification()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_body text;
+  v_category_name text;
+  v_payment_method text;
+  v_recorded_by text;
+  v_supplier_name text;
+begin
+  -- Legacy imports may still contain rows without a tenant. Notification
+  -- persistence must never make those compatibility writes fail.
+  if NEW.tenant_id is null then
+    return NEW;
+  end if;
+
+  select name
+    into v_category_name
+  from public.expense_categories
+  where tenant_id = NEW.tenant_id
+    and id = NEW.category_id;
+
+  select name
+    into v_payment_method
+  from public.payment_methods
+  where tenant_id = NEW.tenant_id
+    and id = NEW.payment_method_id;
+
+  v_recorded_by := public.erp_actor_display_name(
+    coalesce(NEW.created_by, auth.uid()),
+    NEW.tenant_id
+  );
+  v_supplier_name := coalesce(
+    nullif(trim(NEW.supplier_name), ''),
+    'Proveedor no informado'
+  );
+  v_body := coalesce(nullif(trim(NEW.expense_number), ''), 'Gasto')
+    || ' · '
+    || v_supplier_name;
+
+  if coalesce(NEW.total_amount, 0) > 0 then
+    v_body := v_body
+      || ' · $'
+      || trim(to_char(NEW.total_amount, 'FM999G999G999G990'));
+  end if;
+
+  insert into public.erp_notifications (
+    tenant_id,
+    type,
+    title,
+    body,
+    route,
+    entity_type,
+    entity_id,
+    severity,
+    data
+  ) values (
+    NEW.tenant_id,
+    'expense_recorded',
+    'Nuevo gasto registrado',
+    v_body,
+    '/accounting/expenses/' || NEW.id::text,
+    'expense',
+    NEW.id,
+    'info',
+    jsonb_build_object(
+      'expense_id', NEW.id,
+      'expense_number', NEW.expense_number,
+      'supplier_id', NEW.supplier_id,
+      'supplier_name', NEW.supplier_name,
+      'supplier_rut', NEW.supplier_rut,
+      'document_type', NEW.document_type,
+      'document_number', NEW.document_number,
+      'issue_date', NEW.issue_date,
+      'subtotal', NEW.subtotal,
+      'tax_amount', NEW.tax_amount,
+      'total_amount', NEW.total_amount,
+      'currency', NEW.currency,
+      'posting_status', NEW.posting_status,
+      'payment_status', NEW.payment_status,
+      'payment_method', v_payment_method,
+      'category_name', v_category_name,
+      'recorded_by_name', v_recorded_by,
+      'recorded_at', NEW.created_at
+    )
+  ) on conflict (tenant_id, type, entity_type, entity_id) do nothing;
+
+  return NEW;
+end;
+$$;
+
+revoke all on function public.create_expense_erp_notification()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_expense_erp_notification on public.expenses;
+create trigger trg_expense_erp_notification
+  after insert on public.expenses
+  for each row execute function public.create_expense_erp_notification();
+
+-- ============================================================
 -- Notification source: WhatsApp catalog product approved (customer-visible)
 -- Fires only when status transitions INTO 'customer_visible'.
 -- ============================================================

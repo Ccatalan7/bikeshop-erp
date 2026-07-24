@@ -61,6 +61,7 @@ String resolveErpNotificationRoute(Map<String, dynamic> row) {
     switch (type) {
       'mechanic_job_created' => data['job_id'],
       'sales_payment_received' => data['payment_id'],
+      'expense_recorded' => data['expense_id'],
       'online_order_created' => data['order_id'],
       'whatsapp_catalog_approved' => data['product_id'],
       _ => null,
@@ -78,6 +79,11 @@ String resolveErpNotificationRoute(Map<String, dynamic> row) {
       path: '/sales/payments',
       queryParameters: {'paymentId': entityId},
     ).toString();
+  }
+
+  if ((type == 'expense_recorded' || entityType == 'expense') &&
+      entityId != null) {
+    return '/accounting/expenses/${Uri.encodeComponent(entityId)}';
   }
 
   if ((type == 'online_order_created' || entityType == 'online_order') &&
@@ -139,6 +145,7 @@ bool _hasConcreteNotificationTarget(Uri uri) {
   };
   if (uri.queryParameters.keys.any(identityKeys.contains)) return true;
   if (RegExp(r'^/taller/pegas/[^/]+$').hasMatch(uri.path)) return true;
+  if (RegExp(r'^/accounting/expenses/[^/]+$').hasMatch(uri.path)) return true;
   return RegExp(r'^/inventory/products/[^/]+/edit$').hasMatch(uri.path);
 }
 

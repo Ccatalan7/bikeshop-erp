@@ -21,6 +21,11 @@ void main() {
             amount: 6000,
             read: true,
           ),
+          _row(
+            'expense_recorded',
+            DateTime(2026, 7, 16, 19),
+            totalAmount: 13580,
+          ),
           _row('online_order_created', DateTime(2026, 7, 15, 23, 59)),
         ],
         fileCreatedAt: [
@@ -32,9 +37,11 @@ void main() {
       expect(digest.jobCount, 1);
       expect(digest.paymentCount, 2);
       expect(digest.paymentTotal, 30000);
+      expect(digest.expenseCount, 1);
+      expect(digest.expenseTotal, 13580);
       expect(digest.onlineOrderCount, 0);
       expect(digest.fileCount, 1);
-      expect(digest.unreadAlertCount, 2);
+      expect(digest.unreadAlertCount, 3);
     });
 
     test('seven day period includes today and the six prior calendar days', () {
@@ -62,6 +69,7 @@ Map<String, dynamic> _row(
   String type,
   DateTime createdAt, {
   num? amount,
+  num? totalAmount,
   bool read = false,
 }) {
   return {
@@ -70,6 +78,10 @@ Map<String, dynamic> _row(
     'read_at': read
         ? createdAt.add(const Duration(minutes: 1)).toIso8601String()
         : null,
-    if (amount != null) 'data': {'amount': amount},
+    if (amount != null || totalAmount != null)
+      'data': {
+        if (amount != null) 'amount': amount,
+        if (totalAmount != null) 'total_amount': totalAmount,
+      },
   };
 }

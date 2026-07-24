@@ -16,6 +16,7 @@ void main() {
     expect(panel, contains('enum _ActivityFilter'));
     expect(panel, contains('_ActivityFilter.jobs'));
     expect(panel, contains('_ActivityFilter.payments'));
+    expect(panel, contains('_ActivityFilter.expenses'));
     expect(panel, contains('_ActivityFilter.emails'));
     expect(panel, contains('_ActivityFilter.chats'));
     expect(panel, contains('_ActivityFilter.orders'));

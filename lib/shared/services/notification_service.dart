@@ -709,7 +709,7 @@ class NotificationService {
   // ============================================================
   // GENERIC NOTIFICATIONS CENTER FEED
   // Backed by the shared erp_notifications table. Surfaces every
-  // notification type (jobs, payments, online orders, WhatsApp
+  // notification type (jobs, payments, expenses, online orders, WhatsApp
   // catalog approvals, ...) in one feed for the right-side panel.
   // ============================================================
 

@@ -770,39 +770,9 @@ class VinabikeApp extends StatelessWidget {
                             children: [
                               // Tab bar has its own internal Consumer, stable during rebuilds
                               const WorkspaceTabBar(),
-                              // Only this part needs to rebuild on workspace changes
                               Expanded(
-                                child:
-                                    Selector<WorkspaceManager, (int, String)>(
-                                  selector: (_, wm) => (
-                                    wm.activeStackIndex,
-                                    wm.workspaceStackSignature,
-                                  ),
-                                  builder: (context, data, _) {
-                                    final workspaceManager =
-                                        context.read<WorkspaceManager>();
-
-                                    return IndexedStack(
-                                      index: data.$1,
-                                      sizing: StackFit.expand,
-                                      children: workspaceManager
-                                          .workspaceStackOrder
-                                          .map((workspace) {
-                                        if (!workspace.isHydrated) {
-                                          return SizedBox.shrink(
-                                            key: ValueKey(
-                                              'dormant-${workspace.id}',
-                                            ),
-                                          );
-                                        }
-                                        return _WorkspaceRouterView(
-                                          key: ValueKey(workspace.id),
-                                          workspace: workspace,
-                                          authService: authService,
-                                        );
-                                      }).toList(),
-                                    );
-                                  },
+                                child: _WorkspaceShell(
+                                  authService: authService,
                                 ),
                               ),
                             ],
@@ -1251,6 +1221,8 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
         return Icons.build_outlined;
       case 'sales_payment_received':
         return Icons.payments_outlined;
+      case 'expense_recorded':
+        return Icons.receipt_long_outlined;
       case 'online_order_created':
         return Icons.shopping_cart_checkout_outlined;
       case 'whatsapp_catalog_approved':
@@ -1599,6 +1571,82 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
   Widget build(BuildContext context) => widget.child;
 }
 
+class _WorkspaceShell extends StatefulWidget {
+  const _WorkspaceShell({required this.authService});
+
+  final AuthService authService;
+
+  @override
+  State<_WorkspaceShell> createState() => _WorkspaceShellState();
+}
+
+class _WorkspaceShellState extends State<_WorkspaceShell> {
+  final _toolbarKey = GlobalKey();
+
+  Widget _buildWorkspaceStack() {
+    return Selector<WorkspaceManager, (int, String)>(
+      selector: (_, workspaceManager) => (
+        workspaceManager.activeStackIndex,
+        workspaceManager.workspaceStackSignature,
+      ),
+      builder: (context, data, _) {
+        final workspaceManager = context.read<WorkspaceManager>();
+        return IndexedStack(
+          index: data.$1,
+          sizing: StackFit.expand,
+          children: workspaceManager.workspaceStackOrder.map((workspace) {
+            if (!workspace.isHydrated) {
+              return SizedBox.shrink(
+                key: ValueKey('dormant-${workspace.id}'),
+              );
+            }
+            return _WorkspaceRouterView(
+              key: ValueKey(workspace.id),
+              workspace: workspace,
+              authService: widget.authService,
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appearanceService = context.watch<AppearanceService>();
+    final toolbar = RightToolbar(key: _toolbarKey);
+
+    if (!appearanceService.rightToolbarOverContent) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: _buildWorkspaceStack()),
+          toolbar,
+        ],
+      );
+    }
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Padding(
+            padding: const EdgeInsets.only(
+              right: RightToolbar.collapsedWidth,
+            ),
+            child: _buildWorkspaceStack(),
+          ),
+        ),
+        Positioned(
+          top: 0,
+          right: 0,
+          bottom: 0,
+          child: toolbar,
+        ),
+      ],
+    );
+  }
+}
+
 class _WorkspaceRouterView extends StatefulWidget {
   final Workspace workspace;
   final AuthService authService;
@@ -1678,8 +1726,6 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     super.dispose();
   }
 
-  final _toolbarKey = GlobalKey();
-
   Widget _buildWorkspaceRouter() {
     return Provider<Workspace>.value(
       value: widget.workspace,
@@ -1717,36 +1763,7 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     super.build(context);
 
     try {
-      final appearanceService = context.watch<AppearanceService>();
-      final toolbar = RightToolbar(key: _toolbarKey);
-
-      if (!appearanceService.rightToolbarOverContent) {
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(child: _buildWorkspaceRouter()),
-            toolbar,
-          ],
-        );
-      }
-
-      return Stack(
-        children: [
-          Positioned.fill(
-            child: Padding(
-              padding:
-                  const EdgeInsets.only(right: RightToolbar.collapsedWidth),
-              child: _buildWorkspaceRouter(),
-            ),
-          ),
-          Positioned(
-            top: 0,
-            right: 0,
-            bottom: 0,
-            child: toolbar,
-          ),
-        ],
-      );
+      return _buildWorkspaceRouter();
     } catch (e) {
       debugPrint('🔴 [WorkspaceRouterView] Router build error: $e');
       return Material(

@@ -52,6 +52,8 @@ Total a Pagar: 10.040
       expect(invoice.rut, '76.211.240-K');
       expect(invoice.invoiceNumber, '13486798');
       expect(invoice.date, DateTime(2026, 6, 2));
+      expect(invoice.netAmount, 8437);
+      expect(invoice.taxAmount, 1603);
       expect(invoice.total, 10040);
       expect(invoice.supplierName, contains('KAUDAT'));
       expect(invoice.supplierName, isNot(contains('Giro')));

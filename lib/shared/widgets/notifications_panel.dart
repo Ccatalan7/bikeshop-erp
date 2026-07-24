@@ -550,6 +550,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
 
 const _jobsAccent = Color(0xFF2878B8);
 const _paymentsAccent = Color(0xFF2C8A62);
+const _expensesAccent = Color(0xFF9A6332);
 const _ordersAccent = Color(0xFF7758A6);
 const _filesAccent = Color(0xFFC4772D);
 const _mailAccent = Color(0xFF3D6FA8);
@@ -557,13 +558,23 @@ const _chatAccent = Color(0xFF7559A5);
 const _attendanceAccent = Color(0xFF347E79);
 const _warningAccent = Color(0xFFC27A22);
 
-enum _BriefingActivityKind { job, payment, order, email, chat, file, alert }
+enum _BriefingActivityKind {
+  job,
+  payment,
+  expense,
+  order,
+  email,
+  chat,
+  file,
+  alert
+}
 
 enum _ActivityFilter {
   all,
   operational,
   jobs,
   payments,
+  expenses,
   emails,
   chats,
   orders,
@@ -582,6 +593,8 @@ extension _ActivityFilterPresentation on _ActivityFilter {
         return 'Trabajos';
       case _ActivityFilter.payments:
         return 'Pagos';
+      case _ActivityFilter.expenses:
+        return 'Gastos';
       case _ActivityFilter.emails:
         return 'Correos';
       case _ActivityFilter.chats:
@@ -605,6 +618,8 @@ extension _ActivityFilterPresentation on _ActivityFilter {
         return 'No hay trabajos registrados en este período.';
       case _ActivityFilter.payments:
         return 'No hay pagos registrados en este período.';
+      case _ActivityFilter.expenses:
+        return 'No hay gastos registrados en este período.';
       case _ActivityFilter.emails:
         return 'No hay correos registrados en este período.';
       case _ActivityFilter.chats:
@@ -628,6 +643,8 @@ extension _ActivityFilterPresentation on _ActivityFilter {
         return Icons.build_outlined;
       case _ActivityFilter.payments:
         return Icons.payments_outlined;
+      case _ActivityFilter.expenses:
+        return Icons.receipt_long_outlined;
       case _ActivityFilter.emails:
         return Icons.mail_outline;
       case _ActivityFilter.chats:
@@ -650,6 +667,8 @@ extension _ActivityFilterPresentation on _ActivityFilter {
         return _warningAccent;
       case _ActivityFilter.payments:
         return _paymentsAccent;
+      case _ActivityFilter.expenses:
+        return _expensesAccent;
       case _ActivityFilter.emails:
         return _mailAccent;
       case _ActivityFilter.chats:
@@ -670,12 +689,15 @@ extension _ActivityFilterPresentation on _ActivityFilter {
       case _ActivityFilter.operational:
         return kind == _BriefingActivityKind.job ||
             kind == _BriefingActivityKind.payment ||
+            kind == _BriefingActivityKind.expense ||
             kind == _BriefingActivityKind.order ||
             kind == _BriefingActivityKind.alert;
       case _ActivityFilter.jobs:
         return kind == _BriefingActivityKind.job;
       case _ActivityFilter.payments:
         return kind == _BriefingActivityKind.payment;
+      case _ActivityFilter.expenses:
+        return kind == _BriefingActivityKind.expense;
       case _ActivityFilter.emails:
         return kind == _BriefingActivityKind.email;
       case _ActivityFilter.chats:
@@ -1014,6 +1036,19 @@ class _MetricsRibbon extends StatelessWidget {
                 icon: Icons.payments_outlined,
                 accent: _paymentsAccent,
                 onTap: () => onNavigate('/sales/payments'),
+              ),
+            ),
+            const _MetricDivider(),
+            Expanded(
+              child: _MetricRibbonItem(
+                label: 'Gastos',
+                value: digest.expenseTotal > 0
+                    ? ChileanUtils.formatCurrency(digest.expenseTotal)
+                    : r'$0',
+                hint: '${digest.expenseCount} mov.',
+                icon: Icons.receipt_long_outlined,
+                accent: _expensesAccent,
+                onTap: () => onNavigate('/accounting/expenses'),
               ),
             ),
             const _MetricDivider(),
@@ -2238,6 +2273,8 @@ IconData _iconForNotificationType(String type) {
       return Icons.build_outlined;
     case 'sales_payment_received':
       return Icons.payments_outlined;
+    case 'expense_recorded':
+      return Icons.receipt_long_outlined;
     case 'online_order_created':
       return Icons.shopping_bag_outlined;
     case 'whatsapp_catalog_approved':
@@ -2259,6 +2296,8 @@ _BriefingActivityKind _kindForNotificationType(String type) {
       return _BriefingActivityKind.job;
     case 'sales_payment_received':
       return _BriefingActivityKind.payment;
+    case 'expense_recorded':
+      return _BriefingActivityKind.expense;
     case 'online_order_created':
       return _BriefingActivityKind.order;
     default:
@@ -2278,6 +2317,8 @@ Color _accentForNotificationType(String type) {
       return _jobsAccent;
     case 'sales_payment_received':
       return _paymentsAccent;
+    case 'expense_recorded':
+      return _expensesAccent;
     case 'online_order_created':
       return _ordersAccent;
     case 'whatsapp_catalog_approved':
