@@ -62,15 +62,21 @@ The next time users open the app, the Flutter workspace prepares the update
 silently, then shows an update prompt only when the update is ready.
 
 The protected publish job first creates deterministic Spanish fallback notes
-for the exact previous-release commit range, then prefers the Gemini API when
-`GEMINI_RELEASE_API_KEY` exists in the protected `Production` environment. The
-default model is `gemini-2.5-flash-lite`, with
-`GEMINI_RELEASE_NOTES_MODEL` available as an optional override. When the Gemini
-key is absent, the existing `OPENAI_API_KEY` and
-`OPENAI_RELEASE_NOTES_MODEL` integration remains available as a compatibility
-path. Errors, quota limits, timeouts, or invalid output from the selected
-provider never block publication; the validated deterministic fallback remains
-in the manifest.
+for the exact previous-release commit range so the local intermediate file is
+always valid, then prefers the Gemini API when `GEMINI_RELEASE_API_KEY` exists
+in the protected `Production` environment. The default model is
+`gemini-2.5-flash-lite`, with `GEMINI_RELEASE_NOTES_MODEL` available as an
+optional override. If that model returns `404`, the generator performs one
+metadata-free model-list request and retries only with an available model from
+its fixed free Gemini Flash/Flash-Lite allowlist. When the Gemini key is absent,
+the existing `OPENAI_API_KEY` and `OPENAI_RELEASE_NOTES_MODEL` integration
+remains available as a compatibility path.
+
+Errors, exhausted quota, timeouts, or invalid output leave the validated
+deterministic fallback in place and must not block publication. The generator
+prints the selected provider, active Gemini model, and only a sanitized failure
+category so an AI downgrade is visible without exposing Google error text or
+release metadata.
 
 Only sanitized, bounded release metadata is eligible for either provider:
 fixed canonical ERP module/topic labels, status and change counts, and opaque

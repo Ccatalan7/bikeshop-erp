@@ -145,15 +145,21 @@ model as the Windows publisher:
 
 The protected publish job creates a bounded Spanish change summary from the
 exact previous-release commit through the commit being published. It first
-writes a deterministic fallback, then prefers the Gemini API when the protected
-`Production` environment contains `GEMINI_RELEASE_API_KEY`. The default Gemini
-model is `gemini-2.5-flash-lite`; an optional
-`GEMINI_RELEASE_NOTES_MODEL` environment variable may override it. If the
-Gemini key is absent, the existing `OPENAI_API_KEY` and
-`OPENAI_RELEASE_NOTES_MODEL` integration remains available as a compatibility
-path. A missing key, timeout, quota error, or invalid response from the selected
-provider leaves the deterministic fallback in place and never blocks the
-build, signature, or publication.
+writes a deterministic fallback so the local intermediate file is always
+valid, then prefers the Gemini API when the protected `Production` environment
+contains `GEMINI_RELEASE_API_KEY`. The default Gemini model is
+`gemini-2.5-flash-lite`; an optional `GEMINI_RELEASE_NOTES_MODEL` environment
+variable may override it. If that model returns `404`, the generator performs
+one metadata-free model-list request and retries only with an available model
+from its fixed free Gemini Flash/Flash-Lite allowlist. If the Gemini key is
+absent, the existing `OPENAI_API_KEY` and `OPENAI_RELEASE_NOTES_MODEL`
+integration remains available as a compatibility path.
+
+A missing key, timeout, exhausted quota, or invalid response leaves the
+validated deterministic fallback in place and must not block the build,
+signature, or publication. The generator prints the selected provider, active
+Gemini model, and only a sanitized failure category so an AI downgrade is
+visible without exposing Google error text or release metadata.
 
 Only sanitized, bounded release metadata is eligible for either provider:
 fixed canonical ERP module/topic labels, status and change counts, and opaque

@@ -12,6 +12,25 @@ const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
 const GEMINI_MODEL_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/u;
 const GEMINI_ENDPOINT_ROOT =
   "https://generativelanguage.googleapis.com/v1beta/models";
+const GEMINI_MODELS_ENDPOINT = `${GEMINI_ENDPOINT_ROOT}?pageSize=1000`;
+const GEMINI_FALLBACK_MODELS = Object.freeze([
+  "gemini-3.1-flash-lite",
+  "gemini-3.5-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+]);
+const SAFE_API_ERROR_CATEGORIES = new Map([
+  ["ABORTED", "aborted"],
+  ["DEADLINE_EXCEEDED", "deadline_exceeded"],
+  ["FAILED_PRECONDITION", "failed_precondition"],
+  ["INTERNAL", "internal"],
+  ["INVALID_ARGUMENT", "invalid_argument"],
+  ["NOT_FOUND", "not_found"],
+  ["PERMISSION_DENIED", "permission_denied"],
+  ["RESOURCE_EXHAUSTED", "resource_exhausted"],
+  ["UNAUTHENTICATED", "unauthenticated"],
+  ["UNAVAILABLE", "unavailable"],
+]);
 const DEFAULT_TIMEOUT_MS = 12_000;
 const DEFAULT_MAX_ATTEMPTS = 2;
 const MAX_API_RESPONSE_BYTES = 256 * 1024;
@@ -993,9 +1012,13 @@ function buildGeminiRequest(inventory) {
       },
     ],
     generationConfig: {
-      responseMimeType: "application/json",
-      responseJsonSchema: geminiAiOutputSchema(),
       maxOutputTokens: 1_200,
+      responseFormat: {
+        text: {
+          mimeType: "application/json",
+          schema: geminiAiOutputSchema(),
+        },
+      },
     },
   };
 }
@@ -1035,15 +1058,93 @@ function extractGeminiModelOutput(payload) {
   return null;
 }
 
-function geminiEndpoint(model) {
+function normalizeGeminiModel(model) {
   if (
     typeof model !== "string" ||
     !GEMINI_MODEL_PATTERN.test(model.trim().toLowerCase())
   ) {
     return null;
   }
-  const normalizedModel = model.trim().toLowerCase();
+  return model.trim().toLowerCase();
+}
+
+function geminiEndpoint(model) {
+  const normalizedModel = normalizeGeminiModel(model);
+  if (!normalizedModel) return null;
   return `${GEMINI_ENDPOINT_ROOT}/${encodeURIComponent(normalizedModel)}:generateContent`;
+}
+
+function geminiModelNames(payload) {
+  if (!Array.isArray(payload?.models)) return new Set();
+  const names = new Set();
+  for (const model of payload.models) {
+    const methods = Array.isArray(model?.supportedGenerationMethods)
+      ? model.supportedGenerationMethods
+      : Array.isArray(model?.supportedActions)
+        ? model.supportedActions
+        : [];
+    if (!methods.includes("generateContent")) continue;
+
+    for (const value of [model?.baseModelId, model?.name]) {
+      if (typeof value !== "string") continue;
+      const withoutPrefix = value.startsWith("models/")
+        ? value.slice("models/".length)
+        : value;
+      const normalized = normalizeGeminiModel(withoutPrefix);
+      if (normalized) names.add(normalized);
+    }
+  }
+  return names;
+}
+
+async function discoverGeminiFallbackModel({
+  apiKey,
+  currentModel,
+  fetchImpl,
+  timeoutMs,
+}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  timeout.unref?.();
+  try {
+    const response = await fetchImpl(GEMINI_MODELS_ENDPOINT, {
+      method: "GET",
+      headers: {
+        "x-goog-api-key": apiKey,
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+
+    const contentLength = Number.parseInt(
+      response.headers.get("content-length") ?? "0",
+      10,
+    );
+    if (contentLength > MAX_API_RESPONSE_BYTES) return null;
+    const responseText = await response.text();
+    if (Buffer.byteLength(responseText, "utf8") > MAX_API_RESPONSE_BYTES) {
+      return null;
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(responseText);
+    } catch {
+      return null;
+    }
+    const availableModels = geminiModelNames(payload);
+    const normalizedCurrent = normalizeGeminiModel(currentModel);
+    return (
+      GEMINI_FALLBACK_MODELS.find(
+        (candidate) =>
+          candidate !== normalizedCurrent && availableModels.has(candidate),
+      ) ?? null
+    );
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function validatedEndpoint(value) {
@@ -1067,6 +1168,38 @@ function boundedInteger(value, fallback, minimum, maximum) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(maximum, Math.max(minimum, parsed));
+}
+
+async function sanitizedHttpFailureReason(response) {
+  const baseReason = `http_${response.status}`;
+  const contentLength = Number.parseInt(
+    response.headers.get("content-length") ?? "0",
+    10,
+  );
+  if (contentLength > MAX_API_RESPONSE_BYTES) return baseReason;
+
+  let responseText;
+  try {
+    responseText = await response.text();
+  } catch {
+    return baseReason;
+  }
+  if (Buffer.byteLength(responseText, "utf8") > MAX_API_RESPONSE_BYTES) {
+    return baseReason;
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(responseText);
+  } catch {
+    return baseReason;
+  }
+  const status =
+    typeof payload?.error?.status === "string"
+      ? payload.error.status.trim().toUpperCase()
+      : "";
+  const category = SAFE_API_ERROR_CATEGORIES.get(status);
+  return category ? `${baseReason}_${category}` : baseReason;
 }
 
 async function requestAiCandidate({
@@ -1094,7 +1227,7 @@ async function requestAiCandidate({
     if (!response.ok) {
       return {
         candidate: null,
-        reason: `http_${response.status}`,
+        reason: await sanitizedHttpFailureReason(response),
         retryable:
           response.status === 408 ||
           response.status === 409 ||
@@ -1322,6 +1455,8 @@ export async function generateReleaseNotes({
     1,
     30_000,
   );
+  let activeGeminiModel = normalizeGeminiModel(geminiModel);
+  let activeEndpoint = safeEndpoint;
   let finalReason = "ai_unavailable";
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const result = await requestAiCandidate({
@@ -1333,7 +1468,7 @@ export async function generateReleaseNotes({
         provider === "gemini"
           ? { "x-goog-api-key": geminiApiKey }
           : { Authorization: `Bearer ${apiKey}` },
-      endpoint: safeEndpoint,
+      endpoint: activeEndpoint,
       extractModelOutput:
         provider === "gemini"
           ? extractGeminiModelOutput
@@ -1359,6 +1494,8 @@ export async function generateReleaseNotes({
         return {
           source: "ai",
           reason: null,
+          provider,
+          model: provider === "gemini" ? activeGeminiModel : null,
           inventory,
           release_notes: aiNotes,
         };
@@ -1367,12 +1504,32 @@ export async function generateReleaseNotes({
         break;
       }
     }
+    if (
+      provider === "gemini" &&
+      result.reason.startsWith("http_404") &&
+      attempt < attempts
+    ) {
+      const fallbackModel = await discoverGeminiFallbackModel({
+        apiKey: geminiApiKey,
+        currentModel: activeGeminiModel,
+        fetchImpl,
+        timeoutMs: boundedTimeout,
+      });
+      const fallbackEndpoint = geminiEndpoint(fallbackModel);
+      if (fallbackModel && fallbackEndpoint) {
+        activeGeminiModel = fallbackModel;
+        activeEndpoint = fallbackEndpoint;
+        continue;
+      }
+    }
     if (!result.retryable || attempt === attempts) break;
   }
 
   return {
     source: "fallback",
     reason: finalReason,
+    provider,
+    model: provider === "gemini" ? activeGeminiModel : null,
     inventory,
     release_notes: fallback,
   };
@@ -1443,8 +1600,12 @@ async function main() {
     maxAttempts: process.env.OPENAI_RELEASE_NOTES_MAX_ATTEMPTS,
   });
   const suffix = result.reason ? ` (${result.reason})` : "";
+  const modelSuffix =
+    result.provider === "gemini" && result.model
+      ? `; Gemini model: ${result.model}`
+      : "";
   process.stdout.write(
-    `Release notes source: ${result.source}${suffix}; wrote ${path.resolve(args.output)}\n`,
+    `Release notes source: ${result.source}${suffix}${modelSuffix}; wrote ${path.resolve(args.output)}\n`,
   );
 }
 

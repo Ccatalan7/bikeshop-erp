@@ -539,14 +539,14 @@ test("prefers Gemini, sends only bounded metadata, and accepts validated structu
     toCommit,
     outputPath,
     geminiApiKey: geminiSecret,
-    geminiModel: "gemini-test-model",
+    geminiModel: "gemini-2.5-flash-lite",
     apiKey: openAiSecret,
     maxAttempts: 1,
     fetchImpl: async (url, options) => {
       requestCount += 1;
       assert.equal(
         url,
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-test-model:generateContent",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
       );
       assert.equal(options.headers["x-goog-api-key"], geminiSecret);
       assert.equal(Object.hasOwn(options.headers, "Authorization"), false);
@@ -562,6 +562,8 @@ test("prefers Gemini, sends only bounded metadata, and accepts validated structu
   assert.equal(requestCount, 1);
   assert.equal(result.source, "ai");
   assert.equal(result.reason, null);
+  assert.equal(result.provider, "gemini");
+  assert.equal(result.model, "gemini-2.5-flash-lite");
   validateReleaseNotes(result.release_notes, {
     inventory,
     source: "ai",
@@ -608,24 +610,37 @@ test("prefers Gemini, sends only bounded metadata, and accepts validated structu
   assert.equal(metadata.included_change_count, inventory.ai_changes.length);
   assert.equal(metadata.changes.length <= 240, true);
   assert.equal(
-    requestBody.generationConfig.responseMimeType,
+    requestBody.generationConfig.responseFormat.text.mimeType,
     "application/json",
   );
-  assert.equal(requestBody.generationConfig.responseJsonSchema.type, "object");
   assert.equal(
-    requestBody.generationConfig.responseJsonSchema.additionalProperties,
+    requestBody.generationConfig.responseFormat.text.schema.type,
+    "object",
+  );
+  assert.equal(
+    requestBody.generationConfig.responseFormat.text.schema
+      .additionalProperties,
     false,
   );
   assert.equal(
-    requestBody.generationConfig.responseJsonSchema.properties.title.maxLength,
+    requestBody.generationConfig.responseFormat.text.schema.properties.title
+      .maxLength,
     undefined,
   );
   assert.equal(
     Object.hasOwn(
-      requestBody.generationConfig.responseJsonSchema.properties.modules.items
-        .properties,
+      requestBody.generationConfig.responseFormat.text.schema.properties.modules
+        .items.properties,
       "evidence_paths",
     ),
+    false,
+  );
+  assert.equal(
+    Object.hasOwn(requestBody.generationConfig, "responseMimeType"),
+    false,
+  );
+  assert.equal(
+    Object.hasOwn(requestBody.generationConfig, "responseJsonSchema"),
     false,
   );
 
@@ -667,6 +682,210 @@ test("prefers Gemini, sends only bounded metadata, and accepts validated structu
   assert.deepEqual(JSON.parse(await readFile(outputPath, "utf8")), {
     release_notes: result.release_notes,
   });
+});
+
+test("recovers from a Gemini model 404 through allowlisted model discovery", async (t) => {
+  const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
+  const outputPath = path.join(repoDir, "out", "gemini-model-recovery.json");
+  const inventory = collectReleaseInventory({
+    repoDir,
+    fromCommit,
+    toCommit,
+  });
+  const candidate = candidateForInventory(inventory);
+  const geminiSecret = "gemini-model-recovery-secret";
+  const requests = [];
+
+  const result = await generateReleaseNotes({
+    repoDir,
+    fromCommit,
+    toCommit,
+    outputPath,
+    geminiApiKey: geminiSecret,
+    geminiModel: "gemini-unavailable-model",
+    maxAttempts: 2,
+    fetchImpl: async (url, options) => {
+      requests.push({
+        url,
+        method: options.method,
+        headers: options.headers,
+        body: options.body,
+      });
+
+      if (
+        url ===
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-unavailable-model:generateContent"
+      ) {
+        assert.equal(options.method, "POST");
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: 404,
+              status: "NOT_FOUND",
+              message: "Configured model is not available.",
+            },
+          }),
+          { status: 404 },
+        );
+      }
+      if (
+        url ===
+        "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"
+      ) {
+        assert.equal(options.method, "GET");
+        assert.equal(options.headers["x-goog-api-key"], geminiSecret);
+        assert.equal(Object.hasOwn(options, "body"), false);
+        return new Response(
+          JSON.stringify({
+            models: [
+              {
+                name: "models/gemini-untrusted-model",
+                baseModelId: "gemini-untrusted-model",
+                supportedGenerationMethods: ["generateContent"],
+              },
+              {
+                name: "models/gemini-3.1-flash-lite",
+                baseModelId: "gemini-3.1-flash-lite",
+                supportedGenerationMethods: ["generateContent"],
+              },
+              {
+                name: "models/gemini-3.5-flash-lite",
+                baseModelId: "gemini-3.5-flash-lite",
+                supportedGenerationMethods: ["generateContent"],
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (
+        url ===
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent"
+      ) {
+        assert.equal(options.method, "POST");
+        const body = JSON.parse(options.body);
+        assert.equal(body.generationConfig.maxOutputTokens, 1_200);
+        assert.equal(
+          body.generationConfig.responseFormat.text.mimeType,
+          "application/json",
+        );
+        assert.equal(
+          body.generationConfig.responseFormat.text.schema.type,
+          "object",
+        );
+        assert.equal(
+          Object.hasOwn(body.generationConfig, "responseMimeType"),
+          false,
+        );
+        const serializedBody = JSON.stringify(body);
+        assert.equal(serializedBody.includes(fromCommit), false);
+        assert.equal(serializedBody.includes(toCommit), false);
+        for (const entry of inventory.all_changes) {
+          assert.equal(serializedBody.includes(entry.path), false);
+          if (entry.previous_path) {
+            assert.equal(serializedBody.includes(entry.previous_path), false);
+          }
+        }
+        return geminiResponseWithCandidate(candidate);
+      }
+      throw new Error(`Unexpected Gemini test URL: ${url}`);
+    },
+  });
+
+  assert.equal(result.source, "ai");
+  assert.equal(result.reason, null);
+  assert.equal(result.provider, "gemini");
+  assert.equal(result.model, "gemini-3.1-flash-lite");
+  assert.deepEqual(
+    requests.map((request) => [request.method, request.url]),
+    [
+      [
+        "POST",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-unavailable-model:generateContent",
+      ],
+      [
+        "GET",
+        "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",
+      ],
+      [
+        "POST",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+      ],
+    ],
+  );
+  assert.ok(
+    requests.every(
+      (request) =>
+        !request.url.includes(geminiSecret) &&
+        request.headers["x-goog-api-key"] === geminiSecret,
+    ),
+  );
+  assert.deepEqual(JSON.parse(await readFile(outputPath, "utf8")), {
+    release_notes: result.release_notes,
+  });
+});
+
+test("does not select arbitrary or incompatible models discovered after a Gemini 404", async (t) => {
+  const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
+  const outputPath = path.join(repoDir, "out", "gemini-no-safe-model.json");
+  const requestedUrls = [];
+  const privateGoogleError =
+    "customer@example.com /private/customer/invoice-123 secret-key";
+
+  const result = await generateReleaseNotes({
+    repoDir,
+    fromCommit,
+    toCommit,
+    outputPath,
+    geminiApiKey: "test-only-gemini-key",
+    geminiModel: "gemini-unavailable-model",
+    maxAttempts: 2,
+    fetchImpl: async (url) => {
+      requestedUrls.push(url);
+      if (url.endsWith(":generateContent")) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: 404,
+              status: "NOT_FOUND",
+              message: privateGoogleError,
+            },
+          }),
+          { status: 404 },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          models: [
+            {
+              name: "models/gemini-untrusted-model",
+              baseModelId: "gemini-untrusted-model",
+              supportedGenerationMethods: ["generateContent"],
+            },
+            {
+              name: "models/gemini-3.5-flash-lite",
+              baseModelId: "gemini-3.5-flash-lite",
+              supportedGenerationMethods: ["embedContent"],
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    },
+  });
+
+  assert.equal(result.source, "fallback");
+  assert.equal(result.reason, "http_404_not_found");
+  assert.equal(result.provider, "gemini");
+  assert.equal(result.model, "gemini-unavailable-model");
+  assert.equal(result.reason.includes(privateGoogleError), false);
+  assert.deepEqual(requestedUrls, [
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-unavailable-model:generateContent",
+    "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",
+  ]);
+  const saved = await readFile(outputPath, "utf8");
+  assert.equal(JSON.parse(saved).release_notes.source, "fallback");
+  assert.equal(saved.includes(privateGoogleError), false);
 });
 
 test("both AI providers receive only opaque allowlisted metadata even when Git contains private identifiers", async (t) => {
