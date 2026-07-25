@@ -425,14 +425,21 @@ dependencies:
 ### Notification Not Received (Mobile)
 
 1. **Check FCM Token**:
-   ```sql
-   SELECT * FROM user_fcm_tokens WHERE user_id = 'UUID';
+   ```bash
+   bash scripts/db/query.sh production \
+     --sql "select user_id, platform, updated_at from user_fcm_tokens where user_id = 'UUID'" \
+     --format table
    ```
 
-2. **Check Edge Function Logs**:
+2. **Check Edge Function Deployment**:
    ```bash
-   npx supabase functions logs push-notification --project-ref xzdvtzdqjeyqxnkqprtf
+   scripts/supabase_cli.sh functions list \
+     --project-ref xzdvtzdqjeyqxnkqprtf
    ```
+
+   Then invoke the affected notification path and verify the durable database
+   outcome. The current CLI has no `functions logs` command; use the provider
+   Logs Explorer only when runtime-log evidence is required.
 
 3. **Check Android Channel**: Ensure `chat_messages` channel exists in device settings.
 

@@ -5,12 +5,17 @@ set -euo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
 cd "$DB_ROOT"
+expected_staging_ref="bczzjhjrpmtpgwdvlbut"
+[[ "${VINABIKE_STAGING_REACTIVATION_CONFIRM:-}" == "$expected_staging_ref" ]] ||
+  die "Staging is policy-dormant; explicit owner reactivation is required"
 [[ "${VINABIKE_STAGING_SCHEMA_CONFIRM:-}" == "staging" ]] || die "Set VINABIKE_STAGING_SCHEMA_CONFIRM=staging to run the hosted staging schema gate"
 require_command psql
 configure_remote_pg staging
 
 staging_ref="${PGUSER#postgres.}"
 production_ref="$(tr -d '[:space:]' <supabase/.temp/project-ref)"
+[[ "$staging_ref" == "$expected_staging_ref" ]] ||
+  die "Staging connection identity does not match the approved dormant project"
 [[ "$staging_ref" != "$production_ref" ]] || die "Staging ref matches production; refusing schema application"
 
 timestamp="$(date +%Y%m%d-%H%M%S)"

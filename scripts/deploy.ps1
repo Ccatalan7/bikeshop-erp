@@ -1,37 +1,20 @@
 $ErrorActionPreference = "Stop"
 
+# Match the canonical shell wrapper's privacy boundary for the native
+# PowerShell deployment path.
+$env:SUPABASE_TELEMETRY_DISABLED = '1'
+$env:DO_NOT_TRACK = '1'
+$env:OTEL_SDK_DISABLED = 'true'
+$env:OTEL_TRACES_EXPORTER = 'none'
+$env:OTEL_METRICS_EXPORTER = 'none'
+$env:OTEL_LOGS_EXPORTER = 'none'
+
 function Resolve-SupabaseSecretKey {
     if (-not [string]::IsNullOrWhiteSpace($env:SUPABASE_SECRET_KEY)) {
         return $env:SUPABASE_SECRET_KEY
     }
 
-    if (Test-Path -LiteralPath '.env') {
-        $secretLine = Get-Content -LiteralPath '.env' |
-            Where-Object { $_ -match '^\s*SUPABASE_SECRET_KEY\s*=' } |
-            Select-Object -First 1
-        if ($secretLine) {
-            $key = ($secretLine -split '=', 2)[1].Trim().Trim('"').Trim("'")
-            if (-not [string]::IsNullOrWhiteSpace($key)) {
-                return $key
-            }
-        }
-    }
-
-    if (Get-Command supabase -ErrorAction SilentlyContinue) {
-        $keysJson = supabase projects api-keys `
-            --project-ref xzdvtzdqjeyqxnkqprtf `
-            --reveal --output json 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            $keys = @($keysJson | ConvertFrom-Json)
-            $secret = @($keys | Where-Object { $_.type -eq 'secret' }) |
-                Select-Object -First 1
-            if ($secret -and -not [string]::IsNullOrWhiteSpace($secret.api_key)) {
-                return $secret.api_key
-            }
-        }
-    }
-
-    throw 'Could not load SUPABASE_SECRET_KEY from the environment, .env, or authenticated Supabase CLI.'
+    throw 'Could not load SUPABASE_SECRET_KEY from the process environment. Inject it from Windows Credential Manager or another protected environment source.'
 }
 
 # Fail before the expensive web builds when snapshot access is unavailable.

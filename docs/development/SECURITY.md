@@ -1,7 +1,10 @@
 # Security Contract
 
 - Never place credentials in source, documentation, screenshots, logs, launch configurations or chat.
-- Local values belong in macOS Keychain, Windows Credential Manager or an owner-only ignored `.env`.
+- Private Supabase values belong in macOS Keychain, Windows Credential Manager,
+  or a protected one-command/CI environment—never `.env`. Other local-only
+  credentials may use an owner-only ignored `.env` only when their consuming
+  tool has not yet moved to an operating-system store.
 - CI values belong in the matching protected GitHub Environment.
 - Run `just verify-fast` before commit; GitHub runs a complete-history-aware commit-range secret gate.
 - Production database/service credentials are never used by browser E2E or fixtures.

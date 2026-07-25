@@ -113,7 +113,6 @@ function encodedStoragePath(path: string) {
 function authHeaders(extra?: HeadersInit) {
   const headers = new Headers(extra);
   headers.set("apikey", serviceKey);
-  headers.set("Authorization", `Bearer ${serviceKey}`);
   return headers;
 }
 

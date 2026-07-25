@@ -1,5 +1,5 @@
 // Supabase Edge Function: Google Merchant Center Product Feed
-// Deploy with: supabase functions deploy google-merchant-feed
+// Deploy with: scripts/supabase_cli.sh functions deploy google-merchant-feed --project-ref xzdvtzdqjeyqxnkqprtf
 //
 // Usage:
 //   GET /google-merchant-feed?tenant=vinabike     (by subdomain)

@@ -55,7 +55,10 @@ The Supabase schema (`supabase/sql/core_schema.sql`) now includes:
 - `create_sales_payment_journal_entry(payment)` and `delete_sales_payment_journal_entry(payment_id)` — bookkeeping helpers that post or remove the double-entry accounting lines bound to the payment id.
 - Trigger `trg_sales_payments_change` wired to `handle_sales_payment_change()` to recalc invoices and manage journal entries after `INSERT`, `UPDATE`, or `DELETE` events.
 
-> **Deployment tip:** run the updated `core_schema.sql` (or at minimum the new functions and trigger blocks) in Supabase SQL Editor. The script uses `add column if not exists` guards, so it will extend existing tables without dropping user data.
+> **Deployment:** follow `docs/development/SUPABASE_WORKFLOW.md`. Agents apply
+> only the reviewed idempotent forward migration through the guarded database
+> wrapper, verify it, and then register its history. Never paste
+> `core_schema.sql` or fragments into the SQL Editor.
 
 ### Flutter Integration
 
@@ -73,7 +76,10 @@ Supabase realtime channels keep invoice and payment views in sync without manual
 
 1. Follow `docs/development/SETUP_MACOS.md` or `docs/development/SETUP_WINDOWS.md`.
 2. Run `just doctor` and resolve any reported blocker.
-3. Configure local credentials through an owner-only `.env` or the platform credential store; never edit credentials into source files.
+3. Put public app configuration and non-Supabase local-only values in the
+   ignored owner-only `.env` when needed. Private Supabase values use the
+   platform credential store described in
+   `docs/development/SUPABASE_WORKFLOW.md`.
 4. Run `just verify-fast`, then start the pinned SDK with `scripts/dev/flutter.sh run`.
 
 The canonical commands and versions are documented in `docs/development/TOOLCHAIN.md`.

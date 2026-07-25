@@ -1,6 +1,6 @@
 -- Make storefront visibility rules server-authoritative.
 -- Deployment status: DEPLOYED to production xzdvtzdqjeyqxnkqprtf on 2026-05-22
--- Deployment verification: supabase db query --linked --file completed successfully; rerun a sequential signature/count check if more proof is needed.
+-- Historical deployment verification: the linked CLI query completed successfully in 2026-05; current work must use the guarded scripts/db/query.sh path.
 -- Public catalog, search, featured products, and category counts now read the
 -- tenant's website_settings directly, so older deployed storefront code and
 -- newer ERP/editor code share the same source of truth.

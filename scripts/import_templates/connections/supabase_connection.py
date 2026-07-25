@@ -2,9 +2,11 @@
 Supabase/Flutter Connection Module
 
 Provides authenticated Supabase client and helper methods.
-Credentials are permanent and loaded from config.py.
+Non-secret tenant settings come from config.py. The exact URL and privileged
+key must be injected through the protected process environment.
 """
 
+import os
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -17,19 +19,34 @@ from typing import List, Dict, Optional
 class SupabaseConnection:
     """
     Handle all Supabase/Flutter database interactions.
-    Uses permanent credentials from config.py.
+    Uses the tenant ID from config.py and exact SUPABASE_URL plus
+    SUPABASE_SECRET_KEY from the process environment.
     
     Usage:
-        supabase = SupabaseConnection()  # No credentials needed - uses config.py
+        supabase = SupabaseConnection()
         products = supabase.fetch_all_products()
         customers = supabase.fetch_all_customers()
     """
     
     def __init__(self):
-        """Initialize with permanent credentials from config.py"""
-        self.url = config.SUPABASE_URL
-        self.key = config.SUPABASE_KEY
+        """Initialize with protected process credentials."""
+        self.url = os.environ.get("SUPABASE_URL", "").strip()
+        self.key = os.environ.get("SUPABASE_SECRET_KEY", "").strip()
         self.tenant_id = config.TENANT_ID
+        approved_production_url = "https://xzdvtzdqjeyqxnkqprtf.supabase.co"
+        if (
+            self.url != approved_production_url
+            and not self.url.startswith(("http://127.0.0.1:", "http://localhost:"))
+        ):
+            raise RuntimeError(
+                "Missing or invalid SUPABASE_URL. Set the approved production "
+                "URL or an explicit loopback URL in the protected process environment."
+            )
+        if not self.key:
+            raise RuntimeError(
+                "Missing SUPABASE_SECRET_KEY in the process environment. "
+                "Inject it from the documented OS credential store."
+            )
         
         # Initialize client
         print("🔑 Connecting to Supabase...")

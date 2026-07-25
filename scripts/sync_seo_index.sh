@@ -25,10 +25,9 @@ SUPABASE_URL="https://xzdvtzdqjeyqxnkqprtf.supabase.co"
 TENANT_ID="5443b130-cc28-45af-a420-cd500b288890"  # Viñabike production
 
 resolve_supabase_api_key() {
-  # CI already owns the independently managed secret key for snapshot
-  # generation. Accept it as the final non-interactive fallback so the base
-  # HTML is hydrated before Flutter copies web/index.html into the release.
-  # The value is never printed and this request reads only storefront settings.
+  # CI already injects the independently managed secret key for this step.
+  # Keep that explicit process-variable fallback until a dedicated protected
+  # publishable variable exists; never obtain either key by listing project keys.
   local key="${SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_ANON_KEY:-${SUPABASE_SECRET_KEY:-}}}"
 
   if [[ -n "$key" ]]; then
@@ -48,20 +47,8 @@ resolve_supabase_api_key() {
     fi
   fi
 
-  if command -v supabase >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-    key="$(supabase projects api-keys \
-      --project-ref xzdvtzdqjeyqxnkqprtf \
-      --output json 2>/dev/null \
-      | jq -r '[.[] | select(.type == "publishable") | .api_key][0] // empty')"
-    if [[ -n "$key" ]]; then
-      SUPABASE_API_KEY="$key"
-      SUPABASE_API_KEY_SOURCE="authenticated Supabase CLI"
-      return 0
-    fi
-  fi
-
-  echo "Could not load the Supabase publishable key." >&2
-  echo "Set SUPABASE_PUBLISHABLE_KEY, sign in with Supabase CLI, or install the documented OS credential." >&2
+  echo "Could not load a Supabase API key for the SEO sync." >&2
+  echo "Set SUPABASE_PUBLISHABLE_KEY (preferred), legacy SUPABASE_ANON_KEY, or the CI-only SUPABASE_SECRET_KEY in the process environment; otherwise install the documented publishable-key macOS Keychain entry." >&2
   exit 64
 }
 

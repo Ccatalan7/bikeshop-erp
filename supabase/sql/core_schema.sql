@@ -34285,8 +34285,9 @@ set is_required = excluded.is_required,
 
 -- Worker portal login and shift planning foundation.
 --
--- This migration is intentionally idempotent so it can be run through
--- `supabase db query --linked --file ...` and mirrored in core_schema.sql.
+-- This migration is intentionally idempotent so its standalone forward file
+-- can be deployed through the guarded scripts/db/query.sh production --write
+-- path and mirrored in core_schema.sql.
 
 create or replace function public.normalize_worker_username(p_username text)
 returns text

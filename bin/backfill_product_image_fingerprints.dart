@@ -33,15 +33,27 @@ Future<void> main(List<String> args) async {
   }
   stdout.writeln('');
 
-  final supabaseUrl = _getEnvValue('SUPABASE_URL') ?? _defaultSupabaseUrl;
-  final serviceRoleKey = _getEnvValue('SUPABASE_SECRET_KEY') ?? '';
+  final supabaseUrl =
+      _getProcessEnvValue('SUPABASE_URL') ?? _defaultSupabaseUrl;
+  final secretKey = _getProcessEnvValue('SUPABASE_SECRET_KEY') ?? '';
 
-  if (serviceRoleKey.isEmpty) {
-    stderr.writeln('❌ SUPABASE_SECRET_KEY is missing');
+  if (supabaseUrl != _defaultSupabaseUrl &&
+      !supabaseUrl.startsWith('http://127.0.0.1:') &&
+      !supabaseUrl.startsWith('http://localhost:')) {
+    stderr.writeln(
+      '❌ SUPABASE_URL must be the approved production project or an explicit loopback URL.',
+    );
+    exit(64);
+  }
+  if (secretKey.isEmpty) {
+    stderr.writeln(
+      '❌ SUPABASE_SECRET_KEY is missing from the process environment. '
+      'Inject it from the documented OS credential store before running this script.',
+    );
     exit(64);
   }
 
-  supabase = SupabaseClient(supabaseUrl, serviceRoleKey);
+  supabase = SupabaseClient(supabaseUrl, secretKey);
   httpClient = http.Client();
 
   try {
@@ -231,25 +243,9 @@ Future<List<int>?> _downloadImage(String url) async {
   return null;
 }
 
-String? _getEnvValue(String key) {
-  final envValue = Platform.environment[key];
-  if (envValue != null && envValue.isNotEmpty) {
-    return envValue;
-  }
-
-  final envFile = File('.env');
-  if (!envFile.existsSync()) {
-    return null;
-  }
-
-  for (final line in envFile.readAsLinesSync()) {
-    if (!line.startsWith('$key=')) {
-      continue;
-    }
-    return line.substring(key.length + 1).trim();
-  }
-
-  return null;
+String? _getProcessEnvValue(String key) {
+  final value = Platform.environment[key]?.trim();
+  return value == null || value.isEmpty ? null : value;
 }
 
 _Config _parseArgs(List<String> args) {

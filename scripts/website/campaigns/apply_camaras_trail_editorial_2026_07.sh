@@ -3,6 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SUPABASE_CLI_WRAPPER="$ROOT/scripts/supabase_cli.sh"
 cd "$ROOT"
 
 MODE="${1:-}"
@@ -151,7 +152,8 @@ ensure_storage_asset() {
   local existing_etag
   existing_etag="$(storage_etag "$storage_object")"
   if [[ -z "$existing_etag" || "$existing_etag" == "etag" ]]; then
-    supabase --experimental storage cp --linked \
+    VINABIKE_SUPABASE_STORAGE_WRITE_CONFIRM="$EXPECTED_PROJECT_REF" \
+      "$SUPABASE_CLI_WRAPPER" --experimental storage cp --linked \
       --content-type "$content_type" \
       --cache-control 'public,max-age=31536000,immutable' \
       "$asset" "ss:///${STORAGE_BUCKET}/${storage_object}"

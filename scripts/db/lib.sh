@@ -4,6 +4,7 @@ set -euo pipefail
 
 DB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DB_CACHE_DIR="$DB_ROOT/.tmp/db"
+SUPABASE_CLI_WRAPPER="$DB_ROOT/scripts/supabase_cli.sh"
 mkdir -p "$DB_CACHE_DIR"
 
 export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
@@ -15,6 +16,10 @@ die() {
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || die "$1 is required; run the project bootstrap"
+}
+
+run_supabase_cli() {
+  "$SUPABASE_CLI_WRAPPER" "$@"
 }
 
 sha256_file() {
@@ -35,7 +40,7 @@ ensure_docker() {
 
 local_db_url() {
   local output url
-  output="$(supabase status -o env 2>/dev/null || true)"
+  output="$(run_supabase_cli status -o env 2>/dev/null || true)"
   url="$(printf '%s\n' "$output" | awk -F= '$1=="DB_URL"{print substr($0,index($0,"=")+1)}')"
   url="${url%\"}"
   url="${url#\"}"

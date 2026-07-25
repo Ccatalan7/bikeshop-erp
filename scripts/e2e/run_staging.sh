@@ -5,7 +5,19 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-staging_url="${SUPABASE_STAGING_URL:-https://bczzjhjrpmtpgwdvlbut.supabase.co}"
+expected_staging_ref="bczzjhjrpmtpgwdvlbut"
+[[ "${VINABIKE_STAGING_REACTIVATION_CONFIRM:-}" == "$expected_staging_ref" ]] || {
+  echo "Staging is policy-dormant; explicit owner reactivation is required." >&2
+  exit 64
+}
+
+expected_staging_url="https://$expected_staging_ref.supabase.co"
+staging_url="${SUPABASE_STAGING_URL:-$expected_staging_url}"
+staging_url="${staging_url%/}"
+[[ "$staging_url" == "$expected_staging_url" ]] || {
+  echo "SUPABASE_STAGING_URL does not identify the approved dormant staging project." >&2
+  exit 64
+}
 publishable_key="${SUPABASE_STAGING_PUBLISHABLE_KEY:-}"
 e2e_email="${E2E_EMAIL:-e2e-agent@staging.vinabike.invalid}"
 e2e_password="${E2E_PASSWORD:-}"

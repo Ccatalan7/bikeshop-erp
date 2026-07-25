@@ -280,16 +280,12 @@ class StockMovementsService extends ChangeNotifier {
 6. ✅ Clickable reference numbers with navigation to invoices
 
 ### Deployment Command
-```bash
-# Deploy from Supabase SQL Editor or CLI
-supabase db push
 
-# Or manually execute in Supabase SQL Editor:
-# Copy the following sections from core_schema.sql:
-# - Lines 2070-2102 (sales_invoices enhancements)
-# - Lines 4183-4193 (purchase_invoices enhancements)
-# - Lines 1410-1460 (updated stock_movements_view)
-```
+This historical checklist predates the guarded database workflow. Do not run
+`supabase db push`, do not paste fragments into the SQL Editor, and do not
+deploy `core_schema.sql` wholesale. Create a unique idempotent forward
+migration, mirror its final state in `core_schema.sql`, and deploy/verify it
+through `docs/development/SUPABASE_WORKFLOW.md`.
 
 ### Post-Deployment Verification
 ```sql

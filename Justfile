@@ -1,4 +1,4 @@
-set dotenv-load := true
+set dotenv-load := false
 set positional-arguments := true
 
 default:
@@ -56,7 +56,7 @@ db-fingerprint environment="local":
     #!/usr/bin/env bash
     exec bash scripts/db/query.sh "{{environment}}" --file supabase/manual_checks/diagnostics/schema_fingerprint.sql
 
-db-drift left="local" right="staging":
+db-drift left="local" right="production":
     #!/usr/bin/env bash
     exec bash scripts/db/drift.sh "{{left}}" "{{right}}"
 
@@ -65,7 +65,7 @@ db-staging-schema-gate:
     echo "Staging schema gate is suspended: staging is not production-authoritative." >&2
     exit 64
 
-db-smoke environment="staging":
+db-smoke environment="local":
     #!/usr/bin/env bash
     exec bash scripts/db/smoke.sh "{{environment}}"
 

@@ -28,28 +28,16 @@ const webpQuality = 80; // WebP quality (0-100)
 
 late final SupabaseClient supabase;
 
-String _getServiceRoleKey() {
-  // Try environment variable first
-  final envKey = Platform.environment['SUPABASE_SECRET_KEY'];
+String _getSecretKey() {
+  final envKey = Platform.environment['SUPABASE_SECRET_KEY']?.trim();
   if (envKey != null && envKey.isNotEmpty) {
     return envKey;
   }
-  
-  // Try to read from .env file
-  final envFile = File('.env');
-  if (envFile.existsSync()) {
-    final lines = envFile.readAsLinesSync();
-    for (final line in lines) {
-      if (line.startsWith('SUPABASE_SECRET_KEY=')) {
-        return line.substring('SUPABASE_SECRET_KEY='.length).trim();
-      }
-    }
-  }
-  
+
   throw Exception(
-    'SUPABASE_SECRET_KEY not found!\n'
-    'Set it as environment variable or add to .env file.\n'
-    'This key is required to bypass RLS for storage uploads.'
+    'SUPABASE_SECRET_KEY is missing from the process environment.\n'
+    'Inject it from the documented OS credential store before running this script.\n'
+    'This key is required to bypass RLS for storage uploads.',
   );
 }
 
@@ -66,10 +54,10 @@ void main(List<String> args) async {
   if (limit != null) print('📊 Limit: $limit products');
   print('');
 
-  // Initialize Supabase with service role key (bypasses RLS)
-  final serviceRoleKey = _getServiceRoleKey();
-  print('🔑 Using service role key for storage access');
-  supabase = SupabaseClient(supabaseUrl, serviceRoleKey);
+  // Initialize Supabase with the independently managed secret key.
+  final secretKey = _getSecretKey();
+  print('🔑 Using Supabase secret key for storage access');
+  supabase = SupabaseClient(supabaseUrl, secretKey);
 
   // Fetch products that need optimization
   print('📋 Fetching products with images but no optimized version...');
@@ -80,9 +68,8 @@ void main(List<String> args) async {
       .not('image_url', 'is', null)
       .isFilter('image_url_optimized', null);
 
-  final response = limit != null 
-      ? await baseQuery.limit(limit)
-      : await baseQuery;
+  final response =
+      limit != null ? await baseQuery.limit(limit) : await baseQuery;
   final products = response as List;
 
   print('📦 Found ${products.length} products to optimize');

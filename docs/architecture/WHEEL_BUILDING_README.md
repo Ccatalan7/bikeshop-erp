@@ -245,7 +245,12 @@ final lengths = service.calculateAsymmetricSpokeLength(
 
 ## 💾 Deployment
 
-Run `DEPLOY_WHEEL_BUILDING.sql` in Supabase SQL Editor to create:
+Treat `supabase/sql/DEPLOY_WHEEL_BUILDING.sql` as historical source material.
+For any current deployment, first produce a unique idempotent forward migration,
+mirror it in `supabase/sql/core_schema.sql`, and follow
+`docs/development/SUPABASE_WORKFLOW.md` through production-derived validation,
+guarded deployment, and exact read-back. Do not paste this file into the SQL
+Editor. The intended objects are:
 - 4 tables (hubs, rims, spokes, builds)
 - 3 functions (calculator, hub matcher, spoke finder)
 - All RLS policies

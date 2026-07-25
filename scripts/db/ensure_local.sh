@@ -27,7 +27,7 @@ schema_inputs_manifest="$DB_CACHE_DIR/core-schema-inputs.sha256"
 
 current_hash="$(sha256_file "$schema_inputs_manifest")"
 
-supabase status >/dev/null 2>&1 || supabase db start >/dev/null
+run_supabase_cli status >/dev/null 2>&1 || run_supabase_cli db start >/dev/null
 db_url="$(local_db_url)"
 
 sentinels_ready() {

@@ -42,6 +42,12 @@ done
 [[ -z "$sql" || -z "$file" ]] || die "Use either --sql or --file, not both"
 [[ "$format" =~ ^(table|csv|json)$ ]] || die "Format must be table, csv or json"
 
+if [[ "$environment" == staging ]]; then
+  expected_staging_ref="bczzjhjrpmtpgwdvlbut"
+  [[ "${VINABIKE_STAGING_REACTIVATION_CONFIRM:-}" == "$expected_staging_ref" ]] ||
+    die "Staging is policy-dormant. Owner reactivation requires VINABIKE_STAGING_REACTIVATION_CONFIRM=$expected_staging_ref"
+fi
+
 require_command psql
 psql_args=(-X -v ON_ERROR_STOP=1 -P pager=off)
 if [[ "$environment" == local ]]; then
@@ -58,23 +64,32 @@ else
   usage
 fi
 
-if [[ "$environment" == production && "$write" == true ]]; then
+if [[ "$environment" == staging ]]; then
+  staging_ref="${PGUSER#postgres.}"
+  [[ "$staging_ref" == "$expected_staging_ref" ]] ||
+    die "Staging connection identity does not match the approved dormant project"
+fi
+
+if [[ "$environment" == production ]]; then
   expected_production_ref="xzdvtzdqjeyqxnkqprtf"
+  [[ -f "$DB_ROOT/supabase/.temp/project-ref" ]] ||
+    die "Linked production project identity is unavailable"
   linked_ref="$(tr -d '[:space:]' <"$DB_ROOT/supabase/.temp/project-ref")"
   connection_ref="${PGUSER#postgres.}"
-  [[ "${VINABIKE_DB_WRITE_CONFIRM:-}" == production ]] ||
-    die "Production writes require VINABIKE_DB_WRITE_CONFIRM=production"
   [[ "$linked_ref" == "$expected_production_ref" ]] ||
     die "Linked project is not the approved production project"
   [[ "$connection_ref" == "$expected_production_ref" ]] ||
     die "Production connection identity does not match the approved project"
+fi
+if [[ "$environment" == production && "$write" == true ]]; then
+  [[ "${VINABIKE_DB_WRITE_CONFIRM:-}" == production ]] ||
+    die "Production writes require VINABIKE_DB_WRITE_CONFIRM=production"
 fi
 if [[ "$environment" == staging && "$write" == true && "${VINABIKE_DB_WRITE_CONFIRM:-}" != staging ]]; then
   die "Staging writes require VINABIKE_DB_WRITE_CONFIRM=staging"
 fi
 if [[ "$environment" == staging && "$write" == true ]]; then
   production_ref="$(tr -d '[:space:]' <"$DB_ROOT/supabase/.temp/project-ref")"
-  staging_ref="${PGUSER#postgres.}"
   [[ -n "$production_ref" && -n "$staging_ref" ]] ||
     die "Cannot prove staging and production project identities"
   [[ "$staging_ref" != "$production_ref" ]] ||

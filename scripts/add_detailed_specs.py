@@ -5,13 +5,11 @@ This populates the technical fields that Bike Index doesn't provide
 """
 
 import os
-from dotenv import load_dotenv
 from supabase import create_client, Client
-
-load_dotenv()
 
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_SECRET_KEY')
+APPROVED_PRODUCTION_URL = 'https://xzdvtzdqjeyqxnkqprtf.supabase.co'
 
 # Detailed specs for each bike
 BIKE_SPECS = {
@@ -191,6 +189,22 @@ BIKE_SPECS = {
 
 def update_bike_specs():
     """Update bikes with detailed specs"""
+    if (
+        SUPABASE_URL != APPROVED_PRODUCTION_URL
+        and not (SUPABASE_URL or '').startswith(
+            ('http://127.0.0.1:', 'http://localhost:')
+        )
+    ):
+        raise SystemExit(
+            "Missing or invalid SUPABASE_URL. Set the approved production "
+            "URL or an explicit loopback URL."
+        )
+    if not SUPABASE_KEY:
+        raise SystemExit(
+            "Missing SUPABASE_SECRET_KEY in the process environment. Inject "
+            "it from the documented OS credential store."
+        )
+
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
     print("🔧 Adding detailed specs to bikes...\n")

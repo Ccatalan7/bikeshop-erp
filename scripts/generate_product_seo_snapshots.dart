@@ -15,7 +15,7 @@ import 'package:vinabike_erp/public_store/models/public_commerce_product_project
 /// - Reads `build/web_store/index.html` as the base template (already synced by
 ///   `scripts/sync_seo_index.sh`).
 /// - Fetches products from Supabase via REST using `SUPABASE_SECRET_KEY`
-///   from `.env` (never printed).
+///   from the process environment (never printed).
 /// - Writes canonical HTML files at `build/web_store/productos/<slug>/<sku>`
 ///   and legacy UUID snapshots that point crawlers to the canonical URL.
 /// - Writes `sitemap.xml` and `robots.txt` into the same build directory.
@@ -54,21 +54,29 @@ void main(List<String> args) async {
     return;
   }
 
-  final env = await _readDotEnv(File('.env'));
   final serviceRoleKey =
-      _resolveEnvValue('SUPABASE_SECRET_KEY', env: env) ?? '';
+      Platform.environment['SUPABASE_SECRET_KEY']?.trim() ?? '';
   if (serviceRoleKey.isEmpty) {
     stderr.writeln(
-      '❌ SUPABASE_SECRET_KEY not found in environment or .env',
+      '❌ SUPABASE_SECRET_KEY not found in the process environment',
     );
     exitCode = 2;
     return;
   }
 
-  final supabaseUrl =
-      _resolveEnvValue('SUPABASE_URL', env: env)?.isNotEmpty == true
-          ? _resolveEnvValue('SUPABASE_URL', env: env)!
-          : 'https://xzdvtzdqjeyqxnkqprtf.supabase.co';
+  final configuredSupabaseUrl = Platform.environment['SUPABASE_URL']?.trim();
+  const approvedSupabaseUrl = 'https://xzdvtzdqjeyqxnkqprtf.supabase.co';
+  final supabaseUrl = (configuredSupabaseUrl?.isNotEmpty == true
+          ? configuredSupabaseUrl!
+          : approvedSupabaseUrl)
+      .replaceFirst(RegExp(r'/+$'), '');
+  if (supabaseUrl != approvedSupabaseUrl) {
+    stderr.writeln(
+      '❌ SUPABASE_URL is not the approved production project for storefront snapshots',
+    );
+    exitCode = 2;
+    return;
+  }
 
   final baseIndexHtml = await baseIndexFile.readAsString();
 
@@ -1661,7 +1669,6 @@ Future<Map<String, String>> _fetchWebsiteSettings({
     url,
     headers: {
       'apikey': serviceRoleKey,
-      'Authorization': 'Bearer $serviceRoleKey',
     },
   );
 
@@ -1706,7 +1713,6 @@ Future<List<Map<String, dynamic>>> _fetchProducts({
       url,
       headers: {
         'apikey': serviceRoleKey,
-        'Authorization': 'Bearer $serviceRoleKey',
       },
     );
 
@@ -1755,7 +1761,6 @@ Future<Map<String, String>> _fetchProductBrandNames({
       url,
       headers: {
         'apikey': serviceRoleKey,
-        'Authorization': 'Bearer $serviceRoleKey',
       },
     );
     final decoded = jsonDecode(response) as List<dynamic>;
@@ -1796,7 +1801,6 @@ Future<List<Map<String, dynamic>>> _fetchActiveProductCategories({
       url,
       headers: {
         'apikey': serviceRoleKey,
-        'Authorization': 'Bearer $serviceRoleKey',
       },
     );
 
@@ -1824,7 +1828,6 @@ Future<Map<String, int>> _fetchPublicProductAvailability({
       Uri.parse('$supabaseUrl/rest/v1/rpc/get_public_products'),
       headers: {
         'apikey': serviceRoleKey,
-        'Authorization': 'Bearer $serviceRoleKey',
       },
       body: {
         'p_tenant_id': tenantId,
@@ -1871,7 +1874,6 @@ Future<List<Map<String, dynamic>>> _fetchProductUrlAliases({
       url,
       headers: {
         'apikey': serviceRoleKey,
-        'Authorization': 'Bearer $serviceRoleKey',
       },
     );
     final decoded = jsonDecode(response) as List<dynamic>;
@@ -1899,7 +1901,6 @@ Future<List<Map<String, dynamic>>> _fetchWebsitePages({
     url,
     headers: {
       'apikey': serviceRoleKey,
-      'Authorization': 'Bearer $serviceRoleKey',
     },
   );
 
@@ -1931,7 +1932,6 @@ Future<Map<String, List<Map<String, dynamic>>>> _fetchWebsiteBlocksForPages({
     url,
     headers: {
       'apikey': serviceRoleKey,
-      'Authorization': 'Bearer $serviceRoleKey',
     },
   );
 
@@ -3220,53 +3220,6 @@ String _replaceLinkHref(String html,
     return html.replaceAll(re, '<link rel="$rel" href="$esc">');
   }
   return html;
-}
-
-Future<Map<String, String>> _readDotEnv(File file) async {
-  if (!file.existsSync()) return {};
-  final lines = await file.readAsLines();
-  final out = <String, String>{};
-
-  for (final raw in lines) {
-    final line = raw.trim();
-    if (line.isEmpty || line.startsWith('#')) continue;
-
-    final idx = line.indexOf('=');
-    if (idx <= 0) continue;
-
-    var key = line.substring(0, idx).trim();
-    var value = line.substring(idx + 1).trim();
-
-    if (key.startsWith('export ')) {
-      key = key.substring('export '.length).trim();
-    }
-
-    if (key.isEmpty) continue;
-
-    // Strip optional surrounding quotes.
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.substring(1, value.length - 1);
-    }
-
-    out[key] = value;
-  }
-
-  return out;
-}
-
-String? _resolveEnvValue(String key, {required Map<String, String> env}) {
-  final fromProcess = Platform.environment[key]?.trim();
-  if (fromProcess != null && fromProcess.isNotEmpty) {
-    return fromProcess;
-  }
-
-  final fromDotEnv = env[key]?.trim();
-  if (fromDotEnv != null && fromDotEnv.isNotEmpty) {
-    return fromDotEnv;
-  }
-
-  return null;
 }
 
 Map<String, String> _parseArgs(List<String> args) {

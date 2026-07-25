@@ -6,7 +6,9 @@
 2. Clone the repository and enter its root.
 3. Run `bash scripts/bootstrap/bootstrap_macos.sh`.
 4. Run `just doctor`.
-5. Copy `.env.example` to `.env` only when local runtime credentials are required; obtain values from the approved password store, never chat or Git.
+5. Copy `.env.example` to `.env` only for public app configuration or
+   non-Supabase local-only values. Private Supabase values stay in Keychain as
+   documented in `SUPABASE_WORKFLOW.md`.
 6. Run `just verify-fast`. Run `just verify` before a pull request.
 
 The bootstrap installs missing packages from `Brewfile` without broadly upgrading installed packages. It configures pinned Node/npm through Volta, pinned Flutter through FVM, the Python parser through uv, and a Colima Docker runtime when no runtime is active.
@@ -31,7 +33,10 @@ firebase login
 supabase login
 ```
 
-The doctor checks authentication state without printing tokens. Provider and database secrets must remain in Keychain or owner-only `.env` files.
+The doctor checks authentication state without printing tokens. Private
+Supabase and database values must remain in Keychain. Other provider values may
+use an owner-only ignored `.env` only when their consumer has no credential
+store integration.
 
 ## Platform checks
 

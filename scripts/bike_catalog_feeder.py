@@ -10,12 +10,10 @@ import json
 from typing import Dict, List, Optional
 from supabase import create_client, Client
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
-
-SUPABASE_URL = os.getenv('SUPABASE_URL', 'https://your-project.supabase.co')
+SUPABASE_URL = os.getenv('SUPABASE_URL', '')
 SUPABASE_KEY = os.getenv('SUPABASE_SECRET_KEY', '')
+APPROVED_PRODUCTION_URL = 'https://xzdvtzdqjeyqxnkqprtf.supabase.co'
 
 class BikeIndexClient:
     """Client for Bike Index API V3"""
@@ -105,6 +103,19 @@ class BikeCatalogFeeder:
     """Main feeder class to populate bike_catalog table"""
     
     def __init__(self):
+        if (
+            SUPABASE_URL != APPROVED_PRODUCTION_URL
+            and not SUPABASE_URL.startswith(("http://127.0.0.1:", "http://localhost:"))
+        ):
+            raise SystemExit(
+                "Missing or invalid SUPABASE_URL in the process environment. "
+                "Set the approved production URL or an explicit loopback URL."
+            )
+        if not SUPABASE_KEY:
+            raise SystemExit(
+                "Missing SUPABASE_SECRET_KEY in the process environment. "
+                "Inject it from the documented OS credential store."
+            )
         self.bike_index = BikeIndexClient()
         self.supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     

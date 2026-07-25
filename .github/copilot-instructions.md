@@ -196,64 +196,31 @@ Chrome profile, login, or extension.
 
 ## Supabase Implementation Completion Gate
 
-Every Supabase/database implementation must also follow
-`docs/runbooks/STAGING_SUPABASE.md`, whose current environment status and safety
-rules override older staging wording elsewhere in this file.
+All Supabase/database work follows these two documents:
 
-### Production Is The Compatibility Source Of Truth (CRITICAL)
+1. `docs/runbooks/STAGING_SUPABASE.md` is the authoritative environment,
+   production-validation, and safety policy.
+2. `docs/development/SUPABASE_WORKFLOW.md` is the executable daily command
+   guide.
 
-- The deployed production project `xzdvtzdqjeyqxnkqprtf` is the only canonical
-  source for current schema compatibility. The suspended staging project is
-  materially different and must never be used for release evidence, readiness
-  claims, migration compatibility testing, or browser acceptance testing.
-- `supabase/sql/core_schema.sql` is a required idempotent documentation/bootstrap
-  mirror. It is not evidence of what production currently contains and must not
-  be used as the baseline for a test that claims a migration or release will
-  work in production.
-- Before testing database changes, obtain a fresh, read-only schema dump from
-  the verified production project. Record its project ref, UTC timestamp, and
-  SHA-256 outside Git. Restore that dump into a disposable database that retains
-  compatible Supabase-managed schemas, then apply only the migrations that are
-  actually absent from production. Never rebuild this release-validation
-  database from `core_schema.sql`.
-- A production-derived disposable database proves application-schema and SQL
-  compatibility, but it does not by itself prove behavior against live data or
-  provider-managed configuration. Pair it with read-only production manifests,
-  invariants, migration-history checks, and post-deployment read-back.
-- When a behavior cannot be represented faithfully off-production, use the
-  smallest reviewed test directly against production only when the owner has
-  authorized production testing. Prefer `BEGIN`/`ROLLBACK`, fixed synthetic
-  identifiers, a dedicated test tenant, bounded lock/statement timeouts, and
-  tests that cannot emit webhooks, HTTP calls, messages, storage writes, or
-  other non-transactional side effects. If those guarantees cannot be proven,
-  do not run the mutating test; validate with read-only evidence and deploy the
-  backward-compatible change behind its documented guard instead.
-- Never say “100% representative”, “production-safe”, or “ready” based on
-  staging, a core-schema bootstrap, or a schema-only clone. State exactly which
-  layers were verified and reserve the final compatibility claim for live
-  production read-back and business-invariant checks.
+The durable rules are:
 
-For each database-backed implementation, the agent must:
-
-1. Run the documented CLI/project-identity preflight and inspect read-only
-   evidence first.
-2. Represent schema/data behavior in an idempotent forward migration and mirror
-   the same objects/logic in `supabase/sql/core_schema.sql`.
-3. Run affected pgTAP tests against a fresh production-derived disposable
-   database. A local suite bootstrapped from `core_schema.sql` may be used only
-   to maintain that snapshot and can never satisfy the production release gate.
-4. Execute the smallest reviewed migration/backfill against the intended live
-   environment when that target is in scope and the task authorizes the write.
-   Do not stop after creating SQL or after proving it only on a local database.
-5. Register/confirm migration state when required, then query the live target to
-   verify schema, data, tenant isolation, and the affected business invariants.
-6. Make backfills idempotent, scoped, auditable, and safe to replay. Use preview
-   counts/checkpoints and refuse ambiguous repairs rather than guessing.
-
-Production writes retain the authorization and recovery safeguards documented
-below. Once those safeguards and the task-level authorization are satisfied,
-the agent executes and verifies the change without asking the user to repeat
-the same authorization or perform the deployment manually.
+- Production `xzdvtzdqjeyqxnkqprtf` is the compatibility source of truth.
+  Staging is policy-dormant and non-authoritative even when the provider reports
+  `ACTIVE_HEALTHY`.
+- Guarded repository wrappers are the canonical SQL and pgTAP path. Supabase
+  CLI use is control-plane/metadata-only and goes through
+  `scripts/supabase_cli.sh` on Bash/macOS/Linux.
+- Reuse the prepared local database for focused pgTAP. A production-derived
+  validation session uses `scripts/db/production_validation.sh` to reuse one
+  provenance-recorded dump while the live migration head/fingerprint is
+  unchanged; never redump merely to rerun tests.
+- Every schema change has a unique idempotent forward migration and the same
+  final objects/logic mirrored in idempotent
+  `supabase/sql/core_schema.sql`.
+- Agents perform routine preflight, tests, guarded queries, authorized
+  deployment, registration, read-back, and health checks themselves. Hand off
+  only for the human-only blockers listed in the policy.
 
 ---
 
@@ -1185,10 +1152,10 @@ If code changes in this area are shipped without updating the master schema and 
 
 ## Mandatory Verification Before Changes
 
-Before editing bike workshop architecture, agents must verify the current real system state using the already-documented access methods in this file:
-
-- service-role REST inspection
-- direct `psql` inspection when exact SQL is needed
+Before editing bike workshop architecture, agents must verify the current real
+system state through the guarded read-only production path in
+`docs/development/SUPABASE_WORKFLOW.md`. Use a synthetic authenticated client
+when the behavior being verified is RLS/user-context specific.
 
 When the task touches bike technical data modeling, workshop compatibility semantics, ficha value vocabularies, or the compatibility engine, agents must also do external technical research before implementing:
 
@@ -1325,558 +1292,137 @@ Validation rule for every queue item below: use the debug-only `Prueba rápida` 
 
 ---
 
-# 🗄️ SUPABASE PROJECT CONFIGURATION
+# Supabase Operational Routing (CRITICAL)
 
-**⚠️ NEVER GUESS THESE VALUES - THEY ARE DOCUMENTED HERE!**
+Supabase policy and commands are intentionally centralized:
 
-## Project Details
+- `docs/runbooks/STAGING_SUPABASE.md` is authoritative for environment use,
+  production validation, write safety, and valid human handoffs.
+- `docs/development/SUPABASE_WORKFLOW.md` is authoritative for current
+  preflight, credentials, guarded queries, tests, production-derived clone
+  reuse, deployment, and verification commands.
+- `docs/runbooks/DATABASE_BACKUP_AND_RESTORE.md` governs backup/recovery.
+- `docs/development/SECURITY_REMEDIATION_2026-07-12.md` governs legacy-key
+  migration and rotation.
+
+Do not add a second operational command path here. If tooling changes, update
+the workflow; if environment/safety policy changes, update the runbook.
+
+## Project identity
+
+| Environment | Project ref | URL | Policy role |
+|---|---|---|---|
+| Production | `xzdvtzdqjeyqxnkqprtf` | `https://xzdvtzdqjeyqxnkqprtf.supabase.co` | Repository-linked compatibility source of truth |
+| Staging | `bczzjhjrpmtpgwdvlbut` | `https://bczzjhjrpmtpgwdvlbut.supabase.co` | Dormant and non-authoritative until owner reactivation |
+
+Both projects are in `sa-east-1`. A provider status such as `ACTIVE_HEALTHY`
+means the hosted project is running; it does not override staging's dormant
+policy status or authorize agents to use it.
+
+## Canonical operating path
+
+- All local and hosted SQL uses the guarded repository wrappers documented in
+  `docs/development/SUPABASE_WORKFLOW.md`.
+- Supabase CLI is control-plane/metadata-only: projects, secrets, functions,
+  backups, and post-verification migration-history registration. Invoke
+  `scripts/supabase_cli.sh`, pass an explicit project ref where supported, and
+  run control-plane operations sequentially.
+- Never use raw `supabase db query`, `supabase db push`, ad hoc hosted `psql`,
+  or the SQL Editor as the agent SQL/deployment path.
+- `supabase status` describes only the local Docker stack. Use
+  `scripts/supabase_cli.sh projects list --output json` for hosted
+  control-plane status.
+- Agents execute routine preflight, tests, guarded inspection, authorized
+  deployment, migration registration, read-back, and health checks themselves.
+  Do not ask the user to run a query or paste a migration that the repository
+  can execute.
+- Schema-only production dumps are reusable validation-session inputs. Do not
+  redump merely because pgTAP is rerun; use
+  `scripts/db/production_validation.sh` and follow the runbook's provenance and
+  refresh rules.
+- Historical migrations are not replayable from an empty database, so
+  `[db.migrations].enabled = false` is intentional. Use a unique idempotent
+  forward migration, the guarded deployment path, exact read-back, and explicit
+  history registration.
+
+## Credential boundary
+
+No private Supabase credential is stored in the repository. Approved names and
+stores are documented in `docs/development/SUPABASE_WORKFLOW.md`; values must
+never be printed.
+
+- The CLI access token is for provider control-plane commands.
+- The database password is for guarded PostgreSQL access and schema export.
+- The publishable key is public client identity and remains subject to RLS.
+- The modern local-maintenance secret key is privileged, stored only in macOS
+  Keychain, and limited to explicit local admin/REST consumers.
+- The separate GitHub storefront SEO secret key is stored only as the protected
+  repository secret `SUPABASE_SECRET_KEY`; never copy either consumer's key
+  into the other's store.
+- The exposed modern `default` key was revoked on 2026-07-25. Never recover or
+  reuse a secret from CLI key-list output.
+- The legacy `service_role` JWT is compromised and must not be added to any new
+  consumer. It remains enabled only while existing consumers are migrated.
+- The legacy `anon` JWT is public client configuration, not a privileged
+  secret, and remains active only for unmigrated clients.
+- Do not rotate or disable legacy keys as an ordinary cleanup. Map and migrate
+  every consumer using the security remediation plan first.
+
+## Project-scoped Edge Function operations
+
+Direct CLI is appropriate here because secrets and function deployment are
+control-plane operations:
+
+```bash
+scripts/supabase_cli.sh secrets list \
+  --project-ref xzdvtzdqjeyqxnkqprtf
+scripts/supabase_cli.sh functions deploy FUNCTION_NAME \
+  --project-ref xzdvtzdqjeyqxnkqprtf
+```
+
+Use `--no-verify-jwt` only when the reviewed function intentionally implements
+its own authentication, such as a verified webhook. Verify the deployed
+function after every change.
+
+## Stable production metadata
 
 | Field | Value |
-|-------|-------|
-| **Project URL** | `https://xzdvtzdqjeyqxnkqprtf.supabase.co` |
-| **Project ID** | `xzdvtzdqjeyqxnkqprtf` |
-| **Region** | AWS South America East 1 (`sa-east-1`) |
-| **Direct Database Host** | `db.xzdvtzdqjeyqxnkqprtf.supabase.co` |
-| **Pooler Host** | `aws-1-sa-east-1.pooler.supabase.com` |
-| **Database Port** | `6543` (pooler) / `5432` (direct) |
+|---|---|
+| Primary tenant (Viñabike) | `5443b130-cc28-45af-a420-cd500b288890` |
+| REST API | `https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/` |
+| Auth API | `https://xzdvtzdqjeyqxnkqprtf.supabase.co/auth/v1/` |
+| Storage API | `https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/` |
+| Realtime | `wss://xzdvtzdqjeyqxnkqprtf.supabase.co/realtime/v1/` |
 
-## Staging Project
+Storage buckets:
 
-Before any Supabase schema, trigger, RLS, Edge Function, inventory, payment, or
-accounting change, read and follow `docs/runbooks/STAGING_SUPABASE.md`. That
-runbook is authoritative for the environment's current status. Staging is
-currently suspended and non-authoritative; do not use it as release evidence or
-spend time rebuilding it unless the owner explicitly reactivates it.
+- `products` - product images;
+- `website` - Website Builder assets;
+- `documents` - business documents.
 
-| Field | Value |
-|-------|-------|
-| **Project URL** | `https://bczzjhjrpmtpgwdvlbut.supabase.co` |
-| **Project ID** | `bczzjhjrpmtpgwdvlbut` |
-| **Project Name** | `vinabike-staging-2026` |
-| **Region** | AWS South America East 1 (`sa-east-1`) |
-| **Direct Database Host** | `db.bczzjhjrpmtpgwdvlbut.supabase.co` |
-
-- This replacement staging project was created on 2026-07-12 under the Free Plan's second active-project allowance. The prior project `kyvgmapifacpzuyreasy` was paused for more than 90 days and Supabase returned HTTP 400 stating that it cannot be restored.
-- The repository remains linked to production. Do not casually run `supabase link` against staging and leave the working copy pointed at the wrong project.
-- The staging project ref and database password are stored in macOS Keychain as `Vinabike ERP Supabase staging project ref` (account `supabase`) and `Vinabike ERP Supabase staging database password` (account `postgres`).
-- If staging is explicitly reactivated, destructive browser/database journeys
-  belong there, never in production. Staging must use synthetic tenant/user
-  fixtures and must reject the production project ref in reset/cleanup tooling.
-
-## Connection Strings
-
-**Pooler Connection (recommended for most operations):**
-```
-postgresql://postgres.xzdvtzdqjeyqxnkqprtf:[PASSWORD]@aws-1-sa-east-1.pooler.supabase.com:6543/postgres
-```
-
-**Direct Connection (for migrations/schema changes):**
-```
-postgresql://postgres:[PASSWORD]@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres
-```
-
-## 🚀 Correct Use of Supabase CLI (CRITICAL FOR AGENTS)
-
-Agents must inspect and operate Supabase themselves. Do not stop at "Supabase CLI is not configured", ask the user to run routine commands, or blame local Docker before checking the hosted project.
-
-### Mandatory CLI preflight
-
-Run this at the start of every Supabase/database incident or implementation task:
-
-```bash
-cd /Users/Claudio/Dev/bikeshop-erp
-
-# Confirm the installed CLI and linked project.
-supabase --version
-cat supabase/.temp/project-ref
-supabase projects list --output json
-
-# Check for an update. If Supabase is listed, upgrade it and continue.
-outdated_supabase="$(brew outdated --quiet supabase)"
-if [ -n "$outdated_supabase" ]; then brew upgrade supabase; fi
-```
-
-Rules:
-
-- The production project ref is always `xzdvtzdqjeyqxnkqprtf`.
-- For commands that accept it, always pass `--project-ref xzdvtzdqjeyqxnkqprtf`.
-- `supabase status` checks the **local Docker stack only**. A Docker/Colima error does not mean hosted Supabase is down and is not a blocker for hosted CLI operations.
-- `supabase projects list --output json` is the source of truth for hosted project status, region, and linked state.
-- Never run Supabase CLI commands in parallel. Linked queries can throttle temporary login creation, and recent CLI versions can race while updating their local telemetry file.
-- If a command is missing, check `supabase <command> --help`, upgrade the CLI, and continue. Do not hand the setup work back to the user.
-
-### Hosted incident triage
-
-For auth/network/API failures, inspect the hosted project before changing app code:
-
-```bash
-# Hosted control-plane status
-supabase projects list --output json \
-  | jq '.[] | select(.ref == "xzdvtzdqjeyqxnkqprtf")'
-
-# Endpoint DNS and Auth health
-dig +short xzdvtzdqjeyqxnkqprtf.supabase.co
-curl -sS -o /dev/null -w '%{http_code} %{errormsg}\n' \
-  --connect-timeout 10 \
-  https://xzdvtzdqjeyqxnkqprtf.supabase.co/auth/v1/health
-```
-
-Interpretation:
-
-- `ACTIVE_HEALTHY` plus a working health endpoint means the hosted service is up; continue into app credentials, Auth, RLS, or query diagnostics.
-- `INACTIVE` plus missing project-endpoint DNS means the hosted project is paused/inactive. Do not "fix" the Flutter URL or local DNS.
-- A failed `supabase status` with a healthy hosted project only means the local Docker stack is stopped.
-
-As of Supabase CLI `2.105.0`, the CLI can inspect project status but does not expose a `projects restore` subcommand. On macOS, use the authenticated CLI credential to call the official Management API restore endpoint:
-
-```bash
-stored="$(security find-generic-password -s 'Supabase CLI' -a supabase -w)"
-case "$stored" in
-  go-keyring-base64:*) token="$(printf '%s' "${stored#go-keyring-base64:}" | base64 --decode)" ;;
-  *) token="$stored" ;;
-esac
-
-curl -sS -X POST \
-  "https://api.supabase.com/v1/projects/xzdvtzdqjeyqxnkqprtf/restore" \
-  -H "Authorization: Bearer $token" \
-  -H "Content-Type: application/json"
-
-unset stored token
-```
-
-After requesting restore, poll `supabase projects list --output json` sequentially until the project is healthy, then verify Auth and a read-only database query.
-
-If restore returns HTTP `402` with `This organization has unpaid invoices`, that is the root cause. No app code, DNS change, local Docker action, or schema change can reactivate the project; report the exact billing blocker so the organization owner can settle it, then rerun restore and verification.
-
-An overdue invoice can cause Supabase to automatically downgrade the organization to the Free Plan **and** keep every project paused. Being on `free` does not clear historical Pro/overage invoices and does not permit restore while invoices remain unpaid. Check the current organization plan through the authenticated Management API:
-
-```bash
-stored="$(security find-generic-password -s 'Supabase CLI' -a supabase -w)"
-case "$stored" in
-  go-keyring-base64:*) token="$(printf '%s' "${stored#go-keyring-base64:}" | base64 --decode)" ;;
-  *) token="$stored" ;;
-esac
-
-curl -sS "https://api.supabase.com/v1/organizations/xyluboaukuagajdqivij" \
-  -H "Authorization: Bearer $token" \
-  | jq '{id, name, plan}'
-
-unset stored token
-```
-
-For this organization, the reusable interpretation is:
-
-- `plan: "free"` plus restore HTTP `402` means the downgrade already happened, but outstanding invoices still must be paid before restore.
-- Supabase monthly invoices can mix fixed fees and usage fees: fixed plan fees are billed in advance for the cycle that started when the invoice was issued, while usage/compute/overage fees are billed in arrears for the previous cycle.
-- Paying an overdue invoice while the organization is already `free` settles that existing invoice; it does not renew Pro or prepay a new Pro month. Inspect the invoice line items in the organization's Invoices page to see the exact split.
-- After payment, restore the production project and verify that its current database/storage/egress usage fits Free Plan limits before deciding to remain on Free.
-
-### Mandatory post-restore integrity and usage check
-
-Project restoration progresses through statuses such as `COMING_UP` and `RESTORING` before `ACTIVE_HEALTHY`. DNS and individual services can respond before the control-plane status becomes healthy. Do not diagnose missing data while the project is still coming up; poll sequentially until `ACTIVE_HEALTHY`.
-
-After any restore/reactivation, automatically verify all of the following:
-
-1. Organization plan, project status, DNS, Auth, REST, and Storage health.
-2. Database size, production tenant existence, Auth user count, key business-table counts/latest timestamps, invalid indexes, and unvalidated constraints.
-3. Storage bucket/object counts, total bytes, missing metadata, missing bucket references, and actual downloads from representative public objects.
-4. Disk allocation/utilization and recent API activity.
-5. Evidence against a pre-incident baseline when available. Without a prior snapshot/count/dump, never claim absolute proof that no row was lost; report that no evidence of loss was found and identify the newest preserved records.
-
-Useful authenticated Management API checks:
-
-```bash
-# Disk allocation and utilization.
-curl -sS "https://api.supabase.com/v1/projects/xzdvtzdqjeyqxnkqprtf/config/disk" \
-  -H "Authorization: Bearer $token" | jq .
-curl -sS "https://api.supabase.com/v1/projects/xzdvtzdqjeyqxnkqprtf/config/disk/util" \
-  -H "Authorization: Bearer $token" | jq .
-
-# Recent API activity. Valid intervals are:
-# 15min, 30min, 1hr, 3hr, 1day, 3day, 7day
-curl -sS \
-  "https://api.supabase.com/v1/projects/xzdvtzdqjeyqxnkqprtf/analytics/endpoints/usage.api-counts?interval=7day" \
-  -H "Authorization: Bearer $token" | jq .
-```
-
-The Management API access token can inspect recent API request counts, but it does not expose the authoritative organization billing-cycle egress byte total. Check the signed-in organization **Usage** page for exact uncached/cached egress. Do not derive billing egress from API request counts; request counts do not contain response sizes and are not equivalent to egress.
-
-### Autonomous verification requirement
-
-Do not merely author Supabase changes. Run the applicable checks yourself:
-
-```bash
-# Preferred read-only production SQL check through the authenticated CLI.
-supabase db query --linked --output table \
-  "select now() as checked_at, current_database() as database_name;"
-
-# Inspect the CLI-supported syntax before inventing a command.
-supabase db query --help
-```
-
-- Use `supabase db query --linked` first for production SQL inspection and verification.
-- Run linked queries sequentially.
-- After schema/function/policy changes, run focused verification SQL and relevant tests automatically.
-- After Edge Function changes, deploy and invoke/verify the affected function automatically.
-- Never ask the user to run a routine query or test that the agent can run.
-- Never print access tokens, database passwords, service-role keys, or full credential-bearing connection strings.
-
-### Mandatory living-runbook rule
-
-`.github/copilot-instructions.md` is the canonical operational runbook for agents working with this Supabase project. Whenever an agent discovers reusable Supabase knowledge, the agent must update this file in the **same task** without waiting for the user to ask.
-
-Update this Supabase section when discovering any of the following:
-
-- a CLI command or flag that is new, changed, removed, or more reliable than the documented path
-- a required CLI upgrade, authentication/bootstrap step, or platform-specific credential-store detail
-- stale project metadata such as project ref, region, host, pooler, status interpretation, or endpoint behavior
-- a recurring failure mode and its proven diagnosis/fix, including exact meaningful error messages/status codes
-- a better autonomous query, deployment, schema, Edge Function, Auth, Storage, or verification workflow
-- a misleading or contradictory instruction elsewhere in this file
-
-Rules for runbook updates:
-
-- Replace stale or contradictory guidance; do not merely append another conflicting note.
-- Document commands that were actually checked against the installed CLI or hosted project.
-- Keep durable, reusable knowledge. Do not add temporary row data, one-off debugging noise, access tokens, passwords, or new secrets.
-- Preserve the rule that schema SQL must be mirrored into idempotent `supabase/sql/core_schema.sql`.
-- Before finishing any Supabase task, explicitly ask: "Did this task reveal something future agents need in the runbook?" If yes, update this file before reporting completion.
-
-### Project-scoped operations
-
-**1. Managing Secrets for Edge Functions:**
-To set secrets that Edge Functions will read via `Deno.env.get()`:
-```bash
-# Correct syntax for setting multiple secrets:
-supabase secrets set --project-ref xzdvtzdqjeyqxnkqprtf KEY_NAME="value" ANOTHER_KEY="value2"
-
-# To list current secrets constraints:
-supabase secrets list --project-ref xzdvtzdqjeyqxnkqprtf
-```
-
-For a read-only readiness audit, both `supabase secrets list --output json`
-and `supabase functions list --output json` are supported by CLI 2.109.1. Parse
-the JSON and report only required secret names as present/absent; do not echo
-secret digests or any locally sourced credential value.
-
-**2. Deploying Edge Functions:**
-```bash
-# Correct syntax to deploy a single edge function:
-supabase functions deploy my-function-name --project-ref xzdvtzdqjeyqxnkqprtf
-
-# If the function handles its own auth (like webhooks), use --no-verify-jwt:
-supabase functions deploy whatsapp-webhook --project-ref xzdvtzdqjeyqxnkqprtf --no-verify-jwt
-```
-**⚠️ ALWAYS set `--project-ref xzdvtzdqjeyqxnkqprtf` or the command will fail or deploy to the wrong place.**
-
-## Important Tenant IDs
-
-| Tenant | UUID | Description |
-|--------|------|-------------|
-| **Viñabike (Production)** | `5443b130-cc28-45af-a420-cd500b288890` | Primary business account, used for testing and production |
-
-## Viñabike Business Info (for SEO/index.html)
+Viñabike public business data for SEO:
 
 | Field | Value |
-|-------|-------|
-| **Business Name** | Vinabike |
-| **Address** | Álvarez 32, Local 17, Viña del Mar, Chile |
-| **Phone** | +56998357797 |
-| **Email** | vinabikechile@gmail.com |
-| **Website** | https://vinabike.cl |
-
-**⚠️ NEVER use placeholder data (like "contacto", "XXXX", "test") in index.html SEO content!**
-
-## Storage Buckets
-
-- `products` - Product images
-- `website` - Website builder assets (blocks, logos, banners)
-- `documents` - Business documents (invoices, reports)
-
-## API Endpoints
-
-- **REST API:** `https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/`
-- **Auth API:** `https://xzdvtzdqjeyqxnkqprtf.supabase.co/auth/v1/`
-- **Storage API:** `https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/`
-- **Realtime:** `wss://xzdvtzdqjeyqxnkqprtf.supabase.co/realtime/v1/`
-
-## When Running Database Queries
-
-**⚠️ IMPORTANT: Use the right tool for the query type. Do not confuse disabled migrations with disabled SQL access.**
-
-This repo intentionally has `[db.migrations].enabled = false` in `supabase/config.toml`, so `supabase db push` can report "Skipping migrations because it is disabled". That only means the migration pipeline is disabled. It does **not** mean agents cannot run standalone SQL.
-
-### Standalone SQL / Arbitrary SQL Against Production
-
-Use `supabase db query --linked` for standalone SQL files, DDL, function replacement, cleanup SQL, and verification queries against the linked production project.
-
-```bash
-# ✅ Deploy a standalone SQL file to the linked Supabase project
-supabase db query --linked --file supabase/migrations/YYYYMMDD_name.sql --output table
-
-# ✅ Run one verification query
-supabase db query --linked --output table "select now();"
-```
-
-Rules for agents:
-
-- Run linked DB queries **sequentially**, never in parallel. Parallel `supabase db query --linked` calls can trigger Supabase temp-login auth failures or circuit breaker throttling.
-- With CLI `2.109.1`, `supabase db query --local --file` can reject a multi-statement migration with `cannot insert multiple commands into a prepared statement`. For local validation only, use the password-free local URL reported by `supabase status` with `psql -v ON_ERROR_STOP=1 -f ...`; keep `supabase db query --linked` as the production inspection/deployment path.
-- With CLI `2.109.1`, `supabase db dump --linked --schema public --file ...` can exit successfully while leaving a zero-byte file. Always require `test -s "$dump_file"` before treating a production-derived schema clone as evidence. If it is empty, do not repeat the same CLI download: source `scripts/db/lib.sh`, call `configure_remote_pg production`, and run `pg_dump --schema-only --schema=public --no-owner --no-privileges --file "$dump_file"` through the configured session-pooler connection. Confirm the resulting file is non-empty, record its UTC timestamp, byte size, and SHA-256, and remember that even schema-only downloads count as network egress.
-- If a linked query hits temp login throttling, stop starting new linked queries and wait before retrying.
-- On Windows, if the Supabase CLI fails while renaming `C:\Users\<user>\.supabase\telemetry.json` or a `telemetry.json.tmp.*` file with `EPERM`, rerun the same sequential command with telemetry disabled for that process, for example `$env:SUPABASE_TELEMETRY_DISABLED='1'; supabase db query --linked --output table "select now();"`.
-- Do not treat `supabase db push` skipping migrations as a blocker. Use `supabase db query --linked --file ...` for standalone deployment SQL.
-- Keep standalone SQL files idempotent and update their deployment status comment after the SQL actually runs on project `xzdvtzdqjeyqxnkqprtf`.
-- Never print DB passwords, service role keys, or full connection strings in terminal output or final responses.
-
-### Backup / PITR Inspection
-
-Use the CLI backup command for read-only backup availability checks:
-
-```bash
-supabase backups list --project-ref xzdvtzdqjeyqxnkqprtf --output json
-```
-
-`supabase backups list` does not accept `--output table`; use `json` or `pretty`. If the result shows `pitr_enabled: false` and `backups: null`, do not promise exact recovery of hard-deleted row contents from PITR/backups through the CLI. Fall back to live audit tables, related snapshots, local logs/cache, or an explicitly labeled reconstruction from surviving evidence.
-
-Use direct `psql` only when a valid DB password is available in the environment and the command can be run without exposing secrets:
-
-```bash
-# Optional fallback only when SUPABASE_DB_PASSWORD is available
-PGPASSWORD="$SUPABASE_DB_PASSWORD" psql \
-  "postgresql://postgres.xzdvtzdqjeyqxnkqprtf@aws-1-sa-east-1.pooler.supabase.com:5432/postgres" \
-  -v ON_ERROR_STOP=1 \
-  -f supabase/migrations/YYYYMMDD_name.sql
-```
-
-### REST API Inspection
-
-Use REST API with the independently managed `sb_secret_...` key for table/view inspection and simple data checks. REST is **not** the right tool for arbitrary SQL DDL/function deployment unless a specific RPC already exists to do that work.
-
-```bash
-# ✅ CORRECT: Load the secret key from macOS Keychain, never a tracked file
-export SUPABASE_SECRET_KEY="$(security find-generic-password \
-  -s 'Vinabike ERP Supabase secret key' -a supabase -w)"
-curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/TABLE_NAME?select=*" \
-  -H "apikey: $SUPABASE_SECRET_KEY" \
-  -H "Authorization: Bearer $SUPABASE_SECRET_KEY" | jq .
-
-# ✅ EXAMPLE: Query website_pages for Viñabike tenant
-curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/website_pages?tenant_id=eq.5443b130-cc28-45af-a420-cd500b288890&select=id,slug,title" \
-  -H "apikey: $SUPABASE_SECRET_KEY" \
-  -H "Authorization: Bearer $SUPABASE_SECRET_KEY" | jq .
-
-# ❌ AVOID: psql connection (password issues)
-# psql "postgresql://postgres.xzdvtzdqjeyqxnkqprtf:..."  # Often fails with "Tenant or user not found"
-```
-
-**Secret Key Location:** no production credential is stored in this repository. Use the authenticated linked CLI first. A secret-key or database-password fallback may be loaded only from the operating-system credential store after the credential has been rotated and registered there; never search tracked files or documentation for a value.
-
-### API key migration status (2026-07-12)
-
-- Project `xzdvtzdqjeyqxnkqprtf` has independently managed `sb_publishable_...` and `sb_secret_...` keys as well as the legacy JWT `anon` and `service_role` keys.
-- The legacy `service_role` JWT appeared in the public Git history and is compromised. Do not add it to any new consumer.
-- External maintenance scripts and storefront snapshot CI use `SUPABASE_SECRET_KEY`; the current unexposed secret key is stored in macOS Keychain as service `Vinabike ERP Supabase secret key`, account `supabase`, and in GitHub Actions as `SUPABASE_SECRET_KEY`.
-- The publishable key is stored in macOS Keychain as service `Vinabike ERP Supabase publishable key`, account `supabase`.
-- Do **not** disable the legacy keys yet. Client builds still contain the legacy anonymous JWT and Edge Functions still read the platform-provided `SUPABASE_SERVICE_ROLE_KEY`. First migrate and verify every client/Edge Function on staging, deploy the replacements, verify production, and only then disable/revoke legacy keys.
-- Never rotate the legacy JWT signing secret as a shortcut. That can invalidate client keys and active auth sessions immediately. Follow the official publishable/secret-key migration path with before/after checks.
-- The production database password was rotated on 2026-07-12 after proving that no app/runtime consumer used it. Direct PostgreSQL login and linked-CLI tenant counts were verified before/after. The current password is stored only in macOS Keychain as service `Vinabike ERP Supabase database password`, account `postgres`.
-- Supabase CLI `2.109.1` is installed from official Homebrew Core and matched the latest official release on 2026-07-12. If Homebrew warns that the old `supabase/tap` is untrusted, check `brew info supabase`; when `From` points to `homebrew-core`, the stale third-party tap is unnecessary and must not be broadly trusted just to silence the warning.
-
-## 🔐 Autonomous Database Access For Agents (CRITICAL)
-
-**A current authenticated Supabase CLI is the preferred first tool for production investigation.**
-
-With a current CLI, agents can use:
-
-- `supabase projects list --output json` for hosted project status
-- `supabase db query --linked` for read-only SQL, exact forensic queries, DDL, and verification
-- `supabase secrets ... --project-ref xzdvtzdqjeyqxnkqprtf`
-- `supabase functions deploy ... --project-ref xzdvtzdqjeyqxnkqprtf`
-- project-scoped admin workflows
-
-Use service-role REST or direct `psql` as fallbacks when the CLI-linked query path is unavailable, when testing a specific REST/RLS behavior, or when a database operation specifically requires a direct connection.
-
-For autonomous DB fallback work, agents can use **one or both** of these:
-
-### 1. Service Role Access (preferred default for inspection)
-
-Use service-role REST queries for:
-- read-only incident inspection
-- querying tables/views/RPCs quickly
-- verifying cleanup results
-- tenant-scoped production checks
-
-**macOS credential-store fallback (only when REST behavior specifically requires it):**
-```bash
-export SUPABASE_SECRET_KEY="$(security find-generic-password \
-  -s 'Vinabike ERP Supabase secret key' -a supabase -w)"
-```
-
-**Tested REST pattern:**
-```bash
-curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/stock_adjustments?tenant_id=eq.5443b130-cc28-45af-a420-cd500b288890&select=id,product_id,adjustment_type,quantity,stock_before,stock_after,reason,created_by,created_at&order=created_at.desc&limit=20" \
-  -H "apikey: $SUPABASE_SECRET_KEY" \
-  -H "Authorization: Bearer $SUPABASE_SECRET_KEY" | jq .
-```
-
-### 2. Direct Postgres Access (for arbitrary SQL / migrations / cleanup)
-
-Use direct `psql` for:
-- deploying a specific migration file directly
-- ad hoc `SELECT`, `WITH`, cleanup, and verification SQL
-- exact forensic queries that are awkward through REST
-- incident response where raw SQL is faster than SQL Editor handoffs
-
-**macOS credential-store fallback (only when direct PostgreSQL specifically requires it):**
-```bash
-export PGPASSWORD="$(security find-generic-password \
-  -s 'Vinabike ERP Supabase database password' -a postgres -w)"
-```
-
-**Tested direct connection string:**
-```bash
-psql "postgresql://postgres:${PGPASSWORD}@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres"
-```
-
-**⚠️ CRITICAL:** The direct host that worked is:
-```bash
-db.xzdvtzdqjeyqxnkqprtf.supabase.co
-```
-
-Do **not** mistype the host. A wrong host like `db.xzdvtzdqeyqxnkqprtf...` will fail with DNS errors.
-
-## ✅ Tested Command Patterns That Worked
-
-### Read-only SQL count / exact inspection
-
-Use this format for exact scalar checks:
-```bash
-export PGPASSWORD="$(security find-generic-password \
-  -s 'Vinabike ERP Supabase database password' -a postgres -w)"
-psql "postgresql://postgres:${PGPASSWORD}@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres" \
-  -P pager=off -Atqc "
-select count(*)
-from public.stock_adjustments
-where tenant_id = '5443b130-cc28-45af-a420-cd500b288890'
-  and adjustment_type = 'manual'
-  and created_by is null;
-"
-```
-
-### Multi-metric verification in ONE result set
-
-When the terminal wrapper may swallow earlier lines, prefer **one combined query** instead of many separate `SELECT`s:
-```bash
-export PGPASSWORD="$(security find-generic-password \
-  -s 'Vinabike ERP Supabase database password' -a postgres -w)"
-psql "postgresql://postgres:${PGPASSWORD}@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres" \
-  -P pager=off -Atqc "
-select metric || '=' || value
-from (
-  select 'null_user_manual_adjustments' as metric,
-      (select count(*)::text
-        from public.stock_adjustments
-        where tenant_id = '5443b130-cc28-45af-a420-cd500b288890'
-         and adjustment_type = 'manual'
-         and created_by is null) as value
-  union all
-  select 'stock_column_drift',
-      (select count(*)::text
-        from public.products
-        where tenant_id = '5443b130-cc28-45af-a420-cd500b288890'
-         and coalesce(inventory_qty,0) <> coalesce(stock_quantity,0))
-) metrics;
-"
-```
-
-### Deploy a migration file directly to production
-
-```bash
-export PGPASSWORD="$(security find-generic-password \
-  -s 'Vinabike ERP Supabase database password' -a postgres -w)"
-psql "postgresql://postgres:${PGPASSWORD}@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres" \
-  -v ON_ERROR_STOP=1 \
-  -f supabase/migrations/YYYYMMDDHHMMSS_name.sql
-```
-
-Use `-v ON_ERROR_STOP=1` so deployment aborts on the first SQL error.
-
-## ✅ Practical Access Strategy For Agents
-
-Use this order by default:
-
-1. **Supabase CLI** for hosted status, linked SQL inspection/verification, secrets, functions, and project admin tasks.
-2. **REST + service role** for testing REST/RLS behavior or simple table inspection when linked SQL is unavailable.
-3. **Direct `psql`** for operations that specifically require a direct database connection.
-
-## 🚨 Pitfalls Encountered In This Session
-
-Future agents should avoid these exact mistakes:
-
-1. **Do not assume an old CLI limitation still applies.**
-  - Run `supabase --version` and `supabase db query --help`.
-  - Current CLI versions support `supabase db query --linked`; upgrade and use it before falling back.
-
-2. **Do not rely on `stock_movements_view` having raw table columns.**
-  - The view does **not** expose raw `type`.
-  - Query the columns the view actually provides: `movement_type`, `source`, `reference_id`, `reference_number`, `quantity`, `stock_before`, `stock_after`, `notes`, `created_at`.
-
-3. **For terminal verification, prefer one combined query.**
-  - Multiple `SELECT`s inside one `psql -Atqc` call can render inconsistently in the terminal wrapper.
-
-4. **Always disable the pager for scripted checks.**
-  - Use `-P pager=off`.
-
-5. **Use `-Atqc` for machine-readable output.**
-  - `-A` unaligned
-  - `-t` tuples only
-  - `-q` quiet
-  - `-c` command
-
-6. **For production cleanup, prove the scope first with read-only SQL.**
-  - Count rows.
-  - Inspect exact timestamps and product IDs.
-  - Only then run targeted `DELETE` / migration SQL.
-
-7. **Do not guess tenant scope.**
-  - Always filter by `tenant_id = '5443b130-cc28-45af-a420-cd500b288890'` when investigating Viñabike production.
-
-## ✅ Copy-Paste Access Bootstrap
-
-Use this bootstrap only when a task genuinely needs REST service-role behavior or direct PostgreSQL after the linked CLI path has been checked:
-
-```bash
-cd /Users/Claudio/Dev/bikeshop-erp
-
-export SUPABASE_SECRET_KEY="$(security find-generic-password \
-  -s 'Vinabike ERP Supabase secret key' -a supabase -w)"
-export PGPASSWORD="$(security find-generic-password \
-  -s 'Vinabike ERP Supabase database password' -a postgres -w)"
-```
-
-Then either:
-
-```bash
-# REST inspection
-curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/stock_adjustments?tenant_id=eq.5443b130-cc28-45af-a420-cd500b288890&select=id,product_id,quantity,reason,created_by,created_at&order=created_at.desc&limit=20" \
-  -H "apikey: $SUPABASE_SECRET_KEY" \
-  -H "Authorization: Bearer $SUPABASE_SECRET_KEY" | jq .
-
-# Direct SQL
-psql "postgresql://postgres:${PGPASSWORD}@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres" -P pager=off -Atqc "select now();"
-```
-
-## 🔒 Secret Handling Rule
-
-Production credentials must never be documented in this repository, source code, examples, screenshots, logs, patches, or chat. Future agents must:
-
-- use the authenticated Supabase/Firebase/GitHub CLI path first
-- load a required fallback only from the operating-system credential store or protected CI environment
-- print/check only presence, metadata, or a one-way fingerprint—never the value
-- rotate a credential only after mapping every consumer and defining before/after verification
-- update the credential store and dependent services immediately after an approved rotation
-- rerun Gitleaks before committing or pushing
+|---|---|
+| Business name | Vinabike |
+| Address | Álvarez 32, Local 17, Viña del Mar, Chile |
+| Phone | +56998357797 |
+| Email | vinabikechile@gmail.com |
+| Website | https://vinabike.cl |
+
+Never replace verified public business data with placeholders.
+
+## Secret handling invariant
+
+- Load private values only from the operating-system credential store,
+  protected CI, or provider-authenticated tooling.
+- Report presence, metadata, or a one-way fingerprint only.
+- Never include passwords, access tokens, secret/service-role keys, or full
+  credential-bearing connection strings in files, logs, screenshots, patches,
+  or chat.
+- Rotate only after mapping every consumer and defining before/after
+  verification; update stores and consumers in the same approved change.
+- Run Gitleaks before committing or pushing credential-related work.
 
 ## 🔐 No Local App Secrets / OAuth Credential Rule
 
@@ -1897,7 +1443,7 @@ Do **not** put any of these in Dart code, app assets, local preferences, SQLite,
 
 Correct pattern:
 
-1. Store provider credentials in Supabase Edge Function secrets using `supabase secrets set --project-ref xzdvtzdqjeyqxnkqprtf ...`.
+1. Store provider credentials in Supabase Edge Function secrets using `scripts/supabase_cli.sh secrets set --project-ref xzdvtzdqjeyqxnkqprtf ...`.
 2. Generate OAuth authorization URLs server-side when possible, using an Edge Function action such as `authorization_url`.
 3. Exchange OAuth codes server-side in Edge Functions.
 4. Store provider access/refresh tokens only in database-side vault tables such as `email_accounts`, protected from `anon` and `authenticated` direct access.
@@ -2122,7 +1668,7 @@ final paymentData = {
 
 **Step 1: Check if query returns data**
 ```sql
--- Run in Supabase SQL Editor as authenticated user
+-- Run through a synthetic authenticated app/REST session, not SQL Editor.
 SELECT auth.uid() as my_user_id, public.user_tenant_id() as my_tenant_id;
 SELECT * FROM table_name WHERE tenant_id = public.user_tenant_id();
 ```
@@ -2167,7 +1713,7 @@ When a feature is broken:
 - [ ] RLS policies have `to authenticated`?
 - [ ] RLS policies for ALL operations (SELECT, INSERT, UPDATE, DELETE)?
 - [ ] Flutter code fetches and includes `tenant_id`?
-- [ ] Redeploy `core_schema.sql` after function fixes?
+- [ ] Deploy the smallest forward migration through the guarded wrapper?
 - [ ] Restart Flutter app after schema deployment?
 - [ ] Test with actual user (not service role in SQL Editor)?
 
@@ -2193,61 +1739,24 @@ SELECT * FROM test_table;  -- Should only see your tenant's data
 
 # 🚨 CRITICAL RULE: DATABASE SCHEMA FILES
 
-**⚠️ SCHEMA IS SPLIT INTO 3 FILES FOR DEPLOYMENT!**
+The artifact and execution contract lives in
+`docs/development/SUPABASE_WORKFLOW.md`; production safety and validation live
+in `docs/runbooks/STAGING_SUPABASE.md`.
 
-**The database schema exists in TWO forms:**
-
-1. **`supabase/sql/core_schema.sql`** (MASTER FILE - 9630 lines)
-   - ✅ **EDIT THIS FILE** when making schema changes
-   - ✅ This is the SINGLE SOURCE OF TRUTH
-   - ✅ All changes go here FIRST
-
-2. **Split files for deployment** (generated from master):
-   - `supabase/sql/1_core_tables.sql` (Tables + seed data)
-   - `supabase/sql/2_business_logic.sql` (Functions + triggers)
-   - `supabase/sql/3_analytics_views.sql` (Dashboard RPCs + views)
-   - ⚠️ These are GENERATED from `core_schema.sql` - don't edit directly!
-
-**When making database changes:**
-- ✅ Edit `core_schema.sql` (master file)
-- ✅ When the task requires the database change to become live and repository
-  credentials/tooling are available, the agent MUST execute the reviewed SQL
-  against the intended Supabase environment and verify it. Do not stop by
-  telling the user to copy/paste or deploy it.
-- ✅ Be EXPLICIT: "I modified `core_schema.sql` at line X" or "I updated function Y in `core_schema.sql`"
-- ✅ **ALLOWED:** You may create standalone .sql files (e.g. `supabase/migrations/YYYYMMDD_name.sql`) for specific deployments to avoid running the entire schema, BUT you must ALSO update `core_schema.sql` as the source of truth.
-
-## Standalone SQL Deployment Status Rule
-
-Any standalone SQL file created for deployment, including `supabase/migrations/*.sql` and root-level `DEPLOY_*.sql` files, must carry an explicit deployment status comment near the top.
-
-Required status format:
-```sql
--- Deployment status: NOT DEPLOYED
-```
-
-After the SQL has actually been run against the real linked Supabase project `xzdvtzdqjeyqxnkqprtf`, update that same file immediately:
-```sql
--- Deployment status: DEPLOYED to production xzdvtzdqjeyqxnkqprtf on YYYY-MM-DD
--- Deployment verification: <short description of the verification query/result>
-```
-
-Never mark a standalone SQL file as deployed after only running it on a local Supabase database. If deployment is not completed or verification did not run, leave the file marked `NOT DEPLOYED` and say that clearly to the user.
-
-Every timestamped `.sql` file under `supabase/migrations/` is an active
-deployment candidate. Never leave an intentionally non-deployable experiment,
-superseded proposal, or partial backfill in that directory, and never include
-one from `supabase/sql/core_schema.sql`. Move preserved review evidence to
-`supabase/manual_checks/archive/`, label it `NEVER DEPLOY`, and keep the
-canonical snapshot limited to the reviewed forward migrations that actually
-define a fresh database. A `NOT DEPLOYED` status means "pending deployment",
-not "do not deploy".
-
-Migration version prefixes must be unique across `supabase/migrations/`.
-Search for the proposed timestamp before creating a file. Supabase history is
-keyed by version, so duplicate prefixes make deployment attribution and
-metadata repair ambiguous; resolve the behavior under a new unique, idempotent
-forward migration instead of guessing which duplicate was applied.
+- `supabase/sql/core_schema.sql` is the mandatory idempotent bootstrap mirror,
+  not the live deployment mechanism and not proof of production state.
+- Every live schema change needs a unique, idempotent forward migration under
+  `supabase/migrations/` and the same final objects/logic mirrored in
+  `core_schema.sql`.
+- Every migration is an active deployment candidate and carries an explicit
+  `NOT DEPLOYED` or verified production deployment status. Keep experiments and
+  superseded SQL out of `supabase/migrations/`.
+- Deploy only the smallest reviewed migration through the guarded repository
+  wrapper. Never deploy the entire canonical snapshot to production.
+- Mark a migration deployed and register its exact version only after live
+  read-back and business-invariant verification succeed.
+- Migration version prefixes are unique. Search before choosing a timestamp;
+  never repair ambiguous history by guessing.
 
 **⚠️ CRITICAL: NEVER CREATE UNNECESSARY COLUMNS OR FUNCTIONS!**
 
@@ -2686,24 +2195,13 @@ This protocol is the preferred way to get back to a trusted app baseline while p
     migration status/result. Provide a snippet only as review evidence or when
     execution is genuinely blocked.
 
-## 🚨 Agent-Owned Supabase Query And Deployment Rule
+## Supabase Command Ownership
 
-- Agents MUST run required database inspection and deployment queries when the
-  repository tooling and credentials are available.
-- A database implementation is not complete merely because the SQL file exists
-  or local tests pass. If the feature depends on that SQL, deploy it to the
-  intended environment in the same task and verify the live schema/behavior.
-- Use read-only inspection first, then run the smallest idempotent migration or
-  repair proven by that evidence. Keep the SQL represented in a migration and
-  `supabase/sql/core_schema.sql`.
-- Production writes require an explicit task-level authorization, a reviewed
-  forward change, a rollback/forward-recovery plan, local tests, exact project
-  identity checks, and a post-deployment read-only verification. Once those
-  conditions are satisfied, execute the deployment; do not ask the user to run
-  it manually or ask for the same authorization again.
-- Pause only when credentials are unavailable, the target environment is
-  ambiguous, the requested mutation is destructive/data-repairing beyond the
-  task's authorization, or a safety/verification check fails.
+Use `docs/development/SUPABASE_WORKFLOW.md` for commands and
+`docs/runbooks/STAGING_SUPABASE.md` for authorization/safety. Agents run routine
+guarded inspection, tests, authorized deployment, registration, read-back, and
+health checks themselves. Hand off only for a human-only blocker named in the
+policy.
 
 ## 🚨 Production Incident Inspection Protocol (Inventory / Accounting / Triggers)
 
@@ -2727,12 +2225,14 @@ This protocol is the preferred way to get back to a trusted app baseline while p
   - audit SQL for historical damage
   - repair SQL if truly needed
 
-### Interactive SQL workflow with the user
-- ✅ If the user is running queries in Supabase SQL Editor and pasting results back, give **ONE query at a time**.
-- ✅ After each result, interpret it briefly and then provide the **next single query**.
-- ✅ Prefer this guided sequence over dumping a long SQL script when the goal is diagnosis.
-- ❌ Do NOT hand the user a 10-query batch unless they explicitly ask for a bundled script.
-- ❌ Do NOT jump straight to `UPDATE`, `DELETE`, or migration SQL during the inspection phase.
+### Interactive SQL fallback with the user
+
+- The default is agent-owned execution through the guarded repository wrapper.
+- If provider credentials/tooling are genuinely unavailable, or the user
+  explicitly chooses the SQL Editor, give one read-only query at a time and
+  interpret each result before the next.
+- SQL Editor is privileged and cannot prove authenticated-user RLS behavior.
+- Do not jump to `UPDATE`, `DELETE`, or migration SQL during inspection.
 
 ### Query design rules for incident inspection
 - ✅ Keep inspection queries **read-only**: `select`, `with`, aggregates, joins, ordering, comparisons.
@@ -2870,53 +2370,15 @@ This protocol is the preferred way to get back to a trusted app baseline while p
 
 # 📤 DATABASE DEPLOYMENT ARTIFACT AND EXECUTION WORKFLOW
 
-**WHEN YOU MODIFY `core_schema.sql`, YOU MUST:**
+The executable deployment sequence is centralized in
+`docs/development/SUPABASE_WORKFLOW.md`; its authorization and validation gates
+are in `docs/runbooks/STAGING_SUPABASE.md`.
 
-1. ✅ Make the changes to `core_schema.sql`
-2. ✅ Note the line numbers you modified (e.g., "lines 4309-4419")
-3. ✅ Tell user: "I modified `core_schema.sql` at lines X-Y (function/view/table name)"
-4. ✅ **EXTRACT/REVIEW the exact SQL code** that must become live
-5. ✅ **CREATE or update the idempotent forward migration** (for example,
-   `supabase/migrations/20251221_fix_name.sql`) and keep the canonical snapshot
-   synchronized
-6. ✅ Execute the reviewed SQL with the repository database tooling when the
-   task authorizes deployment
-7. ✅ Run a live read-back/invariant query and record the migration/result
-
-A canvas/copy-paste snippet is optional review evidence. It is not a substitute
-for agent-owned execution and must not be presented as work for the user unless
-automated execution is genuinely blocked.
-
-**Example canvas format:**
-```
-Title: Deploy to Supabase: Stock Movements View Fix
-
-Content:
--- Fix stock_movements_view calculation
--- Lines 4309-4419 from core_schema.sql
-
-drop view if exists stock_movements_view cascade;
-
-create view stock_movements_view as
--- ... full SQL here ...
-
-alter view stock_movements_view set (security_invoker = on);
-```
-
-**When a deployable migration is required:**
-- ✅ Creating or modifying a VIEW
-- ✅ Creating or modifying a FUNCTION
-- ✅ Creating or modifying a TRIGGER
-- ✅ Adding/modifying RLS policies
-- ✅ Adding new tables with indexes
-- ✅ Any ALTER TABLE statements
-- ❌ NOT needed for Flutter-only code changes
-
-**Benefits:**
-- The exact live change is versioned and reviewable
-- No need to replay the entire canonical schema snapshot
-- Deployment and recovery scope stay explicit
-- The same artifact can be tested, executed, and audited
+The invariant is one smallest unique/idempotent migration, the same final
+objects/logic mirrored in `supabase/sql/core_schema.sql`, guarded agent-owned
+execution when authorized, and exact live read-back before marking or
+registering the migration as deployed. A copy/paste snippet is review evidence,
+not a deployment path.
 
 ---
 
@@ -3334,9 +2796,9 @@ Newly published links must use the canonical builder.
 Edge Functions must be deployed individually and verified:
 
 ```bash
-supabase functions deploy whatsapp-catalog-sync --project-ref xzdvtzdqjeyqxnkqprtf
-supabase functions deploy whatsapp-profile-admin --project-ref xzdvtzdqjeyqxnkqprtf --no-verify-jwt
-supabase functions deploy google-merchant-feed --project-ref xzdvtzdqjeyqxnkqprtf --no-verify-jwt
+scripts/supabase_cli.sh functions deploy whatsapp-catalog-sync --project-ref xzdvtzdqjeyqxnkqprtf
+scripts/supabase_cli.sh functions deploy whatsapp-profile-admin --project-ref xzdvtzdqjeyqxnkqprtf --no-verify-jwt
+scripts/supabase_cli.sh functions deploy google-merchant-feed --project-ref xzdvtzdqjeyqxnkqprtf --no-verify-jwt
 ```
 
 Build snapshots/sitemap and deploy the public store:
@@ -3474,7 +2936,10 @@ Current external follow-up:
 **File:** `scripts/sync_seo_index.sh`
 
 **What it does:**
-1. Resolves a public Supabase key from `SUPABASE_PUBLISHABLE_KEY`, the legacy `SUPABASE_ANON_KEY`, the documented macOS Keychain entry, or the authenticated Supabase CLI, in that order
+1. Resolves a Supabase API key from the process environment
+   (`SUPABASE_PUBLISHABLE_KEY`, legacy `SUPABASE_ANON_KEY`, or the CI-only
+   `SUPABASE_SECRET_KEY`) and then the documented macOS Keychain publishable-key
+   entry. It must never enumerate or recover key values through Supabase CLI.
 2. Fetches and validates settings from the Supabase `website_settings` table
 3. Regenerates `web/index.html` with correct values
 4. Injects JSON-LD schema, Open Graph, Twitter Cards
@@ -3484,7 +2949,13 @@ Current external follow-up:
 - Step 1 of `/deploy_to_firebase` workflow
 - Must run BEFORE `flutter build web`
 - Use `./scripts/sync_seo_index.sh --check` to verify credential resolution and live read access without modifying `web/index.html`
-- `scripts/deploy.sh` and `scripts/deploy.ps1` must resolve `SUPABASE_SECRET_KEY` before either expensive Flutter build, then pass it only to `generate_product_seo_snapshots.dart`; do not reintroduce a late post-build credential failure or embed the key in a build define
+- Local `scripts/deploy.sh`/`scripts/deploy.ps1` resolve the Keychain-only
+  local-maintenance key before either expensive Flutter build and pass it only
+  to `generate_product_seo_snapshots.dart`. The GitHub storefront workflow uses
+  its separate protected `SUPABASE_SECRET_KEY`. The process variable name may
+  match, but the two credential values/stores must remain independent. Never
+  reintroduce a late post-build credential failure or embed either key in a
+  build define.
 
 **API used:**
 ```bash
@@ -3529,7 +3000,7 @@ This applies to:
 **Before displaying or changing business facts:**
 1. Inspect production `website_settings` for the relevant tenant and keys.
 2. If synced data is missing, fix the sync/backfill path first instead of adding constants to a page.
-3. If Edge Function behavior changes, deploy it with `supabase functions deploy <function-name> --project-ref xzdvtzdqjeyqxnkqprtf`.
+3. If Edge Function behavior changes, deploy it with `scripts/supabase_cli.sh functions deploy <function-name> --project-ref xzdvtzdqjeyqxnkqprtf`.
 4. If Flutter public-store rendering changes, deploy the storefront build so the live site uses the updated parser/UI.
 5. Re-check the live page after cache revalidation or hard refresh.
 
@@ -3726,7 +3197,7 @@ Current public profile fields set through Graph API on 2026-06-10:
 Operational helper:
 
 - `supabase/functions/whatsapp-profile-admin/index.ts` can inspect and update the WhatsApp Business Profile using the server-side `WHATSAPP_ACCESS_TOKEN`; it avoids exposing the Meta token locally.
-- Deploy with: `supabase functions deploy whatsapp-profile-admin --project-ref xzdvtzdqjeyqxnkqprtf --no-verify-jwt`.
+- Deploy with: `scripts/supabase_cli.sh functions deploy whatsapp-profile-admin --project-ref xzdvtzdqjeyqxnkqprtf --no-verify-jwt`.
 - Protect invocations with `WHATSAPP_PROFILE_ADMIN_TOKEN` in Supabase secrets, or the service-role bearer when used by trusted agents only. Never expose either token in chat or checked-in files.
 - Use `inspect` before changing profile data, and only update public business facts that are already verified from `website_settings`, Google Business data, or explicit user instruction.
 - Profile text fields and website can be updated with Graph API. Avatar/profile image updates use the same helper's `upload_profile_picture` multipart action, which performs Meta's resumable upload flow to get a `profile_picture_handle` before updating the WhatsApp Business Profile. Catalog/commerce setup may still need WhatsApp Manager/Commerce Manager configuration; do not claim catalog setup is done after updating profile fields only.
@@ -6216,238 +5687,26 @@ Copilot must:
 
 ---
 
-# 📦 Import Services (CSV/Excel/Zoho) - Stock Tracking Pattern
+# Import services (CSV, Excel, Zoho)
 
-> **Security override (2026-07-19; this overrides every older example in this
-> section):** clients must never call `public.set_config` or
-> `public.import_product_with_context`. Both are owner-only legacy helpers, as
-> are `create_adhoc_item_for_task` and the invoice inventory consume/restore
-> functions. Product stock imports must call only the tenant-scoped,
-> idempotent, audit-linked `apply_product_import_stock` command. A new import
-> workflow that needs another aggregate mutation must introduce an equally
-> narrow canonical command and pgTAP contract; it must not expose a generic GUC
-> setter or a trigger helper. The historical template and Python example below
-> explain the superseded design only and must not be copied into new code.
->
-> `codex_test_runner` is a production-only, sealed diagnostic reader. It must
-> remain `NOLOGIN`, passwordless, without inheritable/settable memberships or
-> privileged role attributes, mutation grants, explicit routine execution or a
-> future-function default grant. Preserve its intentional table `SELECT`
-> evidence. A Supabase-owned `codex_test_runner -> postgres` administration
-> edge is allowed only with `SET=false` and `INHERIT=false`. PostgreSQL
-> `PUBLIC` execution is additive and cannot be denied to one role; retire such
-> grants only through a separate per-routine allowlist audit, never by inventing
-> broad replacement grants for API roles.
-
-**ALL import services that modify stock MUST use single-transaction RPC pattern.**
-
-## ✅ Automatic Protection (Oct 28, 2025 → Enhanced Nov 8, 2025)
-
-### Background: Why Transaction Scope Matters
-
-**The Problem (Discovered Nov 8, 2025):**
-- Supabase Python client treats each RPC call as a separate HTTP request
-- Each HTTP request = separate database transaction
-- Session variables only persist WITHIN a transaction
-- Setting context in one call, then updating in another call = context lost!
-
-**The Solution:**
-- Create RPC functions that bundle context-setting AND data-update in ONE function
-- ONE function call = ONE HTTP request = ONE database transaction
-- Trigger fires within same transaction → sees session variables → labels import correctly
-
-### Pattern: Single-Transaction RPC Functions
-
-**Database RPC Template** (add to `core_schema.sql`):
-```sql
-create or replace function public.import_{table}_with_context(
-  p_tenant_id uuid,
-  p_unique_id text,              -- SKU, email, invoice_number, etc.
-  p_{table}_data jsonb,
-  p_import_reference text,
-  p_import_reason text default 'Import'
-)
-returns jsonb
-security definer
-language plpgsql
-as $$
-declare
-  v_updated_count integer := 0;
-begin
-  -- Set import context (transaction-scoped)
-  perform pg_catalog.set_config('app.stock_adjustment_context', 'import', true);
-  perform pg_catalog.set_config('app.import_reference', p_import_reference, true);
-  perform pg_catalog.set_config('app.import_reason', p_import_reason, true);
-  
-  -- Update record (trigger sees context in same transaction)
-  update {table}
-  set
-    column1 = coalesce((p_{table}_data->>'column1')::type, column1),
-    column2 = coalesce((p_{table}_data->>'column2')::type, column2),
-    updated_at = now()
-  where tenant_id = p_tenant_id and unique_column = p_unique_id;
-  
-  get diagnostics v_updated_count = row_count;
-  
-  -- Clear context
-  perform pg_catalog.set_config('app.stock_adjustment_context', '', true);
-  perform pg_catalog.set_config('app.import_reference', '', true);
-  perform pg_catalog.set_config('app.import_reason', '', true);
-  
-  return jsonb_build_object('success', true, 'updated_count', v_updated_count);
-end;
-$$;
-
-grant execute on function public.import_{table}_with_context(uuid, text, jsonb, text, text) to authenticated;
-```
-
-**Python Import Script Pattern**:
-```python
-# ✅ CORRECT: Single RPC = single transaction
-import_ref = f"import_{int(time.time() * 1000)}"
-
-result = client.rpc('import_product_with_context', {
-    'p_tenant_id': tenant_id,
-    'p_sku': sku,
-    'p_product_data': {
-        'name': product_name,
-        'price': price,
-        'stock_quantity': new_stock
-    },
-    'p_import_reference': import_ref,
-    'p_import_reason': f'Import: {sku}'
-}).execute()
-
-# ❌ WRONG: Separate calls = separate transactions (context lost)
-client.rpc('set_config', {...}).execute()  # Transaction 1
-client.table('products').update({...}).execute()  # Transaction 2 (no context!)
-```
-
-## 🚨 Import Service Checklist
-
-When creating ANY import service (products, categories, customers, suppliers, etc.):
-
-1. ✅ **Check if RPC function exists** in `core_schema.sql`
-   - Search for: `import_{table}_with_context`
-   - If missing, create using template above
-   
-2. ✅ **Use single-transaction RPC pattern** in Python/Dart
-   - ONE `client.rpc()` call bundles context + update
-   - Generate `import_reference` once per import batch
-   
-3. ✅ **Authenticate and get tenant_id**
-   - Sign in with email/password
-   - Fetch tenant_id from `user_profiles` table
-   
-4. ✅ **Handle errors gracefully**
-   - Show which rows failed
-   - Don't stop entire import on single error
-   
-5. ✅ **Support both CSV and Excel formats**
-   - Use pandas for parsing
-   - Validate data before inserting
-   
-6. ✅ **Show progress indicator during bulk imports**
-   - Print/log each item processed
-   - Display summary at end
-   
-7. ✅ **Test with multiple tenants to verify isolation**
-   - Import same SKU for different tenants
-   - Verify data doesn't leak between tenants
-
-## 📋 Existing Import Infrastructure
-
-**Database Functions** (in `core_schema.sql`):
-- `set_config(text, text, boolean)` - Exposes PostgreSQL session variables (lines 1629-1654)
-- `import_product_with_context(uuid, text, jsonb, text, text)` - Products import (lines 1656-1720)
-- `track_product_stock_changes()` - Trigger that detects import context (lines 863-958)
-
-**Stock Adjustments Table**:
-- `adjustment_type` includes `'import'` value (line 802)
-- `reference` column stores import batch ID (line 815)
-
-**Test Scripts**:
-- `scripts/zoho_import/test_import_with_tracking.py` - Working example (469 lines)
-- `scripts/zoho_import/test_products.csv` - Sample test data
-
-**Documentation**:
-- `.github/IMPORT_STOCK_TRACKING_GUIDE.md` - Complete implementation guide
-- `.github/ZOHO_IMPORT_QUICKREF.md` - One-page cheat sheet for AI agents
-
-## 🎯 Production Verification
-
-✅ **Verified working Nov 8, 2025:**
-- Stock adjustments created with `type='import'`
-- Reference column populated with `import_TIMESTAMP`
-- UI displays "Importación" origin label (not "Ajuste Manual")
-- No ghost records (only actual stock changes logged)
-- Multi-tenant isolation working correctly
-
----
-
-# � Import Services (CSV/Excel) - Multi-Tenant Rules (LEGACY - SUPERSEDED BY ABOVE)
-
-**ALL import services MUST follow these rules:**
-
-## ✅ Automatic Protection (Oct 28, 2025)
-
-- **Import services are NOW tenant-safe automatically** via `DatabaseService.insert()`
-- No manual tenant_id injection needed - it's handled at database layer
-- Works for ALL authenticated users across ALL modules
-
-## 🔧 When Creating Import Services
-
-**ALWAYS use DatabaseService for imports:**
-
-```dart
-// ✅ CORRECT: DatabaseService auto-injects tenant_id
-class ProductImportService {
-  final DatabaseService _db = DatabaseService();
-  
-  Future<void> _upsertProduct(Map<String, dynamic> productData) async {
-    // Just use DatabaseService.insert() - tenant_id added automatically
-    await _db.insert('products', productData);
-  }
-}
-
-// ❌ WRONG: Direct Supabase client bypasses auto-injection
-class ProductImportService {
-  Future<void> _upsertProduct(Map<String, dynamic> productData) async {
-    // This bypasses DatabaseService - tenant_id NOT added!
-    await Supabase.instance.client.from('products').insert(productData);
-  }
-}
-```
-
-## 🚨 Import Service Checklist
-
-When creating ANY import service (products, categories, customers, suppliers, etc.):
-
-1. ✅ Use `DatabaseService` for ALL inserts/updates (NOT direct Supabase client)
-2. ✅ Import service class extends `ChangeNotifier` for UI updates
-3. ✅ Handle errors gracefully (show which rows failed)
-4. ✅ Support both CSV and Excel formats
-5. ✅ Validate data before inserting (SKU/name required, prices > 0, etc.)
-6. ✅ Show progress indicator during bulk imports
-7. ✅ Test with multiple tenants to verify isolation
-
-## 🔍 How Auto-Injection Works
-
-- `DatabaseService.insert()` checks if table needs tenant_id
-- Fetches current user's tenant_id from `user_profiles` table
-- Injects tenant_id into payload before INSERT
-- Skips system tables: `tenants`, `user_profiles`, `reserved_subdomains`, `user_invitations`
-- Logs injection activity: `✅ Auto-injected tenant_id: [uuid] into [table]`
-
-## 📦 Existing Import Services (All Protected)
-
-- ✅ `ProductImportService` → Products
-- ✅ `CategoryImportService` → Product categories
-- ✅ `CustomerImportService` → Customers
-- ✅ `SupplierImportService` → Suppliers
-- ✅ `EmployeeImportService` → Employees (if exists)
-
-**All use DatabaseService → All tenant-safe automatically!**
+- Agents own routine import preparation, dry-runs, execution, read-back, and
+  reporting. Human intervention is valid only for an unavailable credential,
+  provider login/approval, or an irreversible business choice.
+- Product stock imports call only the authenticated, tenant-scoped,
+  idempotent, audit-linked `public.apply_product_import_stock` RPC. Never call
+  `public.set_config`, `public.import_product_with_context`, trigger helpers, or
+  direct product-stock updates.
+- A different aggregate import needs its own narrow atomic RPC, durable
+  idempotency key/receipt, pgTAP contract, and canonical-schema mirror.
+- Validate the full batch before writes; use stable import references; isolate
+  failures without hiding them; and read back affected records, stock
+  movements, journal/audit evidence, and tenant invariants.
+- Private credentials follow `docs/development/SUPABASE_WORKFLOW.md`. Ignored
+  files under `scripts/zoho_import/*.py` are quarantined historical artifacts,
+  not working examples. A needed importer must first be tracked, reviewed, and
+  tested.
+- `codex_test_runner` remains a sealed, passwordless `NOLOGIN` production
+  diagnostic reader. Do not grant it mutation or routine-execution access.
 
 ---
 
@@ -7054,21 +6313,11 @@ lifecycle_status text default 'active',
 
 ### Updating GTIN via API
 
-```bash
-# Get product current state
-source .env && curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/products?id=eq.{PRODUCT_ID}" \
-  -H "apikey: $SUPABASE_SECRET_KEY" \
-  -H "Authorization: Bearer $SUPABASE_SECRET_KEY" | jq '.[0] | {name, sku, gtin, mpn, barcode}'
-
-# Update GTIN
-source .env && curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/products?id=eq.{PRODUCT_ID}" \
-  -H "apikey: $SUPABASE_SECRET_KEY" \
-  -H "Authorization: Bearer $SUPABASE_SECRET_KEY" \
-  -H "Content-Type: application/json" \
-  -H "Prefer: return=representation" \
-  -X PATCH \
-  -d '{"gtin": "YOUR_BARCODE_NUMBER"}' | jq '.[0] | {name, sku, gtin}'
-```
+Use the normal tenant-scoped product workflow. For an explicitly authorized
+repair, inspect through `scripts/db/query.sh`, execute the smallest guarded
+tenant-scoped write, and read it back as documented in
+`docs/development/SUPABASE_WORKFLOW.md`. Never source a repository `.env` or use
+a shared secret-key curl command for an ad hoc product mutation.
 
 ---
 

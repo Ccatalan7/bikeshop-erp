@@ -60,18 +60,7 @@ resolve_supabase_secret_key() {
         fi
     fi
 
-    if command -v supabase >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-        key=$(supabase projects api-keys \
-            --project-ref xzdvtzdqjeyqxnkqprtf \
-            --reveal --output json 2>/dev/null \
-            | jq -r '[.[] | select(.type == "secret") | .api_key][0] // empty')
-        if [ -n "$key" ]; then
-            printf '%s' "$key"
-            return 0
-        fi
-    fi
-
-    echo "Could not load SUPABASE_SECRET_KEY from the environment, macOS Keychain, or authenticated Supabase CLI." >&2
+    echo "Could not load SUPABASE_SECRET_KEY from the process environment or macOS Keychain." >&2
     exit 64
 }
 

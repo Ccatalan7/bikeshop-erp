@@ -24,4 +24,9 @@ This workload remains an explicit Visual Studio Installer step because silently 
 
 ## Secrets and authentication
 
-Use Windows Credential Manager or an owner-only `.env`; never put values in tracked PowerShell profiles or launch configurations. Authenticate interactively with `gh auth login`, `firebase login`, and `supabase login`.
+Private Supabase and database values use Windows Credential Manager or a
+protected one-command process environment, never `.env`. Other local-only
+provider values may use an owner-only ignored `.env` when necessary. Never put
+private values in tracked PowerShell profiles or launch configurations.
+Authenticate interactively with `gh auth login`, `firebase login`, and
+`supabase login`.

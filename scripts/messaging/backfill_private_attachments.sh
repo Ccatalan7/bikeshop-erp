@@ -14,15 +14,8 @@ if [[ -z "$secret_key" ]] && command -v security >/dev/null 2>&1; then
     -a supabase -w 2>/dev/null || true)"
 fi
 
-if [[ -z "$secret_key" ]] && command -v supabase >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-  secret_key="$(supabase projects api-keys \
-    --project-ref "$PROJECT_REF" \
-    --reveal --output json 2>/dev/null \
-    | jq -r '[.[] | select(.type == "secret") | .api_key][0] // empty')"
-fi
-
 if [[ -z "$secret_key" ]]; then
-  echo "Missing Supabase production secret key in environment, Keychain or authenticated CLI." >&2
+  echo "Missing Supabase production secret key in the process environment or macOS Keychain." >&2
   exit 64
 fi
 

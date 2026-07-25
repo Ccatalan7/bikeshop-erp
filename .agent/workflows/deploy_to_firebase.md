@@ -27,9 +27,10 @@ Pulls SEO settings from Supabase and regenerates index.html with correct data.
 
 The script loads the public Supabase key without embedding it in the repo. It
 accepts `SUPABASE_PUBLISHABLE_KEY` (or the legacy `SUPABASE_ANON_KEY`), then
-falls back to the documented macOS Keychain entry or the authenticated
-Supabase CLI. To verify credentials and database access without changing
-`web/index.html`, run:
+accepts the existing CI-only `SUPABASE_SECRET_KEY` process-variable fallback,
+then uses the documented publishable-key macOS Keychain entry. It never lists
+project keys through the Supabase CLI. To verify credentials and database
+access without changing `web/index.html`, run:
 
 ```bash
 ./scripts/sync_seo_index.sh --check
@@ -37,10 +38,12 @@ Supabase CLI. To verify credentials and database access without changing
 
 The deploy launcher also resolves `SUPABASE_SECRET_KEY` before starting either
 Flutter build, because the product snapshot generator needs privileged catalog
-read access. macOS uses the documented Keychain entry with an authenticated
-Supabase CLI fallback; Windows accepts the process environment or ignored
-`.env`, then falls back to its authenticated Supabase CLI. The key is never
-printed or passed as a Dart define.
+read access. macOS resolves the documented Keychain entry and injects it into
+the snapshot process; Windows requires `SUPABASE_SECRET_KEY` in the protected
+process environment (for example, injected from Windows Credential Manager).
+The GitHub snapshot job already receives `SUPABASE_SECRET_KEY` from the
+protected `Production` environment. The generator never reads `.env`, lists
+project keys, prints the key, or passes it as a Dart define.
 
 Run `bash scripts/deploy.sh --check` for a fast preflight of both credentials
 before launching the full build/deploy task.

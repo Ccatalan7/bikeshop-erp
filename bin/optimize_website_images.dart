@@ -22,21 +22,16 @@ const jpegQuality = 80;
 
 late final SupabaseClient supabase;
 
-String _getServiceRoleKey() {
-  final envKey = Platform.environment['SUPABASE_SECRET_KEY'];
-  if (envKey != null && envKey.isNotEmpty) return envKey;
-  
-  final envFile = File('.env');
-  if (envFile.existsSync()) {
-    final lines = envFile.readAsLinesSync();
-    for (final line in lines) {
-      if (line.startsWith('SUPABASE_SECRET_KEY=')) {
-        return line.substring('SUPABASE_SECRET_KEY='.length).trim();
-      }
-    }
+String _getSecretKey() {
+  final envKey = Platform.environment['SUPABASE_SECRET_KEY']?.trim();
+  if (envKey != null && envKey.isNotEmpty) {
+    return envKey;
   }
-  
-  throw Exception('SUPABASE_SECRET_KEY not found!');
+
+  throw Exception(
+    'SUPABASE_SECRET_KEY is missing from the process environment. '
+    'Inject it from the documented OS credential store before running this script.',
+  );
 }
 
 void main(List<String> args) async {
@@ -52,13 +47,13 @@ void main(List<String> args) async {
   if (limit != null) print('📊 Limit: $limit blocks');
   print('');
 
-  final serviceRoleKey = _getServiceRoleKey();
-  print('🔑 Using service role key');
-  supabase = SupabaseClient(supabaseUrl, serviceRoleKey);
+  final secretKey = _getSecretKey();
+  print('🔑 Using Supabase secret key');
+  supabase = SupabaseClient(supabaseUrl, secretKey);
 
   // Fetch all website blocks with image fields
   print('📋 Fetching website blocks with images...');
-  
+
   final response = await supabase
       .from('website_blocks')
       .select('id, block_type, block_data')
@@ -105,7 +100,9 @@ void main(List<String> args) async {
 
       final value = blockData[field];
 
-      if (value is String && _isImageUrl(value) && !_isAlreadyOptimized(value)) {
+      if (value is String &&
+          _isImageUrl(value) &&
+          !_isAlreadyOptimized(value)) {
         processed++;
         print('\n[$processed] Processing $blockType.$field...');
         print('   📍 URL: ${_truncateUrl(value)}');
@@ -133,14 +130,23 @@ void main(List<String> args) async {
         for (final item in value) {
           if (item is Map<String, dynamic>) {
             final updatedItem = Map<String, dynamic>.from(item);
-            
+
             // Check common image fields in list items
-            for (final imgField in ['image', 'imageUrl', 'logoUrl', 'backgroundImage', 'logo']) {
+            for (final imgField in [
+              'image',
+              'imageUrl',
+              'logoUrl',
+              'backgroundImage',
+              'logo'
+            ]) {
               if (item.containsKey(imgField)) {
                 final imgUrl = item[imgField];
-                if (imgUrl is String && _isImageUrl(imgUrl) && !_isAlreadyOptimized(imgUrl)) {
+                if (imgUrl is String &&
+                    _isImageUrl(imgUrl) &&
+                    !_isAlreadyOptimized(imgUrl)) {
                   processed++;
-                  print('\n[$processed] Processing $blockType.$field[].$imgField...');
+                  print(
+                      '\n[$processed] Processing $blockType.$field[].$imgField...');
                   print('   📍 URL: ${_truncateUrl(imgUrl)}');
 
                   if (dryRun) {
@@ -177,11 +183,10 @@ void main(List<String> args) async {
       try {
         final newBlockData = Map<String, dynamic>.from(blockData);
         newBlockData.addAll(updates);
-        
+
         await supabase
             .from('website_blocks')
-            .update({'block_data': newBlockData})
-            .eq('id', blockId);
+            .update({'block_data': newBlockData}).eq('id', blockId);
         print('   💾 Block updated');
       } catch (e) {
         print('   ❌ Failed to update block: $e');
@@ -243,13 +248,16 @@ Future<String?> _optimizeImage(String imageUrl) async {
     img.Image optimized = originalImage;
     if (originalImage.width > maxWidth) {
       optimized = img.copyResize(originalImage, width: maxWidth);
-      print('   📐 Resized: ${originalImage.width}x${originalImage.height} → ${optimized.width}x${optimized.height}');
+      print(
+          '   📐 Resized: ${originalImage.width}x${originalImage.height} → ${optimized.width}x${optimized.height}');
     }
 
     // Encode as JPEG
-    final optimizedBytes = Uint8List.fromList(img.encodeJpg(optimized, quality: jpegQuality));
+    final optimizedBytes =
+        Uint8List.fromList(img.encodeJpg(optimized, quality: jpegQuality));
     final optimizedKB = (optimizedBytes.length / 1024).toStringAsFixed(1);
-    final reduction = ((1 - optimizedBytes.length / originalBytes.length) * 100).toStringAsFixed(1);
+    final reduction = ((1 - optimizedBytes.length / originalBytes.length) * 100)
+        .toStringAsFixed(1);
     print('   📦 Optimized: $optimizedKB KB ($reduction% reduction)');
 
     // Skip if optimization made it bigger
@@ -265,16 +273,17 @@ Future<String?> _optimizeImage(String imageUrl) async {
 
     // Upload
     await supabase.storage.from(storageBucket).uploadBinary(
-      objectPath,
-      optimizedBytes,
-      fileOptions: const FileOptions(
-        cacheControl: '3600',
-        upsert: true,
-        contentType: 'image/jpeg',
-      ),
-    );
+          objectPath,
+          optimizedBytes,
+          fileOptions: const FileOptions(
+            cacheControl: '3600',
+            upsert: true,
+            contentType: 'image/jpeg',
+          ),
+        );
 
-    final publicUrl = supabase.storage.from(storageBucket).getPublicUrl(objectPath);
+    final publicUrl =
+        supabase.storage.from(storageBucket).getPublicUrl(objectPath);
     print('   🚀 Uploaded: ${_truncateUrl(publicUrl)}');
 
     return publicUrl;

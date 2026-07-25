@@ -7,13 +7,11 @@ Fetches comprehensive bike specs from 99spokes.com API
 import os
 import requests
 from typing import Dict, List, Optional
-from dotenv import load_dotenv
 from supabase import create_client, Client
-
-load_dotenv()
 
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_SECRET_KEY')
+APPROVED_PRODUCTION_URL = 'https://xzdvtzdqjeyqxnkqprtf.supabase.co'
 
 
 class NinetyNineSpokesClient:
@@ -140,6 +138,21 @@ class NinetyNineSpokesFeeder:
     """Main feeder class using 99 Spokes API"""
     
     def __init__(self):
+        if (
+            SUPABASE_URL != APPROVED_PRODUCTION_URL
+            and not (SUPABASE_URL or '').startswith(
+                ('http://127.0.0.1:', 'http://localhost:')
+            )
+        ):
+            raise SystemExit(
+                "Missing or invalid SUPABASE_URL. Set the approved production "
+                "URL or an explicit loopback URL."
+            )
+        if not SUPABASE_KEY:
+            raise SystemExit(
+                "Missing SUPABASE_SECRET_KEY in the process environment. "
+                "Inject it from the documented OS credential store."
+            )
         self.client = NinetyNineSpokesClient()
         self.supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     

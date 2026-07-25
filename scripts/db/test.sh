@@ -3,6 +3,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SUPABASE_CLI_WRAPPER="$ROOT_DIR/scripts/supabase_cli.sh"
 cd "$ROOT_DIR"
 
 bash scripts/db/ensure_local.sh
@@ -27,8 +28,8 @@ printf '  %s\n' "${files[@]}"
 mkdir -p .tmp/db
 log_file=".tmp/db/pgtap-$(date +%Y%m%d-%H%M%S).log"
 if [[ "${VINABIKE_DB_VERBOSE:-}" == "1" ]]; then
-  supabase test db --local "${files[@]}" 2>&1 | tee "$log_file"
-elif supabase test db --local "${files[@]}" >"$log_file" 2>&1; then
+  "$SUPABASE_CLI_WRAPPER" test db --local "${files[@]}" 2>&1 | tee "$log_file"
+elif "$SUPABASE_CLI_WRAPPER" test db --local "${files[@]}" >"$log_file" 2>&1; then
   rg '(^.*\.sql \.\. ok$|All tests successful|^Files=|^Result:)' "$log_file" || tail -20 "$log_file"
   echo "Full pgTAP output: $log_file"
 else

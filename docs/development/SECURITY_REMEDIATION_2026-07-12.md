@@ -24,13 +24,22 @@
 - Verified the existing independently managed Supabase `sb_secret_...` key with REST HTTP 200, stored it in macOS Keychain, and installed it as protected GitHub secret `SUPABASE_SECRET_KEY`.
 - Stored the existing independently managed Supabase publishable key in macOS Keychain.
 - Rotated the production database password through the Management API after proving there was no runtime consumer. Management API returned 200; direct PostgreSQL login and linked-CLI tenant count (10) passed afterward.
+- On 2026-07-25, found that Supabase CLI telemetry traces had captured the
+  then-current modern secret key in request metadata. Disabled CLI telemetry
+  globally, added the tracked `scripts/supabase_cli.sh` no-telemetry boundary,
+  split the shared key into independently named local-maintenance and GitHub
+  storefront keys, validated both through read-only production REST requests,
+  updated macOS Keychain and the protected GitHub secret, revoked the exposed
+  `default` key as compromised, and permanently removed the seven affected
+  local trace files. The Supabase CLI home and trace directories are now
+  owner-only. No secret values are recorded here.
 
 ## Rotation matrix
 
 | Credential family | Current state | Required completion |
 |---|---|---|
 | Supabase database password | Rotated and verified | Copy to other authorized machines through the approved credential manager only when direct PostgreSQL is required. |
-| Supabase new secret key | Verified, stored, CI migrated | Migrate every external elevated consumer; keep values out of files and logs. |
+| Supabase new secret keys | Rotated and split by consumer on 2026-07-25 | Keep local maintenance and GitHub storefront credentials independent; use guarded credential stores only, never CLI key-list output or trace logs. |
 | Legacy Supabase `service_role` JWT | Compromised, still enabled | Migrate and deploy all Edge Functions to the new secret-key path on staging, verify production, then disable the legacy key. |
 | Legacy Supabase `anon` JWT | Public client key, still active | Rebuild all clients with the new publishable key, verify Auth/REST/Realtime/Storage on every surface, then disable legacy keys. |
 | Zoho OAuth clients/refresh tokens | Removed from source; validity unknown | Identify the active OAuth client and Supabase/DB consumers, issue replacement token, verify imports/OAuth, then revoke exposed refresh tokens. |

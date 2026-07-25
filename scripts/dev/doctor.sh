@@ -83,8 +83,13 @@ if [[ -f .env ]]; then
   else
     warn ".env should be owner-only — run: chmod 600 .env"
   fi
+  if grep -Eq \
+    '^(SUPABASE_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_DB_PASSWORD|SUPABASE_ACCESS_TOKEN)=' \
+    .env; then
+    fail ".env contains a private Supabase variable — move it to the documented OS credential store"
+  fi
 else
-  warn ".env is absent; copy .env.example only when local runtime credentials are needed"
+  warn ".env is absent; copy .env.example only for public app config or non-Supabase local values"
 fi
 
 if [[ -f android/gradle/wrapper/gradle-wrapper.jar ]]; then

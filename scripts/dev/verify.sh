@@ -13,7 +13,9 @@ mode="${1:-fast}"
 bash scripts/dev/check_secrets.sh working
 node -e "JSON.parse(require('fs').readFileSync('toolchain.json')); JSON.parse(require('fs').readFileSync('.fvmrc'))"
 node scripts/ci/check_local_markdown_links.mjs
-bash -n scripts/dev/*.sh scripts/bootstrap/*.sh
+bash -n scripts/dev/*.sh scripts/bootstrap/*.sh scripts/supabase_cli.sh scripts/db/*.sh
+bash test/scripts/supabase_cli_safety_test.sh
+bash test/scripts/production_validation_manager_test.sh
 
 if [[ "$mode" == "fast" ]]; then
   echo "Fast verification passed."

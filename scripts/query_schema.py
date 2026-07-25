@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 """Query live Supabase DB to inspect current schema state."""
+import os
 import urllib.request
 import urllib.parse
 import json
 
-# Read key from .env
-env = {}
-with open('/Users/Claudio/Dev/bikeshop-erp/.env') as f:
-    for line in f:
-        line = line.strip()
-        if '=' in line and not line.startswith('#'):
-            k, v = line.split('=', 1)
-            env[k.strip()] = v.strip()
-
-KEY = env['SUPABASE_SECRET_KEY']
+KEY = os.environ.get('SUPABASE_SECRET_KEY', '').strip()
+if not KEY:
+    raise SystemExit(
+        "Missing SUPABASE_SECRET_KEY in the process environment. "
+        "Inject it from the documented OS credential store."
+    )
 BASE = 'https://xzdvtzdqjeyqxnkqprtf.supabase.co'
 
 def rest_get(path):
@@ -21,7 +18,6 @@ def rest_get(path):
         f'{BASE}/rest/v1/{path}',
         headers={
             'apikey': KEY,
-            'Authorization': f'Bearer {KEY}',
             'Accept': 'application/json'
         }
     )
@@ -35,7 +31,6 @@ def rpc(func_name, params=None):
         data=data,
         headers={
             'apikey': KEY,
-            'Authorization': f'Bearer {KEY}',
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         }
