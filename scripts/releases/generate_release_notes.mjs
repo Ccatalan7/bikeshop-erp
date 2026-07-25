@@ -8,6 +8,10 @@ import { fileURLToPath } from "node:url";
 const COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
 const DEFAULT_MODEL = "gpt-5-mini";
 const DEFAULT_ENDPOINT = "https://api.openai.com/v1/responses";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
+const GEMINI_MODEL_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/u;
+const GEMINI_ENDPOINT_ROOT =
+  "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_TIMEOUT_MS = 12_000;
 const DEFAULT_MAX_ATTEMPTS = 2;
 const MAX_API_RESPONSE_BYTES = 256 * 1024;
@@ -34,6 +38,38 @@ const MODULE_ORDER = Object.freeze(Object.keys(RELEASE_NOTE_MODULES));
 const MODULE_ORDER_INDEX = new Map(
   MODULE_ORDER.map((moduleId, index) => [moduleId, index]),
 );
+
+const RELEASE_NOTE_TOPICS = Object.freeze({
+  workshop_operations: "Trabajos y presupuestos",
+  inventory_operations: "Productos y existencias",
+  sales_operations: "Ventas, cobros y clientes",
+  purchase_operations: "Compras y proveedores",
+  hr_operations: "Personal y turnos",
+  messaging_operations: "Mensajes y conversaciones",
+  mail_operations: "Correo",
+  website_operations: "Catálogo y navegación del sitio web",
+  storage_operations: "Archivos y documentos",
+  accounting_operations: "Gastos y contabilidad",
+  settings_operations: "Configuración y acceso",
+  desktop_updates: "Actualizaciones de la aplicación",
+  notifications: "Notificaciones",
+  general_experience: "Experiencia general",
+});
+
+const DEFAULT_TOPIC_BY_MODULE = Object.freeze({
+  workshop: "workshop_operations",
+  inventory: "inventory_operations",
+  sales: "sales_operations",
+  purchases: "purchase_operations",
+  hr: "hr_operations",
+  messaging: "messaging_operations",
+  mail: "mail_operations",
+  website: "website_operations",
+  storage: "storage_operations",
+  accounting: "accounting_operations",
+  settings: "settings_operations",
+  general: "general_experience",
+});
 
 const FALLBACK_ITEMS = Object.freeze({
   workshop:
@@ -430,6 +466,23 @@ export function moduleForReleasePath(filePath) {
   return "general";
 }
 
+function topicForReleasePath(filePath, moduleId) {
+  const value = filePath.toLowerCase();
+  if (
+    /(?:desktop[_-]?update|install_vinabike|macos[_-]?release|publish[_-]?(?:macos|windows)|release[_-]?notes|windows[_-]?release)/u.test(
+      value,
+    )
+  ) {
+    return "desktop_updates";
+  }
+  if (
+    /(?:notification|notifications|notificacion|notificaciones)/u.test(value)
+  ) {
+    return "notifications";
+  }
+  return DEFAULT_TOPIC_BY_MODULE[moduleId] ?? "general_experience";
+}
+
 export function collectReleaseInventory({
   repoDir = process.cwd(),
   fromCommit,
@@ -605,6 +658,27 @@ function isBoundedString(value, maximumLength) {
   );
 }
 
+function containsPrivateIdentifier(value) {
+  if (/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu.test(value)) {
+    return true;
+  }
+  if (/\b(?:[0-9]{1,2}(?:\.[0-9]{3}){2}|[0-9]{7,8})-[0-9k]\b/iu.test(value)) {
+    return true;
+  }
+  const numericCandidates =
+    value.match(/\+?[0-9](?:[0-9\s().-]*[0-9])?/gu) ?? [];
+  if (
+    numericCandidates.some(
+      (candidate) => (candidate.match(/[0-9]/gu) ?? []).length >= 8,
+    )
+  ) {
+    return true;
+  }
+  return /\b(?:fac|inv|ord|oc|po|ped|cli|customer|cliente|factura|invoice|order|pedido)[\s#:_-]*[a-z]{0,8}[-_]?[0-9]{2,}\b/iu.test(
+    value,
+  );
+}
+
 function isPlainUserText(value) {
   if (!isBoundedString(value, 280)) return false;
   if (/[\r\n\t<>`]/u.test(value)) return false;
@@ -619,6 +693,7 @@ function isPlainUserText(value) {
     return false;
   }
   if (/\b[0-9a-f]{7,40}\b/iu.test(value)) return false;
+  if (containsPrivateIdentifier(value)) return false;
   return !/\b(?:api|backend|commit|dart|deploy(?:ment)?|endpoint|frontend|flutter|github|json|pipeline|rpc|schema|sha|sql|supabase|workflow|yaml)\b/iu.test(
     value,
   );
@@ -779,7 +854,7 @@ function aiOutputSchema() {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["id", "label", "items", "evidence_paths"],
+          required: ["id", "label", "items", "evidence_ids"],
           properties: {
             id: {
               type: "string",
@@ -799,7 +874,7 @@ function aiOutputSchema() {
                 maxLength: 160,
               },
             },
-            evidence_paths: {
+            evidence_ids: {
               type: "array",
               minItems: 1,
               maxItems: 12,
@@ -814,25 +889,53 @@ function aiOutputSchema() {
   };
 }
 
-function buildAiRequest(inventory, model) {
-  const metadata = {
-    locale: "es-CL",
-    from_commit: inventory.from_commit,
-    to_commit: inventory.to_commit,
-    commit_count: inventory.commit_count,
-    commit_subjects: inventory.commits,
-    changed_paths: inventory.ai_changes.map((entry) => ({
+const AI_EDITOR_INSTRUCTIONS = [
+  "Eres editor de novedades para personas que usan un ERP de bicicletería en Chile.",
+  "Resume únicamente los metadatos entregados; no inventes cambios, beneficios ni módulos.",
+  "Usa español de Chile simple, directo y no técnico.",
+  "No uses Markdown, HTML, enlaces, nombres de archivos, rutas, hashes ni jerga de desarrollo.",
+  "Cada módulo debe citar evidence_ids exactos de changes y usar el id y label canónicos correspondientes.",
+  "Prioriza cambios visibles para usuarios. Si el metadato no permite una afirmación específica, describe un ajuste de estabilidad con prudencia.",
+].join(" ");
+
+function buildEvidenceCatalog(inventory) {
+  return inventory.ai_changes.map((entry, index) => {
+    const evidenceId = `change_${String(index + 1).padStart(3, "0")}`;
+    const topicId = topicForReleasePath(entry.path, entry.module_id);
+    return {
+      evidence_id: evidenceId,
+      module_id: entry.module_id,
+      topic_id: topicId,
       status: entry.status,
-      path: entry.path,
-      ...(entry.previous_path ? { previous_path: entry.previous_path } : {}),
       additions: entry.additions,
       deletions: entry.deletions,
-      module_id: entry.module_id,
-    })),
+      local_path: entry.path,
+    };
+  });
+}
+
+function buildAiMetadata(inventory) {
+  const evidenceCatalog = buildEvidenceCatalog(inventory);
+  return {
+    locale: "es-CL",
+    commit_count: inventory.commit_count,
+    change_count: inventory.all_changes.length,
+    included_change_count: evidenceCatalog.length,
     omitted_or_protected_change_count: inventory.omitted_ai_change_count,
     module_labels: RELEASE_NOTE_MODULES,
+    topic_labels: RELEASE_NOTE_TOPICS,
+    changes: evidenceCatalog.map((entry) => ({
+      evidence_id: entry.evidence_id,
+      module_id: entry.module_id,
+      topic_id: entry.topic_id,
+      status: entry.status,
+      additions: entry.additions,
+      deletions: entry.deletions,
+    })),
   };
+}
 
+function buildOpenAiRequest(inventory, model) {
   return {
     model,
     max_output_tokens: 1_200,
@@ -842,14 +945,7 @@ function buildAiRequest(inventory, model) {
         content: [
           {
             type: "input_text",
-            text: [
-              "Eres editor de novedades para personas que usan un ERP de bicicletería en Chile.",
-              "Resume únicamente los metadatos entregados; no inventes cambios, beneficios ni módulos.",
-              "Usa español de Chile simple, directo y no técnico.",
-              "No uses Markdown, HTML, enlaces, nombres de archivos, rutas, hashes ni jerga de desarrollo.",
-              "Cada módulo debe citar rutas exactas de changed_paths y usar el id y label canónicos correspondientes.",
-              "Prioriza cambios visibles para usuarios. Si el metadato no permite una afirmación específica, describe un ajuste de estabilidad con prudencia.",
-            ].join(" "),
+            text: AI_EDITOR_INSTRUCTIONS,
           },
         ],
       },
@@ -858,7 +954,7 @@ function buildAiRequest(inventory, model) {
         content: [
           {
             type: "input_text",
-            text: JSON.stringify(metadata),
+            text: JSON.stringify(buildAiMetadata(inventory)),
           },
         ],
       },
@@ -866,7 +962,7 @@ function buildAiRequest(inventory, model) {
     text: {
       format: {
         type: "json_schema",
-        name: "vinabike_desktop_release_notes",
+        name: "vinabike_desktop_release_notes_by_evidence_id",
         strict: true,
         schema: aiOutputSchema(),
       },
@@ -874,7 +970,37 @@ function buildAiRequest(inventory, model) {
   };
 }
 
-function extractModelOutput(payload) {
+function geminiAiOutputSchema() {
+  const schema = structuredClone(aiOutputSchema());
+  delete schema.properties.title.minLength;
+  delete schema.properties.title.maxLength;
+  delete schema.properties.summary.minLength;
+  delete schema.properties.summary.maxLength;
+  delete schema.properties.modules.items.properties.items.items.minLength;
+  delete schema.properties.modules.items.properties.items.items.maxLength;
+  return schema;
+}
+
+function buildGeminiRequest(inventory) {
+  return {
+    systemInstruction: {
+      parts: [{ text: AI_EDITOR_INSTRUCTIONS }],
+    },
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: JSON.stringify(buildAiMetadata(inventory)) }],
+      },
+    ],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseJsonSchema: geminiAiOutputSchema(),
+      maxOutputTokens: 1_200,
+    },
+  };
+}
+
+function extractOpenAiModelOutput(payload) {
   if (typeof payload?.output_text === "string") {
     return payload.output_text;
   }
@@ -892,6 +1018,32 @@ function extractModelOutput(payload) {
     }
   }
   return null;
+}
+
+function extractGeminiModelOutput(payload) {
+  if (!Array.isArray(payload?.candidates)) return null;
+  for (const candidate of payload.candidates) {
+    if (!Array.isArray(candidate?.content?.parts)) continue;
+    const text = candidate.content.parts
+      .filter(
+        (part) => part?.thought !== true && typeof part?.text === "string",
+      )
+      .map((part) => part.text)
+      .join("");
+    if (text) return text;
+  }
+  return null;
+}
+
+function geminiEndpoint(model) {
+  if (
+    typeof model !== "string" ||
+    !GEMINI_MODEL_PATTERN.test(model.trim().toLowerCase())
+  ) {
+    return null;
+  }
+  const normalizedModel = model.trim().toLowerCase();
+  return `${GEMINI_ENDPOINT_ROOT}/${encodeURIComponent(normalizedModel)}:generateContent`;
 }
 
 function validatedEndpoint(value) {
@@ -918,10 +1070,10 @@ function boundedInteger(value, fallback, minimum, maximum) {
 }
 
 async function requestAiCandidate({
-  inventory,
-  apiKey,
-  model,
+  requestBody,
+  requestHeaders,
   endpoint,
+  extractModelOutput,
   fetchImpl,
   timeoutMs,
 }) {
@@ -932,10 +1084,10 @@ async function requestAiCandidate({
     const response = await fetchImpl(endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        ...requestHeaders,
       },
-      body: JSON.stringify(buildAiRequest(inventory, model)),
+      body: JSON.stringify(requestBody),
       signal: controller.signal,
     });
 
@@ -1034,10 +1186,58 @@ function wrapAiCandidate(candidate, inventory) {
     !candidate ||
     typeof candidate !== "object" ||
     Array.isArray(candidate) ||
-    !hasExactlyKeys(candidate, ["title", "summary", "modules"])
+    !hasExactlyKeys(candidate, ["title", "summary", "modules"]) ||
+    !Array.isArray(candidate.modules) ||
+    candidate.modules.length < 1 ||
+    candidate.modules.length > 5
   ) {
     throw new Error("The AI candidate has an invalid shape.");
   }
+
+  const evidenceById = new Map(
+    buildEvidenceCatalog(inventory).map((entry) => [entry.evidence_id, entry]),
+  );
+  const seenModules = new Set();
+  const modules = candidate.modules.map((module) => {
+    if (
+      !module ||
+      typeof module !== "object" ||
+      Array.isArray(module) ||
+      !hasExactlyKeys(module, ["id", "label", "items", "evidence_ids"]) ||
+      !Object.hasOwn(RELEASE_NOTE_MODULES, module.id) ||
+      module.label !== RELEASE_NOTE_MODULES[module.id] ||
+      seenModules.has(module.id) ||
+      !Array.isArray(module.evidence_ids) ||
+      module.evidence_ids.length < 1 ||
+      module.evidence_ids.length > 12 ||
+      new Set(module.evidence_ids).size !== module.evidence_ids.length
+    ) {
+      throw new Error("The AI candidate has invalid evidence IDs.");
+    }
+    seenModules.add(module.id);
+
+    const evidenceEntries = module.evidence_ids.map((evidenceId) => {
+      if (
+        typeof evidenceId !== "string" ||
+        !/^change_[0-9]{3}$/u.test(evidenceId)
+      ) {
+        throw new Error("The AI candidate has an invalid evidence ID.");
+      }
+      const evidenceEntry = evidenceById.get(evidenceId);
+      if (!evidenceEntry || evidenceEntry.module_id !== module.id) {
+        throw new Error("The AI candidate cites unsupported evidence.");
+      }
+      return evidenceEntry;
+    });
+
+    return {
+      id: module.id,
+      label: module.label,
+      items: module.items,
+      evidence_paths: evidenceEntries.map((entry) => entry.local_path),
+    };
+  });
+
   return {
     schema_version: 1,
     locale: "es-CL",
@@ -1046,7 +1246,7 @@ function wrapAiCandidate(candidate, inventory) {
     to_commit: inventory.to_commit,
     title: candidate.title,
     summary: candidate.summary,
-    modules: candidate.modules,
+    modules,
   };
 }
 
@@ -1058,6 +1258,8 @@ export async function generateReleaseNotes({
   apiKey = "",
   model = DEFAULT_MODEL,
   endpoint = DEFAULT_ENDPOINT,
+  geminiApiKey = "",
+  geminiModel = DEFAULT_GEMINI_MODEL,
   fetchImpl = globalThis.fetch,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxAttempts = DEFAULT_MAX_ATTEMPTS,
@@ -1074,7 +1276,8 @@ export async function generateReleaseNotes({
   const envelope = { release_notes: fallback };
   await writeJsonAtomically(outputPath, envelope);
 
-  if (!apiKey) {
+  const provider = geminiApiKey ? "gemini" : apiKey ? "openai" : null;
+  if (!provider) {
     return {
       source: "fallback",
       reason: "missing_api_key",
@@ -1099,11 +1302,14 @@ export async function generateReleaseNotes({
     };
   }
 
-  const safeEndpoint = validatedEndpoint(endpoint);
+  const safeEndpoint =
+    provider === "gemini"
+      ? geminiEndpoint(geminiModel)
+      : validatedEndpoint(endpoint);
   if (!safeEndpoint) {
     return {
       source: "fallback",
-      reason: "invalid_endpoint",
+      reason: provider === "gemini" ? "invalid_model" : "invalid_endpoint",
       inventory,
       release_notes: fallback,
     };
@@ -1119,10 +1325,19 @@ export async function generateReleaseNotes({
   let finalReason = "ai_unavailable";
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const result = await requestAiCandidate({
-      inventory,
-      apiKey,
-      model,
+      requestBody:
+        provider === "gemini"
+          ? buildGeminiRequest(inventory)
+          : buildOpenAiRequest(inventory, model),
+      requestHeaders:
+        provider === "gemini"
+          ? { "x-goog-api-key": geminiApiKey }
+          : { Authorization: `Bearer ${apiKey}` },
       endpoint: safeEndpoint,
+      extractModelOutput:
+        provider === "gemini"
+          ? extractGeminiModelOutput
+          : extractOpenAiModelOutput,
       fetchImpl,
       timeoutMs: boundedTimeout,
     });
@@ -1198,6 +1413,8 @@ function printUsage() {
       "    --output <release-notes.json>",
       "",
       "Optional environment:",
+      "  GEMINI_RELEASE_API_KEY (preferred when present)",
+      "  GEMINI_RELEASE_NOTES_MODEL (default: gemini-2.5-flash-lite)",
       "  OPENAI_API_KEY",
       "  OPENAI_RELEASE_NOTES_MODEL (default: gpt-5-mini)",
       "",
@@ -1217,6 +1434,8 @@ async function main() {
     fromCommit: args.from_commit,
     toCommit: args.to_commit,
     outputPath: args.output,
+    geminiApiKey: process.env.GEMINI_RELEASE_API_KEY ?? "",
+    geminiModel: process.env.GEMINI_RELEASE_NOTES_MODEL || DEFAULT_GEMINI_MODEL,
     apiKey: process.env.OPENAI_API_KEY ?? "",
     model: process.env.OPENAI_RELEASE_NOTES_MODEL || DEFAULT_MODEL,
     endpoint: process.env.OPENAI_RELEASE_NOTES_ENDPOINT || DEFAULT_ENDPOINT,

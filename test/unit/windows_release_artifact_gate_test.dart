@@ -81,7 +81,10 @@ void main() {
       'Check out release verification material',
       publishJob,
     );
-    final releaseNotesSecret = workflow.indexOf(
+    final geminiReleaseNotesSecret = workflow.indexOf(
+      r'GEMINI_RELEASE_API_KEY: ${{ secrets.GEMINI_RELEASE_API_KEY }}',
+    );
+    final openAiReleaseNotesSecret = workflow.indexOf(
       r'OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}',
     );
     final baseResolution = workflow.indexOf(
@@ -107,7 +110,18 @@ void main() {
         contains('fetch-depth: 0'),
       ),
     );
-    expect(releaseNotesSecret, greaterThan(publishJob));
+    expect(geminiReleaseNotesSecret, greaterThan(publishJob));
+    expect(openAiReleaseNotesSecret, greaterThan(geminiReleaseNotesSecret));
+    expect(
+      workflow,
+      contains(
+        r"GEMINI_RELEASE_NOTES_MODEL: ${{ vars.GEMINI_RELEASE_NOTES_MODEL || 'gemini-2.5-flash-lite' }}",
+      ),
+    );
+    expect(
+      RegExp(r'secrets\.GEMINI_RELEASE_API_KEY').allMatches(workflow).length,
+      1,
+    );
     expect(RegExp(r'secrets\.OPENAI_API_KEY').allMatches(workflow).length, 1);
     expect(generation, greaterThan(baseResolution));
     expect(
@@ -131,6 +145,11 @@ void main() {
       ),
       reason: 'A retry must refresh both assets and their release notes.',
     );
+    expect(distributionRunbook, contains('GEMINI_RELEASE_API_KEY'));
+    expect(distributionRunbook, contains('gemini-2.5-flash-lite'));
+    expect(distributionRunbook, contains('OPENAI_API_KEY'));
+    expect(distributionRunbook, contains('deterministic fallback'));
+    expect(distributionRunbook, contains('human reviewers'));
   });
 
   test('release-note baseline ignores a current-SHA retry', () {

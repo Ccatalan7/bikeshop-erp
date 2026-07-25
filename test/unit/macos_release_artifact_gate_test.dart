@@ -87,7 +87,10 @@ void main() {
 
   test('protected publish binds release notes before signing the manifest', () {
     final publishJob = workflow.indexOf('\n  publish:');
-    final releaseNotesSecret = workflow.indexOf(
+    final geminiReleaseNotesSecret = workflow.indexOf(
+      r'GEMINI_RELEASE_API_KEY: ${{ secrets.GEMINI_RELEASE_API_KEY }}',
+    );
+    final openAiReleaseNotesSecret = workflow.indexOf(
       r'OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}',
     );
     final baseResolution = workflow.indexOf(
@@ -105,11 +108,25 @@ void main() {
     final signing = workflow.indexOf('ssh-keygen -Y sign', merge);
 
     expect(publishJob, greaterThanOrEqualTo(0));
-    expect(releaseNotesSecret, greaterThan(publishJob));
+    expect(geminiReleaseNotesSecret, greaterThan(publishJob));
+    expect(openAiReleaseNotesSecret, greaterThan(geminiReleaseNotesSecret));
+    expect(
+      workflow,
+      contains(
+        r"GEMINI_RELEASE_NOTES_MODEL: ${{ vars.GEMINI_RELEASE_NOTES_MODEL || 'gemini-2.5-flash-lite' }}",
+      ),
+    );
+    expect(
+      RegExp(r'secrets\.GEMINI_RELEASE_API_KEY').allMatches(workflow).length,
+      1,
+      reason:
+          'The Gemini key must only be exposed inside protected publication.',
+    );
     expect(
       RegExp(r'secrets\.OPENAI_API_KEY').allMatches(workflow).length,
       1,
-      reason: 'The AI key must only be exposed inside protected publication.',
+      reason:
+          'The compatibility OpenAI key must stay inside protected publication.',
     );
     expect(baseResolution, greaterThan(publishJob));
     expect(generation, greaterThan(baseResolution));
@@ -137,6 +154,11 @@ void main() {
       ),
       reason: 'A retry must refresh both assets and their release notes.',
     );
+    expect(runbook, contains('GEMINI_RELEASE_API_KEY'));
+    expect(runbook, contains('gemini-2.5-flash-lite'));
+    expect(runbook, contains('OPENAI_API_KEY'));
+    expect(runbook, contains('deterministic fallback'));
+    expect(runbook, contains('human reviewers'));
   });
 
   test('release-note baseline skips same-SHA retries and stays ancestral', () {

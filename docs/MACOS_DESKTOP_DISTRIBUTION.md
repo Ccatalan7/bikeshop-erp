@@ -145,14 +145,30 @@ model as the Windows publisher:
 
 The protected publish job creates a bounded Spanish change summary from the
 exact previous-release commit through the commit being published. It first
-writes a deterministic fallback, then may improve it through the OpenAI
-Responses API when the `Production` environment contains `OPENAI_API_KEY`.
-Only commit subjects, changed paths, statuses, and size metadata are sent; raw
-source and unrestricted diffs are not. A missing key, timeout, quota error, or
-invalid model response leaves the fallback in place and never blocks the build,
-signature, or publication. The resulting JSON is validated and merged before
-the manifest is signed, so displayed macOS notes belong to the same trust
-boundary as the archive.
+writes a deterministic fallback, then prefers the Gemini API when the protected
+`Production` environment contains `GEMINI_RELEASE_API_KEY`. The default Gemini
+model is `gemini-2.5-flash-lite`; an optional
+`GEMINI_RELEASE_NOTES_MODEL` environment variable may override it. If the
+Gemini key is absent, the existing `OPENAI_API_KEY` and
+`OPENAI_RELEASE_NOTES_MODEL` integration remains available as a compatibility
+path. A missing key, timeout, quota error, or invalid response from the selected
+provider leaves the deterministic fallback in place and never blocks the
+build, signature, or publication.
+
+Only sanitized, bounded release metadata is eligible for either provider:
+fixed canonical ERP module/topic labels, status and change counts, and opaque
+evidence IDs. Commit subjects, commit SHAs, raw/current/previous paths, source,
+diffs, credentials, generated bundles, binary contents, customer data, and
+other personal or confidential information stay local and must never be sent.
+Opaque evidence IDs are mapped back to local changed paths only after the model
+output passes schema and evidence validation.
+
+Google's free/unpaid Gemini service may use submitted inputs and generated
+outputs to improve its products, and human reviewers may process them; release
+metadata must therefore remain within this non-sensitive boundary. See the
+[Gemini API Additional Terms of Service](https://ai.google.dev/gemini-api/terms).
+The resulting JSON is validated and merged before the manifest is signed, so
+displayed macOS notes belong to the same trust boundary as the archive.
 
 The normal publish task no longer installs Node packages, resolves Flutter,
 runs analyzer/tests, or compiles web locally before commit. GitHub Actions is

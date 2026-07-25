@@ -62,11 +62,28 @@ The next time users open the app, the Flutter workspace prepares the update
 silently, then shows an update prompt only when the update is ready.
 
 The protected publish job first creates deterministic Spanish fallback notes
-for the exact previous-release commit range, then may improve them through the
-OpenAI Responses API when `OPENAI_API_KEY` exists in the `Production`
-environment. It sends bounded Git metadata rather than raw source. AI errors or
-invalid output never block publication; the validated fallback remains in the
-manifest.
+for the exact previous-release commit range, then prefers the Gemini API when
+`GEMINI_RELEASE_API_KEY` exists in the protected `Production` environment. The
+default model is `gemini-2.5-flash-lite`, with
+`GEMINI_RELEASE_NOTES_MODEL` available as an optional override. When the Gemini
+key is absent, the existing `OPENAI_API_KEY` and
+`OPENAI_RELEASE_NOTES_MODEL` integration remains available as a compatibility
+path. Errors, quota limits, timeouts, or invalid output from the selected
+provider never block publication; the validated deterministic fallback remains
+in the manifest.
+
+Only sanitized, bounded release metadata is eligible for either provider:
+fixed canonical ERP module/topic labels, status and change counts, and opaque
+evidence IDs. Commit subjects, commit SHAs, raw/current/previous paths, source,
+diffs, credentials, generated bundles, binary contents, customer data, and
+other personal or confidential information stay local and must never be sent.
+Opaque evidence IDs are mapped back to local changed paths only after the model
+output passes schema and evidence validation.
+
+Google's free/unpaid Gemini service may use submitted inputs and generated
+outputs to improve its products, and human reviewers may process them; release
+metadata must therefore remain within this non-sensitive boundary. See the
+[Gemini API Additional Terms of Service](https://ai.google.dev/gemini-api/terms).
 
 The CI gate deliberately does not start `vinabike_erp.exe`: application startup
 initializes the production Supabase fallback and notifications before login.

@@ -120,6 +120,57 @@ async function createFixtureRepo(t) {
   return { repoDir, fromCommit, toCommit };
 }
 
+async function createPrivacyFixtureRepo(t) {
+  const repoDir = await mkdtemp(
+    path.join(os.tmpdir(), "vinabike-private-release-notes-test-"),
+  );
+  t.after(async () => {
+    await rm(repoDir, { recursive: true, force: true });
+  });
+
+  runGit(repoDir, ["init", "--quiet"]);
+  runGit(repoDir, ["config", "user.email", "release-tests@vinabike.local"]);
+  runGit(repoDir, ["config", "user.name", "Vinabike Release Tests"]);
+
+  const previousPath =
+    "lib/modules/sales/customers/customer_ana.soto@example.cl_phone_+56-9-8765-4321_rut_12.345.678-5_invoice_FAC-77881.dart";
+  const currentPath =
+    "lib/modules/sales/customers/customer_pedro.rios@example.cl_phone_+56-9-1234-5678_rut_9.876.543-2_order_ORD-99110.dart";
+  await writeRepoFile(
+    repoDir,
+    previousPath,
+    'const privateCustomerRecord = "ana.soto@example.cl +56 9 8765 4321 12.345.678-5 FAC-77881";\n',
+  );
+  const fromCommit = commit(repoDir, "Initial private customer record");
+
+  await rename(
+    path.join(repoDir, previousPath),
+    path.join(repoDir, currentPath),
+  );
+  const privateCommitSubject =
+    "Fix customer Pedro Rios pedro.rios@example.cl +56 9 1234 5678 RUT 9.876.543-2 order ORD-99110";
+  const toCommit = commit(repoDir, privateCommitSubject);
+
+  return {
+    repoDir,
+    fromCommit,
+    toCommit,
+    previousPath,
+    currentPath,
+    privateCommitSubject,
+    privateValues: [
+      "ana.soto@example.cl",
+      "pedro.rios@example.cl",
+      "+56-9-8765-4321",
+      "+56-9-1234-5678",
+      "12.345.678-5",
+      "9.876.543-2",
+      "FAC-77881",
+      "ORD-99110",
+    ],
+  };
+}
+
 function responseWithCandidate(candidate) {
   return new Response(
     JSON.stringify({
@@ -142,11 +193,40 @@ function responseWithCandidate(candidate) {
   );
 }
 
+function geminiResponseWithCandidate(candidate) {
+  const serializedCandidate = JSON.stringify(candidate);
+  const splitAt = Math.ceil(serializedCandidate.length / 2);
+  return new Response(
+    JSON.stringify({
+      candidates: [
+        {
+          content: {
+            role: "model",
+            parts: [
+              { thought: true, text: "Internal reasoning is not output JSON." },
+              { text: serializedCandidate.slice(0, splitAt) },
+              { text: serializedCandidate.slice(splitAt) },
+            ],
+          },
+          finishReason: "STOP",
+        },
+      ],
+    }),
+    {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    },
+  );
+}
+
 function candidateForInventory(inventory) {
   const evidenceByModule = new Map();
-  for (const entry of inventory.ai_changes) {
+  for (const [index, entry] of inventory.ai_changes.entries()) {
     if (!evidenceByModule.has(entry.module_id)) {
-      evidenceByModule.set(entry.module_id, entry.path);
+      evidenceByModule.set(
+        entry.module_id,
+        `change_${String(index + 1).padStart(3, "0")}`,
+      );
     }
   }
 
@@ -168,14 +248,12 @@ function candidateForInventory(inventory) {
     title: "Novedades de esta actualización",
     summary:
       "Mejoramos varias herramientas para que el trabajo diario sea más claro.",
-    modules: [...evidenceByModule.entries()].map(
-      ([moduleId, evidencePath]) => ({
-        id: moduleId,
-        label: labels[moduleId],
-        items: [copy[moduleId]],
-        evidence_paths: [evidencePath],
-      }),
-    ),
+    modules: [...evidenceByModule.entries()].map(([moduleId, evidenceId]) => ({
+      id: moduleId,
+      label: labels[moduleId],
+      items: [copy[moduleId]],
+      evidence_ids: [evidenceId],
+    })),
   };
 }
 
@@ -372,7 +450,7 @@ test("never exposes protected paths when a range has no safe AI metadata", async
   assert.equal(saved.includes("new-secret"), false);
 });
 
-test("upgrades the fallback only for valid structured AI notes and sends metadata only", async (t) => {
+test("upgrades the fallback only for valid structured OpenAI notes and sends metadata only", async (t) => {
   const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
   const outputPath = path.join(repoDir, "out", "ai.json");
   const inventory = collectReleaseInventory({
@@ -426,12 +504,423 @@ test("upgrades the fallback only for valid structured AI notes and sends metadat
   assert.equal(requestBody.text.format.strict, true);
   assert.equal(
     requestBody.text.format.schema.properties.modules.items.properties
-      .evidence_paths.uniqueItems,
+      .evidence_ids.uniqueItems,
     undefined,
+  );
+  assert.equal(
+    Object.hasOwn(
+      requestBody.text.format.schema.properties.modules.items.properties,
+      "evidence_paths",
+    ),
+    false,
   );
   assert.deepEqual(JSON.parse(await readFile(outputPath, "utf8")), {
     release_notes: result.release_notes,
   });
+});
+
+test("prefers Gemini, sends only bounded metadata, and accepts validated structured notes", async (t) => {
+  const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
+  const outputPath = path.join(repoDir, "out", "gemini-ai.json");
+  const inventory = collectReleaseInventory({
+    repoDir,
+    fromCommit,
+    toCommit,
+  });
+  const candidate = candidateForInventory(inventory);
+  const geminiSecret = "gemini-test-secret-that-must-not-leak";
+  const openAiSecret = "openai-test-secret-that-must-not-leak";
+  let requestBody;
+  let requestCount = 0;
+
+  const result = await generateReleaseNotes({
+    repoDir,
+    fromCommit,
+    toCommit,
+    outputPath,
+    geminiApiKey: geminiSecret,
+    geminiModel: "gemini-test-model",
+    apiKey: openAiSecret,
+    maxAttempts: 1,
+    fetchImpl: async (url, options) => {
+      requestCount += 1;
+      assert.equal(
+        url,
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-test-model:generateContent",
+      );
+      assert.equal(options.headers["x-goog-api-key"], geminiSecret);
+      assert.equal(Object.hasOwn(options.headers, "Authorization"), false);
+      assert.equal(
+        JSON.parse(await readFile(outputPath, "utf8")).release_notes.source,
+        "fallback",
+      );
+      requestBody = JSON.parse(options.body);
+      return geminiResponseWithCandidate(candidate);
+    },
+  });
+
+  assert.equal(requestCount, 1);
+  assert.equal(result.source, "ai");
+  assert.equal(result.reason, null);
+  validateReleaseNotes(result.release_notes, {
+    inventory,
+    source: "ai",
+  });
+
+  assert.deepEqual(Object.keys(requestBody).sort(), [
+    "contents",
+    "generationConfig",
+    "systemInstruction",
+  ]);
+  assert.equal(requestBody.contents.length, 1);
+  assert.equal(requestBody.contents[0].role, "user");
+  assert.equal(requestBody.contents[0].parts.length, 1);
+  const metadata = JSON.parse(requestBody.contents[0].parts[0].text);
+  assert.deepEqual(Object.keys(metadata).sort(), [
+    "change_count",
+    "changes",
+    "commit_count",
+    "included_change_count",
+    "locale",
+    "module_labels",
+    "omitted_or_protected_change_count",
+    "topic_labels",
+  ]);
+  assert.deepEqual(
+    metadata.changes,
+    inventory.ai_changes.map((entry, index) => ({
+      evidence_id: `change_${String(index + 1).padStart(3, "0")}`,
+      module_id: entry.module_id,
+      topic_id:
+        entry.module_id === "general"
+          ? "general_experience"
+          : {
+              workshop: "workshop_operations",
+              inventory: "inventory_operations",
+              sales: "sales_operations",
+            }[entry.module_id],
+      status: entry.status,
+      additions: entry.additions,
+      deletions: entry.deletions,
+    })),
+  );
+  assert.equal(metadata.change_count, inventory.all_changes.length);
+  assert.equal(metadata.included_change_count, inventory.ai_changes.length);
+  assert.equal(metadata.changes.length <= 240, true);
+  assert.equal(
+    requestBody.generationConfig.responseMimeType,
+    "application/json",
+  );
+  assert.equal(requestBody.generationConfig.responseJsonSchema.type, "object");
+  assert.equal(
+    requestBody.generationConfig.responseJsonSchema.additionalProperties,
+    false,
+  );
+  assert.equal(
+    requestBody.generationConfig.responseJsonSchema.properties.title.maxLength,
+    undefined,
+  );
+  assert.equal(
+    Object.hasOwn(
+      requestBody.generationConfig.responseJsonSchema.properties.modules.items
+        .properties,
+      "evidence_paths",
+    ),
+    false,
+  );
+
+  const serializedRequest = JSON.stringify(requestBody);
+  for (const protectedValue of [
+    geminiSecret,
+    openAiSecret,
+    ".env.production",
+    "super-secret-new-value",
+    "sk-this-must-never-reach-the-model",
+    "web/spreadsheet_engine/univer.bundle.js",
+    "assets/private-preview.png",
+    "class InvoicePage",
+  ]) {
+    assert.equal(serializedRequest.includes(protectedValue), false);
+  }
+  for (const entry of inventory.all_changes) {
+    assert.equal(serializedRequest.includes(entry.path), false);
+    if (entry.previous_path) {
+      assert.equal(serializedRequest.includes(entry.previous_path), false);
+    }
+  }
+  assert.equal(serializedRequest.includes(fromCommit), false);
+  assert.equal(serializedRequest.includes(toCommit), false);
+  for (const subject of inventory.commits) {
+    assert.equal(serializedRequest.includes(subject), false);
+  }
+
+  for (const module of result.release_notes.modules) {
+    const providerModule = candidate.modules.find(
+      (candidateModule) => candidateModule.id === module.id,
+    );
+    const expectedPaths = providerModule.evidence_ids.map((evidenceId) => {
+      const index = Number.parseInt(evidenceId.slice("change_".length), 10) - 1;
+      return inventory.ai_changes[index].path;
+    });
+    assert.deepEqual(module.evidence_paths, expectedPaths);
+  }
+  assert.deepEqual(JSON.parse(await readFile(outputPath, "utf8")), {
+    release_notes: result.release_notes,
+  });
+});
+
+test("both AI providers receive only opaque allowlisted metadata even when Git contains private identifiers", async (t) => {
+  const {
+    repoDir,
+    fromCommit,
+    toCommit,
+    previousPath,
+    currentPath,
+    privateCommitSubject,
+    privateValues,
+  } = await createPrivacyFixtureRepo(t);
+  const inventory = collectReleaseInventory({
+    repoDir,
+    fromCommit,
+    toCommit,
+  });
+  assert.equal(inventory.ai_changes.length, 1);
+  assert.equal(inventory.ai_changes[0].status, "renamed");
+  assert.equal(inventory.ai_changes[0].previous_path, previousPath);
+  assert.equal(inventory.ai_changes[0].path, currentPath);
+  const candidate = candidateForInventory(inventory);
+
+  const providers = [
+    {
+      name: "openai",
+      args: { apiKey: "private-openai-test-key" },
+      respond: () => responseWithCandidate(candidate),
+      metadataFromBody: (body) => JSON.parse(body.input[1].content[0].text),
+    },
+    {
+      name: "gemini",
+      args: { geminiApiKey: "private-gemini-test-key" },
+      respond: () => geminiResponseWithCandidate(candidate),
+      metadataFromBody: (body) => JSON.parse(body.contents[0].parts[0].text),
+    },
+  ];
+
+  for (const provider of providers) {
+    const outputPath = path.join(
+      repoDir,
+      "out",
+      `private-${provider.name}.json`,
+    );
+    let requestBody;
+    const result = await generateReleaseNotes({
+      repoDir,
+      fromCommit,
+      toCommit,
+      outputPath,
+      maxAttempts: 1,
+      ...provider.args,
+      fetchImpl: async (_url, options) => {
+        requestBody = JSON.parse(options.body);
+        return provider.respond();
+      },
+    });
+
+    assert.equal(result.source, "ai", provider.name);
+    const metadata = provider.metadataFromBody(requestBody);
+    assert.deepEqual(Object.keys(metadata).sort(), [
+      "change_count",
+      "changes",
+      "commit_count",
+      "included_change_count",
+      "locale",
+      "module_labels",
+      "omitted_or_protected_change_count",
+      "topic_labels",
+    ]);
+    assert.deepEqual(metadata.changes, [
+      {
+        evidence_id: "change_001",
+        module_id: "sales",
+        topic_id: "sales_operations",
+        status: "renamed",
+        additions: inventory.ai_changes[0].additions,
+        deletions: inventory.ai_changes[0].deletions,
+      },
+    ]);
+    assert.deepEqual(
+      Object.keys(metadata.changes[0]).sort(),
+      [
+        "additions",
+        "deletions",
+        "evidence_id",
+        "module_id",
+        "status",
+        "topic_id",
+      ],
+      provider.name,
+    );
+
+    const serializedRequest = JSON.stringify(requestBody);
+    for (const forbiddenValue of [
+      fromCommit,
+      toCommit,
+      previousPath,
+      currentPath,
+      privateCommitSubject,
+      ...inventory.commits,
+      ...privateValues,
+      "privateCustomerRecord",
+      "from_commit",
+      "to_commit",
+      "commit_subjects",
+      "changed_paths",
+      "previous_path",
+      "evidence_paths",
+    ]) {
+      assert.equal(
+        serializedRequest.includes(forbiddenValue),
+        false,
+        `${provider.name}: ${forbiddenValue}`,
+      );
+    }
+    assert.deepEqual(result.release_notes.modules[0].evidence_paths, [
+      currentPath,
+    ]);
+  }
+});
+
+test("Gemini failures keep the fallback without OpenAI failover or secret leakage", async (t) => {
+  const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
+  const geminiSecret = "gemini-network-secret-that-must-not-leak";
+  const openAiSecret = "openai-failover-secret-that-must-not-leak";
+  const cases = [
+    {
+      name: "service-unavailable",
+      fetchImpl: async () =>
+        new Response(`provider error ${geminiSecret}`, { status: 503 }),
+      expectedReason: "http_503",
+    },
+    {
+      name: "network-error",
+      fetchImpl: async () => {
+        throw new Error(`network failure ${geminiSecret}`);
+      },
+      expectedReason: "network_error",
+    },
+  ];
+
+  for (const scenario of cases) {
+    const outputPath = path.join(
+      repoDir,
+      "out",
+      `gemini-${scenario.name}.json`,
+    );
+    const requestedUrls = [];
+    const result = await generateReleaseNotes({
+      repoDir,
+      fromCommit,
+      toCommit,
+      outputPath,
+      geminiApiKey: geminiSecret,
+      apiKey: openAiSecret,
+      maxAttempts: 1,
+      fetchImpl: async (url, options) => {
+        requestedUrls.push(url);
+        assert.equal(options.headers["x-goog-api-key"], geminiSecret);
+        assert.equal(Object.hasOwn(options.headers, "Authorization"), false);
+        return scenario.fetchImpl(url, options);
+      },
+    });
+
+    assert.deepEqual(requestedUrls, [
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
+    ]);
+    assert.equal(result.source, "fallback", scenario.name);
+    assert.equal(result.reason, scenario.expectedReason, scenario.name);
+    const saved = await readFile(outputPath, "utf8");
+    assert.equal(saved.includes(geminiSecret), false, scenario.name);
+    assert.equal(saved.includes(openAiSecret), false, scenario.name);
+    assert.equal(
+      JSON.stringify(result).includes(geminiSecret),
+      false,
+      scenario.name,
+    );
+    assert.equal(
+      JSON.stringify(result).includes(openAiSecret),
+      false,
+      scenario.name,
+    );
+  }
+});
+
+test("Gemini output still passes the exact evidence validator before replacing fallback", async (t) => {
+  const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
+  const outputPath = path.join(repoDir, "out", "gemini-invalid.json");
+  const inventory = collectReleaseInventory({
+    repoDir,
+    fromCommit,
+    toCommit,
+  });
+  const fabricatedCandidate = candidateForInventory(inventory);
+  fabricatedCandidate.modules[0].evidence_ids = ["change_999"];
+
+  const result = await generateReleaseNotes({
+    repoDir,
+    fromCommit,
+    toCommit,
+    outputPath,
+    geminiApiKey: "test-only-gemini-key",
+    maxAttempts: 1,
+    fetchImpl: async () => geminiResponseWithCandidate(fabricatedCandidate),
+  });
+
+  assert.equal(result.source, "fallback");
+  assert.equal(result.reason, "invalid_ai_release_notes");
+  assert.equal(
+    JSON.parse(await readFile(outputPath, "utf8")).release_notes.source,
+    "fallback",
+  );
+});
+
+test("hallucinated private identifiers in AI text never replace the safe fallback", async (t) => {
+  const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
+  const inventory = collectReleaseInventory({
+    repoDir,
+    fromCommit,
+    toCommit,
+  });
+  const privateTextCases = [
+    "Escriba a persona@example.cl para conocer el cambio.",
+    "Se revisó el registro asociado al RUT 12.345.678-5.",
+    "Se mejoró el contacto al +56 9 1234 5678.",
+    "Se ajustó el cliente CLI-77881.",
+    "Se ajustó la factura FAC-77881.",
+    "Se ajustó la orden ORD-99110.",
+  ];
+
+  for (const [index, privateText] of privateTextCases.entries()) {
+    const candidate = candidateForInventory(inventory);
+    candidate.modules[0].items = [privateText];
+    const outputPath = path.join(
+      repoDir,
+      "out",
+      `private-ai-text-${index}.json`,
+    );
+    const result = await generateReleaseNotes({
+      repoDir,
+      fromCommit,
+      toCommit,
+      outputPath,
+      apiKey: "test-only-key",
+      maxAttempts: 1,
+      fetchImpl: async () => responseWithCandidate(candidate),
+    });
+
+    assert.equal(result.source, "fallback", privateText);
+    assert.equal(result.reason, "invalid_ai_release_notes", privateText);
+    const saved = await readFile(outputPath, "utf8");
+    assert.equal(saved.includes(privateText), false, privateText);
+  }
 });
 
 test("keeps the fallback for timeout, 429, malformed JSON, and fabricated evidence", async (t) => {
@@ -443,9 +932,7 @@ test("keeps the fallback for timeout, 429, malformed JSON, and fabricated eviden
   });
   const validCandidate = candidateForInventory(inventory);
   const fabricatedCandidate = structuredClone(validCandidate);
-  fabricatedCandidate.modules[0].evidence_paths = [
-    "lib/modules/workshop/never-changed.dart",
-  ];
+  fabricatedCandidate.modules[0].evidence_ids = ["change_999"];
 
   const cases = [
     {
@@ -519,6 +1006,8 @@ test("CLI exits zero with fallback and nonzero for an invalid exact commit", asy
   const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
   const outputPath = path.join(repoDir, "out", "cli.json");
   const environment = { ...process.env };
+  delete environment.GEMINI_RELEASE_API_KEY;
+  delete environment.GEMINI_RELEASE_NOTES_MODEL;
   delete environment.OPENAI_API_KEY;
   delete environment.OPENAI_RELEASE_NOTES_ENDPOINT;
 
