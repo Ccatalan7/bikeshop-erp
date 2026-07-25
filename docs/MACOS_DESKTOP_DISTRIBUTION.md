@@ -148,12 +148,13 @@ exact previous-release commit through the commit being published. It first
 writes a deterministic fallback so the local intermediate file is always
 valid, then prefers the Gemini API when the protected `Production` environment
 contains `GEMINI_RELEASE_API_KEY`. The default Gemini model is
-`gemini-2.5-flash-lite`; an optional `GEMINI_RELEASE_NOTES_MODEL` environment
-variable may override it. If that model returns `404`, the generator performs
-one metadata-free model-list request and retries only with an available model
-from its fixed free Gemini Flash/Flash-Lite allowlist. If the Gemini key is
-absent, the existing `OPENAI_API_KEY` and `OPENAI_RELEASE_NOTES_MODEL`
-integration remains available as a compatibility path.
+`gemini-3.1-flash-lite`; an optional `GEMINI_RELEASE_NOTES_MODEL` environment
+variable may override it. If Google reports that model unavailable or rejects
+its output-format contract, the generator performs one metadata-free model-list
+request and retries only with an available model from its fixed free Gemini
+Flash/Flash-Lite allowlist. If the Gemini key is absent, the existing
+`OPENAI_API_KEY` and `OPENAI_RELEASE_NOTES_MODEL` integration remains available
+as a compatibility path.
 
 A missing key, timeout, exhausted quota, or invalid response leaves the
 validated deterministic fallback in place and must not block the build,

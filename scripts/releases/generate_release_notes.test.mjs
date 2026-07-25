@@ -539,14 +539,13 @@ test("prefers Gemini, sends only bounded metadata, and accepts validated structu
     toCommit,
     outputPath,
     geminiApiKey: geminiSecret,
-    geminiModel: "gemini-2.5-flash-lite",
     apiKey: openAiSecret,
     maxAttempts: 1,
     fetchImpl: async (url, options) => {
       requestCount += 1;
       assert.equal(
         url,
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
       );
       assert.equal(options.headers["x-goog-api-key"], geminiSecret);
       assert.equal(Object.hasOwn(options.headers, "Authorization"), false);
@@ -563,7 +562,7 @@ test("prefers Gemini, sends only bounded metadata, and accepts validated structu
   assert.equal(result.source, "ai");
   assert.equal(result.reason, null);
   assert.equal(result.provider, "gemini");
-  assert.equal(result.model, "gemini-2.5-flash-lite");
+  assert.equal(result.model, "gemini-3.1-flash-lite");
   validateReleaseNotes(result.release_notes, {
     inventory,
     source: "ai",
@@ -825,6 +824,144 @@ test("recovers from a Gemini model 404 through allowlisted model discovery", asy
   });
 });
 
+test("recovers from Gemini 400 INVALID_ARGUMENT through allowlisted model discovery", async (t) => {
+  const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
+  const outputPath = path.join(
+    repoDir,
+    "out",
+    "gemini-invalid-argument-recovery.json",
+  );
+  const inventory = collectReleaseInventory({
+    repoDir,
+    fromCommit,
+    toCommit,
+  });
+  const candidate = candidateForInventory(inventory);
+  const geminiSecret = "gemini-invalid-argument-recovery-secret";
+  const privateGoogleError =
+    "customer@example.com /private/customer/invoice-123 secret-key";
+  const requests = [];
+
+  const result = await generateReleaseNotes({
+    repoDir,
+    fromCommit,
+    toCommit,
+    outputPath,
+    geminiApiKey: geminiSecret,
+    geminiModel: "gemini-2.5-flash-lite",
+    maxAttempts: 2,
+    fetchImpl: async (url, options) => {
+      requests.push({
+        url,
+        method: options.method,
+        headers: options.headers,
+        body: options.body,
+      });
+
+      if (
+        url ===
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
+      ) {
+        const body = JSON.parse(options.body);
+        assert.equal(
+          body.generationConfig.responseFormat.text.mimeType,
+          "application/json",
+        );
+        assert.equal(
+          Object.hasOwn(body.generationConfig, "responseMimeType"),
+          false,
+        );
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: 400,
+              status: "INVALID_ARGUMENT",
+              message: privateGoogleError,
+            },
+          }),
+          { status: 400 },
+        );
+      }
+      if (
+        url ===
+        "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"
+      ) {
+        assert.equal(options.method, "GET");
+        assert.equal(Object.hasOwn(options, "body"), false);
+        return new Response(
+          JSON.stringify({
+            models: [
+              {
+                name: "models/gemini-untrusted-model",
+                supportedGenerationMethods: ["generateContent"],
+              },
+              {
+                name: "models/gemini-3.1-flash-lite",
+                supportedGenerationMethods: ["generateContent"],
+              },
+              {
+                name: "models/gemini-2.5-flash-lite",
+                supportedGenerationMethods: ["generateContent"],
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (
+        url ===
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent"
+      ) {
+        const body = JSON.parse(options.body);
+        assert.equal(
+          body.generationConfig.responseFormat.text.mimeType,
+          "application/json",
+        );
+        assert.equal(
+          body.generationConfig.responseFormat.text.schema.type,
+          "object",
+        );
+        return geminiResponseWithCandidate(candidate);
+      }
+      throw new Error(`Unexpected Gemini test URL: ${url}`);
+    },
+  });
+
+  assert.equal(result.source, "ai");
+  assert.equal(result.reason, null);
+  assert.equal(result.provider, "gemini");
+  assert.equal(result.model, "gemini-3.1-flash-lite");
+  assert.deepEqual(
+    requests.map((request) => [request.method, request.url]),
+    [
+      [
+        "POST",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
+      ],
+      [
+        "GET",
+        "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",
+      ],
+      [
+        "POST",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+      ],
+    ],
+  );
+  assert.ok(
+    requests.every(
+      (request) =>
+        !request.url.includes(geminiSecret) &&
+        request.headers["x-goog-api-key"] === geminiSecret,
+    ),
+  );
+  const discoveryRequest = requests[1];
+  assert.equal(discoveryRequest.body, undefined);
+  const saved = await readFile(outputPath, "utf8");
+  assert.equal(saved.includes(privateGoogleError), false);
+  assert.equal(saved.includes(geminiSecret), false);
+});
+
 test("does not select arbitrary or incompatible models discovered after a Gemini 404", async (t) => {
   const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
   const outputPath = path.join(repoDir, "out", "gemini-no-safe-model.json");
@@ -1052,7 +1189,7 @@ test("Gemini failures keep the fallback without OpenAI failover or secret leakag
     });
 
     assert.deepEqual(requestedUrls, [
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
     ]);
     assert.equal(result.source, "fallback", scenario.name);
     assert.equal(result.reason, scenario.expectedReason, scenario.name);

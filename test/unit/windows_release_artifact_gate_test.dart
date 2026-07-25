@@ -115,7 +115,7 @@ void main() {
     expect(
       workflow,
       contains(
-        r"GEMINI_RELEASE_NOTES_MODEL: ${{ vars.GEMINI_RELEASE_NOTES_MODEL || 'gemini-2.5-flash-lite' }}",
+        r"GEMINI_RELEASE_NOTES_MODEL: ${{ vars.GEMINI_RELEASE_NOTES_MODEL || 'gemini-3.1-flash-lite' }}",
       ),
     );
     expect(
@@ -146,7 +146,7 @@ void main() {
       reason: 'A retry must refresh both assets and their release notes.',
     );
     expect(distributionRunbook, contains('GEMINI_RELEASE_API_KEY'));
-    expect(distributionRunbook, contains('gemini-2.5-flash-lite'));
+    expect(distributionRunbook, contains('gemini-3.1-flash-lite'));
     expect(distributionRunbook, contains('OPENAI_API_KEY'));
     expect(distributionRunbook, contains('deterministic fallback'));
     expect(distributionRunbook, contains('human reviewers'));

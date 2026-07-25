@@ -672,16 +672,20 @@ object in their exact-SHA manifest. Generate it only in the protected
 `Production` publish job. The generator must write a deterministic `es-CL`
 fallback before any optional AI call, summarize the complete previous-platform-
 release-to-current-SHA range, and validate every AI item against the changed-path
-inventory. Send only bounded Git metadata such as commit subjects, paths,
-statuses, and change counts; do not send raw source, unrestricted diffs,
-credentials, generated bundles, or binary contents.
+inventory. Only fixed canonical ERP module/topic labels, statuses, numeric
+change counts, and opaque evidence IDs may leave the protected job. Commit
+subjects, commit SHAs, raw/current/previous paths, source, diffs, credentials,
+generated bundles, binary contents, customer data, and other personal or
+confidential information must stay local.
 
-`OPENAI_API_KEY` is an optional `Production` environment secret and must never
-enter Flutter builds, artifacts, manifests, logs, pull-request jobs, or
-artifact-only release jobs. Missing credentials, timeouts, API errors, invalid
-JSON, unsupported evidence, or oversized text must retain the fallback and must
-not block signing or publication. The app renders validated plain text only; it
-must not interpret model output as Markdown or HTML.
+`GEMINI_RELEASE_API_KEY` and the compatibility `OPENAI_API_KEY` are optional
+`Production` environment secrets and must never enter Flutter builds, artifacts,
+manifests, logs, pull-request jobs, or artifact-only release jobs. Prefer Gemini
+when its key exists; do not send the same release metadata to OpenAI after a
+Gemini failure. Missing credentials, timeouts, API errors, invalid JSON,
+unsupported evidence, or oversized text must retain the fallback and must not
+block signing or publication. The app renders validated plain text only; it must
+not interpret model output as Markdown or HTML.
 
 Merge macOS notes before signing the release manifest, then persist that exact
 manifest only after the LaunchAgent verifies its signature. Windows must require

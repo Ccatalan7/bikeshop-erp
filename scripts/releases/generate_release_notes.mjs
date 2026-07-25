@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
 const DEFAULT_MODEL = "gpt-5-mini";
 const DEFAULT_ENDPOINT = "https://api.openai.com/v1/responses";
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
+const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";
 const GEMINI_MODEL_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/u;
 const GEMINI_ENDPOINT_ROOT =
   "https://generativelanguage.googleapis.com/v1beta/models";
@@ -1170,6 +1170,13 @@ function boundedInteger(value, fallback, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, parsed));
 }
 
+function shouldDiscoverGeminiFallback(reason) {
+  return (
+    typeof reason === "string" &&
+    (reason === "http_400_invalid_argument" || reason.startsWith("http_404"))
+  );
+}
+
 async function sanitizedHttpFailureReason(response) {
   const baseReason = `http_${response.status}`;
   const contentLength = Number.parseInt(
@@ -1506,7 +1513,7 @@ export async function generateReleaseNotes({
     }
     if (
       provider === "gemini" &&
-      result.reason.startsWith("http_404") &&
+      shouldDiscoverGeminiFallback(result.reason) &&
       attempt < attempts
     ) {
       const fallbackModel = await discoverGeminiFallbackModel({
@@ -1571,7 +1578,7 @@ function printUsage() {
       "",
       "Optional environment:",
       "  GEMINI_RELEASE_API_KEY (preferred when present)",
-      "  GEMINI_RELEASE_NOTES_MODEL (default: gemini-2.5-flash-lite)",
+      "  GEMINI_RELEASE_NOTES_MODEL (default: gemini-3.1-flash-lite)",
       "  OPENAI_API_KEY",
       "  OPENAI_RELEASE_NOTES_MODEL (default: gpt-5-mini)",
       "",
