@@ -1,5 +1,21 @@
--- Core data schema for Vinabike ERP.
--- Run this script in the Supabase SQL editor to provision base tables.
+-- Vinabike ERP version-controlled bootstrap/reference schema.
+--
+-- TRUST BOUNDARY:
+-- This file is NOT proof of the live production schema and MUST NOT be treated
+-- as a guaranteed 100% representation of the deployed backend. Historical
+-- standalone production changes were not always mirrored here, so this file
+-- may still contain omissions or stale definitions until an explicit
+-- production-to-bootstrap reconciliation proves parity.
+--
+-- Production catalogs are authoritative for what is currently deployed. This
+-- file remains the repository target for deterministic clean/local bootstrap:
+-- every new schema change must have a reviewed idempotent forward migration and
+-- the same final objects/logic must be added or updated here.
+--
+-- Never run this complete file, or copied fragments from it, against production
+-- or in the Supabase SQL Editor. Deploy only the smallest reviewed standalone
+-- migration through the guarded workflow in docs/development/SUPABASE_WORKFLOW.md.
+--
 -- UUID columns default to gen_random_uuid(); ensure the extension is enabled first.
 -- Match Supabase's hosted public-schema defaults before provisioning objects.
 -- Object-specific REVOKE statements later in this snapshot remain authoritative.
