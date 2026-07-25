@@ -1013,12 +1013,8 @@ function buildGeminiRequest(inventory) {
     ],
     generationConfig: {
       maxOutputTokens: 1_200,
-      responseFormat: {
-        text: {
-          mimeType: "application/json",
-          schema: geminiAiOutputSchema(),
-        },
-      },
+      responseMimeType: "application/json",
+      responseJsonSchema: geminiAiOutputSchema(),
     },
   };
 }

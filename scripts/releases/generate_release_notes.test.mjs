@@ -609,37 +609,28 @@ test("prefers Gemini, sends only bounded metadata, and accepts validated structu
   assert.equal(metadata.included_change_count, inventory.ai_changes.length);
   assert.equal(metadata.changes.length <= 240, true);
   assert.equal(
-    requestBody.generationConfig.responseFormat.text.mimeType,
+    requestBody.generationConfig.responseMimeType,
     "application/json",
   );
+  assert.equal(requestBody.generationConfig.responseJsonSchema.type, "object");
   assert.equal(
-    requestBody.generationConfig.responseFormat.text.schema.type,
-    "object",
-  );
-  assert.equal(
-    requestBody.generationConfig.responseFormat.text.schema
-      .additionalProperties,
+    requestBody.generationConfig.responseJsonSchema.additionalProperties,
     false,
   );
   assert.equal(
-    requestBody.generationConfig.responseFormat.text.schema.properties.title
-      .maxLength,
+    requestBody.generationConfig.responseJsonSchema.properties.title.maxLength,
     undefined,
   );
   assert.equal(
     Object.hasOwn(
-      requestBody.generationConfig.responseFormat.text.schema.properties.modules
-        .items.properties,
+      requestBody.generationConfig.responseJsonSchema.properties.modules.items
+        .properties,
       "evidence_paths",
     ),
     false,
   );
   assert.equal(
-    Object.hasOwn(requestBody.generationConfig, "responseMimeType"),
-    false,
-  );
-  assert.equal(
-    Object.hasOwn(requestBody.generationConfig, "responseJsonSchema"),
+    Object.hasOwn(requestBody.generationConfig, "responseFormat"),
     false,
   );
 
@@ -765,15 +756,12 @@ test("recovers from a Gemini model 404 through allowlisted model discovery", asy
         const body = JSON.parse(options.body);
         assert.equal(body.generationConfig.maxOutputTokens, 1_200);
         assert.equal(
-          body.generationConfig.responseFormat.text.mimeType,
+          body.generationConfig.responseMimeType,
           "application/json",
         );
+        assert.equal(body.generationConfig.responseJsonSchema.type, "object");
         assert.equal(
-          body.generationConfig.responseFormat.text.schema.type,
-          "object",
-        );
-        assert.equal(
-          Object.hasOwn(body.generationConfig, "responseMimeType"),
+          Object.hasOwn(body.generationConfig, "responseFormat"),
           false,
         );
         const serializedBody = JSON.stringify(body);
@@ -864,11 +852,12 @@ test("recovers from Gemini 400 INVALID_ARGUMENT through allowlisted model discov
       ) {
         const body = JSON.parse(options.body);
         assert.equal(
-          body.generationConfig.responseFormat.text.mimeType,
+          body.generationConfig.responseMimeType,
           "application/json",
         );
+        assert.equal(body.generationConfig.responseJsonSchema.type, "object");
         assert.equal(
-          Object.hasOwn(body.generationConfig, "responseMimeType"),
+          Object.hasOwn(body.generationConfig, "responseFormat"),
           false,
         );
         return new Response(
@@ -914,12 +903,13 @@ test("recovers from Gemini 400 INVALID_ARGUMENT through allowlisted model discov
       ) {
         const body = JSON.parse(options.body);
         assert.equal(
-          body.generationConfig.responseFormat.text.mimeType,
+          body.generationConfig.responseMimeType,
           "application/json",
         );
+        assert.equal(body.generationConfig.responseJsonSchema.type, "object");
         assert.equal(
-          body.generationConfig.responseFormat.text.schema.type,
-          "object",
+          Object.hasOwn(body.generationConfig, "responseFormat"),
+          false,
         );
         return geminiResponseWithCandidate(candidate);
       }
