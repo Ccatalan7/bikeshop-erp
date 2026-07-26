@@ -842,7 +842,7 @@ if ($run) {
     Write-Step 'Triggering GitHub Actions Windows release workflow'
     $triggeredAt = (Get-Date).ToUniversalTime().AddSeconds(-5)
     $workflowInputs = [ordered]@{
-        publish_release = $true
+        publish_release = 'true'
         expected_commit = $headSha
         release_notes_from_commit = $releaseNotesFromCommit
         release_notes_candidate_b64 = $releaseNotesCandidateBase64

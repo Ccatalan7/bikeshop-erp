@@ -456,7 +456,7 @@ void main() {
 
   test('developer helper publishes current authorized branch without switching',
       () {
-    expect(publishHelper, contains('publish_release'));
+    expect(publishHelper, contains('publish_release: "true"'));
     expect(publishHelper, contains('--json'));
     expect(publishHelper, contains('git branch --show-current'));
     expect(publishHelper, contains('git push origin "\$branch"'));

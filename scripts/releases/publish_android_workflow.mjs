@@ -322,9 +322,9 @@ function listRuns(state, run) {
   );
 }
 
-function dispatchWorkflow(state, run) {
+export function dispatchWorkflow(state, run) {
   const payload = {
-    publish_release: true,
+    publish_release: "true",
     expected_commit: state.headSha,
     release_notes_from_commit: state.releaseNotesFromCommit,
     release_notes_candidate_b64: state.releaseNotesCandidateBase64,

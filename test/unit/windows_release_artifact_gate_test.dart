@@ -182,7 +182,7 @@ void main() {
   });
 
   test('developer publish helper opts into the guarded publish run', () {
-    expect(publishHelper, contains('publish_release = \$true'));
+    expect(publishHelper, contains("publish_release = 'true'"));
     expect(publishHelper, contains('ConvertTo-Json -Compress'));
     expect(publishHelper, contains('--json'));
     expect(publishHelper, contains('\$expectedRunTitle'));

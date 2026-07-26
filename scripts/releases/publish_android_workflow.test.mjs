@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  dispatchWorkflow,
   main,
   validateAndroidManifest,
 } from "./publish_android_workflow.mjs";
@@ -85,4 +86,38 @@ test("invalid CLI arguments fail without invoking a publication", async () => {
   });
   assert.equal(exitCode, 1);
   assert.match(stderr, /Usage:/u);
+});
+
+test("dispatch JSON uses only string workflow inputs", () => {
+  let captured;
+  dispatchWorkflow(
+    {
+      repositoryRoot: "/repo",
+      branch: "smartpegas1.0",
+      headSha: TO_COMMIT,
+      releaseNotesFromCommit: FROM_COMMIT,
+      releaseNotesCandidateBase64: "e30=",
+      releaseNotesCandidateSha256: "a".repeat(64),
+    },
+    (command, args, options) => {
+      captured = { command, args, options };
+      return "";
+    },
+  );
+
+  assert.equal(captured.command, "gh");
+  assert.deepEqual(captured.args.slice(0, 3), [
+    "workflow",
+    "run",
+    "android-release.yml",
+  ]);
+  const payload = JSON.parse(captured.options.input);
+  assert.deepEqual(Object.values(payload).map((value) => typeof value), [
+    "string",
+    "string",
+    "string",
+    "string",
+    "string",
+  ]);
+  assert.equal(payload.publish_release, "true");
 });

@@ -169,7 +169,7 @@ void main() {
         '\$releaseNotesCandidateSha256',
       ),
     );
-    expect(windowsPublisher, contains('publish_release = \$true'));
+    expect(windowsPublisher, contains("publish_release = 'true'"));
     expect(windowsPublisher, contains('ConvertTo-Json -Compress'));
     expect(windowsPublisher, contains('--json'));
     expect(
