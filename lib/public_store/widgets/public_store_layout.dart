@@ -907,6 +907,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     final headerStyle = getHeaderSetting('header_style', 'solid');
     final headerColorMode = getHeaderSetting('header_color_mode', 'auto');
+    final headerNavigationUppercase =
+        getHeaderSetting('header_navigation_uppercase', 'true') == 'true';
     final showTopBannerRaw =
         getHeaderSetting('header_show_top_banner', 'false');
     final showTopBanner = showTopBannerRaw == 'true';
@@ -986,6 +988,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         // Opening navigation consumes its own editor-owned surfaces.
         menuSurfaceColor: headerMenuSurfaceColor,
         menuRailColor: headerMenuRailColor,
+        navigationUppercase: headerNavigationUppercase,
         navItems: navItems,
         isOverlay: isOverlay,
       );
@@ -3534,6 +3537,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     Color headerBgColor = Colors.white,
     Color? menuSurfaceColor,
     Color? menuRailColor,
+    bool navigationUppercase = true,
     List<WebsiteNavigation> navItems = const [],
     bool isOverlay = false, // For transparent mode when scrolled up
   }) {
@@ -3801,6 +3805,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                                   parent: nav,
                                                   children: children,
                                                   isEditMode: isEditMode,
+                                                  uppercaseLabel:
+                                                      navigationUppercase,
                                                   textColor: textColor,
                                                   panelBackgroundColor:
                                                       resolvedMenuSurface,
@@ -3834,6 +3840,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                                   parent: nav,
                                                   children: children,
                                                   isEditMode: isEditMode,
+                                                  uppercaseLabel:
+                                                      navigationUppercase,
                                                   textColor: textColor,
                                                   panelBackgroundColor:
                                                       resolvedMenuSurface,
@@ -3857,6 +3865,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                                 nav,
                                                 textColor,
                                                 isEditMode: isEditMode,
+                                                uppercaseLabel:
+                                                    navigationUppercase,
                                               ),
                                             );
                                           }),
@@ -6019,6 +6029,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     WebsiteNavigation nav,
     Color primaryColor, {
     bool isEditMode = false,
+    bool uppercaseLabel = false,
   }) {
     final href = _routeForPublicStore(nav.href ?? '/');
     final isActive = GoRouterState.of(context).matchedLocation == href;
@@ -6039,18 +6050,22 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ),
           ),
         ),
-        child: Text(
-          nav.label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontSize: 14,
-                letterSpacing: 0.1,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                color: isActive
-                    ? primaryColor
-                    : (primaryColor == Colors.white
-                        ? Colors.white
-                        : PublicStoreTheme.textPrimary),
-              ),
+        child: Semantics(
+          label: nav.label,
+          excludeSemantics: true,
+          child: Text(
+            uppercaseLabel ? nav.label.toUpperCase() : nav.label,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontSize: 14,
+                  letterSpacing: 0.1,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                  color: isActive
+                      ? primaryColor
+                      : (primaryColor == Colors.white
+                          ? Colors.white
+                          : PublicStoreTheme.textPrimary),
+                ),
+          ),
         ),
       ),
     );
@@ -6931,10 +6946,13 @@ Map<String, MegaMenuBranchPresentation> _projectMegaMenuBranchPresentations({
           ? null
           : registry.forCategory(reference) ??
               registry.resolveSlug(reference)?.presentation;
-      if (presentation != null && presentation.megaMenuImageUrl.isNotEmpty) {
+      if (presentation != null) {
         projections[branch.id] = MegaMenuBranchPresentation(
           imageUrl: presentation.megaMenuImageUrl,
           overlay: presentation.megaMenuOverlay,
+          cardOverlay: presentation.megaMenuCardOverlay,
+          overviewWidth: presentation.megaMenuOverviewWidth,
+          contentAlignment: presentation.megaMenuContentAlignment,
         );
       }
     }

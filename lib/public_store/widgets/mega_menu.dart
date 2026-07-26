@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../modules/website/models/website_catalog_presentation.dart';
 import '../../modules/website/models/website_catalog_query.dart';
 import '../../modules/website/models/website_page_models.dart';
 import '../theme/public_store_theme.dart';
@@ -26,10 +27,17 @@ class MegaMenuBranchPresentation {
   const MegaMenuBranchPresentation({
     required this.imageUrl,
     required this.overlay,
+    this.cardOverlay = 0,
+    this.overviewWidth =
+        WebsiteCatalogPresentation.defaultMegaMenuOverviewWidth,
+    this.contentAlignment = WebsiteMegaMenuContentAlignment.bottom,
   });
 
   final String imageUrl;
   final double overlay;
+  final double cardOverlay;
+  final double overviewWidth;
+  final WebsiteMegaMenuContentAlignment contentAlignment;
 }
 
 class MegaMenuController extends ChangeNotifier {
@@ -162,6 +170,7 @@ class MegaMenuButton extends StatefulWidget {
   final WebsiteNavigation parent;
   final List<WebsiteNavigation> children;
   final bool isEditMode;
+  final bool uppercaseLabel;
   final Color textColor;
   final Color panelBackgroundColor;
   final Color panelForegroundColor;
@@ -175,6 +184,7 @@ class MegaMenuButton extends StatefulWidget {
     required this.parent,
     required this.children,
     required this.isEditMode,
+    this.uppercaseLabel = false,
     required this.textColor,
     required this.panelBackgroundColor,
     required this.panelForegroundColor,
@@ -503,7 +513,9 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            widget.parent.label,
+            widget.uppercaseLabel
+                ? widget.parent.label.toUpperCase()
+                : widget.parent.label,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -541,6 +553,7 @@ class NavigationDropdownButton extends StatelessWidget {
     required this.parent,
     required this.children,
     required this.isEditMode,
+    this.uppercaseLabel = false,
     required this.textColor,
     required this.panelBackgroundColor,
     required this.panelForegroundColor,
@@ -550,6 +563,7 @@ class NavigationDropdownButton extends StatelessWidget {
   final WebsiteNavigation parent;
   final List<WebsiteNavigation> children;
   final bool isEditMode;
+  final bool uppercaseLabel;
   final Color textColor;
   final Color panelBackgroundColor;
   final Color panelForegroundColor;
@@ -604,7 +618,7 @@ class NavigationDropdownButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  parent.label,
+                  uppercaseLabel ? parent.label.toUpperCase() : parent.label,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: textColor,
                     fontSize: 14,
@@ -1193,7 +1207,16 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(width: 440, child: overview),
+              SizedBox(
+                width: (widget.branchPresentations[branch.id]?.overviewWidth ??
+                        WebsiteCatalogPresentation.defaultMegaMenuOverviewWidth)
+                    .clamp(
+                      WebsiteCatalogPresentation.minMegaMenuOverviewWidth,
+                      WebsiteCatalogPresentation.maxMegaMenuOverviewWidth,
+                    )
+                    .toDouble(),
+                child: overview,
+              ),
               if (children.isNotEmpty)
                 Expanded(
                   child: Padding(
@@ -1217,12 +1240,17 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
     WebsiteNavigation branch, {
     required bool compact,
   }) {
-    final theme = Theme.of(context);
     final presentation = widget.branchPresentations[branch.id];
     final imageUrl = presentation?.imageUrl.trim() ?? '';
     final hasImage = imageUrl.isNotEmpty;
     final overlay = (presentation?.overlay ?? 0.58).clamp(0.0, 0.85);
     final centerOverlay = math.max(0.08, overlay * 0.34);
+    final contentAlignment = switch (presentation?.contentAlignment ??
+        WebsiteMegaMenuContentAlignment.bottom) {
+      WebsiteMegaMenuContentAlignment.top => MainAxisAlignment.start,
+      WebsiteMegaMenuContentAlignment.center => MainAxisAlignment.center,
+      WebsiteMegaMenuContentAlignment.bottom => MainAxisAlignment.end,
+    };
     final foreground = hasImage ? Colors.white : widget.panelForegroundColor;
 
     final card = ClipRect(
@@ -1265,51 +1293,20 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
             ),
           Padding(
             padding: const EdgeInsets.all(18),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'SECCIÓN',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: foreground.withValues(alpha: 0.68),
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.25,
-                  ),
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  branch.label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    color: foreground,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.55,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  width: 36,
-                  height: 2,
-                  color: foreground.withValues(alpha: 0.84),
-                ),
-                if (branch.href?.trim().isNotEmpty == true) ...[
-                  const SizedBox(height: 12),
-                  _MegaMenuLink(
-                    label: 'Explorar ${branch.label}',
-                    color: foreground.withValues(alpha: 0.82),
-                    hoverColor: foreground,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    showArrow: true,
-                    onTap: () => widget.onNavigate(
-                      branch.href!,
-                      branch.openInNewTab,
-                    ),
-                  ),
-                ],
-              ],
+            child: _MegaMenuAnimatedBranchContent(
+              key: ValueKey<String>(
+                'mega-menu-branch-animated-content-${branch.id}',
+              ),
+              navigationId: branch.id,
+              label: branch.label,
+              foreground: foreground,
+              mainAxisAlignment: contentAlignment,
+              onExplore: branch.href?.trim().isNotEmpty == true
+                  ? () => widget.onNavigate(
+                        branch.href!,
+                        branch.openInNewTab,
+                      )
+                  : null,
             ),
           ),
         ],
@@ -1441,6 +1438,8 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
               label: node.label,
               imageUrl:
                   widget.branchPresentations[node.id]?.imageUrl.trim() ?? '',
+              imageOverlay:
+                  widget.branchPresentations[node.id]?.cardOverlay ?? 0,
               childLabels:
                   children.map((child) => child.label).toList(growable: false),
               directCategory: _isDirectCategoryDestination(node.href),
@@ -1526,12 +1525,198 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
 // COLUMN HEADER & LINK (Helper Widgets)
 // ============================================================================
 
+class _MegaMenuAnimatedBranchContent extends StatefulWidget {
+  const _MegaMenuAnimatedBranchContent({
+    super.key,
+    required this.navigationId,
+    required this.label,
+    required this.foreground,
+    required this.mainAxisAlignment,
+    required this.onExplore,
+  });
+
+  final String navigationId;
+  final String label;
+  final Color foreground;
+  final MainAxisAlignment mainAxisAlignment;
+  final VoidCallback? onExplore;
+
+  @override
+  State<_MegaMenuAnimatedBranchContent> createState() =>
+      _MegaMenuAnimatedBranchContentState();
+}
+
+class _MegaMenuAnimatedBranchContentState
+    extends State<_MegaMenuAnimatedBranchContent>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1250),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.maybeOf(context)?.disableAnimations == true) {
+      _controller.value = 1;
+    } else if (!_controller.isAnimating && _controller.value == 0) {
+      _controller.forward();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_MegaMenuAnimatedBranchContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.navigationId == widget.navigationId) return;
+    if (MediaQuery.maybeOf(context)?.disableAnimations == true) {
+      _controller.value = 1;
+    } else {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Animation<double> _curve(double begin, double end) {
+    return CurvedAnimation(
+      parent: _controller,
+      curve: Interval(begin, end, curve: Curves.easeInOutCubic),
+    );
+  }
+
+  Widget _reveal({
+    required String keySuffix,
+    required double begin,
+    required double end,
+    required Widget child,
+    double horizontalOffset = -0.08,
+  }) {
+    final animation = _curve(begin, end);
+    return FadeTransition(
+      key: ValueKey<String>(
+        'mega-menu-branch-reveal-${widget.navigationId}-$keySuffix',
+      ),
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: Offset(horizontalOffset, 0),
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final titleAnimation = _curve(0.12, 0.68);
+    final ruleAnimation = _curve(0.28, 0.78);
+
+    return Column(
+      key: ValueKey<String>(
+        'mega-menu-branch-content-${widget.navigationId}',
+      ),
+      mainAxisAlignment: widget.mainAxisAlignment,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _reveal(
+          keySuffix: 'eyebrow',
+          begin: 0,
+          end: 0.44,
+          child: Text(
+            'SECCIÓN',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: widget.foreground.withValues(alpha: 0.72),
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.35,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        FadeTransition(
+          key: ValueKey<String>(
+            'mega-menu-branch-reveal-${widget.navigationId}-title',
+          ),
+          opacity: titleAnimation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(-0.1, 0),
+              end: Offset.zero,
+            ).animate(titleAnimation),
+            child: ScaleTransition(
+              alignment: Alignment.centerLeft,
+              scale:
+                  Tween<double>(begin: 0.965, end: 1).animate(titleAnimation),
+              child: Text(
+                widget.label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: widget.foreground,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.6,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 13),
+        SizeTransition(
+          key: ValueKey<String>(
+            'mega-menu-branch-reveal-${widget.navigationId}-rule',
+          ),
+          axis: Axis.horizontal,
+          axisAlignment: -1,
+          sizeFactor: ruleAnimation,
+          child: Container(
+            width: 44,
+            height: 3,
+            color: widget.foreground.withValues(alpha: 0.88),
+          ),
+        ),
+        if (widget.onExplore != null) ...[
+          const SizedBox(height: 13),
+          _reveal(
+            keySuffix: 'explore',
+            begin: 0.42,
+            end: 1,
+            horizontalOffset: -0.06,
+            child: _MegaMenuLink(
+              label: 'Explorar ${widget.label}',
+              color: widget.foreground.withValues(alpha: 0.86),
+              hoverColor: widget.foreground,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              showArrow: true,
+              onTap: widget.onExplore,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _MegaMenuMediaCard extends StatefulWidget {
   const _MegaMenuMediaCard({
     super.key,
     required this.navigationId,
     required this.label,
     required this.imageUrl,
+    required this.imageOverlay,
     required this.childLabels,
     required this.directCategory,
     required this.foregroundColor,
@@ -1543,6 +1728,7 @@ class _MegaMenuMediaCard extends StatefulWidget {
   final String navigationId;
   final String label;
   final String imageUrl;
+  final double imageOverlay;
   final List<String> childLabels;
   final bool directCategory;
   final Color foregroundColor;
@@ -1555,13 +1741,10 @@ class _MegaMenuMediaCard extends StatefulWidget {
 }
 
 class _MegaMenuMediaCardState extends State<_MegaMenuMediaCard> {
-  bool _isHovered = false;
-  bool _isFocused = false;
-  bool _isNavigateHovered = false;
-  bool _isNavigateFocused = false;
+  bool _isExploreHovered = false;
+  bool _isExploreFocused = false;
 
-  bool get _isActive => _isHovered || _isFocused;
-  bool get _isNavigateActive => _isNavigateHovered || _isNavigateFocused;
+  bool get _isPreviewActive => _isExploreHovered || _isExploreFocused;
 
   @override
   Widget build(BuildContext context) {
@@ -1570,8 +1753,12 @@ class _MegaMenuMediaCardState extends State<_MegaMenuMediaCard> {
     final remaining = widget.childLabels.length - previewLabels.length;
     final hasChildren = widget.childLabels.isNotEmpty;
     final imageUrl = widget.imageUrl.trim();
-    final actionLabel =
-        widget.directCategory ? 'SOLO ESTA CATEGORÍA' : 'VER CATEGORÍA';
+    final imageOverlay = widget.imageOverlay.clamp(0.0, 0.65);
+    final actionLabel = hasChildren
+        ? 'VER SUBCATEGORÍAS'
+        : widget.directCategory
+            ? 'SOLO ESTA CATEGORÍA'
+            : 'VER CATEGORÍA';
     final semanticLabel = widget.directCategory
         ? 'Ver solo productos de ${widget.label}'
         : 'Ver categoría ${widget.label}';
@@ -1589,9 +1776,9 @@ class _MegaMenuMediaCardState extends State<_MegaMenuMediaCard> {
               ),
               if (imageUrl.isNotEmpty)
                 AnimatedScale(
-                  duration: const Duration(milliseconds: 190),
+                  duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOutCubic,
-                  scale: _isActive ? 1.025 : 1,
+                  scale: _isPreviewActive ? 1.018 : 1,
                   child: Image.network(
                     imageUrl,
                     key: ValueKey<String>(
@@ -1618,21 +1805,45 @@ class _MegaMenuMediaCardState extends State<_MegaMenuMediaCard> {
                   size: 30,
                   color: widget.foregroundColor.withValues(alpha: 0.38),
                 ),
+              if (imageOverlay > 0)
+                ColoredBox(
+                  key: ValueKey<String>(
+                    'mega-menu-card-overlay-${widget.navigationId}',
+                  ),
+                  color: Colors.black.withValues(alpha: imageOverlay),
+                ),
               IgnorePointer(
-                child: AnimatedOpacity(
+                child: AnimatedContainer(
                   key: ValueKey<String>(
                     'mega-menu-card-hover-${widget.navigationId}',
                   ),
-                  duration: const Duration(milliseconds: 150),
-                  curve: Curves.easeOut,
-                  opacity: _isActive ? 1 : 0,
-                  child: ColoredBox(
-                    color: Colors.black.withValues(alpha: 0.74),
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: hasChildren
+                  duration: const Duration(milliseconds: 190),
+                  curve: Curves.easeOutCubic,
+                  color: Colors.black.withValues(
+                    alpha: _isPreviewActive ? 0.68 : 0,
+                  ),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 170),
+                        reverseDuration: const Duration(milliseconds: 140),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: Tween<double>(begin: 0.985, end: 1)
+                                .animate(animation),
+                            child: child,
+                          ),
+                        ),
+                        child: _isPreviewActive && hasChildren
                             ? Column(
+                                key: ValueKey<String>(
+                                  'mega-menu-card-preview-'
+                                  '${widget.navigationId}',
+                                ),
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   for (final label in previewLabels)
@@ -1667,27 +1878,21 @@ class _MegaMenuMediaCardState extends State<_MegaMenuMediaCard> {
                                     ),
                                 ],
                               )
-                            : Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    actionLabel,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0.75,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 5),
-                                  const Icon(
-                                    Icons.arrow_forward_rounded,
-                                    size: 16,
-                                    color: Colors.white,
-                                  ),
-                                ],
+                            : Text(
+                                widget.label,
+                                key: ValueKey<String>(
+                                  'mega-menu-card-title-'
+                                  '${widget.navigationId}',
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.2,
+                                ),
                               ),
                       ),
                     ),
@@ -1698,168 +1903,92 @@ class _MegaMenuMediaCardState extends State<_MegaMenuMediaCard> {
           ),
         );
 
-    Widget buildLabel({required bool exposeParentAction}) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      widget.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: widget.foregroundColor,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.1,
-                      ),
-                    ),
-                    if (widget.directCategory)
-                      Text(
-                        'SOLO ESTA CATEGORÍA',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: widget.foregroundColor.withValues(alpha: 0.55),
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.45,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              if (exposeParentAction) ...[
-                const SizedBox(width: 8),
-                Text(
-                  actionLabel,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: _isNavigateActive
-                        ? PublicStoreTheme.info
-                        : widget.foregroundColor.withValues(alpha: 0.68),
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.45,
-                  ),
-                ),
-              ],
-              const SizedBox(width: 5),
-              Icon(
-                Icons.arrow_forward_rounded,
-                size: 16,
-                color: exposeParentAction && _isNavigateActive
-                    ? PublicStoreTheme.info
-                    : widget.foregroundColor.withValues(alpha: 0.58),
-              ),
-            ],
-          ),
-        );
-
-    void updateFocus(bool value) {
-      if (_isFocused != value) setState(() => _isFocused = value);
-    }
-
-    if (!hasChildren) {
-      return Semantics(
-        button: true,
-        label: semanticLabel,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            key: ValueKey<String>(
-              'mega-menu-card-navigate-${widget.navigationId}',
-            ),
-            onTap: widget.onNavigate ?? widget.onExplore,
-            onHover: (value) {
-              if (_isHovered != value) setState(() => _isHovered = value);
-            },
-            onFocusChange: updateFocus,
-            overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-            focusColor: Colors.transparent,
-            hoverColor: Colors.transparent,
-            splashColor: widget.foregroundColor.withValues(alpha: 0.08),
-            highlightColor: Colors.transparent,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: buildImage()),
-                const SizedBox(height: 7),
-                buildLabel(exposeParentAction: false),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
     return Semantics(
       container: true,
       explicitChildNodes: true,
-      child: MouseRegion(
-        onEnter: (_) {
-          if (!_isHovered) setState(() => _isHovered = true);
-        },
-        onExit: (_) {
-          if (_isHovered) setState(() => _isHovered = false);
-        },
-        child: Material(
-          color: Colors.transparent,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: Semantics(
-                  button: true,
-                  label: 'Explorar subcategorías de ${widget.label}',
-                  child: InkWell(
-                    key: ValueKey<String>(
-                      'mega-menu-card-explore-${widget.navigationId}',
-                    ),
-                    onTap: widget.onExplore,
-                    onFocusChange: updateFocus,
-                    overlayColor:
-                        const WidgetStatePropertyAll(Colors.transparent),
-                    focusColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    splashColor: widget.foregroundColor.withValues(alpha: 0.08),
-                    highlightColor: Colors.transparent,
-                    child: buildImage(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 5),
-              Semantics(
+      child: Material(
+        color: Colors.transparent,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Semantics(
                 button: true,
-                label: widget.onNavigate == null
-                    ? 'Explorar subcategorías de ${widget.label}'
-                    : semanticLabel,
+                label: semanticLabel,
                 child: InkWell(
                   key: ValueKey<String>(
                     'mega-menu-card-navigate-${widget.navigationId}',
                   ),
                   onTap: widget.onNavigate ?? widget.onExplore,
-                  onHover: (value) {
-                    if (_isNavigateHovered != value) {
-                      setState(() => _isNavigateHovered = value);
-                    }
-                  },
-                  onFocusChange: (value) {
-                    updateFocus(value);
-                    if (_isNavigateFocused != value) {
-                      setState(() => _isNavigateFocused = value);
-                    }
-                  },
+                  overlayColor:
+                      const WidgetStatePropertyAll(Colors.transparent),
+                  focusColor: Colors.transparent,
+                  hoverColor: Colors.transparent,
+                  splashColor: widget.foregroundColor.withValues(alpha: 0.08),
+                  highlightColor: Colors.transparent,
+                  child: buildImage(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 5),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Semantics(
+                button: true,
+                label: hasChildren
+                    ? 'Ver subcategorías de ${widget.label}'
+                    : semanticLabel,
+                child: InkWell(
+                  key: ValueKey<String>(
+                    hasChildren
+                        ? 'mega-menu-card-explore-${widget.navigationId}'
+                        : 'mega-menu-card-action-${widget.navigationId}',
+                  ),
+                  onTap: hasChildren
+                      ? widget.onExplore
+                      : widget.onNavigate ?? widget.onExplore,
+                  onHover: hasChildren
+                      ? (value) {
+                          if (_isExploreHovered != value) {
+                            setState(() => _isExploreHovered = value);
+                          }
+                        }
+                      : null,
+                  onFocusChange: hasChildren
+                      ? (value) {
+                          if (_isExploreFocused != value) {
+                            setState(() => _isExploreFocused = value);
+                          }
+                        }
+                      : null,
                   borderRadius: BorderRadius.circular(3),
-                  child: buildLabel(
-                    exposeParentAction: widget.onNavigate != null,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          actionLabel,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: PublicStoreTheme.info,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.45,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 16,
+                          color: PublicStoreTheme.info,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

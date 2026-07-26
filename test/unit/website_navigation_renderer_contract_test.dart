@@ -25,6 +25,9 @@ void main() {
     expect(layout, contains('NavigationDropdownButton('));
     expect(layout, contains("'header_menu_surface_color'"));
     expect(layout, contains("'header_menu_rail_color'"));
+    expect(layout, contains("'header_navigation_uppercase'"));
+    expect(layout, contains('uppercaseLabel:'));
+    expect(layout, contains('nav.label.toUpperCase()'));
     expect(layout, isNot(contains('menuSurfaceColor: headerBgColor')));
     expect(layout, contains('final resolvedMenuSurface ='));
     expect(layout, contains('configuredMenuSurface.withValues(alpha: 1)'));
@@ -94,6 +97,23 @@ void main() {
       inspector,
       contains("'header_menu_rail_color':"),
     );
+    expect(
+      inspector,
+      contains(
+          "'header_navigation_uppercase': _navigationUppercase.toString()"),
+    );
+    expect(
+      inspector,
+      contains("getSetting('header_navigation_uppercase', 'true')"),
+    );
+    expect(
+      inspector,
+      contains('Títulos del menú en mayúsculas'),
+    );
+    expect(
+      File('lib/public_store/widgets/mega_menu.dart').readAsStringSync(),
+      contains('widget.parent.label.toUpperCase()'),
+    );
   });
 
   test('desktop navigation preserves recursive visual-card hierarchy', () {
@@ -131,11 +151,13 @@ void main() {
       source,
       contains("'mega-menu-card-navigate-\${widget.navigationId}'"),
     );
-    expect(source, contains('Explorar subcategorías de'));
+    expect(source, contains('Ver subcategorías de'));
     expect(source, contains('Ver categoría \${widget.label}'));
+    expect(source, contains("'VER SUBCATEGORÍAS'"));
     expect(source, contains('VER TODO EN \${levelOwner.label.toUpperCase()}'));
-    expect(source, contains('onHover: (value)'));
-    expect(source, contains('onFocusChange: updateFocus'));
+    expect(source, contains('onHover: hasChildren'));
+    expect(source, contains('onFocusChange: hasChildren'));
+    expect(source, contains('_isExploreHovered'));
     expect(source, contains('subcategorías'));
     expect(source, isNot(contains('_buildBranchDiscovery(')));
     expect(source, isNot(contains('_buildActiveGroup(')));
@@ -229,6 +251,9 @@ void main() {
     expect(layout, contains('visit(branch);'));
     expect(layout, contains('presentation.megaMenuImageUrl'));
     expect(layout, contains('presentation.megaMenuOverlay'));
+    expect(layout, contains('presentation.megaMenuCardOverlay'));
+    expect(layout, contains('presentation.megaMenuOverviewWidth'));
+    expect(layout, contains('presentation.megaMenuContentAlignment'));
     expect(
       layout,
       contains('branchPresentations:'),

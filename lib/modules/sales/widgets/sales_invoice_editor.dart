@@ -26,6 +26,7 @@ import '../../bikeshop/models/bikeshop_models.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
+import 'responsive_invoice_section_card.dart';
 import 'sales_corrections_menu.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -49,6 +50,8 @@ class SalesInvoiceEditor extends StatefulWidget {
   final String? preselectedCustomerId;
   final bool isCompact; // Enable compact mode for side panels
   final VoidCallback? onSaved; // Callback after successful save
+  final VoidCallback? onCloseRequested;
+  final bool allowFullScreenExpansion;
 
   const SalesInvoiceEditor({
     super.key,
@@ -57,6 +60,8 @@ class SalesInvoiceEditor extends StatefulWidget {
     this.preselectedCustomerId,
     this.isCompact = false,
     this.onSaved,
+    this.onCloseRequested,
+    this.allowFullScreenExpansion = true,
   });
 
   @override
@@ -101,6 +106,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   bool _isEditing = false;
   bool _isUpdatingStatus = false;
   bool _isDirty = false; // Tracks unsaved changes to protect from rebuilds
+  bool _isDiscardPromptOpen = false;
   bool _isGeneratingPdf = false;
 
   StreamSubscription? _scanSubscription;
@@ -809,10 +815,41 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     }
   }
 
+  void _handleEditorFieldChanged() {
+    if (!mounted || !_isEditing || _isDirty) return;
+    setState(_markDirty);
+  }
+
   /// Clear dirty state (after save or discard)
   void _clearDirty() {
     _isDirty = false;
     // debugPrint('✅ [InvoiceEditor] Dirty state cleared');
+  }
+
+  Future<void> _requestClose() async {
+    if (_isSaving || _isDiscardPromptOpen) return;
+
+    if (_isDirty) {
+      _isDiscardPromptOpen = true;
+      bool? shouldClose;
+      try {
+        shouldClose = await _showDiscardConfirmDialog(context);
+      } finally {
+        _isDiscardPromptOpen = false;
+      }
+      if (shouldClose != true || !mounted) return;
+      _clearDirty();
+    }
+
+    final onCloseRequested = widget.onCloseRequested;
+    if (onCloseRequested != null) {
+      onCloseRequested();
+      return;
+    }
+
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   void _startEditing() {
@@ -967,7 +1004,11 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     );
 
     if (selected != null && mounted) {
-      setState(() => _selectedCustomer = selected);
+      final customerChanged = selected.id != _selectedCustomer?.id;
+      setState(() {
+        _selectedCustomer = selected;
+        if (customerChanged) _markDirty();
+      });
       final exists =
           _cachedCustomers.any((customer) => customer.id == selected.id);
       if (!exists) {
@@ -1028,6 +1069,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     setState(() {
       _lineEntries.add(entry);
       _autocompleteKey++;
+      _markDirty();
     });
   }
 
@@ -1053,6 +1095,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     setState(() {
       _lineEntries.add(entry);
       _autocompleteKey++;
+      _markDirty();
     });
   }
 
@@ -1083,6 +1126,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
       setState(() {
         _lineEntries.add(entry);
+        _markDirty();
       });
     }
   }
@@ -1091,6 +1135,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     setState(() {
       _lineEntries.remove(entry);
       entry.dispose();
+      _markDirty();
     });
   }
 
@@ -1100,6 +1145,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       setState(() {
         _lineEntries.removeAt(currentIndex);
         _lineEntries.insert(currentIndex - 1, entry);
+        _markDirty();
       });
     }
   }
@@ -1110,6 +1156,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       setState(() {
         _lineEntries.removeAt(currentIndex);
         _lineEntries.insert(currentIndex + 1, entry);
+        _markDirty();
       });
     }
   }
@@ -1138,6 +1185,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
             ? _issueDate.add(const Duration(days: 30))
             : selected;
       }
+      _markDirty();
     });
   }
 
@@ -1224,7 +1272,33 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       return;
     }
 
-    if (!_formKey.currentState!.validate()) {
+    final formIsValid = _formKey.currentState?.validate() ?? false;
+    final lineNumbersAreValid = _lineEntries.every(
+      (entry) =>
+          _parseNonNegativeInvoiceLineNumber(
+                entry.quantityController.text,
+              ) !=
+              null &&
+          _parseNonNegativeInvoiceLineNumber(
+                entry.unitPriceController.text,
+              ) !=
+              null &&
+          _parseNonNegativeInvoiceLineNumber(
+                entry.discountController.text,
+              ) !=
+              null,
+    );
+    if (!formIsValid || !lineNumbersAreValid) {
+      if (!lineNumbersAreValid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Revisa cantidad, precio y descuento: deben ser números válidos mayores o iguales a cero.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       return;
     }
 
@@ -1449,16 +1523,10 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     );
 
     return PopScope(
-      canPop: !_isDirty,
+      canPop: widget.onCloseRequested == null && !_isDirty,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-
-        final shouldPop = await _showDiscardConfirmDialog(context);
-        if (shouldPop == true) {
-          if (mounted) {
-            Navigator.of(context).pop();
-          }
-        }
+        await _requestClose();
       },
       child: content,
     );
@@ -1593,6 +1661,10 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   }
 
   Widget _buildHeader(ThemeData theme) {
+    if (widget.isCompact) {
+      return _buildCompactHeader(theme);
+    }
+
     if (_loadError != null) {
       return Padding(
         padding: const EdgeInsets.all(16),
@@ -1610,40 +1682,6 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
               onPressed: _isLoading ? null : _initialize,
               icon: const Icon(Icons.refresh),
               label: const Text('Reintentar'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Simplified header for compact mode
-    if (widget.isCompact) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: Colors.grey[200]!))),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _invoiceNumberController.text.isEmpty
-                        ? 'Nueva Factura'
-                        : _invoiceNumberController.text,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                ),
-                _buildStatusChip(theme),
-              ],
-            ),
-            const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _buildActionButtons(),
-              ),
             ),
           ],
         ),
@@ -1731,6 +1769,102 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     );
   }
 
+  Widget _buildCompactHeader(ThemeData theme) {
+    final invoiceNumber = _invoiceNumberController.text.trim();
+    final hasExistingInvoice = _currentInvoiceId != null;
+    final title = _loadError != null
+        ? 'Factura no disponible'
+        : _isCanonicalJobInvoiceCreation
+            ? 'Facturar trabajo'
+            : invoiceNumber.isNotEmpty
+                ? 'Factura $invoiceNumber'
+                : (hasExistingInvoice ? 'Factura' : 'Nueva factura');
+    final actions = _loadError != null
+        ? <Widget>[
+            IconButton(
+              onPressed: _isLoading ? null : _initialize,
+              tooltip: 'Reintentar carga',
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ]
+        : _buildActionButtons();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(6, 7, 8, 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+          ),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              if (widget.onCloseRequested != null)
+                IconButton(
+                  key: const ValueKey('invoice-editor-inline-back'),
+                  onPressed:
+                      _isSaving ? null : () => unawaited(_requestClose()),
+                  tooltip: 'Volver a trabajos',
+                  visualDensity: VisualDensity.standard,
+                  constraints:
+                      const BoxConstraints(minWidth: 48, minHeight: 48),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                ),
+              const SizedBox(width: 2),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (_loadError == null)
+                      Text(
+                        _isEditing ? 'Editando borrador' : 'Detalle de factura',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (_loadError == null) ...[
+                const SizedBox(width: 8),
+                _buildStatusChip(theme),
+              ],
+            ],
+          ),
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 5),
+            Align(
+              alignment: Alignment.centerRight,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: actions,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Future<void> _openFullScreenEditor() async {
     if (_isDirty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1766,6 +1900,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                 leading: IconButton(
                   icon: const Icon(Icons.close),
                   onPressed: () => Navigator.of(ctx).pop(),
+                  tooltip: 'Cerrar editor ampliado',
                 ),
               ),
               body: SalesInvoiceEditor(
@@ -1794,6 +1929,24 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
   List<Widget> _buildActionButtons() {
     if (_isCanonicalJobInvoiceCreation) {
+      if (widget.isCompact) {
+        return <Widget>[
+          FilledButton.icon(
+            onPressed: _isSaving ? null : _saveInvoice,
+            icon: _isSaving
+                ? const SizedBox(
+                    width: 15,
+                    height: 15,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.receipt_long_outlined, size: 18),
+            label: const Text('Crear factura'),
+          ),
+        ];
+      }
       return <Widget>[
         AppButton(
           text: 'Crear factura vinculada',
@@ -1807,17 +1960,16 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     final actionButtons = <Widget>[];
 
     // -1. EXPAND BUTTON (Only in compact mode)
-    if (widget.isCompact) {
+    if (widget.isCompact && widget.allowFullScreenExpansion) {
       actionButtons.add(
         IconButton(
           icon: const Icon(Icons.open_in_full, size: 20),
           onPressed: _openFullScreenEditor,
           tooltip: 'Expandir factura',
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
+          visualDensity: VisualDensity.standard,
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
         ),
       );
-      actionButtons.add(const SizedBox(width: 8));
     }
 
     // 0. DOWNLOAD BUTTON (If invoice exists)
@@ -1872,7 +2024,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         ),
       );
 
-      actionButtons.add(const SizedBox(width: 8));
+      if (!widget.isCompact) actionButtons.add(const SizedBox(width: 8));
       actionButtons.add(
         SalesCorrectionsMenu(
           invoice: _loadedInvoice!,
@@ -1928,6 +2080,8 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
               color: _scannerEnabled ? Colors.green : null,
             ),
             tooltip: _scannerEnabled ? 'Desactivar Escáner' : 'Activar Escáner',
+            visualDensity: VisualDensity.standard,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           ),
         );
       }
@@ -1936,54 +2090,109 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
       // 2. CANCEL BUTTON (only if editing existing invoice)
       if (_loadedInvoice != null) {
-        actionButtons.add(
-          OutlinedButton.icon(
-            onPressed: _isSaving ? null : _cancelEditing,
-            icon: const Icon(Icons.close),
-            label: const Text('Cancelar'),
-          ),
-        );
+        actionButtons.add(widget.isCompact
+            ? IconButton(
+                key: const ValueKey('invoice-editor-compact-cancel'),
+                onPressed: _isSaving
+                    ? null
+                    : widget.onCloseRequested != null
+                        ? () => unawaited(_requestClose())
+                        : _cancelEditing,
+                tooltip: widget.onCloseRequested != null
+                    ? 'Cancelar edición y volver'
+                    : 'Cancelar edición',
+                visualDensity: VisualDensity.standard,
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                icon: const Icon(Icons.close_rounded, size: 20),
+              )
+            : OutlinedButton.icon(
+                onPressed: _isSaving ? null : _cancelEditing,
+                icon: const Icon(Icons.close),
+                label: const Text('Cancelar'),
+              ));
         if (!widget.isCompact) actionButtons.add(const SizedBox(width: 8));
       }
 
       // 3. SAVE BUTTON
-      actionButtons.add(
-        AppButton(
-          text: 'Guardar',
-          icon: Icons.save_outlined,
-          onPressed: _isSaving ? null : _saveInvoice,
-          isLoading: _isSaving,
-        ),
-      );
+      actionButtons.add(widget.isCompact
+          ? IconButton.filled(
+              onPressed: _isSaving ? null : _saveInvoice,
+              tooltip: 'Guardar factura',
+              visualDensity: VisualDensity.standard,
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.save_outlined, size: 19),
+            )
+          : AppButton(
+              text: 'Guardar',
+              icon: Icons.save_outlined,
+              onPressed: _isSaving ? null : _saveInvoice,
+              isLoading: _isSaving,
+            ));
     } else {
       // READ-ONLY MODE ACTIONS
       if (_status == InvoiceStatus.draft) {
-        actionButtons.add(
-          OutlinedButton.icon(
-            onPressed: _isUpdatingStatus ? null : _startEditing,
-            icon: const Icon(Icons.edit_outlined),
-            label: const Text('Editar'),
-          ),
-        );
+        actionButtons.add(widget.isCompact
+            ? IconButton.outlined(
+                onPressed: _isUpdatingStatus ? null : _startEditing,
+                tooltip: 'Editar factura',
+                visualDensity: VisualDensity.standard,
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                icon: const Icon(Icons.edit_outlined, size: 19),
+              )
+            : OutlinedButton.icon(
+                onPressed: _isUpdatingStatus ? null : _startEditing,
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Editar'),
+              ));
         if (!widget.isCompact) actionButtons.add(const SizedBox(width: 8));
 
         if (_canMarkAsSent) {
-          actionButtons.add(FilledButton.icon(
-            onPressed: _isUpdatingStatus
-                ? null
-                : () => _updateStatus(InvoiceStatus.sent),
-            icon: const Icon(Icons.send_outlined),
-            label: const Text('Enviar'),
-          ));
+          actionButtons.add(widget.isCompact
+              ? IconButton.filled(
+                  onPressed: _isUpdatingStatus
+                      ? null
+                      : () => _updateStatus(InvoiceStatus.sent),
+                  tooltip: 'Marcar como enviada',
+                  visualDensity: VisualDensity.standard,
+                  constraints:
+                      const BoxConstraints(minWidth: 48, minHeight: 48),
+                  icon: const Icon(Icons.send_outlined, size: 19),
+                )
+              : FilledButton.icon(
+                  onPressed: _isUpdatingStatus
+                      ? null
+                      : () => _updateStatus(InvoiceStatus.sent),
+                  icon: const Icon(Icons.send_outlined),
+                  label: const Text('Enviar'),
+                ));
         }
       } else if (_status == InvoiceStatus.sent) {
-        actionButtons.add(FilledButton.icon(
-          onPressed: _isUpdatingStatus
-              ? null
-              : () => _updateStatus(InvoiceStatus.confirmed),
-          icon: const Icon(Icons.check_circle_outline),
-          label: const Text('Confirmar'),
-        ));
+        actionButtons.add(widget.isCompact
+            ? IconButton.filled(
+                onPressed: _isUpdatingStatus
+                    ? null
+                    : () => _updateStatus(InvoiceStatus.confirmed),
+                tooltip: 'Confirmar factura',
+                visualDensity: VisualDensity.standard,
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                icon: const Icon(Icons.check_circle_outline, size: 19),
+              )
+            : FilledButton.icon(
+                onPressed: _isUpdatingStatus
+                    ? null
+                    : () => _updateStatus(InvoiceStatus.confirmed),
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('Confirmar'),
+              ));
       }
     }
     return actionButtons;
@@ -2089,40 +2298,15 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   }
 
   Widget _buildSectionCard(
-    ThemeData theme, {
+    ThemeData _, {
     required IconData icon,
     required String title,
     required List<Widget> children,
   }) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor:
-                      theme.colorScheme.primary.withValues(alpha: 0.12),
-                  child: Icon(icon, color: theme.colorScheme.primary, size: 18),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  title,
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            ...children,
-          ],
-        ),
-      ),
+    return ResponsiveInvoiceSectionCard(
+      icon: icon,
+      title: title,
+      children: children,
     );
   }
 
@@ -2134,6 +2318,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
           TextFormField(
             controller: _invoiceNumberController,
             enabled: _canEditFields,
+            onChanged: (_) => _handleEditorFieldChanged(),
             decoration: const InputDecoration(
               labelText: 'Número de factura',
               helperText:
@@ -2164,6 +2349,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
               ? IconButton(
                   icon: const Icon(Icons.search),
                   onPressed: _openCustomerSelector,
+                  tooltip: 'Buscar cliente',
                 )
               : null,
         ),
@@ -2174,6 +2360,10 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   Widget _buildLineItemsSection(ThemeData theme) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        if (constraints.maxWidth < 600) {
+          return _buildMobileLineItemsSection(theme);
+        }
+
         // Calculate minimum required width based on columns
         const minTableWidth = 800.0;
         final tableWidth = constraints.maxWidth > minTableWidth
@@ -2242,6 +2432,344 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildMobileLineItemsSection(ThemeData theme) {
+    return Container(
+      key: const ValueKey('invoice-editor-mobile-lines'),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.65),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 10, 9),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Productos y servicios',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${_lineEntries.length}',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(
+            height: 1,
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.55),
+          ),
+          if (_lineEntries.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text(
+                _canEditFields
+                    ? 'Agrega el primer producto o servicio.'
+                    : 'Esta factura no tiene líneas.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            )
+          else
+            for (var index = 0; index < _lineEntries.length; index++) ...[
+              _buildMobileLineCard(
+                theme,
+                index + 1,
+                _lineEntries[index],
+              ),
+              if (index < _lineEntries.length - 1)
+                Divider(
+                  height: 1,
+                  indent: 12,
+                  endIndent: 12,
+                  color:
+                      theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+                ),
+            ],
+          if (_canEditFields) ...[
+            Divider(
+              height: 1,
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.55),
+            ),
+            _buildMobileAddLine(theme),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileLineCard(
+    ThemeData theme,
+    int index,
+    _InvoiceLineEntry entry,
+  ) {
+    final canMoveUp = _canEditFields && index > 1;
+    final canMoveDown = _canEditFields && index < _lineEntries.length;
+    final product = entry.product;
+    final hasStockWarning = product != null &&
+        !product.isService &&
+        product.trackStock &&
+        product.availableStockQuantity < entry.line.quantity;
+    final lineKey = entry.line.id ?? entry.hashCode;
+
+    return Container(
+      key: ValueKey('invoice-editor-mobile-line-$lineKey'),
+      padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
+      color: index.isEven
+          ? theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.45)
+          : theme.colorScheme.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Ítem $index',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                ChileanUtils.formatCurrency(entry.line.netAmount),
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          entry.buildSmartProductField(
+            context,
+            theme,
+            _canEditFields,
+            _handleLinesChanged,
+            _autoAddEmptyLineIfNeeded,
+            preferredJobBikeId: _preferredJobBikeForNewLines()?.id,
+            availableJobBikes: _availableJobBikes,
+          ),
+          if (_availableJobBikes.isNotEmpty) ...[
+            const SizedBox(height: 7),
+            _buildBikeSelector(theme, entry, mobile: true),
+          ],
+          const SizedBox(height: 9),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 2,
+                child: _buildMobileLineNumberField(
+                  key: ValueKey('invoice-editor-line-quantity-$lineKey'),
+                  label: product?.isService == true ? 'Horas' : 'Cantidad',
+                  controller: entry.quantityController,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 3,
+                child: _buildMobileLineNumberField(
+                  key: ValueKey('invoice-editor-line-price-$lineKey'),
+                  label: 'Precio unitario',
+                  controller: entry.unitPriceController,
+                  prefixText: '\$ ',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildMobileLineNumberField(
+                  key: ValueKey('invoice-editor-line-discount-$lineKey'),
+                  label: 'Descuento',
+                  controller: entry.discountController,
+                  prefixText: '\$ ',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Semantics(
+                  label:
+                      'Total del ítem ${ChileanUtils.formatCurrency(entry.line.netAmount)}',
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 50),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.07),
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(
+                        color:
+                            theme.colorScheme.primary.withValues(alpha: 0.16),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Total',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        Text(
+                          ChileanUtils.formatCurrency(entry.line.netAmount),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (hasStockWarning) ...[
+            const SizedBox(height: 7),
+            Text(
+              'Stock proyectado: ${(product.availableStockQuantity - entry.line.quantity).toInt()}',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: Colors.orange.shade800,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          if (_canEditFields) ...[
+            const SizedBox(height: 5),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  key: ValueKey('invoice-editor-line-up-$lineKey'),
+                  onPressed: canMoveUp ? () => _moveLineUp(entry) : null,
+                  tooltip: 'Mover ítem hacia arriba',
+                  visualDensity: VisualDensity.standard,
+                  constraints:
+                      const BoxConstraints(minWidth: 48, minHeight: 48),
+                  icon: const Icon(Icons.arrow_upward_rounded, size: 19),
+                ),
+                IconButton(
+                  key: ValueKey('invoice-editor-line-down-$lineKey'),
+                  onPressed: canMoveDown ? () => _moveLineDown(entry) : null,
+                  tooltip: 'Mover ítem hacia abajo',
+                  visualDensity: VisualDensity.standard,
+                  constraints:
+                      const BoxConstraints(minWidth: 48, minHeight: 48),
+                  icon: const Icon(Icons.arrow_downward_rounded, size: 19),
+                ),
+                IconButton(
+                  key: ValueKey('invoice-editor-line-remove-$lineKey'),
+                  onPressed: () => _removeLine(entry),
+                  tooltip: 'Eliminar ítem',
+                  visualDensity: VisualDensity.standard,
+                  constraints:
+                      const BoxConstraints(minWidth: 48, minHeight: 48),
+                  color: theme.colorScheme.error,
+                  icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileLineNumberField({
+    required Key key,
+    required String label,
+    required TextEditingController controller,
+    String? prefixText,
+  }) {
+    return TextFormField(
+      key: key,
+      controller: controller,
+      enabled: _canEditFields,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      textInputAction: TextInputAction.next,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return 'Requerido';
+        }
+        if (_parseNonNegativeInvoiceLineNumber(value) == null) {
+          return 'Valor inválido';
+        }
+        return null;
+      },
+      decoration: InputDecoration(
+        labelText: label,
+        prefixText: prefixText,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 11,
+          vertical: 11,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(9),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileAddLine(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Agregar línea',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          SmartProductField(
+            key: ValueKey('invoice-editor-mobile-add-$_autocompleteKey'),
+            onProductChanged: (selection) {
+              if (selection == null) return;
+              if (selection.isCatalogProduct && selection.product != null) {
+                _addProductLine(selection.product!);
+              } else if (!selection.isCatalogProduct &&
+                  selection.productName != null) {
+                _addCustomItemLine(selection.productName!);
+              }
+            },
+            allowCustomItems: true,
+            showCost: false,
+            hintText: 'Buscar producto o servicio...',
+          ),
+        ],
+      ),
     );
   }
 
@@ -2426,16 +2954,20 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     );
   }
 
-  Widget _buildBikeSelector(ThemeData theme, _InvoiceLineEntry entry) {
+  Widget _buildBikeSelector(
+    ThemeData theme,
+    _InvoiceLineEntry entry, {
+    bool mobile = false,
+  }) {
     if (_availableJobBikes.isEmpty) {
       return Container(
-        height: 28,
+        height: mobile ? 44 : 28,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         margin: const EdgeInsets.only(top: 4),
         decoration: BoxDecoration(
           color:
               theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(mobile ? 9 : 4),
           border: Border.all(
               color: theme.colorScheme.outline.withValues(alpha: 0.3)),
         ),
@@ -2459,12 +2991,12 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     }
 
     return Container(
-      height: 28,
+      height: mobile ? 44 : 28,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       margin: const EdgeInsets.only(top: 4),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(mobile ? 9 : 4),
         border:
             Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
       ),
@@ -2507,7 +3039,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                           .firstWhere((b) => b.id == newBikeId);
                       entry.line.bikeName = bike.displayName;
                     }
-                    _handleLinesChanged();
+                    _markDirty();
                   });
                 }
               : null,
@@ -2545,7 +3077,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                 context,
                 theme,
                 _canEditFields,
-                () {},
+                _handleLinesChanged,
                 () => _autoAddEmptyLineIfNeeded(),
                 preferredJobBikeId: _preferredJobBikeForNewLines()?.id,
                 availableJobBikes: _availableJobBikes,
@@ -2618,6 +3150,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   Widget _buildDatesAndStatus(ThemeData theme) {
     if (widget.isCompact) {
       return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
@@ -2642,7 +3175,38 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                         }),
             ],
           ),
-          // Dates...
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildCompactDateField(
+                  theme,
+                  key: const ValueKey('invoice-editor-issue-date'),
+                  label: 'Emisión',
+                  value: ChileanUtils.formatDate(_issueDate),
+                  icon: Icons.event_outlined,
+                  onTap: _canEditFields
+                      ? () => _pickDate(isIssueDate: true)
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildCompactDateField(
+                  theme,
+                  key: const ValueKey('invoice-editor-due-date'),
+                  label: 'Vencimiento',
+                  value: _dueDate == null
+                      ? 'Sin fecha'
+                      : ChileanUtils.formatDate(_dueDate!),
+                  icon: Icons.event_available_outlined,
+                  onTap: _canEditFields
+                      ? () => _pickDate(isIssueDate: false)
+                      : null,
+                ),
+              ),
+            ],
+          ),
         ],
       );
     }
@@ -2670,6 +3234,81 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         ),
         // ...
       ],
+    );
+  }
+
+  Widget _buildCompactDateField(
+    ThemeData theme, {
+    required Key key,
+    required String label,
+    required String value,
+    required IconData icon,
+    required VoidCallback? onTap,
+  }) {
+    return Semantics(
+      button: onTap != null,
+      excludeSemantics: true,
+      label: '$label: $value',
+      hint: onTap == null ? null : 'Toca para cambiar la fecha',
+      child: Material(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          key: key,
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 54),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.75),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Text(
+                        value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (onTap != null)
+                  Icon(
+                    Icons.edit_calendar_outlined,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -2732,6 +3371,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     return TextFormField(
       controller: _referenceController,
       enabled: _canEditFields,
+      onChanged: (_) => _handleEditorFieldChanged(),
       decoration: const InputDecoration(
         labelText: 'Referencia / Observaciones',
       ),
@@ -2795,6 +3435,14 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 }
 
 // Private classes copied and adapted
+double? _parseNonNegativeInvoiceLineNumber(String rawValue) {
+  final normalized = rawValue.trim().replaceAll(',', '.');
+  if (normalized.isEmpty) return null;
+  final value = double.tryParse(normalized);
+  if (value == null || !value.isFinite || value < 0) return null;
+  return value;
+}
+
 class _InvoiceLine {
   _InvoiceLine({
     this.id,
@@ -2924,34 +3572,33 @@ class _InvoiceLineEntry {
   }
 
   void _onQuantityChanged() {
-    final value = double.tryParse(quantityController.text.replaceAll(',', '.'));
-    if (value != null && value >= 0) {
+    final value = _parseNonNegativeInvoiceLineNumber(quantityController.text);
+    if (value != null) {
       line.quantity = value;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _listener?.call();
-      });
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _listener?.call();
+    });
   }
 
   void _onUnitPriceChanged() {
-    final value =
-        double.tryParse(unitPriceController.text.replaceAll(',', '.'));
-    if (value != null && value >= 0) {
+    final value = _parseNonNegativeInvoiceLineNumber(unitPriceController.text);
+    if (value != null) {
       line.unitPrice = value;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _listener?.call();
-      });
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _listener?.call();
+    });
   }
 
   void _onDiscountChanged() {
-    final value = double.tryParse(discountController.text.replaceAll(',', '.'));
-    if (value != null && value >= 0) {
+    final value = _parseNonNegativeInvoiceLineNumber(discountController.text);
+    if (value != null) {
       line.discount = value;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _listener?.call();
-      });
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _listener?.call();
+    });
   }
 
   void dispose() {

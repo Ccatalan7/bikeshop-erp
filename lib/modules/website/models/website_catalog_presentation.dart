@@ -84,6 +84,24 @@ extension WebsiteCatalogHeroAlignmentX on WebsiteCatalogHeroAlignment {
       );
 }
 
+enum WebsiteMegaMenuContentAlignment { top, center, bottom }
+
+extension WebsiteMegaMenuContentAlignmentX on WebsiteMegaMenuContentAlignment {
+  String get storageValue => name;
+
+  String get label => switch (this) {
+        WebsiteMegaMenuContentAlignment.top => 'Arriba',
+        WebsiteMegaMenuContentAlignment.center => 'Centro',
+        WebsiteMegaMenuContentAlignment.bottom => 'Abajo',
+      };
+
+  static WebsiteMegaMenuContentAlignment fromStorage(Object? raw) =>
+      WebsiteMegaMenuContentAlignment.values.firstWhere(
+        (value) => value.storageValue == raw?.toString(),
+        orElse: () => WebsiteMegaMenuContentAlignment.bottom,
+      );
+}
+
 enum WebsiteCatalogGridDensity { editorial, balanced, compact }
 
 extension WebsiteCatalogGridDensityX on WebsiteCatalogGridDensity {
@@ -161,10 +179,17 @@ class WebsiteCatalogPresentation {
     this.allowIndexing = true,
     this.heroOverlay = 0.42,
     double megaMenuOverlay = 0.58,
+    double megaMenuCardOverlay = 0,
+    double megaMenuOverviewWidth = defaultMegaMenuOverviewWidth,
+    this.megaMenuContentAlignment = WebsiteMegaMenuContentAlignment.bottom,
     this.showBreadcrumbs = true,
     this.showSubcategories = true,
     List<WebsiteCatalogFacet> facets = defaultFacets,
   })  : megaMenuOverlay = megaMenuOverlay.clamp(0.0, 0.85),
+        megaMenuCardOverlay = megaMenuCardOverlay.clamp(0.0, 0.65),
+        megaMenuOverviewWidth = megaMenuOverviewWidth
+            .clamp(minMegaMenuOverviewWidth, maxMegaMenuOverviewWidth)
+            .toDouble(),
         slug = websiteCategorySlug(slug),
         slugAliases = List<String>.unmodifiable(
           _normalizeCategorySlugAliases(
@@ -180,6 +205,9 @@ class WebsiteCatalogPresentation {
     WebsiteCatalogFacet.categories,
     WebsiteCatalogFacet.availability,
   ];
+  static const double minMegaMenuOverviewWidth = 300;
+  static const double maxMegaMenuOverviewWidth = 440;
+  static const double defaultMegaMenuOverviewWidth = 440;
 
   final String categoryId;
   final String slug;
@@ -198,6 +226,9 @@ class WebsiteCatalogPresentation {
   final bool allowIndexing;
   final double heroOverlay;
   final double megaMenuOverlay;
+  final double megaMenuCardOverlay;
+  final double megaMenuOverviewWidth;
+  final WebsiteMegaMenuContentAlignment megaMenuContentAlignment;
   final bool showBreadcrumbs;
   final bool showSubcategories;
   final List<WebsiteCatalogFacet> facets;
@@ -267,6 +298,14 @@ class WebsiteCatalogPresentation {
       allowIndexing: json['allow_indexing'] != false,
       heroOverlay: overlay.clamp(0.0, 0.78),
       megaMenuOverlay: (json['mega_menu_overlay'] as num?)?.toDouble() ?? 0.58,
+      megaMenuCardOverlay:
+          (json['mega_menu_card_overlay'] as num?)?.toDouble() ?? 0,
+      megaMenuOverviewWidth:
+          (json['mega_menu_overview_width'] as num?)?.toDouble() ??
+              defaultMegaMenuOverviewWidth,
+      megaMenuContentAlignment: WebsiteMegaMenuContentAlignmentX.fromStorage(
+        json['mega_menu_content_alignment'],
+      ),
       showBreadcrumbs: json['show_breadcrumbs'] != false,
       showSubcategories: json['show_subcategories'] != false,
       // Missing means “inherit the polished defaults”. An explicit empty list
@@ -293,6 +332,9 @@ class WebsiteCatalogPresentation {
         'allow_indexing': allowIndexing,
         'hero_overlay': heroOverlay,
         'mega_menu_overlay': megaMenuOverlay,
+        'mega_menu_card_overlay': megaMenuCardOverlay,
+        'mega_menu_overview_width': megaMenuOverviewWidth,
+        'mega_menu_content_alignment': megaMenuContentAlignment.storageValue,
         'show_breadcrumbs': showBreadcrumbs,
         'show_subcategories': showSubcategories,
         'facets': facets.map((facet) => facet.storageValue).toList(),
@@ -315,6 +357,9 @@ class WebsiteCatalogPresentation {
     bool? allowIndexing,
     double? heroOverlay,
     double? megaMenuOverlay,
+    double? megaMenuCardOverlay,
+    double? megaMenuOverviewWidth,
+    WebsiteMegaMenuContentAlignment? megaMenuContentAlignment,
     bool? showBreadcrumbs,
     bool? showSubcategories,
     List<WebsiteCatalogFacet>? facets,
@@ -337,6 +382,11 @@ class WebsiteCatalogPresentation {
       allowIndexing: allowIndexing ?? this.allowIndexing,
       heroOverlay: heroOverlay ?? this.heroOverlay,
       megaMenuOverlay: megaMenuOverlay ?? this.megaMenuOverlay,
+      megaMenuCardOverlay: megaMenuCardOverlay ?? this.megaMenuCardOverlay,
+      megaMenuOverviewWidth:
+          megaMenuOverviewWidth ?? this.megaMenuOverviewWidth,
+      megaMenuContentAlignment:
+          megaMenuContentAlignment ?? this.megaMenuContentAlignment,
       showBreadcrumbs: showBreadcrumbs ?? this.showBreadcrumbs,
       showSubcategories: showSubcategories ?? this.showSubcategories,
       facets: facets ?? this.facets,

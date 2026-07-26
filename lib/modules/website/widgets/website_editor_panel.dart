@@ -11623,6 +11623,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
   // Header style options
   String _headerStyle = 'solid';
   String _headerColorMode = 'auto';
+  bool _navigationUppercase = true;
   bool _showTopBanner = false;
   bool _headerShadow = true;
   bool _loaded = false;
@@ -11675,6 +11676,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
       'top_banner_text': _topBannerController.text,
       'header_style': _headerStyle,
       'header_color_mode': _headerColorMode,
+      'header_navigation_uppercase': _navigationUppercase.toString(),
       'header_show_top_banner': _showTopBanner.toString(),
       'header_shadow': _headerShadow.toString(),
       'header_bg_color': _headerBgColorController.text,
@@ -11707,6 +11709,8 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
 
     _headerStyle = service.getSetting('header_style', 'solid');
     _headerColorMode = service.getSetting('header_color_mode', 'auto');
+    _navigationUppercase =
+        service.getSetting('header_navigation_uppercase', 'true') == 'true';
     final rawBannerValue =
         service.getSetting('header_show_top_banner', 'false');
     _showTopBanner = rawBannerValue == 'true';
@@ -11918,6 +11922,20 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
 
           // Navigation records belong to website_navigation, not header settings.
           const _SectionHeader('Navegación'),
+          const SizedBox(height: 12),
+          _buildSwitch(
+            label: 'Títulos del menú en mayúsculas',
+            value: _navigationUppercase,
+            onChanged: (value) {
+              setState(() {
+                _navigationUppercase = value;
+                _hasLocalChanges = true;
+              });
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _syncPendingSettingsToProvider();
+              });
+            },
+          ),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(12),

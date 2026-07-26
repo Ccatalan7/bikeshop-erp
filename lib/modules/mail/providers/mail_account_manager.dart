@@ -105,6 +105,12 @@ class MailAccountManager extends ChangeNotifier {
     return source;
   }
 
+  /// Stable cross-provider projection for summaries outside the mail module.
+  ///
+  /// The inbox owns temporary search/account filters. Operational briefings
+  /// must not silently inherit those controls when the user visits Mail.
+  List<Email> get briefingEmails => List<Email>.unmodifiable(_unifiedEmails);
+
   /// Initialize manager and all providers
   Future<void> initialize() {
     final userId = Supabase.instance.client.auth.currentUser?.id;

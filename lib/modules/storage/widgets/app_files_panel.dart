@@ -42,12 +42,18 @@ enum _StorageCompactTab {
   screenshots,
 }
 
+typedef AppFilesLoader = Future<List<AppStoredFile>> Function({
+  required String query,
+  required int limit,
+});
+
 class AppFilesPanel extends StatefulWidget {
   final bool compact;
   final bool showHeader;
   final bool runnerMode;
   final String? initialFileId;
   final String? initialOpenRequestId;
+  final AppFilesLoader? filesLoader;
 
   const AppFilesPanel({
     super.key,
@@ -56,6 +62,7 @@ class AppFilesPanel extends StatefulWidget {
     this.runnerMode = false,
     this.initialFileId,
     this.initialOpenRequestId,
+    this.filesLoader,
   });
 
   @override
@@ -63,7 +70,7 @@ class AppFilesPanel extends StatefulWidget {
 }
 
 class _AppFilesPanelState extends State<AppFilesPanel> {
-  final _service = AppFileStorageService.instance;
+  AppFileStorageService get _service => AppFileStorageService.instance;
   final _searchController = TextEditingController();
   final _dateFormat = DateFormat('dd/MM HH:mm');
 
@@ -88,10 +95,12 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
-    _savedFilesSubscription = _service.savedFiles.listen((_) {
-      if (!mounted) return;
-      unawaited(_loadFiles());
-    });
+    if (widget.filesLoader == null) {
+      _savedFilesSubscription = _service.savedFiles.listen((_) {
+        if (!mounted) return;
+        unawaited(_loadFiles());
+      });
+    }
     _loadFiles();
   }
 
@@ -107,6 +116,11 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
   @override
   void didUpdateWidget(covariant AppFilesPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.compact != widget.compact ||
+        oldWidget.filesLoader != widget.filesLoader) {
+      unawaited(_loadFiles());
+      return;
+    }
     if (oldWidget.initialFileId == widget.initialFileId &&
         oldWidget.initialOpenRequestId == widget.initialOpenRequestId) {
       return;
@@ -132,10 +146,11 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
     });
 
     try {
-      var files = await _service.listFiles(
-        query: _query,
-        limit: widget.compact ? 120 : 360,
-      );
+      final limit = widget.compact ? 120 : 360;
+      final filesLoader = widget.filesLoader;
+      var files = filesLoader == null
+          ? await _service.listFiles(query: _query, limit: limit)
+          : await filesLoader(query: _query, limit: limit);
       files = await _autoTagSupplierDownloads(files);
       if (!mounted) return;
       setState(() {
@@ -813,6 +828,9 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
               );
 
     return DropTarget(
+      key: ValueKey(
+        widget.compact ? 'app-files-compact' : 'app-files-desktop',
+      ),
       enable: !_isUploading,
       onDragEntered: (_) => setState(() => _isDragging = true),
       onDragExited: (_) => setState(() => _isDragging = false),
@@ -942,7 +960,8 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
                   tooltip: 'Abrir módulo',
                   onPressed: _openFullModule,
                   icon: const Icon(Icons.open_in_full_outlined, size: 18),
-                  visualDensity: VisualDensity.compact,
+                  constraints:
+                      const BoxConstraints.tightFor(width: 48, height: 48),
                 ),
                 IconButton(
                   tooltip: 'Subir archivos',
@@ -954,21 +973,24 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.upload_file_outlined, size: 18),
-                  visualDensity: VisualDensity.compact,
+                  constraints:
+                      const BoxConstraints.tightFor(width: 48, height: 48),
                 ),
                 IconButton(
                   tooltip: 'Actualizar',
                   onPressed: _loadFiles,
                   icon: const Icon(Icons.refresh, size: 18),
-                  visualDensity: VisualDensity.compact,
+                  constraints:
+                      const BoxConstraints.tightFor(width: 48, height: 48),
                 ),
               ],
             ),
             const SizedBox(height: 8),
           ],
           SizedBox(
-            height: 40,
+            height: widget.compact ? 48 : 40,
             child: TextField(
+              key: const ValueKey('storage-search'),
               controller: _searchController,
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search, size: 18),
@@ -1010,23 +1032,45 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                DropdownButtonHideUnderline(
-                  child: DropdownButton<_StorageSort>(
-                    value: _sort,
-                    isDense: true,
-                    borderRadius: BorderRadius.circular(8),
-                    items: [
-                      for (final sort in _StorageSort.values)
-                        DropdownMenuItem(
-                          value: sort,
-                          child: Text(sort.label),
-                        ),
-                    ],
-                    onChanged: (sort) {
-                      if (sort != null) _setSort(sort);
-                    },
+                if (widget.compact)
+                  SizedBox(
+                    key: const ValueKey('storage-sort'),
+                    width: 48,
+                    height: 48,
+                    child: PopupMenuButton<_StorageSort>(
+                      tooltip: 'Ordenar archivos',
+                      initialValue: _sort,
+                      onSelected: _setSort,
+                      icon: const Icon(Icons.swap_vert_rounded, size: 20),
+                      itemBuilder: (context) => [
+                        for (final sort in _StorageSort.values)
+                          CheckedPopupMenuItem<_StorageSort>(
+                            value: sort,
+                            checked: _sort == sort,
+                            child: Text(sort.label),
+                          ),
+                      ],
+                    ),
+                  )
+                else
+                  DropdownButtonHideUnderline(
+                    key: const ValueKey('storage-sort'),
+                    child: DropdownButton<_StorageSort>(
+                      value: _sort,
+                      isDense: true,
+                      borderRadius: BorderRadius.circular(8),
+                      items: [
+                        for (final sort in _StorageSort.values)
+                          DropdownMenuItem(
+                            value: sort,
+                            child: Text(sort.label),
+                          ),
+                      ],
+                      onChanged: (sort) {
+                        if (sort != null) _setSort(sort);
+                      },
+                    ),
                   ),
-                ),
               ],
             ),
           ],
@@ -1040,31 +1084,30 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
     final colorScheme = theme.colorScheme;
 
     return Container(
-      height: 34,
+      key: const ValueKey('storage-compact-tabs'),
+      height: 50,
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.38),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _StorageCompactTabButton(
             selected: _compactTab == _StorageCompactTab.folders,
-            glyph: '🗂️',
             label: 'Carpetas',
             theme: theme,
             onTap: () => _setCompactTab(_StorageCompactTab.folders),
           ),
           _StorageCompactTabButton(
             selected: _compactTab == _StorageCompactTab.recent,
-            glyph: '🕘',
             label: 'Recientes',
             theme: theme,
             onTap: () => _setCompactTab(_StorageCompactTab.recent),
           ),
           _StorageCompactTabButton(
             selected: _compactTab == _StorageCompactTab.screenshots,
-            glyph: '📸',
             label: 'Capturas',
             theme: theme,
             onTap: () => _setCompactTab(_StorageCompactTab.screenshots),
@@ -1093,6 +1136,7 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
       return Row(
         children: [
           SizedBox(
+            key: const ValueKey('storage-desktop-folder-sidebar'),
             width: 248,
             child: _buildFolderSidebar(context, _folders()),
           ),
@@ -1140,6 +1184,7 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
     }
 
     return ListView.separated(
+      key: const ValueKey('storage-file-list'),
       padding: EdgeInsets.fromLTRB(12, 0, 12, widget.compact ? 12 : 20),
       itemCount: _files.length,
       separatorBuilder: (_, __) => Divider(
@@ -1184,6 +1229,7 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
     final visibleFolders = _visibleFolders(folders);
 
     return Container(
+      key: const ValueKey('storage-compact-folder-tree'),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(8),
@@ -1370,14 +1416,12 @@ class _SupplierFolderAccumulator {
 
 class _StorageCompactTabButton extends StatelessWidget {
   final bool selected;
-  final String glyph;
   final String label;
   final ThemeData theme;
   final VoidCallback onTap;
 
   const _StorageCompactTabButton({
     required this.selected,
-    required this.glyph,
     required this.label,
     required this.theme,
     required this.onTap,
@@ -1387,8 +1431,11 @@ class _StorageCompactTabButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = theme.colorScheme;
     return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.all(3),
+      child: Semantics(
+        key: ValueKey('storage-tab-${label.toLowerCase()}'),
+        button: true,
+        selected: selected,
+        label: label,
         child: Material(
           color: selected ? colorScheme.surface : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
@@ -1396,21 +1443,20 @@ class _StorageCompactTabButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
             onTap: onTap,
             child: Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _StorageGlyph(glyph, size: 16),
-                  const SizedBox(width: 6),
-                  Text(
-                    label,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: selected
-                          ? colorScheme.onSurface
-                          : colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w800,
-                    ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: selected
+                        ? colorScheme.onSurface
+                        : colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w800,
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -1484,6 +1530,7 @@ class _StorageFolderTile extends StatelessWidget {
         color: selected ? accent.withValues(alpha: 0.1) : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
+          key: ValueKey('storage-folder-${folder.id}'),
           borderRadius: BorderRadius.circular(8),
           onTap: onTap,
           child: Padding(
@@ -1493,6 +1540,7 @@ class _StorageFolderTile extends StatelessWidget {
             ),
             child: Row(
               children: [
+                if (dense) const SizedBox(width: 0, height: 36),
                 if (isChild) ...[
                   SizedBox(
                     width: 17,
@@ -1697,9 +1745,13 @@ class _FileListTile extends StatelessWidget {
                   icon: const Icon(Icons.open_in_new, size: 18),
                 ),
               IconButton(
+                key: ValueKey('storage-preview-${file.id}'),
                 tooltip: 'Vista previa',
                 onPressed: onPreview,
                 icon: const Icon(Icons.visibility_outlined, size: 18),
+                constraints: compact
+                    ? const BoxConstraints.tightFor(width: 48, height: 48)
+                    : null,
               ),
               if (!compact)
                 IconButton(
@@ -1708,6 +1760,7 @@ class _FileListTile extends StatelessWidget {
                   icon: const Icon(Icons.download_outlined, size: 18),
                 ),
               PopupMenuButton<String>(
+                key: ValueKey('storage-more-${file.id}'),
                 tooltip: 'Más acciones',
                 onSelected: (value) {
                   if (value == 'quick_expense_ocr') onQuickExpenseOcr?.call();

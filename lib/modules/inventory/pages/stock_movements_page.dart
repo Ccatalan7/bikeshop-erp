@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../shared/models/product.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/utils/responsive_viewport.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/image_service.dart';
@@ -23,6 +24,7 @@ import '../models/stock_movement.dart';
 import '../models/stock_adjustment.dart';
 import '../services/inventory_service.dart' as module_inventory;
 import '../services/stock_movements_service.dart';
+import '../widgets/stock_movements_responsive_frame.dart';
 
 class StockMovementsPage extends StatefulWidget {
   const StockMovementsPage({super.key});
@@ -367,60 +369,62 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     });
   }
 
+  void _selectRecentMode() {
+    _closeLinkedDocument();
+    setState(() => _viewMode = StockMovementsViewMode.recent);
+    context.read<StockMovementsService>().setViewMode('recent');
+  }
+
+  void _selectProductMode() {
+    _closeLinkedDocument();
+    setState(() => _viewMode = StockMovementsViewMode.byProduct);
+    context.read<StockMovementsService>().setViewMode('by_product');
+    _ensureInitialProductPreview();
+  }
+
+  void _backToProductList() {
+    _closeLinkedDocument();
+    context.read<StockMovementsService>().clearSelection();
+  }
+
   @override
   Widget build(BuildContext context) {
-    context.watch<StockMovementsService>();
+    final movementsService = context.watch<StockMovementsService>();
     final isRecentMode = _viewMode == StockMovementsViewMode.recent;
+    final isCompact = ResponsiveViewport.usesCompactShell(context);
+    final hasCompactWorkspace = isCompact &&
+        (_selectedLinkedMovement != null ||
+            (!isRecentMode && movementsService.selectedProductId != null));
 
     return MainLayout(
-      child: Column(
-        children: [
-          _buildHeader(),
-          Expanded(
-            child: isRecentMode
-                // Recent mode: full-width movements table
-                ? _buildMovementDetails()
-                // By product mode: split panel layout
-                : Row(
-                    children: [
-                      // Left panel: Product list (resizable)
-                      SizedBox(
-                        width: _productListWidth,
-                        child: _buildProductList(),
-                      ),
-                      // Resizable divider
-                      MouseRegion(
-                        cursor: SystemMouseCursors.resizeColumn,
-                        child: GestureDetector(
-                          onHorizontalDragUpdate: (details) {
-                            _updatePanelWidth(details.delta.dx);
-                          },
-                          child: Container(
-                            width: 8,
-                            color: Colors.transparent,
-                            child: Center(
-                              child: Container(
-                                width: 1,
-                                color: Theme.of(context).dividerColor,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Right panel: Movement details
-                      Expanded(
-                        child: _buildMovementDetails(),
-                      ),
-                    ],
-                  ),
-          ),
-        ],
+      child: PopScope(
+        canPop: !hasCompactWorkspace,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop || !hasCompactWorkspace) return;
+          if (_selectedLinkedMovement != null) {
+            _closeLinkedDocument();
+          } else {
+            _backToProductList();
+          }
+        },
+        child: StockMovementsResponsiveFrame(
+          isRecentMode: isRecentMode,
+          hasSelectedProduct: movementsService.selectedProductId != null,
+          desktopHeader: _buildHeader(),
+          recentBody: _buildMovementDetails(),
+          productList: _buildProductList(),
+          productDetail: _buildMovementDetails(),
+          onSelectRecentMode: _selectRecentMode,
+          onSelectProductMode: _selectProductMode,
+          onBackToProducts: _backToProductList,
+          desktopProductListWidth: _productListWidth,
+          onDesktopPanelResize: _updatePanelWidth,
+        ),
       ),
     );
   }
 
   Widget _buildHeader() {
-    final movementsService = context.watch<StockMovementsService>();
     final isRecentMode = _viewMode == StockMovementsViewMode.recent;
 
     return Container(
@@ -457,23 +461,13 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                   icon: Icons.history,
                   label: 'Últimos',
                   isSelected: isRecentMode,
-                  onTap: () {
-                    _closeLinkedDocument();
-                    setState(() => _viewMode = StockMovementsViewMode.recent);
-                    movementsService.setViewMode('recent');
-                  },
+                  onTap: _selectRecentMode,
                 ),
                 _buildViewModeButton(
                   icon: Icons.inventory_2,
                   label: 'Por Producto',
                   isSelected: !isRecentMode,
-                  onTap: () {
-                    _closeLinkedDocument();
-                    setState(
-                        () => _viewMode = StockMovementsViewMode.byProduct);
-                    movementsService.setViewMode('by_product');
-                    _ensureInitialProductPreview();
-                  },
+                  onTap: _selectProductMode,
                 ),
               ],
             ),
@@ -496,32 +490,43 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    return InkWell(
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: 'Vista $label',
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.blue : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: isSelected ? Colors.white : Colors.grey[700],
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: isSelected ? Colors.blue : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
             ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.white : Colors.grey[700],
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: isSelected ? Colors.white : Colors.grey[700],
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.grey[700],
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -630,116 +635,125 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     final isSelected = movementsService.selectedProductId == product.id;
     final theme = Theme.of(context);
     final thumbnailUrl = product.imageUrlOptimized ?? product.imageUrl;
+    void selectProduct() {
+      _closeLinkedDocument();
+      context.read<StockMovementsService>().loadMovementsForProduct(product.id);
+    }
 
-    return Material(
-      color: isSelected
-          ? theme.colorScheme.primary.withValues(alpha: 0.06)
-          : Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          _closeLinkedDocument();
-          context
-              .read<StockMovementsService>()
-              .loadMovementsForProduct(product.id);
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color:
-                    isSelected ? theme.colorScheme.primary : Colors.transparent,
-                width: 3,
-              ),
-              bottom: BorderSide(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.18),
-              ),
-            ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: SizedBox(
-                  width: 52,
-                  height: 52,
-                  child: thumbnailUrl != null && thumbnailUrl.isNotEmpty
-                      ? ImageService.buildProductImage(
-                          imageUrl: thumbnailUrl,
-                          size: 52,
-                          isListThumbnail: true,
-                        )
-                      : Container(
-                          color: theme.colorScheme.surfaceContainerHighest,
-                          alignment: Alignment.center,
-                          child: Icon(
-                            Icons.inventory_2_outlined,
-                            size: 20,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label:
+          'Ver movimientos de ${product.name}, stock ${product.stockQuantity}',
+      onTap: selectProduct,
+      excludeSemantics: true,
+      child: Material(
+        color: isSelected
+            ? theme.colorScheme.primary.withValues(alpha: 0.06)
+            : Colors.transparent,
+        child: InkWell(
+          onTap: selectProduct,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(
+                  color: isSelected
+                      ? theme.colorScheme.primary
+                      : Colors.transparent,
+                  width: 3,
+                ),
+                bottom: BorderSide(
+                  color:
+                      theme.colorScheme.outlineVariant.withValues(alpha: 0.18),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    width: 52,
+                    height: 52,
+                    child: thumbnailUrl != null && thumbnailUrl.isNotEmpty
+                        ? ImageService.buildProductImage(
+                            imageUrl: thumbnailUrl,
+                            size: 52,
+                            isListThumbnail: true,
+                          )
+                        : Container(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            alignment: Alignment.center,
+                            child: Icon(
+                              Icons.inventory_2_outlined,
+                              size: 20,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        product.name,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.w600,
+                          height: 1.25,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        product.sku,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      product.name,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w600,
-                        height: 1.25,
+                      'Stock',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 2),
                     Text(
-                      product.sku,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+                      product.stockQuantity.toString(),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurface,
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Stock',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    product.stockQuantity.toString(),
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 12),
-              Icon(
-                Icons.chevron_right,
-                size: 18,
-                color: isSelected
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurfaceVariant,
-              ),
-            ],
+                const SizedBox(width: 12),
+                Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: isSelected
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -875,6 +889,93 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     required int movementCount,
   }) {
     final thumbnailUrl = product.imageUrlOptimized ?? product.imageUrl;
+    final isCompact = ResponsiveViewport.usesCompactShell(context);
+
+    if (isCompact) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          border: Border(
+            bottom: BorderSide(
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: thumbnailUrl != null && thumbnailUrl.isNotEmpty
+                    ? ImageService.buildProductImage(
+                        imageUrl: thumbnailUrl,
+                        size: 48,
+                        isListThumbnail: true,
+                      )
+                    : Container(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.inventory_2_outlined,
+                          size: 20,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    product.sku,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${product.stockQuantity} stock',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$movementCount mov.',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       width: double.infinity,
@@ -1086,7 +1187,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth > 600;
+        final isWide = !ResponsiveViewport.usesCompactShell(context);
 
         if (isWide) {
           final tableWidth = _totalTableWidth > constraints.maxWidth
@@ -1136,48 +1237,69 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     String? subtitle,
     required Widget child,
   }) {
+    final isCompact = ResponsiveViewport.usesCompactShell(context);
+    final backButton = OutlinedButton.icon(
+      onPressed: _closeLinkedDocument,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 48),
+      ),
+      icon: const Icon(Icons.arrow_back, size: 18),
+      label: const Text('Volver a movimientos'),
+    );
+    final hasHeading = (title != null && title.isNotEmpty) ||
+        (subtitle != null && subtitle.isNotEmpty);
+    final heading = hasHeading
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (title != null && title.isNotEmpty)
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              if (subtitle != null && subtitle.isNotEmpty)
+                Text(
+                  subtitle,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+            ],
+          )
+        : null;
+
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: EdgeInsets.symmetric(
+            horizontal: isCompact ? 12 : 16,
+            vertical: isCompact ? 8 : 12,
+          ),
           decoration: BoxDecoration(
             color: Colors.grey[50],
             border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
           ),
-          child: Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: _closeLinkedDocument,
-                icon: const Icon(Icons.arrow_back, size: 16),
-                label: const Text('Volver a movimientos'),
-              ),
-              if ((title != null && title.isNotEmpty) ||
-                  (subtitle != null && subtitle.isNotEmpty)) ...[
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (title != null && title.isNotEmpty)
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      if (subtitle != null && subtitle.isNotEmpty)
-                        Text(
-                          subtitle,
-                          style:
-                              TextStyle(fontSize: 12, color: Colors.grey[600]),
-                        ),
+          child: isCompact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    backButton,
+                    if (heading != null) ...[
+                      const SizedBox(height: 8),
+                      heading,
                     ],
-                  ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    backButton,
+                    if (heading != null) ...[
+                      const SizedBox(width: 12),
+                      Expanded(child: heading),
+                    ],
+                  ],
                 ),
-              ],
-            ],
-          ),
         ),
         if (_selectedLinkedMovement != null)
           _buildMovementAuditPanel(_selectedLinkedMovement!),
@@ -2512,6 +2634,95 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   }
 
   Widget _buildMovementFilters(StockMovementsService service) {
+    if (ResponsiveViewport.usesCompactShell(context)) {
+      final hasDateRange = _startDate != null && _endDate != null;
+      final compactDateLabel = hasDateRange
+          ? '${DateFormat('dd/MM').format(_startDate!)}–'
+              '${DateFormat('dd/MM').format(_endDate!)}'
+          : 'Fechas';
+
+      return Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 5,
+              child: SizedBox(
+                height: 48,
+                child: DropdownButtonFormField<String>(
+                  initialValue: _movementTypeFilter,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Tipo',
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'all', child: Text('Todos')),
+                    DropdownMenuItem(value: 'purchase', child: Text('Compras')),
+                    DropdownMenuItem(value: 'sale', child: Text('Ventas')),
+                    DropdownMenuItem(
+                        value: 'adjustment', child: Text('Ajustes')),
+                    DropdownMenuItem(
+                      value: 'transfer',
+                      child: Text('Transferencias'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() => _movementTypeFilter = value ?? 'all');
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 4,
+              child: Semantics(
+                button: true,
+                label: hasDateRange
+                    ? 'Cambiar rango de fechas, $compactDateLabel'
+                    : 'Elegir rango de fechas',
+                child: OutlinedButton(
+                  onPressed: _selectDateRange,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    foregroundColor: hasDateRange ? Colors.blue[800] : null,
+                    backgroundColor: hasDateRange
+                        ? Colors.blue.withValues(alpha: 0.07)
+                        : null,
+                  ),
+                  child: Text(
+                    compactDateLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ),
+            if (_hasActiveMovementFilters) ...[
+              const SizedBox(width: 4),
+              SizedBox(
+                width: 48,
+                height: 48,
+                child: IconButton(
+                  onPressed: _clearAllMovementFilters,
+                  icon: const Icon(Icons.filter_alt_off, size: 20),
+                  tooltip: 'Quitar todos los filtros',
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2582,6 +2793,99 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
 
   Widget _buildMovementSummary(List<StockMovement> movements) {
     final summary = _buildFilteredSummary(movements);
+
+    if (ResponsiveViewport.usesCompactShell(context)) {
+      final netChange = summary['net_change'] ?? 0;
+      final metrics = <({String label, String value, Color color})>[
+        (
+          label: _hasActiveMovementFilters ? 'Resultados' : 'Movimientos',
+          value: summary['transaction_count'].toString(),
+          color: Colors.blue[800]!,
+        ),
+        (
+          label: 'Entradas',
+          value: '+${summary['total_increase']}',
+          color: Colors.green[800]!,
+        ),
+        (
+          label: 'Salidas',
+          value: '-${summary['total_decrease']}',
+          color: Colors.red[800]!,
+        ),
+        (
+          label: 'Neto',
+          value: netChange >= 0 ? '+$netChange' : '$netChange',
+          color: netChange >= 0 ? Colors.green[800]! : Colors.red[800]!,
+        ),
+        if ((summary['warning_count'] ?? 0) > 0)
+          (
+            label: 'A revisar',
+            value: summary['warning_count'].toString(),
+            color: Colors.orange[800]!,
+          ),
+      ];
+
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.blue.withValues(alpha: 0.04),
+          border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final itemWidth = (constraints.maxWidth - 12) / 2;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 7,
+              children: [
+                for (final metric in metrics)
+                  SizedBox(
+                    width: itemWidth,
+                    child: Semantics(
+                      label: '${metric.label}: ${metric.value}',
+                      excludeSemantics: true,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              metric.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            metric.value,
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelLarge
+                                ?.copyWith(
+                              color: metric.color,
+                              fontWeight: FontWeight.w800,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -3202,30 +3506,16 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
             const SizedBox(height: 8),
             // Stock changes
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 // Reference
                 if (movement.referenceNumber != null ||
                     movement.hasNavigableReference)
-                  InkWell(
-                    onTap: movement.hasNavigableReference
-                        ? () => _navigateToReference(movement)
-                        : null,
-                    child: Text(
-                      movement.referenceDisplay,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: movement.hasNavigableReference
-                            ? Colors.blue
-                            : Colors.grey[700],
-                        decoration: movement.hasNavigableReference
-                            ? TextDecoration.underline
-                            : TextDecoration.none,
-                      ),
-                    ),
+                  Expanded(
+                    child: _buildCompactReferenceAction(movement),
                   )
                 else
-                  const SizedBox(),
+                  const Spacer(),
+                const SizedBox(width: 8),
                 // Stock: before -> change -> after
                 Row(
                   children: [
@@ -3263,6 +3553,15 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     );
   }
 
+  Widget _buildCompactReferenceAction(StockMovement movement) {
+    return StockMovementCompactReferenceAction(
+      label: movement.referenceDisplay,
+      onTap: movement.hasNavigableReference
+          ? () => _navigateToReference(movement)
+          : null,
+    );
+  }
+
   Widget _buildTypeChip(StockMovement movement) {
     Color color;
     switch (movement.category) {
@@ -3280,19 +3579,24 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         break;
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        movement.movementTypeDisplay,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-          color: color,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 148),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Text(
+          movement.movementTypeDisplay,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: color,
+          ),
         ),
       ),
     );

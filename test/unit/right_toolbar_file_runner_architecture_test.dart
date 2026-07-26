@@ -10,6 +10,9 @@ void main() {
     final toolbar = File(
       'lib/shared/widgets/right_toolbar.dart',
     ).readAsStringSync();
+    final presentationCatalog = File(
+      'lib/shared/widgets/toolbar_tool_presentation.dart',
+    ).readAsStringSync();
     final filesPanel = File(
       'lib/modules/storage/widgets/app_files_panel.dart',
     ).readAsStringSync();
@@ -24,8 +27,8 @@ void main() {
     ).readAsStringSync();
 
     expect(service, contains('fileRunner,'));
-    expect(toolbar, contains("return 'Ejecutar archivos';"));
-    expect(toolbar, contains('Icons.play_circle_outline'));
+    expect(presentationCatalog, contains("title: 'Ejecutar archivos'"));
+    expect(presentationCatalog, contains('Icons.play_circle_outline'));
     expect(toolbar, contains('runnerMode: true'));
     expect(
       toolbar,

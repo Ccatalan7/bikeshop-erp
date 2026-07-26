@@ -2437,6 +2437,53 @@ class _ProductWebsiteVisibilityPageState
           ),
         ),
         const SizedBox(height: 8),
+        Text(
+          'Oscurecimiento de la card · '
+          '${(draft.megaMenuCardOverlay * 100).round()}%',
+          style: theme.textTheme.labelMedium,
+        ),
+        Slider(
+          value: draft.megaMenuCardOverlay,
+          min: 0,
+          max: 0.65,
+          divisions: 13,
+          label: '${(draft.megaMenuCardOverlay * 100).round()}%',
+          semanticFormatterCallback: (value) => '${(value * 100).round()}%',
+          onChanged: (value) => _updatePresentationDraft(
+            (current) => current.copyWith(megaMenuCardOverlay: value),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Ancho de portada · '
+          '${draft.megaMenuOverviewWidth.round()} px',
+          style: theme.textTheme.labelMedium,
+        ),
+        Slider(
+          value: draft.megaMenuOverviewWidth,
+          min: WebsiteCatalogPresentation.minMegaMenuOverviewWidth,
+          max: WebsiteCatalogPresentation.maxMegaMenuOverviewWidth,
+          divisions: 14,
+          label: '${draft.megaMenuOverviewWidth.round()} px',
+          semanticFormatterCallback: (value) => '${value.round()} píxeles',
+          onChanged: (value) => _updatePresentationDraft(
+            (current) => current.copyWith(megaMenuOverviewWidth: value),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _buildPresentationDropdown<WebsiteMegaMenuContentAlignment>(
+          theme,
+          label: 'Posición del contenido',
+          value: draft.megaMenuContentAlignment,
+          values: WebsiteMegaMenuContentAlignment.values,
+          labelFor: (value) => value.label,
+          onChanged: (value) => _updatePresentationDraft(
+            (current) => current.copyWith(
+              megaMenuContentAlignment: value,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
         Text('Contenido', style: _presentationSectionStyle(theme)),
         const SizedBox(height: 6),
         SwitchListTile.adaptive(

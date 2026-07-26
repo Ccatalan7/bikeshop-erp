@@ -2,8 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// Centralizes zoom handling - works on all platforms
-/// Desktop: keyboard shortcuts (Cmd/Ctrl +/-), Mobile: manual controls only
+/// Centralizes browser-style zoom for desktop-class app surfaces.
+///
+/// Compact phone/tablet compositions keep an effective scale of 1 so their
+/// touch targets and physical responsive breakpoints are not reduced by a
+/// desktop zoom preference.
 class WindowZoomService extends ChangeNotifier {
   WindowZoomService() {
     _registerGlobalZoomShortcuts();

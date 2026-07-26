@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_erp/modules/website/models/website_catalog_query.dart';
 import 'package:vinabike_erp/modules/website/models/website_destination.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
@@ -190,10 +191,13 @@ void main() {
         'drivetrain': MegaMenuBranchPresentation(
           imageUrl: imageUrl,
           overlay: 0.64,
+          overviewWidth: 330,
+          contentAlignment: WebsiteMegaMenuContentAlignment.center,
         ),
         'chains': MegaMenuBranchPresentation(
           imageUrl: 'https://cdn.example.test/chains-card.webp',
           overlay: 0.58,
+          cardOverlay: 0.30,
         ),
         // A category label is deliberately not a supported projection key.
         'Transmisión': MegaMenuBranchPresentation(
@@ -220,8 +224,14 @@ void main() {
           const ValueKey<String>('mega-menu-branch-overview-drivetrain'),
         ),
       ),
-      const Size(440, 440),
+      const Size(330, 440),
     );
+    final content = tester.widget<Column>(
+      find.byKey(
+        const ValueKey<String>('mega-menu-branch-content-drivetrain'),
+      ),
+    );
+    expect(content.mainAxisAlignment, MainAxisAlignment.center);
     final cardImage = tester.widget<Image>(
       find.byKey(
         const ValueKey<String>('mega-menu-card-image-chains'),
@@ -231,6 +241,12 @@ void main() {
       (cardImage.image as NetworkImage).url,
       'https://cdn.example.test/chains-card.webp',
     );
+    final cardOverlay = tester.widget<ColoredBox>(
+      find.byKey(
+        const ValueKey<String>('mega-menu-card-overlay-chains'),
+      ),
+    );
+    expect(cardOverlay.color.a, closeTo(0.30, 0.001));
 
     final gradientFinder = find.byKey(
       const ValueKey<String>('mega-menu-branch-gradient-drivetrain'),
@@ -447,6 +463,26 @@ void main() {
 
     await mouse.moveTo(tester.getCenter(find.text('RUEDAS')));
     await tester.pump();
+    final wheelsTitleReveal = find.byKey(
+      const ValueKey<String>('mega-menu-branch-reveal-wheels-title'),
+    );
+    expect(wheelsTitleReveal, findsOneWidget);
+    expect(
+      tester.widget<FadeTransition>(wheelsTitleReveal).opacity.value,
+      lessThan(1),
+    );
+    await tester.pump(const Duration(milliseconds: 1300));
+    expect(
+      tester.widget<FadeTransition>(wheelsTitleReveal).opacity.value,
+      closeTo(1, 0.001),
+    );
+    final wheelsTitle = tester.widget<Text>(
+      find.descendant(
+        of: wheelsTitleReveal,
+        matching: find.text('Ruedas'),
+      ),
+    );
+    expect(wheelsTitle.style?.fontSize, 30);
     await tester.pumpAndSettle();
 
     expect(find.text('Aros'), findsOneWidget);
@@ -521,32 +557,32 @@ void main() {
     );
     expect(cassettesCard, findsOneWidget);
     expect(chainsCard, findsOneWidget);
+    expect(find.text('Cassette 10 velocidades'), findsNothing);
     expect(
-      tester
-          .widget<AnimatedOpacity>(
-            find.byKey(
-              const ValueKey<String>('mega-menu-card-hover-cassettes'),
-            ),
-          )
-          .opacity,
-      0,
+      find.byKey(
+        const ValueKey<String>('mega-menu-card-title-cassettes'),
+      ),
+      findsOneWidget,
     );
 
     await mouse.moveTo(tester.getCenter(cassettesCard));
     await tester.pump(const Duration(milliseconds: 180));
-    expect(
-      tester
-          .widget<AnimatedOpacity>(
-            find.byKey(
-              const ValueKey<String>('mega-menu-card-hover-cassettes'),
-            ),
-          )
-          .opacity,
-      1,
+    expect(find.text('Cassette 10 velocidades'), findsNothing);
+
+    final cassettesExplorer = find.byKey(
+      const ValueKey<String>('mega-menu-card-explore-cassettes'),
     );
+    final cardRect = tester.getRect(cassettesCard);
+    final explorerRect = tester.getRect(cassettesExplorer);
+    await mouse.moveTo(Offset(cardRect.left + 8, explorerRect.center.dy));
+    await tester.pump(const Duration(milliseconds: 220));
+    expect(find.text('Cassette 10 velocidades'), findsNothing);
+
+    await mouse.moveTo(tester.getCenter(cassettesExplorer));
+    await tester.pumpAndSettle();
     expect(find.text('Cassette 10 velocidades'), findsOneWidget);
 
-    await tester.tap(cassettesCard);
+    await tester.tap(cassettesExplorer);
     await tester.pumpAndSettle();
 
     expect(
@@ -627,19 +663,24 @@ void main() {
     );
     expect(inclusiveParentDestination, findsOneWidget);
     expect(optionsExplorer, findsOneWidget);
-    expect(find.text('VER CATEGORÍA'), findsOneWidget);
+    expect(find.text('VER SUBCATEGORÍAS'), findsOneWidget);
 
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await mouse.addPointer(location: Offset.zero);
     addTearDown(mouse.removePointer);
     await mouse.moveTo(tester.getCenter(inclusiveParentDestination));
     await tester.pump();
+    expect(find.text('Guías de cadenas'), findsNothing);
     expect(
-      tester.widget<Text>(find.text('VER CATEGORÍA')).style?.color,
+      tester.widget<Text>(find.text('VER SUBCATEGORÍAS')).style?.color,
       PublicStoreTheme.info,
     );
 
-    // The exterior image opens the configured options without navigating.
+    // Only the explicit subcategory action previews and opens the options.
+    await mouse.moveTo(tester.getCenter(optionsExplorer));
+    await tester.pumpAndSettle();
+    expect(find.text('Guías de cadenas'), findsOneWidget);
+
     await tester.tap(optionsExplorer);
     await tester.pumpAndSettle();
 

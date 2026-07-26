@@ -59,6 +59,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
   String? _bikeBrand;
   String? _bikeModel;
   bool _loadingDetails = false;
+  int _detailLoadGeneration = 0;
 
   // Bike details view
   Bike? _selectedBike;
@@ -208,9 +209,13 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
   }
 
   Future<void> _loadJobDetails(MechanicJob job) async {
+    final loadGeneration = ++_detailLoadGeneration;
     setState(() => _loadingDetails = true);
     try {
       final bikeshopService = context.read<BikeshopService>();
+      final customerService = !_useExternalData || widget.customers == null
+          ? context.read<CustomerService>()
+          : null;
 
       // Load job items
       final items = await bikeshopService.getJobItems(job.id!);
@@ -224,8 +229,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
         customerName = customerRel?.name ?? 'Cliente no encontrado';
       } else {
         try {
-          final customerService = context.read<CustomerService>();
-          customerRel = await customerService.getCustomerById(job.customerId);
+          customerRel = await customerService!.getCustomerById(job.customerId);
           customerName = customerRel?.name;
         } catch (e) {
           debugPrint('Error fetching customer: $e');
@@ -286,6 +290,11 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
       // Load fresh job data to get updated invoice_id
       final freshJob = await bikeshopService.getJobById(job.id!);
+      if (!mounted ||
+          loadGeneration != _detailLoadGeneration ||
+          _selectedJob?.id != job.id) {
+        return;
+      }
 
       setState(() {
         if (freshJob != null) {
@@ -301,8 +310,9 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
         _loadingDetails = false;
       });
     } catch (e) {
+      if (!mounted || loadGeneration != _detailLoadGeneration) return;
       setState(() => _loadingDetails = false);
-      if (mounted) {
+      if (_selectedJob?.id == job.id) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al cargar detalles: $e')),
         );
@@ -444,9 +454,21 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
       return const Center(child: BrandedLoading());
     }
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 900) {
+          return _buildCompactCalendar(constraints);
+        }
+        return _buildDesktopCalendar();
+      },
+    );
+  }
+
+  Widget _buildDesktopCalendar() {
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Row(
+        key: const ValueKey('workshop-calendar-desktop-split'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Calendar on the left
@@ -477,6 +499,171 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCompactCalendar(BoxConstraints constraints) {
+    if (_selectedJob != null || _showingBikeDetails) {
+      return _buildCompactDetailWorkspace(constraints);
+    }
+
+    final hasBoundedHeight = constraints.maxHeight.isFinite;
+    final availableHeight = hasBoundedHeight ? constraints.maxHeight : 720.0;
+    final calendarHeight = availableHeight >= 720
+        ? 400.0
+        : (availableHeight * 0.58).clamp(240.0, 360.0).toDouble();
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final calendar = Card(
+      key: const ValueKey('workshop-calendar-compact-month'),
+      margin: EdgeInsets.zero,
+      elevation: 1,
+      color: colorScheme.surfaceContainerLowest,
+      shadowColor: colorScheme.shadow.withValues(alpha: 0.12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          children: [
+            _buildCompactMonthHeader(),
+            const SizedBox(height: 10),
+            Expanded(child: _buildCalendarGrid(compact: true)),
+          ],
+        ),
+      ),
+    );
+
+    final agenda = Card(
+      key: const ValueKey('workshop-calendar-compact-agenda'),
+      margin: EdgeInsets.zero,
+      elevation: 1,
+      color: colorScheme.surfaceContainerLowest,
+      shadowColor: colorScheme.shadow.withValues(alpha: 0.12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: _buildJobsList(compact: true),
+      ),
+    );
+
+    final content = Column(
+      key: const ValueKey('workshop-calendar-compact-stack'),
+      children: [
+        SizedBox(height: calendarHeight, child: calendar),
+        const SizedBox(height: 12),
+        if (hasBoundedHeight)
+          Expanded(child: agenda)
+        else
+          SizedBox(height: 360, child: agenda),
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+      child: hasBoundedHeight
+          ? content
+          : SingleChildScrollView(
+              child: SizedBox(
+                height: calendarHeight + 372,
+                child: content,
+              ),
+            ),
+    );
+  }
+
+  Widget _buildCompactDetailWorkspace(BoxConstraints constraints) {
+    final hasBoundedHeight = constraints.maxHeight.isFinite;
+    final colorScheme = Theme.of(context).colorScheme;
+    final workspace = Card(
+      key: const ValueKey('workshop-calendar-compact-detail-workspace'),
+      margin: EdgeInsets.zero,
+      elevation: 1,
+      clipBehavior: Clip.antiAlias,
+      color: colorScheme.surfaceContainerLowest,
+      shadowColor: colorScheme.shadow.withValues(alpha: 0.12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+        child: _buildJobsList(compact: true),
+      ),
+    );
+
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.only(bottom: 4),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+        child: hasBoundedHeight
+            ? workspace
+            : SizedBox(height: 720, child: workspace),
+      ),
+    );
+  }
+
+  Widget _buildCompactMonthHeader() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final month = DateFormat('MMMM yyyy', 'es').format(_focusedMonth);
+    final monthLabel = '${month[0].toUpperCase()}${month.substring(1)}';
+
+    return Material(
+      color: colorScheme.surfaceContainer,
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        height: 48,
+        child: Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.chevron_left),
+              color: colorScheme.onSurfaceVariant,
+              tooltip: 'Mes anterior',
+              onPressed: () {
+                setState(() {
+                  _focusedMonth =
+                      DateTime(_focusedMonth.year, _focusedMonth.month - 1);
+                });
+              },
+            ),
+            Expanded(
+              child: Text(
+                monthLabel,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: colorScheme.onSurface,
+                    ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.chevron_right),
+              color: colorScheme.onSurfaceVariant,
+              tooltip: 'Mes siguiente',
+              onPressed: () {
+                setState(() {
+                  _focusedMonth =
+                      DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+                });
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -521,7 +708,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     );
   }
 
-  Widget _buildCalendarGrid() {
+  Widget _buildCalendarGrid({bool compact = false}) {
     final firstDayOfMonth =
         DateTime(_focusedMonth.year, _focusedMonth.month, 1);
     final lastDayOfMonth =
@@ -577,14 +764,19 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
                     return Expanded(
                       child: InkWell(
+                        key: ValueKey(
+                          'workshop-calendar-day-'
+                          '${DateFormat('yyyy-MM-dd').format(date)}',
+                        ),
                         onTap: () {
                           setState(() {
                             _selectedDate = date;
                             _selectedJob = null;
+                            _detailLoadGeneration++;
                           });
                         },
                         child: Container(
-                          margin: const EdgeInsets.all(2),
+                          margin: EdgeInsets.all(compact ? 1 : 2),
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? Theme.of(context)
@@ -606,11 +798,11 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Padding(
-                                padding: const EdgeInsets.all(4),
+                                padding: EdgeInsets.all(compact ? 2 : 4),
                                 child: Text(
                                   '$dayNumber',
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: compact ? 11 : 12,
                                     fontWeight: isToday
                                         ? FontWeight.bold
                                         : FontWeight.normal,
@@ -623,7 +815,9 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                                 ),
                               ),
                               // Jobs on this day
-                              if (jobsOnDay.isNotEmpty)
+                              if (compact && jobsOnDay.isNotEmpty)
+                                _buildCompactDayLoad(jobsOnDay)
+                              else if (jobsOnDay.isNotEmpty)
                                 Expanded(
                                   child: ListView.builder(
                                     padding: const EdgeInsets.symmetric(
@@ -708,65 +902,62 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     );
   }
 
-  Widget _buildJobsList() {
+  Widget _buildCompactDayLoad(List<MechanicJob> jobs) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 5,
+            height: 5,
+            decoration: BoxDecoration(
+              color: _getJobColor(jobs.first),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              '${jobs.length}',
+              maxLines: 1,
+              overflow: TextOverflow.clip,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontSize: 9,
+                    height: 1,
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildJobsList({bool compact = false}) {
     final jobsForDate = _getJobsForSelectedDate();
     final dateFormat = DateFormat('EEEE, d MMMM yyyy', 'es');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            if (_selectedJob != null || _showingBikeDetails)
-              IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () {
-                  setState(() {
-                    if (_showingBikeDetails) {
-                      _showingBikeDetails = false;
-                    } else {
-                      _selectedJob = null;
-                    }
-                  });
-                },
-                tooltip: _showingBikeDetails
-                    ? 'Volver a el trabajo'
-                    : 'Volver a la lista',
-              ),
-            Expanded(
-              child: Text(
-                _showingBikeDetails
-                    ? 'Detalles de la Bicicleta'
-                    : _selectedJob != null
-                        ? 'Detalles del Trabajo'
-                        : dateFormat.format(_selectedDate),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-            ),
-            if (_showingBikeDetails && !_editingBike)
-              IconButton(
-                icon: const Icon(Icons.edit),
-                onPressed: () {
-                  _populateBikeControllers();
-                  setState(() => _editingBike = true);
-                },
-                tooltip: 'Editar bicicleta',
-              ),
-            if (_showingBikeDetails && _editingBike)
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => setState(() => _editingBike = false),
-                tooltip: 'Cancelar edición',
-              ),
-          ],
-        ),
+        if (compact)
+          _buildCompactJobsHeader(dateFormat)
+        else
+          _buildDesktopJobsHeader(dateFormat),
         const SizedBox(height: 16),
         if (_showingBikeDetails && _selectedBike != null)
           Expanded(child: _buildBikeDetails(_selectedBike!))
         else if (_selectedJob != null)
-          Expanded(child: _buildJobDetails(_selectedJob!))
+          Expanded(
+            child: _buildJobDetails(
+              _selectedJob!,
+              compact: compact,
+            ),
+          )
         else if (jobsForDate.isEmpty)
           Expanded(
             child: Center(
@@ -775,15 +966,18 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                 children: [
                   Icon(
                     Icons.event_busy,
-                    size: 64,
+                    size: compact ? 36 : 64,
                     color: Theme.of(context)
                         .colorScheme
                         .onSurface
                         .withValues(alpha: 0.3),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: compact ? 8 : 16),
                   Text(
                     'No hay trabajos programados',
+                    textAlign: TextAlign.center,
+                    maxLines: compact ? 2 : null,
+                    overflow: compact ? TextOverflow.ellipsis : null,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: Theme.of(context)
                               .colorScheme
@@ -805,6 +999,142 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                 return _buildJobCard(job);
               },
             ),
+          ),
+      ],
+    );
+  }
+
+  void _returnFromCalendarDetail() {
+    setState(() {
+      if (_showingBikeDetails) {
+        _showingBikeDetails = false;
+        _editingBike = false;
+      } else {
+        _selectedJob = null;
+        _detailLoadGeneration++;
+      }
+    });
+  }
+
+  Widget _buildCompactJobsHeader(DateFormat dateFormat) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final hasDetail = _selectedJob != null || _showingBikeDetails;
+    final jobNumber = _selectedJob?.jobNumber;
+    final title = _showingBikeDetails
+        ? (_selectedBike?.displayName ?? 'Bicicleta')
+        : _selectedJob != null
+            ? (jobNumber == null ? 'Trabajo' : 'Trabajo $jobNumber')
+            : dateFormat.format(_selectedDate);
+    final subtitle = _showingBikeDetails
+        ? (jobNumber == null
+            ? 'Detalle de bicicleta'
+            : 'Bicicleta · $jobNumber')
+        : _selectedJob != null
+            ? DateFormat('d MMM yyyy', 'es').format(_selectedDate)
+            : null;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: Row(
+        children: [
+          if (hasDetail)
+            SizedBox.square(
+              dimension: 48,
+              child: IconButton(
+                key: const ValueKey('workshop-calendar-compact-back'),
+                icon: const Icon(Icons.arrow_back),
+                color: colorScheme.onSurfaceVariant,
+                onPressed: _returnFromCalendarDetail,
+                tooltip: _showingBikeDetails
+                    ? 'Volver al trabajo'
+                    : 'Volver al calendario',
+              ),
+            ),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  key: const ValueKey(
+                    'workshop-calendar-compact-workspace-title',
+                  ),
+                  maxLines: hasDetail ? 1 : 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+              ],
+            ),
+          ),
+          if (_showingBikeDetails)
+            SizedBox.square(
+              dimension: 48,
+              child: IconButton(
+                icon: Icon(_editingBike ? Icons.close : Icons.edit),
+                onPressed: () {
+                  if (_editingBike) {
+                    setState(() => _editingBike = false);
+                  } else {
+                    _populateBikeControllers();
+                    setState(() => _editingBike = true);
+                  }
+                },
+                tooltip: _editingBike ? 'Cancelar edición' : 'Editar bicicleta',
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopJobsHeader(DateFormat dateFormat) {
+    return Row(
+      children: [
+        if (_selectedJob != null || _showingBikeDetails)
+          IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _returnFromCalendarDetail,
+            tooltip:
+                _showingBikeDetails ? 'Volver al trabajo' : 'Volver a la lista',
+          ),
+        Expanded(
+          child: Text(
+            _showingBikeDetails
+                ? 'Detalles de la Bicicleta'
+                : _selectedJob != null
+                    ? 'Detalles del Trabajo'
+                    : dateFormat.format(_selectedDate),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+        ),
+        if (_showingBikeDetails && !_editingBike)
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: () {
+              _populateBikeControllers();
+              setState(() => _editingBike = true);
+            },
+            tooltip: 'Editar bicicleta',
+          ),
+        if (_showingBikeDetails && _editingBike)
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => setState(() => _editingBike = false),
+            tooltip: 'Cancelar edición',
           ),
       ],
     );
@@ -952,11 +1282,15 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
           color: color,
         ),
         const SizedBox(width: 4),
-        Text(
-          '$label: ${DateFormat('dd/MM HH:mm').format(date)}',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: color,
-            fontWeight: fontWeight,
+        Expanded(
+          child: Text(
+            '$label: ${DateFormat('dd/MM HH:mm').format(date)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: color,
+              fontWeight: fontWeight,
+            ),
           ),
         ),
         if (isHighlighted) ...[
@@ -967,7 +1301,10 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     );
   }
 
-  Widget _buildJobDetails(MechanicJob job) {
+  Widget _buildJobDetails(
+    MechanicJob job, {
+    bool compact = false,
+  }) {
     // Determine initial index based on what we want to focus on
     // Default to details (0)
     return DefaultTabController(
@@ -975,7 +1312,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
       child: Column(
         children: [
           // SMART HEADER (Always visible)
-          _buildSmartHeader(job),
+          _buildSmartHeader(job, compact: compact),
 
           // TABS
           TabBar(
@@ -1003,7 +1340,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
           Expanded(
             child: TabBarView(
               children: [
-                _buildInfoTab(job),
+                _buildInfoTab(job, compact: compact),
                 _buildTasksTab(job),
                 job.isQuotationWorkflow
                     ? _buildProposalSummaryTab(job)
@@ -1016,7 +1353,10 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     );
   }
 
-  Widget _buildSmartHeader(MechanicJob job) {
+  Widget _buildSmartHeader(
+    MechanicJob job, {
+    bool compact = false,
+  }) {
     final statusColor = _getJobColor(job);
     final statusText = _getJobStatusText(job);
     final proposalStatusColor = _getProposalStatusColor(job);
@@ -1091,6 +1431,20 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                     code: 'ENTREGADO',
                     id: ''));
       }
+    }
+
+    if (compact) {
+      return _buildCompactSmartHeader(
+        job: job,
+        statusColor: statusColor,
+        statusText: statusText,
+        proposalStatusColor: proposalStatusColor,
+        serviceWarrantyText: serviceWarrantyText,
+        actionLabel: actionLabel,
+        actionIcon: actionIcon,
+        actionColor: actionColor,
+        onAction: onAction,
+      );
     }
 
     return Container(
@@ -1294,6 +1648,207 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     );
   }
 
+  Widget _buildCompactSmartHeader({
+    required MechanicJob job,
+    required Color statusColor,
+    required String statusText,
+    required Color proposalStatusColor,
+    required String? serviceWarrantyText,
+    required String actionLabel,
+    required IconData actionIcon,
+    required Color actionColor,
+    required VoidCallback? onAction,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final statusLabel = statusText.toUpperCase();
+    final statusContent = Container(
+      constraints: const BoxConstraints(minHeight: 48),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: statusColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: statusColor.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: statusColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              statusLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: statusColor,
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+              ),
+            ),
+          ),
+          if (!job.isStandaloneQuotation) ...[
+            const SizedBox(width: 4),
+            Icon(Icons.arrow_drop_down, size: 18, color: statusColor),
+          ],
+        ],
+      ),
+    );
+
+    final statusControl = job.isStandaloneQuotation
+        ? statusContent
+        : PopupMenuButton<JobStatusCustom>(
+            key: const ValueKey('workshop-calendar-compact-status'),
+            tooltip: 'Cambiar estado',
+            onSelected: (newStatus) => _changeJobStatus(job, newStatus),
+            itemBuilder: (ctx) {
+              final jobStatusService = ctx.read<JobStatusService>();
+              return jobStatusService.statuses.map((status) {
+                final isSelected = job.statusId == status.id;
+                return PopupMenuItem<JobStatusCustom>(
+                  value: status,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: status.colorValue,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          status.name,
+                          style: TextStyle(
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: isSelected ? status.colorValue : null,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList();
+            },
+            child: statusContent,
+          );
+
+    return Container(
+      key: const ValueKey('workshop-calendar-compact-job-header'),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: statusColor.withValues(alpha: 0.06),
+        border: Border(
+          bottom: BorderSide(
+            color: statusColor.withValues(alpha: 0.25),
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: statusControl),
+              const SizedBox(width: 10),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 120),
+                child: Text(
+                  job.jobNumber ?? 'Sin #',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          if (job.isServiceBudget ||
+              serviceWarrantyText != null ||
+              (!job.isStandaloneQuotation && job.statusUpdatedAt != null)) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (job.isServiceBudget)
+                  Text(
+                    job.proposalStatusDisplayName,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: proposalStatusColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                if (serviceWarrantyText != null)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.shield_outlined,
+                        size: 14,
+                        color: Color(0xFF047857),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        serviceWarrantyText,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: const Color(0xFF047857),
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ],
+                  ),
+                if (!job.isStandaloneQuotation && job.statusUpdatedAt != null)
+                  Text(
+                    _formatStatusTimestamp(job.statusUpdatedAt!),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+              ],
+            ),
+          ],
+          if (actionLabel.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: onAction,
+                icon: Icon(actionIcon, size: 18),
+                label: Text(
+                  actionLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: actionColor,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   String? _serviceWarrantyText(MechanicJob job) {
     final warranty = job.serviceWarranty;
     if (warranty == null || warranty.state == ServiceWarrantyState.notStarted) {
@@ -1319,9 +1874,17 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     }
   }
 
-  Widget _buildInfoTab(MechanicJob job) {
+  Widget _buildInfoTab(
+    MechanicJob job, {
+    bool compact = false,
+  }) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 4 : 16,
+        compact ? 12 : 16,
+        compact ? 4 : 16,
+        16,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1476,142 +2039,152 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
           const SizedBox(height: 24),
 
-          // Deadlines Row
-          Row(
-            children: [
-              Expanded(
-                child: InkWell(
+          if (compact)
+            Column(
+              children: [
+                _buildCompactDeadlineAction(
+                  key: const ValueKey(
+                    'workshop-calendar-compact-diagnostic-deadline',
+                  ),
+                  icon: Icons.search,
+                  label: 'Diagnóstico',
+                  date: job.diagnosticDeadline,
+                  color: Colors.blue.shade700,
                   onTap: () => _editDeadline(job, isDiagnostic: true),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('DIAGNÓSTICO',
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey.shade600)),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.search,
-                              size: 16, color: Colors.blue.shade700),
-                          const SizedBox(width: 4),
-                          Text(
-                            job.diagnosticDeadline != null
-                                ? DateFormat('dd/MM HH:mm')
-                                    .format(job.diagnosticDeadline!)
-                                : 'Sin fecha',
-                            style: TextStyle(
-                                color: Colors.blue.shade700,
-                                fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
                 ),
-              ),
-              Expanded(
-                child: InkWell(
+                const SizedBox(height: 8),
+                _buildCompactDeadlineAction(
+                  key: const ValueKey(
+                    'workshop-calendar-compact-delivery-deadline',
+                  ),
+                  icon: Icons.local_shipping_outlined,
+                  label: 'Entrega',
+                  date: job.deliveryDeadline,
+                  color: Colors.red.shade700,
                   onTap: () => _editDeadline(job, isDiagnostic: false),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('ENTREGA',
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey.shade600)),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.local_shipping_outlined,
-                              size: 16, color: Colors.red.shade700),
-                          const SizedBox(width: 4),
-                          Text(
-                            job.deliveryDeadline != null
-                                ? DateFormat('dd/MM HH:mm')
-                                    .format(job.deliveryDeadline!)
-                                : 'Sin fecha',
+                ),
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _editDeadline(job, isDiagnostic: true),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('DIAGNÓSTICO',
                             style: TextStyle(
-                                color: Colors.red.shade700,
-                                fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ],
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey.shade600)),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.search,
+                                size: 16, color: Colors.blue.shade700),
+                            const SizedBox(width: 4),
+                            Text(
+                              job.diagnosticDeadline != null
+                                  ? DateFormat('dd/MM HH:mm')
+                                      .format(job.diagnosticDeadline!)
+                                  : 'Sin fecha',
+                              style: TextStyle(
+                                  color: Colors.blue.shade700,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _editDeadline(job, isDiagnostic: false),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('ENTREGA',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey.shade600)),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.local_shipping_outlined,
+                                size: 16, color: Colors.red.shade700),
+                            const SizedBox(width: 4),
+                            Text(
+                              job.deliveryDeadline != null
+                                  ? DateFormat('dd/MM HH:mm')
+                                      .format(job.deliveryDeadline!)
+                                  : 'Sin fecha',
+                              style: TextStyle(
+                                  color: Colors.red.shade700,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
 
           const Divider(height: 32),
 
           // Request & Notes
           // SMART EDITOR for Request, Diagnosis, Work, Notes
-          SmartJobDetailsEditor(
-            isInline: true,
-            readOnly: job.hasFinalProposalDecision,
-            job: job,
-            invoice:
-                null, // Calendar doesn't load full invoice usually, or we can fetch it if needed
-            customerName: _customerName,
-            bikeName: job.isComponentIntake
-                ? (job.subjectDisplayName ?? 'Componente recibido')
-                : '${_bikeBrand ?? ''} ${_bikeModel ?? ''}'.trim(),
-            clientRequest: job.clientRequest,
-            diagnosis: job.diagnosis,
-            workPerformed: job.workPerformed,
-            notes: job.notes,
-            onSave: ({clientRequest, diagnosis, workPerformed, notes}) async {
-              try {
-                // Create updated job copy
-                final updatedJob = job.copyWith(
+          if (compact)
+            _CompactJobDetailsEditor(
+              key: ValueKey('workshop-calendar-compact-editor-${job.id}'),
+              job: job,
+              readOnly: job.hasFinalProposalDecision,
+              onSave: ({clientRequest, diagnosis, workPerformed, notes}) async {
+                final saved = await _saveJobDetailFields(
+                  job,
                   clientRequest: clientRequest,
                   diagnosis: diagnosis,
                   workPerformed: workPerformed,
                   notes: notes,
                 );
-
-                // Update via service
-                await context.read<BikeshopService>().updateJob(updatedJob);
-
-                // Update local state if needed (usually provider handles it, but for safety)
-                setState(() {
-                  _selectedJob = updatedJob;
-                  // Update internal list if using internal data
-                  if (!_useExternalData) {
-                    final index =
-                        _internalJobs.indexWhere((j) => j.id == job.id);
-                    if (index != -1) {
-                      _internalJobs[index] = updatedJob;
-                    }
-                  }
-                });
-
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Cambios guardados'),
-                      backgroundColor: Colors.green,
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
+                if (saved && mounted) {
+                  _returnFromCalendarDetail();
                 }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                        content: Text('Error al guardar: $e'),
-                        backgroundColor: Colors.red),
-                  );
-                }
-              }
-            },
-          ),
+                return saved;
+              },
+            )
+          else
+            SmartJobDetailsEditor(
+              isInline: true,
+              readOnly: job.hasFinalProposalDecision,
+              job: job,
+              invoice:
+                  null, // Calendar doesn't load full invoice usually, or we can fetch it if needed
+              customerName: _customerName,
+              bikeName: job.isComponentIntake
+                  ? (job.subjectDisplayName ?? 'Componente recibido')
+                  : '${_bikeBrand ?? ''} ${_bikeModel ?? ''}'.trim(),
+              clientRequest: job.clientRequest,
+              diagnosis: job.diagnosis,
+              workPerformed: job.workPerformed,
+              notes: job.notes,
+              onSave: ({clientRequest, diagnosis, workPerformed, notes}) async {
+                await _saveJobDetailFields(
+                  job,
+                  clientRequest: clientRequest,
+                  diagnosis: diagnosis,
+                  workPerformed: workPerformed,
+                  notes: notes,
+                );
+              },
+            ),
 
-          const SizedBox(height: 100), // Bottom padding for scrolling
+          SizedBox(height: compact ? 24 : 100),
 
           // Items Section (ReadOnly Summary)
           if (_selectedJobItems.isNotEmpty) ...[
@@ -1622,12 +2195,16 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                 Icon(Icons.shopping_cart,
                     size: 16, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(width: 8),
-                Text(
-                  'Repuestos y Servicios (Resumen)',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold, fontSize: 12),
+                Expanded(
+                  child: Text(
+                    'Repuestos y Servicios (Resumen)',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
                 ),
               ],
             ),
@@ -1684,6 +2261,115 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
         ],
       ),
     );
+  }
+
+  Widget _buildCompactDeadlineAction({
+    required Key key,
+    required IconData icon,
+    required String label,
+    required DateTime? date,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    final formattedDate =
+        date == null ? 'Sin fecha' : DateFormat('dd/MM HH:mm').format(date);
+
+    return Material(
+      color: color.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        key: key,
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                Icon(icon, size: 18, color: color),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: color,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    formattedDate,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: color,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.edit_calendar_outlined, size: 18, color: color),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _saveJobDetailFields(
+    MechanicJob job, {
+    String? clientRequest,
+    String? diagnosis,
+    String? workPerformed,
+    String? notes,
+  }) async {
+    try {
+      final updatedJob = job.copyWith(
+        clientRequest: clientRequest,
+        diagnosis: diagnosis,
+        workPerformed: workPerformed,
+        notes: notes,
+      );
+
+      await context.read<BikeshopService>().updateJob(updatedJob);
+      if (!mounted) return false;
+
+      setState(() {
+        _selectedJob = updatedJob;
+        if (!_useExternalData) {
+          final index = _internalJobs.indexWhere((item) => item.id == job.id);
+          if (index != -1) {
+            _internalJobs[index] = updatedJob;
+          }
+        }
+      });
+      widget.onRefreshNeeded?.call();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cambios guardados'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 1),
+        ),
+      );
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al guardar: $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return false;
+    }
   }
 
   // Placeholder for Tasks Tab - we need to import TasksTabView
@@ -1809,12 +2495,14 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
       locale: const Locale('es', 'CL'),
     );
     if (selectedDate == null) return;
+    if (!mounted) return;
 
     final selectedTime = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(currentDeadline ?? DateTime.now()),
     );
     if (selectedTime == null) return;
+    if (!mounted) return;
 
     final newDeadline = DateTime(
       selectedDate.year,
@@ -2402,6 +3090,256 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
         );
       }
     }
+  }
+}
+
+enum _CompactJobDetailField {
+  request,
+  diagnosis,
+  work,
+  notes,
+}
+
+class _CompactJobDetailsEditor extends StatefulWidget {
+  const _CompactJobDetailsEditor({
+    super.key,
+    required this.job,
+    required this.readOnly,
+    required this.onSave,
+  });
+
+  final MechanicJob job;
+  final bool readOnly;
+  final Future<bool> Function({
+    String? clientRequest,
+    String? diagnosis,
+    String? workPerformed,
+    String? notes,
+  }) onSave;
+
+  @override
+  State<_CompactJobDetailsEditor> createState() =>
+      _CompactJobDetailsEditorState();
+}
+
+class _CompactJobDetailsEditorState extends State<_CompactJobDetailsEditor> {
+  final TextEditingController _controller = TextEditingController();
+  late Map<_CompactJobDetailField, String> _values;
+  late Map<_CompactJobDetailField, String> _originalValues;
+  _CompactJobDetailField _selectedField = _CompactJobDetailField.request;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _resetFromJob();
+  }
+
+  @override
+  void didUpdateWidget(_CompactJobDetailsEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.job.id != widget.job.id) {
+      _selectedField = _CompactJobDetailField.request;
+      _resetFromJob();
+    }
+  }
+
+  void _resetFromJob() {
+    _values = <_CompactJobDetailField, String>{
+      _CompactJobDetailField.request: widget.job.clientRequest ?? '',
+      _CompactJobDetailField.diagnosis: widget.job.diagnosis ?? '',
+      _CompactJobDetailField.work: widget.job.workPerformed ?? '',
+      _CompactJobDetailField.notes: widget.job.notes ?? '',
+    };
+    _originalValues = Map<_CompactJobDetailField, String>.from(_values);
+    _controller.text = _values[_selectedField] ?? '';
+  }
+
+  void _selectField(_CompactJobDetailField field) {
+    _values[_selectedField] = _controller.text;
+    setState(() {
+      _selectedField = field;
+      _controller.text = _values[field] ?? '';
+    });
+  }
+
+  void _revert() {
+    setState(() {
+      _values = Map<_CompactJobDetailField, String>.from(_originalValues);
+      _controller.text = _values[_selectedField] ?? '';
+    });
+  }
+
+  Future<void> _save() async {
+    _values[_selectedField] = _controller.text;
+    setState(() => _saving = true);
+
+    final saved = await widget.onSave(
+      clientRequest: _emptyToNull(_values[_CompactJobDetailField.request]),
+      diagnosis: _emptyToNull(_values[_CompactJobDetailField.diagnosis]),
+      workPerformed: _emptyToNull(_values[_CompactJobDetailField.work]),
+      notes: _emptyToNull(_values[_CompactJobDetailField.notes]),
+    );
+    if (!mounted) return;
+
+    setState(() {
+      _saving = false;
+      if (saved) {
+        _originalValues = Map<_CompactJobDetailField, String>.from(_values);
+      }
+    });
+  }
+
+  String? _emptyToNull(String? value) {
+    final normalized = value?.trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  String _fieldLabel(_CompactJobDetailField field) {
+    return switch (field) {
+      _CompactJobDetailField.request => 'Solicitud',
+      _CompactJobDetailField.diagnosis => 'Diagnóstico',
+      _CompactJobDetailField.work => 'Trabajo realizado',
+      _CompactJobDetailField.notes => 'Notas',
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      key: const ValueKey('workshop-calendar-compact-editor'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.65),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Registro del trabajo',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<_CompactJobDetailField>(
+            key: const ValueKey('workshop-calendar-compact-editor-section'),
+            initialValue: _selectedField,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Sección',
+              border: OutlineInputBorder(),
+            ),
+            items: _CompactJobDetailField.values
+                .map(
+                  (field) => DropdownMenuItem<_CompactJobDetailField>(
+                    value: field,
+                    child: Text(
+                      _fieldLabel(field),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: widget.readOnly
+                ? null
+                : (field) {
+                    if (field != null) _selectField(field);
+                  },
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            key: const ValueKey('workshop-calendar-compact-editor-text'),
+            controller: _controller,
+            readOnly: widget.readOnly,
+            minLines: 4,
+            maxLines: 8,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              hintText: 'Escribe ${_fieldLabel(_selectedField).toLowerCase()}',
+              alignLabelWithHint: true,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          if (widget.readOnly) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  Icons.lock_outline,
+                  size: 16,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Este documento ya tiene una decisión final.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: OutlinedButton(
+                    key: const ValueKey(
+                      'workshop-calendar-compact-editor-revert',
+                    ),
+                    onPressed: widget.readOnly || _saving ? null : _revert,
+                    child: const Text(
+                      'Revertir',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: FilledButton.icon(
+                    key: const ValueKey(
+                      'workshop-calendar-compact-editor-save',
+                    ),
+                    onPressed: widget.readOnly || _saving ? null : _save,
+                    icon: _saving
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.check, size: 18),
+                    label: Text(_saving ? 'Guardando' : 'Guardar'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 }
 

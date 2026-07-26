@@ -34,6 +34,9 @@ void main() {
         allowIndexing: false,
         heroOverlay: 0.55,
         megaMenuOverlay: 0.64,
+        megaMenuCardOverlay: 0.28,
+        megaMenuOverviewWidth: 330,
+        megaMenuContentAlignment: WebsiteMegaMenuContentAlignment.center,
         showBreadcrumbs: false,
         showSubcategories: false,
         facets: [WebsiteCatalogFacet.availability],
@@ -65,6 +68,12 @@ void main() {
       expect(restored.allowIndexing, isFalse);
       expect(restored.heroOverlay, 0.55);
       expect(restored.megaMenuOverlay, 0.64);
+      expect(restored.megaMenuCardOverlay, 0.28);
+      expect(restored.megaMenuOverviewWidth, 330);
+      expect(
+        restored.megaMenuContentAlignment,
+        WebsiteMegaMenuContentAlignment.center,
+      );
       expect(restored.showBreadcrumbs, isFalse);
       expect(restored.showSubcategories, isFalse);
       expect(restored.facets, [WebsiteCatalogFacet.availability]);
@@ -268,23 +277,59 @@ void main() {
         'slug': 'transmision-oscura',
         'mega_menu_image_url': '  https://cdn.example.test/dark.webp  ',
         'mega_menu_overlay': 2,
+        'mega_menu_card_overlay': 2,
+        'mega_menu_overview_width': 999,
+        'mega_menu_content_alignment': 'center',
       });
       final tooLight = WebsiteCatalogPresentation.fromJson(const {
         'category_id': 'category-light',
         'slug': 'transmision-clara',
         'mega_menu_overlay': -1,
+        'mega_menu_card_overlay': -1,
+        'mega_menu_overview_width': 1,
+        'mega_menu_content_alignment': 'future-value',
       });
 
       expect(inherited.megaMenuImageUrl, isEmpty);
       expect(inherited.megaMenuOverlay, 0.58);
+      expect(inherited.megaMenuCardOverlay, 0);
+      expect(
+        inherited.megaMenuOverviewWidth,
+        WebsiteCatalogPresentation.defaultMegaMenuOverviewWidth,
+      );
+      expect(
+        inherited.megaMenuContentAlignment,
+        WebsiteMegaMenuContentAlignment.bottom,
+      );
       expect(
         tooDark.megaMenuImageUrl,
         'https://cdn.example.test/dark.webp',
       );
       expect(tooDark.megaMenuOverlay, 0.85);
+      expect(tooDark.megaMenuCardOverlay, 0.65);
+      expect(
+        tooDark.megaMenuOverviewWidth,
+        WebsiteCatalogPresentation.maxMegaMenuOverviewWidth,
+      );
+      expect(
+        tooDark.megaMenuContentAlignment,
+        WebsiteMegaMenuContentAlignment.center,
+      );
       expect(tooLight.megaMenuOverlay, 0);
+      expect(tooLight.megaMenuCardOverlay, 0);
+      expect(
+        tooLight.megaMenuOverviewWidth,
+        WebsiteCatalogPresentation.minMegaMenuOverviewWidth,
+      );
+      expect(
+        tooLight.megaMenuContentAlignment,
+        WebsiteMegaMenuContentAlignment.bottom,
+      );
       expect(tooDark.toJson()['mega_menu_image_url'], tooDark.megaMenuImageUrl);
       expect(tooDark.toJson()['mega_menu_overlay'], 0.85);
+      expect(tooDark.toJson()['mega_menu_card_overlay'], 0.65);
+      expect(tooDark.toJson()['mega_menu_overview_width'], 440);
+      expect(tooDark.toJson()['mega_menu_content_alignment'], 'center');
     });
 
     test('malformed settings fail closed without inventing content', () {
@@ -349,6 +394,9 @@ void main() {
         'hero_title': 'Hidden root hero',
         'mega_menu_image_url': 'https://cdn.example.test/hidden-root-menu.webp',
         'mega_menu_overlay': 0.12,
+        'mega_menu_card_overlay': 0.28,
+        'mega_menu_overview_width': 330,
+        'mega_menu_content_alignment': 'center',
         'seo_title': 'Productos para bicicleta',
         'seo_description': 'Explora el catálogo público.',
         'social_image_url': 'https://cdn.example.test/catalog.webp',
@@ -363,6 +411,15 @@ void main() {
       expect(sanitizedRoot.heroTitle, isEmpty);
       expect(sanitizedRoot.megaMenuImageUrl, isEmpty);
       expect(sanitizedRoot.megaMenuOverlay, 0.58);
+      expect(sanitizedRoot.megaMenuCardOverlay, 0);
+      expect(
+        sanitizedRoot.megaMenuOverviewWidth,
+        WebsiteCatalogPresentation.defaultMegaMenuOverviewWidth,
+      );
+      expect(
+        sanitizedRoot.megaMenuContentAlignment,
+        WebsiteMegaMenuContentAlignment.bottom,
+      );
       expect(sanitizedRoot.seoTitle, 'Productos para bicicleta');
       expect(sanitizedRoot.seoDescription, 'Explora el catálogo público.');
       expect(

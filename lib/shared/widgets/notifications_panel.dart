@@ -146,15 +146,22 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
   final AppFileStorageService _filesService = AppFileStorageService.instance;
 
   NotificationDigestPeriod _period = NotificationDigestPeriod.today;
+  DateTimeRange? _customDateRange;
   _ActivityFilter _activityFilter = _ActivityFilter.all;
+  List<Map<String, dynamic>> _periodNotifications = const [];
   List<AppStoredFile> _files = const [];
   List<CurrentAttendanceBriefingEntry> _currentAttendances = const [];
   StreamSubscription<AppStoredFile>? _savedFileSubscription;
   Timer? _briefingClock;
   final GlobalKey _activitySectionKey = GlobalKey();
+  final GlobalKey _periodMenuAnchorKey = GlobalKey();
+  int _periodLoadEpoch = 0;
+  int _filesLoadEpoch = 0;
   int _attendanceLoadEpoch = 0;
+  bool _loadingPeriodNotifications = true;
   bool _loadingFiles = true;
   bool _loadingAttendances = true;
+  Object? _periodNotificationsError;
   Object? _filesError;
   Object? _attendancesError;
   DateTime _briefingNow = DateTime.now();
@@ -162,6 +169,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
   @override
   void initState() {
     super.initState();
+    unawaited(_loadPeriodNotifications());
     unawaited(_loadFiles());
     unawaited(_loadAttendances());
     _savedFileSubscription = _filesService.savedFiles.listen(_recordSavedFile);
@@ -181,30 +189,82 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
         Duration(seconds: now.second, milliseconds: now.millisecond);
     _briefingClock = Timer(untilNextMinute, () {
       if (!mounted) return;
-      setState(() => _briefingNow = DateTime.now());
+      final previousDay = NotificationDigestWindow.businessToday(
+        now: _briefingNow,
+      );
+      final nextNow = DateTime.now();
+      final nextDay = NotificationDigestWindow.businessToday(now: nextNow);
+      setState(() => _briefingNow = nextNow);
       if (!_loadingAttendances) {
         unawaited(_loadAttendances(silent: true));
+      }
+      if (previousDay != nextDay) {
+        unawaited(_loadPeriodNotifications(silent: true));
+        unawaited(_loadFiles(silent: true));
       }
       _scheduleBriefingTick();
     });
   }
 
-  Future<void> _loadFiles() async {
-    if (mounted) {
+  NotificationDigestWindow _currentWindow() {
+    return NotificationDigestWindow.resolve(
+      period: _period,
+      now: _briefingNow,
+      customStartDate: _customDateRange?.start,
+      customEndDate: _customDateRange?.end,
+    );
+  }
+
+  Future<void> _loadPeriodNotifications({bool silent = false}) async {
+    final loadEpoch = ++_periodLoadEpoch;
+    final window = _currentWindow();
+    if (mounted && !silent) {
+      setState(() {
+        _loadingPeriodNotifications = true;
+        _periodNotificationsError = null;
+      });
+    }
+    try {
+      final rows = await _notifications.loadNotificationsForRange(
+        startsAt: window.startsAt,
+        endsAt: window.endsAt,
+      );
+      if (!mounted || loadEpoch != _periodLoadEpoch) return;
+      setState(() {
+        _periodNotifications = rows;
+        _loadingPeriodNotifications = false;
+        _periodNotificationsError = null;
+      });
+    } catch (error) {
+      if (!mounted || loadEpoch != _periodLoadEpoch || silent) return;
+      setState(() {
+        _loadingPeriodNotifications = false;
+        _periodNotificationsError = error;
+      });
+    }
+  }
+
+  Future<void> _loadFiles({bool silent = false}) async {
+    final loadEpoch = ++_filesLoadEpoch;
+    final window = _currentWindow();
+    if (mounted && !silent) {
       setState(() {
         _loadingFiles = true;
         _filesError = null;
       });
     }
     try {
-      final files = await _filesService.listFiles(limit: 120);
-      if (!mounted) return;
+      final files = await _filesService.listFilesForRange(
+        startsAt: window.startsAt,
+        endsAt: window.endsAt,
+      );
+      if (!mounted || loadEpoch != _filesLoadEpoch) return;
       setState(() {
         _files = files;
         _loadingFiles = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || loadEpoch != _filesLoadEpoch || silent) return;
       setState(() {
         _loadingFiles = false;
         _filesError = error;
@@ -213,7 +273,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
   }
 
   void _recordSavedFile(AppStoredFile file) {
-    if (!mounted) return;
+    if (!mounted || !_currentWindow().contains(file.createdAt)) return;
     setState(() {
       _files = [
         file,
@@ -250,6 +310,113 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
     }
   }
 
+  Future<void> _selectPeriod(NotificationDigestPeriod nextPeriod) async {
+    DateTimeRange? nextCustomRange = _customDateRange;
+    if (nextPeriod == NotificationDigestPeriod.custom) {
+      final today = NotificationDigestWindow.businessToday();
+      final currentWindow = _currentWindow();
+      final firstDate = DateTime(today.year - 10);
+      final initialStart = currentWindow.startDate.isBefore(firstDate)
+          ? firstDate
+          : currentWindow.startDate;
+      final initialEnd =
+          currentWindow.endDate.isAfter(today) ? today : currentWindow.endDate;
+      final anchorBox =
+          _periodMenuAnchorKey.currentContext?.findRenderObject() as RenderBox?;
+      final overlayBox = Navigator.of(
+        context,
+        rootNavigator: true,
+      ).overlay?.context.findRenderObject() as RenderBox?;
+      if (anchorBox == null ||
+          !anchorBox.attached ||
+          overlayBox == null ||
+          !overlayBox.attached) {
+        return;
+      }
+      final anchorTopLeft = anchorBox.localToGlobal(
+        Offset.zero,
+        ancestor: overlayBox,
+      );
+      final anchorBottomRight = anchorBox.localToGlobal(
+        anchorBox.size.bottomRight(Offset.zero),
+        ancestor: overlayBox,
+      );
+      final anchorRect = Rect.fromPoints(anchorTopLeft, anchorBottomRight);
+      final picked = await showGeneralDialog<DateTimeRange>(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: 'Cerrar rango personalizado',
+        barrierColor: Colors.transparent,
+        transitionDuration: const Duration(milliseconds: 150),
+        pageBuilder: (dialogContext, animation, secondaryAnimation) {
+          return _AnchoredDateRangePopover(
+            anchorRect: anchorRect,
+            overlaySize: overlayBox.size,
+            firstDate: firstDate,
+            lastDate: today,
+            initialRange: DateTimeRange(
+              start:
+                  initialStart.isAfter(initialEnd) ? initialEnd : initialStart,
+              end: initialEnd,
+            ),
+            onCancel: () => Navigator.of(dialogContext).pop(),
+            onApply: (range) => Navigator.of(dialogContext).pop(range),
+          );
+        },
+        transitionBuilder: (context, animation, secondaryAnimation, child) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, -0.012),
+                end: Offset.zero,
+              ).animate(curved),
+              child: child,
+            ),
+          );
+        },
+      );
+      if (picked == null || !mounted) return;
+      nextCustomRange = picked;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _period = nextPeriod;
+      _customDateRange = nextCustomRange;
+    });
+    await Future.wait([
+      _loadPeriodNotifications(),
+      _loadFiles(),
+    ]);
+  }
+
+  Future<void> _markPeriodAlertsRead() async {
+    final window = _currentWindow();
+    final readAt = DateTime.now().toUtc().toIso8601String();
+    if (mounted) {
+      setState(() {
+        _periodNotifications = _periodNotifications
+            .map(
+              (row) => row['read_at'] == null &&
+                      _notificationDateIsInWindow(row, window)
+                  ? {...row, 'read_at': readAt}
+                  : row,
+            )
+            .toList(growable: false);
+      });
+    }
+    await _notifications.markNotificationsReadForRange(
+      startsAt: window.startsAt,
+      endsAt: window.endsAt,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -260,23 +427,29 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
       builder: (context, _) {
         return Consumer<ChatProvider>(
           builder: (context, chat, _) {
-            final rows = _notifications.notificationsFeed.value;
+            final rows = _mergeNotificationRows(
+              _periodNotifications,
+              _notifications.notificationsFeed.value,
+            );
             final digest = NotificationDigestSnapshot.fromRows(
               period: _period,
               notifications: rows,
               fileCreatedAt: _files.map((file) => file.createdAt),
+              customStartDate: _customDateRange?.start,
+              customEndDate: _customDateRange?.end,
+              now: _briefingNow,
             );
             final periodFiles = _files
                 .where((file) => digest.contains(file.createdAt))
                 .toList(growable: false);
             final activity = _buildActivity(
               rows,
-              _mail.emails,
+              _mail.briefingEmails,
               chat,
               periodFiles,
               digest,
             );
-            final unreadEmails = _mail.emails
+            final unreadEmails = _mail.briefingEmails
                 .where(
                   (email) =>
                       !email.isRead && digest.contains(email.receivedTime),
@@ -305,13 +478,27 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
               children: [
                 _BriefingToolbar(
                   period: _period,
+                  customDateRange: _customDateRange,
+                  periodMenuAnchorKey: _periodMenuAnchorKey,
                   unreadAlerts: digest.unreadAlertCount,
-                  onPeriodChanged: (period) {
-                    setState(() => _period = period);
-                  },
-                  onMarkAlertsRead: _notifications.markAllNotificationsRead,
+                  onPeriodChanged: _selectPeriod,
+                  onMarkAlertsRead: _markPeriodAlertsRead,
                 ),
-                const Divider(height: 1),
+                Stack(
+                  alignment: Alignment.bottomCenter,
+                  children: [
+                    const Divider(height: 1),
+                    AnimatedOpacity(
+                      duration: const Duration(milliseconds: 160),
+                      opacity: _loadingPeriodNotifications ? 1 : 0,
+                      child: LinearProgressIndicator(
+                        minHeight: 2,
+                        color: Theme.of(context).colorScheme.primary,
+                        backgroundColor: Colors.transparent,
+                      ),
+                    ),
+                  ],
+                ),
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 260),
@@ -330,9 +517,14 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                       );
                     },
                     child: RefreshIndicator(
-                      key: ValueKey(_period),
+                      key: ValueKey(
+                        '${_period.name}:'
+                        '${_customDateRange?.start.toIso8601String() ?? ''}:'
+                        '${_customDateRange?.end.toIso8601String() ?? ''}',
+                      ),
                       onRefresh: () async {
                         await Future.wait([
+                          _loadPeriodNotifications(),
                           _loadFiles(),
                           _loadAttendances(),
                           _mail.backgroundRefresh(),
@@ -343,10 +535,19 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                         padding: const EdgeInsets.only(bottom: 24),
                         children: [
                           _BriefingHero(
-                            period: _period,
+                            digest: digest,
                             items: activity,
                             now: _briefingNow,
                           ),
+                          if (_periodNotificationsError != null)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                              child: _InlineError(
+                                message:
+                                    'No se pudo completar este período. Se muestran los datos recientes disponibles.',
+                                onRetry: _loadPeriodNotifications,
+                              ),
+                            ),
                           _MetricsRibbon(
                             digest: digest,
                             onNavigate: widget.onNavigate,
@@ -380,7 +581,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
                             child: _FilesSection(
-                              period: _period,
+                              digest: digest,
                               files: periodFiles,
                               loading: _loadingFiles,
                               hasError: _filesError != null,
@@ -393,7 +594,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                             child: _ActivitySection(
                               key: _activitySectionKey,
                               items: activity,
-                              period: _period,
+                              digest: digest,
                               filter: _activityFilter,
                               onFilterChanged: (filter) {
                                 setState(() => _activityFilter = filter);
@@ -724,14 +925,18 @@ extension _ActivityFilterPresentation on _ActivityFilter {
 class _BriefingToolbar extends StatelessWidget {
   const _BriefingToolbar({
     required this.period,
+    required this.customDateRange,
+    required this.periodMenuAnchorKey,
     required this.unreadAlerts,
     required this.onPeriodChanged,
     required this.onMarkAlertsRead,
   });
 
   final NotificationDigestPeriod period;
+  final DateTimeRange? customDateRange;
+  final GlobalKey periodMenuAnchorKey;
   final int unreadAlerts;
-  final ValueChanged<NotificationDigestPeriod> onPeriodChanged;
+  final Future<void> Function(NotificationDigestPeriod) onPeriodChanged;
   final Future<void> Function() onMarkAlertsRead;
 
   @override
@@ -739,34 +944,677 @@ class _BriefingToolbar extends StatelessWidget {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 360;
+          return Row(
+            children: [
+              _PeriodTab(
+                label: 'Hoy',
+                selected: period == NotificationDigestPeriod.today,
+                onTap: () => onPeriodChanged(NotificationDigestPeriod.today),
+              ),
+              const SizedBox(width: 18),
+              _DigestPeriodMenu(
+                period: period,
+                customDateRange: customDateRange,
+                anchorKey: periodMenuAnchorKey,
+                onSelected: onPeriodChanged,
+              ),
+              const Spacer(),
+              if (unreadAlerts > 0)
+                Tooltip(
+                  message: 'Marcar alertas de este período como leídas',
+                  child: TextButton.icon(
+                    onPressed: onMarkAlertsRead,
+                    style: TextButton.styleFrom(
+                      foregroundColor: theme.colorScheme.primary,
+                      visualDensity: VisualDensity.compact,
+                      minimumSize: const Size(40, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 7),
+                    ),
+                    icon: const Icon(Icons.done_all, size: 17),
+                    label: Text(
+                      compact ? '$unreadAlerts' : '$unreadAlerts nuevas',
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DigestPeriodMenu extends StatelessWidget {
+  const _DigestPeriodMenu({
+    required this.period,
+    required this.customDateRange,
+    required this.anchorKey,
+    required this.onSelected,
+  });
+
+  final NotificationDigestPeriod period;
+  final DateTimeRange? customDateRange;
+  final GlobalKey anchorKey;
+  final Future<void> Function(NotificationDigestPeriod) onSelected;
+
+  static const _presets = <NotificationDigestPeriod>[
+    NotificationDigestPeriod.thisWeek,
+    NotificationDigestPeriod.previousWeek,
+    NotificationDigestPeriod.thisMonth,
+    NotificationDigestPeriod.previousMonth,
+    NotificationDigestPeriod.thisYear,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final selected = period != NotificationDigestPeriod.today;
+    final label =
+        selected ? _periodTriggerLabel(period, customDateRange) : 'Período';
+
+    return SizedBox(
+      key: anchorKey,
+      child: PopupMenuButton<NotificationDigestPeriod>(
+        key: const ValueKey<String>('notification-period-trigger'),
+        tooltip: 'Cambiar período',
+        initialValue: selected ? period : null,
+        position: PopupMenuPosition.under,
+        offset: const Offset(0, 8),
+        elevation: 12,
+        color: theme.colorScheme.surfaceContainerLowest,
+        surfaceTintColor: theme.colorScheme.surfaceTint,
+        constraints: const BoxConstraints(minWidth: 210, maxWidth: 238),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        clipBehavior: Clip.antiAlias,
+        onSelected: (value) => unawaited(onSelected(value)),
+        itemBuilder: (context) => [
+          for (final preset in _presets)
+            _periodMenuItem(context, preset, period),
+          const PopupMenuDivider(height: 9),
+          _periodMenuItem(
+            context,
+            NotificationDigestPeriod.custom,
+            period,
+            leading: Icons.edit_calendar_outlined,
+          ),
+        ],
+        child: Semantics(
+          button: true,
+          selected: selected,
+          label: selected
+              ? 'Período seleccionado: ${_periodAccessibleLabel(period, customDateRange)}'
+              : 'Seleccionar otro período',
+          child: Padding(
+            padding: const EdgeInsets.only(top: 10, bottom: 7),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 180),
+                      style: (theme.textTheme.labelLarge ?? const TextStyle())
+                          .copyWith(
+                        color: selected
+                            ? theme.colorScheme.onSurface
+                            : theme.colorScheme.onSurfaceVariant,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 116),
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(
+                      Icons.expand_more_rounded,
+                      size: 17,
+                      color: selected
+                          ? theme.colorScheme.onSurface
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: selected ? 28 : 0,
+                  height: 2,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<NotificationDigestPeriod> _periodMenuItem(
+    BuildContext context,
+    NotificationDigestPeriod value,
+    NotificationDigestPeriod selected, {
+    IconData? leading,
+  }) {
+    final theme = Theme.of(context);
+    final isSelected = value == selected;
+    return PopupMenuItem<NotificationDigestPeriod>(
+      value: value,
+      height: 44,
       child: Row(
         children: [
-          _PeriodTab(
-            label: 'Hoy',
-            selected: period == NotificationDigestPeriod.today,
-            onTap: () => onPeriodChanged(NotificationDigestPeriod.today),
-          ),
-          const SizedBox(width: 18),
-          _PeriodTab(
-            label: '7 días',
-            selected: period == NotificationDigestPeriod.sevenDays,
-            onTap: () => onPeriodChanged(NotificationDigestPeriod.sevenDays),
-          ),
-          const Spacer(),
-          if (unreadAlerts > 0)
-            Tooltip(
-              message: 'Marcar alertas del ERP como leídas',
-              child: TextButton.icon(
-                onPressed: onMarkAlertsRead,
-                style: TextButton.styleFrom(
-                  foregroundColor: theme.colorScheme.primary,
-                  visualDensity: VisualDensity.compact,
-                ),
-                icon: const Icon(Icons.done_all, size: 17),
-                label: Text('$unreadAlerts nuevas'),
+          if (leading != null) ...[
+            Icon(
+              leading,
+              size: 17,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            child: Text(
+              _periodPresetLabel(value),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
+          ),
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 140),
+            opacity: isSelected ? 1 : 0,
+            child: Icon(
+              Icons.check_rounded,
+              size: 17,
+              color: theme.colorScheme.primary,
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _AnchoredDateRangePopover extends StatelessWidget {
+  const _AnchoredDateRangePopover({
+    required this.anchorRect,
+    required this.overlaySize,
+    required this.firstDate,
+    required this.lastDate,
+    required this.initialRange,
+    required this.onCancel,
+    required this.onApply,
+  });
+
+  final Rect anchorRect;
+  final Size overlaySize;
+  final DateTime firstDate;
+  final DateTime lastDate;
+  final DateTimeRange initialRange;
+  final VoidCallback onCancel;
+  final ValueChanged<DateTimeRange> onApply;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    const edgeInset = 12.0;
+    const preferredWidth = 360.0;
+    const preferredHeight = 420.0;
+    final availableWidth = overlaySize.width - (edgeInset * 2);
+    final availableHeight =
+        overlaySize.height - media.padding.vertical - (edgeInset * 2);
+    final width =
+        availableWidth < preferredWidth ? availableWidth : preferredWidth;
+    final height =
+        availableHeight < preferredHeight ? availableHeight : preferredHeight;
+    const minLeft = edgeInset;
+    final maxLeft = overlaySize.width - width - edgeInset;
+    final minTop = media.padding.top + edgeInset;
+    final maxTop =
+        overlaySize.height - media.padding.bottom - height - edgeInset;
+
+    var left = anchorRect.left;
+    if (left + width > overlaySize.width - edgeInset) {
+      left = anchorRect.right - width;
+    }
+    left = left.clamp(minLeft, maxLeft).toDouble();
+
+    var top = anchorRect.bottom + 8;
+    if (top > maxTop) top = anchorRect.top - height - 8;
+    top = top.clamp(minTop, maxTop).toDouble();
+
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(
+        children: [
+          Positioned(
+            left: left,
+            top: top,
+            width: width,
+            height: height,
+            child: SizedBox(
+              key: const ValueKey<String>('notification-date-range-popover'),
+              child: _DateRangePopover(
+                firstDate: firstDate,
+                lastDate: lastDate,
+                initialRange: initialRange,
+                onCancel: onCancel,
+                onApply: onApply,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateRangePopover extends StatefulWidget {
+  const _DateRangePopover({
+    required this.firstDate,
+    required this.lastDate,
+    required this.initialRange,
+    required this.onCancel,
+    required this.onApply,
+  });
+
+  final DateTime firstDate;
+  final DateTime lastDate;
+  final DateTimeRange initialRange;
+  final VoidCallback onCancel;
+  final ValueChanged<DateTimeRange> onApply;
+
+  @override
+  State<_DateRangePopover> createState() => _DateRangePopoverState();
+}
+
+class _DateRangePopoverState extends State<_DateRangePopover> {
+  late DateTime _visibleMonth;
+  DateTime? _rangeStart;
+  DateTime? _rangeEnd;
+
+  @override
+  void initState() {
+    super.initState();
+    _rangeStart = _dateOnly(widget.initialRange.start);
+    _rangeEnd = _dateOnly(widget.initialRange.end);
+    final focusedDate = _rangeEnd ?? _rangeStart ?? widget.lastDate;
+    _visibleMonth = DateTime(focusedDate.year, focusedDate.month);
+  }
+
+  bool get _canApply => _rangeStart != null && _rangeEnd != null;
+
+  void _selectDate(DateTime date) {
+    if (date.isBefore(widget.firstDate) || date.isAfter(widget.lastDate)) {
+      return;
+    }
+    setState(() {
+      if (_rangeStart == null || _rangeEnd != null) {
+        _rangeStart = date;
+        _rangeEnd = null;
+      } else if (date.isBefore(_rangeStart!)) {
+        _rangeEnd = _rangeStart;
+        _rangeStart = date;
+      } else {
+        _rangeEnd = date;
+      }
+    });
+  }
+
+  void _changeMonth(int delta) {
+    setState(() {
+      _visibleMonth = DateTime(
+        _visibleMonth.year,
+        _visibleMonth.month + delta,
+      );
+    });
+  }
+
+  bool _canChangeMonth(int delta) {
+    final target = DateTime(
+      _visibleMonth.year,
+      _visibleMonth.month + delta,
+    );
+    if (delta < 0) {
+      final targetEnd = DateTime(target.year, target.month + 1, 0);
+      return !targetEnd.isBefore(widget.firstDate);
+    }
+    return !target.isAfter(widget.lastDate);
+  }
+
+  String _selectionLabel() {
+    final start = _rangeStart;
+    final end = _rangeEnd;
+    if (start == null) return 'Selecciona la fecha inicial';
+    if (end == null) {
+      return '${_periodRangeLabel(start, start, includeYear: true)} · '
+          'elige la fecha final';
+    }
+    return _periodRangeLabel(start, end, includeYear: true);
+  }
+
+  int? _selectedDayCount() {
+    final start = _rangeStart;
+    final end = _rangeEnd;
+    if (start == null || end == null) return null;
+    final civilStart = DateTime.utc(start.year, start.month, start.day);
+    final civilEnd = DateTime.utc(end.year, end.month, end.day);
+    return civilEnd.difference(civilStart).inDays + 1;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accent = theme.colorScheme.primary;
+    final firstOfMonth = DateTime(
+      _visibleMonth.year,
+      _visibleMonth.month,
+    );
+    final leadingDays = firstOfMonth.weekday - DateTime.monday;
+    final daysInMonth = DateUtils.getDaysInMonth(
+      _visibleMonth.year,
+      _visibleMonth.month,
+    );
+    final selectedDays = _selectedDayCount();
+
+    return Semantics(
+      container: true,
+      scopesRoute: true,
+      namesRoute: true,
+      explicitChildNodes: true,
+      label: 'Rango personalizado',
+      child: Material(
+        color: theme.colorScheme.surfaceContainerLowest,
+        elevation: 16,
+        shadowColor: Colors.black.withValues(alpha: 0.24),
+        surfaceTintColor: Colors.transparent,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+            color: theme.dividerColor.withValues(alpha: 0.58),
+          ),
+        ),
+        child: Column(
+          children: [
+            SizedBox(
+              height: 58,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 6, 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Rango personalizado',
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _selectionLabel(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Cerrar',
+                      onPressed: widget.onCancel,
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Divider(
+                height: 1, color: theme.dividerColor.withValues(alpha: 0.5)),
+            SizedBox(
+              height: 42,
+              child: Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Mes anterior',
+                    onPressed:
+                        _canChangeMonth(-1) ? () => _changeMonth(-1) : null,
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.chevron_left_rounded, size: 21),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '${_briefingMonthLong[_visibleMonth.month - 1]} '
+                      'de ${_visibleMonth.year}',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Mes siguiente',
+                    onPressed:
+                        _canChangeMonth(1) ? () => _changeMonth(1) : null,
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.chevron_right_rounded, size: 21),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 24,
+              child: Row(
+                children: [
+                  for (var weekday = 1; weekday <= 7; weekday++)
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          _weekdayLabel(weekday),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final cellWidth = (constraints.maxWidth - 24) / 7;
+                  final cellHeight = (constraints.maxHeight - 8) / 6;
+                  return GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: 42,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 7,
+                      childAspectRatio: cellWidth / cellHeight,
+                    ),
+                    itemBuilder: (context, index) {
+                      final dayNumber = index - leadingDays + 1;
+                      if (dayNumber < 1 || dayNumber > daysInMonth) {
+                        return const SizedBox.shrink();
+                      }
+                      final day = DateTime(
+                        _visibleMonth.year,
+                        _visibleMonth.month,
+                        dayNumber,
+                      );
+                      return _DateRangeDay(
+                        date: day,
+                        rangeStart: _rangeStart,
+                        rangeEnd: _rangeEnd,
+                        enabled: !day.isBefore(widget.firstDate) &&
+                            !day.isAfter(widget.lastDate),
+                        accent: accent,
+                        onTap: () => _selectDate(day),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            Divider(
+                height: 1, color: theme.dividerColor.withValues(alpha: 0.5)),
+            SizedBox(
+              height: 52,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        selectedDays == null
+                            ? 'Elige dos fechas'
+                            : '$selectedDays '
+                                '${selectedDays == 1 ? 'día' : 'días'}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: widget.onCancel,
+                      child: const Text('Cancelar'),
+                    ),
+                    const SizedBox(width: 4),
+                    FilledButton(
+                      onPressed: !_canApply
+                          ? null
+                          : () => widget.onApply(
+                                DateTimeRange(
+                                  start: _rangeStart!,
+                                  end: _rangeEnd!,
+                                ),
+                              ),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(76, 34),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        visualDensity: VisualDensity.compact,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text('Aplicar'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DateRangeDay extends StatelessWidget {
+  const _DateRangeDay({
+    required this.date,
+    required this.rangeStart,
+    required this.rangeEnd,
+    required this.enabled,
+    required this.accent,
+    required this.onTap,
+  });
+
+  final DateTime date;
+  final DateTime? rangeStart;
+  final DateTime? rangeEnd;
+  final bool enabled;
+  final Color accent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isStart = _sameCalendarDate(date, rangeStart);
+    final isEnd = _sameCalendarDate(date, rangeEnd);
+    final isEndpoint = isStart || isEnd;
+    final inRange = rangeStart != null &&
+        rangeEnd != null &&
+        !date.isBefore(rangeStart!) &&
+        !date.isAfter(rangeEnd!);
+    final today = NotificationDigestWindow.businessToday();
+    final isToday = _sameCalendarDate(date, today);
+    final stateLabel = isStart && isEnd
+        ? 'inicio y fin del rango'
+        : isStart
+            ? 'inicio del rango'
+            : isEnd
+                ? 'fin del rango'
+                : inRange
+                    ? 'dentro del rango'
+                    : isToday
+                        ? 'hoy'
+                        : null;
+    final accessibleDate = '${_briefingWeekdayLong[date.weekday - 1]}, '
+        '${date.day} de ${_briefingMonthLong[date.month - 1]} de ${date.year}';
+
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      selected: isEndpoint || inRange,
+      label:
+          stateLabel == null ? accessibleDate : '$accessibleDate, $stateLabel',
+      child: Opacity(
+        opacity: enabled ? 1 : 0.34,
+        child: Material(
+          color: inRange
+              ? accent.withValues(alpha: isEndpoint ? 0.08 : 0.11)
+              : Colors.transparent,
+          child: InkWell(
+            onTap: enabled ? onTap : null,
+            child: Center(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 130),
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isEndpoint ? accent : Colors.transparent,
+                  shape: BoxShape.circle,
+                  border: isToday && !isEndpoint
+                      ? Border.all(color: accent.withValues(alpha: 0.72))
+                      : null,
+                ),
+                child: Text(
+                  '${date.day}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: isEndpoint
+                        ? theme.colorScheme.onPrimary
+                        : theme.colorScheme.onSurface,
+                    fontWeight: isEndpoint || isToday
+                        ? FontWeight.w700
+                        : FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -822,21 +1670,18 @@ class _PeriodTab extends StatelessWidget {
 
 class _BriefingHero extends StatelessWidget {
   const _BriefingHero({
-    required this.period,
+    required this.digest,
     required this.items,
     required this.now,
   });
 
-  final NotificationDigestPeriod period;
+  final NotificationDigestSnapshot digest;
   final List<_BriefingActivityItem> items;
   final DateTime now;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final todayLabel = MaterialLocalizations.of(context).formatFullDate(
-      DateTime.now(),
-    );
     final accent = theme.colorScheme.primary;
     return Container(
       color: accent.withValues(
@@ -851,9 +1696,7 @@ class _BriefingHero extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  period == NotificationDigestPeriod.today
-                      ? 'Hoy en Viñabike'
-                      : 'Pulso de la semana',
+                  _periodHeroTitle(digest.period),
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                     letterSpacing: -0.25,
@@ -861,9 +1704,11 @@ class _BriefingHero extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  period == NotificationDigestPeriod.today
-                      ? todayLabel
-                      : 'Los últimos siete días, en una mirada',
+                  _periodRangeLabel(
+                    digest.startDate,
+                    digest.endDate,
+                    includeYear: true,
+                  ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -924,7 +1769,7 @@ class _BriefingHero extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 12),
-              _ActivityPulse(period: period, items: items, accent: accent),
+              _ActivityPulse(digest: digest, items: items, accent: accent),
             ],
           );
         },
@@ -994,45 +1839,24 @@ class _ChileClock extends StatelessWidget {
 
 class _ActivityPulse extends StatelessWidget {
   const _ActivityPulse({
-    required this.period,
+    required this.digest,
     required this.items,
     required this.accent,
   });
 
-  final NotificationDigestPeriod period;
+  final NotificationDigestSnapshot digest;
   final List<_BriefingActivityItem> items;
   final Color accent;
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final isToday = period == NotificationDigestPeriod.today;
-    final counts = List<int>.filled(isToday ? 6 : 7, 0);
-
-    for (final item in items) {
-      final local = item.createdAt.toLocal();
-      if (isToday) {
-        final index = (local.hour ~/ 4).clamp(0, 5);
-        counts[index]++;
-      } else {
-        final start = today.subtract(const Duration(days: 6));
-        final itemDay = DateTime(local.year, local.month, local.day);
-        final index = itemDay.difference(start).inDays;
-        if (index >= 0 && index < counts.length) counts[index]++;
-      }
-    }
+    final buckets = _activityPulseBuckets(digest, items);
+    final counts = buckets.map((bucket) => bucket.count).toList();
 
     var maxCount = 1;
     for (final count in counts) {
       if (count > maxCount) maxCount = count;
     }
-    final labels = isToday
-        ? const ['00', '04', '08', '12', '16', '20']
-        : List<String>.generate(7, (index) {
-            final start = today.subtract(const Duration(days: 6));
-            return _weekdayLabel(start.add(Duration(days: index)).weekday);
-          });
 
     return SizedBox(
       height: 54,
@@ -1077,7 +1901,7 @@ class _ActivityPulse extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    labels[index],
+                    buckets[index].label,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 9,
@@ -1664,7 +2488,7 @@ class _AttentionSection extends StatelessWidget {
 
 class _FilesSection extends StatelessWidget {
   const _FilesSection({
-    required this.period,
+    required this.digest,
     required this.files,
     required this.loading,
     required this.hasError,
@@ -1672,7 +2496,7 @@ class _FilesSection extends StatelessWidget {
     required this.onNavigate,
   });
 
-  final NotificationDigestPeriod period;
+  final NotificationDigestSnapshot digest;
   final List<AppStoredFile> files;
   final bool loading;
   final bool hasError;
@@ -1683,9 +2507,7 @@ class _FilesSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final visibleFiles = files.take(4).toList(growable: false);
     return _OpenSection(
-      title: period == NotificationDigestPeriod.today
-          ? 'Archivos de hoy'
-          : 'Archivos de los últimos 7 días',
+      title: _filesPeriodTitle(digest.period),
       trailing: loading ? 'Actualizando' : '${files.length}',
       accent: _filesAccent,
       child: hasError
@@ -1727,42 +2549,71 @@ class _FilesSection extends StatelessWidget {
   }
 }
 
-class _ActivitySection extends StatelessWidget {
+class _ActivitySection extends StatefulWidget {
   const _ActivitySection({
     super.key,
     required this.items,
-    required this.period,
+    required this.digest,
     required this.filter,
     required this.onFilterChanged,
     required this.onTap,
   });
 
   final List<_BriefingActivityItem> items;
-  final NotificationDigestPeriod period;
+  final NotificationDigestSnapshot digest;
   final _ActivityFilter filter;
   final ValueChanged<_ActivityFilter> onFilterChanged;
   final ValueChanged<_BriefingActivityItem> onTap;
 
   @override
+  State<_ActivitySection> createState() => _ActivitySectionState();
+}
+
+class _ActivitySectionState extends State<_ActivitySection> {
+  static const int _activityBatchSize = 12;
+
+  int _visibleLimit = _activityBatchSize;
+
+  @override
+  void didUpdateWidget(covariant _ActivitySection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final periodChanged = oldWidget.digest.period != widget.digest.period ||
+        oldWidget.digest.startDate != widget.digest.startDate ||
+        oldWidget.digest.endDate != widget.digest.endDate;
+    if (oldWidget.filter != widget.filter || periodChanged) {
+      _visibleLimit = _activityBatchSize;
+    }
+  }
+
+  void _showMore() {
+    setState(() => _visibleLimit += _activityBatchSize);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final filteredItems = items
-        .where((item) => filter.includes(item.kind))
+    final filteredItems = widget.items
+        .where((item) => widget.filter.includes(item.kind))
         .toList(growable: false);
-    final visibleItems = filteredItems.take(12).toList(growable: false);
+    final visibleItems =
+        filteredItems.take(_visibleLimit).toList(growable: false);
+    final remaining = filteredItems.length - visibleItems.length;
+    final nextBatchCount =
+        remaining < _activityBatchSize ? remaining : _activityBatchSize;
+
     return _OpenSection(
       title: 'Actividad reciente',
-      trailing: period == NotificationDigestPeriod.today ? 'Hoy' : '7 días',
+      trailing: _periodCompactLabel(widget.digest),
       trailingWidget: _ActivityFilterMenu(
-        selected: filter,
-        items: items,
-        onSelected: onFilterChanged,
+        selected: widget.filter,
+        items: widget.items,
+        onSelected: widget.onFilterChanged,
       ),
-      accent: filter.accent,
+      accent: widget.filter.accent,
       child: visibleItems.isEmpty
           ? _QuietState(
-              icon: filter.icon,
-              text: filter.emptyLabel,
-              accent: filter.accent,
+              icon: widget.filter.icon,
+              text: widget.filter.emptyLabel,
+              accent: widget.filter.accent,
             )
           : Column(
               children: [
@@ -1770,17 +2621,53 @@ class _ActivitySection extends StatelessWidget {
                   _ActivityRow(
                     item: visibleItems[index],
                     isLast: index == visibleItems.length - 1,
-                    onTap: () => onTap(visibleItems[index]),
+                    onTap: () => widget.onTap(visibleItems[index]),
                   ),
-                if (filteredItems.length > visibleItems.length)
+                if (remaining > 0)
                   Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Se muestran los 12 movimientos más recientes.',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Semantics(
+                      button: true,
+                      label: 'Mostrar $nextBatchCount movimientos más. '
+                          '${visibleItems.length} de ${filteredItems.length} visibles.',
+                      child: TextButton(
+                        onPressed: _showMore,
+                        style: TextButton.styleFrom(
+                          foregroundColor:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
+                          minimumSize: const Size(0, 34),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Mostrar $nextBatchCount más',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(width: 3),
+                            const Icon(Icons.keyboard_arrow_down, size: 17),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${visibleItems.length} de '
+                              '${filteredItems.length}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant
+                                        .withValues(alpha: 0.72),
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -2299,6 +3186,288 @@ String _weekdayLabel(int weekday) {
   }
 }
 
+const _briefingMonthShort = <String>[
+  'ene',
+  'feb',
+  'mar',
+  'abr',
+  'may',
+  'jun',
+  'jul',
+  'ago',
+  'sept',
+  'oct',
+  'nov',
+  'dic',
+];
+
+const _briefingMonthLong = <String>[
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+];
+
+const _briefingWeekdayLong = <String>[
+  'lunes',
+  'martes',
+  'miércoles',
+  'jueves',
+  'viernes',
+  'sábado',
+  'domingo',
+];
+
+String _periodPresetLabel(NotificationDigestPeriod period) {
+  switch (period) {
+    case NotificationDigestPeriod.today:
+      return 'Hoy';
+    case NotificationDigestPeriod.thisWeek:
+      return 'Esta semana';
+    case NotificationDigestPeriod.previousWeek:
+      return 'Semana anterior';
+    case NotificationDigestPeriod.thisMonth:
+      return 'Este mes';
+    case NotificationDigestPeriod.previousMonth:
+      return 'Mes anterior';
+    case NotificationDigestPeriod.thisYear:
+      return 'Este año';
+    case NotificationDigestPeriod.custom:
+      return 'Personalizado…';
+  }
+}
+
+String _periodTriggerLabel(
+  NotificationDigestPeriod period,
+  DateTimeRange? customDateRange,
+) {
+  if (period != NotificationDigestPeriod.custom || customDateRange == null) {
+    return _periodPresetLabel(period);
+  }
+  return _periodRangeLabel(
+    _dateOnly(customDateRange.start),
+    _dateOnly(customDateRange.end),
+  );
+}
+
+String _periodAccessibleLabel(
+  NotificationDigestPeriod period,
+  DateTimeRange? customDateRange,
+) {
+  if (period != NotificationDigestPeriod.custom || customDateRange == null) {
+    return _periodPresetLabel(period);
+  }
+  return _periodRangeLabel(
+    _dateOnly(customDateRange.start),
+    _dateOnly(customDateRange.end),
+    includeYear: true,
+  );
+}
+
+String _periodHeroTitle(NotificationDigestPeriod period) {
+  switch (period) {
+    case NotificationDigestPeriod.today:
+      return 'Hoy en Viñabike';
+    case NotificationDigestPeriod.thisWeek:
+      return 'Esta semana en Viñabike';
+    case NotificationDigestPeriod.previousWeek:
+      return 'La semana anterior';
+    case NotificationDigestPeriod.thisMonth:
+      return 'Este mes en Viñabike';
+    case NotificationDigestPeriod.previousMonth:
+      return 'El mes anterior';
+    case NotificationDigestPeriod.thisYear:
+      return 'Este año en Viñabike';
+    case NotificationDigestPeriod.custom:
+      return 'Resumen del período';
+  }
+}
+
+String _filesPeriodTitle(NotificationDigestPeriod period) {
+  switch (period) {
+    case NotificationDigestPeriod.today:
+      return 'Archivos de hoy';
+    case NotificationDigestPeriod.thisWeek:
+      return 'Archivos de esta semana';
+    case NotificationDigestPeriod.previousWeek:
+      return 'Archivos de la semana anterior';
+    case NotificationDigestPeriod.thisMonth:
+      return 'Archivos de este mes';
+    case NotificationDigestPeriod.previousMonth:
+      return 'Archivos del mes anterior';
+    case NotificationDigestPeriod.thisYear:
+      return 'Archivos de este año';
+    case NotificationDigestPeriod.custom:
+      return 'Archivos del período';
+  }
+}
+
+String _periodCompactLabel(NotificationDigestSnapshot digest) {
+  if (digest.period == NotificationDigestPeriod.custom) {
+    return _periodRangeLabel(digest.startDate, digest.endDate);
+  }
+  return _periodPresetLabel(digest.period);
+}
+
+String _periodRangeLabel(
+  DateTime first,
+  DateTime second, {
+  bool includeYear = false,
+}) {
+  final start = _dateOnly(first);
+  final end = _dateOnly(second);
+  if (start == end) {
+    if (!includeYear) {
+      return '${start.day} ${_briefingMonthShort[start.month - 1]}';
+    }
+    return '${_briefingWeekdayLong[start.weekday - 1]}, ${start.day} de '
+        '${_briefingMonthLong[start.month - 1]} de ${start.year}';
+  }
+  if (start.year == end.year && start.month == end.month) {
+    return '${start.day}–${end.day} '
+        '${_briefingMonthShort[start.month - 1]}'
+        '${includeYear ? ' ${start.year}' : ''}';
+  }
+  if (start.year == end.year) {
+    return '${start.day} ${_briefingMonthShort[start.month - 1]}–'
+        '${end.day} ${_briefingMonthShort[end.month - 1]}'
+        '${includeYear ? ' ${start.year}' : ''}';
+  }
+  return '${start.day} ${_briefingMonthShort[start.month - 1]} ${start.year}–'
+      '${end.day} ${_briefingMonthShort[end.month - 1]} ${end.year}';
+}
+
+DateTime _dateOnly(DateTime value) {
+  return DateTime(value.year, value.month, value.day);
+}
+
+bool _sameCalendarDate(DateTime? first, DateTime? second) {
+  return first != null &&
+      second != null &&
+      first.year == second.year &&
+      first.month == second.month &&
+      first.day == second.day;
+}
+
+List<Map<String, dynamic>> _mergeNotificationRows(
+  List<Map<String, dynamic>> historical,
+  List<Map<String, dynamic>> live,
+) {
+  final byId = <String, Map<String, dynamic>>{};
+  final anonymous = <Map<String, dynamic>>[];
+  for (final row in [...historical, ...live]) {
+    final id = row['id']?.toString().trim() ?? '';
+    if (id.isEmpty) {
+      anonymous.add(row);
+    } else {
+      byId[id] = row;
+    }
+  }
+  final merged = [...byId.values, ...anonymous];
+  merged.sort((a, b) {
+    final aDate = DateTime.tryParse(a['created_at']?.toString() ?? '');
+    final bDate = DateTime.tryParse(b['created_at']?.toString() ?? '');
+    if (aDate == null && bDate == null) return 0;
+    if (aDate == null) return 1;
+    if (bDate == null) return -1;
+    return bDate.compareTo(aDate);
+  });
+  return merged;
+}
+
+bool _notificationDateIsInWindow(
+  Map<String, dynamic> row,
+  NotificationDigestWindow window,
+) {
+  final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '');
+  return createdAt != null && window.contains(createdAt);
+}
+
+class _ActivityPulseBucket {
+  const _ActivityPulseBucket(this.label, this.count);
+
+  final String label;
+  final int count;
+}
+
+List<_ActivityPulseBucket> _activityPulseBuckets(
+  NotificationDigestSnapshot digest,
+  List<_BriefingActivityItem> items,
+) {
+  if (digest.period == NotificationDigestPeriod.today) {
+    final counts = List<int>.filled(6, 0);
+    for (final item in items) {
+      final chile = _chileBriefingTime(item.createdAt);
+      counts[(chile.hour ~/ 4).clamp(0, 5)]++;
+    }
+    const labels = ['00', '04', '08', '12', '16', '20'];
+    return List.generate(
+      counts.length,
+      (index) => _ActivityPulseBucket(labels[index], counts[index]),
+    );
+  }
+
+  final start = digest.startDate;
+  final end = digest.endDate;
+  final totalDays = end.difference(start).inDays + 1;
+  if (digest.period == NotificationDigestPeriod.thisYear || totalDays > 90) {
+    final totalMonths =
+        ((end.year - start.year) * 12) + end.month - start.month + 1;
+    final bucketCount = totalMonths.clamp(1, 12);
+    final counts = List<int>.filled(bucketCount, 0);
+    for (final item in items) {
+      final chile = _chileBriefingTime(item.createdAt);
+      final monthOffset =
+          ((chile.year - start.year) * 12) + chile.month - start.month;
+      if (monthOffset < 0 || monthOffset >= totalMonths) continue;
+      final index = (monthOffset * bucketCount ~/ totalMonths).clamp(
+        0,
+        bucketCount - 1,
+      );
+      counts[index]++;
+    }
+    return List.generate(bucketCount, (index) {
+      final monthOffset = index * totalMonths ~/ bucketCount;
+      final date = DateTime(start.year, start.month + monthOffset);
+      return _ActivityPulseBucket(
+        _briefingMonthShort[date.month - 1],
+        counts[index],
+      );
+    });
+  }
+
+  final bucketCount = totalDays.clamp(1, 7);
+  final counts = List<int>.filled(bucketCount, 0);
+  for (final item in items) {
+    final chile = _chileBriefingTime(item.createdAt);
+    final day = DateTime(chile.year, chile.month, chile.day);
+    final dayOffset = day.difference(start).inDays;
+    if (dayOffset < 0 || dayOffset >= totalDays) continue;
+    final index = (dayOffset * bucketCount ~/ totalDays).clamp(
+      0,
+      bucketCount - 1,
+    );
+    counts[index]++;
+  }
+  return List.generate(bucketCount, (index) {
+    final dayOffset = index * totalDays ~/ bucketCount;
+    final date = start.add(Duration(days: dayOffset));
+    final label = totalDays <= 7
+        ? _weekdayLabel(date.weekday)
+        : '${date.day.toString().padLeft(2, '0')}/'
+            '${date.month.toString().padLeft(2, '0')}';
+    return _ActivityPulseBucket(label, counts[index]);
+  });
+}
+
 class _BriefingActivityItem {
   const _BriefingActivityItem({
     required this.title,
@@ -2437,18 +3606,18 @@ IconData _iconForFile(AppStoredFile file) {
 }
 
 String _compactTime(DateTime dateTime) {
-  final local = dateTime.toLocal();
-  final now = DateTime.now();
-  final sameDay = local.year == now.year &&
-      local.month == now.month &&
-      local.day == now.day;
+  final chile = _chileBriefingTime(dateTime);
+  final now = tz.TZDateTime.now(_chileBriefingLocation());
+  final sameDay = chile.year == now.year &&
+      chile.month == now.month &&
+      chile.day == now.day;
   if (sameDay) {
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
+    final hour = chile.hour.toString().padLeft(2, '0');
+    final minute = chile.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
   }
-  final day = local.day.toString().padLeft(2, '0');
-  final month = local.month.toString().padLeft(2, '0');
+  final day = chile.day.toString().padLeft(2, '0');
+  final month = chile.month.toString().padLeft(2, '0');
   return '$day/$month';
 }
 

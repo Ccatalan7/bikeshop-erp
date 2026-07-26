@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../../../modules/crm/models/crm_models.dart';
 import '../../../shared/models/tax_treatment.dart';
+import '../../../shared/utils/responsive_viewport.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../modules/crm/services/customer_service.dart';
@@ -16,6 +17,7 @@ import '../../sales/services/sales_service.dart';
 import '../services/bikeshop_service.dart';
 import '../models/bikeshop_models.dart';
 import '../widgets/bike_record_panel.dart';
+import '../widgets/client_logbook_responsive_frame.dart';
 import 'bike_form_dialog.dart';
 import 'mechanic_job_form_page.dart';
 import '../../messaging/models/conversation.dart';
@@ -88,7 +90,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   String _jobSortKey = 'arrival_desc';
   String _timelineSortKey = 'date_desc';
   String _invoiceSortKey = 'date_desc';
-  JobViewFilter _jobViewFilter = JobViewFilter.completed;
+  JobViewFilter _jobViewFilter = JobViewFilter.active;
   final ScrollController _headerScrollController = ScrollController();
   final ScrollController _bodyScrollController = ScrollController();
 
@@ -915,11 +917,11 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   String _jobFilterLabel(JobViewFilter filter) {
     switch (filter) {
       case JobViewFilter.active:
-        return 'Activas';
+        return 'Activos';
       case JobViewFilter.completed:
-        return 'Entregadas';
+        return 'Entregados';
       case JobViewFilter.all:
-        return 'Todas';
+        return 'Todos';
     }
   }
 
@@ -1176,21 +1178,10 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   // ─────────────────────────────────────────────
 
   Widget _buildContent() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // ── Left panel: fixed identity column ──
-        SizedBox(
-          width: 256,
-          child: _buildLeftPanel(),
-        ),
-        // ── Vertical divider ──
-        const VerticalDivider(width: 1, thickness: 1),
-        // ── Right panel: tabbed content area ──
-        Expanded(
-          child: _buildRightPanel(),
-        ),
-      ],
+    return ClientLogbookResponsiveFrame(
+      desktopIdentity: _buildLeftPanel(),
+      compactIdentity: _buildCompactClientSummary(),
+      content: _buildRightPanel(),
     );
   }
 
@@ -1350,6 +1341,180 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     );
   }
 
+  Widget _buildCompactClientSummary() {
+    final theme = Theme.of(context);
+    final customer = _customer!;
+    final activeJobs = _jobs
+        .where((job) =>
+            job.status != JobStatus.entregado &&
+            job.status != JobStatus.cancelado)
+        .length;
+    final completedJobs =
+        _jobs.where((job) => job.status == JobStatus.entregado).length;
+    final totalSpent = _hasLoadedInvoices
+        ? _invoices.fold(0.0, (sum, invoice) => sum + invoice.paidAmount)
+        : _jobs
+            .where((job) => job.status == JobStatus.entregado)
+            .fold(0.0, (sum, job) => sum + job.totalCost);
+    final compactContact = [
+      if (customer.phone != null && customer.phone!.trim().isNotEmpty)
+        customer.phone!.trim(),
+      if (customer.email != null && customer.email!.trim().isNotEmpty)
+        customer.email!.trim(),
+    ].join(' · ');
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        border: Border(
+          bottom: BorderSide(color: theme.dividerColor),
+        ),
+      ),
+      child: ExpansionTile(
+        key: const PageStorageKey('client-logbook-compact-summary'),
+        maintainState: true,
+        minTileHeight: 64,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: CircleAvatar(
+          radius: 20,
+          backgroundColor: theme.colorScheme.primaryContainer,
+          child: Text(
+            customer.name.substring(0, 1).toUpperCase(),
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onPrimaryContainer,
+            ),
+          ),
+        ),
+        title: Text(
+          'Resumen del cliente',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(
+          [
+            '${_bikes.length} ${_bikes.length == 1 ? 'bici' : 'bicis'}',
+            '$activeJobs ${activeJobs == 1 ? 'activo' : 'activos'}',
+            if (_loyalty != null) _getLoyaltyTierName(_loyalty!.tier),
+          ].join(' · '),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        children: [
+          const Divider(height: 1),
+          if (compactContact.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                compactContact,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildCompactClientMetric(
+                  label: 'Trabajos',
+                  value: _jobs.length.toString(),
+                ),
+              ),
+              Expanded(
+                child: _buildCompactClientMetric(
+                  label: 'Entregados',
+                  value: completedJobs.toString(),
+                ),
+              ),
+              Expanded(
+                child: _buildCompactClientMetric(
+                  label: 'Ingresado',
+                  value: NumberFormat.compactCurrency(
+                    symbol: '\$',
+                    decimalDigits: 0,
+                  ).format(totalSpent),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => context.push(
+                    '/taller/pegas/nueva?customer_id=${customer.id}',
+                  ),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                  ),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Trabajo'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => context
+                      .push('/clientes/${customer.id}/editar')
+                      .then((_) => _loadData()),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                  ),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Editar'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactClientMetric({
+    required String label,
+    required String value,
+  }) {
+    final theme = Theme.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildInfoRow(IconData icon, String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -1455,10 +1620,99 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
 
   Widget _buildRightPanel() {
     final theme = Theme.of(context);
+    final usesCompactLayout = ResponsiveViewport.usesCompactShell(context);
     final activeJobs = _jobs
         .where((j) =>
             j.status != JobStatus.entregado && j.status != JobStatus.cancelado)
         .length;
+    final tabBar = TabBar(
+      controller: _tabController,
+      isScrollable: true,
+      tabAlignment: TabAlignment.start,
+      tabs: [
+        Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Bicicletas'),
+              if (_bikes.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                _buildTabCount(_bikes.length),
+              ],
+            ],
+          ),
+        ),
+        Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Trabajos'),
+              if (_jobs.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                _buildTabCount(
+                  _jobs.length,
+                  highlight: activeJobs > 0,
+                  highlightValue: activeJobs,
+                ),
+              ],
+            ],
+          ),
+        ),
+        Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Facturas'),
+              if (_invoices.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                _buildTabCount(
+                  _invoices.length,
+                  highlight: _invoices.any(
+                    (invoice) =>
+                        invoice.balance > 0.01 &&
+                        invoice.status != InvoiceStatus.cancelled,
+                  ),
+                  highlightValue: _invoices
+                      .where((invoice) =>
+                          invoice.balance > 0.01 &&
+                          invoice.status != InvoiceStatus.cancelled)
+                      .length,
+                ),
+              ],
+            ],
+          ),
+        ),
+        Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Chats'),
+              if (_chats.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                _buildTabCount(
+                  _chats.length,
+                  highlight: _chats.any((chat) => chat.unreadCount > 0),
+                  highlightValue:
+                      _chats.where((chat) => chat.unreadCount > 0).length,
+                ),
+              ],
+            ],
+          ),
+        ),
+        Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Historial'),
+              if (_timeline.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                _buildTabCount(_timeline.length),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1470,157 +1724,15 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
               bottom: BorderSide(color: theme.dividerColor),
             ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: EdgeInsets.only(
+            left: usesCompactLayout ? 4 : 24,
+            right: usesCompactLayout ? 4 : 24,
+          ),
           child: Row(
             children: [
-              TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                tabs: [
-                  Tab(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('Bicicletas'),
-                        if (_bikes.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          _buildTabCount(_bikes.length),
-                        ],
-                      ],
-                    ),
-                  ),
-                  Tab(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('Trabajos'),
-                        if (_jobs.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          _buildTabCount(
-                            _jobs.length,
-                            highlight: activeJobs > 0,
-                            highlightValue: activeJobs,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  Tab(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('Facturas'),
-                        if (_invoices.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          _buildTabCount(
-                            _invoices.length,
-                            highlight: _invoices.any(
-                              (invoice) =>
-                                  invoice.balance > 0.01 &&
-                                  invoice.status != InvoiceStatus.cancelled,
-                            ),
-                            highlightValue: _invoices
-                                .where((invoice) =>
-                                    invoice.balance > 0.01 &&
-                                    invoice.status != InvoiceStatus.cancelled)
-                                .length,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  Tab(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('Chats'),
-                        if (_chats.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          _buildTabCount(
-                            _chats.length,
-                            highlight: _chats.any((c) => c.unreadCount > 0),
-                            highlightValue:
-                                _chats.where((c) => c.unreadCount > 0).length,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  Tab(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('Historial'),
-                        if (_timeline.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          _buildTabCount(_timeline.length),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              // Context-sensitive action button per tab
-              AnimatedBuilder(
-                animation: _tabController,
-                builder: (context, _) {
-                  if (_tabController.index == 0) {
-                    return TextButton.icon(
-                      onPressed: () async {
-                        if (MediaQuery.of(context).size.width < 900) {
-                          final savedBike = await showDialog<Bike>(
-                            context: context,
-                            builder: (_) =>
-                                BikeFormDialog(customerId: widget.customerId),
-                          );
-                          if (savedBike != null) _loadData();
-                        } else {
-                          _openNewBikePane();
-                        }
-                      },
-                      icon: const Icon(Icons.add, size: 16),
-                      label: const Text('Agregar Bicicleta'),
-                    );
-                  }
-                  if (_tabController.index == 1) {
-                    return TextButton.icon(
-                      onPressed: () {
-                        if (MediaQuery.of(context).size.width < 900) {
-                          context.push(
-                              '/taller/pegas/nueva?customer_id=${_customer!.id}');
-                        } else {
-                          setState(() {
-                            _selectedJobId = null;
-                            _isEditingJob = true;
-                          });
-                        }
-                      },
-                      icon: const Icon(Icons.add, size: 16),
-                      label: const Text('Nuevo Trabajo'),
-                    );
-                  }
-                  if (_tabController.index == 3) {
-                    return TextButton.icon(
-                      onPressed: () {
-                        context
-                            .push(
-                                '/sales/invoices/new?customer_id=${widget.customerId}')
-                            .then((_) {
-                          if (!mounted) {
-                            return;
-                          }
-                          unawaited(_loadInvoices(forceRefresh: true));
-                        });
-                      },
-                      icon: const Icon(Icons.add, size: 16),
-                      label: const Text('Nueva Factura'),
-                    );
-                  }
-                  return const SizedBox.shrink();
-                },
-              ),
+              if (usesCompactLayout) Expanded(child: tabBar) else tabBar,
+              if (!usesCompactLayout) const Spacer(),
+              _buildTabContextAction(compact: usesCompactLayout),
             ],
           ),
         ),
@@ -1640,6 +1752,88 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTabContextAction({required bool compact}) {
+    return AnimatedBuilder(
+      animation: _tabController,
+      builder: (context, _) {
+        Future<void> addBike() async {
+          if (ResponsiveViewport.usesCompactShell(context)) {
+            final savedBike = await showDialog<Bike>(
+              context: context,
+              builder: (_) => BikeFormDialog(customerId: widget.customerId),
+            );
+            if (savedBike != null) {
+              await _loadData();
+            }
+          } else {
+            _openNewBikePane();
+          }
+        }
+
+        void addJob() {
+          if (ResponsiveViewport.usesCompactShell(context)) {
+            context.push(
+              '/taller/pegas/nueva?customer_id=${_customer!.id}',
+            );
+          } else {
+            setState(() {
+              _selectedJobId = null;
+              _isEditingJob = true;
+            });
+          }
+        }
+
+        void addInvoice() {
+          context
+              .push(
+            '/sales/invoices/new?customer_id=${widget.customerId}',
+          )
+              .then((_) {
+            if (mounted) {
+              unawaited(_loadInvoices(forceRefresh: true));
+            }
+          });
+        }
+
+        final action = switch (_tabController.index) {
+          0 => (
+              label: 'Agregar bicicleta',
+              icon: Icons.add,
+              onPressed: () => unawaited(addBike()),
+            ),
+          1 => (
+              label: 'Nuevo trabajo',
+              icon: Icons.add,
+              onPressed: addJob,
+            ),
+          2 => (
+              label: 'Nueva factura',
+              icon: Icons.add,
+              onPressed: addInvoice,
+            ),
+          _ => null,
+        };
+
+        if (action == null) {
+          return const SizedBox.shrink();
+        }
+        if (compact) {
+          return IconButton(
+            tooltip: action.label,
+            constraints: BoxConstraints.tight(const Size(48, 48)),
+            onPressed: action.onPressed,
+            icon: Icon(action.icon),
+          );
+        }
+        return TextButton.icon(
+          onPressed: action.onPressed,
+          icon: Icon(action.icon, size: 16),
+          label: Text(action.label),
+        );
+      },
     );
   }
 
@@ -1674,14 +1868,14 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   Widget _buildBikesTab() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isDesktop = constraints.maxWidth > 900;
-        if (!isDesktop && _bikePanelMode == ClientBikePanelMode.none) {
+        final usesCompactLayout = ResponsiveViewport.usesCompactShell(context);
+        if (usesCompactLayout && _bikePanelMode == ClientBikePanelMode.none) {
           return _buildBikesList();
         }
 
         final showRightPane =
-            isDesktop && _bikePanelMode != ClientBikePanelMode.none;
-        if (!isDesktop && _bikePanelMode != ClientBikePanelMode.none) {
+            !usesCompactLayout && _bikePanelMode != ClientBikePanelMode.none;
+        if (usesCompactLayout && _bikePanelMode != ClientBikePanelMode.none) {
           final selectedBike = _selectedBikeId != null
               ? _bikes.where((b) => b.id == _selectedBikeId).firstOrNull
               : null;
@@ -1715,6 +1909,43 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
 
   Widget _buildBikesList() {
     final filteredBikes = _getFilteredBikes();
+    if (ResponsiveViewport.usesCompactShell(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildTabToolbar(
+            searchController: _bikeSearchController,
+            searchHint: 'Buscar bicicleta…',
+            sortKey: _bikeSortKey,
+            sortLabels: _bikeSortLabels,
+            onSortChanged: (value) => setState(() => _bikeSortKey = value),
+            statusText: filteredBikes.length == _bikes.length
+                ? '${_bikes.length} bicicletas'
+                : '${filteredBikes.length} de ${_bikes.length}',
+          ),
+          Expanded(
+            child: filteredBikes.isEmpty
+                ? _buildEmptyState(
+                    _bikes.isEmpty
+                        ? 'Sin bicicletas registradas'
+                        : 'Ninguna bicicleta coincide',
+                    Icons.pedal_bike_outlined,
+                  )
+                : ListView.separated(
+                    key: const PageStorageKey(
+                      'client-logbook-compact-bikes',
+                    ),
+                    padding: EdgeInsets.zero,
+                    itemCount: filteredBikes.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, index) =>
+                        _buildCompactBikeRow(filteredBikes[index]),
+                  ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1865,9 +2096,37 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   Widget _buildJobsTab() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isDesktop = constraints.maxWidth > 900;
+        final usesCompactLayout = ResponsiveViewport.usesCompactShell(context);
+        if (usesCompactLayout && (_selectedJobId != null || _isEditingJob)) {
+          return ColoredBox(
+            color: Colors.white,
+            child: MechanicJobFormPage(
+              key: ValueKey(
+                'client-logbook-mobile-job-${_selectedJobId ?? 'new'}',
+              ),
+              jobId: _selectedJobId,
+              customerId: widget.customerId,
+              isEmbedded: true,
+              isInlineWorkspace: true,
+              onSaved: () {
+                setState(() {
+                  _isEditingJob = false;
+                  _selectedJobId = null;
+                });
+                _loadData();
+              },
+              onCanceled: () {
+                setState(() {
+                  _isEditingJob = false;
+                  _selectedJobId = null;
+                });
+              },
+            ),
+          );
+        }
+
         final showRightPane =
-            isDesktop && (_selectedJobId != null || _isEditingJob);
+            !usesCompactLayout && (_selectedJobId != null || _isEditingJob);
 
         if (!showRightPane) {
           return _buildJobsList();
@@ -1923,6 +2182,47 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     final completedCount =
         _jobs.where((j) => j.status == JobStatus.entregado).length;
 
+    if (ResponsiveViewport.usesCompactShell(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildTabToolbar(
+            searchController: _jobSearchController,
+            searchHint: 'Buscar trabajo…',
+            sortKey: _jobSortKey,
+            sortLabels: _jobSortLabels,
+            onSortChanged: (value) => setState(() => _jobSortKey = value),
+            statusText: filteredJobs.length == _jobs.length
+                ? '${_jobs.length} trabajos'
+                : '${filteredJobs.length} de ${_jobs.length}',
+            compactTrailing: _buildCompactJobFilter(
+              activeCount: activeCount,
+              completedCount: completedCount,
+            ),
+          ),
+          Expanded(
+            child: filteredJobs.isEmpty
+                ? _buildEmptyState(
+                    _jobs.isEmpty
+                        ? 'Sin trabajos registrados'
+                        : 'Ningún trabajo coincide',
+                    Icons.build_outlined,
+                  )
+                : ListView.separated(
+                    key: const PageStorageKey(
+                      'client-logbook-compact-jobs',
+                    ),
+                    padding: EdgeInsets.zero,
+                    itemCount: filteredJobs.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, index) =>
+                        _buildCompactJobRow(filteredJobs[index]),
+                  ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1952,6 +2252,10 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
                 ),
               );
             }).toList(),
+          ),
+          compactTrailing: _buildCompactJobFilter(
+            activeCount: activeCount,
+            completedCount: completedCount,
           ),
         ),
         LayoutBuilder(
@@ -2108,6 +2412,53 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
         ? 'Todos los tipos'
         : '${_timelineTypeFilters.length}/${allTypes.length} tipos';
 
+    if (ResponsiveViewport.usesCompactShell(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildTabToolbar(
+            searchController: _timelineSearchController,
+            searchHint: 'Buscar evento…',
+            sortKey: _timelineSortKey,
+            sortLabels: _timelineSortLabels,
+            onSortChanged: (value) => setState(() => _timelineSortKey = value),
+            statusText: filteredTimeline.length == _timeline.length
+                ? '${_timeline.length} eventos'
+                : '${filteredTimeline.length} de ${_timeline.length}',
+            compactTrailing: IconButton(
+              tooltip: allSelected
+                  ? 'Filtrar tipos de evento'
+                  : 'Filtros de evento activos',
+              constraints: BoxConstraints.tight(const Size(48, 48)),
+              onPressed: _showTimelineFilterSheet,
+              icon: Icon(
+                allSelected ? Icons.filter_list : Icons.filter_list_alt,
+              ),
+            ),
+          ),
+          Expanded(
+            child: filteredTimeline.isEmpty
+                ? _buildEmptyState(
+                    _timeline.isEmpty
+                        ? 'Sin eventos registrados'
+                        : 'Ningún evento coincide',
+                    Icons.history_outlined,
+                  )
+                : ListView.separated(
+                    key: const PageStorageKey(
+                      'client-logbook-compact-timeline',
+                    ),
+                    padding: EdgeInsets.zero,
+                    itemCount: filteredTimeline.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, index) =>
+                        _buildCompactTimelineRow(filteredTimeline[index]),
+                  ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2148,6 +2499,16 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
                 ),
               ],
             ],
+          ),
+          compactTrailing: IconButton(
+            tooltip: allSelected
+                ? 'Filtrar tipos de evento'
+                : 'Filtros de evento activos',
+            constraints: BoxConstraints.tight(const Size(48, 48)),
+            onPressed: _showTimelineFilterSheet,
+            icon: Icon(
+              allSelected ? Icons.filter_list : Icons.filter_list_alt,
+            ),
           ),
         ),
         LayoutBuilder(
@@ -2274,6 +2635,56 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     final paidCount = _invoices
         .where((invoice) => invoice.status == InvoiceStatus.paid)
         .length;
+
+    if (ResponsiveViewport.usesCompactShell(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildTabToolbar(
+            searchController: _invoiceSearchController,
+            searchHint: 'Buscar factura…',
+            sortKey: _invoiceSortKey,
+            sortLabels: _invoiceSortLabels,
+            onSortChanged: (value) => setState(() => _invoiceSortKey = value),
+            statusText: !_hasLoadedInvoices
+                ? 'Cargando facturas…'
+                : filteredInvoices.length == _invoices.length
+                    ? '${_invoices.length} facturas'
+                    : '${filteredInvoices.length} de ${_invoices.length}',
+          ),
+          Expanded(
+            child: _isLoadingInvoices && !_hasLoadedInvoices
+                ? const Center(
+                    child: BrandedLoading(
+                      size: 120,
+                      message: 'Cargando facturas…',
+                    ),
+                  )
+                : _invoiceError != null
+                    ? _buildInvoiceErrorState()
+                    : filteredInvoices.isEmpty
+                        ? _buildEmptyState(
+                            _invoices.isEmpty
+                                ? 'Sin facturas registradas'
+                                : 'Ninguna factura coincide',
+                            Icons.receipt_long_outlined,
+                          )
+                        : ListView.separated(
+                            key: const PageStorageKey(
+                              'client-logbook-compact-invoices',
+                            ),
+                            padding: EdgeInsets.zero,
+                            itemCount: filteredInvoices.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (_, index) => _buildCompactInvoiceRow(
+                              filteredInvoices[index],
+                            ),
+                          ),
+          ),
+        ],
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2631,7 +3042,9 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
       onTap: () => setState(() => _selectedChat = chat),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        color: isSelected ? theme.colorScheme.primary.withOpacity(0.08) : null,
+        color: isSelected
+            ? theme.colorScheme.primary.withValues(alpha: 0.08)
+            : null,
         child: Row(
           children: [
             Stack(
@@ -2639,7 +3052,8 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
+                  backgroundColor:
+                      theme.colorScheme.primary.withValues(alpha: 0.12),
                   child: Icon(
                     Icons.chat_bubble_outline,
                     size: 16,
@@ -2725,8 +3139,90 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     required ValueChanged<String> onSortChanged,
     required String statusText,
     Widget? trailing,
+    Widget? compactTrailing,
   }) {
     final theme = Theme.of(context);
+    final usesCompactLayout = ResponsiveViewport.usesCompactShell(context);
+
+    if (usesCompactLayout) {
+      return Container(
+        key: const ValueKey('client-logbook-compact-tab-toolbar'),
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          border: Border(bottom: BorderSide(color: theme.dividerColor)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: TextField(
+                  controller: searchController,
+                  style: const TextStyle(fontSize: 14),
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    hintText: searchHint,
+                    hintStyle: const TextStyle(fontSize: 13),
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: theme.dividerColor),
+                    ),
+                    filled: true,
+                    fillColor: theme.scaffoldBackgroundColor,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            PopupMenuButton<String>(
+              initialValue: sortKey,
+              tooltip: 'Ordenar: ${sortLabels[sortKey] ?? sortKey}',
+              constraints: const BoxConstraints(
+                minWidth: 240,
+                maxWidth: 320,
+              ),
+              onSelected: onSortChanged,
+              itemBuilder: (context) => sortLabels.entries
+                  .map(
+                    (entry) => PopupMenuItem(
+                      value: entry.key,
+                      height: 52,
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 28,
+                            child: entry.key == sortKey
+                                ? Icon(
+                                    Icons.check,
+                                    color: theme.colorScheme.primary,
+                                  )
+                                : null,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(entry.value)),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+              child: const SizedBox(
+                width: 48,
+                height: 48,
+                child: Icon(Icons.sort),
+              ),
+            ),
+            if (compactTrailing != null) ...[
+              const SizedBox(width: 4),
+              compactTrailing,
+            ],
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 10),
       decoration: BoxDecoration(
@@ -2911,6 +3407,58 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     );
   }
 
+  Widget _buildCompactJobFilter({
+    required int activeCount,
+    required int completedCount,
+  }) {
+    return PopupMenuButton<JobViewFilter>(
+      initialValue: _jobViewFilter,
+      tooltip: 'Filtrar trabajos: ${_jobFilterLabel(_jobViewFilter)}',
+      constraints: const BoxConstraints(
+        minWidth: 220,
+        maxWidth: 300,
+      ),
+      onSelected: (filter) => setState(() => _jobViewFilter = filter),
+      itemBuilder: (context) => JobViewFilter.values.map((filter) {
+        final count = switch (filter) {
+          JobViewFilter.active => activeCount,
+          JobViewFilter.completed => completedCount,
+          JobViewFilter.all => _jobs.length,
+        };
+        return PopupMenuItem(
+          value: filter,
+          height: 52,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 28,
+                child: filter == _jobViewFilter
+                    ? Icon(
+                        Icons.check,
+                        color: Theme.of(context).colorScheme.primary,
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: Text(_jobFilterLabel(filter))),
+              Text(
+                count.toString(),
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+      child: const SizedBox(
+        width: 48,
+        height: 48,
+        child: Icon(Icons.filter_list),
+      ),
+    );
+  }
+
   Widget _buildFilterToggle(
     String label,
     bool selected,
@@ -2975,6 +3523,523 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
           const SizedBox(height: 12),
           Text(message,
               style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactBikeRow(Bike bike) {
+    final theme = Theme.of(context);
+    final jobsForBike = _totalJobsForBike(bike.id);
+    final activeJobs = _activeJobsForBike(bike.id);
+    final serial = bike.serialNumber?.trim();
+
+    void openBike() => _openBikeRecordPane(bike);
+
+    return Material(
+      color: theme.colorScheme.surface,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Semantics(
+              button: true,
+              label: 'Abrir bicicleta ${bike.displayName}',
+              onTap: openBike,
+              excludeSemantics: true,
+              child: InkWell(
+                onTap: openBike,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 76),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.pedal_bike,
+                            color: theme.colorScheme.onPrimaryContainer,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                bike.displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                [
+                                  if (bike.bikeType != null)
+                                    bike.bikeType!.displayName,
+                                  if (serial?.isNotEmpty == true)
+                                    'Serie $serial',
+                                ].join(' · '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '$jobsForBike ${jobsForBike == 1 ? 'trabajo' : 'trabajos'}'
+                                '${activeJobs > 0 ? ' · $activeJobs ${activeJobs == 1 ? 'activo' : 'activos'}' : ''}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: activeJobs > 0
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.onSurfaceVariant,
+                                  fontWeight: activeJobs > 0
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Opciones de ${bike.displayName}',
+            constraints: const BoxConstraints(
+              minWidth: 230,
+              maxWidth: 310,
+            ),
+            onSelected: (value) {
+              if (value == 'jobs') {
+                setState(() {
+                  _jobViewFilter = JobViewFilter.all;
+                  _jobSearchController.text = bike.displayName;
+                  _jobSearchTerm = bike.displayName;
+                });
+                _tabController.animateTo(1);
+              } else if (value == 'edit') {
+                _openBikeEditorPane(bike);
+              } else if (value == 'delete') {
+                _confirmDeleteBike(bike);
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'jobs',
+                height: 56,
+                child: Row(
+                  children: [
+                    Icon(Icons.build_circle_outlined),
+                    SizedBox(width: 12),
+                    Expanded(child: Text('Ver trabajos')),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'edit',
+                height: 56,
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined),
+                    SizedBox(width: 12),
+                    Expanded(child: Text('Editar bicicleta')),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                height: 56,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.delete_outline,
+                      color: theme.colorScheme.error,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Eliminar bicicleta',
+                        style: TextStyle(color: theme.colorScheme.error),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            child: const SizedBox(
+              width: 48,
+              height: 56,
+              child: Icon(Icons.more_horiz),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactJobRow(MechanicJob job) {
+    final theme = Theme.of(context);
+    final bike = _getBikeForJob(job);
+    final request = job.isStandaloneQuotation
+        ? job.subjectNotes?.trim()
+        : job.clientRequest?.trim();
+    final total = NumberFormat.currency(symbol: '\$', decimalDigits: 0)
+        .format(_getJobDisplayTotal(job));
+
+    void openJob() {
+      setState(() {
+        _selectedJobId = job.id;
+        _isEditingJob = true;
+      });
+    }
+
+    return Material(
+      color: theme.colorScheme.surface,
+      child: Semantics(
+        button: true,
+        label:
+            'Abrir trabajo ${job.jobNumber ?? ''}, ${bike.displayName}, ${job.statusDisplayName}',
+        onTap: openJob,
+        excludeSemantics: true,
+        child: InkWell(
+          onTap: openJob,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 88),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 4,
+                    height: 48,
+                    margin: const EdgeInsets.only(top: 2, right: 10),
+                    decoration: BoxDecoration(
+                      color: _compactJobPriorityColor(job.priority),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                job.jobNumber ?? 'Trabajo',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(child: _buildStatusBadge(job)),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          bike.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (request?.isNotEmpty == true) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            request!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    width: 78,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          total,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          DateFormat('dd/MM/yy').format(job.arrivalDate),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Icon(Icons.chevron_right, size: 20),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _compactJobPriorityColor(JobPriority priority) {
+    return switch (priority) {
+      JobPriority.urgente => Colors.red,
+      JobPriority.alta => Colors.orange,
+      JobPriority.baja => Colors.grey,
+      JobPriority.normal => Colors.blue,
+    };
+  }
+
+  Widget _buildCompactInvoiceRow(Invoice invoice) {
+    final theme = Theme.of(context);
+    final bikeName = _bikeIndex[invoice.bikeId]?.displayName;
+    final contextTitle =
+        bikeName ?? invoice.reference ?? _invoiceTypeLabel(invoice);
+    final formatter = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+
+    return Material(
+      color: theme.colorScheme.surface,
+      child: Semantics(
+        button: invoice.id != null,
+        label:
+            'Abrir factura ${invoice.invoiceNumber}, $contextTitle, saldo ${formatter.format(invoice.balance)}',
+        onTap: invoice.id == null ? null : () => _openInvoice(invoice),
+        excludeSemantics: true,
+        child: InkWell(
+          onTap: invoice.id == null ? null : () => _openInvoice(invoice),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 82),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                invoice.invoiceNumber,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildInvoiceStatusChip(invoice.status),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          contextTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          [
+                            DateFormat('dd/MM/yy').format(invoice.date),
+                            _invoiceTypeLabel(invoice),
+                          ].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 92,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          formatter.format(invoice.total),
+                          maxLines: 1,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          invoice.balance > 0.01
+                              ? 'Saldo ${formatter.format(invoice.balance)}'
+                              : 'Pagada',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: invoice.balance > 0.01
+                                ? Colors.orange.shade800
+                                : Colors.green.shade700,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        const Icon(Icons.chevron_right, size: 20),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactTimelineRow(MechanicJobTimeline event) {
+    final theme = Theme.of(context);
+    final color = _timelineColor(event.eventType);
+    final job = event.jobId.isNotEmpty ? _jobIndex[event.jobId] : null;
+    final bike = job != null ? _bikeIndex[job.bikeId] : null;
+    final description =
+        event.description ?? _getDefaultDescription(event.eventType);
+    final reference = [
+      if (job?.jobNumber?.isNotEmpty == true) job!.jobNumber!,
+      if (bike != null) bike.displayName,
+      if (event.createdByName?.isNotEmpty == true) event.createdByName!,
+    ].join(' · ');
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 72),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                _timelineIcon(event.eventType),
+                color: color,
+                size: 21,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (event.oldValue != null || event.newValue != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '${event.oldValue ?? ''} → ${event.newValue ?? ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  if (reference.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      reference,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              DateFormat('dd/MM\nHH:mm').format(event.createdAt),
+              textAlign: TextAlign.right,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInvoiceErrorState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.receipt_long_outlined, size: 48, color: Colors.red[300]),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              _invoiceError!,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[700], fontSize: 13),
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => _loadInvoices(forceRefresh: true),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 48),
+            ),
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Reintentar'),
+          ),
         ],
       ),
     );
@@ -3291,7 +4356,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
               try {
                 await customerService.addLoyaltyPoints(
                     widget.customerId, points);
-                if (mounted) {
+                if (mounted && dialogContext.mounted) {
                   Navigator.of(dialogContext).pop();
                   messenger.showSnackBar(
                     const SnackBar(
@@ -3385,7 +4450,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
               try {
                 await customerService.redeemLoyaltyPoints(
                     widget.customerId, points);
-                if (mounted) {
+                if (mounted && dialogContext.mounted) {
                   Navigator.of(dialogContext).pop();
                   messenger.showSnackBar(
                     const SnackBar(
@@ -4056,7 +5121,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
       );
     }
 
-    return _statusBadgeContainer(status.displayName, color);
+    return _statusBadgeContainer(job.statusDisplayName, color);
   }
 
   Color _operationalStatusColor(JobStatus status) {

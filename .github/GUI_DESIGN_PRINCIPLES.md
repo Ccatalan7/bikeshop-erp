@@ -2,6 +2,19 @@
 
 **Philosophy:** Professional, minimalist, data-dense interfaces that prioritize functionality over decoration, with a restrained premium/performance edge expressed through discipline rather than color noise.
 
+## Ownership and companion guide
+
+This file is the canonical owner of the shared visual language: color,
+typography, hierarchy, spacing, common accessibility, overlays, popovers, and
+rules that apply on every platform.
+
+For phone, tablet, or responsive work, also read
+[`GUI_MOBILE_DESIGN_PRINCIPLES.md`](GUI_MOBILE_DESIGN_PRINCIPLES.md). That
+companion guide owns compact composition, touch navigation, lists/cards,
+disclosures, forms with a virtual keyboard, SafeArea/scroll behavior, context
+preservation, breakpoints, and the real-device validation matrix. Mobile
+recipes belong there and are referenced rather than duplicated here.
+
 ---
 
 ## 🎯 Core Design Principles
@@ -292,7 +305,8 @@ IconButton(
 - Dashboard widgets
 - Settings pages
 - Reports (full-width preferred)
-- Mobile views (use navigation instead)
+- Phone/tablet split panes that cannot preserve useful touch widths; follow the
+  compact composition rules in `GUI_MOBILE_DESIGN_PRINCIPLES.md`
 
 #### Implementation Pattern
 ```dart
@@ -335,7 +349,8 @@ Row(
   from a split detail replaces that detail pane inline, not the entire route.
 - ✅ The same workflow launched from a routed form stays inside its existing
   `MainLayout`; it must not mount a nested top-level `Scaffold` or `AppBar`.
-- ❌ Don't use split-pane on mobile (< 900px width)
+- ❌ Don't squeeze a desktop split pane into the phone/tablet classes defined
+  by `GUI_MOBILE_DESIGN_PRINCIPLES.md`
 - ❌ Don't make both panes scrollable independently (confusing)
 
 ---
@@ -445,32 +460,16 @@ Container(
 
 ---
 
-### 11. **Responsive Breakpoints**
+### 11. **Responsive Composition**
 
-```dart
-// Define breakpoints
-const double mobileBreakpoint = 600;
-const double tabletBreakpoint = 900;
-const double desktopBreakpoint = 1200;
+The canonical phone/tablet/desktop classes, dedicated composition rules,
+touch contracts, and required boundary tests live in
+[`GUI_MOBILE_DESIGN_PRINCIPLES.md`](GUI_MOBILE_DESIGN_PRINCIPLES.md).
 
-// Responsive layout
-LayoutBuilder(
-  builder: (context, constraints) {
-    if (constraints.maxWidth < mobileBreakpoint) {
-      return MobileLayout();
-    } else if (constraints.maxWidth < tabletBreakpoint) {
-      return TabletLayout();
-    } else {
-      return DesktopLayout();
-    }
-  },
-)
-```
-
-#### Responsive Rules
-- **Mobile (<600px):** Single column, stacked forms, card-based lists
-- **Tablet (600-900px):** Two columns, collapsible sidebar
-- **Desktop (>900px):** Multi-column, split-pane, full tables
+The shared rule here is platform-independent: responsive variants may rearrange
+information and controls, but they must preserve the same business command,
+permissions, validation, and persistent effects. Do not use an operating-system
+check when the decision depends on available layout constraints.
 
 ---
 
@@ -499,6 +498,119 @@ LayoutBuilder(
 ❌ **Inconsistent Spacing**
 - Don't use random spacing values (8, 12, 15, 17, 20...)
 - Stick to 4px increments: 8, 12, 16, 24, 32
+
+---
+
+### 13. **Anchored Popovers, Menus & Pickers**
+
+An anchored surface is interaction infrastructure, not merely a floating card.
+Its positioning, overlay ownership, dismissal, focus, semantics, scrolling, and
+rendering behavior must be designed together.
+
+#### UX Contract
+
+- Open a contextual popover next to its trigger, normally `4-8px` below it.
+- Keep approximately `12px` between the popover and every viewport edge.
+- Align the trigger and popover on the leading edge when space permits; align
+  their trailing edges when the surface would overflow horizontally.
+- Open above the trigger only when it does not fit below.
+- Keep desktop date pickers, filters, and contextual tools compact and
+  anchored. Do not replace them with a centered/full-page dialog or dim the
+  entire application unless the decision genuinely blocks the workflow.
+- Constrain tall content and scroll inside the popover rather than allowing it
+  to escape the viewport.
+- Outside click, `Escape`, cancel, selection, route disposal, and host teardown
+  must have explicit behavior. Restore focus to the trigger when appropriate.
+- If the host scrolls or resizes while the surface is open, the surface must
+  either follow/recompute or close. A detached popover is never acceptable.
+
+#### Choose the Flutter Primitive Deliberately
+
+There is no universal overlay primitive. Use this order:
+
+1. Use a framework-managed `PopupMenuButton`, `MenuAnchor`, or equivalent when
+   the standard component satisfies the interaction and geometry.
+2. For a complex, short-lived popover whose anchor is stable while open, render
+   a `Positioned` child in the root Navigator overlay. Measure the trigger in
+   that **same overlay coordinate system**, clamp it to the viewport, and
+   implement the below/above and leading/trailing fallbacks.
+3. When the surface must continuously follow a scrolling, animated, or
+   transformed anchor, prefer a tested shared implementation based on
+   `OverlayPortal.overlayChildLayoutBuilder`.
+4. Use `CompositedTransformTarget` / `CompositedTransformFollower` only for a
+   simple leaf surface that genuinely requires continuous tracking.
+
+`CompositedTransformFollower` is **not** the default for every dropdown. Never
+place a widget that creates another overlay beneath a follower. This includes
+`Tooltip`, `PopupMenuButton`, `MenuAnchor`, `showMenu`, and another
+`OverlayPortal`. Flutter cannot reliably compute the nested portal's layout
+transform because `RenderFollowerLayer` establishes it during paint, which can
+produce `RenderFollowerLayer` and `debugNeedsLayout` assertions and visible
+flicker. Use `OverlayPortal.overlayChildLayoutBuilder`, move the secondary
+surface outside the follower, or replace it with a local non-overlay hover
+label/in-place panel.
+
+#### One Coordinate Space, Including App Zoom
+
+Never combine a transformed global origin with an untransformed `RenderBox.size`.
+The ERP normally runs inside `WindowZoomScope`, so transform both corners into
+the target overlay:
+
+```dart
+final anchorBox = anchorContext.findRenderObject()! as RenderBox;
+final overlayBox = Navigator.of(
+  context,
+  rootNavigator: true,
+).overlay!.context.findRenderObject()! as RenderBox;
+
+final topLeft = anchorBox.localToGlobal(
+  Offset.zero,
+  ancestor: overlayBox,
+);
+final bottomRight = anchorBox.localToGlobal(
+  anchorBox.size.bottomRight(Offset.zero),
+  ancestor: overlayBox,
+);
+final anchorRect = Rect.fromPoints(topLeft, bottomRight);
+```
+
+Use `anchorRect` and `overlayBox.size` together. Do not calculate the trigger in
+screen/global coordinates and position its child in a route-local or nested
+overlay coordinate system.
+
+#### Mandatory Regression Gate
+
+Analyzer success and a screenshot are not sufficient for an anchored surface.
+Before marking it complete:
+
+- Open it through the real widget interaction in a widget test.
+- Assert its gap/alignment to the trigger, horizontal clamp, and vertical flip
+  near the left, right, top, and bottom edges.
+- Exercise a normal desktop host, the real compact host, a short viewport, and
+  the ERP's `80%` transformed/zoomed host.
+- Hover long enough to open every nested tooltip/menu and assert
+  `tester.takeException()` remains `null` after each overlay transition.
+- Verify inside selection, cancel, outside click, `Escape`, focus restoration,
+  scroll/resize policy, and disposal without orphaned entries.
+- Give the trigger and surface stable semantic labels/keys and test the keyboard
+  path where applicable.
+- Inspect the debug runtime log. It must contain no `RenderFollowerLayer`,
+  `debugNeedsLayout`, `RenderBox was not laid out`, semantics assertion, or
+  overflow from the interaction.
+
+Current compact-popover reference:
+
+- Implementation:
+  `lib/shared/widgets/notifications_panel.dart`
+- Real geometry and nested-tooltip regression:
+  `test/widget/notification_period_popover_position_test.dart`
+
+#### Living UI Learning Rule
+
+When a UI incident reveals a reusable rendering, layout, layering,
+accessibility, or interaction failure mode, update this guide and add the
+smallest behavioral regression test in the same task. Do not leave the lesson
+only in a chat, a one-off comment, or a private widget implementation.
 
 ---
 
@@ -574,11 +686,13 @@ Before implementing ANY new module UI:
 - [ ] Status badges use semantic colors only
 - [ ] Forms are scannable (clear labels, grouped fields)
 - [ ] Typography follows size/weight standards
-- [ ] Responsive breakpoints implemented
+- [ ] Responsive matrix from `GUI_MOBILE_DESIGN_PRINCIPLES.md` implemented
 - [ ] Split-pane only if module fits use case
 - [ ] No loud decorative gradients or heavy shadows; subtle localized tonal
       depth is allowed when it improves hierarchy
 - [ ] Data density optimized (10-15 rows visible)
+- [ ] Any anchored popover/menu/picker follows section 13 and passes its real
+      host, viewport, hover, zoom, dismissal, and render-exception checks
 
 ---
 
@@ -664,4 +778,6 @@ When redesigning existing modules:
 
 ---
 
-**Remember:** Professional software looks BORING. That's the goal. Prioritize clarity, efficiency, and data density over visual flair.
+**Remember:** Professional software should feel calm, precise, and intentional,
+not childish, noisy, flat, or lifeless. Prioritize clarity, efficiency, data
+density, and restrained character over decorative flair.

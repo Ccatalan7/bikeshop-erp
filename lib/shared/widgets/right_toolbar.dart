@@ -23,6 +23,12 @@ import 'quick_sale_panel.dart';
 import 'quick_supplier_messages_panel.dart';
 import 'quick_task_panel.dart';
 import 'right_toolbar_glass_surface.dart';
+import 'toolbar_tool_presentation.dart';
+
+enum RightToolbarPresentation {
+  desktopRail,
+  compactWorkspace,
+}
 
 /// A Zoho Books-style right sidebar toolbar.
 ///
@@ -30,9 +36,17 @@ import 'right_toolbar_glass_surface.dart';
 /// Tapping an icon **expands** the toolbar to a resizable width, revealing the
 /// selected tool's panel. A close button collapses it back.
 class RightToolbar extends StatefulWidget {
-  const RightToolbar({super.key});
+  const RightToolbar({
+    super.key,
+    this.presentation = RightToolbarPresentation.desktopRail,
+  });
+
+  const RightToolbar.compactWorkspace({super.key})
+      : presentation = RightToolbarPresentation.compactWorkspace;
 
   static const double collapsedWidth = 48.0;
+
+  final RightToolbarPresentation presentation;
 
   @override
   State<RightToolbar> createState() => _RightToolbarState();
@@ -41,6 +55,10 @@ class RightToolbar extends StatefulWidget {
 class _RightToolbarState extends State<RightToolbar> {
   double _expandedWidth = 380.0;
   bool _isResizing = false;
+  late final Map<ToolbarTool, GlobalKey> _panelKeys = {
+    for (final tool in ToolbarTool.values)
+      tool: GlobalKey(debugLabel: 'right-toolbar-panel-${tool.name}'),
+  };
 
   static const double _minWidth = 320.0;
   static const double _absoluteMaxWidth = 1600.0;
@@ -92,10 +110,10 @@ class _RightToolbarState extends State<RightToolbar> {
   }
 
   void _selectTool(ToolbarTool tool) {
-    if (tool == ToolbarTool.newJob) {
-      context
-          .read<WorkspaceManager>()
-          .navigateActiveWorkspace('/taller/pegas/nueva');
+    final presentation = tool.toolbarPresentation;
+    final route = presentation.route;
+    if (route != null) {
+      context.read<WorkspaceManager>().navigateActiveWorkspace(route);
       return;
     }
     final toolbarService = context.read<RightToolbarService>();
@@ -113,76 +131,6 @@ class _RightToolbarState extends State<RightToolbar> {
 
   void _close() {
     context.read<RightToolbarService>().close();
-  }
-
-  String _toolTitle(ToolbarTool tool) {
-    switch (tool) {
-      case ToolbarTool.notifications:
-        return 'Resumen diario';
-      case ToolbarTool.newJob:
-        return 'Nuevo Trabajo';
-      case ToolbarTool.bikeFinder:
-        return 'Buscador de Bicicletas';
-      case ToolbarTool.aiAssistant:
-        return 'Asistente IA';
-      case ToolbarTool.messages:
-        return 'Mensajería';
-      case ToolbarTool.supplierMessages:
-        return 'Proveedores';
-      case ToolbarTool.storage:
-        return 'Archivos';
-      case ToolbarTool.fileRunner:
-        return 'Ejecutar archivos';
-      case ToolbarTool.kiosk:
-        return 'Kiosko RRHH';
-      case ToolbarTool.quickSale:
-        return 'Venta Rápida';
-      case ToolbarTool.expenses:
-        return 'Gastos Rápidos';
-      case ToolbarTool.purchases:
-        return 'Compras';
-      case ToolbarTool.tasks:
-        return 'Tareas';
-      case ToolbarTool.calculator:
-        return 'Calculadora';
-      case ToolbarTool.performance:
-        return 'DB Gauge';
-    }
-  }
-
-  IconData _toolIcon(ToolbarTool tool) {
-    switch (tool) {
-      case ToolbarTool.notifications:
-        return Icons.notifications_outlined;
-      case ToolbarTool.newJob:
-        return Icons.build_circle_outlined;
-      case ToolbarTool.bikeFinder:
-        return Icons.pedal_bike_outlined;
-      case ToolbarTool.aiAssistant:
-        return Icons.auto_awesome;
-      case ToolbarTool.messages:
-        return Icons.chat_bubble_outline;
-      case ToolbarTool.supplierMessages:
-        return Icons.storefront_outlined;
-      case ToolbarTool.storage:
-        return Icons.folder_open_outlined;
-      case ToolbarTool.fileRunner:
-        return Icons.play_circle_outline;
-      case ToolbarTool.kiosk:
-        return Icons.badge_outlined;
-      case ToolbarTool.quickSale:
-        return Icons.flash_on;
-      case ToolbarTool.expenses:
-        return Icons.receipt_long_outlined;
-      case ToolbarTool.purchases:
-        return Icons.shopping_cart_outlined;
-      case ToolbarTool.tasks:
-        return Icons.task_alt;
-      case ToolbarTool.calculator:
-        return Icons.calculate_outlined;
-      case ToolbarTool.performance:
-        return Icons.speed_outlined;
-    }
   }
 
   Widget _toolPanel(ToolbarTool tool) {
@@ -242,6 +190,13 @@ class _RightToolbarState extends State<RightToolbar> {
     }
   }
 
+  Widget _stableToolPanel(ToolbarTool tool) {
+    return KeyedSubtree(
+      key: _panelKeys[tool],
+      child: _toolPanel(tool),
+    );
+  }
+
   int _toolBadgeCount(ToolbarTool tool, ChatProvider chatProvider) {
     if (tool == ToolbarTool.notifications) {
       return NotificationService().unreadNotificationsCount.value;
@@ -294,7 +249,7 @@ class _RightToolbarState extends State<RightToolbar> {
       alignment: Alignment.center,
       children: [
         Icon(
-          _toolIcon(tool),
+          tool.toolbarPresentation.icon,
           size: iconSize,
           color: iconColor,
         ),
@@ -348,13 +303,21 @@ class _RightToolbarState extends State<RightToolbar> {
 
   @override
   Widget build(BuildContext context) {
+    final toolbarService = context.watch<RightToolbarService>();
+    final activeTool = toolbarService.activeTool;
+
+    if (widget.presentation == RightToolbarPresentation.compactWorkspace) {
+      if (activeTool == null || !activeTool.toolbarPresentation.opensPanel) {
+        return const SizedBox.shrink();
+      }
+      return _buildCompactWorkspace(activeTool);
+    }
+
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final toolbarService = context.watch<RightToolbarService>();
     final desktopUpdateService = context.watch<DesktopUpdateService>();
     final chatProvider = context.watch<ChatProvider>();
     final appearanceService = context.watch<AppearanceService>();
-    final activeTool = toolbarService.activeTool;
     final visibleTools = _visibleTools(toolbarService);
     final useToolbarPalette = appearanceService.messagingUsesSidebarPalette;
     final blurEnabled = appearanceService.rightToolbarBlurEnabled;
@@ -447,6 +410,68 @@ class _RightToolbarState extends State<RightToolbar> {
     );
   }
 
+  Widget _buildCompactWorkspace(ToolbarTool tool) {
+    final theme = Theme.of(context);
+    final presentation = tool.toolbarPresentation;
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _close();
+      },
+      child: Semantics(
+        container: true,
+        label: '${presentation.title}, herramienta',
+        child: Material(
+          color: theme.colorScheme.surface,
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  height: 56,
+                  padding: const EdgeInsets.only(left: 4, right: 12),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: theme.colorScheme.outlineVariant,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        key: const ValueKey('right-toolbar-compact-back'),
+                        tooltip: 'Volver',
+                        onPressed: _close,
+                        icon: const Icon(Icons.arrow_back),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Semantics(
+                          header: true,
+                          child: Text(
+                            presentation.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(child: _stableToolPanel(tool)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Narrow icon column (collapsed state)
   Widget _buildCollapsed(
     ThemeData theme,
@@ -465,7 +490,7 @@ class _RightToolbarState extends State<RightToolbar> {
           // Tool icons
           for (final tool in visibleTools)
             Tooltip(
-              message: _toolTitle(tool),
+              message: tool.toolbarPresentation.title,
               preferBelow: false,
               waitDuration: const Duration(milliseconds: 400),
               child: Material(
@@ -552,7 +577,7 @@ class _RightToolbarState extends State<RightToolbar> {
               ),
               const SizedBox(width: 8),
               Text(
-                _toolTitle(tool),
+                tool.toolbarPresentation.title,
                 style: panelTheme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -597,7 +622,7 @@ class _RightToolbarState extends State<RightToolbar> {
           ),
         ),
         // Tool content
-        Expanded(child: _toolPanel(tool)),
+        Expanded(child: _stableToolPanel(tool)),
       ],
     );
 
@@ -647,7 +672,7 @@ class _RightToolbarState extends State<RightToolbar> {
                       ),
                     for (final t in visibleTools)
                       Tooltip(
-                        message: _toolTitle(t),
+                        message: t.toolbarPresentation.title,
                         preferBelow: false,
                         waitDuration: const Duration(milliseconds: 300),
                         child: Material(
