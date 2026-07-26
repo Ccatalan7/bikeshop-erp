@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -6,6 +8,43 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val androidSigningProperties = Properties()
+val androidSigningPropertiesFile = rootProject.file("key.properties")
+if (androidSigningPropertiesFile.exists()) {
+    androidSigningPropertiesFile.inputStream().use(androidSigningProperties::load)
+}
+
+fun signingValue(environmentName: String, propertyName: String): String? =
+    System.getenv(environmentName)?.takeIf { it.isNotBlank() }
+        ?: androidSigningProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() }
+
+val androidReleaseKeystorePath =
+    signingValue("VINABIKE_ANDROID_KEYSTORE_PATH", "storeFile")
+val androidReleaseStorePassword =
+    signingValue("VINABIKE_ANDROID_STORE_PASSWORD", "storePassword")
+val androidReleaseKeyAlias =
+    signingValue("VINABIKE_ANDROID_KEY_ALIAS", "keyAlias")
+val androidReleaseKeyPassword =
+    signingValue("VINABIKE_ANDROID_KEY_PASSWORD", "keyPassword")
+val isAndroidReleaseBuild = gradle.startParameter.taskNames.any {
+    it.contains("release", ignoreCase = true)
+}
+
+if (isAndroidReleaseBuild) {
+    require(!androidReleaseKeystorePath.isNullOrBlank()) {
+        "VINABIKE_ANDROID_KEYSTORE_PATH (or android/key.properties storeFile) is required for release builds."
+    }
+    require(!androidReleaseStorePassword.isNullOrBlank()) {
+        "VINABIKE_ANDROID_STORE_PASSWORD (or android/key.properties storePassword) is required for release builds."
+    }
+    require(!androidReleaseKeyAlias.isNullOrBlank()) {
+        "VINABIKE_ANDROID_KEY_ALIAS (or android/key.properties keyAlias) is required for release builds."
+    }
+    require(!androidReleaseKeyPassword.isNullOrBlank()) {
+        "VINABIKE_ANDROID_KEY_PASSWORD (or android/key.properties keyPassword) is required for release builds."
+    }
 }
 
 android {
@@ -24,10 +63,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.vinabike.erp"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -35,11 +71,20 @@ android {
         multiDexEnabled = true
     }
 
+    signingConfigs {
+        if (!androidReleaseKeystorePath.isNullOrBlank()) {
+            create("release") {
+                storeFile = file(androidReleaseKeystorePath)
+                storePassword = androidReleaseStorePassword
+                keyAlias = androidReleaseKeyAlias
+                keyPassword = androidReleaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
         }

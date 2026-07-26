@@ -14,6 +14,7 @@ import '../pages/customer_dashboard_page.dart';
 import '../pages/customer_orders_page.dart';
 import '../pages/customer_profile_page.dart';
 import '../pages/customer_service_history_page.dart';
+import '../pages/android_app_download_page.dart';
 import '../pages/dynamic_website_page.dart';
 import '../pages/order_confirmation_page.dart';
 import '../pages/product_catalog_page.dart';
@@ -632,6 +633,14 @@ class PublicStoreRouter {
           ),
         ),
         GoRoute(
+          path: '/cuenta/descargas/android',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const AndroidAppDownloadPage(),
+          ),
+        ),
+        GoRoute(
           path: '/cuenta/perfil',
           pageBuilder: (context, state) => _buildPage(
             context,
@@ -812,6 +821,10 @@ class PublicStoreRouter {
         GoRoute(
           path: '/tienda/cuenta/login',
           redirect: (context, state) => '/cuenta/login',
+        ),
+        GoRoute(
+          path: '/tienda/cuenta/descargas/android',
+          redirect: (context, state) => '/cuenta/descargas/android',
         ),
         GoRoute(
           path: '/tienda/cuenta/perfil',

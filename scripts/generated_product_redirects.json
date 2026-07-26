@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-24T09:56:33.342246Z",
+  "generatedAt": "2026-07-26T07:41:25.222173Z",
   "redirects": [
     {
       "source": "/productos/003addb4-e910-4655-8a0b-f87fbc77f1b3",
@@ -2124,11 +2124,6 @@
     {
       "source": "/productos/be783151-f617-475a-ac4c-00d3232c003f",
       "destination": "/productos/rayos-29-0-cms-mtb-gruesa/R749",
-      "type": 301
-    },
-    {
-      "source": "/productos/bea0b3a7-992f-4c0c-b82e-e21e7154846e",
-      "destination": "/productos/maza-trasera-disco-36h-para-pinon-con-hilo-qr-13mm-8s/1202",
       "type": 301
     },
     {

@@ -145,6 +145,7 @@ import '../../public_store/pages/customer_addresses_page.dart';
 import '../../public_store/pages/customer_orders_page.dart';
 import '../../public_store/pages/customer_bikes_page.dart';
 import '../../public_store/pages/customer_service_history_page.dart';
+import '../../public_store/pages/android_app_download_page.dart';
 import '../../public_store/pages/dynamic_website_page.dart';
 import '../../public_store/pages/static_policy_page.dart';
 import '../../public_store/pages/customer_chat_list_page.dart';
@@ -978,6 +979,13 @@ class AppRouter {
                         ),
                       ),
                       GoRoute(
+                        path: 'descargas/android',
+                        pageBuilder: (context, state) => _buildShellPage(
+                          'public_store_shell_tienda_cuenta_android_download',
+                          const AndroidAppDownloadPage(),
+                        ),
+                      ),
+                      GoRoute(
                         path: 'perfil',
                         pageBuilder: (context, state) => _buildShellPage(
                           'public_store_shell_tienda_cuenta_perfil',
@@ -1214,6 +1222,14 @@ class AppRouter {
             context,
             state,
             const PublicStoreWrapper(child: CustomerAuthPage()),
+          ),
+        ),
+        GoRoute(
+          path: '/cuenta/descargas/android',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: AndroidAppDownloadPage()),
           ),
         ),
         GoRoute(

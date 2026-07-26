@@ -40387,3 +40387,47 @@ comment on function public.correct_sales_payment(
 -- derived per source line from posted receipts and effective resolutions, so
 -- list consumers never need a second asynchronous status query.
 \ir ../migrations/20260724053000_add_purchase_invoice_list_read_model.sql
+--------------------------------------------------------------------------------
+-- PRIVATE ANDROID ERP RELEASES
+--------------------------------------------------------------------------------
+
+insert into storage.buckets (
+  id,
+  name,
+  public,
+  file_size_limit,
+  allowed_mime_types
+)
+values (
+  'erp-mobile-releases',
+  'erp-mobile-releases',
+  false,
+  262144000,
+  array[
+    'application/json',
+    'application/vnd.android.package-archive'
+  ]::text[]
+)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists android_release_objects_select_staff
+  on storage.objects;
+
+create policy android_release_objects_select_staff
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'erp-mobile-releases'
+  and exists (
+    select 1
+    from public.user_profiles profile
+    where profile.user_id = auth.uid()
+      and profile.is_active is true
+      and profile.tenant_id::text = (storage.foldername(name))[1]
+  )
+);
