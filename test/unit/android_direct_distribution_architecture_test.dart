@@ -5,6 +5,25 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   String normalized(String value) => value.replaceAll(RegExp(r'\s+'), ' ');
 
+  Future<({int exitCode, String stdout, String stderr})> parseSignerDigest(
+      String apksignerOutput) async {
+    final process = await Process.start(
+      'bash',
+      ['scripts/android/extract_apksigner_cert_sha256.sh'],
+    );
+    process.stdin.write(apksignerOutput);
+    await process.stdin.close();
+    final output =
+        await process.stdout.transform(systemEncoding.decoder).join();
+    final error = await process.stderr.transform(systemEncoding.decoder).join();
+    final exitCode = await process.exitCode;
+    return (
+      exitCode: exitCode,
+      stdout: output.trim(),
+      stderr: error.trim(),
+    );
+  }
+
   test('Android release builds never fall back to the debug signing key', () {
     final gradle = File('android/app/build.gradle.kts').readAsStringSync();
     final publisher = File(
@@ -24,10 +43,52 @@ void main() {
     expect(publisher, contains('APK_PART_BYTES=41943040'));
     expect(
       publisher,
+      contains('extract_apksigner_cert_sha256.sh'),
+    );
+    expect(
+      publisher,
       contains(
         '7e651eb2989b22a9d9262f91f0657e3a512134ac7675715fed144273ad2a897c',
       ),
     );
+    expect(
+      normalized(publisher),
+      contains(
+        r'if [[ "$SIGNER_CERT_SHA256" != "$EXPECTED_SIGNER_CERT_SHA256" ]]',
+      ),
+    );
+  });
+
+  test('Android signer parser supports legacy and Build Tools 37 output',
+      () async {
+    const digest =
+        '7e651eb2989b22a9d9262f91f0657e3a512134ac7675715fed144273ad2a897c';
+    final legacy = await parseSignerDigest(
+      'Signer #1 certificate SHA-256 digest: $digest\n',
+    );
+    final buildTools37 = await parseSignerDigest(
+      'V2 Signer: certificate SHA-256 digest: ${digest.toUpperCase()}\n',
+    );
+
+    expect(legacy.exitCode, 0, reason: legacy.stderr);
+    expect(legacy.stdout, digest);
+    expect(buildTools37.exitCode, 0, reason: buildTools37.stderr);
+    expect(buildTools37.stdout, digest);
+  });
+
+  test('Android signer parser fails closed for ambiguous certificates',
+      () async {
+    const expected =
+        '7e651eb2989b22a9d9262f91f0657e3a512134ac7675715fed144273ad2a897c';
+    const unexpected =
+        '8e651eb2989b22a9d9262f91f0657e3a512134ac7675715fed144273ad2a897c';
+    final ambiguous = await parseSignerDigest(
+      'V2 Signer: certificate SHA-256 digest: $expected\n'
+      'V3 Signer: certificate SHA-256 digest: $unexpected\n',
+    );
+
+    expect(ambiguous.exitCode, isNot(0));
+    expect(ambiguous.stdout, isEmpty);
   });
 
   test('Android installer handoff is package-scoped and cache-scoped', () {

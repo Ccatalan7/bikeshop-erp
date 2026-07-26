@@ -557,7 +557,7 @@ APKSIGNER_OUTPUT="$(
 )"
 SIGNER_CERT_SHA256="$(
   printf '%s\n' "$APKSIGNER_OUTPUT" |
-    sed -nE 's/^Signer #1 certificate SHA-256 digest: ([a-f0-9]{64})$/\1/p'
+    bash "$PROJECT_ROOT/scripts/android/extract_apksigner_cert_sha256.sh"
 )"
 if [[ "$SIGNER_CERT_SHA256" != "$EXPECTED_SIGNER_CERT_SHA256" ]]; then
   echo "The APK signer does not match the permanent Vinabike release key." >&2
