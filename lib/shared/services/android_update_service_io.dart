@@ -16,87 +16,158 @@ class AndroidUpdateService extends ChangeNotifier {
   static const _channel = MethodChannel('com.vinabike.erp/android_update');
 
   final SupabaseClient _supabase;
-  final MobileReleaseRepository _releaseRepository;
+  late final MobileReleaseRepository _releaseRepository;
   final http.Client _httpClient;
   final bool _ownsHttpClient;
+  final bool _ownsReleaseRepository;
 
   bool _hasChecked = false;
   bool _isChecking = false;
   bool _isDownloading = false;
+  bool _isDisposed = false;
+  bool _pendingForcedCheck = false;
   bool _dismissed = false;
+  int _consecutiveCheckFailures = 0;
   double? _downloadProgress;
   AndroidReleaseManifest? _availableUpdate;
+  DateTime? _lastSuccessfulCheckAt;
   String? _errorMessage;
   String? _statusMessage;
+  String? _sessionUserId;
+  StreamSubscription<AuthState>? _authSubscription;
 
   AndroidUpdateService({
     SupabaseClient? supabase,
     MobileReleaseRepository? releaseRepository,
     http.Client? httpClient,
   })  : _supabase = supabase ?? Supabase.instance.client,
-        _releaseRepository = releaseRepository ??
-            MobileReleaseRepository(
-              supabase: supabase ?? Supabase.instance.client,
-            ),
         _httpClient = httpClient ?? http.Client(),
-        _ownsHttpClient = httpClient == null;
+        _ownsHttpClient = httpClient == null,
+        _ownsReleaseRepository = releaseRepository == null {
+    _releaseRepository = releaseRepository ??
+        MobileReleaseRepository(
+          supabase: _supabase,
+        );
+    _sessionUserId = _supabase.auth.currentUser?.id;
+    _authSubscription =
+        _supabase.auth.onAuthStateChange.listen(_handleAuthStateChange);
+  }
 
   bool get isSupported => !kDebugMode && Platform.isAndroid;
   bool get isChecking => _isChecking;
   bool get isDownloading => _isDownloading;
+  int get consecutiveCheckFailures => _consecutiveCheckFailures;
   double? get downloadProgress => _downloadProgress;
   AndroidReleaseManifest? get availableUpdate =>
       _dismissed ? null : _availableUpdate;
+  DateTime? get lastSuccessfulCheckAt => _lastSuccessfulCheckAt;
   String? get errorMessage => _errorMessage;
   String? get statusMessage => _statusMessage;
 
   Future<void> checkForUpdate({bool force = false}) async {
-    if (!isSupported) return;
-    if (_isChecking || (_hasChecked && !force)) return;
-    if (_supabase.auth.currentUser == null) return;
+    if (!isSupported || _isDisposed) return;
+    if (_isChecking) {
+      _pendingForcedCheck = _pendingForcedCheck || force;
+      return;
+    }
+    if (_hasChecked && !force) return;
+
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) {
+      _hasChecked = false;
+      return;
+    }
 
     _isChecking = true;
     _errorMessage = null;
     _statusMessage = null;
     notifyListeners();
 
+    Object? lastError;
+    StackTrace? lastStackTrace;
+    var completed = false;
     try {
-      final tenantId = await _currentTenantId();
-      if (tenantId == null) {
-        _availableUpdate = null;
-        return;
-      }
-
-      final installedVersionCode = await _channel.invokeMethod<int>(
-        'getInstalledVersionCode',
-      );
-      if (installedVersionCode == null || installedVersionCode <= 0) {
-        throw StateError('Android did not return the installed version.');
-      }
-
-      final release = await _releaseRepository.fetchLatestAndroidRelease(
-        tenantId: tenantId,
-      );
-      if (release.versionCode > installedVersionCode) {
-        if (_availableUpdate?.versionCode != release.versionCode) {
-          _dismissed = false;
+      const retryDelays = <Duration>[
+        Duration.zero,
+        Duration(seconds: 2),
+        Duration(seconds: 8),
+      ];
+      for (var attempt = 0; attempt < retryDelays.length; attempt += 1) {
+        final delay = retryDelays[attempt];
+        if (delay != Duration.zero) {
+          await Future<void>.delayed(delay);
         }
-        _availableUpdate = release;
-      } else {
-        _availableUpdate = null;
-        _dismissed = false;
+        if (_isDisposed || _supabase.auth.currentUser?.id != userId) {
+          return;
+        }
+
+        try {
+          completed = await _checkOnce(userId);
+          if (completed) {
+            _hasChecked = true;
+            _consecutiveCheckFailures = 0;
+            _lastSuccessfulCheckAt = DateTime.now().toUtc();
+          }
+          break;
+        } catch (error, stackTrace) {
+          lastError = error;
+          lastStackTrace = stackTrace;
+        }
       }
-      _hasChecked = true;
-    } on StorageException catch (error, stackTrace) {
-      _errorMessage = 'No se pudo revisar la actualización privada.';
-      debugPrint('Android release storage check failed: $error\n$stackTrace');
-    } catch (error, stackTrace) {
-      _errorMessage = 'No se pudo revisar actualizaciones.';
-      debugPrint('Android update check failed: $error\n$stackTrace');
+
+      if (!completed && lastError != null) {
+        _consecutiveCheckFailures += 1;
+        _errorMessage = lastError is StorageException
+            ? 'No se pudo revisar la actualización privada.'
+            : 'No se pudo revisar actualizaciones.';
+        debugPrint(
+          'Android update check failed after bounded retries: '
+          '$lastError\n$lastStackTrace',
+        );
+      }
     } finally {
       _isChecking = false;
-      notifyListeners();
+      final rerun = _pendingForcedCheck;
+      _pendingForcedCheck = false;
+      if (!_isDisposed) {
+        notifyListeners();
+        if (rerun) {
+          unawaited(checkForUpdate(force: true));
+        }
+      }
     }
+  }
+
+  Future<bool> _checkOnce(String expectedUserId) async {
+    final tenantId = await _currentTenantId();
+    if (tenantId == null) {
+      throw StateError('The authenticated ERP user has no tenant.');
+    }
+
+    final installedVersionCode = await _channel.invokeMethod<int>(
+      'getInstalledVersionCode',
+    );
+    if (installedVersionCode == null || installedVersionCode <= 0) {
+      throw StateError('Android did not return the installed version.');
+    }
+
+    final release = await _releaseRepository.fetchLatestAndroidRelease(
+      tenantId: tenantId,
+    );
+    if (_supabase.auth.currentUser?.id != expectedUserId) {
+      return false;
+    }
+
+    if (release.versionCode > installedVersionCode) {
+      if (_availableUpdate?.versionCode != release.versionCode) {
+        _dismissed = false;
+      }
+      _availableUpdate = release;
+    } else {
+      _availableUpdate = null;
+      _dismissed = false;
+    }
+    return true;
   }
 
   Future<void> installAvailableUpdate() async {
@@ -141,6 +212,43 @@ class AndroidUpdateService extends ChangeNotifier {
   void dismissAvailableUpdate() {
     _dismissed = true;
     notifyListeners();
+  }
+
+  void _handleAuthStateChange(AuthState state) {
+    if (_isDisposed) return;
+
+    final nextUserId = state.session?.user.id;
+    if (state.event == AuthChangeEvent.signedOut || nextUserId == null) {
+      _resetForUser(null);
+      return;
+    }
+
+    if (nextUserId != _sessionUserId) {
+      _resetForUser(nextUserId);
+    } else {
+      _sessionUserId = nextUserId;
+    }
+
+    if (state.event == AuthChangeEvent.initialSession ||
+        state.event == AuthChangeEvent.signedIn ||
+        state.event == AuthChangeEvent.tokenRefreshed ||
+        state.event == AuthChangeEvent.userUpdated) {
+      unawaited(checkForUpdate(force: true));
+    }
+  }
+
+  void _resetForUser(String? userId) {
+    _sessionUserId = userId;
+    _hasChecked = false;
+    _dismissed = false;
+    _availableUpdate = null;
+    _errorMessage = null;
+    _statusMessage = null;
+    _consecutiveCheckFailures = 0;
+    _lastSuccessfulCheckAt = null;
+    if (!_isDisposed) {
+      notifyListeners();
+    }
   }
 
   Future<String?> _currentTenantId() async {
@@ -242,6 +350,11 @@ class AndroidUpdateService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _isDisposed = true;
+    _authSubscription?.cancel();
+    if (_ownsReleaseRepository) {
+      _releaseRepository.dispose();
+    }
     if (_ownsHttpClient) {
       _httpClient.close();
     }

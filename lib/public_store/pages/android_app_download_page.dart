@@ -51,6 +51,7 @@ class _AndroidAppDownloadPageState extends State<AndroidAppDownloadPage> {
   @override
   void dispose() {
     _authSubscription?.cancel();
+    _repository.dispose();
     _httpClient.close();
     _emailController.dispose();
     _passwordController.dispose();

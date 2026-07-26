@@ -73,14 +73,20 @@ void main() {
 
   Future<_FakeAndroidUpdateService> pumpPrompt(
     WidgetTester tester, {
-    required AndroidReleaseManifest release,
+    required AndroidReleaseManifest? release,
+    String? errorMessage,
+    int consecutiveCheckFailures = 0,
   }) async {
     tester.view.physicalSize = const Size(384, 824);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    final service = _FakeAndroidUpdateService(release);
+    final service = _FakeAndroidUpdateService(
+      release,
+      errorMessage: errorMessage,
+      consecutiveCheckFailures: consecutiveCheckFailures,
+    );
     addTearDown(service.dispose);
     await tester.pumpWidget(
       ChangeNotifierProvider<AndroidUpdateService>.value(
@@ -157,13 +163,85 @@ void main() {
     expect(find.text('Actualizar'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'checks immediately, only polls in foreground, and rechecks on resume',
+    (tester) async {
+      final service = await pumpPrompt(
+        tester,
+        release: release(notes: releaseNotes()),
+      );
+
+      expect(service.checkForces, [isTrue]);
+
+      service.checkForces.clear();
+      tester.binding.handleAppLifecycleStateChanged(
+        AppLifecycleState.paused,
+      );
+      await tester.pump(const Duration(minutes: 10));
+      expect(service.checkForces, isEmpty);
+
+      tester.binding.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      );
+      await tester.pump();
+      expect(service.checkForces, [isTrue]);
+
+      service.checkForces.clear();
+      await tester.pump(const Duration(minutes: 4, seconds: 59));
+      expect(service.checkForces, isEmpty);
+      await tester.pump(const Duration(seconds: 1));
+      expect(service.checkForces, [isTrue]);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'shows a bounded check failure with a 48px retry action',
+    (tester) async {
+      final service = await pumpPrompt(
+        tester,
+        release: null,
+        errorMessage: 'No se pudo revisar la actualización privada.',
+        consecutiveCheckFailures: 1,
+      );
+
+      expect(
+        find.byKey(const ValueKey('android-update-check-error')),
+        findsOneWidget,
+      );
+      expect(
+        find.text('No pudimos comprobar si hay una actualización.'),
+        findsOneWidget,
+      );
+      final retry = find.byKey(
+        const ValueKey('android-update-retry-button'),
+      );
+      expect(retry, findsOneWidget);
+      expect(tester.getSize(retry).height, greaterThanOrEqualTo(48));
+
+      service.checkForces.clear();
+      await tester.tap(retry);
+      await tester.pump();
+      expect(service.checkForces, [isTrue]);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 class _FakeAndroidUpdateService extends AndroidUpdateService {
-  final AndroidReleaseManifest release;
+  final AndroidReleaseManifest? release;
+  final String? checkError;
+  final int checkFailureCount;
   var installCalls = 0;
+  final List<bool> checkForces = [];
 
-  _FakeAndroidUpdateService(this.release);
+  _FakeAndroidUpdateService(
+    this.release, {
+    String? errorMessage,
+    int consecutiveCheckFailures = 0,
+  })  : checkError = errorMessage,
+        checkFailureCount = consecutiveCheckFailures;
 
   @override
   bool get isSupported => true;
@@ -178,13 +256,18 @@ class _FakeAndroidUpdateService extends AndroidUpdateService {
   AndroidReleaseManifest? get availableUpdate => release;
 
   @override
-  String? get errorMessage => null;
+  String? get errorMessage => checkError;
+
+  @override
+  int get consecutiveCheckFailures => checkFailureCount;
 
   @override
   String? get statusMessage => null;
 
   @override
-  Future<void> checkForUpdate({bool force = false}) async {}
+  Future<void> checkForUpdate({bool force = false}) async {
+    checkForces.add(force);
+  }
 
   @override
   Future<void> installAvailableUpdate() async {

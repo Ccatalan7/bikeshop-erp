@@ -225,6 +225,22 @@ void main() {
     );
     expect(publisher, contains('.release_notes == \$release_notes'));
     expect(publisher, contains('.apk_parts == \$apk_parts'));
+    expect(publisher, contains(r'local cache_control="${5:-3600}"'));
+    expect(
+      publisher,
+      contains(r'-H "Cache-Control: ${cache_control}"'),
+    );
+    expect(
+      publisher,
+      contains(
+        r'''upload_object \
+  "$LATEST_MANIFEST_PATH" \
+  "$MANIFEST_PATH" \
+  "application/json" \
+  "true" \
+  "0"''',
+      ),
+    );
     expect(
       compactPublisher,
       isNot(

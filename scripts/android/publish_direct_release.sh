@@ -802,6 +802,7 @@ upload_object() {
   local file_path="$2"
   local content_type="$3"
   local upsert="$4"
+  local cache_control="${5:-3600}"
   local encoded_path
   encoded_path="$(encode_storage_path "$object_path")"
   curl --fail --show-error --silent \
@@ -810,6 +811,7 @@ upload_object() {
     -H "apikey: ${SUPABASE_RELEASE_SECRET}" \
     -H "Authorization: Bearer ${SUPABASE_RELEASE_SECRET}" \
     -H "Content-Type: ${content_type}" \
+    -H "Cache-Control: ${cache_control}" \
     -H "x-upsert: ${upsert}" \
     --data-binary "@${file_path}" >/dev/null
 }
@@ -1037,7 +1039,8 @@ upload_object \
   "$LATEST_MANIFEST_PATH" \
   "$MANIFEST_PATH" \
   "application/json" \
-  "true"
+  "true" \
+  "0"
 
 ENCODED_LATEST_PATH="$(encode_storage_path "$LATEST_MANIFEST_PATH")"
 curl --fail --show-error --silent \

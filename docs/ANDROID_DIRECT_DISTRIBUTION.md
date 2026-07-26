@@ -16,6 +16,14 @@ employee pilot.
 Android always owns the final confirmation on an unmanaged phone. The ERP does
 not attempt a silent installation.
 
+The installed app checks immediately after an authenticated workspace opens,
+again whenever Android returns it to the foreground, and every five minutes
+while it remains active. Authentication changes also trigger a fresh check.
+Each mutable `latest.json` read uses a short signed URL, a unique query value,
+and no-cache request headers; immutable APK parts keep their normal cache.
+Transient checks receive two bounded retries. If all attempts fail, the app
+shows a small `Reintentar` action instead of hiding the failure indefinitely.
+
 The pilot build targets ARM64 (`arm64-v8a`), used by current Android phones. A
 different CPU architecture needs its own release variant.
 
@@ -36,7 +44,8 @@ different CPU architecture needs its own release variant.
 - Storage RLS allows reads only to active ERP staff in that tenant. Client
   uploads, replacements, and deletions are not allowed.
 - The versioned APK and manifest are uploaded first. `latest.json` is replaced
-  last, so clients never see a release before its immutable artifact exists.
+  last with a zero cache lifetime, so clients never see a release before its
+  immutable artifact exists.
 - The app validates manifest schema, package, tenant path, size, version code,
   and SHA-256 before invoking Android. Android independently verifies the APK
   signature before replacing an installed application.
