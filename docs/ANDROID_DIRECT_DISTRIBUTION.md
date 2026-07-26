@@ -88,9 +88,14 @@ another commit or push. Before dispatch, it requires the local branch, clean
 worktree, `HEAD`, live remote branch, release-note base, and candidate checksum
 to match that shared state.
 
-The protected cross-platform path dispatches
-`.github/workflows/android-release.yml` with the exact shared commit. GitHub
-serializes Android publications, runs the application integrity gate, rebuilds
+The protected cross-platform path dispatches the already-registered
+`.github/workflows/macos-release.yml` entrypoint with
+`release_target=android`. That neutral router calls
+`.github/workflows/android-release.yml` at the exact shared commit. This is
+required until the new Android workflow is also registered on the repository
+default branch. Android's build, signing, secrets, evidence, serialization, and
+retry boundary remain independent from macOS. GitHub serializes Android
+publications, runs the application integrity gate, rebuilds
 packaged assets, derives a version code greater than the private live manifest,
 builds and verifies the signed APK, and publishes it to the same private
 Supabase bucket. The committed version name remains authoritative; CI selects

@@ -1,7 +1,8 @@
 name: Build macOS Desktop Release
 
 run-name: >-
-  macOS ${{ inputs.publish_release == true && 'publish' || 'artifact gate' }}
+  ${{ inputs.release_target == 'android' && 'Android' || 'macOS' }}
+  ${{ inputs.publish_release == true && 'publish' || 'artifact gate' }}
   · ${{ github.sha }}
   · notes ${{ inputs.release_notes_candidate_sha256 || 'fallback' }}
   · from ${{ inputs.release_notes_from_commit || 'auto' }}
@@ -27,6 +28,14 @@ on:
       - ".github/workflows/macos-release.yml"
   workflow_dispatch:
     inputs:
+      release_target:
+        description: Independently routed release platform
+        required: true
+        type: choice
+        options:
+          - macos
+          - android
+        default: macos
       publish_release:
         description: Publish the verified artifact as the coworker update
         required: true
@@ -57,11 +66,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: macos-release-${{ github.ref }}-${{ inputs.publish_release == true && 'publish' || 'artifact' }}
-  cancel-in-progress: true
+  group: erp-release-${{ github.ref }}-${{ inputs.release_target || 'macos' }}-${{ inputs.publish_release == true && 'publish' || 'artifact' }}
+  cancel-in-progress: ${{ inputs.release_target != 'android' }}
 
 jobs:
   source-guard:
+    if: ${{ inputs.release_target != 'android' }}
     name: Verify requested source commit
     runs-on: ubuntu-latest
     steps:
@@ -86,9 +96,11 @@ jobs:
           echo 'The workflow is bound to the requested commit.'
 
   integrity:
+    if: ${{ inputs.release_target != 'android' }}
     uses: ./.github/workflows/erp-integrity-gate.yml
 
   build:
+    if: ${{ inputs.release_target != 'android' }}
     needs:
       - source-guard
       - integrity
@@ -275,7 +287,7 @@ jobs:
           retention-days: 7
 
   publish:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release == true }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_target != 'android' && inputs.publish_release == true }}
     needs: build
     name: Publish verified coworker update
     runs-on: ubuntu-latest
@@ -484,3 +496,15 @@ jobs:
             dist/install_vinabike_erp_macos.sh \
             --repo "$GH_REPO" \
             --clobber
+
+  android:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_target == 'android' }}
+    name: Route to independently protected Android release
+    uses: ./.github/workflows/android-release.yml
+    with:
+      publish_release: ${{ inputs.publish_release }}
+      expected_commit: ${{ inputs.expected_commit }}
+      release_notes_from_commit: ${{ inputs.release_notes_from_commit }}
+      release_notes_candidate_b64: ${{ inputs.release_notes_candidate_b64 }}
+      release_notes_candidate_sha256: ${{ inputs.release_notes_candidate_sha256 }}
+    secrets: inherit

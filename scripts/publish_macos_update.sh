@@ -603,6 +603,7 @@ else
     --arg release_notes_candidate_b64 "$RELEASE_NOTES_CANDIDATE_B64" \
     --arg release_notes_candidate_sha256 "$RELEASE_NOTES_CANDIDATE_SHA256" \
     '{
+      release_target: "macos",
       publish_release: "true",
       expected_commit: $expected_commit,
       release_notes_from_commit: $release_notes_from_commit,

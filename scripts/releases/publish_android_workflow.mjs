@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPOSITORY = "Ccatalan7/bikeshop-erp";
-const WORKFLOW = "android-release.yml";
+const WORKFLOW = "macos-release.yml";
 const ARTIFACT_NAME = "vinabike-erp-android-release-evidence";
 const MANIFEST_NAME = "android-release-manifest.json";
 const PACKAGE_NAME = "com.vinabike.erp";
@@ -324,6 +324,7 @@ function listRuns(state, run) {
 
 export function dispatchWorkflow(state, run) {
   const payload = {
+    release_target: "android",
     publish_release: "true",
     expected_commit: state.headSha,
     release_notes_from_commit: state.releaseNotesFromCommit,

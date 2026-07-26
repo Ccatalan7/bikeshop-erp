@@ -76,7 +76,9 @@ void main() {
     expect(
       workflow,
       contains(
-        "if: \${{ github.event_name == 'workflow_dispatch' && inputs.publish_release == true }}",
+        "if: \${{ github.event_name == 'workflow_dispatch' && "
+        "inputs.release_target != 'android' && "
+        "inputs.publish_release == true }}",
       ),
     );
 
@@ -456,6 +458,7 @@ void main() {
 
   test('developer helper publishes current authorized branch without switching',
       () {
+    expect(publishHelper, contains('release_target: "macos"'));
     expect(publishHelper, contains('publish_release: "true"'));
     expect(publishHelper, contains('--json'));
     expect(publishHelper, contains('git branch --show-current'));
@@ -481,6 +484,26 @@ void main() {
     );
     expect(runbook, isNot(contains('--preflight-only')));
     expect(runbook, isNot(contains('intentionally stricter than the Windows')));
+  });
+
+  test('registered macOS entrypoint routes Android without sharing publishers',
+      () {
+    expect(
+      workflow,
+      contains(
+        "if: \${{ github.event_name == 'workflow_dispatch' && "
+        "inputs.release_target == 'android' }}",
+      ),
+    );
+    expect(workflow, contains('uses: ./.github/workflows/android-release.yml'));
+    expect(workflow, contains('secrets: inherit'));
+    expect(
+      workflow,
+      contains(
+        "if: \${{ inputs.release_target != 'android' }}\n"
+        '    name: Verify requested source commit',
+      ),
+    );
   });
 
   test('developer helper follows the Windows-like CI publication sequence', () {

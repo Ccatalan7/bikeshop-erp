@@ -161,6 +161,11 @@ void main() {
     expect(androidWorkflowPublisher, contains('dispatchWorkflow(state, run)'));
     expect(
       androidWorkflowPublisher,
+      contains('const WORKFLOW = "macos-release.yml"'),
+    );
+    expect(androidWorkflowPublisher, contains('release_target: "android"'));
+    expect(
+      androidWorkflowPublisher,
       contains('run?.displayTitle === expectedAndroidRunTitle(state)'),
     );
     expect(

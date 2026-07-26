@@ -109,7 +109,7 @@ test("dispatch JSON uses only string workflow inputs", () => {
   assert.deepEqual(captured.args.slice(0, 3), [
     "workflow",
     "run",
-    "android-release.yml",
+    "macos-release.yml",
   ]);
   const payload = JSON.parse(captured.options.input);
   assert.deepEqual(Object.values(payload).map((value) => typeof value), [
@@ -118,6 +118,8 @@ test("dispatch JSON uses only string workflow inputs", () => {
     "string",
     "string",
     "string",
+    "string",
   ]);
+  assert.equal(payload.release_target, "android");
   assert.equal(payload.publish_release, "true");
 });

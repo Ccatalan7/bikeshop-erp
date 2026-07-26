@@ -78,6 +78,7 @@ void main() {
     final productionBoundary = workflow.indexOf('environment: Production');
 
     expect(workflow, contains('publish_release:'));
+    expect(workflow, contains('workflow_call:'));
     expect(workflow, contains('expected_commit:'));
     expect(workflow, contains('release_notes_from_commit:'));
     expect(workflow, contains('release_notes_candidate_b64:'));
@@ -90,6 +91,7 @@ void main() {
     );
     expect(workflow, contains('environment: Production'));
     expect(workflow, contains('cancel-in-progress: false'));
+    expect(workflow, contains(r'if: ${{ inputs.publish_release == true }}'));
     expect(workflow, contains('contents: read'));
     expect(workflow, isNot(contains('contents: write')));
     expect(

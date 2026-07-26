@@ -7,6 +7,26 @@ run-name: >-
   · from ${{ inputs.release_notes_from_commit || 'auto' }}
 
 on:
+  workflow_call:
+    inputs:
+      publish_release:
+        required: true
+        type: boolean
+      expected_commit:
+        required: true
+        type: string
+      release_notes_from_commit:
+        required: false
+        type: string
+        default: ""
+      release_notes_candidate_b64:
+        required: false
+        type: string
+        default: ""
+      release_notes_candidate_sha256:
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       publish_release:
@@ -70,7 +90,7 @@ jobs:
     uses: ./.github/workflows/erp-integrity-gate.yml
 
   publish:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release == true }}
+    if: ${{ inputs.publish_release == true }}
     needs:
       - source-guard
       - integrity
