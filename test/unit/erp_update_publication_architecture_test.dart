@@ -105,6 +105,14 @@ void main() {
     expect(prepareHelper, contains('release_notes_from_commit'));
     expect(prepareHelper, contains('release_notes_candidate_b64'));
     expect(prepareHelper, contains('release_notes_candidate_sha256'));
+    expect(
+      prepareHelper,
+      contains(
+        'select(\n'
+        '        .schema_version == 1\n'
+        '        and .from_commit == \$from',
+      ),
+    );
     expect(prepareHelper, isNot(contains('SIGNING_PASSWORD')));
     expect(prepareHelper, isNot(contains('SUPABASE_RELEASE_SECRET')));
   });

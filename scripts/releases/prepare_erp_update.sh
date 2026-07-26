@@ -180,11 +180,13 @@ prepare_shared_release_notes() {
     --arg from "$release_notes_from_commit" \
     --arg to "$head_commit" \
     '
-      .schema_version == 1
-      and .from_commit == $from
-      and .to_commit == $to
-      and (.evidence_catalog_sha256 | test("^[0-9a-f]{64}$"))
-      and (.candidate | type == "object")
+      select(
+        .schema_version == 1
+        and .from_commit == $from
+        and .to_commit == $to
+        and (.evidence_catalog_sha256 | test("^[0-9a-f]{64}$"))
+        and (.candidate | type == "object")
+      )
     ' \
     "$candidate_file" > "$compact_candidate_file"; then
     echo 'Local Codex notes unavailable; protected CI will use Gemini or deterministic notes.'
