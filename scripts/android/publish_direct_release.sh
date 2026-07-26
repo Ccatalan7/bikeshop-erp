@@ -752,6 +752,17 @@ download_private_object_if_present() {
       rm -f "$destination"
       return 1
       ;;
+    400)
+      if jq -e \
+        '(.statusCode | tostring) == "404" and .error == "not_found"' \
+        "$destination" >/dev/null 2>&1; then
+        rm -f "$destination"
+        return 1
+      fi
+      rm -f "$destination"
+      echo "Could not inspect an existing Android release object (HTTP ${http_status})." >&2
+      return 2
+      ;;
     *)
       rm -f "$destination"
       echo "Could not inspect an existing Android release object (HTTP ${http_status})." >&2

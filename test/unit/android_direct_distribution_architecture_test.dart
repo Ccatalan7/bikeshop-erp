@@ -214,6 +214,12 @@ void main() {
         publisher, contains('.release_notes.to_commit == \$expected_commit'));
     expect(publisher, contains('remote_object_matches_file'));
     expect(
+      compactPublisher,
+      contains(
+        r'''(.statusCode | tostring) == "404" and .error == "not_found"''',
+      ),
+    );
+    expect(
       publisher,
       contains('Reusing the verified immutable Android version manifest.'),
     );
