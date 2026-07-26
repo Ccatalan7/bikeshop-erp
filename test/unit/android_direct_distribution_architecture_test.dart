@@ -40,6 +40,12 @@ void main() {
     expect(publisher, contains('Tus-Resumable: 1.0.0'));
     expect(publisher, contains('--split-per-abi'));
     expect(publisher, contains('app-arm64-v8a-release.apk'));
+    expect(publisher, contains('ANDROID_ARM64_VERSION_CODE_OFFSET=2000'));
+    expect(publisher, contains(r'"$AAPT" dump badging "$APK_PATH"'));
+    expect(
+      normalized(publisher),
+      contains(r'APK_VERSION_CODE != EXPECTED_APK_VERSION_CODE'),
+    );
     expect(publisher, contains('APK_PART_BYTES=41943040'));
     expect(
       publisher,
@@ -204,7 +210,52 @@ void main() {
     );
     expect(
       publisher,
-      contains('VERSION_CODE=\$((LATEST_ANDROID_VERSION_CODE + 1))'),
+      contains('VERSION_CODE=\$((LATEST_ANDROID_BUILD_NUMBER + 1))'),
+    );
+    expect(
+      publisher,
+      contains(r'(.build_number // .version_code) | floor'),
+    );
+    expect(
+      normalized(publisher),
+      contains(
+        r'if has("build_number") then .version_code else (.version_code + 2000) end | floor',
+      ),
+    );
+    expect(
+      publisher,
+      contains(r'and .version_code == (.build_number + 2000)'),
+    );
+    expect(publisher, contains('--argjson build_number "\$VERSION_CODE"'));
+    expect(publisher, contains('--argjson version_code "\$APK_VERSION_CODE"'));
+    expect(publisher, contains('.build_number == \$build_number'));
+    expect(publisher, contains('.version_code == \$version_code'));
+    expect(publisher, contains('download_latest_android_manifest'));
+    expect(publisher, contains('/storage/v1/object/sign/\${BUCKET}/'));
+    expect(
+      publisher,
+      contains(r"""jq -er '.signedURL | select(type == "string")'"""),
+    );
+    expect(
+      publisher,
+      contains(r'signed_url="${SUPABASE_URL}/storage/v1${signed_path}"'),
+    );
+    expect(
+      publisher,
+      contains("Cache-Control: no-cache, no-store, max-age=0"),
+    );
+    expect(publisher, contains('for readback_delay in 0 1 2 4 8 12'));
+    expect(
+      publisher,
+      contains(
+        'The mutable Android manifest did not converge to the published release.',
+      ),
+    );
+    expect(
+      compactPublisher,
+      contains(
+        r'APK_VERSION_CODE <= LATEST_ANDROID_INSTALLED_VERSION_CODE',
+      ),
     );
     expect(publisher, contains('prepare_ci_version'));
     expect(publisher, contains('validate_complete_release_manifest'));

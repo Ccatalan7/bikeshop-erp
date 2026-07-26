@@ -72,8 +72,25 @@ independent encrypted backup under an owner-controlled recovery process.
 
 ## Publication
 
-The package version comes from `pubspec.yaml` and its build number must increase
-for every release.
+The package version comes from `pubspec.yaml` and its logical build number must
+increase for every release. Because Flutter adds an ABI offset when
+`--split-per-abi` produces the ARM64 APK, release metadata keeps the two numbers
+explicit:
+
+- `build_number` is the logical `+N` used for sequencing, filenames, and
+  operator-facing release identity.
+- `version_code` is the actual Android code extracted from the signed ARM64 APK
+  (`build_number + 2000`) and is the only value the installed app compares with
+  Android's native installed code.
+
+The publisher reads both package values back with Android build tools and fails
+before upload unless the package name, version name, logical build, ARM64
+offset, and monotonic native code all agree. Legacy manifests without
+`build_number` are read as ARM64 releases whose old `version_code` was the
+logical build number; immutable legacy manifests are never rewritten. Every
+mutable-manifest read uses a newly signed private URL, and publication waits
+through a short bounded read-after-write window until `latest.json` matches the
+exact release instead of treating a transient CDN response as final evidence.
 
 The normal cross-platform developer action on macOS is:
 
@@ -104,12 +121,13 @@ The protected cross-platform path dispatches the already-registered
 required until the new Android workflow is also registered on the repository
 default branch. Android's build, signing, secrets, evidence, serialization, and
 retry boundary remain independent from macOS. GitHub serializes Android
-publications, runs the application integrity gate, rebuilds
-packaged assets, derives a version code greater than the private live manifest,
-builds and verifies the signed APK, and publishes it to the same private
-Supabase bucket. The committed version name remains authoritative; CI selects
-`max(committed build code, latest live code + 1)` so a Windows workstation does
-not need the Supabase credential or Android signing material.
+publications, runs the application integrity gate, rebuilds packaged assets,
+derives a logical build number greater than the private live manifest, extracts
+and verifies the corresponding native APK version code, and publishes it to the
+same private Supabase bucket. The committed version name remains authoritative;
+CI selects `max(committed build number, latest live build number + 1)` so a
+Windows workstation does not need the Supabase credential or Android signing
+material.
 
 The workflow accepts only a size-bounded, checksummed local Codex candidate and
 an exact release-note base commit. Protected CI independently reconstructs the
@@ -151,11 +169,12 @@ VINABIKE_ANDROID_RELEASE_CONFIRM=publish-1.0.2+4 \
 ```
 
 Publication refuses an uncommitted worktree. It builds the ARM64 release APK,
-verifies its Android signature and permanent certificate fingerprint, hashes
-the whole APK and every ordered part, uploads each part through Supabase's 6 MB
-resumable-upload protocol, writes the immutable versioned manifest, advances the
-private latest manifest, and reads back the complete package, version, source
-commit, object path, byte count, hashes, and ordered parts.
+reads back its actual package/version identity, verifies its Android signature
+and permanent certificate fingerprint, hashes the whole APK and every ordered
+part, uploads each part through Supabase's 6 MB resumable-upload protocol,
+writes the immutable versioned manifest, advances the private latest manifest,
+and reads back the complete package, logical build number, native version code,
+source commit, object path, byte count, hashes, and ordered parts.
 
 ## Rollback
 

@@ -80,6 +80,29 @@ void main() {
     );
   });
 
+  test('accepts the additive build number and compares the real APK code', () {
+    final manifest = validManifest();
+    const apkPath =
+        '$tenantId/android/releases/vinabike-erp-1.0.3+8-arm64-v8a.apk';
+    manifest['version_name'] = '1.0.3';
+    manifest['build_number'] = 8;
+    manifest['version_code'] = 2008;
+    manifest['apk_object_path'] = apkPath;
+    final parts = manifest['apk_parts'] as List<dynamic>;
+    for (var index = 0; index < parts.length; index += 1) {
+      (parts[index] as Map<String, dynamic>)['object_path'] =
+          '$apkPath.part${index.toString().padLeft(3, '0')}';
+    }
+
+    final release = AndroidReleaseManifest.fromJson(
+      manifest,
+      tenantId: tenantId,
+    );
+
+    expect(release.versionCode, 2008);
+    expect(release.versionCode, greaterThan(2006));
+  });
+
   test('rejects another application package', () {
     final manifest = validManifest()..['package_name'] = 'com.attacker.fake';
 

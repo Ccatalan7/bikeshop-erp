@@ -27,6 +27,8 @@ const MAX_MANIFEST_BYTES = 128 * 1024;
 const MAX_APK_BYTES = 250 * 1024 * 1024;
 const MAX_PART_BYTES = 40 * 1024 * 1024;
 const MAX_PARTS = 8;
+const MAX_ANDROID_VERSION_CODE = 2_100_000_000;
+const ANDROID_ARM64_VERSION_CODE_OFFSET = 2_000;
 const COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
@@ -483,10 +485,19 @@ export function validateAndroidManifest(manifest, expectedCommit) {
     typeof manifest.version_name !== "string" ||
     manifest.version_name.length < 1 ||
     manifest.version_name.length > 64 ||
+    !Number.isInteger(manifest.build_number) ||
+    manifest.build_number < 1 ||
+    manifest.build_number >
+      MAX_ANDROID_VERSION_CODE - ANDROID_ARM64_VERSION_CODE_OFFSET ||
     !Number.isInteger(manifest.version_code) ||
     manifest.version_code < 1 ||
+    manifest.version_code !==
+      manifest.build_number + ANDROID_ARM64_VERSION_CODE_OFFSET ||
+    manifest.version_code > MAX_ANDROID_VERSION_CODE ||
     typeof manifest.apk_object_path !== "string" ||
-    !manifest.apk_object_path.endsWith(".apk") ||
+    !manifest.apk_object_path.endsWith(
+      `+${manifest.build_number}-arm64-v8a.apk`,
+    ) ||
     manifest.apk_object_path.includes("..") ||
     manifest.apk_object_path.includes("\\") ||
     !SHA256_PATTERN.test(manifest.sha256) ||
@@ -628,7 +639,8 @@ export async function main({
     const runId = await waitForRun(workflowRun, { state });
     const manifest = await verifyRunEvidence(state, runId);
     stdout.write(
-      `Published Android ${manifest.version_name}+${manifest.version_code} from ${state.headSha}.\n`,
+      `Published Android ${manifest.version_name}+${manifest.build_number} ` +
+        `(APK code ${manifest.version_code}) from ${state.headSha}.\n`,
     );
     return 0;
   } catch (error) {

@@ -11,6 +11,8 @@ TENANT_ID="5443b130-cc28-45af-a420-cd500b288890"
 PACKAGE_NAME="com.vinabike.erp"
 EXPECTED_SIGNER_CERT_SHA256="7e651eb2989b22a9d9262f91f0657e3a512134ac7675715fed144273ad2a897c"
 MAX_ANDROID_VERSION_CODE=2100000000
+ANDROID_ARM64_VERSION_CODE_OFFSET=2000
+MAX_ANDROID_BUILD_NUMBER=$((MAX_ANDROID_VERSION_CODE - ANDROID_ARM64_VERSION_CODE_OFFSET))
 KEY_ALIAS="${VINABIKE_ANDROID_KEY_ALIAS:-vinabike-erp}"
 KEYSTORE_PATH="${VINABIKE_ANDROID_KEYSTORE_PATH:-${HOME}/Library/Application Support/Vinabike ERP/signing/android-release.jks}"
 KEYCHAIN_SIGNING_SERVICE="Vinabike ERP Android release keystore password"
@@ -56,7 +58,7 @@ cd "$PROJECT_ROOT"
 
 for required in \
   awk base64 cat chmod cp curl date dd dirname find git head jq keytool mktemp \
-  mv perl rm sed shasum sort stat tail tr; do
+  mv perl rm sed shasum sleep sort stat tail tr; do
   if ! command -v "$required" >/dev/null 2>&1; then
     echo "$required is required." >&2
     exit 127
@@ -131,8 +133,11 @@ read_pubspec_version() {
     echo 'Android version name contains unsupported release-path characters.' >&2
     exit 65
   fi
-  if (( VERSION_CODE <= 0 || VERSION_CODE > MAX_ANDROID_VERSION_CODE )); then
-    echo "Android version code must be between 1 and ${MAX_ANDROID_VERSION_CODE}." >&2
+  if ((
+    VERSION_CODE <= 0 ||
+    VERSION_CODE > MAX_ANDROID_BUILD_NUMBER
+  )); then
+    echo "Android build number is outside the supported ARM64 range." >&2
     exit 65
   fi
 }
@@ -198,15 +203,77 @@ resolve_supabase_secret() {
     -w 2>/dev/null
 }
 
+encode_storage_path() {
+  local raw="$1"
+  local encoded=""
+  local segment
+  IFS='/' read -r -a segments <<< "$raw"
+  for segment in "${segments[@]}"; do
+    if [[ -n "$encoded" ]]; then
+      encoded+="/"
+    fi
+    encoded+="$(printf '%s' "$segment" | jq -sRr @uri)"
+  done
+  printf '%s' "$encoded"
+}
+
+download_latest_android_manifest() {
+  local destination="${1:-}"
+  local encoded_path
+  local signed_response
+  local signed_path
+  local expected_prefix
+  local signed_url
+
+  encoded_path="$(encode_storage_path "$LATEST_MANIFEST_PATH")"
+  if ! signed_response="$(
+    curl --fail --show-error --silent \
+      --request POST \
+      "${SUPABASE_URL}/storage/v1/object/sign/${BUCKET}/${encoded_path}" \
+      -H "apikey: ${SUPABASE_RELEASE_SECRET}" \
+      -H "Authorization: Bearer ${SUPABASE_RELEASE_SECRET}" \
+      -H 'Content-Type: application/json' \
+      --data '{"expiresIn":60}'
+  )"; then
+    return 1
+  fi
+  if ! signed_path="$(
+    jq -er '.signedURL | select(type == "string")' <<< "$signed_response"
+  )"; then
+    echo 'Supabase did not return an Android manifest URL.' >&2
+    return 1
+  fi
+  expected_prefix="/object/sign/${BUCKET}/${encoded_path}?token="
+  if [[
+    "$signed_path" != "$expected_prefix"* ||
+    "$signed_path" == *$'\r'* ||
+    "$signed_path" == *$'\n'* ||
+    "$signed_path" == *$'\t'* ||
+    "$signed_path" == *' '* ||
+    ${#signed_path} -gt 4096
+  ]]; then
+    echo 'Supabase returned an invalid Android manifest URL.' >&2
+    return 1
+  fi
+  signed_url="${SUPABASE_URL}/storage/v1${signed_path}"
+  if [[ -n "$destination" ]]; then
+    curl --fail --show-error --silent \
+      "$signed_url" \
+      -H 'Cache-Control: no-cache, no-store, max-age=0' \
+      -H 'Pragma: no-cache' \
+      --output "$destination"
+    return
+  fi
+  curl --fail --show-error --silent \
+    "$signed_url" \
+    -H 'Cache-Control: no-cache, no-store, max-age=0' \
+    -H 'Pragma: no-cache'
+}
+
 load_latest_android_release() {
   local latest_json
 
-  if ! latest_json="$(
-    curl --fail --show-error --silent \
-      "${SUPABASE_URL}/storage/v1/object/authenticated/${BUCKET}/${LATEST_MANIFEST_PATH}" \
-      -H "apikey: ${SUPABASE_RELEASE_SECRET}" \
-      -H "Authorization: Bearer ${SUPABASE_RELEASE_SECRET}"
-  )"; then
+  if ! latest_json="$(download_latest_android_manifest)"; then
     echo 'Could not read the current private Android release manifest.' >&2
     exit 69
   fi
@@ -215,6 +282,26 @@ load_latest_android_release() {
       .schema_version == 1
       and (.version_name | type == "string" and length > 0)
       and (.version_code | type == "number" and . > 0 and . <= 2100000000 and floor == .)
+      and (
+        (has("build_number") | not)
+        or (
+          .build_number
+          | type == "number"
+            and . > 0
+            and . <= 2099998000
+            and floor == .
+        )
+      )
+      and (
+        if has("build_number") then
+          .version_code == (.build_number + 2000)
+        else
+          (
+            .apk_object_path
+            | type == "string" and endswith("-arm64-v8a.apk")
+          )
+        end
+      )
       and (.commit | type == "string" and test("^[0-9a-f]{40}$"))
     ' >/dev/null <<< "$latest_json"; then
     echo 'The current private Android release manifest is invalid.' >&2
@@ -223,8 +310,13 @@ load_latest_android_release() {
 
   LATEST_ANDROID_RELEASE_JSON="$latest_json"
   LATEST_ANDROID_VERSION_NAME="$(jq -r '.version_name' <<< "$latest_json")"
-  LATEST_ANDROID_VERSION_CODE="$(
-    jq -r '.version_code | floor' <<< "$latest_json"
+  LATEST_ANDROID_BUILD_NUMBER="$(
+    jq -r '(.build_number // .version_code) | floor' <<< "$latest_json"
+  )"
+  LATEST_ANDROID_INSTALLED_VERSION_CODE="$(
+    jq -r \
+      'if has("build_number") then .version_code else (.version_code + 2000) end | floor' \
+      <<< "$latest_json"
   )"
   LATEST_ANDROID_COMMIT="$(jq -r '.commit' <<< "$latest_json")"
 }
@@ -238,23 +330,57 @@ validate_complete_release_manifest() {
     --arg package_name "$PACKAGE_NAME" \
     --arg expected_commit "$expected_commit" \
     '
-      (. | keys | sort) == [
-        "apk_object_path",
-        "apk_parts",
-        "commit",
-        "package_name",
-        "published_at",
-        "release_notes",
-        "schema_version",
-        "sha256",
-        "size_bytes",
-        "version_code",
-        "version_name"
-      ]
+      (
+        (. | keys | sort) == [
+          "apk_object_path",
+          "apk_parts",
+          "commit",
+          "package_name",
+          "published_at",
+          "release_notes",
+          "schema_version",
+          "sha256",
+          "size_bytes",
+          "version_code",
+          "version_name"
+        ]
+        or
+        (. | keys | sort) == [
+          "apk_object_path",
+          "apk_parts",
+          "build_number",
+          "commit",
+          "package_name",
+          "published_at",
+          "release_notes",
+          "schema_version",
+          "sha256",
+          "size_bytes",
+          "version_code",
+          "version_name"
+        ]
+      )
       and .schema_version == 1
       and .package_name == $package_name
       and (.version_name | type == "string" and length > 0 and length <= 64)
       and (.version_code | type == "number" and . > 0 and . <= 2100000000 and floor == .)
+      and (
+        if has("build_number") then
+          (
+            .build_number
+            | type == "number"
+              and . > 0
+              and . <= 2099998000
+              and floor == .
+          )
+          and .version_code == (.build_number + 2000)
+        else
+          (
+            .apk_object_path
+            | type == "string" and endswith("-arm64-v8a.apk")
+          )
+        end
+      )
       and .commit == $expected_commit
       and (
         .apk_object_path
@@ -368,16 +494,16 @@ prepare_ci_version() {
       "$LATEST_ANDROID_RELEASE_JSON" \
       "$CI_EXACT_SHA"
     write_release_evidence "$LATEST_ANDROID_RELEASE_JSON"
-    echo "Android ${LATEST_ANDROID_VERSION_NAME}+${LATEST_ANDROID_VERSION_CODE} is already published from commit $CI_EXACT_SHA."
+    echo "Android ${LATEST_ANDROID_VERSION_NAME}+${LATEST_ANDROID_BUILD_NUMBER} is already published from commit $CI_EXACT_SHA."
     exit 0
   fi
 
-  if (( VERSION_CODE <= LATEST_ANDROID_VERSION_CODE )); then
-    if (( LATEST_ANDROID_VERSION_CODE >= MAX_ANDROID_VERSION_CODE )); then
-      echo 'The Android version-code range is exhausted.' >&2
+  if (( VERSION_CODE <= LATEST_ANDROID_BUILD_NUMBER )); then
+    if (( LATEST_ANDROID_BUILD_NUMBER >= MAX_ANDROID_BUILD_NUMBER )); then
+      echo 'The Android build-number range is exhausted.' >&2
       exit 65
     fi
-    VERSION_CODE=$((LATEST_ANDROID_VERSION_CODE + 1))
+    VERSION_CODE=$((LATEST_ANDROID_BUILD_NUMBER + 1))
   fi
   echo "Protected Android release selected ${VERSION_NAME}+${VERSION_CODE}."
 }
@@ -387,13 +513,13 @@ prepare_next_android_version() {
   local next_code
 
   current_head="$(git rev-parse HEAD)"
-  if (( VERSION_CODE > LATEST_ANDROID_VERSION_CODE )); then
-    echo "Android build code ${VERSION_CODE} is ready (published: ${LATEST_ANDROID_VERSION_CODE})."
+  if (( VERSION_CODE > LATEST_ANDROID_BUILD_NUMBER )); then
+    echo "Android build number ${VERSION_CODE} is ready (published: ${LATEST_ANDROID_BUILD_NUMBER})."
     return
   fi
 
   if [[
-    "$VERSION_CODE" == "$LATEST_ANDROID_VERSION_CODE" &&
+    "$VERSION_CODE" == "$LATEST_ANDROID_BUILD_NUMBER" &&
     "$VERSION_NAME" == "$LATEST_ANDROID_VERSION_NAME" &&
     "$current_head" == "$LATEST_ANDROID_COMMIT" &&
     -z "$(git status --porcelain)"
@@ -402,11 +528,11 @@ prepare_next_android_version() {
     return
   fi
 
-  if (( LATEST_ANDROID_VERSION_CODE >= MAX_ANDROID_VERSION_CODE )); then
-    echo 'The Android version-code range is exhausted.' >&2
+  if (( LATEST_ANDROID_BUILD_NUMBER >= MAX_ANDROID_BUILD_NUMBER )); then
+    echo 'The Android build-number range is exhausted.' >&2
     exit 65
   fi
-  next_code=$((LATEST_ANDROID_VERSION_CODE + 1))
+  next_code=$((LATEST_ANDROID_BUILD_NUMBER + 1))
   write_pubspec_version_code "$next_code"
   printf 'Advanced Android build code to %s+%s for the shared ERP update.\n' \
     "$VERSION_NAME" \
@@ -425,7 +551,7 @@ android_release_is_already_published() {
   fi
 
   [[
-    "$VERSION_CODE" == "$LATEST_ANDROID_VERSION_CODE" &&
+    "$VERSION_CODE" == "$LATEST_ANDROID_BUILD_NUMBER" &&
     "$VERSION_NAME" == "$LATEST_ANDROID_VERSION_NAME" &&
     "$release_commit" == "$LATEST_ANDROID_COMMIT" &&
     -z "$(git status --porcelain)"
@@ -438,9 +564,9 @@ assert_android_version_is_publishable() {
   if android_release_is_already_published "$release_commit"; then
     return 2
   fi
-  if (( VERSION_CODE <= LATEST_ANDROID_VERSION_CODE )); then
-    echo "Android build code ${VERSION_CODE} is not newer than published code ${LATEST_ANDROID_VERSION_CODE}." >&2
-    echo "The next Android release requires build code $((LATEST_ANDROID_VERSION_CODE + 1))." >&2
+  if (( VERSION_CODE <= LATEST_ANDROID_BUILD_NUMBER )); then
+    echo "Android build number ${VERSION_CODE} is not newer than published build ${LATEST_ANDROID_BUILD_NUMBER}." >&2
+    echo "The next Android release requires build number $((LATEST_ANDROID_BUILD_NUMBER + 1))." >&2
     return 1
   fi
   return 0
@@ -483,6 +609,11 @@ APKSIGNER="$(
 )"
 [[ -x "$APKSIGNER" ]] || {
   echo "Android apksigner is unavailable." >&2
+  exit 127
+}
+AAPT="$(dirname "$APKSIGNER")/aapt"
+[[ -x "$AAPT" ]] || {
+  echo "Android aapt is unavailable." >&2
   exit 127
 }
 
@@ -551,6 +682,36 @@ APK_PATH="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
   echo "Flutter did not produce $APK_PATH." >&2
   exit 70
 }
+
+APK_BADGING="$("$AAPT" dump badging "$APK_PATH")"
+APK_PACKAGE_NAME="$(
+  sed -nE "s/^package: name='([^']+)'.*$/\\1/p" <<< "$APK_BADGING" |
+    head -1
+)"
+APK_VERSION_CODE="$(
+  sed -nE "s/^package: .* versionCode='([0-9]+)'.*$/\\1/p" <<< "$APK_BADGING" |
+    head -1
+)"
+APK_VERSION_NAME="$(
+  sed -nE "s/^package: .* versionName='([^']+)'.*$/\\1/p" <<< "$APK_BADGING" |
+    head -1
+)"
+if [[
+  "$APK_PACKAGE_NAME" != "$PACKAGE_NAME" ||
+  "$APK_VERSION_NAME" != "$VERSION_NAME" ||
+  ! "$APK_VERSION_CODE" =~ ^[0-9]+$
+]]; then
+  echo 'The built APK identity does not match the requested Android release.' >&2
+  exit 74
+fi
+EXPECTED_APK_VERSION_CODE=$((VERSION_CODE + ANDROID_ARM64_VERSION_CODE_OFFSET))
+if ((
+  APK_VERSION_CODE != EXPECTED_APK_VERSION_CODE ||
+  APK_VERSION_CODE > MAX_ANDROID_VERSION_CODE
+)); then
+  echo 'The built APK version code does not match its ARM64 build number.' >&2
+  exit 74
+fi
 
 APKSIGNER_OUTPUT="$(
   "$APKSIGNER" verify --verbose --print-certs "$APK_PATH"
@@ -693,7 +854,8 @@ done
 jq -n \
   --arg package_name "$PACKAGE_NAME" \
   --arg version_name "$VERSION_NAME" \
-  --argjson version_code "$VERSION_CODE" \
+  --argjson build_number "$VERSION_CODE" \
+  --argjson version_code "$APK_VERSION_CODE" \
   --arg apk_object_path "$APK_OBJECT_PATH" \
   --arg sha256 "$APK_SHA256" \
   --argjson size_bytes "$APK_SIZE" \
@@ -705,6 +867,7 @@ jq -n \
     schema_version: 1,
     package_name: $package_name,
     version_name: $version_name,
+    build_number: $build_number,
     version_code: $version_code,
     apk_object_path: $apk_object_path,
     sha256: $sha256,
@@ -714,20 +877,6 @@ jq -n \
     release_notes: $release_notes,
     commit: $commit
   }' > "$MANIFEST_PATH"
-
-encode_storage_path() {
-  local raw="$1"
-  local encoded=""
-  local segment
-  IFS='/' read -r -a segments <<< "$raw"
-  for segment in "${segments[@]}"; do
-    if [[ -n "$encoded" ]]; then
-      encoded+="/"
-    fi
-    encoded+="$(printf '%s' "$segment" | jq -sRr @uri)"
-  done
-  printf '%s' "$encoded"
-}
 
 download_private_object_if_present() {
   local object_path="$1"
@@ -952,6 +1101,10 @@ fi
 if (( version_status != 0 )); then
   exit "$version_status"
 fi
+if (( APK_VERSION_CODE <= LATEST_ANDROID_INSTALLED_VERSION_CODE )); then
+  echo "The built APK version code ${APK_VERSION_CODE} is not newer than the installed release code ${LATEST_ANDROID_INSTALLED_VERSION_CODE}." >&2
+  exit 65
+fi
 
 for part_array_index in "${!APK_PART_FILES[@]}"; do
   existing_part_status=0
@@ -985,7 +1138,8 @@ case "$existing_manifest_status" in
       --arg package_name "$PACKAGE_NAME" \
       --arg version_name "$VERSION_NAME" \
       --arg sha "$APK_SHA256" \
-      --argjson code "$VERSION_CODE" \
+      --argjson build_number "$VERSION_CODE" \
+      --argjson version_code "$APK_VERSION_CODE" \
       --arg commit "$GIT_COMMIT" \
       --arg apk_object_path "$APK_OBJECT_PATH" \
       --argjson size_bytes "$APK_SIZE" \
@@ -994,7 +1148,8 @@ case "$existing_manifest_status" in
         .schema_version == 1
         and .package_name == $package_name
         and .version_name == $version_name
-        and .version_code == $code
+        and .build_number == $build_number
+        and .version_code == $version_code
         and .commit == $commit
         and .apk_object_path == $apk_object_path
         and .sha256 == $sha
@@ -1042,36 +1197,45 @@ upload_object \
   "true" \
   "0"
 
-ENCODED_LATEST_PATH="$(encode_storage_path "$LATEST_MANIFEST_PATH")"
-curl --fail --show-error --silent \
-  "${SUPABASE_URL}/storage/v1/object/authenticated/${BUCKET}/${ENCODED_LATEST_PATH}" \
-  -H "apikey: ${SUPABASE_RELEASE_SECRET}" \
-  -H "Authorization: Bearer ${SUPABASE_RELEASE_SECRET}" \
-  > "$TEMP_DIR/latest-readback.json"
-
-jq -e \
-  --arg package_name "$PACKAGE_NAME" \
-  --arg version_name "$VERSION_NAME" \
-  --arg sha "$APK_SHA256" \
-  --argjson code "$VERSION_CODE" \
-  --arg commit "$GIT_COMMIT" \
-  --arg apk_object_path "$APK_OBJECT_PATH" \
-  --argjson size_bytes "$APK_SIZE" \
-  --argjson apk_parts "$APK_PARTS_JSON" \
-  --argjson release_notes "$RELEASE_NOTES_JSON" \
-  '
-    .schema_version == 1
-    and .package_name == $package_name
-    and .version_name == $version_name
-    and .version_code == $code
-    and .commit == $commit
-    and .apk_object_path == $apk_object_path
-    and .sha256 == $sha
-    and .size_bytes == $size_bytes
-    and .apk_parts == $apk_parts
-    and .release_notes == $release_notes
-  ' \
-  "$TEMP_DIR/latest-readback.json" >/dev/null
+latest_readback_matches=false
+for readback_delay in 0 1 2 4 8 12; do
+  if (( readback_delay > 0 )); then
+    sleep "$readback_delay"
+  fi
+  if download_latest_android_manifest "$TEMP_DIR/latest-readback.json" &&
+    jq -e \
+      --arg package_name "$PACKAGE_NAME" \
+      --arg version_name "$VERSION_NAME" \
+      --arg sha "$APK_SHA256" \
+      --argjson build_number "$VERSION_CODE" \
+      --argjson version_code "$APK_VERSION_CODE" \
+      --arg commit "$GIT_COMMIT" \
+      --arg apk_object_path "$APK_OBJECT_PATH" \
+      --argjson size_bytes "$APK_SIZE" \
+      --argjson apk_parts "$APK_PARTS_JSON" \
+      --argjson release_notes "$RELEASE_NOTES_JSON" \
+      '
+        .schema_version == 1
+        and .package_name == $package_name
+        and .version_name == $version_name
+        and .build_number == $build_number
+        and .version_code == $version_code
+        and .commit == $commit
+        and .apk_object_path == $apk_object_path
+        and .sha256 == $sha
+        and .size_bytes == $size_bytes
+        and .apk_parts == $apk_parts
+        and .release_notes == $release_notes
+      ' \
+      "$TEMP_DIR/latest-readback.json" >/dev/null 2>&1; then
+    latest_readback_matches=true
+    break
+  fi
+done
+if [[ "$latest_readback_matches" != true ]]; then
+  echo 'The mutable Android manifest did not converge to the published release.' >&2
+  exit 69
+fi
 
 LATEST_ANDROID_RELEASE_JSON="$(cat "$TEMP_DIR/latest-readback.json")"
 if [[ -n "$CI_EXACT_SHA" ]]; then

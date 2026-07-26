@@ -20,7 +20,8 @@ function manifest() {
     schema_version: 1,
     package_name: "com.vinabike.erp",
     version_name: "1.0.1",
-    version_code: 42,
+    build_number: 42,
+    version_code: 2042,
     apk_object_path: apkObjectPath,
     sha256: "a".repeat(64),
     size_bytes: 100,
@@ -54,7 +55,28 @@ function manifest() {
 }
 
 test("accepts exact Android publication evidence with structured notes", () => {
-  assert.equal(validateAndroidManifest(manifest(), TO_COMMIT).version_code, 42);
+  const validated = validateAndroidManifest(manifest(), TO_COMMIT);
+  assert.equal(validated.build_number, 42);
+  assert.equal(validated.version_code, 2042);
+});
+
+test("rejects a manifest that publishes the logical build as the APK code", () => {
+  const candidate = manifest();
+  candidate.version_code = candidate.build_number;
+  assert.throws(
+    () => validateAndroidManifest(candidate, TO_COMMIT),
+    /does not match the requested release/u,
+  );
+});
+
+test("rejects an APK path that is not bound to the logical build number", () => {
+  const candidate = manifest();
+  candidate.apk_object_path = candidate.apk_object_path.replace("+42-", "+43-");
+  candidate.apk_parts[0].object_path = `${candidate.apk_object_path}.part000`;
+  assert.throws(
+    () => validateAndroidManifest(candidate, TO_COMMIT),
+    /does not match the requested release/u,
+  );
 });
 
 test("rejects evidence from another source commit", () => {
