@@ -61,6 +61,18 @@ requires one. The exception must be named in
 `canonical-ui-surfaces.md`, must not redefine the three product classes, and
 must have boundary tests.
 
+Width class does not prove input capability. Detect or design explicitly for
+the capabilities the host actually offers:
+
+- mouse, trackpad, hover, keyboard, shortcuts, and secondary click;
+- touch, system Back, gestures, SafeArea, and the virtual keyboard; and
+- browser history, deep links, text scale, and reduced motion.
+
+macOS, Windows, iOS, and Android share business rules, but they do not need
+identical affordances. Do not enable a hover-dependent control merely because
+a tablet crossed a width boundary, and do not remove keyboard efficiency from a
+touch-capable desktop.
+
 Responsive design is not:
 
 - shrinking a desktop table until it technically fits;
@@ -80,7 +92,7 @@ Before laying out a compact screen, identify:
 1. the record identity the operator scans for;
 2. the state or exception that changes the next decision;
 3. the related entity needed to recognize the work;
-4. the two or three actions performed repeatedly;
+4. the actions performed repeatedly and their relative frequency;
 5. the secondary information that is useful only after intent; and
 6. the list context that must survive a detail round trip.
 
@@ -109,7 +121,9 @@ Use:
 - restrained tonal separation or a subtle divider between records;
 - one compact semantic state treatment;
 - deliberate typography and spacing hierarchy;
-- a small, labelled frequent-action rail when several destinations matter; and
+- direct access to the actions that genuinely dominate the workflow;
+- an action rail only when several repeated, peer destinations justify the
+  permanent row it consumes; and
 - one clearly labelled disclosure for secondary detail.
 
 Avoid:
@@ -124,9 +138,28 @@ Avoid:
 - rows so tall that ordinary work cannot be scanned.
 
 Neutral-first does not mean monochromatic or lifeless. Follow the color rules
-in `GUI_DESIGN_PRINCIPLES.md`: use restrained tonal depth to separate command
-and record surfaces, one deliberate accent for the primary action, and
-low-saturation semantic color only for real state or exceptions.
+in `GUI_DESIGN_PRINCIPLES.md`: use the theme's coherent accent and semantic
+roles, restrained tonal depth, and purposeful emphasis. Do not turn one accent
+into a repeated blue personality layer, and do not remove all color in the name
+of restraint.
+
+An action rail is not a default card footer or a miniature tab bar. If a
+sensible row target, one direct action plus overflow, or an in-place control
+supports the task with less height, prefer that composition.
+
+### Use the available width
+
+Compact does not mean narrow and centered.
+
+- Remove duplicated gutters and padding introduced by nested hosts.
+- Let forms, editors, lists, and workspaces use the safe content width
+  responsibly.
+- Avoid a desktop max-width wrapper that leaves a phone editor in a thin central
+  column.
+- Do not stretch small controls merely to fill space; allocate width according
+  to reading order, touchability, and content value.
+- Test the real route after drawers, system insets, and host chrome consume
+  their share of the viewport.
 
 ### Progressive disclosure
 
@@ -181,7 +214,8 @@ At `600-899px`, choose the composition that supports the task:
 
 - a compact list with more metadata per row;
 - a reduced-column table with an explicit record inspector;
-- a two-pane layout only when both panes retain useful touch widths; or
+- a two-pane layout only when repeated comparison or list-detail work benefits
+  from simultaneous visibility and both panes retain useful touch widths; or
 - a phone-style list with an inline workspace when rapid return matters more
   than simultaneous visibility.
 
@@ -189,12 +223,16 @@ Do not create an arbitrary extra column merely because space exists. Do not
 retain a desktop toolbar if its hover, secondary-click, or tiny icon affordances
 are the only way to operate the record.
 
+These are options, not tablet templates. A long list, by itself, does not force
+a split pane; selection frequency, comparison value, task depth, and useful
+pane width must justify it.
+
 ## In-page and in-block navigation
 
 High-frequency list → work → list loops should normally preserve the host
 instead of replacing the route.
 
-The approved compact workspace pattern is:
+When the task evidence favors an inline or in-page workspace, its contract is:
 
 1. the list host retains scope, view, search, filters, selection, disclosures,
    and its scroll controller;
@@ -224,7 +262,8 @@ file picker or share sheet; export/share remains an explicit action.
 Use a full route when the workflow genuinely needs a durable deep link,
 cross-module history entry, independent task context, or more space than the
 host can responsibly provide. Even then, returning must restore the originating
-list context.
+host exactly—not a generic root or canonical list for the entity that was
+visited.
 
 ## Navigation and context preservation
 
@@ -238,6 +277,10 @@ explicitly resets it:
 - selected or expanded record;
 - loaded-page/window state where relevant; and
 - scroll position.
+
+For cross-module navigation, also retain the originating module and its return
+contract. Visiting a customer, bicycle, invoice, or document from a workflow
+must not make Back fall through to that entity's generic list.
 
 Keep the state with the list owner. Do not reconstruct it from visible labels
 or from a child editor. Do not reset it merely because an inline workspace
@@ -270,6 +313,10 @@ Prefer text-first controls for high-frequency compact actions. Icon-only
 controls are acceptable only for universally understood actions, and they still
 need a semantic label. Tooltips may support desktop discovery but do not make
 an ambiguous touch icon understandable.
+
+Text-first does not mean wrapping every command in an outlined pill. A labelled
+row target, an inline value/action pair, one primary control with a secondary
+menu, or a compact toolbar may create clearer hierarchy with less visual noise.
 
 Place frequent actions near the record they affect. Use a bottom sheet for
 bounded secondary action sets or selectors that need more vertical room. Use a
@@ -329,7 +376,7 @@ not a controller recreated on every responsive rebuild.
 
 Shared overlay geometry, focus, dismissal, semantics, and primitive selection
 remain owned by
-[`GUI_DESIGN_PRINCIPLES.md`](GUI_DESIGN_PRINCIPLES.md#13-anchored-popovers-menus--pickers).
+[`GUI_DESIGN_PRINCIPLES.md`](GUI_DESIGN_PRINCIPLES.md#11-anchored-popovers-menus-and-pickers).
 
 For compact composition:
 
@@ -341,6 +388,10 @@ For compact composition:
 - restore focus and context when a sheet/menu closes;
 - respect top and bottom SafeArea insets; and
 - constrain and scroll long content inside the sheet.
+
+The same canonical command may use an anchored popover with pointer input and a
+sheet on phone. The surface changes; ownership, permission, validation, and
+persistence do not.
 
 A selector must expose the current value and the available alternatives.
 Hiding a business state behind an unlabelled ellipsis is not an acceptable
@@ -380,6 +431,18 @@ Design these states as part of the surface:
 An optional projection failure must not turn an authoritative base query into a
 false empty list. Loading/error placeholders must not change the layout so
 dramatically that controls jump beneath the user's finger.
+
+## Compact motion and continuity
+
+Use brief motion to make it clear that a list host remains mounted while an
+inline workspace, disclosure, selector, or detail replaces part of it.
+
+- Animate the changed region, not the entire application shell.
+- Preserve scroll, selection, focus intent, and draft ownership across the
+  transition.
+- Do not add animation merely to make a navigation feel more substantial.
+- Respect reduced motion and keep the state transition understandable with
+  animation disabled.
 
 ## Required validation matrix
 
@@ -444,6 +507,12 @@ When a mobile interface takes several iterations to reach a satisfactory
 result, add one reusable record here after the final behavior is validated.
 Do not document every discarded experiment.
 
+The records below describe the named surfaces and the conditions recorded in
+their approved pattern. They are evidence, not universal templates. Do not copy
+their action rails, inline workspaces, breakpoints, cards, or compact chrome
+into another workflow without repeating the task analysis required by the
+general guide.
+
 Every record must contain these exact fields:
 
 - **Problem observed**
@@ -469,9 +538,14 @@ Every record must contain these exact fields:
   full financial detail in one in-place disclosure. Let `Trabajo`, `Ítems`,
   `Factura`, and `PDF` replace only the list body with their canonical form,
   editor, or side-effect-free preview; minimal back and successful save return
-  to the preserved list owner. Keep that inline child mounted across breakpoint
-  changes until save, cancel, or confirmed discard resolves the draft. Within
-  the tablet product class, Jobs uses its documented `720px` content exception:
+  to the preserved list owner. Compact filter composition keeps the canonical
+  desktop predicates and operators while expressing them in task language
+  suited to touch. When an include/exclude mode only has meaning after a choice
+  exists, reveal a clearly labelled contextual toggle beside that choice group
+  instead of forcing abstract query vocabulary into a permanent control. Keep
+  that inline child mounted across breakpoint changes until save, cancel, or
+  confirmed discard resolves the draft. Within the tablet product class, Jobs
+  uses its documented `720px` content exception:
   `600-719px` keeps one compact column, while `720-899px` pairs the same cards
   in two columns so tablet width improves scanning instead of stretching a
   phone card. Both variants retain the same scroll owner and actions.
@@ -479,20 +553,27 @@ Every record must contain these exact fields:
   repeated blue icons; card-in-card nesting; permanently expanded metadata;
   horizontal desktop line tables on phone; detours through a generic desktop
   detail pane; a reduced mobile writer; or branch-driven disposal of a dirty
-  editor during resize; or stretching a single phone card across a wide tablet
-  and leaving its decision content stranded at opposite edges.
+  editor during resize; simplifying mobile filters by dropping include/exclude
+  semantics; mechanically copying database-style operator labels when a clear
+  action phrase communicates the same rule; or stretching a single phone card
+  across a wide tablet and leaving its decision content stranded at opposite
+  edges.
 - **Reference implementation:**
   `lib/modules/bikeshop/pages/pegas_table_page.dart`,
+  `lib/modules/bikeshop/widgets/workshop_status_filter_header.dart`,
   `lib/modules/bikeshop/pages/mechanic_job_form_page.dart`, and
   `lib/modules/sales/widgets/sales_invoice_editor.dart`.
 - **Minimum test:** At `384x824`, prove at least three ordinary collapsed
   records remain scannable after real chrome; open and return from Trabajo,
   Ítems, Factura, and proposal PDF; preserve scope/view/search/filters,
-  disclosures, and scroll; verify editable mobile line cards below 600px; run
-  `599/600`, verify the registered tablet grid at `719/720`, including an odd
-  record count and an expanded card, cross `899/900` with a dirty draft still
-  mounted and guarded, run increased text scale/semantics, and verify the
-  `1440x900` desktop regression with no layout or runtime exceptions.
+  disclosures, and scroll; select a grouped filter, toggle its labelled
+  exclusion mode, close and reopen the filter surface, and prove that the same
+  canonical predicate and persisted state are used; verify editable mobile
+  line cards below 600px; run `599/600`, verify the registered tablet grid at
+  `719/720`, including an odd record count and an expanded card, cross
+  `899/900` with a dirty draft still mounted and guarded, run increased text
+  scale/semantics, and verify the `1440x900` desktop regression with no layout
+  or runtime exceptions.
 
 ### Compact application chrome and tool workspaces
 

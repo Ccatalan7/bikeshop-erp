@@ -11,6 +11,22 @@ String _section(String source, String startMarker, String endMarker) {
   return source.substring(start, end);
 }
 
+void _expectLiteralTouchHeight(
+  String source, {
+  required String owner,
+}) {
+  final match =
+      RegExp(r'(?:minHeight|height):\s*([0-9]+(?:\.[0-9]+)?)').firstMatch(
+    source,
+  );
+  expect(match, isNotNull, reason: '$owner needs an explicit touch height.');
+  expect(
+    double.parse(match!.group(1)!),
+    greaterThanOrEqualTo(48),
+    reason: '$owner must preserve the shared minimum touch target.',
+  );
+}
+
 void main() {
   late String table;
   late String detail;
@@ -387,13 +403,23 @@ void main() {
     expect(table, isNot(contains('_openMobileJobDetail')));
     expect(table, contains('onTap = () => _showStatusMenu(job);'));
     expect(table, contains('_registerInvoicePayment(invoiceId!)'));
-    expect(table, contains('_showBikeProfileDialog(job, customer)'));
     expect(
         table, contains('_openInvoicePreview(invoiceId!, invoice: invoice)'));
     expect(table, contains('_buildMobileFinancialSummary('));
     expect(table, contains('invoice.total - invoice.paidAmount > 0.01'));
     expect(table, contains('_expandedMobileJobKeys'));
     expect(table, contains('AnimatedSize('));
+
+    final mobileObject = _section(
+      table,
+      'Widget _buildMobileJobObject',
+      'Widget _buildMobileStatusAction',
+    );
+    expect(mobileObject, contains('if (customer != null)'));
+    expect(mobileObject, contains('onTap = () =>'));
+    expect(mobileObject, contains('button: onTap != null'));
+    expect(mobileObject, contains("'Abrir \$eyebrow: \$label'"));
+    expect(mobileObject, contains('onTap: onTap'));
 
     final mobileActions = _section(
       table,
@@ -560,11 +586,6 @@ void main() {
     expect(cancelFlow, contains('if (_isSaving) return;'));
     expect(cancelFlow, contains('if (widget.isInlineWorkspace)'));
     expect(cancelFlow, contains('_inlineDraftHasUnsavedChanges'));
-    expect(cancelFlow, contains('showDialog<bool>('));
-    expect(
-      cancelFlow,
-      contains("ValueKey('mechanic-job-inline-discard-dialog')"),
-    );
     expect(
       cancelFlow,
       contains("'mechanic-job-inline-discard-cancel'"),
@@ -642,7 +663,7 @@ void main() {
     expect(exporter, contains('Printing.sharePdf'));
   });
 
-  test('desktop split and routed deep links keep their established owners', () {
+  test('compact and routed job entry points keep their canonical owners', () {
     final tableOpenFlow = _section(
       table,
       'void _openJobFromTable(MechanicJob job)',
@@ -663,8 +684,6 @@ void main() {
         '_openMobileInlineSurface(job, _MobileWorkshopSurface.job);',
       ),
     );
-    expect(
-        tableOpenFlow, contains('final useSplitPane = _isSplitPaneEnabled;'));
     expect(tableOpenFlow, contains('unawaited(_openJobEditor(job));'));
     expect(table, contains('await context.push(route);'));
     expect(table, contains("path: '/taller/pegas/\$jobId'"));
@@ -707,6 +726,67 @@ void main() {
     expect(table, contains('_priorityFilter'));
     expect(table, contains('_showOnlyOverdue'));
     expect(table, contains('_showOnlyUnpaid'));
+    final mobileFilters = _section(
+      table,
+      'Future<void> _showMobileFilters()',
+      'Future<void> _showMobileWorkloadSummary()',
+    );
+    expect(
+      mobileFilters,
+      contains('WorkshopStatusFilterHeader('),
+      reason: 'The include/exclude operator must stay discoverable on mobile.',
+    );
+    expect(
+      mobileFilters,
+      contains('excludeMode: _statusFilterExcludeMode'),
+    );
+    expect(
+      mobileFilters,
+      contains('() => _statusFilterExcludeMode = value'),
+      reason: 'Mobile must reuse the canonical desktop filter owner.',
+    );
+    expect(
+      mobileFilters,
+      isNot(contains("Text('Excluir los estados elegidos')")),
+      reason: 'The operator must not disappear until a status is selected.',
+    );
+    for (final preservedOwner in const [
+      '_mobileJobsScrollController',
+      '_searchTerm',
+      '_statusFilter',
+      '_viewMode',
+    ]) {
+      expect(
+        mobileFilters,
+        isNot(contains('$preservedOwner =')),
+        reason: '$preservedOwner must survive opening and closing filters.',
+      );
+    }
+
+    final restoreState = _section(
+      table,
+      'void _restoreTableState()',
+      'List<String> _statusFilterOptions()',
+    );
+    expect(
+      restoreState,
+      contains(
+        '_statusFilterExcludeMode = '
+        '_bikeshopService.pegasStatusFilterExcludeMode',
+      ),
+    );
+    final saveState = _section(
+      table,
+      'void _saveTableState()',
+      'void _onBikeshopServiceChanged()',
+    );
+    expect(
+      saveState,
+      contains(
+        '_bikeshopService.pegasStatusFilterExcludeMode = '
+        '_statusFilterExcludeMode',
+      ),
+    );
     for (final section in <(String, String)>[
       ('Widget _buildMobileControlField', 'String _mobileViewModeLabel'),
       (
@@ -718,10 +798,9 @@ void main() {
         'Future<void> _showMobileScopePicker'
       ),
     ]) {
-      expect(
+      _expectLiteralTouchHeight(
         _section(table, section.$1, section.$2),
-        contains('height: 52'),
-        reason: '${section.$1} must preserve a touch target above 48 px.',
+        owner: section.$1,
       );
     }
   });
@@ -748,7 +827,6 @@ void main() {
         table, contains('expandedInsets: expanded ? EdgeInsets.zero : null'));
     expect(table, contains('workshop-gantt-compact-controls'));
     expect(table, contains('workshop-gantt-horizontal-scroll'));
-    expect(table, contains('height: compact ? 52 : 36'));
     expect(table, contains('minimumSize: const Size(48, 48)'));
     expect(
       table,
@@ -756,11 +834,7 @@ void main() {
     );
   });
 
-  test('compact visual hierarchy is neutral and uses textual row actions', () {
-    expect(table, contains('surfaceContainerLow'));
-    expect(table, contains('gradient: LinearGradient('));
-    expect(
-        table, contains('theme.colorScheme.primary.withValues(alpha: 0.025)'));
+  test('compact hierarchy uses semantic labels and accessible row actions', () {
     expect(table, contains("label: 'Trabajo'"));
     expect(table, contains("label: 'Ítems'"));
     expect(table, contains("label: 'Más'"));
@@ -795,10 +869,9 @@ void main() {
       reason:
           'The compact row action rail should be text-first, not icon-heavy.',
     );
-    expect(
+    _expectLiteralTouchHeight(
       table.substring(actionStart, actionEnd),
-      contains('height: 48'),
-      reason: 'Every compact row action needs a 48 px touch target.',
+      owner: 'Widget _buildMobileCardAction',
     );
   });
 
@@ -826,22 +899,29 @@ void main() {
   test('mobile status selector separates selection from management', () {
     final statusManager = _section(
       table,
-      'class _StatusManagerDialogState',
+      'Widget _buildStatusList(',
       'class _StatusListItem',
     );
 
     expect(
       statusManager,
-      contains("ValueKey('workshop-status-manager-dialog')"),
-    );
-    expect(
-      statusManager,
       contains("ValueKey('workshop-status-compact-list')"),
     );
-    expect(statusManager, contains('BoxConstraints(minHeight: 56)'));
+    _expectLiteralTouchHeight(
+      statusManager,
+      owner: 'compact status selection',
+    );
     expect(statusManager, contains("'Cambiar estado a \${status.name}'"));
     expect(statusManager, contains("'Gestionar \${status.name}'"));
-    expect(statusManager, contains('Size.square(usesCompactLayout ? 48 : 24)'));
+    final addTarget = RegExp(
+      r'Size\.square\(usesCompactLayout\s*\?\s*'
+      r'([0-9]+(?:\.[0-9]+)?)\s*:',
+    ).firstMatch(statusManager);
+    expect(addTarget, isNotNull);
+    expect(
+      double.parse(addTarget!.group(1)!),
+      greaterThanOrEqualTo(48),
+    );
     expect(statusManager, contains("Text('Editar estado')"));
     expect(statusManager, contains("'Eliminar estado'"));
   });
@@ -864,17 +944,6 @@ void main() {
       board,
       contains('_showStatusMenu(job)'),
       reason: 'The compact board must retain the canonical status command.',
-    );
-
-    final desktopColumn = _section(
-      table,
-      'Widget _buildCustomBoardColumn',
-      'Widget _buildLegacyBoardColumn',
-    );
-    expect(
-      desktopColumn,
-      contains('width: 320'),
-      reason: 'The established desktop kanban column remains unchanged.',
     );
   });
 

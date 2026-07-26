@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
+import '../utils/auth_input_validation.dart';
 
 class ForgotPasswordDialog extends StatefulWidget {
   const ForgotPasswordDialog({super.key});
@@ -27,7 +29,7 @@ class _ForgotPasswordDialogState extends State<ForgotPasswordDialog> {
     setState(() => _isLoading = true);
 
     try {
-      final authService = AuthService();
+      final authService = context.read<AuthService>();
       await authService.sendPasswordResetEmail(_emailController.text.trim());
 
       if (mounted) {
@@ -36,38 +38,40 @@ class _ForgotPasswordDialogState extends State<ForgotPasswordDialog> {
           _isLoading = false;
         });
       }
-    } on AuthException catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_mapSupabaseError(e)),
-            backgroundColor: Colors.red,
-          ),
-        );
+    } on AuthException catch (error) {
+      final isRateLimited = error.message.toLowerCase().contains('rate limit');
+      if (!isRateLimited) {
+        if (mounted) {
+          setState(() {
+            _emailSent = true;
+            _isLoading = false;
+          });
+        }
+        return;
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
 
-  String _mapSupabaseError(AuthException e) {
-    final message = e.message.toLowerCase();
-    if (message.contains('user not found') || message.contains('invalid')) {
-      return 'No existe una cuenta con este correo electrónico.';
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('Demasiados intentos. Espera unos minutos y reintenta.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No pudimos conectarnos al servicio. Revisa tu conexión e inténtalo nuevamente.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
-    if (message.contains('rate limit')) {
-      return 'Demasiados intentos. Por favor espera unos minutos.';
-    }
-    return 'Error al enviar el correo: ${e.message}';
   }
 
   @override
@@ -78,7 +82,7 @@ class _ForgotPasswordDialogState extends State<ForgotPasswordDialog> {
           const Icon(Icons.lock_reset, color: Colors.blue),
           const SizedBox(width: 12),
           Text(
-            _emailSent ? '✓ Correo enviado' : 'Recuperar contraseña',
+            _emailSent ? 'Solicitud procesada' : 'Recuperar contraseña',
             style: const TextStyle(fontSize: 20),
           ),
         ],
@@ -142,15 +146,7 @@ class _ForgotPasswordDialogState extends State<ForgotPasswordDialog> {
               prefixIcon: Icon(Icons.email),
               border: OutlineInputBorder(),
             ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Ingresa tu correo electrónico';
-              }
-              if (!value.contains('@')) {
-                return 'Ingresa un correo válido';
-              }
-              return null;
-            },
+            validator: AuthInputValidation.validateEmail,
             onFieldSubmitted: (_) => _sendResetEmail(),
           ),
         ],
@@ -176,7 +172,7 @@ class _ForgotPasswordDialogState extends State<ForgotPasswordDialog> {
               const SizedBox(width: 12),
               const Expanded(
                 child: Text(
-                  '¡Correo enviado!',
+                  'Revisa tu bandeja de entrada',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -189,7 +185,7 @@ class _ForgotPasswordDialogState extends State<ForgotPasswordDialog> {
         ),
         const SizedBox(height: 16),
         Text(
-          'Hemos enviado un enlace de recuperación a:',
+          'Si existe una cuenta asociada, recibirás un enlace de recuperación en:',
           style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
         ),
         const SizedBox(height: 8),

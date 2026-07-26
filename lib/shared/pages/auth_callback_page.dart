@@ -15,10 +15,14 @@ import 'package:web/web.dart'
 /// '/login' or '/dashboard' and strip the `?code=...` query params before
 /// Supabase can exchange them into a session.
 class AuthCallbackPage extends StatefulWidget {
-  const AuthCallbackPage({super.key});
+  const AuthCallbackPage({
+    super.key,
+    this.fallbackPath = '/',
+  });
 
   static const webReturnToEditorKey = 'google_oauth_return_to_editor';
   static const webReturnToPathKey = 'google_oauth_return_path';
+  final String fallbackPath;
 
   @override
   State<AuthCallbackPage> createState() => _AuthCallbackPageState();
@@ -91,8 +95,8 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
           debugPrint('🧩 [AuthCallback] Exchanging OAuth code for session...');
           await Supabase.instance.client.auth.exchangeCodeForSession(code);
           debugPrint('✅ [AuthCallback] exchangeCodeForSession completed');
-        } catch (e) {
-          debugPrint('⚠️ [AuthCallback] exchangeCodeForSession failed: $e');
+        } catch (_) {
+          debugPrint('⚠️ [AuthCallback] OAuth code exchange failed');
         } finally {
           _oauthCodeProcessed = true;
           if (mounted) {
@@ -128,7 +132,7 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
     _timeout = Timer(const Duration(seconds: 12), () {
       debugPrint('⏱️ [AuthCallback] Timeout waiting for session');
       if (mounted) {
-        context.go('/');
+        context.go(widget.fallbackPath);
       }
     });
   }
@@ -151,8 +155,8 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
       final has2json = m2?['provider_token'] != null;
       debugPrint(
           '🧩 [AuthCallback] After refreshSession: hasProviderToken=$has2, hasProviderTokenJson=$has2json');
-    } catch (e) {
-      debugPrint('⚠️ [AuthCallback] refreshSession failed: $e');
+    } catch (_) {
+      debugPrint('⚠️ [AuthCallback] Session refresh failed');
     }
 
     // If this callback came from the store editor flow, request returning to
@@ -161,10 +165,12 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
       try {
         final flag = web.window.localStorage
             .getItem(AuthCallbackPage.webReturnToEditorKey);
-        debugPrint('🧩 [AuthCallback] returnToEditor flag=$flag');
+        debugPrint(
+          '🧩 [AuthCallback] Editor return requested=${flag == 'true'}',
+        );
         // Keep the flag for PublicStoreLayout to consume & clear.
-      } catch (e) {
-        debugPrint('⚠️ [AuthCallback] localStorage read failed: $e');
+      } catch (_) {
+        debugPrint('⚠️ [AuthCallback] Editor return lookup failed');
       }
     }
 
@@ -179,18 +185,18 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
           // Clear it to avoid loops.
           web.window.localStorage
               .removeItem(AuthCallbackPage.webReturnToPathKey);
-          debugPrint('🧩 [AuthCallback] Navigating back to: $returnPath');
+          debugPrint('🧩 [AuthCallback] Returning to stored application path');
           context.go(returnPath);
           return;
         }
-      } catch (e) {
-        debugPrint('⚠️ [AuthCallback] returnPath read failed: $e');
+      } catch (_) {
+        debugPrint('⚠️ [AuthCallback] Return path lookup failed');
       }
     }
 
     // Fallback: send the user somewhere sane. For ERP host, '/' becomes
     // login/dashboard. For store host, '/' becomes store home.
-    context.go('/');
+    context.go(widget.fallbackPath);
   }
 
   @override

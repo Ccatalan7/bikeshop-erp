@@ -121,31 +121,25 @@ select throws_ok(
     )
   $$,
   '42501',
-  'Exactly one active employee tenant is required',
+  'Tenant aggregate access denied',
   'an inactive employee profile cannot authorize an aggregate read'
 );
 update public.user_profiles
    set is_active = true
  where user_id = '99941000-0000-4000-8000-000000000099';
 
-insert into public.user_profiles(user_id, tenant_id, role) values (
-  '99941000-0000-4000-8000-000000000099',
-  '99941000-0000-4000-8000-000000000002',
-  'admin'
-);
 select throws_ok(
   $$
-    select public.get_bike_aggregate(
-      '99941000-0000-4000-8000-000000000011'
+    insert into public.user_profiles(user_id, tenant_id, role) values (
+      '99941000-0000-4000-8000-000000000099',
+      '99941000-0000-4000-8000-000000000002',
+      'admin'
     )
   $$,
-  '42501',
-  'Exactly one active employee tenant is required',
-  'ambiguous multi-tenant membership cannot pick a tenant nondeterministically'
+  '23505',
+  'duplicate key value violates unique constraint "user_profiles_one_active_tenant_per_user_uidx"',
+  'a second active tenant membership fails closed at the authority boundary'
 );
-delete from public.user_profiles
- where user_id = '99941000-0000-4000-8000-000000000099'
-   and tenant_id = '99941000-0000-4000-8000-000000000002';
 
 select throws_ok(
   $$

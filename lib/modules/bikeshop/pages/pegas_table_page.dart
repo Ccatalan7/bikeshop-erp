@@ -51,6 +51,7 @@ import '../widgets/job_time_metrics_widget.dart';
 import '../widgets/smart_job_details_editor.dart';
 import '../widgets/pegas_tasks_widget.dart';
 import '../widgets/workshop_board_compact_view.dart';
+import '../widgets/workshop_status_filter_header.dart';
 import 'bike_form_dialog.dart';
 import 'mechanic_job_form_page.dart';
 
@@ -2668,40 +2669,18 @@ class _PegasTablePageState extends State<PegasTablePage>
                         const Divider(height: 24),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
-                          child: Row(
-                            children: [
-                              const Expanded(
-                                child: Text(
-                                  'ESTADO OPERATIVO',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: _customStatusFilter.isEmpty
-                                    ? null
-                                    : () => apply(
-                                          _customStatusFilter.clear,
-                                        ),
-                                child: const Text('Todos'),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (_customStatusFilter.isNotEmpty)
-                          SwitchListTile(
-                            title: const Text('Excluir los estados elegidos'),
-                            subtitle: const Text(
-                              'Desactivado: mostrar solamente los elegidos',
-                            ),
-                            value: _statusFilterExcludeMode,
-                            onChanged: (value) => apply(
+                          child: WorkshopStatusFilterHeader(
+                            excludeMode: _statusFilterExcludeMode,
+                            canClear: _customStatusFilter.isNotEmpty,
+                            onExcludeModeChanged: (value) => apply(
                               () => _statusFilterExcludeMode = value,
                             ),
+                            onClear: () => apply(() {
+                              _customStatusFilter.clear();
+                              _statusFilterExcludeMode = false;
+                            }),
                           ),
+                        ),
                         if (customStatuses.isEmpty)
                           for (final status in JobStatus.values)
                             CheckboxListTile(

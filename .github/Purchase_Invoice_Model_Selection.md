@@ -1,5 +1,16 @@
 # PURCHASE INVOICE — PAYMENT MODEL SELECTION
 
+> [!WARNING]
+> **Historical business context; not UI authority.** Reconcile this model with
+> the current purchase architecture before implementation. Every visual,
+> layout, navigation, component, color, spacing, badge, modal/dialog/snackbar,
+> responsive, and platform recipe below is superseded by
+> [`GUI_DESIGN_PRINCIPLES.md`](GUI_DESIGN_PRINCIPLES.md) and
+> [`GUI_MOBILE_DESIGN_PRINCIPLES.md`](GUI_MOBILE_DESIGN_PRINCIPLES.md). Do not
+> copy an old widget or treat selection as an automatic centered dialog. Choose
+> inline, in-block, pane, popover, sheet, blocking surface, or full route from
+> task evidence; none is a mandatory pattern.
+
 ## Overview
 
 When creating a new purchase invoice, the user must choose which payment model to use. This decision is made **per-invoice** (not globally) because different suppliers and scenarios require different payment flows.
@@ -41,14 +52,17 @@ The selected model determines:
 
 ---
 
-## 🎯 MODEL SELECTION DIALOG
+## MODEL-SELECTION DECISION
 
 ### When Triggered
-The model selection dialog appears when:
+The model-selection decision is required when:
 1. User clicks **[+ Nueva Factura de Compra]** button
 2. Before the purchase invoice form opens
 
-### Dialog Design
+The host and interaction surface are deliberately unspecified. Preserve the
+originating list context and choose the surface under the canonical GUI guides.
+
+### Decision content
 
 **Title**: "Seleccionar Modelo de Pago"
 
@@ -59,7 +73,7 @@ The model selection dialog appears when:
 Esto determina el flujo de estados y cuándo se registra el pago.
 ```
 
-**Options** (Radio buttons):
+**Options**:
 
 ```
 ◉ Pago Después de Recibir (Modelo Estándar)
@@ -73,121 +87,19 @@ Esto determina el flujo de estados y cuándo se registra el pago.
   └─ Ideal para: Importaciones, transferencias bancarias, pre-órdenes
 ```
 
-**Buttons**:
-- [Cancelar] (outlined, grey)
-- [Continuar] (filled, blue) ← Primary action
+**Commands**:
+- Cancelar
+- Continuar, enabled only after a valid model is selected
 
-### Frontend Implementation
+### Frontend behavior
 
-**PurchaseInvoiceListPage** (FAB button):
-```dart
-FloatingActionButton(
-  onPressed: _showModelSelectionDialog,
-  child: Icon(Icons.add),
-  tooltip: 'Nueva Factura de Compra',
-)
-
-void _showModelSelectionDialog() async {
-  final model = await showDialog<String>(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => AlertDialog(
-      title: Text('Seleccionar Modelo de Pago'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '¿Cómo se va a gestionar el pago de esta factura de compra?',
-            style: TextStyle(fontSize: 14),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Esto determina el flujo de estados y cuándo se registra el pago.',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-          ),
-          SizedBox(height: 24),
-          
-          // Standard Model Option
-          RadioListTile<String>(
-            value: 'standard',
-            groupValue: _selectedModel,
-            onChanged: (value) => setState(() => _selectedModel = value),
-            title: Text(
-              'Pago Después de Recibir (Modelo Estándar)',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(height: 4),
-                Text('Flujo: Enviada → Confirmada → Recibida → Pagada'),
-                Text('El pago se registra DESPUÉS de recibir los productos'),
-                Text(
-                  'Ideal para: Proveedores locales, entregas contra pago',
-                  style: TextStyle(fontStyle: FontStyle.italic),
-                ),
-              ],
-            ),
-          ),
-          
-          SizedBox(height: 16),
-          
-          // Prepayment Model Option
-          RadioListTile<String>(
-            value: 'prepayment',
-            groupValue: _selectedModel,
-            onChanged: (value) => setState(() => _selectedModel = value),
-            title: Text(
-              'Pago Anticipado (Prepago)',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(height: 4),
-                Text('Flujo: Enviada → Confirmada → Pagada → Recibida'),
-                Text('El pago se registra ANTES de recibir los productos'),
-                Text(
-                  'Ideal para: Importaciones, transferencias bancarias, pre-órdenes',
-                  style: TextStyle(fontStyle: FontStyle.italic),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, null),
-          child: Text('Cancelar'),
-        ),
-        ElevatedButton(
-          onPressed: _selectedModel == null 
-            ? null 
-            : () => Navigator.pop(context, _selectedModel),
-          child: Text('Continuar'),
-        ),
-      ],
-    ),
-  );
-  
-  if (model != null) {
-    _navigateToCreateInvoice(isPrepayment: model == 'prepayment');
-  }
-}
-
-void _navigateToCreateInvoice({required bool isPrepayment}) {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => PurchaseInvoiceFormPage(
-        isPrepayment: isPrepayment,
-      ),
-    ),
-  );
-}
-```
+- The create command requests one explicit model before the first save.
+- Cancel returns to the exact originating list state.
+- Continue opens the canonical purchase-invoice editor with the selected model.
+- The interaction must not create a second writer or bypass the canonical
+  validation/permission path.
+- A durable route is optional and must be selected from history/return
+  semantics, not because this historical prompt used one.
 
 ---
 
@@ -243,7 +155,7 @@ Borrador → Enviada → Confirmada → Pagada → Recibida
                     Accounting  Payment  Inventory
 ```
 
-### Button Visibility Logic
+### Action availability logic
 
 ```dart
 // PurchaseInvoiceFormPage
@@ -324,96 +236,17 @@ $$ LANGUAGE plpgsql;
 
 ---
 
-## 📊 UI INDICATORS
+## UI information contract
 
-### Model Badge Display
-
-Show the selected model in the invoice detail page:
-
-```dart
-// PurchaseInvoiceFormPage - Header section
-Row(
-  children: [
-    // Status badge
-    _buildStatusBadge(_invoice.status),
-    
-    SizedBox(width: 8),
-    
-    // Model indicator
-    Container(
-      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: _invoice.prepaymentModel 
-          ? Colors.orange[50] 
-          : Colors.blue[50],
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: _invoice.prepaymentModel 
-            ? Colors.orange[300]! 
-            : Colors.blue[300]!,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            _invoice.prepaymentModel 
-              ? Icons.payment 
-              : Icons.local_shipping,
-            size: 14,
-            color: _invoice.prepaymentModel 
-              ? Colors.orange[700] 
-              : Colors.blue[700],
-          ),
-          SizedBox(width: 4),
-          Text(
-            _invoice.prepaymentModel ? 'Prepago' : 'Estándar',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: _invoice.prepaymentModel 
-                ? Colors.orange[700] 
-                : Colors.blue[700],
-            ),
-          ),
-        ],
-      ),
-    ),
-  ],
-)
-```
-
-### Timeline View
-
-Show different timelines based on model:
-
-```dart
-Widget _buildTimeline() {
-  final isPrepayment = _invoice.prepaymentModel;
-  
-  if (isPrepayment) {
-    return Column(
-      children: [
-        _buildTimelineStep('Borrador', _invoice.createdAt, completed: true),
-        _buildTimelineStep('Enviada', _invoice.sentDate, completed: _invoice.status != 'draft'),
-        _buildTimelineStep('Confirmada', _invoice.confirmedDate, completed: _isStatusReached('confirmed')),
-        _buildTimelineStep('Pagada', _invoice.paidDate, completed: _isStatusReached('paid'), highlighted: true),
-        _buildTimelineStep('Recibida', _invoice.receivedDate, completed: _isStatusReached('received')),
-      ],
-    );
-  } else {
-    return Column(
-      children: [
-        _buildTimelineStep('Borrador', _invoice.createdAt, completed: true),
-        _buildTimelineStep('Enviada', _invoice.sentDate, completed: _invoice.status != 'draft'),
-        _buildTimelineStep('Confirmada', _invoice.confirmedDate, completed: _isStatusReached('confirmed')),
-        _buildTimelineStep('Recibida', _invoice.receivedDate, completed: _isStatusReached('received'), highlighted: true),
-        _buildTimelineStep('Pagada', _invoice.paidDate, completed: _isStatusReached('paid')),
-      ],
-    );
-  }
-}
-```
+- The selected model must remain clearly visible and accessible by text and
+  semantics wherever it changes the next action.
+- A badge, chip, timeline, colored container, or icon is optional. Let the
+  current task, information density, viewport, and canonical visual system
+  determine the representation.
+- When history materially helps a decision, show the correct sequence for the
+  selected model. Do not render a lifecycle graphic merely as decoration.
+- Status and model must never be communicated by color alone or through
+  feature-owned literal hues.
 
 ---
 
@@ -431,11 +264,11 @@ Widget _buildTimeline() {
 - [ ] Implement model-specific accounting functions
 
 ### Frontend
-- [ ] Create model selection dialog in PurchaseInvoiceListPage
+- [ ] Add an explicit model-selection interaction to the canonical create flow
 - [ ] Update PurchaseInvoiceFormPage to accept `isPrepayment` parameter
-- [ ] Update PurchaseInvoiceFormPage to show model badge
-- [ ] Implement conditional button visibility based on model
-- [ ] Create model-specific timeline views
+- [ ] Expose the selected model clearly without prescribing a badge
+- [ ] Implement conditional action availability based on model
+- [ ] Expose model-specific history only where it supports the task
 - [ ] Add model filter in list page (optional)
 
 ### Testing
@@ -453,22 +286,9 @@ Widget _buildTimeline() {
 
 Once an invoice is created with a specific model, **it cannot be changed**:
 
-```dart
-// In edit form
-if (_existingInvoice != null) {
-  // Show read-only model indicator
-  ListTile(
-    leading: Icon(Icons.lock),
-    title: Text('Modelo de Pago'),
-    subtitle: Text(
-      _invoice.prepaymentModel 
-        ? 'Prepago (no se puede cambiar)' 
-        : 'Estándar (no se puede cambiar)'
-    ),
-    enabled: false,
-  );
-}
-```
+The canonical editor must expose the persisted model as read-only and explain
+that it cannot be changed. This is a behavioral requirement, not a prescription
+for a disabled tile, lock icon, badge, or other particular control.
 
 ### Rationale
 Changing the model after creation would require:

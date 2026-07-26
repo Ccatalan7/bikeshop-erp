@@ -1,6 +1,6 @@
 import 'dart:collection';
 
-/// A bounded, plain-text summary attached to a desktop release manifest.
+/// A bounded, plain-text summary attached to a platform release manifest.
 ///
 /// The release pipeline may generate this payload with AI, but the installed
 /// app treats it as untrusted data and only renders it after strict parsing.

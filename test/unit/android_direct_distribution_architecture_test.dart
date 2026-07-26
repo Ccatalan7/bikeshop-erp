@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  String normalized(String value) => value.replaceAll(RegExp(r'\s+'), ' ');
+
   test('Android release builds never fall back to the debug signing key', () {
     final gradle = File('android/app/build.gradle.kts').readAsStringSync();
     final publisher = File(
@@ -65,5 +67,102 @@ void main() {
     expect(router, contains('/cuenta/descargas/android'));
     expect(firebase, contains('X-Robots-Tag'));
     expect(firebase, contains('noindex, nofollow, noarchive'));
+  });
+
+  test('protected Android workflow binds one exact source and shared notes',
+      () {
+    final workflow = File(
+      '.github/workflows/android-release.yml',
+    ).readAsStringSync();
+    final compactWorkflow = normalized(workflow);
+    final productionBoundary = workflow.indexOf('environment: Production');
+
+    expect(workflow, contains('publish_release:'));
+    expect(workflow, contains('expected_commit:'));
+    expect(workflow, contains('release_notes_from_commit:'));
+    expect(workflow, contains('release_notes_candidate_b64:'));
+    expect(workflow, contains('release_notes_candidate_sha256:'));
+    expect(
+      workflow,
+      contains(
+        "notes \${{ inputs.release_notes_candidate_sha256 || 'fallback' }}",
+      ),
+    );
+    expect(workflow, contains('environment: Production'));
+    expect(workflow, contains('cancel-in-progress: false'));
+    expect(workflow, contains('contents: read'));
+    expect(workflow, isNot(contains('contents: write')));
+    expect(
+        workflow, contains('uses: ./.github/workflows/erp-integrity-gate.yml'));
+    expect(workflow, contains('ANDROID_RELEASE_KEYSTORE_BASE64'));
+    expect(workflow, contains('ANDROID_RELEASE_STORE_PASSWORD'));
+    expect(workflow, contains('ANDROID_RELEASE_KEY_PASSWORD'));
+    expect(workflow, contains('ANDROID_RELEASE_KEY_ALIAS'));
+    expect(workflow, contains('SUPABASE_RELEASE_SECRET'));
+    for (final secret in <String>[
+      r'${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}',
+      r'${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}',
+      r'${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}',
+      r'${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}',
+      r'${{ secrets.SUPABASE_RELEASE_SECRET }}',
+    ]) {
+      expect(workflow.indexOf(secret), greaterThan(productionBoundary));
+    }
+    expect(workflow, contains('generate_release_notes.mjs'));
+    expect(workflow, contains('CODEX_RELEASE_NOTES_CANDIDATE_B64='));
+    expect(workflow, contains("CODEX_CANDIDATE_B64=''"));
+    expect(
+      workflow.indexOf("CODEX_CANDIDATE_B64=''"),
+      lessThan(workflow.indexOf('generate_release_notes.mjs')),
+    );
+    expect(
+      compactWorkflow,
+      contains(r'if [[ "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]]'),
+    );
+    expect(
+      workflow,
+      contains('name: vinabike-erp-android-release-evidence'),
+    );
+    expect(workflow, contains('/android-release-manifest.json'));
+    expect(workflow, contains('retention-days: 30'));
+  });
+
+  test('Linux CI Android publisher is monotonic retry-safe and exact', () {
+    final publisher = File(
+      'scripts/android/publish_direct_release.sh',
+    ).readAsStringSync();
+    final compactPublisher = normalized(publisher);
+
+    expect(publisher, contains('--ci-exact-sha'));
+    expect(publisher, isNot(contains('--prepared-state')));
+    expect(
+      compactPublisher,
+      contains(r'"$(git rev-parse HEAD)" != "$CI_EXACT_SHA"'),
+    );
+    expect(
+      publisher,
+      contains('VERSION_CODE=\$((LATEST_ANDROID_VERSION_CODE + 1))'),
+    );
+    expect(publisher, contains('prepare_ci_version'));
+    expect(publisher, contains('validate_complete_release_manifest'));
+    expect(publisher, contains('write_release_evidence'));
+    expect(publisher, contains('--argjson release_notes'));
+    expect(
+        publisher, contains('.release_notes.to_commit == \$expected_commit'));
+    expect(publisher, contains('remote_object_matches_file'));
+    expect(
+      publisher,
+      contains('Reusing the verified immutable Android version manifest.'),
+    );
+    expect(publisher, contains('.release_notes == \$release_notes'));
+    expect(publisher, contains('.apk_parts == \$apk_parts'));
+    expect(
+      compactPublisher,
+      isNot(
+        contains(
+          'for required in awk base64 cat curl date dd find git head jq keytool mktemp perl rm security',
+        ),
+      ),
+    );
   });
 }

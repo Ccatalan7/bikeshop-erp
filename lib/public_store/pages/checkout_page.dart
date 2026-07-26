@@ -19,6 +19,7 @@ import '../../modules/website/services/mercadopago_service.dart';
 import '../../modules/website/models/public_shipping_quote.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/utils/chilean_utils.dart';
+import '../../shared/utils/auth_input_validation.dart';
 import '../../shared/models/customer_address.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 
@@ -1160,6 +1161,8 @@ class _CheckoutPageState extends State<CheckoutPage>
                               label: 'Contraseña para tu cuenta *',
                               icon: Icons.lock_outline,
                             ).copyWith(
+                              helperText:
+                                  AuthInputValidation.strongPasswordHelper,
                               suffixIcon: IconButton(
                                 onPressed: () {
                                   setState(() {
@@ -1176,10 +1179,10 @@ class _CheckoutPageState extends State<CheckoutPage>
                             ),
                             validator: (value) {
                               if (!_createAccountAfterCheckout) return null;
-                              if (value == null || value.length < 6) {
-                                return 'Usa al menos 6 caracteres';
-                              }
-                              return null;
+                              return AuthInputValidation.validatePassword(
+                                value,
+                                isNewPassword: true,
+                              );
                             },
                           ),
                           const SizedBox(height: 14),
@@ -1192,10 +1195,11 @@ class _CheckoutPageState extends State<CheckoutPage>
                             ),
                             validator: (value) {
                               if (!_createAccountAfterCheckout) return null;
-                              if (value != _accountPasswordController.text) {
-                                return 'Las contraseñas no coinciden';
-                              }
-                              return null;
+                              return AuthInputValidation
+                                  .validatePasswordConfirmation(
+                                value,
+                                password: _accountPasswordController.text,
+                              );
                             },
                           ),
                         ],

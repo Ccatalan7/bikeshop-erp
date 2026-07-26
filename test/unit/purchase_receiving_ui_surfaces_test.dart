@@ -90,7 +90,7 @@ void main() {
     );
   });
 
-  test('purchase list status label and color share fulfillment derivation', () {
+  test('purchase list status presentation shares fulfillment derivation', () {
     final list = _read(
       'lib/modules/purchases/pages/purchase_invoice_list_page.dart',
     );
@@ -100,25 +100,20 @@ void main() {
     expect(
       list,
       contains(
-        "label: isPaid ? 'PAGADA · RECIBIDA' : 'RECIBIDA', "
-        'foreground: const Color(0xFF165F52), '
-        'background: const Color(0xFFCFE8DF)',
+        "label: isPaid ? 'PAGADA · RECIBIDA' : 'RECIBIDA'",
       ),
     );
     expect(
       list,
       contains(
-        "label: isPaid ? 'PAGADA · PARCIAL' : 'RECEP. PARCIAL', "
-        'foreground: const Color(0xFF6F480B), '
-        'background: const Color(0xFFF0D9A7)',
+        "label: isPaid ? 'PAGADA · PARCIAL' : 'RECEP. PARCIAL'",
       ),
     );
     expect(
       list,
       contains(
         "label: isPaid ? 'PAGADA · CERRADA CON DIF.' "
-        ": 'CERRADA CON DIF.', foreground: const Color(0xFF6F480B), "
-        'background: const Color(0xFFF0D9A7)',
+        ": 'CERRADA CON DIF.'",
       ),
     );
     expect(list, contains('color: presentation.background'));
@@ -185,34 +180,15 @@ void main() {
     );
   });
 
-  test('receipt redesign stays local and preserves the purchase host styling',
-      () {
-    final theme = _read('lib/shared/themes/app_theme.dart');
-    final guide = _read('.github/GUI_DESIGN_PRINCIPLES.md');
-    final list = _read(
-      'lib/modules/purchases/pages/purchase_invoice_list_page.dart',
-    );
+  test('receipt workspace stays local to the existing purchase host', () {
     final receiving = _read(
       'lib/modules/purchases/pages/purchase_receiving_page.dart',
     );
 
-    expect(theme, contains('static const Color primaryBlue'));
-    expect(theme, contains('primarySwatch: Colors.blue'));
-    expect(theme, contains('backgroundColor: primaryBlue'));
-    expect(list, contains('Colors.blue'));
-    expect(list, contains('Colors.orange'));
-    expect(list, contains('Colors.green'));
-    expect(list, contains('Colors.teal'));
-    expect(receiving, contains('class _ReceiptPalette'));
-    expect(receiving, contains('return Theme('));
-    expect(
-      guide,
-      contains('A localized redesign must never replace the global app theme'),
-    );
-    expect(
-      guide,
-      contains('it must not mount a nested top-level `Scaffold` or `AppBar`'),
-    );
+    expect(receiving, contains('class PurchaseReceivingWorkspace'));
+    expect(receiving, isNot(contains('return Scaffold(')));
+    expect(receiving, isNot(contains('AppBar(')));
+    expect(receiving, isNot(contains('AppTheme.')));
   });
 
   test('preview photos are bundled and receipt grid stays simple', () {
@@ -239,7 +215,6 @@ void main() {
         'assets/images/campaigns/products/ridexc-butyl-29-cutout.png',
       ),
     );
-    expect(receiving, contains('static const double minimumWidth = 900'));
     expect(receiving, contains("'RECIBIDO AHORA'"));
     expect(receiving, contains("'DIFERENCIA'"));
     expect(receiving, contains("_header('MOTIVO / EVIDENCIA'"));
@@ -264,8 +239,6 @@ void main() {
     expect(receiving, contains('Rechazado / no conforme'));
     expect(receiving, contains('thumbVisibility: true'));
     expect(receiving, contains('highlightWhenPositive: false'));
-    expect(receiving, isNot(contains('Color(0xFFF3F1EC)')));
-    expect(receiving, isNot(contains('LinearGradient(')));
   });
 
   test('linked credit notes open their exact document inside the host layout',

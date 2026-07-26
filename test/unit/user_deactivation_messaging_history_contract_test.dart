@@ -30,7 +30,7 @@ void main() {
     );
   });
 
-  test('admin UI distinguishes deactivation from hard deletion', () {
+  test('admin UI reports tenant detachment without claiming Auth deletion', () {
     expect(pageSource, contains('_confirmAccountRemoval('));
     expect(
       pageSource,
@@ -40,7 +40,14 @@ void main() {
       pageSource,
       contains('La identidad sigue activa por otro acceso vigente'),
     );
-    expect(pageSource, contains("'auth_deleted'"));
+    expect(pageSource, contains("'authDetachedOnly'"));
+    expect(pageSource, contains("'tenant_access_detached'"));
+    expect(
+      pageSource,
+      contains('La identidad global y la ficha histórica se conservaron'),
+    );
+    expect(pageSource, isNot(contains("'auth_deleted'")));
+    expect(pageSource, isNot(contains("'authDeleted'")));
     expect(pageSource, isNot(contains("title: 'Eliminar cuenta interna'")));
     expect(pageSource, isNot(contains("title: 'Eliminar cuenta web'")));
   });

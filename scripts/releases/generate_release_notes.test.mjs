@@ -15,8 +15,12 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  acceptCodexReleaseEnvelope,
   collectReleaseInventory,
+  createCodexReleaseContext,
+  createCodexReleaseEnvelope,
   createFallbackReleaseNotes,
+  decodeCodexReleaseEnvelopeBase64,
   generateReleaseNotes,
   isBinaryReleasePath,
   isGeneratedReleasePath,
@@ -233,9 +237,11 @@ function candidateForInventory(inventory) {
   const copy = {
     workshop: "Ahora es más claro revisar los trabajos y sus presupuestos.",
     inventory:
-      "Mejoramos la estabilidad al revisar la información de inventario.",
-    sales: "Mejoramos la experiencia al revisar ventas y pagos.",
-    general: "Incluye mejoras generales para un uso más estable.",
+      "Ahora puedes revisar las existencias de cada producto con mayor claridad.",
+    sales:
+      "Ahora puedes revisar ventas, cobros y pagos desde una vista más clara.",
+    general:
+      "Ahora la actualización muestra sus novedades antes de reiniciar.",
   };
   const labels = {
     workshop: "Taller",
@@ -375,6 +381,185 @@ test("writes the same bounded es-CL fallback before any optional AI work", async
   assert.deepEqual(JSON.parse(firstJson), {
     release_notes: first.release_notes,
   });
+});
+
+test("uses an exact locally generated Codex candidate before any network provider", async (t) => {
+  const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
+  const outputPath = path.join(repoDir, "out", "codex-local.json");
+  const inventory = collectReleaseInventory({
+    repoDir,
+    fromCommit,
+    toCommit,
+  });
+  const context = createCodexReleaseContext(inventory);
+  const candidate = candidateForInventory(inventory);
+  const codexCandidateEnvelope = createCodexReleaseEnvelope(candidate, {
+    inventory,
+  });
+  let fetchCalled = false;
+
+  assert.equal(context.from_commit, fromCommit);
+  assert.equal(context.to_commit, toCommit);
+  assert.equal(context.evidence_catalog_sha256.length, 64);
+  assert.deepEqual(
+    context.changes.map((entry) => entry.path),
+    inventory.ai_changes.map((entry) => entry.path),
+  );
+  assert.equal(JSON.stringify(context).includes(".env.production"), false);
+  assert.equal(
+    JSON.stringify(context).includes("web/spreadsheet_engine/univer.bundle.js"),
+    false,
+  );
+
+  const result = await generateReleaseNotes({
+    repoDir,
+    fromCommit,
+    toCommit,
+    outputPath,
+    codexCandidateEnvelope,
+    geminiApiKey: "must-not-be-used",
+    apiKey: "must-not-be-used",
+    fetchImpl: async () => {
+      fetchCalled = true;
+      throw new Error("A valid local candidate must skip network providers.");
+    },
+  });
+
+  assert.equal(fetchCalled, false);
+  assert.equal(result.source, "ai");
+  assert.equal(result.provider, "codex-local");
+  assert.equal(result.reason, null);
+  assert.deepEqual(
+    acceptCodexReleaseEnvelope(codexCandidateEnvelope, { inventory }),
+    result.release_notes,
+  );
+  assert.deepEqual(JSON.parse(await readFile(outputPath, "utf8")), {
+    release_notes: result.release_notes,
+  });
+});
+
+test("rejects stale, tampered, or generic Codex candidates without blocking fallback", async (t) => {
+  const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
+  const inventory = collectReleaseInventory({
+    repoDir,
+    fromCommit,
+    toCommit,
+  });
+  const validEnvelope = createCodexReleaseEnvelope(
+    candidateForInventory(inventory),
+    { inventory },
+  );
+  const cases = [
+    {
+      name: "wrong-head",
+      mutate: (envelope) => {
+        envelope.to_commit = "0".repeat(40);
+      },
+    },
+    {
+      name: "wrong-catalog",
+      mutate: (envelope) => {
+        envelope.evidence_catalog_sha256 = "0".repeat(64);
+      },
+    },
+    {
+      name: "fabricated-evidence",
+      mutate: (envelope) => {
+        envelope.candidate.modules[0].evidence_ids = ["change_999"];
+      },
+    },
+    {
+      name: "generic-copy",
+      mutate: (envelope) => {
+        for (const module of envelope.candidate.modules) {
+          module.items = [
+            "Se aplicaron ajustes técnicos para mejorar la estabilidad del programa.",
+          ];
+        }
+      },
+    },
+    {
+      name: "generic-module-copy",
+      mutate: (envelope) => {
+        const genericItems = {
+          workshop:
+            "Se aplicaron ajustes en la gestión de trabajos y presupuestos.",
+          inventory:
+            "Se realizó una optimización en el control de inventario y existencias.",
+          sales:
+            "Se incorporaron mejoras generales en el proceso de ventas y cobros.",
+          general:
+            "Se realizaron actualizaciones para mejorar el funcionamiento general.",
+        };
+        for (const module of envelope.candidate.modules) {
+          module.items = [genericItems[module.id]];
+        }
+      },
+    },
+  ];
+
+  for (const scenario of cases) {
+    const envelope = structuredClone(validEnvelope);
+    scenario.mutate(envelope);
+    const outputPath = path.join(
+      repoDir,
+      "out",
+      `codex-${scenario.name}.json`,
+    );
+    const result = await generateReleaseNotes({
+      repoDir,
+      fromCommit,
+      toCommit,
+      outputPath,
+      codexCandidateEnvelope: envelope,
+      codexCandidateProvided: true,
+    });
+
+    assert.equal(result.source, "fallback", scenario.name);
+    assert.equal(result.reason, "invalid_codex_candidate", scenario.name);
+    assert.equal(
+      JSON.parse(await readFile(outputPath, "utf8")).release_notes.source,
+      "fallback",
+      scenario.name,
+    );
+  }
+});
+
+test("decodes only bounded canonical UTF-8 Codex candidate transport", () => {
+  const envelope = {
+    schema_version: 1,
+    from_commit: "1".repeat(40),
+    to_commit: "2".repeat(40),
+    evidence_catalog_sha256: "3".repeat(64),
+    candidate: { title: "Novedades", summary: "Resumen", modules: [] },
+  };
+  const canonical = Buffer.from(JSON.stringify(envelope), "utf8").toString(
+    "base64",
+  );
+
+  assert.deepEqual(decodeCodexReleaseEnvelopeBase64(""), {
+    provided: false,
+    envelope: null,
+    reason: null,
+  });
+  assert.deepEqual(decodeCodexReleaseEnvelopeBase64(canonical), {
+    provided: true,
+    envelope,
+    reason: null,
+  });
+  for (const invalid of [
+    "not base64",
+    `${canonical}\n`,
+    "A===",
+    Buffer.from([0xc3, 0x28]).toString("base64"),
+    "A".repeat(16 * 1024 + 4),
+  ]) {
+    assert.deepEqual(decodeCodexReleaseEnvelopeBase64(invalid), {
+      provided: true,
+      envelope: null,
+      reason: "invalid_codex_candidate_transport",
+    });
+  }
 });
 
 test("never exposes protected paths when a range has no safe AI metadata", async (t) => {
@@ -1034,6 +1219,13 @@ test("both AI providers receive only opaque allowlisted metadata even when Git c
   assert.equal(inventory.ai_changes[0].status, "renamed");
   assert.equal(inventory.ai_changes[0].previous_path, previousPath);
   assert.equal(inventory.ai_changes[0].path, currentPath);
+  const codexContext = createCodexReleaseContext(inventory);
+  assert.deepEqual(codexContext.changes, []);
+  assert.equal(JSON.stringify(codexContext).includes(previousPath), false);
+  assert.equal(JSON.stringify(codexContext).includes(currentPath), false);
+  for (const privateValue of privateValues) {
+    assert.equal(JSON.stringify(codexContext).includes(privateValue), false);
+  }
   const candidate = candidateForInventory(inventory);
 
   const providers = [

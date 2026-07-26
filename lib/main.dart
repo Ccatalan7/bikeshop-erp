@@ -150,10 +150,11 @@ Future<void> main() async {
   // Capture browser URL IMMEDIATELY, before anything else
   if (kIsWeb) {
     _initialBrowserUrl = getInitialBrowserUrl();
+    AuthService.captureInitialUrl(_initialBrowserUrl);
+    CustomerAccountService.captureInitialUrl(_initialBrowserUrl);
     // Capture OAuth codes if present to prevent router from cleaning them
     captureZohoOAuthCode();
     captureGmailOAuthCode();
-    // debugPrint('🚀 [Main] Captured initial URL: $_initialBrowserUrl');
   }
   _logTiming('URL_CAPTURED');
 
@@ -703,8 +704,6 @@ class VinabikeApp extends StatelessWidget {
               }
               if (kIsWeb && _initialBrowserUrl != null) {
                 final uri = Uri.parse(_initialBrowserUrl!);
-                debugPrint(
-                    '🔍 [Main] Using captured initial URL: $_initialBrowserUrl');
                 return uri
                     .toString(); // Just pass the full URL string (or path+query)
               }

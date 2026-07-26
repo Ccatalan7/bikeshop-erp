@@ -1,0 +1,268 @@
+name: Publish Android ERP Release
+
+run-name: >-
+  Android ${{ inputs.publish_release == true && 'publish' || 'validation' }}
+  · ${{ github.sha }}
+  · notes ${{ inputs.release_notes_candidate_sha256 || 'fallback' }}
+  · from ${{ inputs.release_notes_from_commit || 'auto' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish the verified APK as the private employee update
+        required: true
+        type: boolean
+        default: false
+      expected_commit:
+        description: Exact commit requested by the shared ERP publisher
+        required: true
+        type: string
+      release_notes_from_commit:
+        description: Optional exact base commit for shared release notes
+        required: false
+        type: string
+        default: ""
+      release_notes_candidate_b64:
+        description: Optional bounded local Codex release-note candidate
+        required: false
+        type: string
+        default: ""
+      release_notes_candidate_sha256:
+        description: SHA-256 of the decoded Codex candidate envelope
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+# Android version selection and private latest.json replacement must be
+# serialized. A queued retry reads the final live manifest before selecting its
+# version code, so it cannot race another Android publication.
+concurrency:
+  group: vinabike-erp-android-production
+  cancel-in-progress: false
+
+jobs:
+  source-guard:
+    name: Bind requested Android source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify the exact workflow source
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'The requested Android source binding is invalid.' >&2
+            exit 1
+          fi
+          if [[ "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]]; then
+            echo 'The Android workflow source does not match the requested commit.' >&2
+            exit 1
+          fi
+          echo 'The Android workflow is bound to the requested commit.'
+
+  integrity:
+    name: Verify application integrity
+    uses: ./.github/workflows/erp-integrity-gate.yml
+
+  publish:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release == true }}
+    needs:
+      - source-guard
+      - integrity
+    name: Build, sign, and publish protected Android update
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: Production
+
+    steps:
+      - name: Check out the exact release source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node for packaged assets and release notes
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: npm
+
+      - name: Set up Java for Android signing
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.5"
+          channel: stable
+          cache: true
+
+      - name: Rebuild packaged assets and lock dependencies
+        run: |
+          set -euo pipefail
+
+          npm ci
+          npm run build:spreadsheet-engine
+          flutter pub get
+          git diff --exit-code -- \
+            pubspec.lock \
+            web/spreadsheet_engine/univer.bundle.js \
+            web/spreadsheet_engine/univer.bundle.css
+          test -z "$(git status --porcelain)"
+
+      - name: Resolve the exact Android release-note base
+        id: notes-base
+        env:
+          REQUESTED_NOTES_BASE: ${{ inputs.release_notes_from_commit }}
+          SUPABASE_RELEASE_SECRET: ${{ secrets.SUPABASE_RELEASE_SECRET }}
+        run: |
+          set -euo pipefail
+
+          notes_base="$REQUESTED_NOTES_BASE"
+          if [[ -z "$notes_base" ]]; then
+            if [[ -z "$SUPABASE_RELEASE_SECRET" ]]; then
+              echo 'The Production Supabase release credential is not configured.' >&2
+              exit 1
+            fi
+            latest_json="$(
+              curl --fail --show-error --silent \
+                "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/authenticated/erp-mobile-releases/5443b130-cc28-45af-a420-cd500b288890/android/latest.json" \
+                -H "apikey: ${SUPABASE_RELEASE_SECRET}" \
+                -H "Authorization: Bearer ${SUPABASE_RELEASE_SECRET}"
+            )"
+            notes_base="$(jq -r '.commit // empty' <<< "$latest_json")"
+          fi
+          if [[ ! "$notes_base" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'The Android release-note base commit is invalid.' >&2
+            exit 1
+          fi
+          git cat-file -e "${notes_base}^{commit}"
+          git merge-base --is-ancestor "$notes_base" "$GITHUB_SHA"
+          printf 'commit=%s\n' "$notes_base" >> "$GITHUB_OUTPUT"
+
+      - name: Validate and generate exact-range release notes
+        env:
+          CODEX_CANDIDATE_B64: ${{ inputs.release_notes_candidate_b64 }}
+          CODEX_CANDIDATE_SHA256: ${{ inputs.release_notes_candidate_sha256 }}
+          NOTES_BASE: ${{ steps.notes-base.outputs.commit }}
+          GEMINI_RELEASE_API_KEY: ${{ secrets.GEMINI_RELEASE_API_KEY }}
+          GEMINI_RELEASE_NOTES_MODEL: ${{ vars.GEMINI_RELEASE_NOTES_MODEL || 'gemini-3.1-flash-lite' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_RELEASE_NOTES_MODEL: ${{ vars.OPENAI_RELEASE_NOTES_MODEL }}
+        run: |
+          set -euo pipefail
+
+          candidate_transport_valid=true
+          if (( ${#CODEX_CANDIDATE_B64} > 16384 )); then
+            candidate_transport_valid=false
+          fi
+
+          if [[ -n "$CODEX_CANDIDATE_B64" && "$candidate_transport_valid" == true ]]; then
+            if [[ ! "$CODEX_CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+              candidate_transport_valid=false
+            fi
+          fi
+          if [[ -n "$CODEX_CANDIDATE_B64" && "$candidate_transport_valid" == true ]]; then
+            candidate_file="$RUNNER_TEMP/android-codex-release-candidate.json"
+            if ! printf '%s' "$CODEX_CANDIDATE_B64" |
+              base64 --decode > "$candidate_file"; then
+              candidate_transport_valid=false
+            fi
+            if [[ "$candidate_transport_valid" == true ]]; then
+              candidate_bytes="$(stat -c '%s' "$candidate_file")"
+              if (( candidate_bytes < 2 || candidate_bytes > 12288 )); then
+                candidate_transport_valid=false
+              fi
+            fi
+            if [[ "$candidate_transport_valid" == true ]]; then
+              candidate_sha="$(sha256sum "$candidate_file" | awk '{print $1}')"
+              if [[ "$candidate_sha" != "$CODEX_CANDIDATE_SHA256" ]]; then
+                candidate_transport_valid=false
+              fi
+            fi
+          elif [[ -n "$CODEX_CANDIDATE_SHA256" ]]; then
+            candidate_transport_valid=false
+          fi
+          if [[ "$candidate_transport_valid" != true ]]; then
+            CODEX_CANDIDATE_B64=''
+            rm -f "$RUNNER_TEMP/android-codex-release-candidate.json"
+            echo 'Local release-note candidate discarded: transport_validation.'
+          fi
+
+          CODEX_RELEASE_NOTES_CANDIDATE_B64="$CODEX_CANDIDATE_B64" \
+            node scripts/releases/generate_release_notes.mjs \
+              --from-commit "$NOTES_BASE" \
+              --to-commit "$GITHUB_SHA" \
+              --output "$RUNNER_TEMP/android-release-notes.json"
+
+          jq -e \
+            --arg base "$NOTES_BASE" \
+            --arg head "$GITHUB_SHA" \
+            '
+              (. | keys | sort) == ["release_notes"]
+              and .release_notes.schema_version == 1
+              and .release_notes.locale == "es-CL"
+              and .release_notes.from_commit == $base
+              and .release_notes.to_commit == $head
+              and (.release_notes.modules | type == "array" and length > 0)
+            ' "$RUNNER_TEMP/android-release-notes.json" >/dev/null
+
+      - name: Materialize the protected Android signing identity
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$ANDROID_RELEASE_KEYSTORE_BASE64" ]]; then
+            echo 'The Production Android release keystore is not configured.' >&2
+            exit 1
+          fi
+          keystore="$RUNNER_TEMP/android-release.jks"
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" |
+            base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          keystore_bytes="$(stat -c '%s' "$keystore")"
+          if (( keystore_bytes < 256 || keystore_bytes > 1048576 )); then
+            echo 'The protected Android release keystore has an invalid size.' >&2
+            exit 1
+          fi
+
+      - name: Build, sign, upload, and verify the Android release
+        env:
+          VINABIKE_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/android-release.jks
+          VINABIKE_ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          VINABIKE_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          VINABIKE_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          SUPABASE_RELEASE_SECRET: ${{ secrets.SUPABASE_RELEASE_SECRET }}
+          VINABIKE_ANDROID_RELEASE_NOTES_PATH: ${{ runner.temp }}/android-release-notes.json
+          VINABIKE_ANDROID_RELEASE_EVIDENCE_PATH: ${{ runner.temp }}/android-release-manifest.json
+        run: |
+          set -euo pipefail
+
+          bash scripts/android/publish_direct_release.sh \
+            --ci-exact-sha "$GITHUB_SHA"
+
+      - name: Retain exact Android publication evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: vinabike-erp-android-release-evidence
+          path: ${{ runner.temp }}/android-release-manifest.json
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 9
+
+      - name: Remove protected temporary material
+        if: ${{ always() }}
+        run: |
+          rm -f \
+            "$RUNNER_TEMP/android-release.jks" \
+            "$RUNNER_TEMP/android-codex-release-candidate.json" \
+            "$RUNNER_TEMP/android-release-notes.json"

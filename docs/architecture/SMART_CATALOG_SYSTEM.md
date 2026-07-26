@@ -1,10 +1,32 @@
-# 🚴 Smart Catalog & Compatibility System
+# Smart Catalog & Compatibility System
 
 ## Executive Summary
 
 A revolutionary **bike encyclopedia + compatibility engine** that transforms how bike shops manage inventory and service bikes. The system automatically matches bike specifications with compatible parts, eliminating guesswork and reducing errors in repairs and sales.
 
 **Core Innovation**: When a customer brings a Trek Marlin 5 2022 for repair, the system instantly knows every technical specification and shows ONLY compatible parts from your inventory.
+
+### UI guidance status
+
+This document owns the catalog, compatibility, data-quality, and command
+architecture described below. It is a dated concept and implementation summary,
+not a visual design specification. Its historical code samples and diagrams do
+not authorize literal colors, decorative icons, emoji labels, cards, chips,
+metric blocks, gradients, dimensions, or a fixed navigation surface.
+
+Current UI work must follow
+[the general GUI guide](../../.github/GUI_DESIGN_PRINCIPLES.md) and, for phone,
+tablet, compact, adaptive, or responsive work,
+[the mobile GUI guide](../../.github/GUI_MOBILE_DESIGN_PRINCIPLES.md).
+Select the interaction surface from the task, frequency, risk, available space,
+and actual input capabilities. Do not infer a mandatory table, card grid,
+split pane, dialog, inline editor, or full route from this architecture.
+
+Compatibility in this design is deterministic matching over structured data.
+Do not present it as artificial intelligence or magic through decorative
+sparkle, flame, brain, or robot iconography. Use a clear action label and
+explain the compatibility result, confidence, and exception in ordinary
+language.
 
 ---
 
@@ -447,114 +469,35 @@ ORDER BY p.stock_quantity DESC, p.price ASC;
 
 When adding/editing a product, the form **automatically adapts** based on selected category:
 
-```dart
-// lib/modules/inventory/pages/product_form_page.dart
-
-Widget build(BuildContext context) {
-  return Scaffold(
-    body: Form(
-      child: Column(
-        children: [
-          // Always visible: Basic info
-          _buildBasicInfoSection(),
-          
-          // Category selection
-          _buildCategoryDropdown(),
-          
-          // 🔥 DYNAMIC: Technical specs (only if category has component_type)
-          if (_selectedCategory?.componentType != null)
-            _buildDynamicSpecsSection(),
-          
-          // Always visible: Pricing, stock, images
-          _buildPricingSection(),
-          _buildStockSection(),
-          _buildImagesSection(),
-        ],
-      ),
-    ),
-  );
-}
-
-Widget _buildDynamicSpecsSection() {
-  final specSchema = _selectedCategory!.specSchema;
-  final fields = specSchema['fields'] as List;
-  
-  return Card(
-    child: Padding(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.auto_awesome, color: Colors.blue),
-              SizedBox(width: 8),
-              Text(
-                '⚙️ Technical Specifications',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          Divider(),
-          
-          // Build fields from schema
-          ...fields.map((fieldDef) {
-            return _buildSpecField(fieldDef);
-          }).toList(),
-        ],
-      ),
-    ),
-  );
-}
-
-Widget _buildSpecField(Map<String, dynamic> fieldDef) {
-  final name = fieldDef['name'] as String;
-  final type = fieldDef['type'] as String;
-  final label = fieldDef['label'] ?? name;
-  final required = fieldDef['required'] ?? false;
-  
-  switch (type) {
-    case 'select':
-      return DropdownButtonFormField(
-        decoration: InputDecoration(
-          labelText: label + (required ? ' *' : ''),
-        ),
-        value: _technicalSpecs[name],
-        items: (fieldDef['options'] as List).map((opt) {
-          return DropdownMenuItem(value: opt, child: Text(opt.toString()));
-        }).toList(),
-        onChanged: (value) => setState(() => _technicalSpecs[name] = value),
-        validator: required ? (v) => v == null ? 'Required' : null : null,
-      );
-      
-    case 'number':
-      return TextFormField(
-        decoration: InputDecoration(labelText: label + (required ? ' *' : '')),
-        keyboardType: TextInputType.number,
-        initialValue: _technicalSpecs[name]?.toString(),
-        onChanged: (v) => _technicalSpecs[name] = num.tryParse(v),
-        validator: required ? (v) => v?.isEmpty == true ? 'Required' : null : null,
-      );
-      
-    case 'boolean':
-      return CheckboxListTile(
-        title: Text(label),
-        value: _technicalSpecs[name] ?? false,
-        onChanged: (v) => setState(() => _technicalSpecs[name] = v),
-      );
-      
-    default: // text
-      return TextFormField(
-        decoration: InputDecoration(labelText: label + (required ? ' *' : '')),
-        initialValue: _technicalSpecs[name],
-        onChanged: (v) => _technicalSpecs[name] = v,
-        validator: required ? (v) => v?.isEmpty == true ? 'Required' : null : null,
-      );
-  }
-}
+```text
+definitions = selected_category.spec_schema.fields
+for each definition:
+  bind technical_specs[definition.name]
+  parse and validate from definition.type/options/required
+save technical_specs through the canonical product command
 ```
 
-**Result**: 
+The snippet expresses an ownership boundary, not a widget recipe:
+
+- `spec_schema` owns which technical facts exist, their type, options,
+  requirement, and domain validation.
+- The product-form implementation owns parsing and serialization for
+  `select`, `number`, `text`, `boolean`, and `multiselect` through shared,
+  tested field behavior.
+- The current form host owns grouping, visual hierarchy, disclosure, focus,
+  error presentation, and platform-appropriate controls.
+- Every routed, embedded, or compact host delegates to the same save command,
+  permissions, validation, and `technical_specs` serialization.
+- Changing category must preserve compatible entered values, make discarded
+  values explicit, and never silently write a partial technical profile.
+
+Do not infer a card, decorated heading, literal color, fixed padding, or
+specific Material field from the old implementation sample. On phone and
+tablet, the composition must also handle SafeArea, text scale, focus, virtual
+keyboard, scrolling, and reachable save/cancel actions as required by the
+mobile guide.
+
+**Behavioral result**:
 - Select "Hubs" → Form shows: Holes, O.L.D., Freehub Type, Brake Type, Axle Type
 - Select "Jerseys" → Form shows: Size, Gender, Fit, Material, Pockets
 - Select "Water Bottles" → No specs form (componentType = null)
@@ -562,6 +505,10 @@ Widget _buildSpecField(Map<String, dynamic> fieldDef) {
 ---
 
 ## User Workflows
+
+These scenarios define business sequence and command outcomes. Their boxes,
+glyphs, labels, and control wording are historical illustrations, not
+wireframes or a required visual hierarchy.
 
 ### Workflow 1: Customer Brings Bike for Repair
 
@@ -577,14 +524,14 @@ Widget _buildSpecField(Map<String, dynamic> fieldDef) {
    
 3. System → Show Compatible Parts
    ┌────────────────────────────────────────────────┐
-   │ 🔍 Compatible Derailleurs (Trek Marlin 5 2022)│
+   │ Compatible Derailleurs (Trek Marlin 5 2022)   │
    ├────────────────────────────────────────────────┤
-   │ ✅ Shimano Alivio RD-M3100 9sp - $32 (5 stock)│
-   │ ✅ Shimano Acera RD-M360 9sp - $28 (3 stock)  │
-   │ ✅ Microshift Advent 9sp - $35 (2 stock)      │
+   │ Shimano Alivio RD-M3100 9sp - $32 (5 stock)   │
+   │ Shimano Acera RD-M360 9sp - $28 (3 stock)     │
+   │ Microshift Advent 9sp - $35 (2 stock)         │
    ├────────────────────────────────────────────────┤
-   │ ⚠️ Need to Order:                              │
-   │ □ Shimano Deore RD-M5120 9sp - $45 (0 stock)  │
+   │ Needs ordering                                 │
+   │ Shimano Deore RD-M5120 9sp - $45 (0 stock)    │
    └────────────────────────────────────────────────┘
    
 4. Technician → Select Part
@@ -595,10 +542,10 @@ Widget _buildSpecField(Map<String, dynamic> fieldDef) {
 ```
 
 **Key Benefits**:
-- ⚡ No manual spec lookup
-- ⚡ No compatibility errors
-- ⚡ Shows only in-stock compatible items
-- ⚡ Speeds up service time by 70%
+- No manual spec lookup
+- Fewer compatibility errors
+- Shows only in-stock compatible items
+- Targeted 70% reduction in part lookup time
 
 ---
 
@@ -614,11 +561,11 @@ Widget _buildSpecField(Map<String, dynamic> fieldDef) {
    └─ Stock: 8 units
 
 3. Select Category: "Parts/Components → Wheels → Hubs"
-   └─ 🔥 Form automatically shows hub-specific fields
+   └─ Form automatically exposes hub-specific fields
 
 4. Technical Specifications Section Appears
    ┌──────────────────────────────────────────┐
-   │ ⚙️ Technical Specifications              │
+   │ Technical Specifications                 │
    ├──────────────────────────────────────────┤
    │ Number of Holes * : [Dropdown: 32]      │
    │ O.L.D. (mm) *     : [Input: 135]        │
@@ -652,7 +599,7 @@ Widget _buildSpecField(Map<String, dynamic> fieldDef) {
 3. Add Products → Two Options:
    
    Option A: Smart Mode (bike selected)
-   ├─ Click "🧠 Add Compatible Parts"
+   ├─ Choose "Add Compatible Parts"
    ├─ Select Component Type: "Derailleur"
    └─ Choose from filtered list (only 9-speed derailleurs)
    
@@ -664,9 +611,9 @@ Widget _buildSpecField(Map<String, dynamic> fieldDef) {
 ```
 
 **Key Benefits**:
-- 🎯 Reduces wrong part selection by 95%
-- 🎯 Faster invoice creation (no searching through 500 products)
-- 🎯 Customer satisfaction (correct parts first time)
+- Targeted 95% reduction in wrong part selection
+- Faster invoice creation without searching through the full catalog
+- Better chance of selecting the correct part the first time
 
 ---
 
@@ -678,7 +625,7 @@ Widget _buildSpecField(Map<String, dynamic> fieldDef) {
 **API**: https://api.bikebook.io/v1  
 **Format**: Structured JSON with normalized component specs  
 **Coverage**: ~50,000 bike models (2015-2025)  
-**Quality**: ⭐⭐⭐⭐⭐ (structured, comprehensive)  
+**Quality**: 5/5 in this historical assessment (structured, comprehensive)<br>
 **Cost**: Free (open source)
 
 **Example API Call**:
@@ -716,7 +663,7 @@ Response:
 
 **URL**: https://bikeindex.org/documentation/api_v3  
 **Use Case**: Fill gaps for rare/older models  
-**Quality**: ⭐⭐⭐ (user-submitted, inconsistent)  
+**Quality**: 3/5 in this historical assessment (user-submitted, inconsistent)<br>
 **Cost**: Free (100 requests/hour)
 
 ### Tertiary Source: Manual Entry
@@ -827,23 +774,27 @@ refresh materialized view compatible_parts_cache;
 
 ## Success Metrics
 
+These are outcome hypotheses to measure, not a requirement to render dashboard
+cards, colored KPI blocks, trend chips, or decorative indicators. Surface them
+in-product only when they improve a decision in the current workflow.
+
 ### Efficiency Gains:
-- 🎯 **Service Time**: 70% reduction in part lookup time
-- 🎯 **Error Rate**: 95% reduction in incompatible part sales
-- 🎯 **Invoice Speed**: 50% faster invoice creation
-- 🎯 **Return Rate**: 90% reduction in part returns
+- **Service Time**: 70% reduction in part lookup time
+- **Error Rate**: 95% reduction in incompatible part sales
+- **Invoice Speed**: 50% faster invoice creation
+- **Return Rate**: 90% reduction in part returns
 
 ### Business Impact:
-- 💰 Fewer returns = lower operational cost
-- 💰 Faster service = higher throughput
-- 💰 Customer satisfaction = repeat business
-- 💰 Staff confidence = reduced training time
+- Fewer returns = lower operational cost
+- Faster service = higher throughput
+- Customer satisfaction = repeat business
+- Staff confidence = reduced training time
 
 ### User Satisfaction:
-- ⭐ "No more guessing if parts fit"
-- ⭐ "New employees productive in days, not months"
-- ⭐ "Customers trust our recommendations"
-- ⭐ "Inventory actually makes sense now"
+- "No more guessing if parts fit"
+- "New employees productive in days, not months"
+- "Customers trust our recommendations"
+- "Inventory actually makes sense now"
 
 ---
 
@@ -877,4 +828,4 @@ The Smart Catalog & Compatibility System transforms a bike shop from a parts res
 4. **Scale operations** (efficiency gains)
 5. **Differentiate from competitors** (technology advantage)
 
-**This isn't just better inventory management—it's a competitive moat.** 🚴🔧⚡
+**This isn't just better inventory management—it's a competitive moat.**

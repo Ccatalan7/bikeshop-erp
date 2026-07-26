@@ -1,12 +1,23 @@
 # 🚀 Copilot Agent Task --- Smart Purchase List Module (ERP for Bike Shops)
 
+> [!WARNING]
+> **Historical business context; not UI authority.** This prompt may retain
+> useful purchase-planning behavior, but every visual, layout, navigation,
+> component, color, spacing, metric-card, modal/dialog/snackbar, responsive,
+> and platform recipe is superseded by
+> [`GUI_DESIGN_PRINCIPLES.md`](GUI_DESIGN_PRINCIPLES.md) and
+> [`GUI_MOBILE_DESIGN_PRINCIPLES.md`](GUI_MOBILE_DESIGN_PRINCIPLES.md). Do not
+> copy a competitor, screenshot, or old component. Choose inline, in-block,
+> pane, popover, sheet, blocking surface, or full route from the actual task;
+> none is an automatic module-wide pattern.
+
 ## 🧠 General Goal
 
 We want to develop a **Smart Purchase List Module**, an intelligent
 system that automatically builds and manages purchase needs in real
 time.\
-Unlike most ERPs (like Odoo or Zoho), this module should be more
-**context-aware, data-driven, and practical for a workshop environment**
+The module should be **context-aware, data-driven, and practical for a
+workshop environment**
 --- especially for our mountain bike repair and parts shop.
 
 The goal is to **automatically generate and manage a centralized
@@ -23,8 +34,9 @@ decisions.
 -   **Framework:** Flutter\
 -   **Auth & Database:** Supabase\
 -   **App type:** ERP system for Bike Shops (Accounting core)\
--   **Navigation:** In-page (no page reloads, only route transitions
-    with arrows)
+-   **Navigation:** Preserve the current purchase-list context across related
+    work. Select the lightest justified interaction surface under the canonical
+    navigation rules rather than prescribing one route shape.
 
 All data must be **hardcoded and globally available** for prototype
 mode.\
@@ -91,8 +103,9 @@ where required for the module to function properly.
     -   Dropdown to select "Generate purchase order by supplier".
     -   When a supplier is selected:
         -   All pending items linked to that supplier are grouped.
-        -   The app navigates to the purchase document creation flow
-            with those items preloaded and supplier preselected.
+        -   The app opens the canonical purchase-document creation flow with
+            those items preloaded and supplier preselected, while preserving
+            the originating purchase-list context for return.
 3.  **Smart Removal**
     -   When a related purchase or expense document is marked as
         completed/paid/received, the item is automatically removed or
@@ -111,8 +124,9 @@ where required for the module to function properly.
     -   Select items manually via checkbox.
     -   Add selected items to a new or existing purchase document.
     -   Option to bulk add all items from the same supplier.
-7.  **Dashboard Summary**
-    -   Optional small dashboard above the table:
+7.  **Decision Summary**
+    -   Show a compact summary only when these values change the purchasing
+        decision:
         -   Total pending items
         -   Most urgent items (by priority)
         -   Supplier with most pending products
@@ -121,10 +135,13 @@ where required for the module to function properly.
     -   Filter by supplier, priority, category, or status.
     -   Sort by priority, added date, or rotation speed.
 9.  **UI/UX**
-    -   Clean, modern, and professional.
-    -   Visual indicators for priority (e.g., color gradient from green
-        to red).
-    -   Smooth animations and inline editing.
+    -   Follow both canonical GUI guides and produce a modern, professional,
+        visually considered operational surface.
+    -   Communicate priority through text and semantics plus a measured
+        theme-owned treatment; never through a literal hue scale or color
+        alone.
+    -   Use purposeful motion and contextual editing only where they improve
+        continuity; neither is a compulsory pattern.
 
 ------------------------------------------------------------------------
 

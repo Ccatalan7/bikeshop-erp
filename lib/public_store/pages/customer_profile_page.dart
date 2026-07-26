@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../services/customer_account_service.dart';
 import '../theme/public_store_theme.dart';
 import '../widgets/customer_portal_layout.dart';
+import '../../shared/utils/auth_input_validation.dart';
 
 class CustomerProfilePage extends StatefulWidget {
   const CustomerProfilePage({super.key});
@@ -341,12 +342,14 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
           ),
         );
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al actualizar perfil: $e'),
+          const SnackBar(
+            content: Text(
+              'No pudimos actualizar el perfil. Inténtalo nuevamente.',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -375,11 +378,15 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
               const SizedBox(height: 12),
               TextFormField(
                 controller: newPasswordController,
-                decoration:
-                    const InputDecoration(labelText: 'Nueva contraseña'),
+                decoration: const InputDecoration(
+                  labelText: 'Nueva contraseña',
+                  helperText: AuthInputValidation.strongPasswordHelper,
+                ),
                 obscureText: true,
-                validator: (v) =>
-                    v == null || v.length < 6 ? 'Mínimo 6 caracteres' : null,
+                validator: (value) => AuthInputValidation.validatePassword(
+                  value,
+                  isNewPassword: true,
+                ),
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -387,9 +394,11 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
                 decoration:
                     const InputDecoration(labelText: 'Confirmar contraseña'),
                 obscureText: true,
-                validator: (v) => v != newPasswordController.text
-                    ? 'Las contraseñas no coinciden'
-                    : null,
+                validator: (value) =>
+                    AuthInputValidation.validatePasswordConfirmation(
+                  value,
+                  password: newPasswordController.text,
+                ),
               ),
             ],
           ),
@@ -414,11 +423,12 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
                       backgroundColor: Colors.green,
                     ),
                   );
-                } catch (error) {
+                } catch (_) {
                   messenger.showSnackBar(
-                    SnackBar(
-                      content:
-                          Text('No pudimos actualizar la contraseña: $error'),
+                    const SnackBar(
+                      content: Text(
+                        'No pudimos actualizar la contraseña. Inténtalo nuevamente.',
+                      ),
                       backgroundColor: Colors.red,
                     ),
                   );

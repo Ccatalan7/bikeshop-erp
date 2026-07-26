@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <meta http-equiv="Cache-Control" content="no-store">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    >
+    <title>Confirma la acción | Viñabike</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Arial, sans-serif;
+        background: #f4f6f8;
+        color: #1f2937;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+
+      main {
+        width: min(100%, 520px);
+        box-sizing: border-box;
+        padding: 32px;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        background: #fff;
+      }
+
+      .brand {
+        margin: 0 0 20px;
+        color: #1677d2;
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      h1 {
+        margin: 0 0 14px;
+        color: #111827;
+        font-size: 24px;
+      }
+
+      p {
+        margin: 0 0 22px;
+        line-height: 1.6;
+      }
+
+      button {
+        width: 100%;
+        min-height: 48px;
+        border: 0;
+        border-radius: 8px;
+        background: #1677d2;
+        color: #fff;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+      }
+
+      #error {
+        display: none;
+        margin-top: 18px;
+        color: #b42318;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="brand">Viñabike</p>
+      <h1>Confirma que deseas continuar</h1>
+      <p>
+        Por seguridad, esta acción sólo se completará cuando presiones el botón.
+        Si no solicitaste el cambio, cierra esta página.
+      </p>
+      <button id="continue" type="button" disabled>Continuar de forma segura</button>
+      <p id="error" role="alert">
+        El enlace no es válido o ya no contiene la información necesaria.
+      </p>
+    </main>
+    <script>
+      (() => {
+        'use strict';
+
+        const confirmationFragmentPrefix = '#confirmation_url=';
+        const inviteFragmentPrefix = '#token_hash=';
+        const inviteFragmentSeparator = '&type=invite&redirect_to=';
+        const button = document.getElementById('continue');
+        const error = document.getElementById('error');
+        const allowedAuthHosts = new Set([
+          'xzdvtzdqjeyqxnkqprtf.supabase.co',
+          '127.0.0.1:54321',
+          'localhost:54321',
+        ]);
+        const allowedStoreHosts = new Set([
+          'project-vinabike.web.app',
+          'project-vinabike.firebaseapp.com',
+          'vinabike.cl',
+          'www.vinabike.cl',
+          'vinabike-store.web.app',
+          'vinabike-store.firebaseapp.com',
+          '127.0.0.1:54330',
+          'localhost:54330',
+          '127.0.0.1:3000',
+          'localhost:3000',
+        ]);
+
+        let destination = null;
+        if (window.location.hash.startsWith(confirmationFragmentPrefix)) {
+          const rawDestination =
+            window.location.hash.slice(confirmationFragmentPrefix.length);
+          const candidates = [rawDestination];
+          try {
+            const decodedDestination = decodeURIComponent(rawDestination);
+            if (decodedDestination !== rawDestination) {
+              candidates.push(decodedDestination);
+            }
+          } catch (_) {
+            // The unmodified value is still validated below.
+          }
+
+          for (const value of candidates) {
+            try {
+              const candidate = new URL(value);
+              const isAllowedProtocol =
+                candidate.protocol === 'https:' ||
+                (candidate.protocol === 'http:' &&
+                  (candidate.hostname === '127.0.0.1' ||
+                    candidate.hostname === 'localhost'));
+              if (
+                isAllowedProtocol &&
+                allowedAuthHosts.has(candidate.host) &&
+                candidate.pathname === '/auth/v1/verify' &&
+                candidate.searchParams.has('token') &&
+                candidate.searchParams.has('type')
+              ) {
+                destination = candidate;
+                break;
+              }
+            } catch (_) {
+              destination = null;
+            }
+          }
+        } else if (window.location.hash.startsWith(inviteFragmentPrefix)) {
+          const invitePayload =
+            window.location.hash.slice(inviteFragmentPrefix.length);
+          const separatorIndex = invitePayload.indexOf(inviteFragmentSeparator);
+          if (separatorIndex > 0) {
+            const tokenHash = invitePayload.slice(0, separatorIndex);
+            const rawRedirect = invitePayload.slice(
+              separatorIndex + inviteFragmentSeparator.length,
+            );
+            const isValidTokenHash =
+              /^[A-Za-z0-9._~-]{20,512}$/.test(tokenHash);
+            const redirectCandidates = [rawRedirect];
+            try {
+              const decodedRedirect = decodeURIComponent(rawRedirect);
+              if (decodedRedirect !== rawRedirect) {
+                redirectCandidates.push(decodedRedirect);
+              }
+            } catch (_) {
+              // The unmodified redirect is still validated below.
+            }
+
+            if (isValidTokenHash) {
+              for (const value of redirectCandidates) {
+                try {
+                  const candidate = new URL(value);
+                  const isAllowedProtocol =
+                    candidate.protocol === 'https:' ||
+                    (candidate.protocol === 'http:' &&
+                      (candidate.hostname === '127.0.0.1' ||
+                        candidate.hostname === 'localhost'));
+                  const hasExactInvitationRoute =
+                    candidate.pathname === '/cuenta/login' &&
+                    candidate.searchParams.size === 1 &&
+                    candidate.searchParams.get('invited') === 'true' &&
+                    candidate.hash === '';
+                  if (
+                    isAllowedProtocol &&
+                    !candidate.username &&
+                    !candidate.password &&
+                    allowedStoreHosts.has(candidate.host) &&
+                    hasExactInvitationRoute
+                  ) {
+                    destination = new URL(
+                      '/cuenta/login',
+                      candidate.origin,
+                    );
+                    destination.hash = new URLSearchParams({
+                      token_hash: tokenHash,
+                      type: 'invite',
+                    }).toString();
+                    break;
+                  }
+                } catch (_) {
+                  destination = null;
+                }
+              }
+            }
+          }
+        }
+
+        window.history.replaceState(
+          null,
+          '',
+          `${window.location.pathname}${window.location.search}`,
+        );
+
+        if (destination === null) {
+          error.style.display = 'block';
+          return;
+        }
+
+        button.disabled = false;
+        button.addEventListener(
+          'click',
+          () => {
+            button.disabled = true;
+            window.location.assign(destination.href);
+          },
+          { once: true },
+        );
+      })();
+    </script>
+  </body>
+</html>

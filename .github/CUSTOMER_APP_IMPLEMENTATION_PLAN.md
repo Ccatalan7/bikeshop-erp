@@ -1,5 +1,15 @@
 # 📱 Customer Mobile App - Complete Implementation Plan
 
+> [!WARNING]
+> **Historical product context; not UI authority.** Feature intent may remain
+> useful, but every wireframe, visual, navigation, component, color, spacing,
+> card/badge, modal/dialog/snackbar, responsive, and platform recipe below is
+> superseded by [`GUI_DESIGN_PRINCIPLES.md`](GUI_DESIGN_PRINCIPLES.md) and
+> [`GUI_MOBILE_DESIGN_PRINCIPLES.md`](GUI_MOBILE_DESIGN_PRINCIPLES.md). Do not
+> copy the historical mockups or palette. Inspect current iOS and Android hosts
+> and choose inline, in-block, pane, popover, sheet, blocking surface, or full
+> route from task evidence; none is an automatic app-wide pattern.
+
 **Date**: November 8, 2025  
 **Project**: Viña Bike ERP - Customer Companion App  
 **Purpose**: Replace WhatsApp for customer communication with professional mobile app
@@ -48,6 +58,11 @@
 ## 🏗️ App Architecture
 
 ### **Folder Structure**
+
+The topology below is historical planning context, not a requirement to create
+parallel screens or presentation-only components. Reuse current canonical
+owners and shared components after inspecting the live repository.
+
 ```
 customer_app/
 ├── lib/
@@ -77,10 +92,7 @@ customer_app/
 │   │   │   └── invoice_detail_screen.dart
 │   │   └── bikes/
 │   │       └── bikes_list_screen.dart
-│   └── widgets/
-│       ├── status_badge.dart
-│       ├── invoice_card.dart
-│       └── job_timeline.dart
+│   └── widgets/          # Reuse current shared components where appropriate
 ```
 
 ---
@@ -121,85 +133,21 @@ create policy "customers_own_invoices" on sales_invoices for select
 
 ---
 
-## 📱 Screen Designs
+## 📱 Historical screen information requirements
 
-### **1. Home Screen (Dashboard)**
-```
-┌─────────────────────────────────┐
-│  Viña Bike                    🔔│
-├─────────────────────────────────┤
-│  Hola, Juan! 👋                 │
-│                                 │
-│  📋 Trabajos Activos (2)        │
-│  ┌───────────────────────────┐ │
-│  │ Bicicleta MTB Trek         │ │
-│  │ Estado: En Diagnóstico 🔍  │ │
-│  │ Estimado: 15/11/2025       │ │
-│  └───────────────────────────┘ │
-│                                 │
-│  💰 Facturas Pendientes ($150K)│
-│  ┌───────────────────────────┐ │
-│  │ Factura #1234              │ │
-│  │ Vence: 20/11/2025          │ │
-│  │ Monto: $150,000            │ │
-│  │          [Pagar Ahora]     │ │
-│  └───────────────────────────┘ │
-│                                 │
-│  🚴 Mis Bicicletas (3)          │
-│  [Ver Historial]                │
-└─────────────────────────────────┘
-```
+These are content requirements, not layouts:
 
-### **2. Job Detail Screen**
-```
-┌─────────────────────────────────┐
-│  ← Trabajo #PG-001            📞│
-├─────────────────────────────────┤
-│  🚴 Bicicleta                   │
-│  Trek Marlin 7 - Roja           │
-│                                 │
-│  📅 Estado del Trabajo          │
-│  ┌───────────────────────────┐ │
-│  │ ✅ Recibido  10/11         │ │
-│  │ ✅ Diagnóstico  11/11      │ │
-│  │ 🔄 En Curso  (actual)      │ │
-│  │ ⏳ Finalizado              │ │
-│  │ ⏳ Entregado               │ │
-│  └───────────────────────────┘ │
-│                                 │
-│  📝 Descripción                 │
-│  Cambio de frenos y ajuste...  │
-│                                 │
-│  💰 Presupuesto: $50,000        │
-│  📄 Factura: #1234 (ver)        │
-│                                 │
-│  [Contactar Taller]             │
-└─────────────────────────────────┘
-```
+- **Home:** identify the customer, active work, pending financial exception,
+  registered bicycles, and the most relevant next actions without turning each
+  value into a decorative metric card.
+- **Job detail:** identify the job and bicycle, expose current state and useful
+  history, description, estimate, related invoice, and contact action.
+- **Invoice detail:** expose identity, issue/due dates, state, line detail,
+  subtotal, IVA, total, document access, and payment action when allowed.
 
-### **3. Invoice Detail Screen**
-```
-┌─────────────────────────────────┐
-│  ← Factura #1234               │
-├─────────────────────────────────┤
-│  📅 Fecha: 10/11/2025           │
-│  ⏰ Vence: 20/11/2025           │
-│  🏷️  Estado: Pendiente          │
-│                                 │
-│  📦 Detalle                     │
-│  • Pastillas freno $15,000     │
-│  • Cable freno $5,000          │
-│  • Mano de obra $30,000        │
-│                                 │
-│  Subtotal: $50,000              │
-│  IVA (19%): $9,500              │
-│  ━━━━━━━━━━━━━━━━━              │
-│  TOTAL: $59,500                 │
-│                                 │
-│  [Descargar PDF]                │
-│  [Pagar Ahora]                  │
-└─────────────────────────────────┘
-```
+Compose these requirements for the current phone/tablet host according to both
+canonical guides. Preserve exact origin and list state when entering and
+returning from related work.
 
 ---
 
@@ -512,7 +460,7 @@ Viña Bike - Tu taller de confianza en Viña del Mar 🔧
 
 ### **Screenshots Needed**
 1. Home screen with active jobs
-2. Job detail with status timeline
+2. Job detail with useful status/history context
 3. Invoice list
 4. Bike history
 5. Push notification example
@@ -523,17 +471,15 @@ Viña Bike - Tu taller de confianza en Viña del Mar 🔧
 
 ### **App Icon**
 - Use Viña Bike logo
-- Circular icon with bike silhouette
-- Colors: Blue/Green (trust/eco-friendly)
+- Adapt the asset to current iOS and Android icon requirements without
+  prescribing a decorative shape or legacy palette here.
 
-### **Color Scheme**
-```dart
-Primary: #2196F3 (Blue)
-Secondary: #4CAF50 (Green)
-Accent: #FF9800 (Orange for CTAs)
-Background: #FFFFFF (White)
-Surface: #F5F5F5 (Light Gray)
-```
+### **Visual system**
+
+Use the current theme-owned brand, interaction, surface, and semantic roles
+defined by the canonical GUI guide. Professional must not be interpreted as
+monochrome or lifeless, and brand expression must not become a bright
+multi-color control palette.
 
 ---
 
@@ -573,4 +519,3 @@ Surface: #F5F5F5 (Light Gray)
 ---
 
 **Ready to build?** This is a professional, scalable solution that will set Viña Bike apart from competitors! 🚀
-

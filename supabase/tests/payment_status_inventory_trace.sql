@@ -14,6 +14,7 @@ create temp table selected_payment_method on commit drop as
 select id
 from public.payment_methods
 where tenant_id = '93000000-0000-4000-8000-000000000001'
+  and coalesce(requires_reference, false) is false
 order by created_at, id
 limit 1;
 

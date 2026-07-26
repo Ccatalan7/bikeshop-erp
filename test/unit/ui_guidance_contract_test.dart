@@ -2,6 +2,20 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+void _expectContainsAll(
+  String sourceName,
+  String source,
+  Iterable<String> required,
+) {
+  for (final value in required) {
+    expect(
+      source,
+      contains(value),
+      reason: '$sourceName must contain the canonical guidance: $value',
+    );
+  }
+}
+
 void _expectNoLegacyBreakpointClaims(String sourceName, String source) {
   final contradictoryPatterns = <RegExp>[
     RegExp(
@@ -24,6 +38,52 @@ void _expectNoLegacyBreakpointClaims(String sourceName, String source) {
       pattern.hasMatch(source),
       isFalse,
       reason: '$sourceName contains a contradictory responsive claim: '
+          '${pattern.pattern}',
+    );
+  }
+}
+
+void _expectNoLegacyVisualRecipes(String sourceName, String source) {
+  final legacyPatterns = <RegExp>[
+    RegExp(
+      r'Colors\.(?:blue|green|orange|amber|purple|teal|red|grey|white)\b',
+    ),
+    RegExp(r'#[0-9a-f]{6}\b', caseSensitive: false),
+    RegExp(r'one restrained accent', caseSensitive: false),
+    RegExp(r'(?:maximum|max)\s+2\s*[-–]\s*3 colors', caseSensitive: false),
+    RegExp(r'1 primary action\b[^\n]{0,24}per screen', caseSensitive: false),
+    RegExp(r'2\s*[-–]\s*3 secondary actions', caseSensitive: false),
+    RegExp(r'green snackbar|snackbar \(green\)', caseSensitive: false),
+    RegExp(r'preserve established[^\n]{0,60}palette', caseSensitive: false),
+    RegExp(r'same flat[^\n]{0,60}visual grammar', caseSensitive: false),
+  ];
+
+  for (final pattern in legacyPatterns) {
+    expect(
+      pattern.hasMatch(source),
+      isFalse,
+      reason: '$sourceName still contains a legacy visual recipe: '
+          '${pattern.pattern}',
+    );
+  }
+}
+
+void _expectNoUniversalSurfaceRecipe(String sourceName, String source) {
+  final universalPatterns = <RegExp>[
+    RegExp(r'use split[- ]pane only', caseSensitive: false),
+    RegExp(r'crud forms[^\n]{0,48}(?:use|with) dialogs?', caseSensitive: false),
+    RegExp(r'always place the search bar', caseSensitive: false),
+    RegExp(r'circular avatar style', caseSensitive: false),
+    RegExp(r'minTableWidth', caseSensitive: false),
+    RegExp(r'every split-action command opens[^\n]*dialog',
+        caseSensitive: false),
+  ];
+
+  for (final pattern in universalPatterns) {
+    expect(
+      pattern.hasMatch(source),
+      isFalse,
+      reason: '$sourceName turns a contextual surface into a universal recipe: '
           '${pattern.pattern}',
     );
   }
@@ -52,71 +112,75 @@ void main() {
       'scripts/run_flutter_test_gate.sh',
     ).readAsStringSync();
 
-    expect(agents, contains('.github/copilot-instructions.md'));
-    expect(agents, contains('.github/GUI_DESIGN_PRINCIPLES.md'));
-    expect(agents, contains('.github/GUI_MOBILE_DESIGN_PRINCIPLES.md'));
-    expect(copilot, contains('.github/GUI_DESIGN_PRINCIPLES.md'));
-    expect(copilot, contains('.github/GUI_MOBILE_DESIGN_PRINCIPLES.md'));
-    expect(copilot, contains('canonical living UI playbook'));
-    expect(copilot, contains('macOS desktop remains the operational priority'));
-    expect(copilot, contains('require dedicated compositions'));
+    _expectContainsAll('AGENTS.md', agents, <String>[
+      '.github/copilot-instructions.md',
+      '.github/GUI_DESIGN_PRINCIPLES.md',
+      '.github/GUI_MOBILE_DESIGN_PRINCIPLES.md',
+      'Historical prompts, screenshots, feature plans',
+      'never turn it into a universal',
+    ]);
+
+    _expectContainsAll('Copilot instructions', copilot, <String>[
+      '.github/GUI_DESIGN_PRINCIPLES.md',
+      '.github/GUI_MOBILE_DESIGN_PRINCIPLES.md',
+      'macOS desktop remains the operational priority',
+      'Phone and tablet remain',
+      'first-class and require dedicated compositions',
+      'None is a universal default',
+      'preserve exact navigation context',
+    ]);
 
     expect(mobileGuiFile.existsSync(), isTrue);
-    expect(gui, contains('GUI_MOBILE_DESIGN_PRINCIPLES.md'));
-    expect(gui, contains('canonical owner of the shared visual language'));
-    expect(mobileGui, contains('## Scope and ownership'));
-    expect(
-      mobileGui,
-      contains('owns phone and tablet composition and interaction'),
-    );
-    expect(
-      mobileGui,
-      contains(
-        'does not own business rules, commands, persistence, or routing',
-      ),
-    );
-    expect(mobileGui, contains('GUI_DESIGN_PRINCIPLES.md'));
-    expect(mobileGui, contains('docs/architecture/canonical-ui-surfaces.md'));
-    expect(
-      mobileGui,
-      contains('phone: `<600px`'),
-    );
-    expect(
-      mobileGui,
-      contains('tablet: `600-899px`'),
-    );
-    expect(
-      mobileGui,
-      contains('desktop: `>=900px`'),
-    );
-    expect(mobileGui, contains('Every touch target must be at least `48px`'));
-    expect(
-      mobileGui,
-      contains('effective application scale is `1.0` below `900px`'),
-    );
-    expect(
-      mobileGui,
-      contains('Keep the zoom wrapper topology stable across the boundary'),
-    );
-    expect(mobileGui, contains('virtual keyboard'));
-    expect(mobileGui, contains('SafeArea'));
-    expect(mobileGui, contains('search query'));
-    expect(mobileGui, contains('scroll position'));
-    expect(
-      mobileGui,
-      contains(
-        'Never let a `LayoutBuilder` branch silently dispose an open draft.',
-      ),
-    );
-    expect(
-      mobileGui,
-      contains('cross at least one responsive boundary'),
-    );
-    expect(mobileGui, contains('Loading, empty, error, and offline states'));
-    expect(mobileGui, contains('approximately `384x824`'));
-    expect(mobileGui, contains('`599px` and `600px`'));
-    expect(mobileGui, contains('`899px` and `900px`'));
-    expect(mobileGui, contains('approximately `1440x900`'));
+    _expectContainsAll('general GUI guide', gui, <String>[
+      'canonical owner of the shared UI language',
+      'Professional does not mean colorless, flat, or',
+      'The target is the deliberate middle',
+      'Design the task, not a favorite pattern',
+      'No module name automatically implies',
+      'Legacy consistency is not approval',
+      'Purposeful color, not color quotas',
+      'feature UI must consume centrally owned theme or design',
+      'Avoid both extremes',
+      'Chips and badges are compact semantic tools',
+      'Metrics deserve prominent blocks only when they change a decision',
+      'Back, close, and cancel return to the exact origin',
+      'The following are decision aids, not mandatory mappings',
+      'Do not put split panes everywhere',
+      'A short atomic decision',
+      'Motion should explain',
+      'reduced-motion',
+      'GUI_MOBILE_DESIGN_PRINCIPLES.md',
+      'Reusable learning rule',
+      'not a universal template',
+    ]);
+
+    _expectContainsAll('mobile GUI guide', mobileGui, <String>[
+      'owns phone and tablet composition and interaction',
+      'does not own business rules, commands, persistence, or routing',
+      'phone: `<600px`',
+      'tablet: `600-899px`',
+      'desktop: `>=900px`',
+      'Width class does not prove input capability',
+      'Every touch target must be at least `48px`',
+      'An action rail is not a default card footer',
+      'Compact does not mean narrow and centered',
+      'A long list, by itself, does not force',
+      'host exactly—not a generic root',
+      'Text-first does not mean wrapping every command',
+      'The same canonical command may use an anchored popover',
+      'Compact motion and continuity',
+      'They are evidence, not universal templates',
+      'virtual keyboard',
+      'SafeArea',
+      'search query',
+      'scroll position',
+      'Never let a `LayoutBuilder` branch silently dispose an open draft.',
+      'Loading, empty, error, and offline states',
+      'approximately `384x824`',
+      '`599px` and `600px`',
+      '`899px` and `900px`',
+      'approximately `1440x900`',
+    ]);
 
     for (final field in <String>[
       '**Problem observed**',
@@ -129,53 +193,47 @@ void main() {
       expect(mobileGui, contains(field));
     }
 
-    expect(
-      surfaces,
-      contains('compact inline Jobs workspace'),
-    );
-    expect(
-      surfaces,
-      contains('Trabajo`, `Ítems`, `Factura`, and proposal `PDF`'),
-    );
-    expect(
-      surfaces,
-      contains('resize never silently throws away a draft'),
-    );
-    expect(
-      surfaces,
-      contains('Only hosts that pass `onCloseRequested`'),
-    );
-    expect(surfaces, contains('`WindowZoomScope` / `WindowViewportMetrics`'));
-    expect(
-      surfaces,
-      contains('Compact has an effective scale of `1.0` below `900px`'),
-    );
-    expect(
-      surfaces,
-      contains('hardware panel resolution is first converted to logical'),
-    );
-    expect(
-      surfaces,
-      contains('keeps `_WorkspaceShell` in one stable slot'),
-    );
-    expect(
-      RegExp(r'without a transient\s+empty reload').hasMatch(surfaces),
-      isTrue,
-    );
+    _expectContainsAll('canonical surface registry', surfaces, <String>[
+      'GUI_DESIGN_PRINCIPLES.md',
+      'GUI_MOBILE_DESIGN_PRINCIPLES.md',
+      'Visual and navigation continuity invariant',
+      'It is not a template or',
+      'does not require sharing one container',
+      'Back, close, and cancel return there',
+      'Literal colors, radii, shadows, widget classes, and dimensions',
+      'compact inline Jobs workspace',
+      'resize never silently throws away a draft',
+      'Compact has an effective scale of `1.0` below `900px`',
+    ]);
 
-    expect(gui, contains('Anchored Popovers, Menus & Pickers'));
-    expect(gui, contains('OverlayPortal.overlayChildLayoutBuilder'));
-    expect(gui, contains('Rect.fromPoints(topLeft, bottomRight)'));
-    expect(gui, contains('tester.takeException()'));
-    expect(gui, contains('Living UI Learning Rule'));
+    _expectContainsAll('general overlay guidance', gui, <String>[
+      'Anchored popovers, menus, and pickers',
+      'OverlayPortal.overlayChildLayoutBuilder',
+      'Rect.fromPoints(topLeft, bottomRight)',
+      'tester.takeException()',
+      'Mandatory regression gate',
+    ]);
 
-    expect(copilot, isNot(contains('## Responsive Surface Contract')));
+    for (final entry in <MapEntry<String, String>>[
+      MapEntry<String, String>('Copilot instructions', copilot),
+      MapEntry<String, String>('general GUI guide', gui),
+      MapEntry<String, String>('mobile GUI guide', mobileGui),
+      MapEntry<String, String>('canonical surface registry', surfaces),
+    ]) {
+      _expectNoLegacyBreakpointClaims(entry.key, entry.value);
+      _expectNoLegacyVisualRecipes(entry.key, entry.value);
+    }
+
+    for (final entry in <MapEntry<String, String>>[
+      MapEntry<String, String>('Copilot instructions', copilot),
+      MapEntry<String, String>('general GUI guide', gui),
+      MapEntry<String, String>('mobile GUI guide', mobileGui),
+    ]) {
+      _expectNoUniversalSurfaceRecipe(entry.key, entry.value);
+    }
+
     expect(copilot, isNot(contains('`384x824`')));
-    expect(copilot, isNot(contains('phone is `<600px`')));
-    _expectNoLegacyBreakpointClaims('Copilot instructions', copilot);
-    _expectNoLegacyBreakpointClaims('general GUI guide', gui);
-    _expectNoLegacyBreakpointClaims('mobile GUI guide', mobileGui);
-
+    expect(copilot, isNot(contains('⚡` active')));
     expect(
       copilot,
       isNot(
@@ -185,27 +243,14 @@ void main() {
         ),
       ),
     );
-    expect(
-      copilot,
-      isNot(
-        contains(
-          'Use `CompositedTransformFollower` + `LayerLink` for overlay',
-        ),
-      ),
-    );
 
-    expect(
-      workflow,
-      contains('- ".github/GUI_MOBILE_DESIGN_PRINCIPLES.md"'),
-    );
-    expect(
-      workflow,
-      contains('- "docs/architecture/canonical-ui-surfaces.md"'),
-    );
-    expect(
-      workflow,
-      contains('bash scripts/run_flutter_test_gate.sh flutter'),
-    );
+    _expectContainsAll('ERP integrity workflow', workflow, <String>[
+      '- ".github/GUI_MOBILE_DESIGN_PRINCIPLES.md"',
+      '- "docs/architecture/canonical-ui-surfaces.md"',
+      'Verify canonical UI guidance contract',
+      'flutter test test/unit/ui_guidance_contract_test.dart',
+      'bash scripts/run_flutter_test_gate.sh flutter',
+    ]);
     expect(
       flutterTestGate,
       contains(r'"$flutter_bin" test --machine'),

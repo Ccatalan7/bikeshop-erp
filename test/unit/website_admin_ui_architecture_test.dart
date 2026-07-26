@@ -28,7 +28,7 @@ void main() {
     }
   });
 
-  test('website dashboard is a grouped control center, not a card grid', () {
+  test('website dashboard keeps its grouped administration hierarchy', () {
     final source = File(
       'lib/modules/website/pages/website_management_page.dart',
     ).readAsStringSync();
@@ -37,9 +37,6 @@ void main() {
     expect(source, contains("'Catálogo y ventas'"));
     expect(source, contains("'Configuración y alcance'"));
     expect(source, contains("'Tu vitrina digital, lista para vender'"));
-    expect(source, contains('WebsiteAdminMetricStrip'));
-    expect(source, contains('LinearGradient'));
-    expect(source, contains('Color(0xFF1976D2)'));
     expect(source, isNot(contains('GridView.count')));
     expect(source, isNot(contains('_buildManagementCard')));
   });
@@ -54,7 +51,7 @@ void main() {
     expect(source, isNot(contains('AppBar(')));
   });
 
-  test('online orders uses a flat resizable sortable desktop table', () {
+  test('online orders keeps sortable operations and exact destinations', () {
     final source = File(
       'lib/modules/website/pages/online_orders_page.dart',
     ).readAsStringSync();
@@ -64,7 +61,6 @@ void main() {
     expect(source, contains('onHorizontalDragUpdate'));
     expect(source, contains('_compareOrders'));
     expect(source, contains('ListView.builder'));
-    expect(source, contains('bottom: BorderSide'));
     expect(source, isNot(contains('ListView.separated')));
     expect(source, contains('_showOrderInspector'));
     expect(source, contains('OrderEvidenceSection('));

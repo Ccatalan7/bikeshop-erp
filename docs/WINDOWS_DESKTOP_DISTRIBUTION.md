@@ -53,6 +53,62 @@ The developer helper and VS Code publish task pass
 `publish_release=true` explicitly. A forgotten input therefore fails safe as
 artifact-only instead of exposing an update.
 
+### One Windows + Android task
+
+On a Windows development computer, the primary paired-release action is:
+
+```text
+Ctrl+Shift+B -> Publish ERP Update (Windows + Android)
+```
+
+That task deliberately has one shared preparation step followed by two
+independent publishers:
+
+1. It verifies that the current branch is allowed by the protected
+   `Production` environment.
+2. It fetches the live branch and applies only a safe fast-forward. Diverged
+   history or a fast-forward that would disturb local work stops before
+   publication.
+3. It runs the pinned Flutter dependency normalization, stages the reviewed
+   Source Control changes once, creates at most one new commit, and pushes that
+   exact commit once.
+4. It asks the locally authenticated Codex CLI once for a bounded,
+   user-friendly Spanish release-note candidate. Missing login, timeout,
+   malformed output, or quota exhaustion leaves the candidate empty and does
+   not block the release.
+5. It writes a short-lived, current-user-only Windows+Android handoff inside
+   `.git`, separate from the macOS paired-release state, binding the branch,
+   exact local and remote SHA, release-note base, candidate bytes, and
+   candidate SHA256.
+6. VS Code then launches the Windows and Android GitHub publishers in parallel
+   in separate terminal panes. Each child revalidates the state and live source
+   independently before dispatching its own protected workflow.
+
+The shared task does **not** merge signing systems or credentials. Windows and
+Android remain separate GitHub Actions workflows, protected publication jobs,
+artifacts, manifests, signing keys, logs, and final results. If one platform
+succeeds and the other fails, the successful release remains valid; rerunning
+the paired task treats an already-published exact commit as success and retries
+only what is missing. The preparation state keeps and reuses the exact
+SHA-bound Codex candidate for that same commit, so an ordinary partial-success
+retry does not silently rewrite the user-facing summary.
+
+The same validated Codex candidate is offered to both protected jobs, so their
+`Novedades` describe the same committed ERP update. Each workflow independently
+reconstructs and validates the committed evidence before accepting it. If
+Codex is unavailable or the candidate is rejected, the protected release-note
+generator continues through the established sanitized Gemini path and then the
+deterministic fallback.
+
+The first paired Android release uses the latest valid Windows release commit
+as its shared notes baseline because the Windows computer does not receive the
+private Supabase credential needed to inspect the older direct-Android channel.
+That first summary can therefore cover the desktop release range; after paired
+publishing begins, the Windows and Android baselines converge naturally.
+
+`Publish Windows Update (all changes)` remains available for a Windows-only
+release and keeps its existing standalone behavior.
+
 The workflow is pinned to the GitHub `windows-2022` runner so the Windows build uses the Visual Studio 2022 toolchain instead of whatever `windows-latest` points to that week. Release tags do not trigger this workflow; the workflow creates the release.
 
 The newest non-prerelease GitHub Release whose

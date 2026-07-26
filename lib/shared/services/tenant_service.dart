@@ -26,6 +26,8 @@ class TenantService extends ChangeNotifier {
   // Cache for tenant_id to avoid repeated database queries
   String? _cachedTenantId;
   String? _cachedUserId;
+  String? _cachedUserRole;
+  Map<String, dynamic>? _cachedUserPermissions;
 
   // Track if a query is in progress to prevent duplicate concurrent queries
   bool _isQuerying = false;
@@ -82,25 +84,37 @@ class TenantService extends ChangeNotifier {
       }
       final response = await _supabase
           .from('user_profiles')
-          .select('tenant_id')
+          .select('tenant_id, role, permissions')
           .eq('user_id', userId)
-          .maybeSingle();
+          .eq('is_active', true)
+          .limit(2);
 
-      if (response == null) {
+      final profiles = List<Map<String, dynamic>>.from(response);
+      if (profiles.length != 1) {
         if (!kReleaseMode) {
-          debugPrint('[TenantService] No profile found');
+          debugPrint(
+            '[TenantService] Active profile resolution failed closed',
+          );
         }
-        // IMPORTANT: Cache the "no profile" result to prevent repeated queries
         _cachedTenantId = null;
+        _cachedUserRole = null;
+        _cachedUserPermissions = null;
         _cachedUserId = userId;
         return null;
       }
 
-      // Cache the result
-      var tid = response['tenant_id'] as String?;
+      final profile = profiles.single;
+      var tid = profile['tenant_id'] as String?;
       if (tid != null && tid.isEmpty) tid = null;
 
       _cachedTenantId = tid;
+      _cachedUserRole = profile['role'] as String?;
+      final permissions = profile['permissions'];
+      _cachedUserPermissions = permissions is Map
+          ? Map<String, dynamic>.unmodifiable(
+              Map<String, dynamic>.from(permissions),
+            )
+          : null;
       _cachedUserId = userId;
       if (!kReleaseMode) {
         debugPrint('[TenantService] Got tenant_id: $_cachedTenantId');
@@ -118,6 +132,8 @@ class TenantService extends ChangeNotifier {
   void clearCache() {
     _cachedTenantId = null;
     _cachedUserId = null;
+    _cachedUserRole = null;
+    _cachedUserPermissions = null;
   }
 
   /// Get the current user's tenant_id (synchronous - from cache)
@@ -126,45 +142,24 @@ class TenantService extends ChangeNotifier {
   String? get currentTenantId {
     final user = _supabase.auth.currentUser;
     if (user == null) return null;
-
-    // CRITICAL FIX: Try app_metadata first (set by database trigger)
-    final appMetadata = user.appMetadata;
-    if (appMetadata['tenant_id'] != null) {
-      final tid = appMetadata['tenant_id'] as String?;
-      if (tid != null && tid.isNotEmpty) return tid;
-    }
-
-    // Try to get from user_metadata second (cached)
-    final metadata = user.userMetadata;
-    if (metadata != null && metadata['tenant_id'] != null) {
-      final tid = metadata['tenant_id'] as String?;
-      if (tid != null && tid.isNotEmpty) return tid;
-    }
-
-    // If not in metadata, need to query database (use getTenantId() instead)
-    return null;
+    if (_cachedUserId != user.id) return null;
+    return _cachedTenantId;
   }
 
   /// Get the current user's role
   String? get currentUserRole {
     final user = _supabase.auth.currentUser;
     if (user == null) return null;
-
-    final metadata = user.userMetadata;
-    if (metadata == null) return null;
-
-    return metadata['role'] as String?;
+    if (_cachedUserId != user.id) return null;
+    return _cachedUserRole;
   }
 
   /// Get the current user's permissions
   Map<String, dynamic>? get currentUserPermissions {
     final user = _supabase.auth.currentUser;
     if (user == null) return null;
-
-    final metadata = user.userMetadata;
-    if (metadata == null) return null;
-
-    return metadata['permissions'] as Map<String, dynamic>?;
+    if (_cachedUserId != user.id) return null;
+    return _cachedUserPermissions;
   }
 
   /// Check if current user has a specific role
@@ -212,6 +207,7 @@ class TenantService extends ChangeNotifier {
           .from('tenants')
           .select()
           .eq('id', tenantId)
+          .eq('is_active', true)
           .maybeSingle(); // ✅ Use maybeSingle() instead of single() - returns null if not found
 
       if (response == null) {

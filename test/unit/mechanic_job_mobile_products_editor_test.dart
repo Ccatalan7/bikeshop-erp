@@ -23,11 +23,13 @@ void main() {
       'Widget _buildMobilePartsSection',
     );
     expect(responsiveEntry, contains('constraints.maxWidth < 600'));
-    expect(responsiveEntry, contains('const minTableWidth = 800.0'));
+    expect(responsiveEntry, contains('return _buildMobilePartsSection(theme)'));
     expect(
       responsiveEntry.indexOf('constraints.maxWidth < 600'),
-      lessThan(responsiveEntry.indexOf('const minTableWidth = 800.0')),
-      reason: 'The mobile editor must bypass the 800 px desktop table.',
+      lessThan(responsiveEntry.indexOf('SingleChildScrollView')),
+      reason:
+          'The mobile editor must bypass the horizontally scrolling desktop '
+          'table without freezing one desktop width as the contract.',
     );
 
     final mobileEditor = _section(

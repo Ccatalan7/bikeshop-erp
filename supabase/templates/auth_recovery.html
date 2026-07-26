@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Restablece tu contraseña</title>
+  </head>
+  <body style="margin:0;background:#f4f6f8;color:#1f2937;font-family:Arial,sans-serif">
+    <div style="display:none;max-height:0;overflow:hidden">
+      Usa este enlace de un solo uso para restablecer tu contraseña Viñabike.
+    </div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center" style="padding:32px 16px">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                 style="max-width:560px;background:#fff;border:1px solid #e5e7eb;border-radius:16px">
+            <tr><td style="padding:28px 32px 12px;color:#1677d2;font-size:22px;font-weight:700">Viñabike</td></tr>
+            <tr>
+              <td style="padding:8px 32px 32px">
+                <h1 style="margin:0 0 16px;font-size:24px;color:#111827">Restablece tu contraseña</h1>
+                <p style="margin:0 0 24px;line-height:1.6">
+                  Recibimos una solicitud para cambiar la contraseña de <strong>{{ .Email }}</strong>.
+                </p>
+                <p style="margin:0 0 24px">
+                  <a href="{{ .SiteURL }}/auth-action.html#confirmation_url={{ .ConfirmationURL }}"
+                     style="display:inline-block;padding:13px 22px;border-radius:8px;background:#1677d2;color:#fff;text-decoration:none;font-weight:700">
+                    Crear una contraseña nueva
+                  </a>
+                </p>
+                <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.5">
+                  El enlace es personal y de un solo uso. Si no pediste este cambio, ignora el mensaje y no compartas el enlace.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

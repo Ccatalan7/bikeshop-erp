@@ -1,5 +1,18 @@
 # PURCHASE INVOICE STATUS FLOW — STANDARD MODEL (PAY AFTER RECEIPT)
 
+
+> [!WARNING]
+> **Historical business context; not UI authority.** Reconcile this flow with
+> the current canonical purchase owner before implementing it. Every visual,
+> layout, navigation, component, color, spacing, badge, modal/dialog/snackbar,
+> responsive, and platform recipe below is superseded by
+> [GUI_DESIGN_PRINCIPLES.md](GUI_DESIGN_PRINCIPLES.md) and
+> [GUI_MOBILE_DESIGN_PRINCIPLES.md](GUI_MOBILE_DESIGN_PRINCIPLES.md). Do not
+> imitate another product, old screenshot, or local widget. Choose inline,
+> in-block, pane, popover, sheet, blocking surface, or full route from task
+> evidence; none is an automatic status-flow pattern.
+
+
 ## Overview
 
 This document describes the **Standard Purchase Invoice Workflow** implemented in the Vinabike ERP. This is the traditional "Pay After Receipt" model where:
@@ -10,9 +23,10 @@ This document describes the **Standard Purchase Invoice Workflow** implemented i
 
 The workflow **mirrors the sales invoice flow** but handles supplier invoices with inventory IN movements and Accounts Payable accounting.
 
-The system uses **DELETE-based reversals** (like Zoho Books and sales invoices) for purchase invoices. When going backward, journal entries are deleted completely, not marked as reversed. This provides a cleaner, simpler approach for draft/in-progress invoices.
+This historical flow uses **DELETE-based reversals** for purchase invoices. When going backward, journal entries are deleted completely, not marked as reversed. This provides a cleaner, simpler approach for draft/in-progress invoices.
 
-**Payment Model Selection**: When creating a new purchase invoice, a dialog prompts the user to choose between:
+**Payment Model Selection**: Before the first save, the create flow requires the
+user to choose between:
 - **Standard Model** (this document): Pay after receiving goods
 - **Prepayment Model**: Pay before receiving goods (see Purchase_Invoice_Prepayment_Flow.md)
 
@@ -79,8 +93,8 @@ Each invoice stores its selected model in the `prepayment_model` boolean field, 
        │    • DECREASES inventory back
        │    • Triggers: reverse_purchase_invoice_inventory()
        │
-       │ ➡️ [Pagar Factura] → Payment Form
-       │    • Button navigates to payment page
+       │ ➡️ [Pagar Factura] → Payment workflow
+       │    • Opens through the host selected by the canonical GUI rules
        │    • User enters payment details
        │    • Click [Guardar Pago]
        │    • Creates payment journal entry
@@ -105,7 +119,7 @@ Each invoice stores its selected model in the `prepayment_model` boolean field, 
 
 ### 1. **Borrador** (Draft)
 - **Spanish Label**: "Borrador"
-- **Badge Color**: Grey (`Colors.grey[200]` / `Colors.grey[800]`)
+- **State presentation**: Theme-owned and legible without color alone
 - **Accounting Effect**: ❌ None
 - **Inventory Effect**: ❌ None
 - **Description**: Purchase invoice is being prepared, not yet sent to supplier
@@ -118,20 +132,20 @@ Each invoice stores its selected model in the `prepayment_model` boolean field, 
 
 ### 2. **Enviada** (Sent to Supplier)
 - **Spanish Label**: "Enviada"
-- **Badge Color**: Blue (`Colors.blue[100]` / `Colors.blue[800]`)
+- **State presentation**: Theme-owned and legible without color alone
 - **Accounting Effect**: ❌ None
 - **Inventory Effect**: ❌ None
 - **Description**: Order sent to supplier, waiting for their confirmation
 - **Available Actions**:
   - ✏️ **[Editar]** button → Opens form in edit mode
   - ⬅️ **[Volver a Borrador]** button → Changes status to 'draft'
-  - ✅ **[Confirmar Factura]** button (Green) → Changes status to 'confirmed' + triggers accounting
+  - ✅ **[Confirmar Factura]** button → Changes status to 'confirmed' + triggers accounting
 
 ---
 
 ### 3. **Confirmada** (Confirmed by Supplier)
 - **Spanish Label**: "Confirmada"
-- **Badge Color**: Purple (`Colors.purple[100]` / `Colors.purple[800]`)
+- **State presentation**: Theme-owned and legible without color alone
 - **Accounting Effect**: ✅ Journal entry created
   - **Debit**: Inventario (1105 or 1150)
   - **Debit**: IVA Crédito Fiscal (1107 or 1140)
@@ -147,7 +161,7 @@ Each invoice stores its selected model in the `prepayment_model` boolean field, 
 
 ### 4. **Recibida** (Received in Store)
 - **Spanish Label**: "Recibida"
-- **Badge Color**: Green (`Colors.green[100]` / `Colors.green[800]`)
+- **State presentation**: Theme-owned and legible without color alone
 - **Accounting Effect**: — (already created when confirmed)
 - **Inventory Effect**: ✅ Stock INCREASED (IN movement)
   - **Trigger**: `consume_purchase_invoice_inventory()`
@@ -156,14 +170,14 @@ Each invoice stores its selected model in the `prepayment_model` boolean field, 
 - **Description**: Goods physically received in store, inventory updated, ready to pay
 - **Available Actions**:
   - ✏️ **[Editar]** button → Very limited editing
-  - 💰 **[Pagar Factura]** button → Navigates to payment form page
+  - 💰 **[Pagar Factura]** button → Opens the canonical payment workflow
   - ⬅️ **[Volver a Confirmada]** button → Creates reversal for inventory, decreases stock
 
 ---
 
 ### 5. **Pagada** (Paid to Supplier)
 - **Spanish Label**: "Pagada"
-- **Badge Color**: Blue (`Colors.blue[100]` / `Colors.blue[800]`)
+- **State presentation**: Theme-owned and legible without color alone
 - **Accounting Effect**: ✅ Payment journal entry created
   - **Debit**: Cuentas por Pagar (2101 or 2120)
   - **Credit**: Cash/Bank account (1110 or 1101)
@@ -171,7 +185,7 @@ Each invoice stores its selected model in the `prepayment_model` boolean field, 
 - **Description**: Invoice has been paid to supplier, process complete
 - **Available Actions**:
   - ✏️ **[Ver Detalles]** button → View-only mode
-  - ⬅️ **[Deshacer Pago]** button (Red text) → Deletes payment record AND payment journal entry, returns to 'received'
+  - ⬅️ **[Deshacer Pago]** button → Deletes payment record AND payment journal entry, returns to 'received'
 
 ---
 
@@ -183,33 +197,15 @@ Each invoice stores its selected model in the `prepayment_model` boolean field, 
 
 **User Interaction**:
 1. User opens purchase invoice in detail page
-2. Sees status badge: Grey "Borrador"
-3. Clicks green button **[Marcar como Enviada]**
+2. Sees status "Borrador"
+3. Invokes **[Marcar como Enviada]**
 
-**Frontend Action** (`PurchaseInvoiceFormPage`):
-```dart
-void _markAsSent() async {
-  setState(() => _isLoading = true);
-  
-  try {
-    await _purchaseService.updateInvoiceStatus(
-      widget.invoiceId,
-      'sent',
-    );
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Factura marcada como enviada')),
-      );
-      Navigator.pop(context, true); // Refresh parent
-    }
-  } catch (e) {
-    _showError('Error al marcar como enviada: $e');
-  } finally {
-    setState(() => _isLoading = false);
-  }
-}
-```
+**Frontend behavior**:
+- Invoke the canonical business command once and keep loading/error state with
+  the current host.
+- Communicate the persisted outcome at the scope of the operation.
+- Preserve the exact originating list/editor context; this historical document
+  does not prescribe route replacement or a transient surface.
 
 **Backend Effect** (`PurchaseService.updateInvoiceStatus()`):
 ```dart
@@ -230,70 +226,31 @@ Future<void> updateInvoiceStatus(int invoiceId, String newStatus) async {
 - ❌ No inventory changes
 
 **GUI Update**:
-- Badge changes to blue **"Enviada"**
+- State label changes to **"Enviada"**
 - Buttons visible:
   - **[Editar]** (outlined)
-  - **[Volver a Borrador]** (outlined, grey)
-  - **[Confirmar Factura]** (filled, green) ← Primary action
-- SnackBar: "Factura marcada como enviada"
+  - **[Volver a Borrador]**
+  - **[Confirmar Factura]** ← Primary action
+- Scoped feedback: "Factura marcada como enviada"
 
 ---
 
 #### **Enviada → Confirmada**
 
 **User Interaction**:
-1. User sees status badge: Blue "Enviada"
-2. Clicks green button **[Confirmar Factura]**
-3. Optional: Confirmation dialog appears
+1. User sees status "Enviada"
+2. Invokes **[Confirmar Factura]**
+3. Optional explicit confirmation when risk warrants it
    - Title: "Confirmar factura de compra"
    - Message: "Esto creará un asiento contable (Inventario + IVA / Cuentas por Pagar). ¿Continuar?"
    - Buttons: [Cancelar] [Confirmar]
 
-**Frontend Action**:
-```dart
-void _confirmInvoice() async {
-  // Show confirmation dialog
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text('Confirmar factura de compra'),
-      content: Text('Esto creará un asiento contable (Inventario + IVA / Cuentas por Pagar). ¿Continuar?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text('Cancelar'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: Text('Confirmar'),
-        ),
-      ],
-    ),
-  );
-  
-  if (confirmed != true) return;
-  
-  setState(() => _isLoading = true);
-  
-  try {
-    await _purchaseService.updateInvoiceStatus(
-      widget.invoiceId,
-      'confirmed',
-    );
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Factura confirmada - asiento contable creado')),
-      );
-      Navigator.pop(context, true);
-    }
-  } catch (e) {
-    _showError('Error al confirmar factura: $e');
-  } finally {
-    setState(() => _isLoading = false);
-  }
-}
-```
+**Frontend behavior**:
+- Invoke the canonical business command once and keep loading/error state with
+  the current host.
+- Communicate the persisted outcome at the scope of the operation.
+- Preserve the exact originating list/editor context; this historical document
+  does not prescribe route replacement or a transient surface.
 
 **SQL Trigger**: ✅ `handle_purchase_invoice_change()`
 
@@ -433,67 +390,31 @@ $$ LANGUAGE plpgsql;
 - ❌ NO inventory changes yet
 
 **GUI Update**:
-- Badge changes to purple **"Confirmada"**
+- State label changes to **"Confirmada"**
 - Buttons visible:
   - **[Editar]** (outlined, disabled or limited)
-  - **[Volver a Enviada]** (outlined, grey)
-  - **[Marcar como Recibida]** (filled, green) ← Primary action
-- SnackBar: "Factura confirmada - asiento contable creado"
+  - **[Volver a Enviada]**
+  - **[Marcar como Recibida]** ← Primary action
+- Scoped feedback: "Factura confirmada - asiento contable creado"
 
 ---
 
 #### **Confirmada → Recibida**
 
 **User Interaction**:
-1. User sees status badge: Purple "Confirmada"
-2. Clicks green button **[Marcar como Recibida]**
-3. Optional: Verification dialog
+1. User sees status "Confirmada"
+2. Invokes **[Marcar como Recibida]**
+3. Explicit receipt verification is required
    - Title: "Marcar productos como recibidos"
    - Message: "¿Los productos fueron entregados físicamente en la tienda? Esto aumentará el inventario."
    - Buttons: [Cancelar] [Confirmar Recepción]
 
-**Frontend Action**:
-```dart
-void _markAsReceived() async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text('Marcar productos como recibidos'),
-      content: Text('¿Los productos fueron entregados físicamente en la tienda? Esto aumentará el inventario.'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text('Cancelar'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, true),
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-          child: Text('Confirmar Recepción'),
-        ),
-      ],
-    ),
-  );
-  
-  if (confirmed != true) return;
-  
-  setState(() => _isLoading = true);
-  
-  try {
-    await _purchaseService.markAsReceived(widget.invoiceId);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Productos recibidos - inventario actualizado')),
-      );
-      Navigator.pop(context, true);
-    }
-  } catch (e) {
-    _showError('Error al marcar como recibida: $e');
-  } finally {
-    setState(() => _isLoading = false);
-  }
-}
-```
+**Frontend behavior**:
+- Invoke the canonical business command once and keep loading/error state with
+  the current host.
+- Communicate the persisted outcome at the scope of the operation.
+- Preserve the exact originating list/editor context; this historical document
+  does not prescribe route replacement or a transient surface.
 
 **Backend Service** (`PurchaseService.markAsReceived()`):
 ```dart
@@ -579,31 +500,28 @@ $$ LANGUAGE plpgsql;
 ```
 
 **Database Changes**:
-$$ LANGUAGE plpgsql;
-```
-
-**Database Changes**:
 - `purchase_invoices.status` = 'received'
 - `purchase_invoices.received_date` = NOW()
 - ✅ `stock_movements` records created (type='IN', movement_type='purchase_invoice')
 - ✅ `products.inventory_qty` INCREASED for each item
 
 **GUI Update**:
-- Badge changes to green **"Recibida"**
+- State label changes to **"Recibida"**
 - Buttons visible:
   - **[Ver Detalles]** (outlined)
-  - **[Volver a Confirmada]** (outlined, grey)
-  - **[Pagar Factura]** (filled, blue) ← Primary action
-- SnackBar: "Productos recibidos - inventario actualizado"
+  - **[Volver a Confirmada]**
+  - **[Pagar Factura]** ← Primary action
+- Scoped feedback: "Productos recibidos - inventario actualizado"
 
 ---
 
 #### **Recibida → Pagada**
 
 **User Interaction**:
-1. User sees status badge: Green "Recibida"
-2. Clicks blue button **[Pagar Factura]**
-3. Navigates to **Payment Form Page** (`PurchasePaymentFormPage`)
+1. User sees status "Recibida"
+2. Invokes **[Pagar Factura]**
+3. Opens the canonical payment workflow through the host selected by the
+   current task and GUI guides
 4. User fills payment form:
    - **Payment method** (Dropdown populated from `payment_methods` table)
      - Examples: "Efectivo", "Transferencia Bancaria", "Tarjeta", "Cheque"
@@ -614,71 +532,15 @@ $$ LANGUAGE plpgsql;
    - Notes
 5. Clicks **[Guardar Pago]** button
 
-**Frontend Navigation**:
-```dart
-void _navigateToPayment() async {
-  final result = await Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => PurchasePaymentFormPage(
-        invoiceId: widget.invoiceId,
-        invoiceTotal: _invoice.total,
-        remainingBalance: _invoice.balance,
-      ),
-    ),
-  );
-  
-  if (result == true) {
-    // Payment recorded successfully
-    _loadInvoice(); // Refresh invoice data
-  }
-}
-```
+**Frontend navigation behavior**:
+Open the canonical payment editor through the lightest justified host and
+restore the exact invoice/list context after save or cancellation. Route
+replacement is not prescribed.
 
-**Payment Form Page** (`PurchasePaymentFormPage`):
-```dart
-// Load payment methods dynamically from database
-Future<void> _loadPaymentMethods() async {
-  final response = await _supabase
-    .from('payment_methods')
-    .select()
-    .eq('is_active', true)
-    .order('sort_order');
-    
-  setState(() {
-    _paymentMethods = response as List;
-    _selectedMethodId = _paymentMethods.first['id']; // Default to first method
-  });
-}
-
-void _savePayment() async {
-  if (!_formKey.currentState!.validate()) return;
-  
-  setState(() => _isLoading = true);
-  
-  try {
-    await _purchaseService.registerPayment(
-      invoiceId: widget.invoiceId,
-      amount: _amountController.value,
-      paymentMethodId: _selectedMethodId, // UUID reference to payment_methods
-      paymentDate: _selectedDate,
-      reference: _referenceController.text,
-      notes: _notesController.text,
-    );
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Pago registrado correctamente')),
-      );
-      Navigator.pop(context, true); // Return to detail page
-    }
-  } catch (e) {
-    _showError('Error al registrar pago: $e');
-  } finally {
-    setState(() => _isLoading = false);
-  }
-}
-```
+**Payment editor behavior**:
+Load active payment methods from the canonical source, validate the required
+amount/date/reference fields, invoke the shared payment command once, preserve
+entered values after recoverable failure, and return through the host contract.
 
 **Backend Service** (`PurchaseService.registerPayment()`):
 ```dart
@@ -870,15 +732,15 @@ $$ LANGUAGE plpgsql;
 - ❌ No inventory changes
 
 **GUI Update**:
-- Badge changes to blue **"Pagada"** (if fully paid)
+- State label changes to **"Pagada"** (if fully paid)
 - Buttons visible:
   - **[Ver Detalles]** (outlined)
-  - **[Deshacer Pago]** (text button, red color)
+  - **[Deshacer Pago]**
 - Shows payment information:
   - Payment date
   - Payment method
   - Amount paid
-- SnackBar: "Pago registrado correctamente"
+- Scoped feedback: "Pago registrado correctamente"
 
 ---
 
@@ -887,53 +749,18 @@ $$ LANGUAGE plpgsql;
 #### **Enviada → Borrador**
 
 **User Interaction**:
-1. User sees status badge: Blue "Enviada"
-2. Clicks grey button **[Volver a Borrador]**
+1. User sees status "Enviada"
+2. Invokes **[Volver a Borrador]**
 3. Optional: Simple confirmation
    - Message: "¿Cancelar orden enviada y volver a borrador?"
    - Buttons: [No] [Sí]
 
-**Frontend Action**:
-```dart
-void _revertToDraft() async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text('Volver a borrador'),
-      content: Text('¿Cancelar orden enviada y volver a borrador?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text('No'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: Text('Sí'),
-        ),
-      ],
-    ),
-  );
-  
-  if (confirmed != true) return;
-  
-  setState(() => _isLoading = true);
-  
-  try {
-    await _purchaseService.updateInvoiceStatus(widget.invoiceId, 'draft');
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Factura revertida a borrador')),
-      );
-      Navigator.pop(context, true);
-    }
-  } catch (e) {
-    _showError('Error: $e');
-  } finally {
-    setState(() => _isLoading = false);
-  }
-}
-```
+**Frontend behavior**:
+- Invoke the canonical business command once and keep loading/error state with
+  the current host.
+- Communicate the persisted outcome at the scope of the operation.
+- Preserve the exact originating list/editor context; this historical document
+  does not prescribe route replacement or a transient surface.
 
 **SQL Trigger**: ❌ None (simple status change)
 
@@ -943,66 +770,28 @@ void _revertToDraft() async {
 - ❌ No inventory changes
 
 **GUI Update**:
-- Badge changes to grey **"Borrador"**
+- State label changes to **"Borrador"**
 - Buttons visible: **[Editar]** **[Marcar como Enviada]** **[Eliminar]**
-- SnackBar: "Factura revertida a borrador"
+- Scoped feedback: "Factura revertida a borrador"
 
 ---
 
 #### **Confirmada → Enviada**
 
 **User Interaction**:
-1. User sees status badge: Purple "Confirmada"
-2. Clicks grey button **[Volver a Enviada]**
-3. **Confirmation Dialog** (IMPORTANT):
+1. User sees status "Confirmada"
+2. Invokes **[Volver a Enviada]**
+3. **Explicit confirmation requirement** (surface selected by the canonical GUI guide):
    - Title: "Revertir factura confirmada"
    - Message: "⚠️ Esto creará un asiento contable de REVERSO y eliminará el pasivo. ¿Continuar?"
    - Buttons: [Cancelar] [Sí, Revertir]
 
-**Frontend Action**:
-```dart
-void _revertToSent() async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text('Revertir factura confirmada'),
-      content: Text(
-        '⚠️ Esto ELIMINARÁ el asiento contable completamente (DELETE-based reversal). ¿Continuar?',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text('Cancelar'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, true),
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-          child: Text('Sí, Revertir'),
-        ),
-      ],
-    ),
-  );
-  
-  if (confirmed != true) return;
-  
-  setState(() => _isLoading = true);
-  
-  try {
-    await _purchaseService.revertToSent(widget.invoiceId);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Factura revertida a enviada - asiento reverso creado')),
-      );
-      Navigator.pop(context, true);
-    }
-  } catch (e) {
-    _showError('Error al revertir: $e');
-  } finally {
-    setState(() => _isLoading = false);
-  }
-}
-```
+**Frontend behavior**:
+- Invoke the canonical business command once and keep loading/error state with
+  the current host.
+- Communicate the persisted outcome at the scope of the operation.
+- Preserve the exact originating list/editor context; this historical document
+  does not prescribe route replacement or a transient surface.
 
 **Backend Service** (`PurchaseService.revertToSent()`):
 ```dart
@@ -1021,7 +810,7 @@ Future<void> revertToSent(int invoiceId) async {
 ```sql
 -- In handle_purchase_invoice_change():
 IF v_old_posted AND NOT v_new_posted THEN
-  -- Confirmed → Sent: DELETE journal entry (Zoho Books style)
+  -- Confirmed → Sent: DELETE journal entry (historical DELETE-based approach)
   DELETE FROM public.journal_entries
   WHERE source_module = 'purchase_invoices' 
     AND source_reference = OLD.id::text;
@@ -1048,68 +837,28 @@ Net Effect: Clean slate, as if invoice was never confirmed
 ```
 
 **GUI Update**:
-- Badge changes to blue **"Enviada"**
+- State label changes to **"Enviada"**
 - Buttons visible: **[Editar]** **[Volver a Borrador]** **[Confirmar Factura]**
-- SnackBar: "Factura revertida a enviada - asiento contable eliminado"
+- Scoped feedback: "Factura revertida a enviada - asiento contable eliminado"
 
 ---
 
 #### **Recibida → Confirmada**
 
 **User Interaction**:
-1. User sees status badge: Green "Recibida"
-2. Clicks grey button **[Volver a Confirmada]**
-3. **Confirmation Dialog** (CRITICAL):
+1. User sees status "Recibida"
+2. Invokes **[Volver a Confirmada]**
+3. **Explicit confirmation requirement** (surface selected by the canonical GUI guide):
    - Title: "Revertir productos recibidos"
    - Message: "⚠️ Esto DISMINUIRÁ el inventario. Solo si los productos NO han sido vendidos. ¿Continuar?"
    - Buttons: [Cancelar] [Sí, Revertir]
 
-**Frontend Action**:
-```dart
-void _revertToConfirmed() async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text('Revertir productos recibidos'),
-      content: Text(
-        '⚠️ Esto DISMINUIRÁ el inventario.\n\n'
-        'Solo si los productos NO han sido vendidos.\n\n'
-        '¿Continuar?',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text('Cancelar'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, true),
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-          child: Text('Sí, Revertir'),
-        ),
-      ],
-    ),
-  );
-  
-  if (confirmed != true) return;
-  
-  setState(() => _isLoading = true);
-  
-  try {
-    await _purchaseService.revertToConfirmed(widget.invoiceId);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Factura revertida a confirmada - inventario disminuido')),
-      );
-      Navigator.pop(context, true);
-    }
-  } catch (e) {
-    _showError('Error al revertir: $e');
-  } finally {
-    setState(() => _isLoading = false);
-  }
-}
-```
+**Frontend behavior**:
+- Invoke the canonical business command once and keep loading/error state with
+  the current host.
+- Communicate the persisted outcome at the scope of the operation.
+- Preserve the exact originating list/editor context; this historical document
+  does not prescribe route replacement or a transient surface.
 
 **Backend Service**:
 ```dart
@@ -1184,75 +933,28 @@ $$ LANGUAGE plpgsql;
 - No partial reversals (all or nothing)
 
 **GUI Update**:
-- Badge changes to purple **"Confirmada"**
+- State label changes to **"Confirmada"**
 - Buttons visible: **[Editar]** **[Volver a Enviada]** **[Marcar como Recibida]**
-- SnackBar: "Factura revertida a confirmada - inventario disminuido"
+- Scoped feedback: "Factura revertida a confirmada - inventario disminuido"
 
 ---
 
 #### **Pagada → Recibida** (Undo Payment)
 
 **User Interaction**:
-1. User sees status badge: Blue "Pagada"
-2. Clicks red text button **[Deshacer Pago]**
-3. **Confirmation Dialog**:
+1. User sees status "Pagada"
+2. Invokes **[Deshacer Pago]**
+3. **Explicit confirmation requirement** (surface selected by the canonical GUI guide):
    - Title: "Deshacer pago"
    - Message: "Se eliminará el registro de pago de $119,000 CLP y su asiento contable. ¿Continuar?"
    - Buttons: [Cancelar] [Sí, Deshacer]
 
-**Frontend Action**:
-```dart
-void _undoPayment() async {
-  // Get last payment
-  final lastPayment = await _purchaseService.getLastPayment(widget.invoiceId);
-  
-  if (lastPayment == null) {
-    _showError('No hay pagos para deshacer');
-    return;
-  }
-  
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text('Deshacer pago'),
-      content: Text(
-        'Se eliminará el registro de pago de \$${lastPayment.amount.toStringAsFixed(0)} CLP '
-        'y su asiento contable.\n\n¿Continuar?',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text('Cancelar'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, true),
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-          child: Text('Sí, Deshacer'),
-        ),
-      ],
-    ),
-  );
-  
-  if (confirmed != true) return;
-  
-  setState(() => _isLoading = true);
-  
-  try {
-    await _purchaseService.deletePayment(lastPayment.id);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Pago eliminado correctamente')),
-      );
-      _loadInvoice(); // Refresh
-    }
-  } catch (e) {
-    _showError('Error al eliminar pago: $e');
-  } finally {
-    setState(() => _isLoading = false);
-  }
-}
-```
+**Frontend behavior**:
+- Invoke the canonical business command once and keep loading/error state with
+  the current host.
+- Communicate the persisted outcome at the scope of the operation.
+- Preserve the exact originating list/editor context; this historical document
+  does not prescribe route replacement or a transient surface.
 
 **Backend Service**:
 ```dart
@@ -1300,10 +1002,10 @@ EXECUTE FUNCTION public.handle_purchase_payment_deletion();
 - ❌ No inventory changes
 
 **GUI Update**:
-- Badge changes to green **"Recibida"**
+- State label changes to **"Recibida"**
 - Buttons visible: **[Ver Detalles]** **[Volver a Confirmada]** **[Pagar Factura]**
 - Balance shows unpaid amount again
-- SnackBar: "Pago eliminado correctamente"
+- Scoped feedback: "Pago eliminado correctamente"
 
 ---
 
@@ -1344,7 +1046,8 @@ Result:
   - All journal_lines cascade deleted
   - Clean slate (as if never confirmed)
 
-Note: This follows Zoho Books approach for draft/in-progress invoices.
+Historical note: this document records complete deletion of the draft or
+in-progress entry rather than using it as a visual or product-model precedent.
 For auditing, use application logs or database audit tables if needed.
 ```
 
@@ -1434,171 +1137,20 @@ Cannot reverse invoice: insufficient inventory for some products
 
 ---
 
-## 🎨 GUI COMPONENTS
+## GUI interaction contract
 
-### Status Badge Colors
-
-| Status     | Color  | Hex/Material |
-|------------|--------|--------------|
-| Borrador   | Grey   | Colors.grey[200] / Colors.grey[800] |
-| Recibida   | Green  | Colors.green[100] / Colors.green[800] |
-| Pagada     | Blue   | Colors.blue[100] / Colors.blue[800] |
-| Cancelada  | Red    | Colors.red[100] / Colors.red[800] |
-
-### Button Layout by Status
-
-#### **Borrador** (Grey Badge)
-```dart
-// PurchaseInvoiceFormPage - Borrador status
-Row(
-  mainAxisAlignment: MainAxisAlignment.end,
-  children: [
-    OutlinedButton.icon(
-      icon: Icon(Icons.edit),
-      label: Text('Editar'),
-      onPressed: _editInvoice,
-    ),
-    SizedBox(width: 8),
-    ElevatedButton.icon(
-      icon: Icon(Icons.send),
-      label: Text('Marcar como Enviada'),
-      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-      onPressed: _markAsSent,
-    ),
-    SizedBox(width: 8),
-    TextButton.icon(
-      icon: Icon(Icons.delete, color: Colors.red),
-      label: Text('Eliminar', style: TextStyle(color: Colors.red)),
-      onPressed: _deleteInvoice,
-    ),
-  ],
-)
-```
-
-**Visual**: `[📝 Editar] [📤 Marcar como Enviada (Blue)] [🗑️ Eliminar (Red)]`
-
----
-
-#### **Enviada** (Blue Badge)
-```dart
-// PurchaseInvoiceFormPage - Enviada status
-Row(
-  mainAxisAlignment: MainAxisAlignment.end,
-  children: [
-    OutlinedButton.icon(
-      icon: Icon(Icons.edit),
-      label: Text('Editar'),
-      onPressed: _editInvoice,
-    ),
-    SizedBox(width: 8),
-    OutlinedButton.icon(
-      icon: Icon(Icons.arrow_back),
-      label: Text('Volver a Borrador'),
-      onPressed: _revertToDraft,
-    ),
-    SizedBox(width: 8),
-    ElevatedButton.icon(
-      icon: Icon(Icons.check_circle),
-      label: Text('Confirmar Factura'),
-      style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-      onPressed: _confirmInvoice,
-    ),
-  ],
-)
-```
-
-**Visual**: `[📝 Editar] [⬅️ Volver a Borrador] [✅ Confirmar Factura (Green)]`
-
----
-
-#### **Confirmada** (Purple Badge)
-```dart
-// PurchaseInvoiceFormPage - Confirmada status
-Row(
-  mainAxisAlignment: MainAxisAlignment.end,
-  children: [
-    OutlinedButton.icon(
-      icon: Icon(Icons.edit),
-      label: Text('Editar'),
-      onPressed: _editInvoice, // Limited
-    ),
-    SizedBox(width: 8),
-    OutlinedButton.icon(
-      icon: Icon(Icons.arrow_back),
-      label: Text('Volver a Enviada'),
-      onPressed: _revertToSent,
-    ),
-    SizedBox(width: 8),
-    ElevatedButton.icon(
-      icon: Icon(Icons.inventory),
-      label: Text('Marcar como Recibida'),
-      style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-      onPressed: _markAsReceived,
-    ),
-  ],
-)
-```
-
-**Visual**: `[📝 Editar] [⬅️ Volver a Enviada] [📦 Marcar como Recibida (Green)]`
-
----
-
-#### **Recibida** (Green Badge)
-```dart
-// PurchaseInvoiceFormPage - Recibida status
-Row(
-  mainAxisAlignment: MainAxisAlignment.end,
-  children: [
-    OutlinedButton.icon(
-      icon: Icon(Icons.visibility),
-      label: Text('Ver Detalles'),
-      onPressed: _viewDetails,
-    ),
-    SizedBox(width: 8),
-    OutlinedButton.icon(
-      icon: Icon(Icons.arrow_back),
-      label: Text('Volver a Confirmada'),
-      onPressed: _revertToConfirmed,
-    ),
-    SizedBox(width: 8),
-    ElevatedButton.icon(
-      icon: Icon(Icons.payment),
-      label: Text('Pagar Factura'),
-      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-      onPressed: _navigateToPayment,
-    ),
-  ],
-)
-```
-
-**Visual**: `[👁️ Ver Detalles] [⬅️ Volver a Confirmada] [💰 Pagar Factura (Blue)]`
-
----
-
-#### **Pagada** (Blue Badge)
-```dart
-// PurchaseInvoiceFormPage - Pagada status
-Row(
-  mainAxisAlignment: MainAxisAlignment.end,
-  children: [
-    OutlinedButton.icon(
-      icon: Icon(Icons.visibility),
-      label: Text('Ver Detalles'),
-      onPressed: _viewDetails,
-    ),
-    SizedBox(width: 8),
-    TextButton.icon(
-      icon: Icon(Icons.undo, color: Colors.red),
-      label: Text('Deshacer Pago', style: TextStyle(color: Colors.red)),
-      onPressed: _undoPayment,
-    ),
-  ],
-)
-```
-
-**Visual**: `[👁️ Ver Detalles] [🔄 Deshacer Pago (Red)]`
-
----
+- Expose current state with a clear label and semantics. A badge is optional,
+  and this document does not prescribe a hue, icon, chip, or container.
+- Expose only the commands allowed by the current business state, grouped by
+  actual scope and frequency.
+- Let the canonical visual system determine action weight, feedback, status
+  treatment, and responsive composition. Do not assign one bright color to
+  each lifecycle state.
+- Risky reversals must state their accounting, payment, and inventory
+  consequences and require an intentional decision. The correct interaction
+  surface depends on risk and host; a centered dialog is not automatic.
+- Preserve purchase-list filters, selection, scroll, and invoice context while
+  entering payment, receipt, or reversal work.
 
 ## 🔐 BUSINESS RULES
 
@@ -1609,7 +1161,7 @@ Row(
 | Borrador   | Enviada    | ✅ Yes   | Always | ❌ None | ❌ None |
 | Enviada    | Borrador   | ✅ Yes   | Always | ❌ None | ❌ None |
 | Enviada    | Confirmada | ✅ Yes   | Always | ✅ Creates AP entry | ❌ None |
-| Confirmada | Enviada    | ✅ Yes   | Always | ✅ DELETES entry (Zoho Books style) | ❌ None |
+| Confirmada | Enviada    | ✅ Yes   | Always | ✅ DELETES entry (historical DELETE-based approach) | ❌ None |
 | Confirmada | Recibida   | ✅ Yes   | Always | ❌ None | ✅ Increases inventory |
 | Recibida   | Confirmada | ✅ Yes   | **Only if sufficient inventory** | ❌ None | ✅ Decreases inventory |
 | Recibida   | Pagada     | ✅ Auto  | When payment >= balance | ✅ Creates payment entry | ❌ None |
@@ -1628,7 +1180,7 @@ Row(
 - **Can only delete Borrador and Enviada statuses**
 - Confirmada/Recibida/Pagada invoices must be reverted step by step
 - **Journal Entries**: 
-  - For Confirmada → Enviada: **DELETED** (Zoho Books style, clean slate)
+  - For Confirmada → Enviada: **DELETED** (historical DELETE-based approach, clean slate)
   - For Recibida → Confirmada: **PRESERVED** (accounting stays intact)
 - **Stock Movements**: DELETED when reverting from Recibida → Confirmada
 - **Payments**: Can be deleted individually (via "Deshacer Pago"), invoice returns to "Recibida"
@@ -1651,11 +1203,11 @@ Row(
 | **Audit Trail** | Simpler (entries deleted) | Simpler (entries deleted) |
 | **Primary Confirm Action** | "Confirmar" → Accounting + Inventory | "Confirmar Factura" → Accounting only |
 | **Secondary Action** | "Pagar factura" → Payment | "Marcar como Recibida" → Inventory |
-| **Payment Action** | Same page, inline payment | Navigates to payment form page |
+| **Payment Action** | Uses the canonical payment command | Uses the canonical payment command; host is selected by task evidence |
 | **Movement Type** | `sales_invoice` | `purchase_invoice` |
 | **Stock Movement Type** | OUT | IN |
 | **Journal Entry** | DR: AR, CR: Sales/IVA/Inventory | DR: Inv/IVA, CR: AP |
-| **Reversal Approach** | Zoho Books style (DELETE) | Zoho Books style (DELETE) |
+| **Reversal Approach** | historical DELETE-based approach (DELETE) | historical DELETE-based approach (DELETE) |
 | **Why Same Reversal?** | Both use DELETE for draft/in-progress invoices (cleaner) | Both use DELETE for draft/in-progress invoices (cleaner) |
 
 ---
@@ -1766,7 +1318,7 @@ EXECUTE FUNCTION public.handle_purchase_invoice_change();
 - Linked via source_module='purchase_payments' and source_reference=payment.id
 
 **Note on Reversal Approach**:
-This document describes **DELETE-based reversals** (Zoho Books style) for draft/in-progress invoices. When reverting from Confirmed → Sent, the journal entry is **deleted completely**, not reversed with a REV- entry. This provides a cleaner approach for invoices that haven't been finalized.
+This document describes **DELETE-based reversals** (historical DELETE-based approach) for draft/in-progress invoices. When reverting from Confirmed → Sent, the journal entry is **deleted completely**, not reversed with a REV- entry. This provides a cleaner approach for invoices that haven't been finalized.
 
 ---
 
@@ -1832,12 +1384,12 @@ This document describes **DELETE-based reversals** (Zoho Books style) for draft/
 
 ### When Implementing Status Transitions:
 1. ✅ Always use button-driven transitions
-2. ✅ Show confirmation dialogs for backward transitions
+2. ✅ Require an explicit, consequence-aware decision for risky reversals; let the canonical surface-selection rules choose its host
 3. ✅ Use REVERSAL entries for journal entries (not delete)
 4. ✅ Check inventory availability before reversing
 5. ✅ Update UI immediately after status change
-6. ✅ Show appropriate snackbar messages
-7. ✅ Keep status badge colors consistent
+6. ✅ Provide feedback at the scope and duration of the operation
+7. ✅ Use theme-owned state treatment with text and semantics, never literal feature colors
 
 ### When Debugging:
 1. Check `journal_entries` table for source_module='purchase_invoice'
@@ -1854,7 +1406,7 @@ This document describes **DELETE-based reversals** (Zoho Books style) for draft/
 
 ### Important Notes:
 - **Purchases use REVERSAL entries** (traditional accounting)
-- **Sales use DELETE entries** (Zoho Books style)
+- **Sales use DELETE entries** (historical DELETE-based approach)
 - This maintains better audit trail for purchases (supplier relationships)
 - Both approaches are valid, chosen for different business needs
 - Inventory can only be reversed if sufficient stock exists

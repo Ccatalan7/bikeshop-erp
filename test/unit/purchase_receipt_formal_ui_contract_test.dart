@@ -16,9 +16,6 @@ String _section(
   return source.substring(start, end);
 }
 
-int _count(String source, String value) =>
-    RegExp(RegExp.escape(value)).allMatches(source).length;
-
 void main() {
   test(
     'formal receipt detail keeps thumbnails, a flat summary table and '
@@ -88,42 +85,37 @@ void main() {
   });
 
   test(
-    'resolution picker uses a compact bottom sheet and scroll-safe '
-    'desktop dialog',
+    'resolution picker preserves every outcome and explicit cancellation',
     () {
       final source = _read(
         'lib/modules/purchases/pages/purchase_receipt_detail_page.dart',
       );
+      final resolutionFlow = _section(
+        source,
+        from: 'Future<void> _resolveCase(',
+        to: 'Future<PurchaseReceiptResolutionOutcome?> '
+            '_selectResolutionOutcome(',
+      );
       final picker = _section(
         source,
-        from: 'Future<PurchaseReceiptResolutionOutcome?> '
-            '_selectResolutionOutcome(',
-        to: 'Future<void> _openCreditNoteResolution(',
+        from: 'class _ResolutionOutcomePicker',
+        to: 'class _ResolutionOutcomeOption',
       );
 
-      expect(
-        picker,
-        contains('MediaQuery.sizeOf(context).width < 700'),
-      );
-      expect(
-        picker,
-        matches(
-          RegExp(
-            r'if\s*\(compact\)\s*\{\s*'
-            r'return showModalBottomSheet<PurchaseReceiptResolutionOutcome>',
-          ),
-        ),
-      );
-      expect(_count(picker, 'showModalBottomSheet'), 1);
-      expect(
-        picker,
-        contains('return showDialog<PurchaseReceiptResolutionOutcome>'),
-      );
-      expect(picker, contains('final availableHeight ='));
-      expect(picker, contains('ConstrainedBox('));
-      expect(picker, contains('maxWidth: 620'));
-      expect(picker, contains('maxHeight: availableHeight'));
-      expect(picker, contains('SingleChildScrollView('));
+      expect(resolutionFlow, contains('_selectResolutionOutcome('));
+      expect(resolutionFlow, contains('_openCreditNoteResolution('));
+      expect(resolutionFlow, contains('_showingLaterDelivery = true'));
+      expect(resolutionFlow, contains('_recordDocumentedLoss('));
+
+      for (final outcome in const [
+        'PurchaseReceiptResolutionOutcome.creditNote',
+        'PurchaseReceiptResolutionOutcome.laterDelivery',
+        'PurchaseReceiptResolutionOutcome.documentedLoss',
+      ]) {
+        expect(picker, contains('onSelected($outcome)'));
+      }
+      expect(picker, contains('onPressed: onCancel'));
+      expect(picker, contains("child: const Text('Cancelar')"));
     },
   );
 

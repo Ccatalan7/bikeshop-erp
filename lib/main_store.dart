@@ -112,7 +112,6 @@ Future<void> _resetLocalStoreDebugStateIfNeeded(
 Future<void> main() async {
   if (kIsWeb) {
     _initialBrowserUrl = getInitialBrowserUrl();
-    debugPrint('🚀 [StoreMain] Captured initial URL: $_initialBrowserUrl');
     // Capture recovery state BEFORE Supabase.initialize() processes and clears
     // the URL fragment. The passwordRecovery stream event fires during initialize()
     // before any subscriber exists, so this static flag is the only reliable source.

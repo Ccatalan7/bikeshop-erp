@@ -8,6 +8,8 @@ void main() {
   late String installer;
   late String updaterService;
   late String publishHelper;
+  late String codexReleaseNotesHelper;
+  late String releaseNotesGenerator;
   late String flutterTestGate;
   late String releaseBaseResolver;
   late String runbook;
@@ -24,6 +26,12 @@ void main() {
       'lib/shared/services/desktop_update_service_io.dart',
     ).readAsStringSync();
     publishHelper = File('scripts/publish_macos_update.sh').readAsStringSync();
+    codexReleaseNotesHelper = File(
+      'scripts/releases/generate_codex_release_notes.mjs',
+    ).readAsStringSync();
+    releaseNotesGenerator = File(
+      'scripts/releases/generate_release_notes.mjs',
+    ).readAsStringSync();
     flutterTestGate =
         File('scripts/run_flutter_test_gate.sh').readAsStringSync();
     releaseBaseResolver = File(
@@ -46,6 +54,24 @@ void main() {
         r'\s+default: false',
       )),
     );
+    for (final inputName in const [
+      'expected_commit',
+      'release_notes_candidate_b64',
+    ]) {
+      expect(
+        workflow,
+        contains(
+          RegExp(
+            '$inputName:\\s*\\n'
+            '\\s+description:.*\\n'
+            '\\s+required: false\\s*\\n'
+            '\\s+type: string\\s*\\n'
+            '\\s+default: (?:\'\'|"")',
+          ),
+        ),
+        reason: '$inputName must remain an optional empty dispatch input.',
+      );
+    }
     expect(workflow, contains('permissions:\n  contents: read'));
     expect(
       workflow,
@@ -93,6 +119,15 @@ void main() {
     final openAiReleaseNotesSecret = workflow.indexOf(
       r'OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}',
     );
+    final sourceGuardJob = workflow.indexOf('\n  source-guard:');
+    final expectedCommitInput = workflow.indexOf(
+      r'${{ inputs.expected_commit }}',
+      sourceGuardJob,
+    );
+    final codexCandidateInput = workflow.indexOf(
+      r'${{ inputs.release_notes_candidate_b64 }}',
+      publishJob,
+    );
     final baseResolution = workflow.indexOf(
       'resolve_previous_release_commit.sh',
       publishJob,
@@ -108,6 +143,31 @@ void main() {
     final signing = workflow.indexOf('ssh-keygen -Y sign', merge);
 
     expect(publishJob, greaterThanOrEqualTo(0));
+    expect(sourceGuardJob, greaterThanOrEqualTo(0));
+    expect(expectedCommitInput, greaterThan(sourceGuardJob));
+    expect(expectedCommitInput, lessThan(publishJob));
+    expect(codexCandidateInput, greaterThan(publishJob));
+    expect(
+      workflow.substring(sourceGuardJob, publishJob),
+      allOf(
+        contains('EXPECTED_COMMIT'),
+        contains('GITHUB_SHA'),
+      ),
+      reason:
+          'The workflow must bind an explicit publish request to its exact source SHA.',
+    );
+    expect(
+      workflow.substring(publishJob, baseResolution),
+      contains('CODEX_RELEASE_NOTES_CANDIDATE_B64'),
+      reason:
+          'Only protected publication may receive the optional local notes.',
+    );
+    expect(
+      workflow.substring(0, publishJob),
+      isNot(contains('CODEX_RELEASE_NOTES_CANDIDATE_B64')),
+      reason:
+          'The local Codex payload must only enter the protected publish job.',
+    );
     expect(geminiReleaseNotesSecret, greaterThan(publishJob));
     expect(openAiReleaseNotesSecret, greaterThan(geminiReleaseNotesSecret));
     expect(
@@ -130,6 +190,30 @@ void main() {
     );
     expect(baseResolution, greaterThan(publishJob));
     expect(generation, greaterThan(baseResolution));
+    expect(
+      releaseNotesGenerator,
+      contains('CODEX_RELEASE_NOTES_CANDIDATE_B64'),
+      reason:
+          'The generator must consume and revalidate the transported candidate.',
+    );
+    final codexCandidateDecode = releaseNotesGenerator.indexOf(
+      'decodeCodexReleaseEnvelopeBase64(',
+    );
+    final generationFunction = releaseNotesGenerator.indexOf(
+      'export async function generateReleaseNotes',
+    );
+    final codexCandidateValidation = releaseNotesGenerator.indexOf(
+      'acceptCodexReleaseEnvelope(',
+      generationFunction,
+    );
+    final remoteProviderSelection = releaseNotesGenerator.indexOf(
+      'const provider =',
+      generationFunction,
+    );
+    expect(codexCandidateDecode, greaterThanOrEqualTo(0));
+    expect(generationFunction, greaterThanOrEqualTo(0));
+    expect(codexCandidateValidation, greaterThan(generationFunction));
+    expect(remoteProviderSelection, greaterThan(codexCandidateValidation));
     expect(
       workflow.substring(generation, merge),
       allOf(
@@ -159,6 +243,29 @@ void main() {
     expect(runbook, contains('OPENAI_API_KEY'));
     expect(runbook, contains('deterministic fallback'));
     expect(runbook, contains('human reviewers'));
+    final normalizedRunbook = runbook.replaceAll(RegExp(r'\s+'), ' ');
+    expect(
+      normalizedRunbook,
+      matches(
+        RegExp(
+          r'Codex.*Gemini.*deterministic fallback',
+          caseSensitive: false,
+        ),
+      ),
+      reason:
+          'The documented provider order must remain Codex, Gemini, then fallback.',
+    );
+    expect(
+      normalizedRunbook,
+      allOf(
+        contains('source-inspection boundary'),
+        contains('source and diffs'),
+        contains('OpenAI'),
+        contains('sanitized'),
+      ),
+      reason:
+          'The runbook must explain the distinct local-Codex and sanitized-CI privacy boundaries.',
+    );
   });
 
   test('release-note baseline skips same-SHA retries and stays ancestral', () {
@@ -201,15 +308,22 @@ void main() {
     expect(workflow, contains('npm run build:spreadsheet-engine'));
 
     final integrityJob = workflow.indexOf('\n  integrity:');
+    final sourceGuardJob = workflow.indexOf('\n  source-guard:');
     final buildJob = workflow.indexOf('\n  build:');
+    final buildNeedsSourceGuard = workflow.indexOf(
+      '- source-guard',
+      buildJob,
+    );
     final buildNeedsIntegrity = workflow.indexOf(
-      'needs: integrity',
+      '- integrity',
       buildJob,
     );
     final publishJob = workflow.indexOf('\n  publish:');
     final publishNeedsBuild = workflow.indexOf('needs: build', publishJob);
+    expect(sourceGuardJob, greaterThanOrEqualTo(0));
     expect(integrityJob, greaterThanOrEqualTo(0));
     expect(buildJob, greaterThan(integrityJob));
+    expect(buildNeedsSourceGuard, greaterThan(buildJob));
     expect(buildNeedsIntegrity, greaterThan(buildJob));
     expect(publishJob, greaterThan(buildNeedsIntegrity));
     expect(publishNeedsBuild, greaterThan(publishJob));
@@ -342,15 +456,21 @@ void main() {
 
   test('developer helper publishes current authorized branch without switching',
       () {
-    expect(publishHelper, contains('-f publish_release=true'));
+    expect(publishHelper, contains('publish_release'));
+    expect(publishHelper, contains('--json'));
     expect(publishHelper, contains('git branch --show-current'));
     expect(publishHelper, contains('git push origin "\$branch"'));
     expect(
       publishHelper,
       contains('Existing macOS release build found for current commit'),
     );
-    expect(publishHelper, contains('startswith("macOS publish")'),
-        reason: 'The helper must bind to a macOS publish run, not any run.');
+    expect(publishHelper, contains('\$expected_run_title'));
+    expect(
+      publishHelper,
+      contains('(.display_title // "") == \$expected_title'),
+      reason:
+          'The helper must bind to the exact source and note inputs, not any run.',
+    );
     expect(publishHelper, isNot(contains('git checkout')));
     expect(publishHelper, isNot(contains('git switch')));
     expect(runbook, contains('smartpegas1.0'));
@@ -366,6 +486,10 @@ void main() {
   test('developer helper follows the Windows-like CI publication sequence', () {
     final stage = publishHelper.indexOf('git add -A');
     final commit = publishHelper.indexOf('git commit -m', stage);
+    final codexCandidate = publishHelper.indexOf(
+      'prepare_local_codex_release_notes "\$head_sha"',
+      commit,
+    );
     final push = publishHelper.indexOf('git push origin', commit);
     final activeRunLookup = publishHelper.indexOf('active_run="\$(', push);
     final dispatch = publishHelper.indexOf('gh workflow run', activeRunLookup);
@@ -381,18 +505,41 @@ void main() {
 
     expect(stage, greaterThanOrEqualTo(0));
     expect(commit, greaterThan(stage));
+    expect(codexCandidate, greaterThan(commit));
+    expect(codexCandidate, lessThan(push));
     expect(push, greaterThan(commit));
     expect(activeRunLookup, greaterThan(push));
     expect(dispatch, greaterThan(activeRunLookup));
     expect(wait, greaterThan(dispatch));
     expect(diagnostics, greaterThan(wait));
     expect(releaseVerification, greaterThan(diagnostics));
+    expect(
+      publishHelper,
+      contains('scripts/releases/generate_codex_release_notes.mjs'),
+    );
+    expect(
+      publishHelper.substring(activeRunLookup, dispatch),
+      allOf(
+        contains('expected_commit'),
+        contains('release_notes_candidate_b64'),
+      ),
+      reason:
+          'The dispatch payload must carry both exact-head and optional-note bindings.',
+    );
+    expect(
+      publishHelper.substring(dispatch),
+      contains('--json'),
+      reason:
+          'The bounded candidate must be dispatched as JSON on stdin, not shell flags.',
+    );
 
     expect(publishHelper, contains('require_command git'));
     expect(publishHelper, contains('require_command gh'));
     expect(publishHelper, contains('require_command jq'));
     expect(publishHelper, isNot(contains('require_command volta')));
     expect(publishHelper, isNot(contains('require_command node')));
+    expect(publishHelper, isNot(contains('require_command codex')));
+    expect(publishHelper, isNot(contains('require_command gitleaks')));
     expect(publishHelper, isNot(contains('require_command npm')));
     expect(publishHelper, isNot(contains('npm ci')));
     expect(publishHelper, isNot(contains('flutter analyze')));
@@ -400,6 +547,31 @@ void main() {
     expect(publishHelper, isNot(contains('flutter build')));
     expect(publishHelper, isNot(contains('git archive')));
     expect(publishHelper, isNot(contains('--preflight-only')));
+  });
+
+  test('local Codex release-note attempt is read-only and optional', () {
+    expect(codexReleaseNotesHelper, contains('--ephemeral'));
+    expect(codexReleaseNotesHelper, contains('read-only'));
+    expect(codexReleaseNotesHelper, contains('--output-schema'));
+    expect(
+      codexReleaseNotesHelper,
+      anyOf(contains('--output-last-message'), contains('"-o"')),
+    );
+    expect(
+      codexReleaseNotesHelper,
+      isNot(contains('--dangerously-bypass-approvals-and-sandbox')),
+    );
+    expect(
+      publishHelper,
+      anyOf(
+        contains('Codex release notes unavailable'),
+        contains('Local Codex notes unavailable'),
+        contains('Continuing without local Codex release notes'),
+        contains('continuing without local Codex release notes'),
+      ),
+      reason:
+          'Codex authentication, quota, or output failure must not block publication.',
+    );
   });
 
   test('developer helper verifies exact run and release evidence', () {

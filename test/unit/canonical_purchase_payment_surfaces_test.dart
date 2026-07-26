@@ -74,16 +74,12 @@ void main() {
   );
 
   test(
-    'supplier-payment full master is the configurable invoice-style table',
+    'supplier-payment master preserves configurable operations and identity',
     () {
       final master = _read(
         'lib/modules/purchases/pages/purchase_payments_list_page.dart',
       );
 
-      expect(master, contains('static const double _tableHeaderHeight = 38;'));
-      expect(master, contains('static const double _tableRowHeight = 38;'));
-      expect(master, contains('Widget _buildPaymentsTable('));
-      expect(master, contains("ValueKey('purchase-payments-full-table')"));
       expect(master, contains('onTap: () => _changeSort(column.id)'));
       expect(master, contains('bool _matchesSmartSearch('));
       expect(master, contains('.every((token)'));
@@ -123,31 +119,16 @@ void main() {
         expect(master, contains("id: '$columnId'"));
       }
 
-      final fullView = _section(
+      final rowSelection = _section(
         master,
-        'Widget _buildFullTableView(',
-        'Widget _buildSplitView(',
+        'void _selectRow(',
+        'void _openInvoice(',
       );
-      expect(fullView, contains('_buildSummaryCards(visibleRows)'));
-      expect(fullView, contains('_buildPaymentsTable(visibleRows)'));
-      expect(fullView, isNot(contains('_buildPaymentCardsList(')));
-
-      final tableRow = _section(
-        master,
-        'Widget _buildTableRow(',
-        'Widget _buildTableCell(',
+      expect(
+        rowSelection,
+        contains(r"context.push('/purchases/payments/${row.id}')"),
       );
-      expect(tableRow, contains('onTap: () => _selectRow(row)'));
-      expect(tableRow, contains('Colors.grey[50]'));
-      expect(tableRow, contains('Colors.blue[50]'));
-      expect(tableRow, contains('width: 48'));
-      final outerTableTap = _section(
-        tableRow,
-        'child: InkWell(',
-        'child: Container(',
-      );
-      expect(outerTableTap, contains('onTap: () => _selectRow(row)'));
-      expect(outerTableTap, isNot(contains('_openInvoice(row)')));
+      expect(rowSelection, contains('_selectedPaymentId = row.id'));
 
       final methodCell = _section(
         master,
@@ -166,57 +147,30 @@ void main() {
     },
   );
 
-  test('supplier-payment split replaces the table with compact cards', () {
+  test('supplier payment and linked invoice remain separate commands', () {
     final master = _read(
       'lib/modules/purchases/pages/purchase_payments_list_page.dart',
     );
 
-    final split = _section(
+    final rowSelection = _section(
       master,
-      'Widget _buildSplitView(',
-      'Widget _buildPaymentCardsList(',
+      'void _selectRow(',
+      'void _openInvoice(',
     );
-    expect(split, contains('_buildPaymentCardsList(visibleRows)'));
-    expect(split, contains('PurchasePaymentDetailView('));
-    expect(split, contains('Ajustar ancho de la lista de pagos'));
-    expect(split, isNot(contains('_buildPaymentsTable(')));
-    expect(split, isNot(contains('_buildTableHeader(')));
-    expect(split, isNot(contains('_buildSummaryCards(')));
-    expect(split, isNot(contains('_showColumnCustomizer')));
-    expect(
-      split,
-      contains("ValueKey('purchase-payment-detail-\${selectedRow.id}')"),
-    );
-
-    final cards = _section(
+    final invoiceNavigation = _section(
       master,
-      'Widget _buildPaymentCardsList(',
-      'Widget _buildPaymentMethodChip(',
+      'void _openInvoice(',
+      'bool get _isEditableTextFocused',
     );
     expect(
-      cards,
-      contains("ValueKey('purchase-payments-split-card-list')"),
+      rowSelection,
+      contains(r"context.push('/purchases/payments/${row.id}')"),
     );
+    expect(rowSelection, contains('_selectedPaymentId = row.id'));
     expect(
-      cards,
-      contains("ValueKey('purchase-payment-card-\${row.id}')"),
+      invoiceNavigation,
+      contains(r"context.push('/purchases/$invoiceId')"),
     );
-    expect(cards, contains('Colors.blue[50]'));
-    expect(cards, contains('width: 3'));
-    expect(cards, contains('bottom: BorderSide('));
-    expect(cards, contains('_selectRow(row)'));
-    expect(cards, contains('row.supplierName'));
-    expect(cards, contains('row.payment.amount'));
-    expect(cards, contains('row.code'));
-    expect(cards, contains('_buildPaymentMethodChip(row)'));
-
-    final outerTap = _section(
-      cards,
-      'onTap: () {',
-      'child: Container(',
-    );
-    expect(outerTap, contains('_selectRow(row)'));
-    expect(outerTap, isNot(contains('_openInvoice(row)')));
   });
 
   test('split and routed detail share supplier-payment-owned evidence', () {
@@ -368,7 +322,6 @@ void main() {
 
     expect(registry, contains('| Supplier-payment master/detail |'));
     expect(registry, contains('exact `?paymentId=` links'));
-    expect(registry, contains('desktop split preview'));
     expect(registry, contains('mobile `/purchases/payments/:id`'));
     expect(
       registry,
@@ -384,7 +337,6 @@ void main() {
         'implicit destination',
       ),
     );
-    expect(registry, contains('never squeeze the table into the split pane'));
     expect(registry, contains('`PurchasePaymentReceiptPdfGenerator`'));
     expect(registry, contains('`source_module=purchase_payments`'));
     expect(

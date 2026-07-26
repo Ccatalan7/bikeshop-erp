@@ -99,7 +99,10 @@ class TenantDetectionService {
     final sw = Stopwatch()..start();
     try {
       // Use OR filter to check both in one query
-      var query = _supabase.from('tenants').select().eq('is_active', true);
+      var query = _supabase
+          .from('public_tenant_directory')
+          .select()
+          .eq('is_active', true);
 
       if (subdomain != null && subdomain.isNotEmpty) {
         query = query.or('subdomain.eq.$subdomain,custom_domain.eq.$domain');
@@ -128,7 +131,7 @@ class TenantDetectionService {
   Future<Tenant?> getTenantBySubdomain(String subdomain) async {
     try {
       final response = await _supabase
-          .from('tenants')
+          .from('public_tenant_directory')
           .select()
           .eq('subdomain', subdomain)
           .eq('is_active', true)
@@ -148,7 +151,7 @@ class TenantDetectionService {
   Future<Tenant?> getTenantByCustomDomain(String domain) async {
     try {
       final response = await _supabase
-          .from('tenants')
+          .from('public_tenant_directory')
           .select()
           .eq('custom_domain', domain)
           .eq('is_active', true)
@@ -272,7 +275,7 @@ class TenantDetectionService {
       debugPrint('📱 [TenantDetection] Using default mobile tenant (Viñabike)');
       if (_perfLogsEnabled) {
         debugPrint(
-        '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (default_mobile)');
+            '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (default_mobile)');
       }
       return Tenant(
         id: defaultTenantId,
@@ -458,7 +461,7 @@ class TenantDetectionService {
 
       // Check reserved subdomains
       final reserved = await _supabase
-          .from('reserved_subdomains')
+          .from('public_reserved_subdomains')
           .select('subdomain')
           .eq('subdomain', subdomain)
           .maybeSingle();
@@ -469,7 +472,7 @@ class TenantDetectionService {
 
       // Check existing tenants
       final existing = await _supabase
-          .from('tenants')
+          .from('public_tenant_directory')
           .select('id')
           .eq('subdomain', subdomain)
           .maybeSingle();

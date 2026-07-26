@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/android_update_service.dart';
+import 'desktop_update_prompt.dart' show showDesktopReleaseNotesDialog;
 
 class AndroidUpdatePrompt extends StatefulWidget {
   const AndroidUpdatePrompt({super.key});
@@ -93,7 +94,7 @@ class _AndroidUpdatePromptState extends State<AndroidUpdatePrompt> {
                                   Text(
                                     service.errorMessage ??
                                         service.statusMessage ??
-                                        release.releaseNotes ??
+                                        release.releaseNotes?.summary ??
                                         'Hay una nueva versión de Vinabike ERP.',
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: service.errorMessage == null
@@ -121,21 +122,48 @@ class _AndroidUpdatePromptState extends State<AndroidUpdatePrompt> {
                           ),
                         ],
                         const SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: FilledButton(
-                            key: const ValueKey(
-                              'android-update-primary-button',
+                        Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
+                            if (release.releaseNotes != null)
+                              TextButton(
+                                key: const ValueKey(
+                                  'android-update-whats-new-button',
+                                ),
+                                style: TextButton.styleFrom(
+                                  minimumSize: const Size(0, 48),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                ),
+                                onPressed: () => showDesktopReleaseNotesDialog(
+                                  context,
+                                  release.releaseNotes!,
+                                ),
+                                child: const Text('Novedades'),
+                              ),
+                            FilledButton(
+                              key: const ValueKey(
+                                'android-update-primary-button',
+                              ),
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(0, 48),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                              ),
+                              onPressed: service.isDownloading
+                                  ? null
+                                  : () => _install(context),
+                              child: Text(
+                                service.isDownloading
+                                    ? 'Descargando…'
+                                    : 'Actualizar',
+                              ),
                             ),
-                            onPressed: service.isDownloading
-                                ? null
-                                : () => _install(context),
-                            child: Text(
-                              service.isDownloading
-                                  ? 'Descargando…'
-                                  : 'Actualizar',
-                            ),
-                          ),
+                          ],
                         ),
                       ],
                     ),

@@ -8,9 +8,11 @@ on:
       - smartpegas1.0
     paths:
       - "AGENTS.md"
+      - ".github/**/*.md"
       - ".github/copilot-instructions.md"
       - ".github/GUI_DESIGN_PRINCIPLES.md"
       - ".github/GUI_MOBILE_DESIGN_PRINCIPLES.md"
+      - "docs/architecture/**"
       - "docs/architecture/canonical-ui-surfaces.md"
       - "assets/**"
       - "lib/**"
@@ -21,6 +23,7 @@ on:
       - "package-lock.json"
       - "pubspec.yaml"
       - "pubspec.lock"
+      - "scripts/releases/**"
       - "scripts/run_flutter_test_gate.sh"
 
 permissions:
@@ -45,6 +48,9 @@ jobs:
           node-version: "24.18.0"
           cache: npm
 
+      - name: Test desktop release metadata helpers
+        run: node --test scripts/releases/*.test.mjs
+
       - name: Build packaged spreadsheet engine
         run: |
           npm ci
@@ -65,6 +71,9 @@ jobs:
 
       - name: Install Flutter dependencies
         run: flutter pub get
+
+      - name: Verify canonical UI guidance contract
+        run: flutter test test/unit/ui_guidance_contract_test.dart
 
       - name: Analyze without increasing the existing warning baseline
         run: flutter analyze --no-fatal-infos --no-fatal-warnings lib test

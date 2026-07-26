@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Tu acceso está listo</title>
+  </head>
+  <body style="margin:0;background:#f4f6f8;color:#1f2937;font-family:Arial,sans-serif">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center" style="padding:32px 16px">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                 style="max-width:560px;background:#fff;border:1px solid #e5e7eb;border-radius:16px">
+            <tr><td style="padding:28px 32px 12px;color:#1677d2;font-size:22px;font-weight:700">Viñabike</td></tr>
+            <tr>
+              <td style="padding:8px 32px 32px">
+                <h1 style="margin:0 0 16px;font-size:24px;color:#111827">Tu acceso está listo</h1>
+                <p style="margin:0 0 24px;line-height:1.6">
+                  Te invitaron a crear acceso para <strong>{{ .Email }}</strong>.
+                </p>
+                <p style="margin:0 0 24px">
+                  <a href="{{ .SiteURL }}/auth-action.html#token_hash={{ .TokenHash }}&amp;type=invite&amp;redirect_to={{ .RedirectTo }}"
+                     style="display:inline-block;padding:13px 22px;border-radius:8px;background:#1677d2;color:#fff;text-decoration:none;font-weight:700">
+                    Configurar mi acceso
+                  </a>
+                </p>
+                <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.5">
+                  Si no esperabas esta invitación, ignora el mensaje. El enlace es personal y no debe compartirse.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

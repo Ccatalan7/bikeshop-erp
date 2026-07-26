@@ -101,7 +101,7 @@ openai_api_key = "env(OPENAI_API_KEY)"
 
 # Email testing server. Emails sent with the local dev setup are not actually sent - rather, they
 # are monitored, and you can view the emails that would have been sent from the web interface.
-[inbucket]
+[local_smtp]
 enabled = true
 # Port to use for the email testing server web interface.
 port = 54324
@@ -156,9 +156,68 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+site_url = "http://127.0.0.1:54330"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+additional_redirect_urls = [
+  "http://127.0.0.1:54330/auth/callback",
+  "http://127.0.0.1:54330/cuenta/login",
+  "http://127.0.0.1:54330/cuenta/login?confirmed=true",
+  "http://127.0.0.1:54330/cuenta/login?invited=true",
+  "http://127.0.0.1:54330/cuenta/login?type=recovery",
+  "http://127.0.0.1:54330/reset-password",
+  "http://localhost:54330/auth/callback",
+  "http://localhost:54330/cuenta/login",
+  "http://localhost:54330/cuenta/login?confirmed=true",
+  "http://localhost:54330/cuenta/login?invited=true",
+  "http://localhost:54330/cuenta/login?type=recovery",
+  "http://localhost:54330/reset-password",
+  "http://127.0.0.1:3000/auth/callback",
+  "http://127.0.0.1:3000/cuenta/login",
+  "http://127.0.0.1:3000/cuenta/login?confirmed=true",
+  "http://127.0.0.1:3000/cuenta/login?invited=true",
+  "http://127.0.0.1:3000/cuenta/login?type=recovery",
+  "http://127.0.0.1:3000/reset-password",
+  "http://localhost:3000/auth/callback",
+  "http://localhost:3000/cuenta/login",
+  "http://localhost:3000/cuenta/login?confirmed=true",
+  "http://localhost:3000/cuenta/login?invited=true",
+  "http://localhost:3000/cuenta/login?type=recovery",
+  "http://localhost:3000/reset-password",
+  "https://project-vinabike.web.app/auth/callback",
+  "https://project-vinabike.web.app/cuenta/login",
+  "https://project-vinabike.web.app/cuenta/login?confirmed=true",
+  "https://project-vinabike.web.app/cuenta/login?invited=true",
+  "https://project-vinabike.web.app/cuenta/login?type=recovery",
+  "https://project-vinabike.web.app/reset-password",
+  "https://project-vinabike.firebaseapp.com/auth/callback",
+  "https://project-vinabike.firebaseapp.com/cuenta/login",
+  "https://project-vinabike.firebaseapp.com/cuenta/login?confirmed=true",
+  "https://project-vinabike.firebaseapp.com/cuenta/login?invited=true",
+  "https://project-vinabike.firebaseapp.com/cuenta/login?type=recovery",
+  "https://project-vinabike.firebaseapp.com/reset-password",
+  "https://vinabike.cl/auth/callback",
+  "https://vinabike.cl/cuenta/login",
+  "https://vinabike.cl/cuenta/login?confirmed=true",
+  "https://vinabike.cl/cuenta/login?invited=true",
+  "https://vinabike.cl/cuenta/login?type=recovery",
+  "https://www.vinabike.cl/auth/callback",
+  "https://www.vinabike.cl/cuenta/login",
+  "https://www.vinabike.cl/cuenta/login?confirmed=true",
+  "https://www.vinabike.cl/cuenta/login?invited=true",
+  "https://www.vinabike.cl/cuenta/login?type=recovery",
+  "https://vinabike-store.web.app/auth/callback",
+  "https://vinabike-store.web.app/cuenta/login",
+  "https://vinabike-store.web.app/cuenta/login?confirmed=true",
+  "https://vinabike-store.web.app/cuenta/login?invited=true",
+  "https://vinabike-store.web.app/cuenta/login?type=recovery",
+  "https://vinabike-store.firebaseapp.com/auth/callback",
+  "https://vinabike-store.firebaseapp.com/cuenta/login",
+  "https://vinabike-store.firebaseapp.com/cuenta/login?confirmed=true",
+  "https://vinabike-store.firebaseapp.com/cuenta/login?invited=true",
+  "https://vinabike-store.firebaseapp.com/cuenta/login?type=recovery",
+  "vinabike://app/auth/callback",
+  "vinabike://app/reset-password",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to the local API URL (http://127.0.0.1:<port>/auth/v1).
@@ -177,10 +236,10 @@ enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-minimum_password_length = 6
+minimum_password_length = 8
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
-password_requirements = ""
+password_requirements = "letters_digits"
 
 # Configure passkey sign-ins.
 # [auth.passkey]
@@ -218,11 +277,11 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
-secure_password_change = false
+secure_password_change = true
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
-max_frequency = "1s"
+max_frequency = "60s"
 # Number of characters used in the email OTP.
 otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
@@ -238,16 +297,49 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+[auth.email.template.invite]
+subject = "Tu acceso a Viñabike está listo"
+content_path = "./supabase/templates/auth_invite.html"
 
-# Uncomment to customize notification email template
-# [auth.email.notification.password_changed]
-# enabled = true
-# subject = "Your password has been changed"
-# content_path = "./templates/password_changed_notification.html"
+[auth.email.template.confirmation]
+subject = "Confirma tu correo para ingresar a Viñabike"
+content_path = "./supabase/templates/auth_confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Restablece tu contraseña de Viñabike"
+content_path = "./supabase/templates/auth_recovery.html"
+
+[auth.email.template.magic_link]
+subject = "Tu enlace seguro de acceso a Viñabike"
+content_path = "./supabase/templates/auth_magic_link.html"
+
+[auth.email.template.email_change]
+subject = "Confirma tu nuevo correo de Viñabike"
+content_path = "./supabase/templates/auth_email_change.html"
+
+[auth.email.template.reauthentication]
+subject = "{{ .Token }} es tu código de verificación de Viñabike"
+content_path = "./supabase/templates/auth_reauthentication.html"
+
+[auth.email.notification.password_changed]
+enabled = true
+subject = "La contraseña de tu cuenta Viñabike cambió"
+content_path = "./supabase/templates/auth_password_changed.html"
+
+[auth.email.notification.email_changed]
+enabled = true
+subject = "El correo de tu cuenta Viñabike cambió"
+content_path = "./supabase/templates/auth_email_changed.html"
+
+[auth.email.notification.identity_linked]
+enabled = true
+subject = "Se vinculó un método de acceso a tu cuenta Viñabike"
+content_path = "./supabase/templates/auth_identity_linked.html"
+
+[auth.email.notification.identity_unlinked]
+enabled = true
+subject = "Se desvinculó un método de acceso de tu cuenta Viñabike"
+content_path = "./supabase/templates/auth_identity_unlinked.html"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
@@ -374,6 +466,17 @@ verify_jwt = false
 # Account administration is an authenticated ERP-only surface. The function
 # also revalidates tenant-scoped administrative permission before any mutation.
 verify_jwt = true
+
+[functions.send-invitation]
+# Internal invitation delivery requires a valid caller JWT at the gateway and
+# revalidates the caller's single active tenant plus manage-users permission.
+verify_jwt = true
+
+[functions.worker-login]
+# Worker username login performs its own bounded credential exchange with the
+# service role restricted to private resolution and the anon key restricted to
+# the Auth password grant. It returns only the resulting refresh capability.
+verify_jwt = false
 
 [functions.gmail-oauth]
 # Gmail redirects the browser back here without a Supabase Authorization header.

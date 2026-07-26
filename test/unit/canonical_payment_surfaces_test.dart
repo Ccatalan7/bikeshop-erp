@@ -47,16 +47,12 @@ void main() {
   });
 
   test(
-    'payment full-width master matches the configurable sales-invoice table',
+    'payment master preserves configurable operations and payment identity',
     () {
       final master = _read(
         'lib/modules/sales/pages/payment_form_page.dart',
       );
 
-      expect(master, contains('static const double _tableHeaderHeight = 38;'));
-      expect(master, contains('static const double _tableRowHeight = 38;'));
-      expect(master, contains('Widget _buildPaymentsTable('));
-      expect(master, contains('ListView.builder('));
       expect(master, contains('onTap: () => _changeSort(column.id)'));
       expect(master, contains('bool _matchesSmartSearch('));
       expect(master, contains('.every((token)'));
@@ -82,7 +78,6 @@ void main() {
       expect(master, contains('_saveColumnPreferences()'));
       expect(master, contains('_syncHeaderToBody'));
       expect(master, contains('_syncBodyToHeader'));
-      expect(master, contains("ValueKey('payments-full-table')"));
 
       for (final columnId in [
         'code',
@@ -98,88 +93,6 @@ void main() {
       ]) {
         expect(master, contains("id: '$columnId'"));
       }
-
-      final fullView = _section(
-        master,
-        'Widget _buildFullTableView(',
-        'Widget _buildSplitView(',
-      );
-      expect(fullView, contains('_buildSummaryCards(visibleRows)'));
-      expect(fullView, contains('_buildPaymentsTable(visibleRows)'));
-      expect(fullView, isNot(contains('_buildPaymentCardsList(')));
-
-      final tableHeader = _section(
-        master,
-        'Widget _buildTableHeader(',
-        'Widget _buildHeaderCell(',
-      );
-      expect(tableHeader, contains('Colors.grey[50]'));
-      expect(tableHeader, contains('Colors.grey[300]'));
-      expect(tableHeader, contains('width: 48'));
-      expect(tableHeader, contains('Checkbox('));
-
-      final tableRow = _section(
-        master,
-        'Widget _buildTableRow(',
-        'Widget _buildTableCell(',
-      );
-      expect(tableRow, contains('onTap: () => _selectRow(row)'));
-      expect(tableRow, contains('Colors.grey[50]'));
-      expect(tableRow, contains('Colors.blue[50]'));
-      expect(tableRow, contains('width: 48'));
-      expect(tableRow, contains('PopupMenuButton<String>('));
-      expect(tableRow, isNot(contains('/sales/invoices/')));
-      final outerTableTap = _section(
-        tableRow,
-        'child: InkWell(',
-        'child: Container(',
-      );
-      expect(outerTableTap, contains('onTap: () => _selectRow(row)'));
-      expect(outerTableTap, isNot(contains('_openInvoice(row)')));
-
-      final tableCell = _section(
-        master,
-        'Widget _buildTableCell(',
-        'String? _cellTooltip(',
-      );
-      expect(tableCell, contains('fontSize: 13'));
-      expect(
-        _section(tableCell, "case 'method':", "case 'reference':"),
-        contains('_buildPaymentMethodChip(row)'),
-      );
-      expect(
-        tableCell,
-        contains('padding: const EdgeInsets.symmetric(horizontal: 12)'),
-      );
-      expect(tableCell, isNot(contains('BorderSide(')));
-
-      final methodChip = _section(
-        master,
-        'Widget _buildPaymentMethodChip(',
-        'Widget _buildToolbar(',
-      );
-      expect(methodChip, contains('Colors.green'));
-      expect(methodChip, contains('Colors.blue'));
-      expect(methodChip, contains('Colors.purple'));
-      expect(methodChip, contains('Colors.teal'));
-      expect(methodChip, contains('Colors.orange'));
-      expect(methodChip, contains('Colors.grey'));
-      expect(methodChip, contains('tone[100]'));
-      expect(methodChip, contains('lightBackgroundShade = 200'));
-      expect(methodChip, contains('lightForegroundShade = 700'));
-      expect(methodChip, contains('BorderRadius.circular(3)'));
-      expect(methodChip, contains('fontSize: 10.5'));
-      expect(methodChip, contains('fontWeight: FontWeight.w600'));
-
-      final mobileCard = _section(
-        master,
-        'Widget _buildMobilePaymentCard(',
-        'Widget _buildErrorState(',
-      );
-      expect(
-        mobileCard,
-        contains(r"context.push('/sales/payments/${row.id}')"),
-      );
 
       final rowSelection = _section(
         master,
@@ -201,47 +114,31 @@ void main() {
     },
   );
 
-  test('payment split replaces the table with sales-invoice-style cards', () {
+  test('payment and linked-invoice navigation remain separate commands', () {
     final master = _read(
       'lib/modules/sales/pages/payment_form_page.dart',
     );
 
-    final split = _section(
+    final rowSelection = _section(
       master,
-      'Widget _buildSplitView(',
-      'Widget _buildPaymentCardsList(',
+      'void _selectRow(',
+      'void _openInvoice(',
     );
-    expect(split, contains('_buildPaymentCardsList(visibleRows)'));
-    expect(split, contains('PaymentDetailView('));
-    expect(split, contains('Ajustar ancho de la lista de pagos'));
-    expect(split, isNot(contains('_buildPaymentsTable(')));
-    expect(split, isNot(contains('_buildTableHeader(')));
-    expect(split, isNot(contains('_buildSummaryStrip(')));
-    expect(split, isNot(contains('_showColumnCustomizer')));
-
-    final cards = _section(
+    final invoiceNavigation = _section(
       master,
-      'Widget _buildPaymentCardsList(',
-      'Widget _buildPaymentMethodChip(',
+      'void _openInvoice(',
+      'bool get _isEditableTextFocused',
     );
-    expect(cards, contains("ValueKey('payments-split-card-list')"));
-    expect(cards, contains("ValueKey('payment-card-\${row.id}')"));
-    expect(cards, contains('Colors.blue[50]'));
-    expect(cards, contains('width: 3'));
-    expect(cards, contains('bottom: BorderSide('));
-    expect(cards, contains('_selectRow(row)'));
-    expect(cards, contains('row.customerName'));
-    expect(cards, contains('row.payment.amount'));
-    expect(cards, contains('row.code'));
-    expect(cards, contains('_buildPaymentMethodChip(row)'));
-
-    final outerTap = _section(
-      cards,
-      'onTap: () {',
-      'child: Container(',
+    expect(
+      rowSelection,
+      contains(r"context.push('/sales/payments/${row.id}')"),
     );
-    expect(outerTap, contains('_selectRow(row)'));
-    expect(outerTap, isNot(contains('_openInvoice(row)')));
+    expect(rowSelection, contains('_selectedPaymentId = row.id'));
+    expect(rowSelection, isNot(contains('/sales/invoices/')));
+    expect(
+      invoiceNavigation,
+      contains(r"context.push('/sales/invoices/$invoiceId')"),
+    );
   });
 
   test('split and routed detail share real payment receipt actions', () {
@@ -421,7 +318,6 @@ void main() {
 
     expect(registry, contains('| Received-payment master/detail |'));
     expect(registry, contains('exact `?paymentId=` links'));
-    expect(registry, contains('desktop split preview'));
     expect(registry, contains('mobile `/sales/payments/:id`'));
     expect(
       registry,
@@ -437,8 +333,6 @@ void main() {
         'destination.',
       ),
     );
-    expect(registry, contains('sales-invoice-style compact payment-card rail'));
-    expect(registry, contains('never squeeze the table into the split pane'));
     expect(registry, contains('`PaymentReceiptPdfGenerator`'));
 
     expect(registry, contains('| Received-payment correction form |'));

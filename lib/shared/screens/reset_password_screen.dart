@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
+import '../utils/auth_input_validation.dart';
 import '../widgets/app_button.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
@@ -22,33 +26,49 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   bool _hasValidSession = false;
   bool _checkingSession = true;
   String? _errorMessage;
+  AuthService? _authService;
+  Timer? _recoveryTimeout;
 
   @override
   void initState() {
     super.initState();
-    _checkSession();
+    _recoveryTimeout = Timer(const Duration(seconds: 4), () {
+      if (!mounted || _hasValidSession) return;
+      setState(() {
+        _checkingSession = false;
+        _errorMessage =
+            'El enlace de restablecimiento ha expirado o es inválido. Por favor solicita uno nuevo.';
+      });
+    });
   }
 
-  Future<void> _checkSession() async {
-    // Wait a moment for Supabase to process the URL hash token
-    await Future.delayed(const Duration(milliseconds: 500));
-    
-    final session = Supabase.instance.client.auth.currentSession;
-    
-    if (mounted) {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final authService = context.read<AuthService>();
+    if (identical(authService, _authService)) return;
+    _authService?.removeListener(_handleAuthStateChanged);
+    _authService = authService;
+    _authService!.addListener(_handleAuthStateChanged);
+    _handleAuthStateChanged();
+  }
+
+  void _handleAuthStateChanged() {
+    if (!mounted || _authService?.isPasswordRecovery != true) return;
+    _recoveryTimeout?.cancel();
+    if (_checkingSession || !_hasValidSession || _errorMessage != null) {
       setState(() {
-        _hasValidSession = session != null;
+        _hasValidSession = true;
         _checkingSession = false;
-        if (!_hasValidSession) {
-          _errorMessage =
-              'El enlace de restablecimiento ha expirado o es inválido. Por favor solicita uno nuevo.';
-        }
+        _errorMessage = null;
       });
     }
   }
 
   @override
   void dispose() {
+    _recoveryTimeout?.cancel();
+    _authService?.removeListener(_handleAuthStateChanged);
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -70,7 +90,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final authService = AuthService();
+      final authService = context.read<AuthService>();
       await authService.updatePassword(_passwordController.text);
 
       if (mounted) {
@@ -96,12 +116,14 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
+          const SnackBar(
+            content: Text(
+              'No pudimos actualizar la contraseña. Solicita un enlace nuevo e inténtalo nuevamente.',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -115,9 +137,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       return 'La nueva contraseña debe ser diferente a la anterior.';
     }
     if (message.contains('weak password') || message.contains('password')) {
-      return 'La contraseña debe tener al menos 6 caracteres.';
+      return AuthInputValidation.strongPasswordHelper;
     }
-    return 'Error al actualizar la contraseña: ${e.message}';
+    return 'No pudimos actualizar la contraseña. Solicita un enlace nuevo e inténtalo nuevamente.';
   }
 
   @override
@@ -207,7 +229,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             color: Colors.blue,
           ),
           const SizedBox(height: 16),
-          
+
           // Title
           const Text(
             'Restablecer contraseña',
@@ -234,7 +256,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             obscureText: _obscurePassword,
             decoration: InputDecoration(
               labelText: 'Nueva contraseña',
-              hintText: 'Mínimo 6 caracteres',
+              helperText: AuthInputValidation.strongPasswordHelper,
               prefixIcon: const Icon(Icons.lock),
               suffixIcon: IconButton(
                 icon: Icon(
@@ -246,15 +268,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               ),
               border: const OutlineInputBorder(),
             ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Ingresa una contraseña';
-              }
-              if (value.length < 6) {
-                return 'La contraseña debe tener al menos 6 caracteres';
-              }
-              return null;
-            },
+            validator: (value) => AuthInputValidation.validatePassword(
+              value,
+              isNewPassword: true,
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -279,15 +296,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               ),
               border: const OutlineInputBorder(),
             ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Confirma tu contraseña';
-              }
-              if (value != _passwordController.text) {
-                return 'Las contraseñas no coinciden';
-              }
-              return null;
-            },
+            validator: (value) =>
+                AuthInputValidation.validatePasswordConfirmation(
+              value,
+              password: _passwordController.text,
+            ),
             onFieldSubmitted: (_) => _resetPassword(),
           ),
           const SizedBox(height: 24),

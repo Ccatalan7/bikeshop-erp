@@ -3,12 +3,77 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'auth_redirect_urls.dart';
 import 'browser_profile_service.dart';
+import '../utils/auth_input_validation.dart';
 
 class AuthService extends ChangeNotifier {
+  static bool _capturedRecoveryIntent = false;
+  static String? _capturedRecoveryCode;
+  static String? _capturedRecoveryAccessToken;
+  static String? _capturedRecoveryRefreshToken;
+
+  static bool isPasswordRecoveryUri(Uri uri) {
+    if (uri.path != '/reset-password') return false;
+
+    final fragmentParameters = _fragmentParameters(uri.fragment);
+    final recoveryType = uri.queryParameters['type'] == 'recovery' ||
+        fragmentParameters['type'] == 'recovery';
+    final hasCode = uri.queryParameters['code']?.isNotEmpty == true;
+    final hasAccessToken =
+        uri.queryParameters['access_token']?.isNotEmpty == true ||
+            fragmentParameters['access_token']?.isNotEmpty == true;
+    return (recoveryType || hasCode) && (hasCode || hasAccessToken);
+  }
+
+  /// Captures recovery evidence before Supabase initialization consumes the URL.
+  static void captureInitialUrl(String? rawUrl) {
+    _capturedRecoveryIntent = false;
+    _capturedRecoveryCode = null;
+    _capturedRecoveryAccessToken = null;
+    _capturedRecoveryRefreshToken = null;
+    if (rawUrl == null || rawUrl.isEmpty) return;
+
+    try {
+      final uri = Uri.parse(rawUrl);
+      if (!isPasswordRecoveryUri(uri)) return;
+      final fragmentParameters = _fragmentParameters(uri.fragment);
+      _capturedRecoveryIntent = true;
+      _capturedRecoveryCode = uri.queryParameters['code'];
+      _capturedRecoveryAccessToken = uri.queryParameters['access_token'] ??
+          fragmentParameters['access_token'];
+      _capturedRecoveryRefreshToken = uri.queryParameters['refresh_token'] ??
+          fragmentParameters['refresh_token'];
+    } on FormatException {
+      // Malformed input is not recovery evidence.
+    }
+  }
+
+  static Map<String, String> _fragmentParameters(String fragment) {
+    if (fragment.isEmpty) return const {};
+    try {
+      final normalized =
+          fragment.startsWith('?') ? fragment.substring(1) : fragment;
+      return Uri.splitQueryString(normalized);
+    } on FormatException {
+      return const {};
+    }
+  }
+
   AuthService() {
+    _preserveInitialRecoveryUntilConsumed = _capturedRecoveryIntent;
+    _initialRecoveryCode = _capturedRecoveryCode;
+    _initialRecoveryAccessToken = _capturedRecoveryAccessToken;
+    _initialRecoveryRefreshToken = _capturedRecoveryRefreshToken;
+    _capturedRecoveryIntent = false;
+    _capturedRecoveryCode = null;
+    _capturedRecoveryAccessToken = null;
+    _capturedRecoveryRefreshToken = null;
+
     _session = _client.auth.currentSession;
     _currentUser = _session?.user;
+    _isPasswordRecovery = _preserveInitialRecoveryUntilConsumed &&
+        _sessionMatchesInitialRecoveryEvidence(_session);
 
     // DON'T set _isInitializing to false here!
     // Wait for the auth state change listener to fire first
@@ -18,6 +83,18 @@ class AuthService extends ChangeNotifier {
       _session = data.session;
       _currentUser = data.session?.user;
       _isInitializing = false; // Now we can set it to false
+      if (data.event == AuthChangeEvent.passwordRecovery) {
+        _isPasswordRecovery = true;
+        _preserveInitialRecoveryUntilConsumed = true;
+      } else if (data.event == AuthChangeEvent.signedIn ||
+          data.event == AuthChangeEvent.signedOut) {
+        if (data.event == AuthChangeEvent.signedOut) {
+          _isPasswordRecovery = false;
+          _preserveInitialRecoveryUntilConsumed = false;
+        } else if (!_preserveInitialRecoveryUntilConsumed) {
+          _isPasswordRecovery = false;
+        }
+      }
 
       // CRITICAL: Only notify listeners on MEANINGFUL auth changes.
       // Token refreshes should NOT trigger GoRouter rebuilds, as that
@@ -58,10 +135,19 @@ class AuthService extends ChangeNotifier {
     if (_session != null) {
       _isInitializing = false;
       _loadAccessProfiles(); // Load async, will notifyListeners when done
+      if (_preserveInitialRecoveryUntilConsumed && !_isPasswordRecovery) {
+        unawaited(_restoreInitialRecoverySession());
+      } else if (_isPasswordRecovery) {
+        _clearInitialRecoveryEvidence();
+      }
+    } else if (_preserveInitialRecoveryUntilConsumed) {
+      unawaited(_restoreInitialRecoverySession());
     }
 
     // Auto-login for debug mode only
-    if (kDebugMode && _session == null) {
+    if (kDebugMode &&
+        _session == null &&
+        !_preserveInitialRecoveryUntilConsumed) {
       _autoLoginForDebug();
     }
   }
@@ -71,6 +157,12 @@ class AuthService extends ChangeNotifier {
   Session? _session;
   User? _currentUser;
   bool _isInitializing = true;
+  bool _isPasswordRecovery = false;
+  bool _preserveInitialRecoveryUntilConsumed = false;
+  bool _isRestoringInitialRecovery = false;
+  String? _initialRecoveryCode;
+  String? _initialRecoveryAccessToken;
+  String? _initialRecoveryRefreshToken;
   Map<String, dynamic>? _staffProfile;
   Map<String, dynamic>? _workerProfile;
   bool _isStaffProfileLoaded = false;
@@ -81,9 +173,15 @@ class AuthService extends ChangeNotifier {
   User? get currentUser => _currentUser;
   bool get isAuthenticated => _currentUser != null;
   bool get isInitializing => _isInitializing;
+  bool get isPasswordRecovery => _isPasswordRecovery;
   bool get isWorkerPortalAuthUser => _isWorkerPortalUser(_currentUser);
   bool get isStaff => _staffProfile != null;
   bool get isWorker => _workerProfile != null;
+  bool get workerMustResetPassword {
+    final account = _workerProfile?['account'];
+    return account is Map && account['mustResetPassword'] == true;
+  }
+
   bool get isStaffProfileLoaded => _isStaffProfileLoaded;
   bool get isWorkerProfileLoaded => _isWorkerProfileLoaded;
   bool get isAccessProfileLoaded =>
@@ -118,69 +216,107 @@ class AuthService extends ChangeNotifier {
     required String username,
     required String password,
   }) async {
-    final resolved = await _client.rpc(
-      'resolve_worker_login',
-      params: {
-        'p_tenant': tenant.trim(),
-        'p_username': username.trim(),
-      },
-    );
-    final loginEmail = _extractWorkerLoginEmail(resolved);
-
-    if (loginEmail == null || loginEmail.isEmpty) {
-      throw const AuthException(
-        'No encontramos ese trabajador para esta tienda.',
+    var sessionEstablished = false;
+    try {
+      final response = await _client.functions.invoke(
+        'worker-login',
+        body: {
+          'tenant': tenant.trim(),
+          'username': username.trim(),
+          'password': password,
+        },
       );
-    }
 
-    final response = await _client.auth.signInWithPassword(
-      email: loginEmail,
-      password: password,
-    );
-    _syncAuth(response.session, notify: false);
-    await _loadAccessProfiles();
+      final data = response.data;
+      if (response.status != 200 || data is! Map || data['success'] != true) {
+        throw const AuthException('Credenciales inválidas.');
+      }
+      final refreshToken = data['refreshToken']?.toString();
+      if (refreshToken == null || refreshToken.isEmpty) {
+        throw const AuthException('Credenciales inválidas.');
+      }
 
-    final user = response.user ?? _client.auth.currentUser;
-    if (user == null) {
-      throw const AuthException(
-          'No se pudo obtener el trabajador después del inicio de sesión.');
+      final authResponse = await _client.auth.setSession(refreshToken);
+      final session = authResponse.session ?? _client.auth.currentSession;
+      if (session == null) {
+        throw const AuthException('Credenciales inválidas.');
+      }
+
+      sessionEstablished = true;
+      _syncAuth(session, notify: false);
+      await _loadAccessProfiles();
+
+      if (!isWorker) {
+        throw const AuthException('Credenciales inválidas.');
+      }
+
+      return session.user;
+    } catch (_) {
+      if (sessionEstablished && _client.auth.currentSession != null) {
+        try {
+          await signOut();
+        } catch (_) {
+          // Keep the public error uniform even if local cleanup fails.
+        }
+      }
+      throw const AuthException('Credenciales inválidas.');
     }
-    return user;
   }
 
-  Future<User> createUserWithEmailAndPassword(
-      String email, String password) async {
+  Future<AuthResponse> signUpTenantOwner({
+    required String email,
+    required String password,
+    required String shopName,
+    required String subdomain,
+  }) async {
+    _requireStrongNewPassword(password);
     final response = await _client.auth.signUp(
       email: email,
       password: password,
-      emailRedirectTo: null,
+      emailRedirectTo: AuthRedirectUrls.authCallback(isWeb: kIsWeb),
+      data: {
+        'shop_name': shopName,
+        'subdomain': subdomain,
+      },
     );
-    _syncAuth(response.session);
-    final user = response.user ?? _client.auth.currentUser;
-    if (user == null) {
-      throw const AuthException(
-          'Revisa tu correo para confirmar la cuenta antes de iniciar sesión.');
+    await _syncSignedUpSession(response);
+    return response;
+  }
+
+  Future<AuthResponse> signUpStaffInvitation({
+    required String email,
+    required String password,
+    required String invitationToken,
+  }) async {
+    _requireStrongNewPassword(password);
+    final response = await _client.auth.signUp(
+      email: email,
+      password: password,
+      emailRedirectTo: AuthRedirectUrls.authCallback(isWeb: kIsWeb),
+      data: {
+        'account_type': 'staff_invitation',
+        'invitation_token': invitationToken,
+      },
+    );
+    await _syncSignedUpSession(response);
+    return response;
+  }
+
+  Future<void> _syncSignedUpSession(AuthResponse response) async {
+    if (response.session == null) {
+      return;
     }
-    return user;
+    _syncAuth(response.session, notify: false);
+    await _loadAccessProfiles();
   }
 
   Future<bool> signInWithGoogle() async {
     try {
-      // Determine redirect URL based on platform
-      String? redirectTo;
-
-      if (kIsWeb) {
-        // For web, redirect back to a stable callback route.
-        // If we redirect to '/', the router might redirect immediately and strip
-        // the OAuth query params before Supabase can exchange them.
-        final origin = Uri.base.origin;
-        redirectTo = '$origin/auth/callback';
-        if (kDebugMode) {
-          print('🔐 Google OAuth redirect URL: $redirectTo');
-        }
-      } else {
-        // For desktop/mobile, use deep link
-        redirectTo = 'io.supabase.vinabikeerp://login-callback/';
+      final redirectTo = AuthRedirectUrls.authCallback(isWeb: kIsWeb);
+      if (redirectTo == null) {
+        throw const AuthException(
+          'El inicio de sesión con Google no está configurado para esta plataforma.',
+        );
       }
 
       final response = await _client.auth.signInWithOAuth(
@@ -189,19 +325,16 @@ class AuthService extends ChangeNotifier {
         authScreenLaunchMode: LaunchMode.externalApplication,
       );
 
-      if (kDebugMode) {
-        print('🔐 OAuth response: $response');
-      }
-
       // For web/desktop OAuth, the session is handled via redirect callback
       // The auth state listener will update automatically
       return response;
-    } catch (e) {
+    } catch (_) {
       if (kDebugMode) {
-        print('❌ Google Sign-In error: $e');
+        debugPrint('❌ [AuthService] Google sign-in failed');
       }
-      throw AuthException(
-          'Error al iniciar sesión con Google: ${e.toString()}');
+      throw const AuthException(
+        'No pudimos iniciar sesión con Google. Inténtalo nuevamente.',
+      );
     }
   }
 
@@ -209,19 +342,25 @@ class AuthService extends ChangeNotifier {
   /// Call this after updating user metadata in the database
   Future<void> refreshSession() async {
     try {
-      await _client.auth.refreshSession();
-      _syncAuth(_client.auth.currentSession);
-    } catch (e) {
+      final response = await _client.auth.refreshSession();
+      _syncAuth(response.session, notify: false);
+      await _loadAccessProfiles();
+    } catch (_) {
       if (kDebugMode) {
-        print('Session refresh error: $e');
+        debugPrint('⚠️ [AuthService] Session refresh failed');
       }
     }
   }
 
   Future<void> signOut() async {
     final signingOutUserId = _currentUser?.id;
-    await _client.auth.signOut();
+    if (_client.auth.currentSession != null) {
+      await _client.auth.signOut();
+    }
     await BrowserProfileService.clearWebsiteData(userId: signingOutUserId);
+    _isPasswordRecovery = false;
+    _preserveInitialRecoveryUntilConsumed = false;
+    _clearInitialRecoveryEvidence();
     _staffProfile = null;
     _workerProfile = null;
     _isStaffProfileLoaded = false;
@@ -262,9 +401,11 @@ class AuthService extends ChangeNotifier {
           .from('user_profiles')
           .select()
           .eq('user_id', _currentUser!.id)
-          .maybeSingle();
+          .eq('is_active', true)
+          .limit(2);
 
-      _staffProfile = response;
+      final profiles = List<Map<String, dynamic>>.from(response);
+      _staffProfile = profiles.length == 1 ? profiles.single : null;
       _isStaffProfileLoaded = true;
 
       if (kDebugMode) {
@@ -277,8 +418,8 @@ class AuthService extends ChangeNotifier {
       }
 
       if (notify) notifyListeners(); // Notify Router to re-evaluate
-    } catch (e) {
-      debugPrint('⚠️ [AuthService] Error loading staff profile: $e');
+    } catch (_) {
+      debugPrint('⚠️ [AuthService] Staff profile lookup failed');
       _staffProfile = null;
       _isStaffProfileLoaded = true; // Still mark as loaded (failed check)
       if (notify) notifyListeners();
@@ -314,8 +455,8 @@ class AuthService extends ChangeNotifier {
       }
 
       if (notify) notifyListeners();
-    } catch (e) {
-      debugPrint('⚠️ [AuthService] Error loading worker profile: $e');
+    } catch (_) {
+      debugPrint('⚠️ [AuthService] Worker profile lookup failed');
       _workerProfile = null;
       _isWorkerProfileLoaded = true;
       if (notify) notifyListeners();
@@ -332,21 +473,54 @@ class AuthService extends ChangeNotifier {
     await _loadWorkerProfile();
   }
 
+  /// Replaces an administrator-issued worker credential, records completion
+  /// server-side, and leaves sign-out to the caller after both steps succeed.
+  Future<void> completeWorkerPasswordReset(String newPassword) async {
+    if (!isWorker || !workerMustResetPassword) {
+      throw const AuthException(
+        'No hay un cambio de contraseña pendiente para esta cuenta.',
+      );
+    }
+
+    final validationError =
+        AuthInputValidation.validateAdminManagedPassword(newPassword);
+    if (validationError != null) {
+      throw AuthException(validationError);
+    }
+
+    final challengeStarted =
+        await _client.rpc('begin_my_worker_password_reset');
+    if (challengeStarted != true) {
+      throw const AuthException(
+        'No pudimos iniciar el cambio obligatorio de contraseña.',
+      );
+    }
+
+    final response = await _client.auth.updateUser(
+      UserAttributes(password: newPassword),
+    );
+    if (response.user == null) {
+      throw const AuthException('No pudimos actualizar la contraseña.');
+    }
+
+    final completed = await _client.rpc('complete_my_worker_password_reset');
+    if (completed != true) {
+      throw const AuthException(
+        'No pudimos completar el cambio obligatorio de contraseña.',
+      );
+    }
+
+    await _client.auth.signOut(scope: SignOutScope.others);
+    await _loadWorkerProfile(notify: false);
+  }
+
   /// Send password reset email with redirect URL
   Future<void> sendPasswordResetEmail(String email) async {
-    // Determine redirect URL based on platform
-    String? redirectTo;
-
-    if (kIsWeb) {
-      // For web, redirect back to the current origin with reset-password path
-      final origin = Uri.base.origin;
-      redirectTo = '$origin/#/reset-password';
-      if (kDebugMode) {
-        print('🔐 Password reset redirect URL: $redirectTo');
-      }
-    } else {
-      // For desktop/mobile, use deep link
-      redirectTo = 'io.supabase.vinabikeerp://reset-password/';
+    final redirectTo = AuthRedirectUrls.passwordReset(isWeb: kIsWeb);
+    if (redirectTo == null) {
+      throw const AuthException(
+        'La recuperación de contraseña no está configurada para esta plataforma.',
+      );
     }
 
     await _client.auth.resetPasswordForEmail(
@@ -357,6 +531,7 @@ class AuthService extends ChangeNotifier {
 
   /// Update user password (must be called after password reset link click)
   Future<void> updatePassword(String newPassword) async {
+    _requireStrongNewPassword(newPassword);
     final response = await _client.auth.updateUser(
       UserAttributes(password: newPassword),
     );
@@ -365,7 +540,103 @@ class AuthService extends ChangeNotifier {
       throw const AuthException('Error al actualizar la contraseña.');
     }
 
+    await _client.auth.signOut(scope: SignOutScope.others);
+    _isPasswordRecovery = false;
+    _preserveInitialRecoveryUntilConsumed = false;
+    _clearInitialRecoveryEvidence();
     _syncAuth(_client.auth.currentSession);
+  }
+
+  void _requireStrongNewPassword(String password) {
+    final validationError = AuthInputValidation.validatePassword(
+      password,
+      isNewPassword: true,
+    );
+    if (validationError != null) {
+      throw AuthException(validationError);
+    }
+  }
+
+  Future<void> _restoreInitialRecoverySession() async {
+    if (_isRestoringInitialRecovery) return;
+    _isRestoringInitialRecovery = true;
+    try {
+      final existingSession = _client.auth.currentSession;
+      if (_sessionMatchesInitialRecoveryEvidence(existingSession)) {
+        _syncAuth(existingSession, notify: false);
+        _isPasswordRecovery = true;
+        notifyListeners();
+        return;
+      }
+
+      final code = _initialRecoveryCode;
+      final refreshToken = _initialRecoveryRefreshToken;
+      var restoredFromCapturedCredential = false;
+      if (code != null && code.isNotEmpty) {
+        await _client.auth.exchangeCodeForSession(code);
+        restoredFromCapturedCredential = true;
+      } else if (refreshToken != null && refreshToken.isNotEmpty) {
+        await _client.auth.setSession(refreshToken);
+        restoredFromCapturedCredential = true;
+      }
+
+      final session = _client.auth.currentSession;
+      if (!restoredFromCapturedCredential || session == null) {
+        _preserveInitialRecoveryUntilConsumed = false;
+        _isPasswordRecovery = false;
+        _isInitializing = false;
+        notifyListeners();
+        return;
+      }
+
+      _syncAuth(session, notify: false);
+      _isPasswordRecovery = true;
+      notifyListeners();
+    } catch (_) {
+      _preserveInitialRecoveryUntilConsumed = false;
+      _isPasswordRecovery = false;
+      _isInitializing = false;
+      debugPrint('⚠️ [AuthService] Recovery session restoration failed');
+      notifyListeners();
+    } finally {
+      _clearInitialRecoveryEvidence();
+      _isRestoringInitialRecovery = false;
+    }
+  }
+
+  bool _sessionMatchesInitialRecoveryEvidence(Session? session) {
+    if (session == null) return false;
+
+    final accessToken = _initialRecoveryAccessToken;
+    if (accessToken != null &&
+        accessToken.isNotEmpty &&
+        session.accessToken == accessToken) {
+      return true;
+    }
+
+    final refreshToken = _initialRecoveryRefreshToken;
+    if (refreshToken != null &&
+        refreshToken.isNotEmpty &&
+        session.refreshToken == refreshToken) {
+      return true;
+    }
+
+    // PKCE codes are consumed by Supabase initialization before this service
+    // subscribes. A freshly issued recovery timestamp is the server-returned
+    // evidence that the resulting session came from that consumed code.
+    final code = _initialRecoveryCode;
+    if (code == null || code.isEmpty) return false;
+    final sentAt = DateTime.tryParse(session.user.recoverySentAt ?? '');
+    if (sentAt == null) return false;
+    final age = DateTime.now().toUtc().difference(sentAt.toUtc());
+    return age >= const Duration(minutes: -5) &&
+        age <= const Duration(minutes: 65);
+  }
+
+  void _clearInitialRecoveryEvidence() {
+    _initialRecoveryCode = null;
+    _initialRecoveryAccessToken = null;
+    _initialRecoveryRefreshToken = null;
   }
 
   void _syncAuth(Session? session, {bool notify = true}) {
@@ -381,7 +652,7 @@ class AuthService extends ChangeNotifier {
   /// Automatically logs in with your credentials when running in debug mode
   Future<void> _autoLoginForDebug() async {
     try {
-      // Read credentials from dart-defines (set in .vscode/launch.json)
+      // Read credentials only from local, runtime-supplied dart-defines.
       const debugEmail =
           String.fromEnvironment('DEBUG_EMAIL', defaultValue: '');
       const debugPassword =
@@ -391,11 +662,12 @@ class AuthService extends ChangeNotifier {
         debugPrint(
             '⚠️ [AuthService] Auto-login skipped: No credentials configured');
         debugPrint(
-            '💡 Set DEBUG_EMAIL and DEBUG_PASSWORD in .vscode/launch.json');
+            '💡 Supply DEBUG_EMAIL and DEBUG_PASSWORD only through a local '
+            'secret-aware debug environment');
         return;
       }
 
-      debugPrint('🚀 [AuthService] Attempting auto-login with: $debugEmail');
+      debugPrint('🚀 [AuthService] Attempting configured debug auto-login');
 
       await Future.delayed(const Duration(
           milliseconds: 500)); // Small delay to ensure Supabase is ready
@@ -412,31 +684,15 @@ class AuthService extends ChangeNotifier {
       } else {
         debugPrint('❌ [AuthService] Auto-login failed: No session returned');
       }
-    } catch (e) {
-      debugPrint('❌ [AuthService] Auto-login error: $e');
+    } catch (_) {
+      debugPrint('❌ [AuthService] Auto-login failed');
       // Don't throw - just let user login manually if auto-login fails
     }
   }
 
-  String? _extractWorkerLoginEmail(dynamic resolved) {
-    if (resolved is List && resolved.isNotEmpty) {
-      final first = resolved.first;
-      if (first is Map) return first['login_email']?.toString();
-      return first?.toString();
-    }
-    if (resolved is Map) {
-      return resolved['login_email']?.toString();
-    }
-    if (resolved is String && resolved.contains('@')) {
-      return resolved;
-    }
-    return null;
-  }
-
   bool _isWorkerPortalUser(User? user) {
     if (user == null) return false;
-    return user.userMetadata?['account_type'] == 'worker_portal' ||
-        user.appMetadata['account_type'] == 'worker_portal';
+    return user.appMetadata['account_type'] == 'worker_portal';
   }
 
   @override

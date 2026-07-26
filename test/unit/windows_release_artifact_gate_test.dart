@@ -182,8 +182,11 @@ void main() {
   });
 
   test('developer publish helper opts into the guarded publish run', () {
-    expect(publishHelper, contains('-f publish_release=true'));
-    expect(publishHelper, contains("-notlike 'Windows publish*'"));
+    expect(publishHelper, contains('publish_release = \$true'));
+    expect(publishHelper, contains('ConvertTo-Json -Compress'));
+    expect(publishHelper, contains('--json'));
+    expect(publishHelper, contains('\$expectedRunTitle'));
+    expect(publishHelper, contains('\$candidateTitle -ne \$ExpectedTitle'));
   });
 
   test('CI validates the Windows bundle without contacting production', () {

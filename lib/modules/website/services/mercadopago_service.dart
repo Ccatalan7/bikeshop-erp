@@ -132,23 +132,18 @@ class MercadoPagoService extends ChangeNotifier {
     }
 
     try {
-      await _supabase.from('website_settings').upsert([
-        {
-          'tenant_id': _tenantId,
-          'key': 'mercadopago_public_key',
-          'value': publicKey
+      // The access token is deliberately invisible through client SELECT
+      // policies. Persist all three values atomically through the tenant- and
+      // permission-checked server RPC instead of opening secret rows to the
+      // browser for an INSERT ... ON CONFLICT update.
+      await _supabase.rpc(
+        'save_mercadopago_settings',
+        params: {
+          'p_public_key': publicKey,
+          'p_access_token': accessToken,
+          'p_test_mode': testMode,
         },
-        {
-          'tenant_id': _tenantId,
-          'key': 'mercadopago_access_token',
-          'value': accessToken
-        },
-        {
-          'tenant_id': _tenantId,
-          'key': 'mercadopago_test_mode',
-          'value': testMode ? 'true' : 'false'
-        },
-      ], onConflict: 'tenant_id,key');
+      );
 
       _publicKey = publicKey;
       _accessToken = accessToken;

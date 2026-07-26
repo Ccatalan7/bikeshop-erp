@@ -6,8 +6,32 @@ import 'package:vinabike_erp/shared/models/android_release_manifest.dart';
 
 void main() {
   const tenantId = '5443b130-cc28-45af-a420-cd500b288890';
+  const fromCommit = '1111111111111111111111111111111111111111';
+  const toCommit = '2222222222222222222222222222222222222222';
   final validSha256 = List.filled(64, 'a').join();
   final secondSha256 = List.filled(64, 'b').join();
+
+  Map<String, dynamic> validReleaseNotes() => {
+        'schema_version': 1,
+        'locale': 'es-CL',
+        'source': 'ai',
+        'from_commit': fromCommit,
+        'to_commit': toCommit,
+        'title': 'Novedades de esta actualización',
+        'summary': 'Mejoramos tareas cotidianas del sistema.',
+        'modules': [
+          {
+            'id': 'workshop',
+            'label': 'Taller',
+            'items': [
+              'Ahora es más fácil revisar y descargar presupuestos.',
+            ],
+            'evidence_paths': [
+              'lib/modules/bikeshop/pages/pegas_table_page.dart',
+            ],
+          },
+        ],
+      };
 
   Map<String, dynamic> validManifest() => {
         'schema_version': 1,
@@ -33,7 +57,8 @@ void main() {
           },
         ],
         'published_at': '2026-07-26T01:00:00Z',
-        'release_notes': 'Piloto privado.',
+        'commit': toCommit,
+        'release_notes': validReleaseNotes(),
       };
 
   test('parses the exact tenant-scoped Android release contract', () {
@@ -46,7 +71,9 @@ void main() {
     expect(release.sha256, validSha256);
     expect(release.parts, hasLength(2));
     expect(release.parts.last.sha256, secondSha256);
-    expect(release.releaseNotes, 'Piloto privado.');
+    expect(release.commit, toCommit);
+    expect(release.releaseNotes?.title, 'Novedades de esta actualización');
+    expect(release.releaseNotes?.modules.single.label, 'Taller');
     expect(
       AndroidReleaseManifest.latestManifestPath(tenantId),
       '$tenantId/android/latest.json',
@@ -55,6 +82,53 @@ void main() {
 
   test('rejects another application package', () {
     final manifest = validManifest()..['package_name'] = 'com.attacker.fake';
+
+    expect(
+      () => AndroidReleaseManifest.fromJson(manifest, tenantId: tenantId),
+      throwsFormatException,
+    );
+  });
+
+  test('ignores optional release notes that do not match the release commit',
+      () {
+    final manifest = validManifest();
+    (manifest['release_notes'] as Map<String, dynamic>)['to_commit'] =
+        fromCommit;
+
+    final release = AndroidReleaseManifest.fromJson(
+      manifest,
+      tenantId: tenantId,
+    );
+
+    expect(release.commit, toCommit);
+    expect(release.releaseNotes, isNull);
+  });
+
+  test('ignores malformed or oversized optional notes without blocking update',
+      () {
+    final malformed = validManifest()..['release_notes'] = 'Piloto privado.';
+    final oversized = validManifest();
+    ((oversized['release_notes'] as Map<String, dynamic>)['modules'] as List)
+        .first['items'] = [List.filled(161, 'x').join()];
+
+    expect(
+      AndroidReleaseManifest.fromJson(
+        malformed,
+        tenantId: tenantId,
+      ).releaseNotes,
+      isNull,
+    );
+    expect(
+      AndroidReleaseManifest.fromJson(
+        oversized,
+        tenantId: tenantId,
+      ).releaseNotes,
+      isNull,
+    );
+  });
+
+  test('rejects an invalid publication commit', () {
+    final manifest = validManifest()..['commit'] = 'not-a-commit';
 
     expect(
       () => AndroidReleaseManifest.fromJson(manifest, tenantId: tenantId),

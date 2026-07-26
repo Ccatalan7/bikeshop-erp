@@ -51,19 +51,20 @@ void main() {
       reason:
           'Cancelled invoices must remain reachable through an explicit filter.',
     );
-    final summaryStart = listPreview.indexOf(
-      'Widget _buildSummaryCards(List<Invoice> invoices)',
+    final collectibleStart = listPreview.indexOf(
+      'final collectibleInvoices = invoices.where(',
     );
-    final summaryEnd = listPreview.indexOf(
-      'Widget _buildSummaryCard(',
-      summaryStart,
+    final collectibleEnd = listPreview.indexOf(
+      'final totalReceivable =',
+      collectibleStart,
     );
-    expect(summaryStart, greaterThanOrEqualTo(0));
-    expect(summaryEnd, greaterThan(summaryStart));
-    final summaryFlow = listPreview.substring(summaryStart, summaryEnd);
-    expect(summaryFlow, contains('invoice.status != InvoiceStatus.draft'));
+    expect(collectibleStart, greaterThanOrEqualTo(0));
+    expect(collectibleEnd, greaterThan(collectibleStart));
+    final collectibleFlow =
+        listPreview.substring(collectibleStart, collectibleEnd);
+    expect(collectibleFlow, contains('invoice.status != InvoiceStatus.draft'));
     expect(
-      summaryFlow,
+      collectibleFlow,
       contains('invoice.status != InvoiceStatus.cancelled'),
       reason:
           'Cancelled historical balances must not contaminate collection KPIs.',

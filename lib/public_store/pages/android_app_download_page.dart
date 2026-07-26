@@ -379,7 +379,7 @@ class _AndroidAppDownloadPageState extends State<AndroidAppDownloadPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            release.releaseNotes ?? 'Piloto privado para Android.',
+            release.releaseNotes?.summary ?? 'Piloto privado para Android.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: colors.onSurfaceVariant,
             ),

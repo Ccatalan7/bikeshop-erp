@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import '../../../shared/services/user_management_service.dart';
+import '../../../shared/utils/auth_input_validation.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -497,11 +497,13 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
       if (!mounted) return;
       await _showWorkerPortalResult(result);
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('No se pudo crear el acceso trabajador: $e'),
+        const SnackBar(
+          content: Text(
+            'No se pudo crear el acceso trabajador. Revisa los datos e inténtalo nuevamente.',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -552,9 +554,13 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                       controller: passwordController,
                       obscureText: true,
                       decoration: const InputDecoration(
-                        labelText: 'Contraseña temporal opcional',
+                        labelText: 'Contraseña',
+                        helperText:
+                            AuthInputValidation.adminManagedPasswordHelper,
                         prefixIcon: Icon(Icons.lock_outline),
                       ),
+                      validator:
+                          AuthInputValidation.validateAdminManagedPassword,
                     ),
                   ],
                 ),
@@ -573,9 +579,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                       username: _normalizeWorkerUsername(
                         usernameController.text,
                       ),
-                      password: passwordController.text.trim().isEmpty
-                          ? null
-                          : passwordController.text.trim(),
+                      password: passwordController.text,
                     ),
                   );
                 },
@@ -594,7 +598,6 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
   Future<void> _showWorkerPortalResult(Map<String, dynamic> result) async {
     final username = result['username']?.toString() ?? '';
-    final password = result['temporaryPassword']?.toString() ?? '';
 
     await showDialog<void>(
       context: context,
@@ -614,26 +617,14 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 12),
-                const Text('Contraseña temporal'),
-                const SizedBox(height: 4),
-                SelectableText(
-                  password,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                const Text(
+                  'La contraseña definida quedó activa. Por seguridad no se '
+                  'vuelve a mostrar ni se recibe desde el servidor.',
                 ),
               ],
             ),
           ),
           actions: [
-            TextButton.icon(
-              onPressed: () {
-                Clipboard.setData(
-                  ClipboardData(text: 'Usuario: $username\nClave: $password'),
-                );
-                Navigator.of(dialogContext).pop();
-              },
-              icon: const Icon(Icons.copy_outlined),
-              label: const Text('Copiar'),
-            ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Listo'),
@@ -1966,11 +1957,11 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 class _WorkerPortalInput {
   const _WorkerPortalInput({
     required this.username,
-    this.password,
+    required this.password,
   });
 
   final String username;
-  final String? password;
+  final String password;
 }
 
 class _DefaultScheduleProfileDayRow extends StatelessWidget {

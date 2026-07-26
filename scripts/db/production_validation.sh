@@ -509,6 +509,41 @@ SQL
   done <"$capture_dir/production-acl-roles.txt"
 }
 
+production_validation_split_managed_post_data() {
+  local input_file="$1"
+  local early_file="$2"
+  local late_file="$3"
+
+  : >"$early_file"
+  : >"$late_file"
+  awk \
+    -v early_file="$early_file" \
+    -v late_file="$late_file" '
+      function flush_statement() {
+        if (statement == "") {
+          return
+        }
+        if (statement ~ /public\./) {
+          printf "%s", statement >> late_file
+        } else {
+          printf "%s", statement >> early_file
+        }
+        statement = ""
+      }
+
+      {
+        statement = statement $0 ORS
+        if ($0 ~ /;[[:space:]]*$/) {
+          flush_statement()
+        }
+      }
+
+      END {
+        flush_statement()
+      }
+    ' "$input_file"
+}
+
 production_validation_prepare_managed_schema_files() {
   local capture_dir="$1"
 
@@ -532,12 +567,10 @@ production_validation_prepare_managed_schema_files() {
     --file="$capture_dir/local-managed-post.sql" \
     "$PRODUCTION_VALIDATION_LOCAL_DB_URL"
 
-  awk '!/public\./' \
+  production_validation_split_managed_post_data \
     "$capture_dir/local-managed-post.sql" \
-    >"$capture_dir/local-managed-post-early.sql"
-  awk '/^(CREATE TRIGGER|CREATE POLICY).*public\./' \
-    "$capture_dir/local-managed-post.sql" \
-    >"$capture_dir/local-managed-post-late.sql"
+    "$capture_dir/local-managed-post-early.sql" \
+    "$capture_dir/local-managed-post-late.sql"
 }
 
 production_validation_build_template() {

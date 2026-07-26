@@ -73,6 +73,134 @@
 				"panel": "dedicated",
 				"clear": true
 			}
+		},
+		{
+			"label": "🚀 Publish ERP Update (macOS + Android)",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"🔒 Prepare ERP Update (shared commit)",
+				"🚀 Publish Prepared ERP Platforms"
+			],
+			"problemMatcher": [],
+			"group": "build",
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		},
+		{
+			"label": "🔒 Prepare ERP Update (shared commit)",
+			"type": "shell",
+			"command": "bash scripts/releases/prepare_erp_update.sh",
+			"problemMatcher": [],
+			"hide": true,
+			"runOptions": {
+				"instanceLimit": 1
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true
+			}
+		},
+		{
+			"label": "🚀 Publish Prepared ERP Platforms",
+			"dependsOrder": "parallel",
+			"dependsOn": [
+				"🍎 Publish Prepared ERP Update (macOS)",
+				"🤖 Publish Prepared ERP Update (Android)"
+			],
+			"problemMatcher": [],
+			"hide": true
+		},
+		{
+			"label": "🍎 Publish Prepared ERP Update (macOS)",
+			"type": "shell",
+			"command": "bash scripts/publish_macos_update.sh --prepared-state auto",
+			"problemMatcher": [],
+			"hide": true,
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"group": "erp-update-platforms",
+				"clear": true
+			}
+		},
+		{
+			"label": "🤖 Publish Prepared ERP Update (Android)",
+			"type": "shell",
+			"command": "node scripts/releases/publish_android_workflow.mjs --prepared-state auto",
+			"problemMatcher": [],
+			"hide": true,
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"group": "erp-update-platforms",
+				"clear": true
+			}
+		},
+		{
+			"label": "🚀 Publish ERP Update (Windows + Android)",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"🔒 Prepare Windows + Android ERP Update",
+				"🚀 Publish Prepared Windows + Android Platforms"
+			],
+			"problemMatcher": [],
+			"group": "build",
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		},
+		{
+			"label": "🔒 Prepare Windows + Android ERP Update",
+			"type": "shell",
+			"command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/releases/prepare_windows_android_update.ps1",
+			"problemMatcher": [],
+			"hide": true,
+			"runOptions": {
+				"instanceLimit": 1
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true
+			}
+		},
+		{
+			"label": "🚀 Publish Prepared Windows + Android Platforms",
+			"dependsOrder": "parallel",
+			"dependsOn": [
+				"🪟 Publish Prepared ERP Update (Windows)",
+				"🤖 Publish Prepared ERP Update (Android CI)"
+			],
+			"problemMatcher": [],
+			"hide": true
+		},
+		{
+			"label": "🪟 Publish Prepared ERP Update (Windows)",
+			"type": "shell",
+			"command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish_windows_update.ps1 -PreparedState .git/vinabike-windows-android-publish-state.json",
+			"problemMatcher": [],
+			"hide": true,
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"group": "erp-update-windows-android",
+				"clear": true
+			}
+		},
+		{
+			"label": "🤖 Publish Prepared ERP Update (Android CI)",
+			"type": "shell",
+			"command": "node scripts/releases/publish_android_workflow.mjs --prepared-state .git/vinabike-windows-android-publish-state.json",
+			"problemMatcher": [],
+			"hide": true,
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"group": "erp-update-windows-android",
+				"clear": true
+			}
 		}
 	]
 }

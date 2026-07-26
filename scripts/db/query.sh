@@ -4,6 +4,12 @@ set -euo pipefail
 # shellcheck source=lib.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
+contains_transaction_control() {
+  tr '\r\n\t' '   ' |
+    grep -Eiq \
+      '(^|;)[[:space:]]*(begin([[:space:]]+(work|transaction))?|commit([[:space:]]+(work|transaction))?|rollback([[:space:]]+(work|transaction))?|end([[:space:]]+(work|transaction))?|set[[:space:]]+transaction)([[:space:];]|$)'
+}
+
 usage() {
   echo "Usage: $0 <local|staging|production> (--sql SQL | --file PATH) [--format table|csv|json] [--write]" >&2
   exit 64
@@ -101,7 +107,7 @@ if [[ -n "$file" ]]; then
   if [[ "$format" != table ]]; then
     sql="$(<"$file")"
   elif [[ "$environment" != local && "$write" == false ]]; then
-    if grep -Eiq '^[[:space:]]*(begin|commit|rollback|end|set[[:space:]]+transaction)([[:space:];]|$)' "$file"; then
+    if contains_transaction_control <"$file"; then
       die "Remote read-only SQL files cannot manage transactions"
     fi
     {
@@ -119,7 +125,7 @@ fi
 sql="${sql%;}"
 original_sql="$sql"
 if [[ "$environment" != local && "$write" == false ]]; then
-  if printf '%s\n' "$sql" | grep -Eiq '(^|;)[[:space:]]*(begin|commit|rollback|end|set[[:space:]]+transaction)([[:space:];]|$)'; then
+  if printf '%s\n' "$sql" | contains_transaction_control; then
     die "Remote read-only SQL cannot manage transactions"
   fi
   sql="begin read only; set local statement_timeout = '30s'; $sql; rollback"

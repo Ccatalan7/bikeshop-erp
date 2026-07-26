@@ -1,12 +1,21 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
+const defaultAllowedOrigins = [
+  'https://project-vinabike.web.app',
+  'https://project-vinabike.firebaseapp.com',
+  'http://localhost:54330',
+  'http://127.0.0.1:54330',
+] as const
+
+const firebasePreviewOrigin = /^https:\/\/project-vinabike--[a-z0-9-]+\.web\.app$/
 
 type SupabaseClient = any
+type EnvReader = (name: string) => string | undefined
+
+interface InvitationDeliveryOptions {
+  fetchImpl?: typeof fetch
+  getEnv?: EnvReader
+}
 
 interface RequestBody {
   action?: string
@@ -23,8 +32,6 @@ interface RequestBody {
   permissions?: Record<string, boolean>
   isActive?: boolean
   password?: string
-  mode?: 'invite' | 'temporary_password'
-  confirmEmail?: boolean
   deleteCustomerRecord?: boolean
 }
 
@@ -33,6 +40,26 @@ interface CallerContext {
   tenantId: string
   role: string
   permissions: Record<string, unknown>
+  isPrincipalOwner?: boolean
+  tenantOwnerEmail?: string | null
+}
+
+type StaffRole =
+  | 'admin'
+  | 'manager'
+  | 'cashier'
+  | 'accountant'
+  | 'mechanic'
+
+type AuthorityRole = 'owner' | StaffRole
+
+interface StaffTargetContext {
+  userId: string
+  role: StaffRole
+  permissions: Record<string, unknown>
+  isActive: boolean
+  updatedAt: string
+  isPrincipalOwner: boolean
 }
 
 export interface MessagingDeletionEvidence {
@@ -47,13 +74,25 @@ export interface AccountDeletionResult {
   authDetachedOnly: boolean
   accountDeactivated: boolean
   preservedForMessagingHistory: boolean
-  outcome: 'auth_deleted' | 'deactivated_preserved_messaging_history'
+  outcome:
+    | 'tenant_access_detached'
+    | 'deactivated_preserved_messaging_history'
   messagingEvidence: string[]
 }
 
-export type AccountDeletionScope = 'internal' | 'customer' | 'orphan'
+export type AccountDeletionScope = 'internal' | 'customer'
 
-const rolePermissions: Record<string, Record<string, boolean>> = {
+class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    readonly publicMessage: string,
+  ) {
+    super(publicMessage)
+  }
+}
+
+const rolePermissions: Record<StaffRole, Record<string, boolean>> = {
   admin: {
     access_pos: true,
     create_invoices: true,
@@ -101,23 +140,58 @@ const rolePermissions: Record<string, Record<string, boolean>> = {
   },
 }
 
+const canonicalPermissionKeys = [
+  'access_pos',
+  'create_invoices',
+  'edit_prices',
+  'delete_invoices',
+  'access_accounting',
+  'manage_users',
+  'edit_settings',
+] as const
+
+const canonicalPermissionKeySet = new Set<string>(canonicalPermissionKeys)
+
+const roleRank: Record<AuthorityRole, number> = {
+  owner: 400,
+  admin: 300,
+  manager: 200,
+  cashier: 100,
+  accountant: 100,
+  mechanic: 100,
+}
+
 export async function handler(req: Request) {
+  const configuredOrigins = configuredCorsOrigins()
+  const origin = req.headers.get('origin')
+  const respond = (data: unknown, status = 200) => json(req, data, status, configuredOrigins)
+
+  if (origin && !isAllowedCorsOrigin(origin, configuredOrigins)) {
+    return respond(
+      { error: 'Origin not allowed', code: 'origin_not_allowed' },
+      403,
+    )
+  }
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders(req, configuredOrigins),
+    })
   }
 
   if (req.method !== 'POST') {
-    return json({ error: 'Method not allowed' }, 405)
+    return respond({ error: 'Method not allowed', code: 'method_not_allowed' }, 405)
   }
 
   try {
     const supabaseUrl = requiredEnv('SUPABASE_URL')
     const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY')
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? serviceRoleKey
+    const anonKey = requiredEnv('SUPABASE_ANON_KEY')
     const authHeader = req.headers.get('Authorization') ?? ''
 
-    if (!authHeader.startsWith('Bearer ')) {
-      return json({ error: 'Missing authorization header' }, 401)
+    if (!/^Bearer\s+\S+$/i.test(authHeader)) {
+      return respond({ error: 'Authentication required', code: 'invalid_session' }, 401)
     }
 
     const serviceClient = createClient(supabaseUrl, serviceRoleKey)
@@ -131,45 +205,61 @@ export async function handler(req: Request) {
 
     switch (action) {
       case 'overview':
-        return json(await getOverview(serviceClient, caller, body.search ?? ''))
+        return respond(await getOverview(serviceClient, caller, body.search ?? ''))
       case 'create_internal_invitation':
-        return json(await createInternalInvitation(serviceClient, caller, body, req))
+        return respond(
+          await createInternalInvitation(serviceClient, caller, body, authHeader, req),
+        )
       case 'resend_internal_invitation':
-        return json(await sendInvitationEmail(serviceClient, body.invitationId, req))
+        return respond(
+          await sendInvitationEmail(
+            serviceClient,
+            caller,
+            body.invitationId,
+            authHeader,
+            req,
+          ),
+        )
       case 'cancel_internal_invitation':
-        return json(await cancelInternalInvitation(serviceClient, caller, body))
+        return respond(await cancelInternalInvitation(serviceClient, caller, body))
       case 'update_internal_user':
-        return json(await updateInternalUser(serviceClient, caller, body))
+        return respond(await updateInternalUser(serviceClient, caller, body))
       case 'update_internal_identity':
-        return json(await updateInternalIdentity(serviceClient, caller, body))
+        return respond(await updateInternalIdentity(serviceClient, caller, body))
       case 'set_internal_access':
-        return json(await setInternalAccess(serviceClient, caller, body))
+        return respond(await setInternalAccess(serviceClient, caller, body))
       case 'delete_internal_account':
-        return json(await deleteInternalAccount(serviceClient, caller, body))
+        return respond(await deleteInternalAccount(serviceClient, caller, body))
       case 'create_worker_portal_account':
-        return json(await createWorkerPortalAccount(serviceClient, caller, body))
+        return respond(await createWorkerPortalAccount(serviceClient, caller, body))
       case 'reset_worker_portal_password':
-        return json(await resetWorkerPortalPassword(serviceClient, caller, body))
+        return respond(await resetWorkerPortalPassword(serviceClient, caller, body))
       case 'set_worker_portal_access':
-        return json(await setWorkerPortalAccess(serviceClient, caller, body))
+        return respond(await setWorkerPortalAccess(serviceClient, caller, body))
       case 'create_customer_account':
-        return json(await createCustomerAccount(serviceClient, caller, body, req))
+        return respond(await createCustomerAccount(serviceClient, caller, body))
       case 'set_customer_access':
-        return json(await setCustomerAccess(serviceClient, caller, body))
+        return respond(await setCustomerAccess(serviceClient, caller, body))
       case 'delete_customer_account':
-        return json(await deleteCustomerAccount(serviceClient, caller, body))
+        return respond(await deleteCustomerAccount(serviceClient, caller, body))
       case 'resend_customer_verification':
-        return json(await resendCustomerVerification(serviceClient, caller, body))
-      case 'confirm_email':
-        return json(await confirmUserEmail(serviceClient, caller, body))
+        return respond(
+          await resendCustomerVerification(serviceClient, caller, body),
+        )
       case 'send_password_reset':
-        return json(await sendPasswordReset(serviceClient, caller, body, req))
+        return respond(await sendPasswordReset(serviceClient, caller, body, req))
       default:
-        return json({ error: `Unsupported action: ${action}` }, 400)
+        return respond({ error: 'Unsupported action', code: 'unsupported_action' }, 400)
     }
   } catch (error) {
-    console.error('admin-user-management error', error)
-    return json({ error: toErrorMessage(error) }, 500)
+    const safeError = toHttpError(error)
+    if (safeError.status >= 500) {
+      console.error('admin-user-management request failed', { code: safeError.code })
+    }
+    return respond(
+      { error: safeError.publicMessage, code: safeError.code },
+      safeError.status,
+    )
   }
 }
 
@@ -197,7 +287,21 @@ function toErrorMessage(error: unknown): string {
   return String(error)
 }
 
-async function getCallerContext(
+function toHttpError(error: unknown): HttpError {
+  if (error instanceof HttpError) return error
+
+  const message = toErrorMessage(error)
+  const containsSensitiveValue =
+    /https?:\/\/|[?&](?:token|code|access_token|refresh_token)=|[\w.+-]+@[\w.-]+\.[a-z]{2,}|\bBearer\s+\S+|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|\b(?:token|secret|password|link)\b/i
+      .test(message)
+  const safeMessage = !containsSensitiveValue && message.length > 0 && message.length <= 240
+    ? message
+    : 'Unable to complete account management'
+
+  return new HttpError(500, 'account_management_failed', safeMessage)
+}
+
+export async function getCallerContext(
   userClient: SupabaseClient,
   serviceClient: SupabaseClient,
 ): Promise<CallerContext> {
@@ -205,32 +309,86 @@ async function getCallerContext(
   const user = userData?.user
 
   if (userError || !user) {
-    throw new Error('Invalid session')
+    throw new HttpError(401, 'invalid_session', 'Authentication required')
   }
 
-  const { data: profile, error: profileError } = await serviceClient
+  const { data, error: profileError } = await serviceClient
     .from('user_profiles')
-    .select('tenant_id, role, permissions, is_active')
+    .select(
+      'tenant_id, role, permissions, tenants!inner(id, is_active, owner_email)',
+    )
     .eq('user_id', user.id)
-    .maybeSingle()
+    .eq('is_active', true)
+    .eq('tenants.is_active', true)
+    .limit(2)
 
-  if (profileError) throw profileError
-  if (!profile || profile.is_active === false) {
-    throw new Error('Only active ERP users can manage accounts')
+  if (profileError) {
+    throw new HttpError(
+      503,
+      'authorization_unavailable',
+      'Unable to verify account access',
+    )
   }
 
-  const permissions = (profile.permissions ?? {}) as Record<string, unknown>
-  const canManage = ['owner', 'admin', 'manager'].includes(profile.role) || permissions.manage_users === true
+  const profiles = Array.isArray(data) ? data : []
+  if (profiles.length !== 1) {
+    throw new HttpError(
+      403,
+      'tenant_context_invalid',
+      'A single active tenant is required',
+    )
+  }
+
+  const profile = profiles[0]
+  const tenantRelation = Array.isArray(profile.tenants) ? profile.tenants : [profile.tenants]
+  const activeTenants = tenantRelation.filter((tenant: unknown) => {
+    if (!tenant || typeof tenant !== 'object') return false
+    const record = tenant as Record<string, unknown>
+    return record.id === profile.tenant_id && record.is_active === true
+  })
+  if (
+    typeof profile.tenant_id !== 'string' ||
+    profile.tenant_id.trim().length === 0 ||
+    activeTenants.length !== 1
+  ) {
+    throw new HttpError(
+      403,
+      'tenant_context_invalid',
+      'A valid active tenant is required',
+    )
+  }
+  const callerRole = requireCanonicalStoredRole(profile.role)
+  const permissions = profile.permissions &&
+      typeof profile.permissions === 'object' &&
+      !Array.isArray(profile.permissions)
+    ? profile.permissions as Record<string, unknown>
+    : {}
+  const tenant = activeTenants[0] as Record<string, unknown>
+  const tenantOwnerEmail = normalizeOptionalEmail(tenant.owner_email)
+  const isPrincipalOwner = derivePrincipalOwnerIdentity({
+    tenantId: profile.tenant_id,
+    tenantOwnerEmail,
+    authUser: user,
+  })
+  const canManage = isPrincipalOwner ||
+    ['admin', 'manager'].includes(callerRole) ||
+    permissions.manage_users === true
 
   if (!canManage) {
-    throw new Error('You do not have permission to manage users')
+    throw new HttpError(
+      403,
+      'forbidden',
+      'User management permission is required',
+    )
   }
 
   return {
     userId: user.id,
     tenantId: profile.tenant_id,
-    role: profile.role,
+    role: callerRole,
     permissions,
+    isPrincipalOwner,
+    tenantOwnerEmail,
   }
 }
 
@@ -300,7 +458,11 @@ async function getPendingInvitations(serviceClient: SupabaseClient, tenantId: st
   return data ?? []
 }
 
-async function getCustomerAccounts(serviceClient: SupabaseClient, tenantId: string, search: string) {
+async function getCustomerAccounts(
+  serviceClient: SupabaseClient,
+  tenantId: string,
+  search: string,
+) {
   let query = serviceClient
     .from('customers')
     .select('id, name, email, phone, is_active, auth_user_id, created_at, updated_at')
@@ -359,7 +521,11 @@ async function getCustomerAccounts(serviceClient: SupabaseClient, tenantId: stri
   return [...orphanWebsiteAccounts, ...customerAccounts]
 }
 
-async function getOrphanWebsiteAuthAccounts(serviceClient: SupabaseClient, tenantId: string, search: string) {
+async function getOrphanWebsiteAuthAccounts(
+  serviceClient: SupabaseClient,
+  tenantId: string,
+  search: string,
+) {
   const linkedAuthIds = await getLinkedCustomerAuthIds(serviceClient, tenantId)
   const searchTerm = search.trim().toLowerCase()
   const accounts = []
@@ -451,25 +617,61 @@ async function countOrphanWebsiteAuthAccounts(serviceClient: SupabaseClient, ten
   return (await getOrphanWebsiteAuthAccounts(serviceClient, tenantId, '')).length
 }
 
-async function createInternalInvitation(
+export async function createInternalInvitation(
   serviceClient: SupabaseClient,
   caller: CallerContext,
   body: RequestBody,
+  authHeader: string,
   req: Request,
 ) {
   const email = normalizeEmail(required(body.email, 'email'))
-  const role = normalizeRole(body.role ?? 'cashier')
-  const permissions = body.permissions ?? rolePermissions[role] ?? {}
+  const { role, permissions } = authorizeStaffAssignment(
+    caller,
+    body.role ?? 'cashier',
+    body.permissions,
+  )
+  const employeeId = body.employeeId == null ? null : required(body.employeeId, 'employeeId')
+  if (employeeId) {
+    await assertActiveEmployeeForInvitation(
+      serviceClient,
+      caller.tenantId,
+      employeeId,
+    )
+  }
 
   const { data: existing, error: existingError } = await serviceClient
     .from('user_invitations')
-    .select('id')
+    .select('id, role, permissions, employee_id')
     .eq('tenant_id', caller.tenantId)
     .eq('email', email)
     .eq('status', 'pending')
     .maybeSingle()
 
   if (existingError) throw existingError
+  if (existing) {
+    const storedAuthority = assertStoredInvitationAuthorityAllowed(
+      caller,
+      existing,
+    )
+    const storedEmployeeId = existing.employee_id == null
+      ? null
+      : typeof existing.employee_id === 'string' &&
+          existing.employee_id.trim().length > 0
+      ? existing.employee_id
+      : undefined
+    if (
+      storedEmployeeId === undefined ||
+      storedAuthority.role !== role ||
+      !sameCanonicalPermissions(storedAuthority.permissions, permissions) ||
+      storedEmployeeId !== employeeId
+    ) {
+      throw new HttpError(
+        409,
+        'pending_invitation_exists',
+        'A pending invitation already exists with different access',
+      )
+    }
+  }
 
   let invitationId = existing?.id
   if (!invitationId) {
@@ -482,7 +684,7 @@ async function createInternalInvitation(
         permissions,
         invited_by: caller.userId,
         status: 'pending',
-        employee_id: body.employeeId ?? null,
+        employee_id: employeeId,
         expires_at: addDays(7),
         metadata: {
           first_name: body.name?.trim() || email.split('@')[0],
@@ -497,66 +699,226 @@ async function createInternalInvitation(
     invitationId = data.id
   }
 
-  const emailResult = await sendInvitationEmail(serviceClient, invitationId, req)
-  return { invitationId, ...emailResult }
+  const emailResult = await sendInvitationEmail(
+    serviceClient,
+    caller,
+    invitationId,
+    authHeader,
+    req,
+  )
+  return emailResult
 }
 
-async function sendInvitationEmail(_serviceClient: SupabaseClient, invitationId: string | undefined, req: Request) {
-  if (!invitationId) throw new Error('invitationId is required')
+export async function assertActiveEmployeeForInvitation(
+  serviceClient: SupabaseClient,
+  tenantId: string,
+  employeeId: string,
+) {
+  const { data, error } = await serviceClient
+    .from('employees')
+    .select('id')
+    .eq('id', employeeId)
+    .eq('tenant_id', tenantId)
+    .eq('status', 'active')
+    .maybeSingle()
 
-  const supabaseUrl = requiredEnv('SUPABASE_URL')
-  const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY')
-  const response = await fetch(`${supabaseUrl}/functions/v1/send-invitation`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${serviceRoleKey}`,
-      apikey: serviceRoleKey,
-      'Content-Type': 'application/json',
-      origin: req.headers.get('origin') ?? '',
-    },
-    body: JSON.stringify({ invitationId }),
-  })
-
-  const data = await response.json().catch(() => ({}))
-  return {
-    emailSent: response.ok && data?.success !== false,
-    invitationLink: data?.invitationLink ?? null,
-    emailResult: data,
+  if (error) {
+    throw new HttpError(
+      503,
+      'employee_lookup_failed',
+      'Unable to verify the invitation employee',
+    )
+  }
+  if (!data) {
+    throw new HttpError(
+      404,
+      'employee_not_found',
+      'Active employee not found in this tenant',
+    )
   }
 }
 
-async function cancelInternalInvitation(serviceClient: SupabaseClient, caller: CallerContext, body: RequestBody) {
+export async function sendInvitationEmail(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  invitationId: string | undefined,
+  authHeader: string,
+  req: Request,
+  options: InvitationDeliveryOptions = {},
+) {
+  if (!invitationId?.trim()) {
+    throw new HttpError(400, 'invalid_invitation', 'A valid invitation is required')
+  }
+
+  const normalizedInvitationId = invitationId.trim()
+  const invitation = await assertPendingInvitationInTenant(
+    serviceClient,
+    caller.tenantId,
+    normalizedInvitationId,
+  )
+  assertStoredInvitationAuthorityAllowed(caller, invitation)
+
+  const getEnv = options.getEnv ?? ((name: string) => Deno.env.get(name))
+  const fetchImpl = options.fetchImpl ?? fetch
+  const supabaseUrl = requiredEnvFrom(getEnv, 'SUPABASE_URL')
+  const anonKey = requiredEnvFrom(getEnv, 'SUPABASE_ANON_KEY')
+  const headers = new Headers({
+    Authorization: authHeader,
+    apikey: anonKey,
+    'Content-Type': 'application/json',
+  })
+  const origin = req.headers.get('origin')
+  if (origin) headers.set('origin', origin)
+
+  const response = await fetchImpl(`${supabaseUrl}/functions/v1/send-invitation`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ invitationId: normalizedInvitationId }),
+  })
+
+  const data = await response.json().catch(() => ({}))
+  if (
+    response.status === 429 &&
+    data?.code === 'invitation_rate_limited'
+  ) {
+    throw new HttpError(
+      429,
+      'invitation_rate_limited',
+      'Please wait before sending this invitation again',
+    )
+  }
+  if (!response.ok || data?.success !== true || data?.emailSent !== true) {
+    throw new HttpError(
+      502,
+      'invitation_delivery_failed',
+      'The invitation email could not be delivered',
+    )
+  }
+
+  return {
+    success: true,
+    emailSent: true,
+    invitationId: normalizedInvitationId,
+    expiresAt: typeof data?.expiresAt === 'string' ? data.expiresAt : null,
+  }
+}
+
+export async function assertPendingInvitationInTenant(
+  serviceClient: SupabaseClient,
+  tenantId: string,
+  invitationId: string,
+) {
+  const { data, error } = await serviceClient
+    .from('user_invitations')
+    .select('id, role, permissions')
+    .eq('id', invitationId)
+    .eq('tenant_id', tenantId)
+    .eq('status', 'pending')
+    .maybeSingle()
+
+  if (error) {
+    throw new HttpError(
+      503,
+      'invitation_lookup_failed',
+      'Unable to verify the invitation',
+    )
+  }
+  if (!data) {
+    throw new HttpError(404, 'invitation_not_found', 'Invitation not found')
+  }
+  return data
+}
+
+async function cancelInternalInvitation(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  body: RequestBody,
+) {
   const invitationId = required(body.invitationId, 'invitationId')
-  const { error } = await serviceClient
+  const invitation = await assertPendingInvitationInTenant(
+    serviceClient,
+    caller.tenantId,
+    invitationId,
+  )
+  assertStoredInvitationAuthorityAllowed(caller, invitation)
+  const { data, error } = await serviceClient
     .from('user_invitations')
     .update({ status: 'expired' })
     .eq('id', invitationId)
     .eq('tenant_id', caller.tenantId)
     .eq('status', 'pending')
+    .eq('role', invitation.role)
+    .select('id')
+    .maybeSingle()
 
   if (error) throw error
+  if (!data) {
+    throw new HttpError(404, 'invitation_not_found', 'Invitation not found')
+  }
   return { success: true }
 }
 
-async function updateInternalUser(serviceClient: SupabaseClient, caller: CallerContext, body: RequestBody) {
+export async function updateInternalUser(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  body: RequestBody,
+) {
   const userId = required(body.userId, 'userId')
-  const role = normalizeRole(body.role ?? 'cashier')
-  const permissions = body.permissions ?? rolePermissions[role] ?? {}
+  if (userId === caller.userId) {
+    throw new HttpError(
+      403,
+      'self_role_change_forbidden',
+      'You cannot change your own role or permissions',
+    )
+  }
+  const target = await getStaffTargetContext(
+    serviceClient,
+    caller,
+    userId,
+  )
+  assertStaffTargetMutationAllowed(caller, target)
+  const { role, permissions } = authorizeStaffAssignment(
+    caller,
+    body.role ?? target.role,
+    body.permissions,
+  )
 
-  const { error } = await serviceClient
+  const { data, error } = await serviceClient
     .from('user_profiles')
     .update({ role, permissions, updated_at: new Date().toISOString() })
     .eq('user_id', userId)
     .eq('tenant_id', caller.tenantId)
+    .eq('role', target.role)
+    .eq('is_active', target.isActive)
+    .eq('updated_at', target.updatedAt)
+    .select('user_id')
+    .maybeSingle()
 
   if (error) throw error
+  if (!data) {
+    throw new HttpError(
+      404,
+      'staff_user_not_found',
+      'Staff user not found in this tenant',
+    )
+  }
   return { success: true }
 }
 
-async function updateInternalIdentity(serviceClient: SupabaseClient, caller: CallerContext, body: RequestBody) {
+async function updateInternalIdentity(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  body: RequestBody,
+) {
   const userId = required(body.userId, 'userId')
   const name = required(body.name, 'name')
-  await assertStaffInTenant(serviceClient, caller.tenantId, userId)
+  const target = await getStaffTargetContext(
+    serviceClient,
+    caller,
+    userId,
+  )
+  assertStaffTargetMutationAllowed(caller, target)
+  await assertSingleAccountMembership(serviceClient, userId)
 
   const authUser = await getAuthUser(serviceClient, userId)
   const { error } = await serviceClient.auth.admin.updateUserById(userId, {
@@ -572,48 +934,90 @@ async function updateInternalIdentity(serviceClient: SupabaseClient, caller: Cal
   return { success: true }
 }
 
-async function setInternalAccess(serviceClient: SupabaseClient, caller: CallerContext, body: RequestBody) {
+async function setInternalAccess(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  body: RequestBody,
+) {
   const userId = required(body.userId, 'userId')
   const isActive = body.isActive === true
-  if (userId === caller.userId && !isActive) throw new Error('You cannot suspend your own account')
+  if (userId === caller.userId && !isActive) {
+    throw new HttpError(
+      403,
+      'self_deactivation_forbidden',
+      'You cannot suspend your own account',
+    )
+  }
 
-  await assertStaffInTenant(serviceClient, caller.tenantId, userId)
-  await serviceClient.auth.admin.updateUserById(userId, {
-    ban_duration: isActive ? 'none' : '876600h',
-  })
-
-  const { error } = await serviceClient
+  const target = await getStaffTargetContext(
+    serviceClient,
+    caller,
+    userId,
+  )
+  assertStaffTargetMutationAllowed(caller, target)
+  const { data, error } = await serviceClient
     .from('user_profiles')
     .update({ is_active: isActive, updated_at: new Date().toISOString() })
     .eq('user_id', userId)
     .eq('tenant_id', caller.tenantId)
+    .eq('role', target.role)
+    .eq('is_active', target.isActive)
+    .eq('updated_at', target.updatedAt)
+    .select('user_id')
+    .maybeSingle()
 
   if (error) throw error
-  return { success: true }
+  if (!data) {
+    throw new HttpError(
+      409,
+      'staff_state_changed',
+      'Staff account authority changed; retry the operation',
+    )
+  }
+  return { success: true, authBanned: false }
 }
 
-async function deleteInternalAccount(serviceClient: SupabaseClient, caller: CallerContext, body: RequestBody) {
+async function deleteInternalAccount(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  body: RequestBody,
+) {
   const userId = required(body.userId, 'userId')
-  if (userId === caller.userId) throw new Error('You cannot delete your own account')
+  if (userId === caller.userId) {
+    throw new HttpError(
+      403,
+      'self_detach_forbidden',
+      'You cannot detach your own account',
+    )
+  }
 
-  await assertStaffInTenant(serviceClient, caller.tenantId, userId)
+  const target = await getStaffTargetContext(
+    serviceClient,
+    caller,
+    userId,
+  )
+  assertStaffTargetMutationAllowed(caller, target)
 
   const messagingEvidence = await getMessagingDeletionEvidence(serviceClient, userId)
   if (messagingEvidence.hasEvidence) {
-    const deactivation = await deactivateAccountPreservingMessagingHistory(
+    await deactivateInternalStaffProfile(
       serviceClient,
-      caller.tenantId,
-      userId,
-      'internal',
+      caller,
+      target,
     )
-    return preservedMessagingHistoryResult(messagingEvidence, deactivation.authBanned)
+    return preservedMessagingHistoryResult(messagingEvidence)
   }
 
-  await serviceClient.from('employees').update({ user_id: null }).eq('user_id', userId).eq('tenant_id', caller.tenantId)
-  const { error } = await serviceClient.auth.admin.deleteUser(userId)
-  if (error) throw error
+  await deactivateInternalStaffProfile(serviceClient, caller, target)
 
-  return hardDeletedAccountResult()
+  const { error: employeeError } = await serviceClient
+    .from('employees')
+    .update({ user_id: null })
+    .eq('user_id', userId)
+    .eq('tenant_id', caller.tenantId)
+  if (employeeError) throw employeeError
+
+  return detachedAccountResult()
 }
 
 async function createWorkerPortalAccount(
@@ -623,7 +1027,7 @@ async function createWorkerPortalAccount(
 ) {
   const employeeId = required(body.employeeId, 'employeeId')
   const username = normalizeWorkerUsername(required(body.username, 'username'))
-  const temporaryPassword = body.password?.trim() || generatePassword()
+  const password = requireStrongAdminPassword(body.password)
   const employee = await getEmployeeForPortal(serviceClient, caller.tenantId, employeeId)
   const loginEmail = buildWorkerLoginEmail(caller.tenantId, username)
 
@@ -636,82 +1040,176 @@ async function createWorkerPortalAccount(
   if (existingError) throw existingError
 
   const rows = existingRows ?? []
-  const usernameConflict = rows.find((row: any) => row.username === username && row.employee_id !== employeeId)
+  const usernameConflict = rows.find((row: any) =>
+    row.username === username && row.employee_id !== employeeId
+  )
   if (usernameConflict) {
     throw new Error('Ese nombre de usuario ya esta asignado a otro trabajador')
   }
 
   const existingForEmployee = rows.find((row: any) => row.employee_id === employeeId) ?? null
-  let authUser = existingForEmployee?.auth_user_id
-    ? await getAuthUser(serviceClient, existingForEmployee.auth_user_id)
-    : null
-  authUser ??= await findAuthUserByEmail(serviceClient, loginEmail)
-
-  const metadata = {
-    account_type: 'worker_portal',
-    tenant_id: caller.tenantId,
-    employee_id: employeeId,
-    username,
-    role: 'worker',
-    name: `${employee.first_name ?? ''} ${employee.last_name ?? ''}`.trim(),
+  let authUser = null
+  let createdAuthUserId: string | null = null
+  let reusedOrphanAuth = false
+  if (existingForEmployee?.auth_user_id) {
+    authUser = await getAuthUser(serviceClient, existingForEmployee.auth_user_id)
+    if (
+      !authUser ||
+      !hasAuthoritativeWorkerIdentity(authUser, caller.tenantId, employeeId)
+    ) {
+      throw new HttpError(
+        409,
+        'worker_identity_conflict',
+        'The worker login identity cannot be safely reused',
+      )
+    }
+  } else {
+    const existingAuthUser = await findAuthUserByEmail(
+      serviceClient,
+      loginEmail,
+    )
+    if (existingAuthUser) {
+      authUser = await assertReusableWorkerOrphan(
+        serviceClient,
+        existingAuthUser,
+        caller.tenantId,
+        employeeId,
+        loginEmail,
+      )
+      reusedOrphanAuth = true
+    }
   }
+
+  const metadata = buildWorkerAuthMetadata({
+    tenantId: caller.tenantId,
+    employeeId,
+    username,
+    name: `${employee.first_name ?? ''} ${employee.last_name ?? ''}`.trim(),
+  })
 
   if (!authUser) {
     const { data, error } = await serviceClient.auth.admin.createUser({
       email: loginEmail,
-      password: temporaryPassword,
+      password,
       email_confirm: true,
-      user_metadata: metadata,
+      user_metadata: metadata.userMetadata,
+      app_metadata: metadata.appMetadata,
     })
     if (error) throw error
     authUser = data.user
-  } else {
-    const { error } = await serviceClient.auth.admin.updateUserById(authUser.id, {
-      email: loginEmail,
-      password: temporaryPassword,
-      email_confirm: true,
-      ban_duration: 'none',
-      user_metadata: {
-        ...(authUser.user_metadata ?? {}),
-        ...metadata,
+    if (
+      !authUser ||
+      typeof authUser.id !== 'string' ||
+      authUser.id.trim().length === 0
+    ) {
+      throw new HttpError(
+        502,
+        'worker_auth_create_failed',
+        'The worker login identity could not be created',
+      )
+    }
+    createdAuthUserId = authUser.id
+  } else if (reusedOrphanAuth) {
+    const { error } = await serviceClient.auth.admin.updateUserById(
+      authUser.id,
+      {
+        email: loginEmail,
+        password,
+        email_confirm: true,
+        user_metadata: sanitizeWorkerDisplayMetadata(
+          authUser.user_metadata,
+          metadata.userMetadata,
+        ),
+        app_metadata: mergeWorkerAppMetadata(
+          authUser.app_metadata,
+          metadata.appMetadata,
+        ),
       },
-    })
-    if (error) throw error
+    )
+    if (error) {
+      throw new HttpError(
+        503,
+        'worker_orphan_reuse_failed',
+        'The worker login identity could not be reconciled',
+      )
+    }
   }
 
-  const payload = {
+  const basePayload = {
     tenant_id: caller.tenantId,
     employee_id: employeeId,
     auth_user_id: authUser.id,
     username,
     login_email: loginEmail,
     is_active: true,
-    must_reset_password: true,
-    updated_at: new Date().toISOString(),
   }
 
   let portalAccountId: string
   if (existingForEmployee) {
+    const passwordResetRequiredAt = await beginWorkerPasswordCredentialIssue(
+      serviceClient,
+      existingForEmployee.id,
+      caller.tenantId,
+    )
     const { data, error } = await serviceClient
       .from('employee_portal_accounts')
-      .update(payload)
+      .update({
+        ...basePayload,
+        updated_at: passwordResetRequiredAt,
+      })
       .eq('id', existingForEmployee.id)
       .eq('tenant_id', caller.tenantId)
       .select('id')
       .single()
     if (error) throw error
     portalAccountId = data.id
+
+    const { error: authError } = await serviceClient.auth.admin.updateUserById(
+      authUser.id,
+      {
+        email: loginEmail,
+        password,
+        email_confirm: true,
+        user_metadata: sanitizeWorkerDisplayMetadata(
+          authUser.user_metadata,
+          metadata.userMetadata,
+        ),
+        app_metadata: mergeWorkerAppMetadata(
+          authUser.app_metadata,
+          metadata.appMetadata,
+        ),
+      },
+    )
+    if (authError) throw authError
+
+    await finishWorkerPasswordCredentialIssue(
+      serviceClient,
+      existingForEmployee.id,
+      caller.tenantId,
+      passwordResetRequiredAt,
+    )
   } else {
-    const { data, error } = await serviceClient
-      .from('employee_portal_accounts')
-      .insert({
-        ...payload,
-        created_by: caller.userId,
-      })
-      .select('id')
-      .single()
-    if (error) throw error
-    portalAccountId = data.id
+    const passwordResetRequiredAt = new Date().toISOString()
+    portalAccountId = await persistNewWorkerPortalAccount(
+      serviceClient,
+      {
+        payload: {
+          ...basePayload,
+          ...buildWorkerPasswordResetMarker(
+            passwordResetRequiredAt,
+            passwordResetRequiredAt,
+          ),
+          created_by: caller.userId,
+          updated_at: passwordResetRequiredAt,
+        },
+        tenantId: caller.tenantId,
+        employeeId,
+        username,
+        loginEmail,
+        authUserId: authUser.id,
+        createdAuthUserId,
+      },
+    )
   }
 
   return {
@@ -720,7 +1218,7 @@ async function createWorkerPortalAccount(
     authUserId: authUser.id,
     employeeId,
     username,
-    temporaryPassword,
+    passwordConfigured: true,
   }
 }
 
@@ -732,29 +1230,83 @@ async function resetWorkerPortalPassword(
   const account = await getWorkerPortalAccount(serviceClient, caller.tenantId, body)
   if (!account.auth_user_id) throw new Error('El trabajador no tiene usuario Auth vinculado')
 
-  const temporaryPassword = body.password?.trim() || generatePassword()
-  const { error } = await serviceClient.auth.admin.updateUserById(account.auth_user_id, {
-    password: temporaryPassword,
-    ban_duration: 'none',
+  const password = requireStrongAdminPassword(body.password)
+  const employee = await getEmployeeForPortal(
+    serviceClient,
+    caller.tenantId,
+    account.employee_id,
+  )
+  const authUser = await getAuthUser(serviceClient, account.auth_user_id)
+  if (!authUser) throw new Error('El trabajador no tiene usuario Auth disponible')
+  if (
+    !hasAuthoritativeWorkerIdentity(
+      authUser,
+      caller.tenantId,
+      account.employee_id,
+    )
+  ) {
+    throw new HttpError(
+      409,
+      'worker_identity_conflict',
+      'The worker login identity cannot be safely updated',
+    )
+  }
+  const metadata = buildWorkerAuthMetadata({
+    tenantId: caller.tenantId,
+    employeeId: account.employee_id,
+    username: account.username,
+    name: `${employee.first_name ?? ''} ${employee.last_name ?? ''}`.trim(),
   })
-  if (error) throw error
 
-  const { error: updateError } = await serviceClient
+  const passwordResetRequiredAt = await beginWorkerPasswordCredentialIssue(
+    serviceClient,
+    account.id,
+    caller.tenantId,
+  )
+  const { data: markedAccount, error: updateError } = await serviceClient
     .from('employee_portal_accounts')
     .update({
-      must_reset_password: true,
       is_active: true,
-      updated_at: new Date().toISOString(),
+      updated_at: passwordResetRequiredAt,
     })
     .eq('id', account.id)
     .eq('tenant_id', caller.tenantId)
+    .select('id')
+    .maybeSingle()
   if (updateError) throw updateError
+  if (!markedAccount) {
+    throw new HttpError(
+      404,
+      'worker_portal_account_not_found',
+      'The worker portal account is no longer available',
+    )
+  }
+
+  const { error } = await serviceClient.auth.admin.updateUserById(account.auth_user_id, {
+    password,
+    user_metadata: sanitizeWorkerDisplayMetadata(
+      authUser.user_metadata,
+      metadata.userMetadata,
+    ),
+    app_metadata: mergeWorkerAppMetadata(
+      authUser.app_metadata,
+      metadata.appMetadata,
+    ),
+  })
+  if (error) throw error
+
+  await finishWorkerPasswordCredentialIssue(
+    serviceClient,
+    account.id,
+    caller.tenantId,
+    passwordResetRequiredAt,
+  )
 
   return {
     success: true,
     employeeId: account.employee_id,
     username: account.username,
-    temporaryPassword,
+    passwordUpdated: true,
   }
 }
 
@@ -766,13 +1318,6 @@ async function setWorkerPortalAccess(
   const account = await getWorkerPortalAccount(serviceClient, caller.tenantId, body)
   const isActive = body.isActive === true
 
-  if (account.auth_user_id) {
-    const { error } = await serviceClient.auth.admin.updateUserById(account.auth_user_id, {
-      ban_duration: isActive ? 'none' : '876600h',
-    })
-    if (error) throw error
-  }
-
   const { error } = await serviceClient
     .from('employee_portal_accounts')
     .update({
@@ -783,24 +1328,29 @@ async function setWorkerPortalAccess(
     .eq('tenant_id', caller.tenantId)
 
   if (error) throw error
-  return { success: true }
+  return { success: true, authBanned: false }
 }
 
-async function createCustomerAccount(
+export async function createCustomerAccount(
   serviceClient: SupabaseClient,
   caller: CallerContext,
   body: RequestBody,
-  req: Request,
 ) {
-  const email = normalizeEmail(required(body.email, 'email'))
-  const name = body.name?.trim() || email.split('@')[0]
+  const requestedEmail = normalizeEmail(required(body.email, 'email'))
+  let email = requestedEmail
+  const name = body.name?.trim() || requestedEmail.split('@')[0]
   const phone = body.phone?.trim() || null
-  const mode = body.mode ?? 'invite'
 
   let customer = body.customerId
     ? await getCustomer(serviceClient, caller.tenantId, body.customerId)
     : null
 
+  if (customer) {
+    email = resolveCustomerProvisioningEmail(
+      requestedEmail,
+      customer.email,
+    )
+  }
   customer ??= await findCustomerByEmail(serviceClient, caller.tenantId, email)
 
   if (!customer) {
@@ -820,105 +1370,61 @@ async function createCustomerAccount(
     customer = data
   }
 
-  let authUser = customer.auth_user_id ? await getAuthUser(serviceClient, customer.auth_user_id) : null
-  authUser ??= await findAuthUserByEmail(serviceClient, email)
-
-  if (authUser && await isStaffUserInTenant(serviceClient, caller.tenantId, authUser.id)) {
-    if (customer.auth_user_id === authUser.id) {
-      const { error: customerError } = await serviceClient
-        .from('customers')
-        .update({
-          name,
-          phone,
-          is_active: true,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', customer.id)
-        .eq('tenant_id', caller.tenantId)
-
-      if (customerError) throw customerError
-
-      return {
-        success: true,
-        authUserId: authUser.id,
-        customerId: customer.id,
-        inviteSent: false,
-        temporaryPassword: null,
-        sharedStaffAccount: true,
-      }
-    }
-
-    throw new Error(
-      'Ese email ya pertenece a un usuario interno del ERP. Usa otro email para la cuenta web o mantén este login solo como usuario de equipo.',
+  let authUser = customer.auth_user_id
+    ? await getAuthUser(serviceClient, customer.auth_user_id)
+    : null
+  if (
+    authUser &&
+    customer.auth_user_id &&
+    (typeof authUser.email !== 'string' ||
+      authUser.email.trim().toLowerCase() !== email)
+  ) {
+    throw new HttpError(
+      409,
+      'customer_auth_email_mismatch',
+      'The customer is linked to a different Auth email',
     )
   }
+  authUser ??= await findAuthUserByEmail(serviceClient, email)
 
-  const metadata = {
-    account_type: 'public_store_customer',
-    customer_tenant_id: caller.tenantId,
-    customer_id: customer.id,
-    role: 'customer',
+  const metadata = buildCustomerAuthMetadata({
     name,
     phone,
-  }
-
-  let temporaryPassword: string | null = null
-  let inviteSent = false
-  let passwordResetSent = false
-  let passwordResetLinkGenerated = false
-  let accessLink: string | null = null
+  })
+  const storeOrigin = await getStoreOrigin(serviceClient, caller.tenantId)
+  let newlyInvited = false
 
   if (!authUser) {
-    if (mode === 'temporary_password') {
-      temporaryPassword = body.password?.trim() || generatePassword()
-      const { data, error } = await serviceClient.auth.admin.createUser({
-        email,
-        password: temporaryPassword,
-        email_confirm: body.confirmEmail === true,
-        user_metadata: metadata,
-      })
-      if (error) throw error
-      authUser = data.user
-    } else {
-      const { data, error } = await serviceClient.auth.admin.inviteUserByEmail(email, {
-        data: metadata,
-        redirectTo: `${await getStoreOrigin(serviceClient, caller.tenantId, req)}/cuenta/login`,
-      })
-      if (error) throw error
-      authUser = data.user
-      inviteSent = true
-    }
-  } else {
-    const updatePayload: Record<string, unknown> = {
-      user_metadata: {
-        ...(authUser.user_metadata ?? {}),
-        ...metadata,
-      },
-      ban_duration: 'none',
-    }
-
-    if (mode === 'temporary_password') {
-      temporaryPassword = body.password?.trim() || generatePassword()
-      updatePayload.password = temporaryPassword
-      if (body.confirmEmail === true) updatePayload.email_confirm = true
-    }
-
-    await serviceClient.auth.admin.updateUserById(authUser.id, updatePayload)
-
-    if (mode !== 'temporary_password') {
-      accessLink = await generateRecoveryLink(
-        serviceClient,
-        email,
-        `${await getStoreOrigin(serviceClient, caller.tenantId, req)}/cuenta/login`,
+    const { data, error } = await serviceClient.auth.admin.inviteUserByEmail(email, {
+      data: metadata.userMetadata,
+      redirectTo: accessEmailRedirect({
+        delivery: 'invite',
+        isCustomer: true,
+        erpOrigin: storeOrigin,
+        storeOrigin,
+      }),
+    })
+    if (error) throw error
+    authUser = data.user
+    if (!authUser) {
+      throw new HttpError(
+        502,
+        'customer_invitation_failed',
+        'The customer invitation could not be created',
       )
-      passwordResetLinkGenerated = true
     }
+    newlyInvited = true
   }
 
-  const { error: customerError } = await serviceClient
+  const delivery = selectAccessEmailDelivery({
+    newlyInvited,
+    emailConfirmedAt: authUser.email_confirmed_at,
+  })
+  const expectedAuthUserId = delivery === 'recovery' ? authUser.id : null
+  const { data: updatedCustomer, error: customerError } = await serviceClient
     .from('customers')
     .update({
-      auth_user_id: authUser.id,
+      auth_user_id: expectedAuthUserId,
       name,
       phone,
       is_active: true,
@@ -926,8 +1432,48 @@ async function createCustomerAccount(
     })
     .eq('id', customer.id)
     .eq('tenant_id', caller.tenantId)
+    .select('id, auth_user_id')
+    .maybeSingle()
 
   if (customerError) throw customerError
+  if (!updatedCustomer) {
+    throw new HttpError(
+      404,
+      'customer_not_found',
+      'Customer not found in this tenant',
+    )
+  }
+  if (updatedCustomer.auth_user_id !== expectedAuthUserId) {
+    throw new HttpError(
+      409,
+      'customer_link_state_mismatch',
+      'The customer Auth link could not be verified',
+    )
+  }
+
+  if (delivery === 'verification') {
+    await sendSignupVerificationEmail(
+      serviceClient,
+      email,
+      accessEmailRedirect({
+        delivery,
+        isCustomer: true,
+        erpOrigin: storeOrigin,
+        storeOrigin,
+      }),
+    )
+  } else if (delivery === 'recovery') {
+    await sendRecoveryEmail(
+      serviceClient,
+      email,
+      accessEmailRedirect({
+        delivery,
+        isCustomer: true,
+        erpOrigin: storeOrigin,
+        storeOrigin,
+      }),
+    )
+  }
 
   await serviceClient
     .from('online_orders')
@@ -938,30 +1484,45 @@ async function createCustomerAccount(
 
   return {
     success: true,
-    authUserId: authUser.id,
+    authUserId: updatedCustomer.auth_user_id,
     customerId: customer.id,
-    inviteSent,
-    passwordResetSent,
-    passwordResetLinkGenerated,
-    accessEmailSent: inviteSent || passwordResetSent,
-    accessLink,
-    temporaryPassword,
+    authLinked: updatedCustomer.auth_user_id === authUser.id,
+    inviteSent: delivery === 'invite',
+    verificationSent: delivery === 'verification',
+    passwordResetSent: delivery === 'recovery',
+    accessEmailSent: true,
   }
 }
 
-async function setCustomerAccess(serviceClient: SupabaseClient, caller: CallerContext, body: RequestBody) {
-  const customer = await getCustomer(serviceClient, caller.tenantId, required(body.customerId, 'customerId'))
-  const isActive = body.isActive === true
-
-  const authUserIsStaff = customer.auth_user_id
-    ? await isStaffUserInTenant(serviceClient, caller.tenantId, customer.auth_user_id)
-    : false
-
-  if (customer.auth_user_id && !authUserIsStaff) {
-    await serviceClient.auth.admin.updateUserById(customer.auth_user_id, {
-      ban_duration: isActive ? 'none' : '876600h',
-    })
+export function resolveCustomerProvisioningEmail(
+  requestedEmail: string,
+  authoritativeCustomerEmail: unknown,
+): string {
+  const requested = normalizeEmail(requestedEmail)
+  const authoritative = normalizeEmail(
+    typeof authoritativeCustomerEmail === 'string' ? authoritativeCustomerEmail : null,
+  )
+  if (requested !== authoritative) {
+    throw new HttpError(
+      400,
+      'customer_email_mismatch',
+      'Account access must use the customer email on file',
+    )
   }
+  return authoritative
+}
+
+async function setCustomerAccess(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  body: RequestBody,
+) {
+  const customer = await getCustomer(
+    serviceClient,
+    caller.tenantId,
+    required(body.customerId, 'customerId'),
+  )
+  const isActive = body.isActive === true
 
   const { error } = await serviceClient
     .from('customers')
@@ -970,15 +1531,27 @@ async function setCustomerAccess(serviceClient: SupabaseClient, caller: CallerCo
     .eq('tenant_id', caller.tenantId)
 
   if (error) throw error
-  return { success: true }
+  return { success: true, authBanned: false }
 }
 
-async function deleteCustomerAccount(serviceClient: SupabaseClient, caller: CallerContext, body: RequestBody) {
+async function deleteCustomerAccount(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  body: RequestBody,
+) {
   if (!body.customerId && body.userId) {
-    return await deleteOrphanWebsiteAuthAccount(serviceClient, caller, required(body.userId, 'userId'))
+    throw new HttpError(
+      404,
+      'customer_not_found',
+      'Customer not found in this tenant',
+    )
   }
 
-  const customer = await getCustomer(serviceClient, caller.tenantId, required(body.customerId, 'customerId'))
+  const customer = await getCustomer(
+    serviceClient,
+    caller.tenantId,
+    required(body.customerId, 'customerId'),
+  )
   const authUserId = customer.auth_user_id
 
   if (!authUserId) {
@@ -989,39 +1562,29 @@ async function deleteCustomerAccount(serviceClient: SupabaseClient, caller: Call
         .eq('id', customer.id)
         .eq('tenant_id', caller.tenantId)
       if (error) throw error
+    } else {
+      const { error } = await serviceClient
+        .from('customers')
+        .update({
+          is_active: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', customer.id)
+        .eq('tenant_id', caller.tenantId)
+      if (error) throw error
     }
-    return { success: true, authDeleted: false, authDetachedOnly: true }
+    return detachedAccountResult()
   }
 
   const messagingEvidence = await getMessagingDeletionEvidence(serviceClient, authUserId)
   if (messagingEvidence.hasEvidence) {
-    const deactivation = await deactivateAccountPreservingMessagingHistory(
+    await deactivateAccountPreservingMessagingHistory(
       serviceClient,
       caller.tenantId,
       authUserId,
       'customer',
     )
-    return preservedMessagingHistoryResult(messagingEvidence, deactivation.authBanned)
-  }
-
-  const isStaffUser = await isStaffUserInTenant(serviceClient, caller.tenantId, authUserId)
-  if (!isStaffUser) {
-    const { error } = await serviceClient.auth.admin.deleteUser(authUserId)
-    if (error) {
-      console.warn('Unable to hard-delete customer auth user', authUserId, error.message)
-      throw new Error(`No se pudo eliminar el usuario Auth del cliente: ${error.message}`)
-    }
-
-    if (body.deleteCustomerRecord === true) {
-      const { error: customerDeleteError } = await serviceClient
-        .from('customers')
-        .delete()
-        .eq('id', customer.id)
-        .eq('tenant_id', caller.tenantId)
-      if (customerDeleteError) throw customerDeleteError
-    }
-
-    return hardDeletedAccountResult()
+    return preservedMessagingHistoryResult(messagingEvidence)
   }
 
   if (body.deleteCustomerRecord === true) {
@@ -1034,50 +1597,17 @@ async function deleteCustomerAccount(serviceClient: SupabaseClient, caller: Call
   } else {
     const { error } = await serviceClient
       .from('customers')
-      .update({ auth_user_id: null, updated_at: new Date().toISOString() })
+      .update({
+        auth_user_id: null,
+        is_active: false,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', customer.id)
       .eq('tenant_id', caller.tenantId)
     if (error) throw error
   }
 
-  return { success: true, authDeleted: false, authDetachedOnly: true }
-}
-
-async function deleteOrphanWebsiteAuthAccount(serviceClient: SupabaseClient, caller: CallerContext, authUserId: string) {
-  const authUser = await getAuthUser(serviceClient, authUserId)
-  if (!authUser || !isPublicStoreCustomerForTenant(authUser, caller.tenantId)) {
-    throw new Error('Cuenta web no encontrada para este tenant')
-  }
-
-  if (await isStaffUserInTenant(serviceClient, caller.tenantId, authUserId)) {
-    throw new Error('Esta cuenta Auth también pertenece al equipo ERP. Elimínala desde la pestaña Equipo si corresponde.')
-  }
-
-  const { data: linkedCustomer, error: customerError } = await serviceClient
-    .from('customers')
-    .select('id')
-    .eq('tenant_id', caller.tenantId)
-    .eq('auth_user_id', authUserId)
-    .maybeSingle()
-  if (customerError) throw customerError
-  if (linkedCustomer) {
-    throw new Error('Esta cuenta web ya tiene ficha CRM. Elimínala desde el cliente vinculado.')
-  }
-
-  const messagingEvidence = await getMessagingDeletionEvidence(serviceClient, authUserId)
-  if (messagingEvidence.hasEvidence) {
-    const deactivation = await deactivateAccountPreservingMessagingHistory(
-      serviceClient,
-      caller.tenantId,
-      authUserId,
-      'orphan',
-    )
-    return preservedMessagingHistoryResult(messagingEvidence, deactivation.authBanned)
-  }
-
-  const { error } = await serviceClient.auth.admin.deleteUser(authUserId)
-  if (error) throw new Error(`No se pudo eliminar el usuario Auth del cliente: ${error.message}`)
-  return hardDeletedAccountResult()
+  return detachedAccountResult()
 }
 
 export async function getMessagingDeletionEvidence(
@@ -1164,17 +1694,21 @@ export async function deactivateAccountPreservingMessagingHistory(
   const updatedAt = new Date().toISOString()
   const operations = []
   if (scope === 'internal') {
-    operations.push(serviceClient
-      .from('user_profiles')
-      .update({ is_active: false, updated_at: updatedAt })
-      .eq('tenant_id', tenantId)
-      .eq('user_id', userId))
+    operations.push(
+      serviceClient
+        .from('user_profiles')
+        .update({ is_active: false, updated_at: updatedAt })
+        .eq('tenant_id', tenantId)
+        .eq('user_id', userId),
+    )
   } else if (scope === 'customer') {
-    operations.push(serviceClient
-      .from('customers')
-      .update({ is_active: false, updated_at: updatedAt })
-      .eq('tenant_id', tenantId)
-      .eq('auth_user_id', userId))
+    operations.push(
+      serviceClient
+        .from('customers')
+        .update({ is_active: false, updated_at: updatedAt })
+        .eq('tenant_id', tenantId)
+        .eq('auth_user_id', userId),
+    )
   }
 
   const results = await Promise.all(operations)
@@ -1182,68 +1716,58 @@ export async function deactivateAccountPreservingMessagingHistory(
     if (result.error) throw result.error
   }
 
-  const authBanned = !await hasActiveAccountMembership(serviceClient, userId)
-  if (authBanned) {
-    const { error: authError } = await serviceClient.auth.admin.updateUserById(userId, {
-      ban_duration: '876600h',
-    })
-    if (authError) {
-      throw new Error(`No se pudo suspender el usuario Auth: ${toErrorMessage(authError)}`)
-    }
-  }
-
-  return { authBanned }
+  return { authBanned: false }
 }
 
-async function hasActiveAccountMembership(serviceClient: SupabaseClient, userId: string) {
+export async function assertSingleAccountMembership(
+  serviceClient: SupabaseClient,
+  userId: string,
+): Promise<void> {
   const checks = [
-    {
-      source: 'user_profiles',
-      query: serviceClient
-        .from('user_profiles')
-        .select('id')
-        .eq('user_id', userId)
-        .or('is_active.eq.true,is_active.is.null'),
-    },
-    {
-      source: 'customers',
-      query: serviceClient
-        .from('customers')
-        .select('id')
-        .eq('auth_user_id', userId)
-        .eq('is_active', true),
-    },
-    {
-      source: 'employee_portal_accounts',
-      query: serviceClient
-        .from('employee_portal_accounts')
-        .select('id')
-        .eq('auth_user_id', userId)
-        .eq('is_active', true),
-    },
+    serviceClient
+      .from('user_profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(2),
+    serviceClient
+      .from('customers')
+      .select('id')
+      .eq('auth_user_id', userId)
+      .limit(2),
+    serviceClient
+      .from('employee_portal_accounts')
+      .select('id')
+      .eq('auth_user_id', userId)
+      .limit(2),
   ]
-
-  const results = await Promise.all(checks.map(async ({ source, query }) => {
-    const { data, error } = await query.limit(1)
-    if (error) {
-      throw new Error(
-        `No se pudo verificar el acceso activo restante (${source}): ${toErrorMessage(error)}`,
-      )
-    }
-    return Array.isArray(data) && data.length > 0
-  }))
-
-  return results.some(Boolean)
+  const results = await Promise.all(checks)
+  if (results.some((result) => result.error)) {
+    throw new HttpError(
+      503,
+      'membership_check_failed',
+      'Unable to verify the global identity scope',
+    )
+  }
+  const membershipCount = results.reduce(
+    (total, result) => total + (Array.isArray(result.data) ? result.data.length : 0),
+    0,
+  )
+  if (membershipCount !== 1) {
+    throw new HttpError(
+      409,
+      'shared_identity',
+      'Display identity cannot be changed from a shared tenant account',
+    )
+  }
 }
 
 export function preservedMessagingHistoryResult(
   evidence: MessagingDeletionEvidence,
-  authBanned: boolean,
 ): AccountDeletionResult {
   return {
     success: true,
     authDeleted: false,
-    authBanned,
+    authBanned: false,
     authDetachedOnly: false,
     accountDeactivated: true,
     preservedForMessagingHistory: true,
@@ -1252,84 +1776,251 @@ export function preservedMessagingHistoryResult(
   }
 }
 
-export function hardDeletedAccountResult(): AccountDeletionResult {
+export function detachedAccountResult(): AccountDeletionResult {
   return {
     success: true,
-    authDeleted: true,
+    authDeleted: false,
     authBanned: false,
-    authDetachedOnly: false,
-    accountDeactivated: false,
+    authDetachedOnly: true,
+    accountDeactivated: true,
     preservedForMessagingHistory: false,
-    outcome: 'auth_deleted',
+    outcome: 'tenant_access_detached',
     messagingEvidence: [],
   }
 }
 
-async function resendCustomerVerification(serviceClient: SupabaseClient, caller: CallerContext, body: RequestBody) {
-  const customer = await getCustomer(serviceClient, caller.tenantId, required(body.customerId, 'customerId'))
-  const email = normalizeEmail(body.email ?? customer.email)
-  const { error } = await serviceClient.auth.resend({ type: 'signup', email })
-  if (error) throw error
-  return { success: true }
+export async function resendCustomerVerification(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  body: RequestBody,
+  getEnv: EnvReader = (name) => Deno.env.get(name),
+) {
+  const customer = await getCustomer(
+    serviceClient,
+    caller.tenantId,
+    required(body.customerId, 'customerId'),
+  )
+  const email = normalizeEmail(customer.email)
+  if (body.email && normalizeEmail(body.email) !== email) {
+    throw new HttpError(
+      400,
+      'customer_email_mismatch',
+      'Verification can only be sent to the tenant customer email',
+    )
+  }
+  const redirectTo = `${await getStoreOrigin(
+    serviceClient,
+    caller.tenantId,
+    getEnv,
+  )}/cuenta/login?confirmed=true`
+  await sendSignupVerificationEmail(serviceClient, email, redirectTo)
+  return { success: true, verificationSent: true }
 }
 
-async function confirmUserEmail(serviceClient: SupabaseClient, caller: CallerContext, body: RequestBody) {
-  const userId = required(body.userId, 'userId')
-  await assertUserBelongsToTenant(serviceClient, caller.tenantId, userId)
-  const { error } = await serviceClient.auth.admin.updateUserById(userId, { email_confirm: true })
+async function sendSignupVerificationEmail(
+  serviceClient: SupabaseClient,
+  email: string,
+  redirectTo: string,
+) {
+  const { error } = await serviceClient.auth.resend({
+    type: 'signup',
+    email,
+    options: { emailRedirectTo: redirectTo },
+  })
   if (error) throw error
-  return { success: true }
 }
 
-async function sendPasswordReset(serviceClient: SupabaseClient, caller: CallerContext, body: RequestBody, req: Request) {
+async function sendPasswordReset(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  body: RequestBody,
+  req: Request,
+) {
   const email = normalizeEmail(required(body.email, 'email'))
   const user = await findAuthUserByEmail(serviceClient, email)
-  if (user) await assertUserBelongsToTenant(serviceClient, caller.tenantId, user.id)
+  const accepted = { success: true, accessEmailSent: true }
+  if (!user) return accepted
 
-  let redirectTo = `${getOrigin(req)}/reset-password`
-  if (user) {
-    const { data: customer } = await serviceClient
-      .from('customers')
-      .select('id')
-      .eq('tenant_id', caller.tenantId)
-      .eq('auth_user_id', user.id)
-      .maybeSingle()
-    if (customer || isPublicStoreCustomerForTenant(user, caller.tenantId)) {
-      redirectTo = `${await getStoreOrigin(serviceClient, caller.tenantId, req)}/cuenta/login`
-    }
+  try {
+    await assertUserBelongsToTenant(serviceClient, caller.tenantId, user.id)
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 404) return accepted
+    throw error
   }
 
-  const accessLink = await generateRecoveryLink(serviceClient, email, redirectTo)
-  return { success: true, passwordResetLinkGenerated: true, accessLink }
-}
+  const { data: customer, error: customerError } = await serviceClient
+    .from('customers')
+    .select('id')
+    .eq('tenant_id', caller.tenantId)
+    .eq('auth_user_id', user.id)
+    .maybeSingle()
+  if (customerError) {
+    throw new HttpError(
+      503,
+      'customer_membership_check_failed',
+      'Unable to verify the customer account',
+    )
+  }
 
-async function generateRecoveryLink(serviceClient: SupabaseClient, email: string, redirectTo: string) {
-  const { data, error } = await serviceClient.auth.admin.generateLink({
-    type: 'recovery',
-    email,
-    options: { redirectTo },
+  const delivery = selectAccessEmailDelivery({
+    newlyInvited: false,
+    emailConfirmedAt: user.email_confirmed_at,
+  })
+  const erpOrigin = getOrigin(req)
+  const storeOrigin = customer ? await getStoreOrigin(serviceClient, caller.tenantId) : erpOrigin
+  const redirectTo = accessEmailRedirect({
+    delivery,
+    isCustomer: Boolean(customer),
+    erpOrigin,
+    storeOrigin,
   })
 
-  if (error) throw error
-  const properties = (data as any)?.properties ?? {}
-  const actionLink = properties.action_link ?? (data as any)?.action_link ?? null
-  if (!actionLink) throw new Error('No se pudo generar el link de recuperación')
-  return actionLink.toString()
+  if (delivery === 'verification') {
+    await sendSignupVerificationEmail(serviceClient, email, redirectTo)
+  } else {
+    await sendRecoveryEmail(serviceClient, email, redirectTo)
+  }
+
+  return accepted
 }
 
-async function assertStaffInTenant(serviceClient: SupabaseClient, tenantId: string, userId: string) {
+async function sendRecoveryEmail(serviceClient: SupabaseClient, email: string, redirectTo: string) {
+  const { error } = await serviceClient.auth.resetPasswordForEmail(email, {
+    redirectTo,
+  })
+  if (error) throw error
+}
+
+export async function getStaffTargetContext(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  userId: string,
+): Promise<StaffTargetContext> {
   const { data, error } = await serviceClient
     .from('user_profiles')
-    .select('user_id')
-    .eq('tenant_id', tenantId)
+    .select('user_id, role, permissions, is_active, updated_at')
+    .eq('tenant_id', caller.tenantId)
     .eq('user_id', userId)
     .maybeSingle()
 
-  if (error) throw error
-  if (!data) throw new Error('User does not belong to this tenant staff')
+  if (error) {
+    throw new HttpError(
+      503,
+      'authorization_unavailable',
+      'Unable to verify staff authority',
+    )
+  }
+  if (!data) {
+    throw new HttpError(
+      404,
+      'staff_user_not_found',
+      'Staff user not found in this tenant',
+    )
+  }
+  if (data.user_id !== userId) {
+    throw new HttpError(
+      503,
+      'authorization_unavailable',
+      'Unable to verify staff authority',
+    )
+  }
+  if (
+    typeof data.updated_at !== 'string' ||
+    data.updated_at.trim().length === 0
+  ) {
+    throw new HttpError(
+      503,
+      'authorization_unavailable',
+      'Unable to verify staff authority',
+    )
+  }
+
+  let authResult: {
+    data?: { user?: Record<string, unknown> | null } | null
+    error?: unknown
+  }
+  try {
+    authResult = await serviceClient.auth.admin.getUserById(userId)
+  } catch {
+    throw new HttpError(
+      503,
+      'authorization_unavailable',
+      'Unable to verify staff identity',
+    )
+  }
+  const authUser = authResult?.data?.user
+  if (authResult?.error || !authUser) {
+    throw new HttpError(
+      503,
+      'authorization_unavailable',
+      'Unable to verify staff identity',
+    )
+  }
+
+  const permissions = data.permissions &&
+      typeof data.permissions === 'object' &&
+      !Array.isArray(data.permissions)
+    ? data.permissions as Record<string, unknown>
+    : {}
+  const isPrincipalOwner = derivePrincipalOwnerIdentity({
+    tenantId: caller.tenantId,
+    tenantOwnerEmail: caller.tenantOwnerEmail ?? null,
+    authUser,
+  })
+  if (
+    !isPrincipalOwner &&
+    !normalizeOptionalEmail(caller.tenantOwnerEmail)
+  ) {
+    throw new HttpError(
+      503,
+      'authorization_unavailable',
+      'Unable to verify tenant ownership',
+    )
+  }
+  return {
+    userId,
+    role: requireCanonicalStoredRole(data.role),
+    permissions,
+    isActive: data.is_active === true,
+    updatedAt: data.updated_at,
+    isPrincipalOwner,
+  }
 }
 
-async function isStaffUserInTenant(serviceClient: SupabaseClient, tenantId: string, userId: string) {
+async function deactivateInternalStaffProfile(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  target: StaffTargetContext,
+) {
+  const { data, error } = await serviceClient
+    .from('user_profiles')
+    .update({
+      is_active: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('tenant_id', caller.tenantId)
+    .eq('user_id', target.userId)
+    .eq('role', target.role)
+    .eq('is_active', target.isActive)
+    .eq('updated_at', target.updatedAt)
+    .select('user_id')
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) {
+    throw new HttpError(
+      409,
+      'staff_state_changed',
+      'Staff account authority changed; retry the operation',
+    )
+  }
+}
+
+async function isStaffUserInTenant(
+  serviceClient: SupabaseClient,
+  tenantId: string,
+  userId: string,
+) {
   const { data, error } = await serviceClient
     .from('user_profiles')
     .select('user_id')
@@ -1341,18 +2032,35 @@ async function isStaffUserInTenant(serviceClient: SupabaseClient, tenantId: stri
   return Boolean(data)
 }
 
-async function assertUserBelongsToTenant(serviceClient: SupabaseClient, tenantId: string, userId: string) {
-  const [{ data: staff }, { data: customer }] = await Promise.all([
-    serviceClient.from('user_profiles').select('user_id').eq('tenant_id', tenantId).eq('user_id', userId).maybeSingle(),
-    serviceClient.from('customers').select('id').eq('tenant_id', tenantId).eq('auth_user_id', userId).maybeSingle(),
+export async function assertUserBelongsToTenant(
+  serviceClient: SupabaseClient,
+  tenantId: string,
+  userId: string,
+) {
+  const [
+    { data: staff, error: staffError },
+    { data: customer, error: customerError },
+  ] = await Promise.all([
+    serviceClient.from('user_profiles').select('user_id').eq('tenant_id', tenantId).eq(
+      'user_id',
+      userId,
+    ).maybeSingle(),
+    serviceClient.from('customers').select('id').eq('tenant_id', tenantId).eq(
+      'auth_user_id',
+      userId,
+    ).maybeSingle(),
   ])
 
+  if (staffError || customerError) {
+    throw new HttpError(
+      503,
+      'membership_check_failed',
+      'Unable to verify account access',
+    )
+  }
   if (staff || customer) return
 
-  const authUser = await getAuthUser(serviceClient, userId)
-  if (isPublicStoreCustomerForTenant(authUser, tenantId)) return
-
-  throw new Error('User does not belong to this tenant')
+  throw new HttpError(404, 'account_not_found', 'Account not found in this tenant')
 }
 
 async function getCustomer(serviceClient: SupabaseClient, tenantId: string, customerId: string) {
@@ -1385,7 +2093,7 @@ async function getAuthUser(serviceClient: SupabaseClient, userId: string | null)
   if (!userId) return null
   const { data, error } = await serviceClient.auth.admin.getUserById(userId)
   if (error) {
-    console.warn('Unable to load auth user', userId, error.message)
+    console.warn('Unable to load auth user')
     return null
   }
   return data.user
@@ -1404,7 +2112,11 @@ async function findAuthUserByEmail(serviceClient: SupabaseClient, email: string)
   return null
 }
 
-async function getEmployeeName(serviceClient: SupabaseClient, employeeId: string, tenantId: string) {
+async function getEmployeeName(
+  serviceClient: SupabaseClient,
+  employeeId: string,
+  tenantId: string,
+) {
   const { data } = await serviceClient
     .from('employees')
     .select('first_name, last_name')
@@ -1416,7 +2128,11 @@ async function getEmployeeName(serviceClient: SupabaseClient, employeeId: string
   return `${data.first_name ?? ''} ${data.last_name ?? ''}`.trim() || null
 }
 
-async function getEmployeeForPortal(serviceClient: SupabaseClient, tenantId: string, employeeId: string) {
+async function getEmployeeForPortal(
+  serviceClient: SupabaseClient,
+  tenantId: string,
+  employeeId: string,
+) {
   const { data, error } = await serviceClient
     .from('employees')
     .select('id, first_name, last_name, status')
@@ -1426,7 +2142,9 @@ async function getEmployeeForPortal(serviceClient: SupabaseClient, tenantId: str
 
   if (error) throw error
   if (!data) throw new Error('Trabajador no encontrado para este tenant')
-  if (data.status !== 'active') throw new Error('Solo trabajadores activos pueden tener acceso movil')
+  if (data.status !== 'active') {
+    throw new Error('Solo trabajadores activos pueden tener acceso movil')
+  }
   return data
 }
 
@@ -1454,13 +2172,217 @@ async function getWorkerPortalAccount(
   return data
 }
 
+export async function assertReusableWorkerOrphan(
+  serviceClient: SupabaseClient,
+  user: Record<string, unknown>,
+  tenantId: string,
+  employeeId: string,
+  loginEmail: string,
+) {
+  if (
+    typeof user.id !== 'string' ||
+    user.id.trim().length === 0 ||
+    normalizeOptionalEmail(user.email) !== loginEmail ||
+    !hasAuthoritativeWorkerIdentity(user, tenantId, employeeId)
+  ) {
+    throw new HttpError(
+      409,
+      'worker_login_email_conflict',
+      'The worker login address is already reserved',
+    )
+  }
+
+  const membershipCount = await getAuthMembershipCount(
+    serviceClient,
+    user.id,
+  )
+  if (membershipCount !== 0) {
+    throw new HttpError(
+      409,
+      'worker_login_email_conflict',
+      'The worker login address is already reserved',
+    )
+  }
+  return user
+}
+
+export async function persistNewWorkerPortalAccount(
+  serviceClient: SupabaseClient,
+  input: {
+    payload: Record<string, unknown>
+    tenantId: string
+    employeeId: string
+    username: string
+    loginEmail: string
+    authUserId: string
+    createdAuthUserId: string | null
+  },
+): Promise<string> {
+  const { data, error } = await serviceClient
+    .from('employee_portal_accounts')
+    .insert(input.payload)
+    .select('id')
+    .single()
+
+  if (
+    !error &&
+    data &&
+    typeof data.id === 'string' &&
+    data.id.trim().length > 0
+  ) {
+    return data.id
+  }
+
+  const linkedAccount = await getExactWorkerPortalLink(
+    serviceClient,
+    input,
+  )
+  if (linkedAccount) return linkedAccount.id
+
+  if (input.createdAuthUserId) {
+    if (input.createdAuthUserId !== input.authUserId) {
+      throw workerIdentityReconciliationRequired()
+    }
+    await compensateNewWorkerAuthIdentity(
+      serviceClient,
+      input.createdAuthUserId,
+      input.tenantId,
+      input.employeeId,
+      input.loginEmail,
+    )
+  }
+
+  throw new HttpError(
+    503,
+    'worker_portal_account_create_failed',
+    'The worker portal account could not be created',
+  )
+}
+
+async function getExactWorkerPortalLink(
+  serviceClient: SupabaseClient,
+  input: {
+    tenantId: string
+    employeeId: string
+    username: string
+    loginEmail: string
+    authUserId: string
+  },
+): Promise<{ id: string } | null> {
+  const { data, error } = await serviceClient
+    .from('employee_portal_accounts')
+    .select('id')
+    .eq('tenant_id', input.tenantId)
+    .eq('employee_id', input.employeeId)
+    .eq('auth_user_id', input.authUserId)
+    .eq('username', input.username)
+    .eq('login_email', input.loginEmail)
+    .maybeSingle()
+
+  if (error) throw workerIdentityReconciliationRequired()
+  if (!data) return null
+  if (typeof data.id !== 'string' || data.id.trim().length === 0) {
+    throw workerIdentityReconciliationRequired()
+  }
+  return { id: data.id }
+}
+
+async function compensateNewWorkerAuthIdentity(
+  serviceClient: SupabaseClient,
+  userId: string,
+  tenantId: string,
+  employeeId: string,
+  loginEmail: string,
+) {
+  let authResult: {
+    data?: { user?: Record<string, unknown> | null } | null
+    error?: unknown
+  }
+  try {
+    authResult = await serviceClient.auth.admin.getUserById(userId)
+  } catch {
+    throw workerIdentityReconciliationRequired()
+  }
+  const authUser = authResult?.data?.user
+  if (
+    authResult?.error ||
+    !authUser ||
+    authUser.id !== userId ||
+    normalizeOptionalEmail(authUser.email) !== loginEmail ||
+    !hasAuthoritativeWorkerIdentity(authUser, tenantId, employeeId)
+  ) {
+    throw workerIdentityReconciliationRequired()
+  }
+
+  let membershipCount: number
+  try {
+    membershipCount = await getAuthMembershipCount(
+      serviceClient,
+      userId,
+    )
+  } catch {
+    throw workerIdentityReconciliationRequired()
+  }
+  if (membershipCount !== 0) {
+    throw workerIdentityReconciliationRequired()
+  }
+
+  const { error } = await serviceClient.auth.admin.deleteUser(userId)
+  if (error) throw workerIdentityReconciliationRequired()
+}
+
+async function getAuthMembershipCount(
+  serviceClient: SupabaseClient,
+  userId: string,
+): Promise<number> {
+  const results = await Promise.all([
+    serviceClient
+      .from('user_profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(1),
+    serviceClient
+      .from('customers')
+      .select('id')
+      .eq('auth_user_id', userId)
+      .limit(1),
+    serviceClient
+      .from('employee_portal_accounts')
+      .select('id')
+      .eq('auth_user_id', userId)
+      .limit(1),
+  ])
+  if (results.some((result) => result.error)) {
+    throw new HttpError(
+      503,
+      'worker_membership_check_failed',
+      'Unable to verify the worker login identity',
+    )
+  }
+  return results.reduce(
+    (total, result) => total + (Array.isArray(result.data) ? result.data.length : 0),
+    0,
+  )
+}
+
+function workerIdentityReconciliationRequired() {
+  return new HttpError(
+    503,
+    'worker_identity_reconciliation_required',
+    'The worker login identity requires reconciliation',
+  )
+}
+
 async function countRows(
   serviceClient: SupabaseClient,
   table: string,
   tenantId: string,
   filters: Record<string, unknown> = {},
 ) {
-  let query = serviceClient.from(table).select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId)
+  let query = serviceClient.from(table).select('id', { count: 'exact', head: true }).eq(
+    'tenant_id',
+    tenantId,
+  )
 
   for (const [key, value] of Object.entries(filters)) {
     if (value === 'not-null') query = query.not(key, 'is', null)
@@ -1493,10 +2415,243 @@ function isMissingRelationError(error: unknown) {
     String(value.message ?? '').toLowerCase().includes('does not exist')
 }
 
-function normalizeRole(role: string) {
-  const allowed = ['admin', 'manager', 'cashier', 'mechanic', 'accountant']
-  if (!allowed.includes(role)) throw new Error(`Invalid role: ${role}`)
+const staffRoleSet = new Set<string>([
+  'admin',
+  'manager',
+  'cashier',
+  'mechanic',
+  'accountant',
+])
+
+function normalizeRole(role: string): StaffRole {
+  const normalized = role.trim().toLowerCase()
+  if (!staffRoleSet.has(normalized)) {
+    throw new HttpError(400, 'invalid_role', 'A valid staff role is required')
+  }
+  return normalized as StaffRole
+}
+
+function requireCanonicalStoredRole(role: unknown): StaffRole {
+  if (typeof role !== 'string' || !staffRoleSet.has(role)) {
+    throw new HttpError(
+      409,
+      'staff_authority_invalid',
+      'Staff account authority is invalid',
+    )
+  }
+  return role as StaffRole
+}
+
+function normalizeOptionalEmail(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().toLowerCase()
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalized)) return null
+  return normalized
+}
+
+export function derivePrincipalOwnerIdentity(input: {
+  tenantId: string
+  tenantOwnerEmail: string | null
+  authUser: unknown
+}): boolean {
+  if (!input.authUser || typeof input.authUser !== 'object') return false
+  const authUser = input.authUser as Record<string, unknown>
+  const ownerEmail = normalizeOptionalEmail(input.tenantOwnerEmail)
+  const authEmail = normalizeOptionalEmail(authUser.email)
+  const metadata = authUser.app_metadata
+  const claims = metadata &&
+      typeof metadata === 'object' &&
+      !Array.isArray(metadata)
+    ? metadata as Record<string, unknown>
+    : {}
+  const hasOwnerEmailIdentity = Boolean(
+    ownerEmail && authEmail === ownerEmail,
+  )
+  const hasAuthoritativeOwnerClaim = claims.account_type === 'erp_owner' &&
+    claims.tenant_id === input.tenantId
+  return hasOwnerEmailIdentity || hasAuthoritativeOwnerClaim
+}
+
+function callerAuthorityRole(caller: CallerContext): AuthorityRole {
+  if (caller.isPrincipalOwner === true) return 'owner'
+  const callerRole = requireCanonicalStoredRole(caller.role)
+  return staffAuthorityRole(callerRole, caller.permissions)
+}
+
+function staffAuthorityRole(
+  role: StaffRole,
+  permissions: Record<string, unknown>,
+): StaffRole {
+  if (role === 'admin') return 'admin'
+  if (role === 'manager' || permissions.manage_users === true) {
+    return 'manager'
+  }
   return role
+}
+
+export function assertRoleAssignmentAllowed(
+  caller: CallerContext,
+  targetRole: StaffRole,
+  targetPermissions: Record<string, unknown> = {},
+) {
+  const actorRole = callerAuthorityRole(caller)
+  const actorRank = roleRank[actorRole]
+  const targetRank = roleRank[
+    staffAuthorityRole(targetRole, targetPermissions)
+  ]
+  const canManagePeer = actorRole === 'owner'
+  if (
+    targetRank > actorRank ||
+    (targetRank === actorRank && !canManagePeer)
+  ) {
+    throw new HttpError(
+      403,
+      'role_assignment_forbidden',
+      'You cannot assign that staff role',
+    )
+  }
+}
+
+export function canonicalizeRequestedPermissions(
+  requested: unknown,
+  defaults: Record<string, unknown> = {},
+): Record<string, boolean> {
+  const source = requested === undefined ? defaults : requested
+  if (
+    !source ||
+    typeof source !== 'object' ||
+    Array.isArray(source)
+  ) {
+    throw new HttpError(
+      400,
+      'invalid_permissions',
+      'Staff permissions must be a canonical boolean object',
+    )
+  }
+
+  for (const [key, value] of Object.entries(source)) {
+    if (
+      !canonicalPermissionKeySet.has(key) ||
+      typeof value !== 'boolean'
+    ) {
+      throw new HttpError(
+        400,
+        'invalid_permissions',
+        'Staff permissions must use canonical boolean fields',
+      )
+    }
+  }
+
+  const sourceRecord = source as Record<string, unknown>
+  return Object.fromEntries(
+    canonicalPermissionKeys.map((key) => [
+      key,
+      sourceRecord[key] === true,
+    ]),
+  )
+}
+
+export function assertPermissionGrantAllowed(
+  caller: CallerContext,
+  permissions: Record<string, boolean>,
+) {
+  if (caller.isPrincipalOwner === true) return
+  for (const key of canonicalPermissionKeys) {
+    if (
+      permissions[key] === true &&
+      caller.permissions[key] !== true
+    ) {
+      throw new HttpError(
+        403,
+        'permission_grant_forbidden',
+        'You cannot grant a permission you do not possess',
+      )
+    }
+  }
+}
+
+export function authorizeStaffAssignment(
+  caller: CallerContext,
+  requestedRole: string,
+  requestedPermissions: unknown,
+) {
+  const role = normalizeRole(requestedRole)
+
+  let permissions: Record<string, boolean>
+  if (requestedPermissions === undefined) {
+    const defaults = canonicalizeRequestedPermissions(
+      undefined,
+      rolePermissions[role],
+    )
+    permissions = caller.isPrincipalOwner === true ? defaults : Object.fromEntries(
+      canonicalPermissionKeys.map((key) => [
+        key,
+        defaults[key] === true && caller.permissions[key] === true,
+      ]),
+    )
+  } else {
+    permissions = canonicalizeRequestedPermissions(requestedPermissions)
+  }
+  assertPermissionGrantAllowed(caller, permissions)
+  assertRoleAssignmentAllowed(caller, role, permissions)
+  return { role, permissions }
+}
+
+export function assertStoredInvitationAuthorityAllowed(
+  caller: CallerContext,
+  invitation: { role?: unknown; permissions?: unknown },
+) {
+  const role = requireCanonicalStoredRole(invitation.role)
+  let permissions: Record<string, boolean>
+  try {
+    permissions = canonicalizeRequestedPermissions(invitation.permissions)
+  } catch {
+    throw new HttpError(
+      409,
+      'invitation_authority_invalid',
+      'Invitation authority is invalid',
+    )
+  }
+  assertRoleAssignmentAllowed(caller, role, permissions)
+  assertPermissionGrantAllowed(caller, permissions)
+  return { role, permissions }
+}
+
+function sameCanonicalPermissions(
+  left: Record<string, boolean>,
+  right: Record<string, boolean>,
+): boolean {
+  return canonicalPermissionKeys.every((key) => left[key] === right[key])
+}
+
+export function assertStaffTargetMutationAllowed(
+  caller: CallerContext,
+  target: StaffTargetContext,
+) {
+  if (target.isPrincipalOwner) {
+    throw new HttpError(
+      403,
+      'principal_owner_protected',
+      'The tenant principal cannot be changed through this operation',
+    )
+  }
+
+  const actorRole = callerAuthorityRole(caller)
+  const actorRank = roleRank[actorRole]
+  const targetRank = roleRank[
+    staffAuthorityRole(target.role, target.permissions)
+  ]
+  const canManagePeer = actorRole === 'owner'
+  if (
+    targetRank > actorRank ||
+    (targetRank === actorRank && !canManagePeer)
+  ) {
+    throw new HttpError(
+      403,
+      'staff_hierarchy_forbidden',
+      'You cannot change that staff account',
+    )
+  }
 }
 
 function normalizeEmail(email: string | null | undefined) {
@@ -1508,7 +2663,9 @@ function normalizeEmail(email: string | null | undefined) {
 function normalizeWorkerUsername(username: string | null | undefined) {
   const normalized = username?.trim().toLowerCase() ?? ''
   if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(normalized)) {
-    throw new Error('El usuario debe tener 3 a 32 caracteres: letras, numeros, punto, guion o guion bajo')
+    throw new Error(
+      'El usuario debe tener 3 a 32 caracteres: letras, numeros, punto, guion o guion bajo',
+    )
   }
   return normalized
 }
@@ -1523,12 +2680,30 @@ function buildWorkerLoginEmail(tenantId: string, username: string) {
 }
 
 function getDisplayName(user: any) {
-  return user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? user?.user_metadata?.display_name ?? null
+  return user?.user_metadata?.full_name ?? user?.user_metadata?.name ??
+    user?.user_metadata?.display_name ?? null
 }
 
-function isPublicStoreCustomerForTenant(user: any, tenantId: string) {
-  return user?.user_metadata?.account_type === 'public_store_customer' &&
-    user?.user_metadata?.customer_tenant_id === tenantId
+export function isPublicStoreCustomerForTenant(
+  user: Record<string, unknown> | null | undefined,
+  tenantId: string,
+) {
+  const metadata = user?.app_metadata
+  if (!metadata || typeof metadata !== 'object') return false
+  const claims = metadata as Record<string, unknown>
+  if (claims.account_type !== 'public_store_customer') return false
+
+  const memberships = claims.customer_memberships
+  if (
+    !memberships ||
+    typeof memberships !== 'object' ||
+    Array.isArray(memberships)
+  ) {
+    return false
+  }
+
+  const customerId = (memberships as Record<string, unknown>)[tenantId]
+  return typeof customerId === 'string' && customerId.trim().length > 0
 }
 
 function isBanned(user: any) {
@@ -1536,10 +2711,228 @@ function isBanned(user: any) {
   return new Date(user.banned_until).getTime() > Date.now()
 }
 
-function generatePassword() {
-  const bytes = crypto.getRandomValues(new Uint8Array(18))
-  const base = Array.from(bytes, (byte) => byte.toString(36).padStart(2, '0')).join('')
-  return `Vina-${base.slice(0, 14)}!9`
+export function isStrongAdminPassword(password: unknown): password is string {
+  if (typeof password !== 'string') return false
+  // deno-lint-ignore no-control-regex
+  const hasControlCharacters = /[\u0000-\u001F\u007F-\u009F]/u.test(password)
+  return !hasControlCharacters &&
+    password.length >= 12 &&
+    password.length <= 128 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /[0-9]/.test(password) &&
+    /[^A-Za-z0-9\s]/u.test(password)
+}
+
+function requireStrongAdminPassword(password: unknown): string {
+  if (!isStrongAdminPassword(password)) {
+    throw new HttpError(
+      400,
+      'weak_password',
+      'Password must be 12-128 characters and include uppercase, lowercase, number, and symbol',
+    )
+  }
+  return password
+}
+
+export function buildWorkerAuthMetadata(input: {
+  tenantId: string
+  employeeId: string
+  username: string
+  name: string
+}) {
+  const authoritative = {
+    account_type: 'worker_portal',
+    tenant_id: input.tenantId,
+    employee_id: input.employeeId,
+    role: 'worker',
+  } as const
+
+  return {
+    appMetadata: authoritative,
+    userMetadata: {
+      username: input.username,
+      name: input.name,
+    },
+  }
+}
+
+export function mergeWorkerAppMetadata(
+  current: unknown,
+  authoritative: {
+    account_type: 'worker_portal'
+    tenant_id: string
+    employee_id: string
+    role: 'worker'
+  },
+): Record<string, unknown> {
+  const preserved = current &&
+      typeof current === 'object' &&
+      !Array.isArray(current)
+    ? { ...(current as Record<string, unknown>) }
+    : {}
+  return {
+    ...preserved,
+    ...authoritative,
+  }
+}
+
+export function buildWorkerPasswordResetMarker(
+  passwordResetRequiredAt: string,
+  passwordCredentialIssuedAt: string | null,
+) {
+  return {
+    must_reset_password: true,
+    password_reset_required_at: passwordResetRequiredAt,
+    password_credential_issued_at: passwordCredentialIssuedAt,
+    password_reset_challenge_started_at: null,
+  } as const
+}
+
+export async function beginWorkerPasswordCredentialIssue(
+  serviceClient: SupabaseClient,
+  portalAccountId: string,
+  tenantId: string,
+): Promise<string> {
+  const { data, error } = await serviceClient.rpc(
+    'begin_worker_password_credential_issue',
+    {
+      p_portal_account_id: portalAccountId,
+      p_tenant_id: tenantId,
+    },
+  )
+  if (error) {
+    throw new HttpError(
+      503,
+      'worker_credential_issue_begin_failed',
+      'Unable to prepare the worker credential',
+    )
+  }
+  return requireCredentialIssueTimestamp(
+    data,
+    'worker_credential_issue_begin_failed',
+  )
+}
+
+export async function finishWorkerPasswordCredentialIssue(
+  serviceClient: SupabaseClient,
+  portalAccountId: string,
+  tenantId: string,
+  passwordResetRequiredAt: string,
+): Promise<string> {
+  const { data, error } = await serviceClient.rpc(
+    'finish_worker_password_credential_issue',
+    {
+      p_portal_account_id: portalAccountId,
+      p_tenant_id: tenantId,
+      p_password_reset_required_at: passwordResetRequiredAt,
+    },
+  )
+  if (error) {
+    throw new HttpError(
+      503,
+      'worker_credential_issue_finish_failed',
+      'Unable to finalize the worker credential',
+    )
+  }
+  return requireCredentialIssueTimestamp(
+    data,
+    'worker_credential_issue_finish_failed',
+  )
+}
+
+function requireCredentialIssueTimestamp(
+  value: unknown,
+  code: string,
+): string {
+  if (
+    typeof value !== 'string' ||
+    value.trim().length === 0 ||
+    !Number.isFinite(Date.parse(value))
+  ) {
+    throw new HttpError(
+      503,
+      code,
+      'Unable to verify the worker credential state',
+    )
+  }
+  return value
+}
+
+export function sanitizeWorkerDisplayMetadata(
+  current: unknown,
+  display: { username: string; name: string },
+): Record<string, unknown> {
+  const metadata = current && typeof current === 'object'
+    ? { ...(current as Record<string, unknown>) }
+    : {}
+  delete metadata.account_type
+  delete metadata.tenant_id
+  delete metadata.employee_id
+  delete metadata.role
+  delete metadata.invitation_token
+  return {
+    ...metadata,
+    username: display.username,
+    name: display.name,
+  }
+}
+
+export function hasAuthoritativeWorkerIdentity(
+  user: Record<string, unknown> | null | undefined,
+  tenantId: string,
+  employeeId: string,
+): boolean {
+  const metadata = user?.app_metadata
+  if (!metadata || typeof metadata !== 'object') return false
+  const claims = metadata as Record<string, unknown>
+  return claims.account_type === 'worker_portal' &&
+    claims.tenant_id === tenantId &&
+    claims.employee_id === employeeId &&
+    claims.role === 'worker'
+}
+
+export function buildCustomerAuthMetadata(input: {
+  name: string
+  phone: string | null
+}) {
+  return {
+    userMetadata: {
+      name: input.name,
+      phone: input.phone,
+    },
+  }
+}
+
+export function selectAccessEmailDelivery(input: {
+  newlyInvited: boolean
+  emailConfirmedAt: unknown
+}): 'invite' | 'verification' | 'recovery' {
+  if (input.newlyInvited) return 'invite'
+  return typeof input.emailConfirmedAt === 'string' &&
+      input.emailConfirmedAt.trim().length > 0
+    ? 'recovery'
+    : 'verification'
+}
+
+export function accessEmailRedirect(input: {
+  delivery: 'invite' | 'verification' | 'recovery'
+  isCustomer: boolean
+  erpOrigin: string
+  storeOrigin: string
+}): string {
+  if (input.isCustomer) {
+    if (input.delivery === 'invite') {
+      return `${input.storeOrigin}/cuenta/login?invited=true`
+    }
+    if (input.delivery === 'verification') {
+      return `${input.storeOrigin}/cuenta/login?confirmed=true`
+    }
+    return `${input.storeOrigin}/cuenta/login`
+  }
+  return input.delivery === 'verification'
+    ? `${input.erpOrigin}/auth/callback`
+    : `${input.erpOrigin}/reset-password`
 }
 
 function addDays(days: number) {
@@ -1550,29 +2943,109 @@ function addDays(days: number) {
 
 function getOrigin(req: Request) {
   const origin = req.headers.get('origin')
-  if (origin) return origin
-  return Deno.env.get('APP_URL') ?? 'https://project-vinabike.web.app'
+  if (origin) {
+    return normalizeOrigin(origin) ?? 'https://project-vinabike.web.app'
+  }
+  const configured = Deno.env.get('APP_URL')?.trim() ?? ''
+  return normalizeOrigin(configured) ?? 'https://project-vinabike.web.app'
 }
 
-async function getStoreOrigin(serviceClient: SupabaseClient, tenantId: string, req: Request) {
-  const { data: tenant } = await serviceClient
+async function getStoreOrigin(
+  serviceClient: SupabaseClient,
+  tenantId: string,
+  getEnv: EnvReader = (name) => Deno.env.get(name),
+) {
+  const { data: tenant, error } = await serviceClient
     .from('tenants')
     .select('custom_domain, subdomain')
     .eq('id', tenantId)
     .maybeSingle()
 
-  const customDomain = tenant?.custom_domain?.toString().trim()
-  if (customDomain) {
-    return customDomain.startsWith('http') ? customDomain : `https://${customDomain}`
+  if (error) {
+    throw new HttpError(
+      503,
+      'store_origin_unavailable',
+      'Unable to resolve the customer storefront',
+    )
   }
 
-  const baseDomain = Deno.env.get('PUBLIC_STORE_BASE_DOMAIN')?.trim()
-  const subdomain = tenant?.subdomain?.toString().trim()
-  if (baseDomain && subdomain) {
-    return `https://${subdomain}.${baseDomain}`
+  return resolveTrustedStoreOrigin({
+    customDomain: tenant?.custom_domain?.toString(),
+    subdomain: tenant?.subdomain?.toString(),
+    publicStoreOrigins: getEnv('PUBLIC_STORE_ORIGINS'),
+    publicStoreBaseDomain: getEnv('PUBLIC_STORE_BASE_DOMAIN'),
+  })
+}
+
+export function resolveTrustedStoreOrigin(input: {
+  customDomain?: string | null
+  subdomain?: string | null
+  publicStoreOrigins?: string | null
+  publicStoreBaseDomain?: string | null
+}): string {
+  const allowedOrigins = new Set(
+    (input.publicStoreOrigins ?? '')
+      .split(',')
+      .map((value) => strictHttpsOrigin(value))
+      .filter((value): value is string => value !== null),
+  )
+  const customOrigin = strictHttpsOrigin(input.customDomain ?? '', true)
+  if (customOrigin && allowedOrigins.has(customOrigin)) return customOrigin
+
+  const baseDomain = input.publicStoreBaseDomain?.trim().toLowerCase() ?? ''
+  const configuredSubdomain = input.subdomain?.trim() ?? ''
+  const subdomain = configuredSubdomain.toLowerCase()
+  if (
+    /^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/.test(baseDomain) &&
+    !baseDomain.includes('..') &&
+    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain)
+  ) {
+    const generated = strictHttpsOrigin(`https://${subdomain}.${baseDomain}`)
+    if (generated) return generated
   }
 
-  return getOrigin(req)
+  const configuredCustomDomain = input.customDomain?.trim() ?? ''
+  const isCanonicalVinabikeDomain = customOrigin === 'https://vinabike.cl' ||
+    customOrigin === 'https://www.vinabike.cl'
+  const hasNoConflictingCustomDomain = configuredCustomDomain.length === 0 ||
+    isCanonicalVinabikeDomain
+  const isCanonicalVinabikeTenant = configuredSubdomain === 'vinabike' &&
+    hasNoConflictingCustomDomain
+  if (isCanonicalVinabikeTenant) {
+    return 'https://vinabike.cl'
+  }
+
+  throw new HttpError(
+    503,
+    'store_origin_unavailable',
+    'Unable to resolve the customer storefront',
+  )
+}
+
+function strictHttpsOrigin(
+  value: string,
+  assumeHttps = false,
+): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  try {
+    const parsed = new URL(
+      assumeHttps && !trimmed.includes('://') ? `https://${trimmed}` : trimmed,
+    )
+    if (
+      parsed.protocol !== 'https:' ||
+      parsed.username ||
+      parsed.password ||
+      parsed.pathname !== '/' ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      return null
+    }
+    return parsed.origin
+  } catch (_) {
+    return null
+  }
 }
 
 function required(value: string | undefined | null, name: string) {
@@ -1581,17 +3054,83 @@ function required(value: string | undefined | null, name: string) {
 }
 
 function requiredEnv(name: string) {
-  const value = Deno.env.get(name)
-  if (!value) throw new Error(`${name} is not configured`)
+  return requiredEnvFrom((envName) => Deno.env.get(envName), name)
+}
+
+function requiredEnvFrom(getEnv: EnvReader, name: string) {
+  const value = getEnv(name)?.trim()
+  if (!value) {
+    throw new HttpError(
+      503,
+      'service_not_configured',
+      'Account management is unavailable',
+    )
+  }
   return value
 }
 
-function json(data: unknown, status = 200) {
+export function isAllowedCorsOrigin(
+  origin: string,
+  configuredOrigins: readonly string[] = configuredCorsOrigins(),
+) {
+  const normalized = normalizeOrigin(origin)
+  if (!normalized) return false
+
+  const allowed = new Set([
+    ...defaultAllowedOrigins,
+    ...configuredOrigins
+      .map(normalizeOrigin)
+      .filter((value): value is string => value !== null),
+  ])
+
+  return allowed.has(normalized) || firebasePreviewOrigin.test(normalized)
+}
+
+function configuredCorsOrigins() {
+  const values = (Deno.env.get('CORS_ALLOWED_ORIGINS') ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+
+  const appUrl = Deno.env.get('APP_URL')?.trim()
+  if (appUrl) values.push(appUrl)
+  return values
+}
+
+function normalizeOrigin(value: string) {
+  try {
+    return new URL(value).origin
+  } catch (_) {
+    return null
+  }
+}
+
+function corsHeaders(req: Request, configuredOrigins: readonly string[]) {
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Max-Age': '86400',
+    Vary: 'Origin',
+  }
+  const origin = req.headers.get('origin')
+  if (origin && isAllowedCorsOrigin(origin, configuredOrigins)) {
+    headers['Access-Control-Allow-Origin'] = normalizeOrigin(origin)!
+  }
+  return headers
+}
+
+function json(
+  req: Request,
+  data: unknown,
+  status: number,
+  configuredOrigins: readonly string[],
+) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
-      ...corsHeaders,
+      ...corsHeaders(req, configuredOrigins),
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
     },
   })
 }

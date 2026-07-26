@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'desktop_release_notes.dart';
+
 class AndroidReleaseManifest {
   static const schemaVersion = 1;
   static const packageName = 'com.vinabike.erp';
@@ -15,7 +17,8 @@ class AndroidReleaseManifest {
   final int sizeBytes;
   final List<AndroidReleasePart> parts;
   final DateTime publishedAt;
-  final String? releaseNotes;
+  final String commit;
+  final DesktopReleaseNotes? releaseNotes;
 
   const AndroidReleaseManifest({
     required this.versionCode,
@@ -25,6 +28,7 @@ class AndroidReleaseManifest {
     required this.sizeBytes,
     required this.parts,
     required this.publishedAt,
+    required this.commit,
     this.releaseNotes,
   });
 
@@ -57,6 +61,7 @@ class AndroidReleaseManifest {
     final sizeBytes = json['size_bytes'];
     final partsValue = json['apk_parts'];
     final publishedAtValue = json['published_at'];
+    final commitValue = json['commit'];
     final releaseNotesValue = json['release_notes'];
 
     if (manifestSchema != schemaVersion) {
@@ -118,6 +123,10 @@ class AndroidReleaseManifest {
     if (publishedAt == null) {
       throw const FormatException('Invalid Android publication timestamp.');
     }
+    if (commitValue is! String ||
+        !RegExp(r'^[a-f0-9]{40}$').hasMatch(commitValue)) {
+      throw const FormatException('Invalid Android publication commit.');
+    }
 
     return AndroidReleaseManifest(
       versionCode: versionCode,
@@ -127,9 +136,11 @@ class AndroidReleaseManifest {
       sizeBytes: sizeBytes,
       parts: List.unmodifiable(parts),
       publishedAt: publishedAt,
-      releaseNotes: releaseNotesValue is String && releaseNotesValue.isNotEmpty
-          ? releaseNotesValue
-          : null,
+      commit: commitValue,
+      releaseNotes: DesktopReleaseNotes.tryParse(
+        releaseNotesValue,
+        expectedToCommit: commitValue,
+      ),
     );
   }
 

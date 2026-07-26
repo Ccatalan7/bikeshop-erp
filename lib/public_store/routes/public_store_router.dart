@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../shared/pages/auth_callback_page.dart';
 import '../pages/cart_page.dart';
 import '../pages/checkout_page.dart';
 import '../pages/contact_page.dart';
@@ -414,6 +415,17 @@ class PublicStoreRouter {
         if (_storeNavLogsEnabled) _PublicStoreNavObserver(),
       ],
       routes: [
+        // Stable OAuth landing route. Supabase exchanges the provider code here
+        // before navigation continues to the tenant-scoped customer portal.
+        GoRoute(
+          path: '/auth/callback',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const AuthCallbackPage(fallbackPath: '/cuenta'),
+          ),
+        ),
+
         // ====================================================================
         // MAIN PAGES
         // ====================================================================

@@ -158,9 +158,6 @@ void main() {
     final productForm =
         File('lib/modules/inventory/pages/product_form_page.dart')
             .readAsStringSync();
-    final productDialog =
-        File('lib/modules/inventory/widgets/product_editor_dialog.dart')
-            .readAsStringSync();
     final availabilityLoader = File(
       'lib/modules/website/services/website_catalog_availability_loader.dart',
     ).readAsStringSync();
@@ -174,14 +171,12 @@ void main() {
     expect(visibility, contains("label: 'Reglas públicas'"));
     expect(visibility, contains("message: 'Publicar el resultado actual'"));
     expect(visibility, contains('_confirmAndRunResultAction'));
-    expect(visibility, contains('_CatalogActionConfirmationDialog'));
     expect(visibility, contains("title: 'Publicar resultado actual'"));
     expect(visibility, contains("title: 'Ocultar resultado actual'"));
     expect(
       visibility,
       contains("title: 'Dejar visible sólo este resultado'"),
     );
-    expect(visibility, contains('barrierDismissible: false'));
     expect(
       visibility,
       isNot(contains('value: _CatalogResultAction.publish')),
@@ -193,7 +188,6 @@ void main() {
     expect(visibility, contains('_buildPublicStatusBadge'));
     expect(visibility, contains('isMarkedForWebsite'));
     expect(visibility, contains('OperationalStatusBadge('));
-    expect(visibility, contains('const Color(0xFF8F9F94)'));
     expect(visibility, contains("label = 'Publicado'"));
     expect(visibility, contains("label = 'Bloqueado'"));
     expect(visibility, contains("label = 'Oculto'"));
@@ -243,11 +237,7 @@ void main() {
       availabilityLoader,
       contains('static const int maxBatchSize = 500'),
     );
-    expect(visibility, contains('_CatalogTableMetrics.forWidth'));
-    expect(visibility, contains('final fieldWidth ='));
-    expect(visibility, contains('const Spacer()'));
     expect(visibility, contains('_openProductWebsiteEditor'));
-    expect(visibility, contains('showProductEditorDialog('));
     expect(
         visibility, contains("label: 'Editar página web de \${product.name}'"));
     expect(
@@ -263,10 +253,6 @@ void main() {
       productForm,
       contains('widget.initialSection == ProductFormSection.website ? 1 : 0'),
     );
-    expect(productDialog, contains('barrierColor: Colors.black'));
-    expect(productDialog, contains('maxWidth: 1480'));
-    expect(productDialog, contains('ProductFormPage('));
-    expect(productDialog, contains('showInDialog: true'));
     expect(
       visibility,
       contains(
@@ -280,7 +266,13 @@ void main() {
     expect(renderer, contains('widget.featuredProducts'));
     expect(registry, contains('| Website catalog workspace |'));
     expect(registry, contains('`Categorías > Publicación` exclusively owns'));
-    expect(registry, contains('opens the canonical `ProductFormPage` inline'));
+    expect(
+      registry,
+      contains(
+        'opens the canonical `ProductFormPage` in the host-appropriate '
+        'context-preserving workspace',
+      ),
+    );
   });
 
   test('category CTA picker surfaces catalog readiness', () {
@@ -822,21 +814,45 @@ void main() {
     }
   });
 
-  test('global Theme button controls produce shared shape and size tokens', () {
-    final theme = WebsiteThemeBuilder.build(
-      base: ThemeData.light(),
-      primaryColor: Colors.teal,
-      accentColor: Colors.orange,
-      backgroundColor: Colors.white,
+  test('global Theme button controls change the shared button tokens', () {
+    final base = ThemeData.light();
+    final pillLargeTheme = WebsiteThemeBuilder.build(
+      base: base,
+      primaryColor: base.colorScheme.primary,
+      accentColor: base.colorScheme.secondary,
+      backgroundColor: base.colorScheme.surface,
       buttonStyle: 'pill',
       buttonSize: 'large',
     );
-    final style = theme.elevatedButtonTheme.style!;
-    final shape = style.shape!.resolve({}) as RoundedRectangleBorder;
-    final minimumSize = style.minimumSize!.resolve({})!;
+    final sharpSmallTheme = WebsiteThemeBuilder.build(
+      base: base,
+      primaryColor: base.colorScheme.primary,
+      accentColor: base.colorScheme.secondary,
+      backgroundColor: base.colorScheme.surface,
+      buttonStyle: 'sharp',
+      buttonSize: 'small',
+    );
+    final pillLargeStyle = pillLargeTheme.elevatedButtonTheme.style!;
+    final sharpSmallStyle = sharpSmallTheme.elevatedButtonTheme.style!;
+    final pillLargeShape =
+        pillLargeStyle.shape!.resolve({}) as RoundedRectangleBorder;
+    final sharpSmallShape =
+        sharpSmallStyle.shape!.resolve({}) as RoundedRectangleBorder;
+    final pillLargeMinimumSize = pillLargeStyle.minimumSize!.resolve({})!;
+    final sharpSmallMinimumSize = sharpSmallStyle.minimumSize!.resolve({})!;
+    final pillLargeRadius =
+        pillLargeShape.borderRadius.resolve(TextDirection.ltr);
+    final sharpSmallRadius =
+        sharpSmallShape.borderRadius.resolve(TextDirection.ltr);
 
-    expect(shape.borderRadius, BorderRadius.circular(999));
-    expect(minimumSize.height, 52);
+    expect(
+      pillLargeRadius.topLeft.x,
+      greaterThan(sharpSmallRadius.topLeft.x),
+    );
+    expect(
+      pillLargeMinimumSize.height,
+      greaterThan(sharpSmallMinimumSize.height),
+    );
   });
 
   test('all storefront navigation CTAs use one renderer and one editor', () {

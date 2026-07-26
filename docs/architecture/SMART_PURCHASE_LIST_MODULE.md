@@ -9,6 +9,23 @@
 
 The Smart Purchase List is an intelligent inventory replenishment tool located at **Compras → Lista Inteligente**. It analyzes product sales history and current stock to suggest purchase quantities, helping users make data-driven purchasing decisions.
 
+### UI guidance status
+
+This is a dated implementation summary, not a visual design specification.
+Its replenishment rules, workflow states, and persistence contracts remain
+useful. Historical literals for colors, badges, chips, icons, columns, dialogs,
+route primitives, or component geometry are non-authoritative.
+
+Current UI work must follow
+[the general GUI guide](../../.github/GUI_DESIGN_PRINCIPLES.md) and, for phone,
+tablet, compact, adaptive, or responsive work,
+[the mobile GUI guide](../../.github/GUI_MOBILE_DESIGN_PRINCIPLES.md).
+Choose the interaction surface from the actual task, sequence, available space,
+and input capabilities using the canonical guide's decision criteria. No
+surface in this historical summary is a mandatory pattern. A long list is
+evidence to evaluate context-preserving list-detail interaction, not a mandate
+for a split pane or any other favorite layout.
+
 ---
 
 ## ✅ Completed Features
@@ -37,13 +54,12 @@ The Smart Purchase List is an intelligent inventory replenishment tool located a
 
 ### 2. Manual Adjustment & Priority Setting
 **Features:**
-- ✏️ **Inline editing** for suggested quantity (planned, not yet implemented)
-- 📝 **Notes column** for purchase justification/reminders
-- 🎨 **Priority colors** (visual indicators):
-  - 🔴 Red: Stock < 3 (critical)
-  - 🟠 Orange: Stock 3-5 (low)
-  - 🟡 Yellow: Stock 6-10 (medium)
-  - 🟢 Green: Stock > 10 (good)
+- **Suggested-quantity adjustment** (planned, not yet implemented)
+- **Purchase notes** for justification or reminders
+- **Replenishment urgency:** derived from stock and demand, exposed with a
+  clear textual or semantic state. Theme-owned color may reinforce it, but a
+  hardcoded traffic-light palette, one colored chip per state, or color-only
+  meaning is not part of the contract.
 
 ---
 
@@ -55,7 +71,7 @@ The Smart Purchase List is an intelligent inventory replenishment tool located a
 **Columns:**
 - Producto (Product name)
 - SKU
-- Stock Actual (Current stock with color badge)
+- Stock Actual (current stock and replenishment urgency)
 - Ventas 30d (Sales in last 30 days)
 - Sugerido (Suggested quantity to buy)
 - Notas (Notes - editable)
@@ -72,8 +88,8 @@ The Smart Purchase List is an intelligent inventory replenishment tool located a
 **Purpose:** Track ordered but not received inventory
 
 **Added Columns (beyond "Por Ordenar"):**
-- 📄 **N° Factura** (Invoice Number) - Clickable link
-- 📅 **Ordenado el** (Order date)
+- **N° Factura** (Invoice Number) - invoice detail action
+- **Ordenado el** (Order date)
 
 **Features:**
 - ✅ Clickable invoice number → Opens invoice in **read-only mode**
@@ -90,8 +106,8 @@ The Smart Purchase List is an intelligent inventory replenishment tool located a
 **Purpose:** Review completed purchases and verify stock updates
 
 **Added Columns (beyond "Ordenados"):**
-- 📦 **Stock al Recibir** (Stock at receipt) - Actual stock when invoice was received
-- 📅 **Creado el** (Invoice creation date)
+- **Stock al Recibir** (Stock at receipt) - actual stock when invoice was received
+- **Creado el** (Invoice creation date)
 
 **Key Feature - Stock at Receipt Tracking:**
 - ✅ Captures the **actual stock level** when invoice is received
@@ -178,61 +194,39 @@ Future<void> createPurchaseInvoice(String itemId) async {
 
 **Feature:** When navigating from Smart Purchase List, invoice opens in read-only mode
 
-**Implementation:**
-```dart
-class PurchaseInvoiceFormPage extends StatefulWidget {
-  final String? invoiceId;
-  final bool readOnly; // NEW parameter (default: false)
-}
-
-// Modified UI behavior:
-Widget _buildHeader() {
-  if (widget.readOnly) {
-    // Hide: Save, Delete, Add Line buttons
-    // Show: Only status label and back button
-  } else {
-    // Normal edit mode with all actions
-  }
-}
-```
-
-**Navigation:**
-```dart
-// From smart_purchase_list_page.dart
-void _navigateToInvoice(String invoiceNumber) {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => PurchaseInvoiceFormPage(
-        invoiceId: invoiceId,
-        readOnly: true, // ← Prevents editing
-      ),
-    ),
-  );
-}
-```
+**Behavioral contract:**
+- The invoice action delegates to the canonical purchase-invoice reader and
+  canonical permission checks.
+- The host may present it inline, in-block, in an inspector, or as a full route
+  according to the canonical surface-selection criteria.
+- A full route is justified by task and navigation needs, not by the fact that
+  an invoice widget exists.
+- Back or close returns to the exact Smart Purchase List view, search, filters,
+  selection, and scroll position.
+- Read-only mode cannot expose mutating commands through an alternate host.
 
 ---
 
 ### 7. GUI Enhancements
 
-**Recent Fixes (Oct 31, 2025):**
+**Historical capability snapshot (Oct 31, 2025):**
 
 ✅ **Invoice Creation Date Column**
 - Added "Creado el" column to "Recibido" view
 - Shows when the purchase invoice was originally created
 - Format: `DD/MM/YYYY HH:mm`
-- Uses `FutureBuilder` to fetch from `purchase_invoices.created_at`
+- The current implementation must use the authoritative read model; this
+  historical `FutureBuilder` detail is not a UI pattern
 
 ✅ **Clickable Invoice Numbers**
-- Invoice numbers in "Ordenados" and "Recibido" views are blue and underlined
-- Click to navigate to invoice detail
-- Opens in read-only mode (no accidental edits)
+- Invoice numbers in "Ordenados" and "Recibido" expose an accessible invoice
+  action through the shared interaction language
+- Opens through the canonical read-only surface with exact-origin return
 
-✅ **Priority Color Badges**
-- Visual stock indicators based on quantity
-- Helps quickly identify critical stock levels
-- Color-coded for at-a-glance assessment
+✅ **Replenishment Urgency**
+- Stock and demand expose the exception that changes the purchase decision
+- Treatment follows current theme roles and remains understandable without
+  color; the old priority-color badges are not visual precedent
 
 ---
 
@@ -296,15 +290,15 @@ create index idx_smart_purchase_list_product on smart_purchase_list(product_id);
 - Suggested quantity (user can adjust before ordering)
 - Notes field (add purchase justification)
 
-**Implementation Plan:**
-```dart
-// Replace Text widget with TextField on edit mode
-bool _isEditing = false;
-TextEditingController _notesController;
-
-// Add edit/save buttons per row
-// Save changes via SmartPurchaseService.updateItem()
-```
+**Interaction contract:**
+- Prefer editing in the current workflow when it remains clear and protects
+  scanning context; use another surface when validation, space, or task
+  complexity genuinely requires it.
+- Do not infer that every row needs permanent fields or edit/save buttons.
+- Reuse the canonical update command, validation, permission, loading, and
+  error behavior in every host.
+- Preserve the active workflow view, filters, selection, draft, and scroll
+  through save, cancel, error, and return.
 
 **Benefit:** Users can adjust suggestions without creating invoices first
 
@@ -324,7 +318,7 @@ TextEditingController _notesController;
 **Not Yet Implemented:**
 - ❌ Filter by product category
 - ❌ Filter by supplier
-- ❌ Filter by priority level
+- ❌ Filter by replenishment urgency
 - ❌ Sort by different columns
 
 **Current State:** All products shown, sorted by suggested quantity DESC
@@ -369,7 +363,12 @@ TextEditingController _notesController;
 - [x] Mark invoice as "received" → Item moves to "Recibido"
 - [x] "Stock al Recibir" shows actual stock at receipt time
 - [x] "Creado el" shows invoice creation date
-- [x] Priority colors display correctly (red/orange/yellow/green)
+- [ ] Replenishment urgency is clear without color-only meaning or a rainbow
+      chip system
+- [ ] Invoice detail → return restores the exact workflow view, filters,
+      selection, and scroll
+- [ ] Desktop, tablet, and phone use task-appropriate compositions rather than
+      a universal table, card, or split-pane recipe
 
 ### Edge Cases (All Handled ✅)
 - [x] Product with no sales history → Not suggested
@@ -388,7 +387,8 @@ TextEditingController _notesController;
 - ✅ Loading states with progress indicators
 - ✅ Empty states with helpful guidance ("No hay productos por ordenar")
 - ✅ No SQL injection risks (uses parameterized queries)
-- ✅ Responsive design (works on mobile/tablet/desktop)
+- ⚠️ Responsive behavior must be revalidated against the current canonical
+  desktop, tablet, phone, touch, and context-preservation requirements
 
 ---
 
@@ -429,8 +429,8 @@ This module integrates with:
    - `lib/modules/purchases/pages/smart_purchase_list_page.dart` (~800 lines)
      - Three-tab layout (Por Ordenar, Ordenados, Recibido)
      - Search functionality
-     - Priority color badges
-     - Clickable invoice navigation
+     - Replenishment urgency
+     - Canonical read-only invoice access
      - Invoice creation date display
 
 5. **Navigation:**
@@ -471,7 +471,7 @@ This module integrates with:
 
 **User Feedback (Expected):**
 - "Makes purchasing decisions much easier"
-- "Love the color-coded priorities"
+- "The most urgent replenishment decisions are easy to recognize"
 - "Wish I could edit quantities before ordering" ← TODO #1
 
 ---

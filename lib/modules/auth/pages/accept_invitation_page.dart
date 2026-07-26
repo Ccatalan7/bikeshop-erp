@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../shared/services/auth_service.dart';
+import '../../../shared/utils/auth_input_validation.dart';
+
+enum _InvitationAccountMode { create, existing }
 
 /// Invitation Acceptance Page
 /// Handles employee invitation acceptance and account setup
-/// Route: /accept-invitation?token=xxx
+/// Route: /accept-invitation#token=xxx (query-string fallback for old emails)
 class AcceptInvitationPage extends StatefulWidget {
   final String token;
 
@@ -27,7 +33,11 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
   bool _isSubmitting = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  String? _errorMessage;
+  bool _hasMatchingSession = false;
+  bool _hasMismatchedSession = false;
+  _InvitationAccountMode _accountMode = _InvitationAccountMode.create;
+  String? _loadErrorMessage;
+  String? _formErrorMessage;
   Map<String, dynamic>? _invitationData;
 
   @override
@@ -48,60 +58,62 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
     try {
       setState(() {
         _isLoading = true;
-        _errorMessage = null;
+        _loadErrorMessage = null;
+        _formErrorMessage = null;
       });
 
-      debugPrint('🔍 Loading invitation with token: ${widget.token}');
+      final token = widget.token.trim();
+      if (token.isEmpty) {
+        _setInvitationLoadError('Invitación no encontrada o ya fue utilizada.');
+        return;
+      }
 
-      // Fetch invitation by token
-      final response = await Supabase.instance.client
-          .from('user_invitations')
-          .select(
-              'id, email, role, tenant_id, status, expires_at, metadata, employee_id')
-          .eq('metadata->>invitation_token', widget.token)
-          .maybeSingle();
-
-      debugPrint('📦 Invitation response: $response');
+      final response = await Supabase.instance.client.rpc(
+        'lookup_user_invitation',
+        params: {'p_token': token},
+      ).maybeSingle();
 
       if (response == null) {
-        debugPrint('❌ No invitation found for token: ${widget.token}');
-        setState(() {
-          _errorMessage = 'Invitación no encontrada o ya fue utilizada.';
-          _isLoading = false;
-        });
+        _setInvitationLoadError('Invitación no encontrada o ya fue utilizada.');
         return;
       }
 
-      // Check if invitation is expired
-      final expiresAt = DateTime.parse(response['expires_at']);
-      if (DateTime.now().isAfter(expiresAt)) {
-        setState(() {
-          _errorMessage = 'Esta invitación ha expirado.';
-          _isLoading = false;
-        });
+      final invitation = Map<String, dynamic>.from(response as Map);
+      final email = invitation['email']?.toString().trim() ?? '';
+      if (email.isEmpty) {
+        _setInvitationLoadError('La invitación no contiene un correo válido.');
         return;
       }
 
-      // Check if already accepted
-      if (response['status'] == 'accepted') {
-        setState(() {
-          _errorMessage = 'Esta invitación ya fue aceptada.';
-          _isLoading = false;
-        });
-        return;
-      }
-
+      if (!mounted) return;
+      final signedInEmail = Supabase.instance.client.auth.currentUser?.email;
+      final hasSession =
+          signedInEmail != null && signedInEmail.trim().isNotEmpty;
+      final sessionMatchesInvitation = hasSession &&
+          signedInEmail.trim().toLowerCase() == email.toLowerCase();
       setState(() {
-        _invitationData = response;
-        _emailController.text = response['email'];
+        _invitationData = invitation;
+        _emailController.text = email;
+        _hasMatchingSession = sessionMatchesInvitation;
+        _hasMismatchedSession = hasSession && !sessionMatchesInvitation;
+        if (sessionMatchesInvitation) {
+          _accountMode = _InvitationAccountMode.existing;
+        }
         _isLoading = false;
       });
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Error al cargar la invitación: $e';
-        _isLoading = false;
-      });
+    } catch (_) {
+      _setInvitationLoadError(
+        'No pudimos validar la invitación. Inténtalo nuevamente.',
+      );
     }
+  }
+
+  void _setInvitationLoadError(String message) {
+    if (!mounted) return;
+    setState(() {
+      _loadErrorMessage = message;
+      _isLoading = false;
+    });
   }
 
   Future<void> _acceptInvitation() async {
@@ -109,120 +121,142 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
 
     setState(() {
       _isSubmitting = true;
-      _errorMessage = null;
+      _formErrorMessage = null;
     });
 
     try {
       final email = _emailController.text.trim();
       final password = _passwordController.text;
+      final authService = context.read<AuthService>();
 
-      // IMPORTANT: The trigger handle_new_user() will automatically:
-      // 1. Find the pending invitation
-      // 2. Create user_profile with correct tenant_id and role
-      // 3. Update auth.users metadata
-      // 4. Mark invitation as accepted
-      // 
-      // We DON'T need to pass metadata in signUp() - the trigger handles everything!
-      
-      // Step 1: Sign up the user (trigger will handle the rest)
-      // Note: emailRedirectTo skips the confirmation email for invited users
-      AuthResponse authResponse;
-      
-      try {
-        authResponse = await Supabase.instance.client.auth.signUp(
-          email: email,
-          password: password,
-          emailRedirectTo: null, // Skip email confirmation redirect
-          // Don't pass metadata - let the trigger handle it
+      if (_hasMatchingSession) {
+        await _claimInvitation(authService);
+        return;
+      }
+
+      if (_hasMismatchedSession) {
+        throw const AuthException(
+          'Cierra la sesión actual antes de aceptar esta invitación.',
         );
-        
-        debugPrint('✅ User signed up: ${authResponse.user?.id}');
-        debugPrint('✅ Email confirmed: ${authResponse.user?.emailConfirmedAt}');
-      } catch (signupError) {
-        debugPrint('⚠️ Signup error: $signupError');
-        
-        // Check if user already exists
-        if (signupError.toString().contains('already registered') ||
-            signupError.toString().contains('User already registered')) {
-          setState(() {
-            _errorMessage =
-                'Este email ya está registrado. Si ya tienes una cuenta, inicia sesión normalmente.';
-            _isSubmitting = false;
-          });
-          return;
-        }
-        
-        rethrow;
       }
 
+      if (_accountMode == _InvitationAccountMode.existing) {
+        final user =
+            await authService.signInWithEmailAndPassword(email, password);
+        if (user.email?.trim().toLowerCase() != email.toLowerCase()) {
+          await authService.signOut();
+          throw const AuthException(
+            'No pudimos verificar la cuenta para esta invitación.',
+          );
+        }
+        await _claimInvitation(authService);
+        return;
+      }
+
+      final authResponse = await authService.signUpStaffInvitation(
+        email: email,
+        password: password,
+        invitationToken: widget.token.trim(),
+      );
       if (authResponse.user == null) {
-        throw Exception(
-            'Error al crear la cuenta. Por favor intenta nuevamente.');
+        throw const AuthException(
+          'No pudimos completar el registro con esta invitación.',
+        );
       }
 
-      final userId = authResponse.user!.id;
-      debugPrint('✅ User created with ID: $userId');
-
-      // Step 2: Link user to employee if employee_id exists
-      // (The trigger already marked invitation as accepted)
-      if (_invitationData!['employee_id'] != null) {
-        try {
-          await Supabase.instance.client.from('employees').update(
-              {'user_id': userId}).eq('id', _invitationData!['employee_id']);
-          
-          debugPrint(
-              '✅ Linked user to employee: ${_invitationData!['employee_id']}');
-        } catch (employeeError) {
-          debugPrint(
-              '⚠️ Failed to link employee (non-critical): $employeeError');
-          // Non-critical error - continue anyway
-        }
+      final needsEmailConfirmation = authResponse.session == null;
+      // With email confirmation enabled, server-side assignment occurs when
+      // the user confirms the mailbox link, not necessarily during signup.
+      // If signup issued a session immediately, close it and require a clean
+      // login after the invitation flow.
+      if (authResponse.session != null) {
+        await authService.signOut();
       }
 
-      // Step 3: Sign out (force fresh login to load correct tenant context)
-      await Supabase.instance.client.auth.signOut();
-
-      // Step 4: Check if email confirmation is required
-      final needsEmailConfirmation =
-          authResponse.user?.emailConfirmedAt == null;
-
-      // Step 5: Show success message and redirect
-      if (mounted) {
-        if (needsEmailConfirmation) {
-          // Email confirmation required - show clear instructions
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                '✅ Cuenta creada exitosamente!\n'
-                '📧 Revisa tu email para confirmar tu cuenta.\n'
-                'Una vez confirmada, podrás iniciar sesión.',
-              ),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 8),
-            ),
-          );
-        } else {
-          // Email auto-confirmed - can login immediately
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  '✅ Cuenta creada exitosamente. Ya puedes iniciar sesión con tu contraseña.'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 5),
-            ),
-          );
-        }
-
-        // Redirect to login page
-        context.go('/login');
-      }
-    } catch (e) {
-      debugPrint('❌ Error accepting invitation: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            needsEmailConfirmation
+                ? 'Cuenta creada. Revisa tu email para confirmar el acceso.'
+                : 'Cuenta creada. Ya puedes iniciar sesión.',
+          ),
+          backgroundColor:
+              needsEmailConfirmation ? Colors.orange : Colors.green,
+          duration: const Duration(seconds: 6),
+        ),
+      );
+      context.go('/login');
+    } on AuthException {
+      if (!mounted) return;
       setState(() {
-        _errorMessage = 'Error al crear la cuenta: ${e.toString()}';
+        _formErrorMessage =
+            'No pudimos verificar las credenciales o completar la invitación. Revisa los datos e inténtalo nuevamente.';
+        _isSubmitting = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _formErrorMessage =
+            'No pudimos completar la invitación. Verifica el enlace e inténtalo nuevamente.';
         _isSubmitting = false;
       });
     }
+  }
+
+  Future<void> _claimInvitation(AuthService authService) async {
+    final accepted = await Supabase.instance.client.rpc(
+      'accept_user_invitation',
+      params: {'p_token': widget.token.trim()},
+    );
+    if (accepted != true) {
+      throw const AuthException('No pudimos completar la invitación.');
+    }
+
+    await authService.refreshSession();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Invitación aceptada. Ya tienes acceso al equipo.'),
+        backgroundColor: Colors.green,
+      ),
+    );
+    context.go('/dashboard');
+  }
+
+  Future<void> _switchSignedInAccount() async {
+    setState(() {
+      _isSubmitting = true;
+      _formErrorMessage = null;
+    });
+    try {
+      await context.read<AuthService>().signOut();
+      if (!mounted) return;
+      setState(() {
+        _hasMatchingSession = false;
+        _hasMismatchedSession = false;
+        _accountMode = _InvitationAccountMode.existing;
+        _isSubmitting = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _formErrorMessage =
+            'No pudimos cambiar la sesión. Inténtalo nuevamente.';
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  void _changeAccountMode(_InvitationAccountMode mode) {
+    if (_accountMode == mode) return;
+    _formKey.currentState?.reset();
+    _passwordController.clear();
+    _confirmPasswordController.clear();
+    setState(() {
+      _accountMode = mode;
+      _formErrorMessage = null;
+    });
   }
 
   @override
@@ -254,7 +288,7 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
                     ? const Center(
                         child: CircularProgressIndicator(),
                       )
-                    : _errorMessage != null
+                    : _loadErrorMessage != null
                         ? _buildErrorView()
                         : _buildInvitationForm(),
               ),
@@ -281,7 +315,7 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
         ),
         const SizedBox(height: 8),
         Text(
-          _errorMessage!,
+          _loadErrorMessage!,
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.red.shade700),
         ),
@@ -295,9 +329,9 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
   }
 
   Widget _buildInvitationForm() {
-    final firstName = _invitationData!['metadata']['first_name'];
-    final lastName = _invitationData!['metadata']['last_name'];
-    final role = _invitationData!['role'];
+    final shopName =
+        _invitationData!['shop_name']?.toString().trim() ?? 'tu empresa';
+    final role = _invitationData!['role']?.toString() ?? '';
 
     return Form(
       key: _formKey,
@@ -319,7 +353,7 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Hola $firstName $lastName, configura tu contraseña para acceder al sistema.',
+            'Te invitaron al equipo de $shopName. Elige cómo quieres vincular tu acceso.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
@@ -352,7 +386,7 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
           // Email field (read-only)
           TextFormField(
             controller: _emailController,
-            enabled: false,
+            readOnly: true,
             decoration: const InputDecoration(
               labelText: 'Email',
               prefixIcon: Icon(Icons.email),
@@ -361,63 +395,107 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
           ),
           const SizedBox(height: 16),
 
-          // Password field
-          TextFormField(
-            controller: _passwordController,
-            obscureText: _obscurePassword,
-            decoration: InputDecoration(
-              labelText: 'Contraseña',
-              prefixIcon: const Icon(Icons.lock),
-              suffixIcon: IconButton(
-                icon: Icon(
-                    _obscurePassword ? Icons.visibility : Icons.visibility_off),
-                onPressed: () =>
-                    setState(() => _obscurePassword = !_obscurePassword),
+          if (_hasMismatchedSession) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
               ),
-              border: const OutlineInputBorder(),
-            ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Por favor ingresa una contraseña';
-              }
-              if (value.length < 8) {
-                return 'La contraseña debe tener al menos 8 caracteres';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-
-          // Confirm password field
-          TextFormField(
-            controller: _confirmPasswordController,
-            obscureText: _obscureConfirmPassword,
-            decoration: InputDecoration(
-              labelText: 'Confirmar Contraseña',
-              prefixIcon: const Icon(Icons.lock_outline),
-              suffixIcon: IconButton(
-                icon: Icon(_obscureConfirmPassword
-                    ? Icons.visibility
-                    : Icons.visibility_off),
-                onPressed: () => setState(
-                    () => _obscureConfirmPassword = !_obscureConfirmPassword),
+              child: Text(
+                'Hay otra cuenta iniciada en este dispositivo. Cámbiala antes de continuar con la invitación.',
+                style: TextStyle(color: Colors.orange.shade900),
+                textAlign: TextAlign.center,
               ),
-              border: const OutlineInputBorder(),
             ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Por favor confirma tu contraseña';
-              }
-              if (value != _passwordController.text) {
-                return 'Las contraseñas no coinciden';
-              }
-              return null;
-            },
-          ),
+          ] else if (_hasMatchingSession) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'La cuenta correcta ya está iniciada. Puedes aceptar la invitación sin volver a ingresar tu contraseña.',
+                style: TextStyle(color: Colors.green.shade900),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ] else ...[
+            SegmentedButton<_InvitationAccountMode>(
+              selected: {_accountMode},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) =>
+                  _changeAccountMode(selection.first),
+              segments: const [
+                ButtonSegment(
+                  value: _InvitationAccountMode.create,
+                  icon: Icon(Icons.person_add_outlined),
+                  label: Text('Crear cuenta'),
+                ),
+                ButtonSegment(
+                  value: _InvitationAccountMode.existing,
+                  icon: Icon(Icons.login),
+                  label: Text('Ya tengo cuenta'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              key: ValueKey('invitation-password-${_accountMode.name}'),
+              controller: _passwordController,
+              obscureText: _obscurePassword,
+              decoration: InputDecoration(
+                labelText: _accountMode == _InvitationAccountMode.create
+                    ? 'Crear contraseña'
+                    : 'Contraseña actual',
+                prefixIcon: const Icon(Icons.lock),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscurePassword
+                      ? Icons.visibility
+                      : Icons.visibility_off),
+                  onPressed: () =>
+                      setState(() => _obscurePassword = !_obscurePassword),
+                ),
+                border: const OutlineInputBorder(),
+                helperText: _accountMode == _InvitationAccountMode.create
+                    ? AuthInputValidation.strongPasswordHelper
+                    : null,
+              ),
+              validator: (value) => AuthInputValidation.validatePassword(
+                value,
+                isNewPassword: _accountMode == _InvitationAccountMode.create,
+              ),
+            ),
+            if (_accountMode == _InvitationAccountMode.create) ...[
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _confirmPasswordController,
+                obscureText: _obscureConfirmPassword,
+                decoration: InputDecoration(
+                  labelText: 'Confirmar contraseña',
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscureConfirmPassword
+                        ? Icons.visibility
+                        : Icons.visibility_off),
+                    onPressed: () => setState(() =>
+                        _obscureConfirmPassword = !_obscureConfirmPassword),
+                  ),
+                  border: const OutlineInputBorder(),
+                ),
+                validator: (value) =>
+                    AuthInputValidation.validatePasswordConfirmation(
+                  value,
+                  password: _passwordController.text,
+                ),
+              ),
+            ],
+          ],
           const SizedBox(height: 24),
 
           // Error message
-          if (_errorMessage != null) ...[
+          if (_formErrorMessage != null) ...[
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -425,7 +503,7 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                _errorMessage!,
+                _formErrorMessage!,
                 style: TextStyle(color: Colors.red.shade700),
               ),
             ),
@@ -434,7 +512,11 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
 
           // Submit button
           ElevatedButton(
-            onPressed: _isSubmitting ? null : _acceptInvitation,
+            onPressed: _isSubmitting
+                ? null
+                : _hasMismatchedSession
+                    ? _switchSignedInAccount
+                    : _acceptInvitation,
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
@@ -444,7 +526,15 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
                     width: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Crear Cuenta'),
+                : Text(
+                    _hasMismatchedSession
+                        ? 'Cambiar cuenta'
+                        : _hasMatchingSession
+                            ? 'Aceptar invitación'
+                            : _accountMode == _InvitationAccountMode.create
+                                ? 'Crear cuenta'
+                                : 'Ingresar y aceptar',
+                  ),
           ),
         ],
       ),

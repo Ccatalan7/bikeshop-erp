@@ -9,6 +9,22 @@
 
 The Stock Movements module provides comprehensive inventory transaction tracking, showing the complete history of stock changes for each product. It displays purchases, sales, adjustments, and transfers in a chronological timeline with full filtering, date range selection, and invoice navigation capabilities.
 
+### UI guidance status
+
+This is a dated implementation summary, not a visual design specification.
+Its business capabilities and data contracts remain useful, but any literal
+color, badge, chip, icon, dialog, panel width, table width, or navigation
+primitive described historically is non-authoritative.
+
+Current UI work must follow
+[the general GUI guide](../../.github/GUI_DESIGN_PRINCIPLES.md) and, for phone,
+tablet, compact, adaptive, or responsive work,
+[the mobile GUI guide](../../.github/GUI_MOBILE_DESIGN_PRINCIPLES.md).
+Select the composition from the operator's task, information relationship,
+available space, and input capabilities. A long list is evidence to evaluate
+context-preserving list-detail interaction, not an instruction to install a
+particular layout here or in unrelated surfaces.
+
 ---
 
 ## ✅ Completed Work
@@ -112,42 +128,32 @@ class StockMovementsService extends ChangeNotifier {
 
 **File:** `lib/modules/inventory/pages/stock_movements_page.dart`
 
-**Layout:** Two-panel design with resizable divider
+The UI must support these tasks without prescribing one permanent layout:
 
-**Left Panel - Product List:**
-- Search bar (by name/SKU)
-- Product list with current stock badges
-- Click to select product and load movements
+- search products by name or SKU and retain the active selection;
+- inspect chronological movements with type and date filters;
+- compare date, type, source, reference, stock before, signed movement, and
+  stock after;
+- show aggregate counts or balances only when they improve a decision; and
+- open the related invoice through the canonical read-only command and return
+  to the exact originating search, filters, selection, and scroll position.
 
-**Right Panel - Movement Details:**
-- **Filters Section:**
-  - Dropdown: Movement type (All, Compra, Venta, Ajuste, Transferencia)
-  - Date Range Picker: ✅ **IMPLEMENTED**
-    - Visual button shows selected range (DD/MM/YY - DD/MM/YY)
-    - Clear button to reset filter
-    - Blue highlight when filter is active
-  
-- **Summary Statistics:**
-  - 📊 Transacciones: Total count
-  - ⬆️ Entradas: Total increases
-  - ⬇️ Salidas: Total decreases
-  - 📈 Balance: Net change
-  
-- **Movement Table:**
-  - Columns: Fecha, Tipo, Origen, Referencia, Stock Inicial, Movimiento, Stock Final
-  - Color-coded chips:
-    - 🟢 Purchase (green)
-    - 🔵 Sale (blue)
-    - 🟠 Adjustment (orange)
-    - 🟣 Transfer (purple)
-  - Movement values: Green (+) for increases, Red (-) for decreases
-  - ✅ **Clickable reference numbers** → Navigate to invoice detail page
+On a wide pointer-and-keyboard surface, a table may support comparison. For a
+long product list with repeated list-detail inspection, a resizable split pane
+is one candidate if both sides remain useful. Inline or in-block detail, a
+contextual inspector, or a routed workspace may be better when the task or
+available width demands it. No fixed pane width, minimum table width, or split
+ratio in this historical document is a current requirement.
 
-**Responsive Features:**
-- ✅ Resizable divider between panels (300-600px, default 400px)
-- ✅ Panel width persists in SharedPreferences
-- ✅ Horizontal scroll for table overflow
-- ✅ Minimum table width: 900px
+Phone and tablet require a dedicated composition. Do not default to a miniature
+desktop table with horizontal scrolling. Recompose the movement fields into a
+scannable list or record detail, preserve the same filters and canonical
+commands, and keep every important action reachable by touch.
+
+Status, movement direction, and selection use theme-owned roles plus text and
+semantics. Do not recreate the historical rainbow chip or literal link-color
+scheme. Positive and negative quantities must remain distinguishable without
+depending on color alone.
 
 ---
 
@@ -236,27 +242,29 @@ class StockMovementsService extends ChangeNotifier {
 ### 5. Date Range Picker (UI ENHANCEMENT) - ✅ FIXED
 **Status:** ✅ **IMPLEMENTED**
 
-**Features:**
-- Material date range picker dialog
-- Initial range: 2020 to current date
-- Visual indicator: Button shows selected range (DD/MM/YY - DD/MM/YY)
-- Clear button (X icon) to reset filter
-- Blue highlight when active
-- Filters movements by transaction_date
+**Behavioral contract:**
+- Filters movements by `transaction_date`
+- Exposes the selected range in a readable label
+- Provides a clear, accessible reset action
+- Uses the appropriate inline, anchored, sheet, or routed selector for the
+  current task and platform according to the canonical GUI guides
+- Communicates active state through more than a literal feature color
 
 ---
 
 ### 6. Reference Number Navigation (UI ENHANCEMENT) - ✅ FIXED
 **Status:** ✅ **IMPLEMENTED**
 
-**Features:**
-- Reference numbers are clickable (InkWell)
-- Blue underlined text indicates link
+**Behavioral contract:**
+- A reference with a valid identifier exposes an accessible detail action
+- The action's affordance uses the shared interaction system rather than a
+  hardcoded color or widget recipe
 - Navigation logic:
   - Purchase movements → `/purchases/invoice/{id}`
   - Sale movements → `/sales/invoice/{id}`
-  - Opens in read-only mode (extra: {'readOnly': true})
-- Null-safe: Only clickable if reference exists
+  - Opens through the canonical read-only invoice surface
+- Back or close restores the exact Stock Movements origin context
+- A missing reference identifier does not expose a false action
 
 ---
 
@@ -332,11 +340,14 @@ Once deployed, verify:
 - [x] **Date range picker opens and filters movements correctly**
 - [x] **Clear date filter button works**
 - [x] **Selected date range displays in button label**
-- [x] Color-coded chips display properly
-- [x] Positive/negative quantities show in correct colors
-- [x] Panel divider is resizable (drag left/right)
-- [x] Panel width persists after page refresh
-- [x] Horizontal scroll works if table overflows
+- [ ] State and movement direction remain unambiguous without color-only
+      meaning
+- [ ] The chosen wide layout supports comparison without imposing a split pane
+      when it does not improve the task
+- [ ] Phone and tablet use dedicated compositions with no automatic miniature
+      horizontal table
+- [ ] Search, filters, selected product, and scroll survive invoice
+      detail → return
 - [x] **Reference numbers are clickable and navigate to invoices**
 - [x] **Purchase references navigate to /purchases/invoice/{id}**
 - [x] **Sale references navigate to /sales/invoice/{id}**
@@ -380,7 +391,8 @@ Once deployed, verify:
 ## 📝 Code Quality Notes
 
 - ✅ All code follows Flutter best practices
-- ✅ Responsive design with adaptive layouts
+- ⚠️ Responsive behavior must be revalidated against the current canonical
+  desktop, tablet, phone, touch, and context-preservation requirements
 - ✅ Multi-tenant safe (all queries filter by tenant_id)
 - ✅ Error handling with user-friendly messages
 - ✅ Loading states with progress indicators
@@ -398,18 +410,17 @@ Once deployed, verify:
 
 ### UI Improvements
 1. **Date Range Picker** ✅
-   - Material date picker dialog (2020 - present)
-   - Visual button label shows selected range
-   - Clear button (X icon) to reset filter
-   - Blue highlight when filter is active
+   - Filters with a visible current-range label and reset action
+   - The historical dialog and literal active-color treatment are not
+     implementation requirements
    - Filters movements by transaction_date
 
 2. **Reference Number Navigation** ✅
-   - Clickable blue underlined links
-   - Smart routing based on movement type
+   - Accessible invoice action using the shared interaction language
+   - Routing based on movement type
    - Purchase → `/purchases/invoice/{id}`
    - Sale → `/sales/invoice/{id}`
-   - Opens in read-only mode
+   - Opens through the canonical read-only surface and preserves return context
    - Null-safe (only clickable if reference exists)
 
 ### Database Enhancements

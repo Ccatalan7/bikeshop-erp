@@ -3,6 +3,8 @@ name: Build macOS Desktop Release
 run-name: >-
   macOS ${{ inputs.publish_release == true && 'publish' || 'artifact gate' }}
   · ${{ github.sha }}
+  · notes ${{ inputs.release_notes_candidate_sha256 || 'fallback' }}
+  · from ${{ inputs.release_notes_from_commit || 'auto' }}
 
 on:
   push:
@@ -30,6 +32,26 @@ on:
         required: true
         type: boolean
         default: false
+      expected_commit:
+        description: Exact commit requested by the local publisher
+        required: false
+        type: string
+        default: ""
+      release_notes_from_commit:
+        description: Exact shared release-note base commit
+        required: false
+        type: string
+        default: ""
+      release_notes_candidate_b64:
+        description: Optional bounded local Codex release-note candidate
+        required: false
+        type: string
+        default: ""
+      release_notes_candidate_sha256:
+        description: SHA-256 binding for the optional Codex candidate
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -39,11 +61,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  source-guard:
+    name: Verify requested source commit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bind an explicit publish request to this workflow source
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$EXPECTED_COMMIT" ]]; then
+            echo 'No explicit source binding was supplied.'
+            exit 0
+          fi
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'The requested source binding is invalid.' >&2
+            exit 1
+          fi
+          if [[ "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]]; then
+            echo 'The workflow source does not match the requested commit.' >&2
+            exit 1
+          fi
+          echo 'The workflow is bound to the requested commit.'
+
   integrity:
     uses: ./.github/workflows/erp-integrity-gate.yml
 
   build:
-    needs: integrity
+    needs:
+      - source-guard
+      - integrity
     name: Build, verify, and package macOS app
     runs-on: macos-15
     outputs:
@@ -259,6 +307,9 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GEMINI_RELEASE_API_KEY: ${{ secrets.GEMINI_RELEASE_API_KEY }}
           GEMINI_RELEASE_NOTES_MODEL: ${{ vars.GEMINI_RELEASE_NOTES_MODEL || 'gemini-3.1-flash-lite' }}
+          RELEASE_NOTES_FROM_COMMIT: ${{ inputs.release_notes_from_commit }}
+          CODEX_RELEASE_NOTES_CANDIDATE_B64: ${{ inputs.release_notes_candidate_b64 }}
+          CODEX_RELEASE_NOTES_CANDIDATE_SHA256: ${{ inputs.release_notes_candidate_sha256 }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_RELEASE_NOTES_MODEL: ${{ vars.OPENAI_RELEASE_NOTES_MODEL }}
         run: |
@@ -270,6 +321,46 @@ jobs:
               macos-release-manifest.json \
               "$GITHUB_SHA"
           )"
+          if [[ -n "$RELEASE_NOTES_FROM_COMMIT" ]]; then
+            if [[
+              ! "$RELEASE_NOTES_FROM_COMMIT" =~ ^[0-9a-f]{40}$ ||
+              "$RELEASE_NOTES_FROM_COMMIT" != "$base_commit"
+            ]]; then
+              echo 'The shared release-note base does not match the authoritative macOS range.' >&2
+              exit 1
+            fi
+          fi
+
+          candidate_transport_valid=true
+          if [[ -z "$CODEX_RELEASE_NOTES_CANDIDATE_B64" ]]; then
+            [[ -z "$CODEX_RELEASE_NOTES_CANDIDATE_SHA256" ]] ||
+              candidate_transport_valid=false
+          elif [[
+            ${#CODEX_RELEASE_NOTES_CANDIDATE_B64} -gt 16384 ||
+            ! "$CODEX_RELEASE_NOTES_CANDIDATE_B64" =~ ^[A-Za-z0-9+/]*={0,2}$ ||
+            ! "$CODEX_RELEASE_NOTES_CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$
+          ]]; then
+            candidate_transport_valid=false
+          else
+            candidate_file="$RUNNER_TEMP/codex-release-notes-candidate.json"
+            if ! printf '%s' "$CODEX_RELEASE_NOTES_CANDIDATE_B64" |
+              base64 --decode > "$candidate_file"; then
+              candidate_transport_valid=false
+            elif [[
+              ! -s "$candidate_file" ||
+              "$(wc -c < "$candidate_file")" -gt 12288 ||
+              "$(sha256sum "$candidate_file" | awk '{print $1}')" != \
+                "$CODEX_RELEASE_NOTES_CANDIDATE_SHA256"
+            ]]; then
+              candidate_transport_valid=false
+            fi
+          fi
+          if [[ "$candidate_transport_valid" != true ]]; then
+            CODEX_RELEASE_NOTES_CANDIDATE_B64=''
+            rm -f "$RUNNER_TEMP/codex-release-notes-candidate.json"
+            echo 'Local release-note candidate discarded: transport_validation.'
+          fi
+
           node scripts/releases/generate_release_notes.mjs \
             --from-commit "$base_commit" \
             --to-commit "$GITHUB_SHA" \

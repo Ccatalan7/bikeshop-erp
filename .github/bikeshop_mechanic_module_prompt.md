@@ -1,5 +1,16 @@
 # 🛠 Bikeshop Mechanic & Service Manager Module (Gestión de Taller y Clientes)
 
+> [!WARNING]
+> **Historical business context; not UI authority.** Preserve relevant workshop
+> behavior and relationships only after reconciling them with the current
+> workshop architecture. Every visual, layout, navigation, component, color,
+> spacing, modal/dialog/snackbar, responsive, and platform recipe below is
+> superseded by [`GUI_DESIGN_PRINCIPLES.md`](GUI_DESIGN_PRINCIPLES.md) and
+> [`GUI_MOBILE_DESIGN_PRINCIPLES.md`](GUI_MOBILE_DESIGN_PRINCIPLES.md). Do not
+> imitate a reference product, screenshot, or old local widget. Choose inline, in-block,
+> pane, popover, sheet, blocking surface, or full route from the actual task;
+> none is an automatic module-wide pattern.
+
 ## 🎯 Objective
 
 Develop a complete **Bikeshop Mechanic & Service Manager module** integrated into the ERP system.  
@@ -34,15 +45,17 @@ Bikeshop
 
 ## 👥 Submenu 1: Clientes
 
-This view acts like the **Notion-style “Gestión de clientes” table** shown in the reference image.  
+This view lists customers and provides access to bicycles, service history,
+and current workshop work. Its current composition must be derived from the
+operating task and canonical GUI guides.
 It lists all customers and provides access to their bicycles, service history, and current mechanic jobs.
 
-### 🧾 Columns (based on the Notion table)
+### 🧾 Historical information fields
 | Column | Description |
 |--------|--------------|
 | Nombre del Cliente | Linked to `clients` table (foreign key) |
 | Teléfono | Contact number (read from client profile) |
-| Estado del Servicio | Color-coded status label (`COMENZAR`, `DIAGNÓSTICO`, `COMPONENTES`, `EN CURSO`, `FINALIZADO`) |
+| Estado del Servicio | Semantic status (`COMENZAR`, `DIAGNÓSTICO`, `COMPONENTES`, `EN CURSO`, `FINALIZADO`), legible without color alone |
 | Fecha de Ingreso | Date the client delivered the bike |
 | Antecedentes de Bicicleta | Free text or structured notes (bike age, maintenance history, type of use) |
 | Solicitud de Cliente | Client’s request or reported issues |
@@ -51,11 +64,12 @@ It lists all customers and provides access to their bicycles, service history, a
 ### 🧭 Behavior
 - Each row represents an active or past job.
 - Clicking on a **client name** opens the **Client Logbook View**, showing:
-  - List/timeline of all past and current services.
+  - Chronological access to all past and current services.
   - Attached photos of the bicycle.
   - Invoices related to the client.
   - Used products and services.
-  - Chronological graphical timeline view (scrollable or expandable list).
+  - A comprehensible chronological history; choose its representation from the
+    current task rather than prescribing a graphical timeline.
 
 ### 🧱 Database Relations
 - Linked to `clients`, `bikes`, `sales_invoices`, and `inventory` tables.
@@ -65,7 +79,8 @@ It lists all customers and provides access to their bicycles, service history, a
 
 ## 🔧 Submenu 2: Trabajos (en curso)
 
-A database-like view similar to Notion’s “Table” mode — for active workshop jobs.
+A high-throughput view for active workshop jobs. Its desktop, tablet, and phone
+representations may differ while composing the same business commands.
 
 ### 📋 Columns
 | Column | Description |
@@ -90,7 +105,8 @@ A database-like view similar to Notion’s “Table” mode — for active works
   - Default contact info  
 - Jobs marked as **Done** remain in the database but are hidden by default (filter toggle: “Show completed”).
 - Clicking a client name takes you to the **Client Logbook**.
-- Supports **search, filters, sorting, and color-coded status labels** (same as Notion design).
+- Supports **search, filters, sorting, and clear semantic status treatment**
+  without copying another product or depending on color alone.
 
 ---
 
@@ -159,12 +175,15 @@ Add:
 ---
 
 ## 🎨 UI & UX Rules
-- Follow ERP design system (clean, modular, professional).
-- Maintain the same color-coded label system from the Notion reference.
+- Follow both canonical GUI guides linked in the warning above.
+- Use theme-owned visual roles and clear text/semantics for status; historical
+  screenshots and literal palettes are not precedent.
 - Lists: searchable, sortable, and paginated.
-- Include **timeline view** for each client (bike history).
+- Make chronological history understandable; a timeline is one candidate, not
+  a mandatory visual pattern.
 - Support **image upload** and display carousel.
-- Use **dark mode** compatibility.
+- Support the application themes and accessibility modes owned by the current
+  design system.
 - Default language: **Spanish (Chile)**.
 - Date format: **DD/MM/YYYY**.
 

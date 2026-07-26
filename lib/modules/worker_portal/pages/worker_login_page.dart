@@ -27,6 +27,18 @@ class _WorkerLoginPageState extends State<WorkerLoginPage> {
     _storeController = TextEditingController(
       text: queryStore?.isNotEmpty == true ? queryStore! : 'vinabike',
     );
+    if (Uri.base.queryParameters['password_reset'] == 'complete') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Contraseña actualizada. Ingresa nuevamente con tu nueva contraseña.',
+            ),
+          ),
+        );
+      });
+    }
   }
 
   @override
@@ -55,7 +67,13 @@ class _WorkerLoginPageState extends State<WorkerLoginPage> {
         throw const AuthException('Este usuario no tiene acceso trabajador.');
       }
 
-      if (mounted) context.go('/worker');
+      if (mounted) {
+        context.go(
+          authService.workerMustResetPassword
+              ? '/worker/password-reset'
+              : '/worker',
+        );
+      }
     } on AuthException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -64,11 +82,13 @@ class _WorkerLoginPageState extends State<WorkerLoginPage> {
           backgroundColor: Colors.red.shade700,
         ),
       );
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No se pudo iniciar sesion: $error'),
+          content: const Text(
+            'No pudimos iniciar sesión. Revisa los datos e inténtalo nuevamente.',
+          ),
           backgroundColor: Colors.red.shade700,
         ),
       );
@@ -82,7 +102,7 @@ class _WorkerLoginPageState extends State<WorkerLoginPage> {
     if (lower.contains('invalid login credentials')) {
       return 'Usuario o contraseña incorrectos.';
     }
-    return message;
+    return 'No pudimos iniciar sesión. Revisa los datos e inténtalo nuevamente.';
   }
 
   @override

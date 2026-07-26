@@ -124,6 +124,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         WheelSpokesPage,
         WorkerHomePage,
         WorkerLoginPage,
+        WorkerPasswordResetPage,
         WorkshopCalendarPage,
         WorkspaceDemoPage;
 
@@ -158,6 +159,24 @@ import '../../public_store/utils/public_store_tenant_resolver.dart';
 import '../../public_store/services/public_store_scroll_state.dart';
 import '../../modules/website/services/website_service.dart';
 import '../utils/mercadopago_reference.dart';
+
+String invitationTokenFromUri(Uri uri) {
+  final fragment = uri.fragment;
+  if (fragment.isNotEmpty) {
+    try {
+      final normalized =
+          fragment.startsWith('?') ? fragment.substring(1) : fragment;
+      final token = Uri.splitQueryString(normalized)['token']?.trim();
+      if (token != null && token.isNotEmpty) {
+        return token;
+      }
+    } on FormatException {
+      return '';
+    }
+  }
+
+  return '';
+}
 
 class _EnsurePublicStoreScrollState extends StatelessWidget {
   final Widget child;
@@ -576,6 +595,11 @@ class AppRouter {
           return null;
         }
 
+        if (authService.isPasswordRecovery &&
+            state.uri.path != '/reset-password') {
+          return '/reset-password';
+        }
+
         // --------------------------------------------------------------------
         // ERP DOMAIN PROTECTION: Redirect root '/' to login/dashboard
         // --------------------------------------------------------------------
@@ -594,6 +618,8 @@ class AppRouter {
 
         final loggingIn = state.matchedLocation == '/login';
         final workerLoggingIn = state.matchedLocation == '/worker/login';
+        final workerResettingPassword =
+            state.matchedLocation == '/worker/password-reset';
         final workerRoute = state.uri.path == '/worker' ||
             state.uri.path.startsWith('/worker/');
         final resettingPassword = state.matchedLocation == '/reset-password';
@@ -609,7 +635,9 @@ class AppRouter {
           if (isLoggedIn &&
               authService.isAccessProfileLoaded &&
               authService.isWorker) {
-            return '/worker';
+            return authService.workerMustResetPassword
+                ? '/worker/password-reset'
+                : '/worker';
           }
           return null;
         }
@@ -620,6 +648,18 @@ class AppRouter {
           }
           if (authService.isAccessProfileLoaded && !authService.isWorker) {
             return '/worker/login?error=access_denied';
+          }
+          if (authService.isAccessProfileLoaded &&
+              authService.isWorker &&
+              authService.workerMustResetPassword &&
+              !workerResettingPassword) {
+            return '/worker/password-reset';
+          }
+          if (authService.isAccessProfileLoaded &&
+              authService.isWorker &&
+              !authService.workerMustResetPassword &&
+              workerResettingPassword) {
+            return '/worker';
           }
           return null;
         }
@@ -1438,6 +1478,16 @@ class AppRouter {
         ),
 
         GoRoute(
+          path: '/worker/password-reset',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => erp.WorkerPasswordResetPage(),
+          ),
+        ),
+
+        GoRoute(
           path: '/login',
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
@@ -1462,7 +1512,7 @@ class AppRouter {
         GoRoute(
           path: '/accept-invitation',
           pageBuilder: (context, state) {
-            final token = state.uri.queryParameters['token'] ?? '';
+            final token = invitationTokenFromUri(state.uri);
             return _buildDeferredPageWithNoTransition(
               context,
               state,

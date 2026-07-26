@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'tenant_service.dart';
+import '../utils/auth_input_validation.dart';
 
 /// Tenant-scoped user administration service.
 ///
@@ -26,9 +27,6 @@ class UserManagementService {
     required String email,
     required String name,
     String? phone,
-    String mode = 'invite',
-    String? password,
-    bool confirmEmail = false,
   }) {
     return _invokeAdmin<Map<String, dynamic>>({
       'action': 'create_customer_account',
@@ -36,9 +34,6 @@ class UserManagementService {
       'email': email,
       'name': name,
       'phone': phone,
-      'mode': mode,
-      'password': password,
-      'confirmEmail': confirmEmail,
     });
   }
 
@@ -84,13 +79,6 @@ class UserManagementService {
     });
   }
 
-  Future<void> confirmEmail(String userId) {
-    return _invokeAdminVoid({
-      'action': 'confirm_email',
-      'userId': userId,
-    });
-  }
-
   /// Existing staff-list API used by other modules such as task assignment.
   Future<List<Map<String, dynamic>>> getTenantUsers() async {
     final tenantId = _tenantService.currentTenantId;
@@ -131,8 +119,8 @@ class UserManagementService {
     required Map<String, bool> permissions,
     String? name,
     String? employeeId,
-  }) {
-    return _invokeAdmin<Map<String, dynamic>>({
+  }) async {
+    final result = await _invokeAdmin<Map<String, dynamic>>({
       'action': 'create_internal_invitation',
       'email': email,
       'role': role,
@@ -140,13 +128,20 @@ class UserManagementService {
       'name': name,
       'employeeId': employeeId,
     });
+    if (result['success'] != true || result['emailSent'] != true) {
+      throw Exception('No se pudo enviar el correo de invitación.');
+    }
+    return result;
   }
 
-  Future<void> resendInternalInvitation(String invitationId) {
-    return _invokeAdminVoid({
+  Future<void> resendInternalInvitation(String invitationId) async {
+    final result = await _invokeAdmin<Map<String, dynamic>>({
       'action': 'resend_internal_invitation',
       'invitationId': invitationId,
     });
+    if (result['success'] != true || result['emailSent'] != true) {
+      throw Exception('No se pudo reenviar el correo de invitación.');
+    }
   }
 
   Future<void> cancelInternalInvitation(String invitationId) {
@@ -198,27 +193,35 @@ class UserManagementService {
   Future<Map<String, dynamic>> createWorkerPortalAccount({
     required String employeeId,
     required String username,
-    String? password,
+    required String password,
   }) {
+    _validateAdminManagedPassword(password);
     return _invokeAdmin<Map<String, dynamic>>({
       'action': 'create_worker_portal_account',
       'employeeId': employeeId,
       'username': username,
-      if (password != null && password.trim().isNotEmpty)
-        'password': password.trim(),
+      'password': password,
     });
   }
 
   Future<Map<String, dynamic>> resetWorkerPortalPassword({
     required String employeeId,
-    String? password,
+    required String password,
   }) {
+    _validateAdminManagedPassword(password);
     return _invokeAdmin<Map<String, dynamic>>({
       'action': 'reset_worker_portal_password',
       'employeeId': employeeId,
-      if (password != null && password.trim().isNotEmpty)
-        'password': password.trim(),
+      'password': password,
     });
+  }
+
+  void _validateAdminManagedPassword(String password) {
+    final validationError =
+        AuthInputValidation.validateAdminManagedPassword(password);
+    if (validationError != null) {
+      throw ArgumentError(validationError, 'password');
+    }
   }
 
   Future<void> setWorkerPortalAccess({
@@ -232,11 +235,15 @@ class UserManagementService {
     });
   }
 
-  Future<Map<String, dynamic>> sendPasswordReset(String email) {
-    return _invokeAdmin<Map<String, dynamic>>({
+  Future<Map<String, dynamic>> sendPasswordReset(String email) async {
+    final result = await _invokeAdmin<Map<String, dynamic>>({
       'action': 'send_password_reset',
       'email': email,
     });
+    if (result['accessEmailSent'] != true) {
+      throw Exception('No se pudo enviar el correo de acceso.');
+    }
+    return result;
   }
 
   Future<T> _invokeAdmin<T>(Map<String, dynamic> body) async {

@@ -419,18 +419,17 @@ class DocumentAccountingContextService {
   Future<String?> _resolveTenantId() async {
     final user = _client.auth.currentUser;
     if (user == null) return null;
-    final appTenant = user.appMetadata['tenant_id']?.toString().trim();
-    if (appTenant?.isNotEmpty == true) return appTenant;
-    final userTenant = user.userMetadata?['tenant_id']?.toString().trim();
-    if (userTenant?.isNotEmpty == true) return userTenant;
 
-    final profile = await _client
+    final response = await _client
         .from('user_profiles')
         .select('tenant_id')
         .eq('user_id', user.id)
         .eq('is_active', true)
-        .maybeSingle();
-    final tenantId = profile?['tenant_id']?.toString().trim();
+        .limit(2);
+    final profiles = List<Map<String, dynamic>>.from(response);
+    if (profiles.length != 1) return null;
+
+    final tenantId = profiles.single['tenant_id']?.toString().trim();
     return tenantId?.isNotEmpty == true ? tenantId : null;
   }
 

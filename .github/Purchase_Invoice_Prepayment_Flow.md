@@ -1,5 +1,18 @@
 # PURCHASE INVOICE STATUS FLOW — PREPAYMENT MODEL (PAGO ANTICIPADO)
 
+
+> [!WARNING]
+> **Historical business context; not UI authority.** Reconcile this flow with
+> the current canonical purchase owner before implementing it. Every visual,
+> layout, navigation, component, color, spacing, badge, modal/dialog/snackbar,
+> responsive, and platform recipe below is superseded by
+> [GUI_DESIGN_PRINCIPLES.md](GUI_DESIGN_PRINCIPLES.md) and
+> [GUI_MOBILE_DESIGN_PRINCIPLES.md](GUI_MOBILE_DESIGN_PRINCIPLES.md). Do not
+> imitate another product, old screenshot, or local widget. Choose inline,
+> in-block, pane, popover, sheet, blocking surface, or full route from task
+> evidence; none is an automatic prepayment pattern.
+
+
 ## Overview
 
 This document describes the **Prepayment Purchase Invoice Workflow** for businesses that pay suppliers in advance before receiving goods. This model reflects real-world scenarios where:
@@ -8,7 +21,7 @@ This document describes the **Prepayment Purchase Invoice Workflow** for busines
 - Payment is made upfront (wire transfer)
 - Goods are delivered later and verified
 
-This is an **alternative model** to the standard "Pay After Receipt" flow. **The model is selected at invoice creation time** via a dialog prompt, allowing each invoice to use whichever payment flow is appropriate for that specific supplier/order.
+This is an **alternative model** to the standard "Pay After Receipt" flow. **The model is selected at invoice creation time** through an explicit creation decision, allowing each invoice to use whichever payment flow is appropriate for that specific supplier/order.
 
 ---
 
@@ -90,7 +103,7 @@ This is an **alternative model** to the standard "Pay After Receipt" flow. **The
 
 ### 1. **Borrador** (Draft)
 - **Spanish Label**: "Borrador"
-- **Badge Color**: Grey (`Colors.grey[200]` / `Colors.grey[800]`)
+- **State presentation**: Theme-owned and legible without color alone
 - **Accounting Effect**: ❌ None
 - **Inventory Effect**: ❌ None
 - **Description**: Purchase order is being prepared internally, not yet sent to supplier
@@ -109,7 +122,7 @@ This is an **alternative model** to the standard "Pay After Receipt" flow. **The
 
 ### 2. **Enviada** (Sent to Supplier)
 - **Spanish Label**: "Enviada"
-- **Badge Color**: Blue (`Colors.blue[100]` / `Colors.blue[800]`)
+- **State presentation**: Theme-owned and legible without color alone
 - **Accounting Effect**: ❌ None
 - **Inventory Effect**: ❌ None
 - **Description**: Order sent to supplier, waiting for their confirmation and invoice issuance
@@ -122,8 +135,8 @@ This is an **alternative model** to the standard "Pay After Receipt" flow. **The
     - ❌ No inventory changes
     - ❌ No SQL triggers
     - Frontend: `_revertToDraft()` → `PurchaseService.updateInvoiceStatus()`
-  - ✅ **[Confirmar Recepción Factura]** button (Green/Purple) → Triggers:
-    - Opens modal dialog to enter supplier invoice number and date
+  - ✅ **[Confirmar Recepción Factura]** button → Triggers:
+    - Requires supplier invoice number and date through the context-appropriate canonical editor
     - Status changes to 'confirmed'
     - Sets `confirmed_date` = NOW()
     - Sets `supplier_invoice_number` = user input
@@ -140,7 +153,7 @@ This is an **alternative model** to the standard "Pay After Receipt" flow. **The
 
 ### 3. **Confirmada** (Confirmed - Invoice Issued by Supplier)
 - **Spanish Label**: "Confirmada"
-- **Badge Color**: Purple (`Colors.purple[100]` / `Colors.purple[800]`)
+- **State presentation**: Theme-owned and legible without color alone
 - **Accounting Effect**: ✅ AP liability recorded
   - **Debit**: Inventario (1105) $100,000
   - **Debit**: IVA Crédito Fiscal (1107) $19,000
@@ -150,18 +163,18 @@ This is an **alternative model** to the standard "Pay After Receipt" flow. **The
 - **Available Actions**:
   - ✏️ **[Editar]** button → Limited editing (accounting entry already exists, cannot modify amounts/items easily)
   - ⬅️ **[Volver a Enviada]** button → Triggers:
-    - Shows confirmation dialog warning about deletion
+    - Requires an explicit, consequence-aware decision before deletion
     - Status changes to 'sent'
     - Clears `confirmed_date`, `supplier_invoice_number`, `supplier_invoice_date`
     - ✅ **SQL Trigger**: `handle_purchase_invoice_prepaid_change()`
-    - ✅ **Accounting**: DELETES journal entry completely (Zoho Books style)
+    - ✅ **Accounting**: DELETES journal entry completely (historical DELETE-based approach)
       - DELETE FROM journal_entries WHERE source_module = 'purchase_invoices' AND source_reference = invoice_id
       - journal_lines cascade deleted
       - Clean slate (as if never confirmed)
     - ❌ No inventory changes (wasn't received yet)
     - Frontend: `_revertToSent()` → `PurchaseService.revertToSent()`
-  - 💰 **[Registrar Pago]** button (Orange) → Triggers:
-    - Navigates to `PurchasePrepaymentFormPage`
+  - 💰 **[Registrar Pago]** button → Triggers:
+    - Opens the canonical prepayment workflow through the host selected by the canonical GUI rules
     - User enters payment details (method, date, bank account, reference)
     - User clicks [Confirmar Pago Anticipado]
     - Status changes to 'paid'
@@ -180,7 +193,7 @@ This is an **alternative model** to the standard "Pay After Receipt" flow. **The
 
 ### 4. **Pagada** (Paid - Prepaid)
 - **Spanish Label**: "Pagada"
-- **Badge Color**: Orange/Amber (`Colors.orange[100]` / `Colors.orange[800]`)
+- **State presentation**: Theme-owned and legible without color alone
 - **Accounting Effect**: ✅ Payment recorded
   - **Debit**: Cuentas por Pagar (2120) $119,000 (settles liability)
   - **Credit**: Banco (1101) $119,000 (money out)
@@ -188,8 +201,8 @@ This is an **alternative model** to the standard "Pay After Receipt" flow. **The
 - **Inventory Effect**: ❌ None (still waiting for goods)
 - **Description**: Payment sent to supplier via wire transfer, waiting for goods delivery
 - **Available Actions**:
-  - 📦 **[Marcar como Recibida]** button (Green) → Triggers:
-    - Shows verification dialog with checklist (products match, quantities correct, condition OK)
+  - 📦 **[Marcar como Recibida]** button → Triggers:
+    - Requires receipt verification (products, quantities, and condition) through the host selected by the canonical GUI rules
     - Status changes to 'received'
     - Sets `received_date` = NOW()
     - ✅ **SQL Trigger**: `handle_purchase_invoice_prepaid_change()`
@@ -203,8 +216,8 @@ This is an **alternative model** to the standard "Pay After Receipt" flow. **The
       - CR: Inventario en Tránsito (1155) $100,000 (clear "on order")
       - IVA stays in IVA Crédito (1140) unchanged
     - Frontend: `_markAsReceived()` → `PurchaseService.markPrepaidAsReceived()`
-  - ⬅️ **[Volver a Confirmada]** button (Grey) → Triggers:
-    - Shows confirmation dialog for refund/cancellation scenario
+  - ⬅️ **[Volver a Confirmada]** button → Triggers:
+    - Requires an explicit refund/cancellation decision with its consequences
     - Status changes to 'confirmed'
     - Clears `paid_date`, `paid_amount`, sets `balance` = total
     - ✅ **SQL Trigger**: `recalculate_purchase_invoice_payments()` on DELETE
@@ -218,7 +231,7 @@ This is an **alternative model** to the standard "Pay After Receipt" flow. **The
 
 ### 5. **Recibida** (Received - Goods in Stock)
 - **Spanish Label**: "Recibida"
-- **Badge Color**: Green (`Colors.green[100]` / `Colors.green[800]`)
+- **State presentation**: Theme-owned and legible without color alone
 - **Accounting Effect**: ✅ Inventory settled
   - **Debit**: Inventario (1150) $100,000 (goods in stock)
   - **Credit**: Inventario en Tránsito (1155) $100,000 (settled)
@@ -234,8 +247,8 @@ This is an **alternative model** to the standard "Pay After Receipt" flow. **The
 - **Available Actions**:
   - ✏️ **[Ver Detalles Completos]** button → View-only mode, shows complete purchase timeline
   - 🖨️ **[Imprimir Resumen]** button → Generates printable summary of entire prepaid purchase
-  - ⬅️ **[Volver a Pagada]** button (Grey, for returns only) → Triggers:
-    - Shows confirmation dialog: "Devolver productos recibidos"
+  - ⬅️ **[Volver a Pagada]** button → Triggers:
+    - Requires an explicit return decision: "Devolver productos recibidos"
     - Status changes to 'paid'
     - Clears `received_date`
     - ✅ **SQL Trigger**: `handle_purchase_invoice_prepaid_change()`
@@ -244,7 +257,7 @@ This is an **alternative model** to the standard "Pay After Receipt" flow. **The
       - For each product:
         - UPDATE `products.inventory_qty` -= quantity
         - DELETE `stock_movements` records (movement_type='purchase_invoice_prepaid')
-    - ✅ **Accounting**: Settlement entry DELETED (Zoho Books style)
+    - ✅ **Accounting**: Settlement entry DELETED (historical DELETE-based approach)
       - DELETE FROM journal_entries WHERE source_module = 'purchase_invoices' AND entry_type = 'purchase_receipt'
       - journal_lines cascade deleted
       - Clean removal (as if goods were never received)
@@ -261,33 +274,15 @@ This is an **alternative model** to the standard "Pay After Receipt" flow. **The
 
 **User Interaction**:
 1. User opens purchase invoice detail page
-2. Sees status badge: Grey "Borrador"
-3. Clicks blue button **[Enviar a Proveedor]**
+2. Sees status "Borrador"
+3. Invokes **[Enviar a Proveedor]**
 
-**Frontend Action** (`PurchaseInvoiceFormPage` - Prepayment Mode):
-```dart
-void _sendToSupplier() async {
-  setState(() => _isLoading = true);
-  
-  try {
-    await _purchaseService.updateInvoiceStatus(
-      widget.invoiceId,
-      'sent',
-    );
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Orden enviada al proveedor')),
-      );
-      Navigator.pop(context, true);
-    }
-  } catch (e) {
-    _showError('Error al enviar orden: $e');
-  } finally {
-    setState(() => _isLoading = false);
-  }
-}
-```
+**Frontend behavior**:
+- Invoke the canonical business command once and keep loading/error state with
+  the current host.
+- Communicate the persisted outcome at the scope of the operation.
+- Preserve the exact originating list/editor context; this historical document
+  does not prescribe route replacement or a transient surface.
 
 **Backend Effect**:
 ```dart
@@ -312,12 +307,12 @@ Future<void> updateInvoiceStatus(int invoiceId, String newStatus) async {
 - ❌ No inventory changes
 
 **GUI Update**:
-- Badge changes to blue **"Enviada"**
+- State label changes to **"Enviada"**
 - Buttons visible:
   - **[Editar]** (outlined)
-  - **[Volver a Borrador]** (outlined, grey)
-  - **[Confirmar Recepción Factura]** (filled, purple) ← Primary action
-- SnackBar: "Orden enviada al proveedor"
+  - **[Volver a Borrador]**
+  - **[Confirmar Recepción Factura]** ← Primary action
+- Scoped feedback: "Orden enviada al proveedor"
 ```
 User Action: Click "Enviar a Proveedor"
 Backend Effect:
@@ -327,18 +322,18 @@ Backend Effect:
   • ❌ No inventory change
 SQL Trigger: None (simple status update)
 GUI Update:
-  • Badge changes to blue "Enviada"
+  • State label changes to "Enviada"
   • Buttons: [Editar] [Volver a Borrador] [Confirmar Recepción Factura]
-  • SnackBar: "Orden enviada al proveedor"
+  • Scoped feedback: "Orden enviada al proveedor"
 ```
 
 #### **Enviada → Confirmada**
 
 **User Interaction**:
-1. User sees status badge: Blue "Enviada"
+1. User sees status "Enviada"
 2. Supplier confirms order and issues digital invoice (factura electrónica)
-3. User clicks purple button **[Confirmar Recepción Factura]**
-4. Modal dialog appears:
+3. User Invokes **[Confirmar Recepción Factura]**
+4. Supplier-invoice information is required:
    - Title: "Confirmar factura del proveedor"
    - Fields:
      - **Número de Factura** (Supplier's invoice number) - Required
@@ -347,44 +342,12 @@ GUI Update:
      - **Monto Total** (auto-filled, readonly)
    - Buttons: [Cancelar] [Confirmar y Crear Pasivo]
 
-**Frontend Action**:
-```dart
-void _confirmSupplierInvoice() async {
-  final result = await showDialog<Map<String, dynamic>>(
-    context: context,
-    builder: (context) => ConfirmSupplierInvoiceDialog(
-      supplierId: _invoice.supplierId,
-      total: _invoice.total,
-    ),
-  );
-  
-  if (result == null) return; // User cancelled
-  
-  setState(() => _isLoading = true);
-  
-  try {
-    await _purchaseService.confirmSupplierInvoice(
-      invoiceId: widget.invoiceId,
-      supplierInvoiceNumber: result['invoiceNumber'],
-      supplierInvoiceDate: result['invoiceDate'],
-    );
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Factura confirmada - pasivo registrado (AP)'),
-          backgroundColor: Colors.purple,
-        ),
-      );
-      Navigator.pop(context, true);
-    }
-  } catch (e) {
-    _showError('Error al confirmar factura: $e');
-  } finally {
-    setState(() => _isLoading = false);
-  }
-}
-```
+**Frontend behavior**:
+- Invoke the canonical business command once and keep loading/error state with
+  the current host.
+- Communicate the persisted outcome at the scope of the operation.
+- Preserve the exact originating list/editor context; this historical document
+  does not prescribe route replacement or a transient surface.
 
 **Backend Service**:
 ```dart
@@ -505,16 +468,16 @@ $$ LANGUAGE plpgsql;
 - ❌ NO inventory changes yet (products not received)
 
 **GUI Update**:
-- Badge changes to purple **"Confirmada"**
+- State label changes to **"Confirmada"**
 - Shows supplier invoice info:
   - "Factura Proveedor: #12345"
   - "Fecha Factura: 12/10/2025"
   - "Pasivo Registrado: $119,000 CLP"
 - Buttons visible:
   - **[Ver Factura]** (outlined, view supplier invoice)
-  - **[Volver a Enviada]** (outlined, grey)
-  - **[Registrar Pago]** (filled, orange/amber) ← Primary action
-- SnackBar: "Factura confirmada - pasivo registrado (AP)"
+  - **[Volver a Enviada]**
+  - **[Registrar Pago]** ← Primary action
+- Scoped feedback: "Factura confirmada - pasivo registrado (AP)"
 ```
 User Action: Click "Confirmar Recepción Factura"
   (User enters supplier's invoice number and date)
@@ -527,18 +490,19 @@ Backend Effect:
 SQL Trigger: handle_purchase_invoice_change()
   → create_purchase_invoice_ap_entry()
 GUI Update:
-  • Badge changes to purple "Confirmada"
+  • State label changes to "Confirmada"
   • Buttons: [Editar] [Volver a Enviada] [Registrar Pago]
-  • SnackBar: "Factura confirmada - pasivo registrado"
+  • Scoped feedback: "Factura confirmada - pasivo registrado"
   • Shows: Supplier invoice #, Amount payable
 ```
 
 #### **Confirmada → Pagada**
 
 **User Interaction**:
-1. User sees status badge: Purple "Confirmada"
-2. User clicks orange button **[Registrar Pago]**
-3. Navigates to **Prepaid Payment Form Page**
+1. User sees status "Confirmada"
+2. User Invokes **[Registrar Pago]**
+3. Opens the canonical prepayment workflow through the host selected by the
+   current task and GUI guides
 4. User fills payment form:
    - **Método de Pago**: Transferencia, Cheque, Efectivo (dropdown)
    - **Monto**: Auto-filled with invoice total (readonly in prepayment)
@@ -549,91 +513,15 @@ GUI Update:
    - **Notas**: Text area (optional)
 5. Clicks **[Confirmar Pago Anticipado]** button
 
-**Frontend Navigation**:
-```dart
-void _navigateToPrepayment() async {
-  final result = await Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => PurchasePrepaymentFormPage(
-        invoiceId: widget.invoiceId,
-        supplierId: _invoice.supplierId,
-        supplierName: _invoice.supplierName,
-        invoiceTotal: _invoice.total,
-        supplierInvoiceNumber: _invoice.supplierInvoiceNumber,
-      ),
-    ),
-  );
-  
-  if (result == true) {
-    _loadInvoice(); // Refresh
-  }
-}
-```
+**Frontend navigation behavior**:
+Open the canonical payment editor through the lightest justified host and
+restore the exact invoice/list context after save or cancellation. Route
+replacement is not prescribed.
 
-**Payment Form Page**:
-```dart
-// PurchasePrepaymentFormPage
-void _confirmPrepayment() async {
-  if (!_formKey.currentState!.validate()) return;
-  
-  // Confirmation dialog for prepayment
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text('Confirmar pago anticipado'),
-      content: Text(
-        '⚠️ Está a punto de PAGAR \$${_invoice.total.toStringAsFixed(0)} CLP '
-        'al proveedor ${widget.supplierName}.\n\n'
-        'Los productos AÚN NO han sido recibidos.\n\n'
-        '¿Proceder con el pago anticipado?',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text('Cancelar'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, true),
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-          child: Text('Sí, Pagar Ahora'),
-        ),
-      ],
-    ),
-  );
-  
-  if (confirmed != true) return;
-  
-  setState(() => _isLoading = true);
-  
-  try {
-    await _purchaseService.registerPrepayment(
-      invoiceId: widget.invoiceId,
-      amount: _invoice.total, // Full amount
-      paymentMethod: _selectedMethod,
-      paymentDate: _selectedDate,
-      bankAccountId: _selectedBankAccountId,
-      reference: _referenceController.text,
-      checkNumber: _checkNumberController.text,
-      notes: _notesController.text,
-    );
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Pago anticipado registrado - esperando entrega'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      Navigator.pop(context, true);
-    }
-  } catch (e) {
-    _showError('Error al registrar pago: $e');
-  } finally {
-    setState(() => _isLoading = false);
-  }
-}
-```
+**Payment editor behavior**:
+Load active payment methods from the canonical source, validate the required
+amount/date/reference fields, invoke the shared payment command once, preserve
+entered values after recoverable failure, and return through the host contract.
 
 **Backend Service**:
 ```dart
@@ -802,7 +690,7 @@ Current balances:
 ```
 
 **GUI Update**:
-- Badge changes to orange **"Pagada"**
+- State label changes to **"Pagada"**
 - Shows payment information:
   - "⚠️ Pago Anticipado Realizado"
   - "Método: Transferencia"
@@ -811,9 +699,9 @@ Current balances:
   - "Estado: Esperando Entrega de Productos"
 - Buttons visible:
   - **[Ver Comprobante]** (outlined, view payment details)
-  - **[Volver a Confirmada]** (outlined, grey, for cancellation)
-  - **[Marcar como Recibida]** (filled, green) ← Primary action (waiting for delivery)
-- SnackBar: "Pago anticipado registrado - esperando entrega"
+  - **[Volver a Confirmada]** (cancellation/refund path)
+  - **[Marcar como Recibida]** ← Primary action (waiting for delivery)
+- Scoped feedback: "Pago anticipado registrado - esperando entrega"
 ```
 User Action: Click "Registrar Pago"
   → Payment form (amount, date, bank account, reference)
@@ -828,20 +716,20 @@ Backend Effect:
 SQL Trigger: handle_purchase_payment()
   → create_purchase_payment_entry()
 GUI Update:
-  • Badge changes to orange "Pagada"
+  • State label changes to "Pagada"
   • Buttons: [Marcar como Recibida] [Volver a Confirmada]
-  • SnackBar: "Pago registrado - esperando entrega"
+  • Scoped feedback: "Pago registrado - esperando entrega"
   • Shows: Payment date, method, waiting for delivery
 ```
 
 #### **Pagada → Recibida**
 
 **User Interaction**:
-1. User sees status badge: Orange "Pagada"
+1. User sees status "Pagada"
 2. Warning message: "⚠️ Pago anticipado realizado - Esperando entrega de productos"
 3. Supplier delivers products to store
-4. User clicks green button **[Marcar como Recibida]**
-5. **Verification Dialog** appears:
+4. User Invokes **[Marcar como Recibida]**
+5. **Receipt verification** is required:
    - Title: "Confirmar recepción de productos"
    - Content:
      - "¿Los productos fueron entregados físicamente en la tienda?"
@@ -853,69 +741,12 @@ GUI Update:
      - Note: "Esto aumentará el inventario y completará el proceso de compra prepagada."
    - Buttons: [Cancelar] [Confirmar Recepción]
 
-**Frontend Action**:
-```dart
-void _markAsReceived() async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text('Confirmar recepción de productos'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('¿Los productos fueron entregados físicamente en la tienda?\n'),
-          Text('Verifique:', style: TextStyle(fontWeight: FontWeight.bold)),
-          SizedBox(height: 8),
-          Row(children: [Icon(Icons.check_circle_outline, size: 16), SizedBox(width: 4), Text('Productos coinciden con factura')]),
-          Row(children: [Icon(Icons.check_circle_outline, size: 16), SizedBox(width: 4), Text('Cantidades correctas')]),
-          Row(children: [Icon(Icons.check_circle_outline, size: 16), SizedBox(width: 4), Text('Condición física adecuada')]),
-          Row(children: [Icon(Icons.check_circle_outline, size: 16), SizedBox(width: 4), Text('Embalaje intacto')]),
-          SizedBox(height: 12),
-          Text(
-            'Esto aumentará el inventario y completará el proceso de compra prepagada.',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text('Cancelar'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, true),
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-          child: Text('Confirmar Recepción'),
-        ),
-      ],
-    ),
-  );
-  
-  if (confirmed != true) return;
-  
-  setState(() => _isLoading = true);
-  
-  try {
-    await _purchaseService.markPrepaidAsReceived(widget.invoiceId);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✅ Productos recibidos - inventario actualizado - compra completada'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 4),
-        ),
-      );
-      Navigator.pop(context, true);
-    }
-  } catch (e) {
-    _showError('Error al marcar como recibida: $e');
-  } finally {
-    setState(() => _isLoading = false);
-  }
-}
-```
+**Frontend behavior**:
+- Invoke the canonical business command once and keep loading/error state with
+  the current host.
+- Communicate the persisted outcome at the scope of the operation.
+- Preserve the exact originating list/editor context; this historical document
+  does not prescribe route replacement or a transient surface.
 
 **Backend Service**:
 ```dart
@@ -1068,13 +899,14 @@ After receipt settlement:
 ```
 
 **GUI Update**:
-- Badge changes to green **"Recibida"**
+- State label changes to **"Recibida"**
 - Shows completion information:
   - "✅ Compra Completada"
   - "Productos Recibidos: 12/10/2025"
   - "Inventario Actualizado"
   - "Pago Realizado: 10/10/2025 ($119,000 CLP)"
-- Timeline view showing all statuses:
+- When history supports review or audit, expose the complete ordered sequence;
+  a timeline widget is not mandatory:
   1. ✅ Borrador → Enviada (08/10/2025)
   2. ✅ Enviada → Confirmada (09/10/2025)
   3. ✅ Confirmada → Pagada (10/10/2025) - PREPAGO
@@ -1082,8 +914,8 @@ After receipt settlement:
 - Buttons visible:
   - **[Ver Detalles Completos]** (outlined)
   - **[Imprimir Resumen]** (outlined)
-  - **[Volver a Pagada]** (outlined, grey, for returns only)
-- SnackBar: "✅ Productos recibidos - inventario actualizado - compra completada"
+  - **[Volver a Pagada]**
+- Scoped feedback: "✅ Productos recibidos - inventario actualizado - compra completada"
 ```
 User Action: Click "Marcar como Recibida"
   → Verification form (count products, verify quantities)
@@ -1098,9 +930,9 @@ SQL Trigger: handle_purchase_receipt()
   → consume_purchase_invoice_inventory()
   → settle_inventory_on_order() [Optional]
 GUI Update:
-  • Badge changes to green "Recibida"
+  • State label changes to "Recibida"
   • Buttons: [Ver Detalles] [Volver a Pagada]
-  • SnackBar: "Productos recibidos - inventario actualizado"
+  • Scoped feedback: "Productos recibidos - inventario actualizado"
   • Shows: Received date, stock updated
 ```
 
@@ -1111,7 +943,7 @@ GUI Update:
 #### **Enviada → Borrador**
 ```
 User Action: Click "Volver a Borrador"
-Confirmation Dialog:
+Explicit confirmation requirement (surface selected by the canonical GUI guide):
   Title: "Cancelar orden enviada"
   Message: "¿Volver esta orden a BORRADOR?
   
@@ -1124,15 +956,15 @@ Backend Effect:
   • ❌ No inventory changes
 SQL Trigger: None
 GUI Update:
-  • Badge changes to grey "Borrador"
+  • State label changes to "Borrador"
   • Buttons: [Editar] [Enviar a Proveedor] [Eliminar]
-  • SnackBar: "Orden revertida a borrador"
+  • Scoped feedback: "Orden revertida a borrador"
 ```
 
 #### **Confirmada → Enviada**
 ```
 User Action: Click "Volver a Enviada"
-Confirmation Dialog:
+Explicit confirmation requirement (surface selected by the canonical GUI guide):
   Title: "Cancelar factura confirmada"
   Message: "¿Volver esta factura a ENVIADA?
   
@@ -1148,15 +980,15 @@ Backend Effect:
 SQL Trigger: handle_purchase_invoice_reversal()
   → delete_or_reverse_ap_entry()
 GUI Update:
-  • Badge changes to blue "Enviada"
+  • State label changes to "Enviada"
   • Buttons: [Editar] [Volver a Borrador] [Confirmar Recepción Factura]
-  • SnackBar: "Factura revertida - pasivo eliminado"
+  • Scoped feedback: "Factura revertida - pasivo eliminado"
 ```
 
 #### **Pagada → Confirmada**
 ```
 User Action: Click "Volver a Confirmada"
-Confirmation Dialog:
+Explicit confirmation requirement (surface selected by the canonical GUI guide):
   Title: "Revertir pago realizado"
   Message: "¿Volver esta factura pagada a CONFIRMADA?
   
@@ -1173,15 +1005,15 @@ Backend Effect:
 SQL Trigger: handle_purchase_payment_reversal()
   → reverse_purchase_payment_entry()
 GUI Update:
-  • Badge changes to purple "Confirmada"
+  • State label changes to "Confirmada"
   • Buttons: [Editar] [Volver a Enviada] [Registrar Pago]
-  • SnackBar: "Pago revertido - factura pendiente de pago"
+  • Scoped feedback: "Pago revertido - factura pendiente de pago"
 ```
 
 #### **Recibida → Pagada**
 ```
 User Action: Click "Volver a Pagada"
-Confirmation Dialog:
+Explicit confirmation requirement (surface selected by the canonical GUI guide):
   Title: "Devolver productos recibidos"
   Message: "¿Volver esta factura a PAGADA?
   
@@ -1198,9 +1030,9 @@ SQL Trigger: handle_purchase_return()
   → reverse_purchase_invoice_inventory()
   → reverse_settlement_entry()
 GUI Update:
-  • Badge changes to orange "Pagada"
+  • State label changes to "Pagada"
   • Buttons: [Marcar como Recibida] [Volver a Confirmada]
-  • SnackBar: "Productos devueltos - inventario ajustado"
+  • Scoped feedback: "Productos devueltos - inventario ajustado"
 ```
 
 ---
@@ -1360,310 +1192,20 @@ WHERE movement_type = 'purchase_invoice_prepaid'
 
 ---
 
-## 🎨 GUI COMPONENTS
+## GUI interaction contract
 
-### Status Badge Colors
-
-| Status     | Color        | Hex/Material |
-|------------|--------------|--------------|
-| Borrador   | Grey         | Colors.grey[200] / Colors.grey[800] |
-| Enviada    | Blue         | Colors.blue[100] / Colors.blue[800] |
-| Confirmada | Purple       | Colors.purple[100] / Colors.purple[800] |
-| Pagada     | Orange/Amber | Colors.orange[100] / Colors.orange[800] |
-| Recibida   | Green        | Colors.green[100] / Colors.green[800] |
-
-### Button Layout by Status
-
-#### **Borrador** (Grey Badge)
-```dart
-// PurchaseInvoiceFormPage - Prepayment Model - Borrador
-Row(
-  mainAxisAlignment: MainAxisAlignment.end,
-  children: [
-    OutlinedButton.icon(
-      icon: Icon(Icons.edit),
-      label: Text('Editar'),
-      onPressed: _editInvoice,
-    ),
-    SizedBox(width: 8),
-    ElevatedButton.icon(
-      icon: Icon(Icons.send),
-      label: Text('Enviar a Proveedor'),
-      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-      onPressed: _sendToSupplier,
-    ),
-    SizedBox(width: 8),
-    TextButton.icon(
-      icon: Icon(Icons.delete, color: Colors.red),
-      label: Text('Eliminar', style: TextStyle(color: Colors.red)),
-      onPressed: _deleteInvoice,
-    ),
-  ],
-)
-```
-
-**Visual**: `[📝 Editar] [📤 Enviar a Proveedor (Blue)] [🗑️ Eliminar (Red)]`
-
----
-
-#### **Enviada** (Blue Badge)
-```dart
-// PurchaseInvoiceFormPage - Prepayment Model - Enviada
-Row(
-  mainAxisAlignment: MainAxisAlignment.end,
-  children: [
-    OutlinedButton.icon(
-      icon: Icon(Icons.edit),
-      label: Text('Editar'),
-      onPressed: _editInvoice,
-    ),
-    SizedBox(width: 8),
-    OutlinedButton.icon(
-      icon: Icon(Icons.arrow_back),
-      label: Text('Volver a Borrador'),
-      onPressed: _revertToDraft,
-    ),
-    SizedBox(width: 8),
-    ElevatedButton.icon(
-      icon: Icon(Icons.receipt_long),
-      label: Text('Confirmar Recepción Factura'),
-      style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
-      onPressed: _confirmSupplierInvoice,
-    ),
-  ],
-)
-```
-
-**Visual**: `[📝 Editar] [⬅️ Volver a Borrador] [🧾 Confirmar Recepción Factura (Purple)]`
-
----
-
-#### **Confirmada** (Purple Badge)
-```dart
-// PurchaseInvoiceFormPage - Prepayment Model - Confirmada
-Column(
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
-    // Info banner
-    Container(
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.purple[50],
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.info_outline, color: Colors.purple),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Factura confirmada por proveedor. Pasivo registrado: \$${_invoice.total.toStringAsFixed(0)} CLP',
-              style: TextStyle(color: Colors.purple[900]),
-            ),
-          ),
-        ],
-      ),
-    ),
-    SizedBox(height: 12),
-    Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        OutlinedButton.icon(
-          icon: Icon(Icons.visibility),
-          label: Text('Ver Factura'),
-          onPressed: _viewSupplierInvoice,
-        ),
-        SizedBox(width: 8),
-        OutlinedButton.icon(
-          icon: Icon(Icons.arrow_back),
-          label: Text('Volver a Enviada'),
-          onPressed: _revertToSent,
-        ),
-        SizedBox(width: 8),
-        ElevatedButton.icon(
-          icon: Icon(Icons.payment),
-          label: Text('Registrar Pago'),
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[700]),
-          onPressed: _navigateToPrepayment,
-        ),
-      ],
-    ),
-  ],
-)
-```
-
-**Visual**: 
-```
-┌─────────────────────────────────────────────────────────┐
-│ ℹ️ Factura confirmada. Pasivo: $119,000 CLP            │
-└─────────────────────────────────────────────────────────┘
-[👁️ Ver Factura] [⬅️ Volver a Enviada] [💰 Registrar Pago (Orange)]
-```
-
----
-
-#### **Pagada** (Orange Badge)
-```dart
-// PurchaseInvoiceFormPage - Prepayment Model - Pagada
-Column(
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
-    // Warning banner - PREPAID
-    Container(
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.orange[50],
-        border: Border.all(color: Colors.orange[300]!),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.warning_amber, color: Colors.orange[800]),
-          SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '⚠️ PAGO ANTICIPADO REALIZADO',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange[900]),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Monto: \$${_invoice.paidAmount.toStringAsFixed(0)} CLP | '
-                  'Fecha: ${DateFormat('dd/MM/yyyy').format(_invoice.paidDate!)}',
-                  style: TextStyle(fontSize: 12, color: Colors.orange[800]),
-                ),
-                Text(
-                  'Estado: Esperando entrega de productos',
-                  style: TextStyle(fontSize: 12, color: Colors.orange[800], fontStyle: FontStyle.italic),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-    SizedBox(height: 12),
-    Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        OutlinedButton.icon(
-          icon: Icon(Icons.receipt),
-          label: Text('Ver Comprobante'),
-          onPressed: _viewPaymentReceipt,
-        ),
-        SizedBox(width: 8),
-        OutlinedButton.icon(
-          icon: Icon(Icons.arrow_back),
-          label: Text('Volver a Confirmada'),
-          onPressed: _revertToConfirmed,
-        ),
-        SizedBox(width: 8),
-        ElevatedButton.icon(
-          icon: Icon(Icons.inventory_2),
-          label: Text('Marcar como Recibida'),
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-          onPressed: _markAsReceived,
-        ),
-      ],
-    ),
-  ],
-)
-```
-
-**Visual**: 
-```
-┌──────────────────────────────────────────────────────────┐
-│ ⚠️ PAGO ANTICIPADO REALIZADO                            │
-│ Monto: $119,000 CLP | Fecha: 10/10/2025                 │
-│ Estado: Esperando entrega de productos                   │
-└──────────────────────────────────────────────────────────┘
-[🧾 Ver Comprobante] [⬅️ Volver a Confirmada] [📦 Marcar como Recibida (Green)]
-```
-
----
-
-#### **Recibida** (Green Badge)
-```dart
-// PurchaseInvoiceFormPage - Prepayment Model - Recibida
-Column(
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
-    // Success banner
-    Container(
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.green[50],
-        border: Border.all(color: Colors.green[300]!),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.check_circle, color: Colors.green[800]),
-          SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '✅ COMPRA COMPLETADA',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green[900]),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Productos recibidos: ${DateFormat('dd/MM/yyyy').format(_invoice.receivedDate!)}',
-                  style: TextStyle(fontSize: 12, color: Colors.green[800]),
-                ),
-                Text(
-                  'Pago realizado: ${DateFormat('dd/MM/yyyy').format(_invoice.paidDate!)} (\$${_invoice.paidAmount.toStringAsFixed(0)} CLP)',
-                  style: TextStyle(fontSize: 12, color: Colors.green[800]),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-    SizedBox(height: 12),
-    Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        OutlinedButton.icon(
-          icon: Icon(Icons.summarize),
-          label: Text('Ver Detalles Completos'),
-          onPressed: _viewFullDetails,
-        ),
-        SizedBox(width: 8),
-        OutlinedButton.icon(
-          icon: Icon(Icons.print),
-          label: Text('Imprimir Resumen'),
-          onPressed: _printSummary,
-        ),
-        SizedBox(width: 8),
-        OutlinedButton.icon(
-          icon: Icon(Icons.arrow_back),
-          label: Text('Volver a Pagada'),
-          style: OutlinedButton.styleFrom(foregroundColor: Colors.grey),
-          onPressed: _revertToPaid, // Only for returns
-        ),
-      ],
-    ),
-  ],
-)
-```
-
-**Visual**: 
-```
-┌──────────────────────────────────────────────────────────┐
-│ ✅ COMPRA COMPLETADA                                     │
-│ Productos recibidos: 12/10/2025                          │
-│ Pago realizado: 10/10/2025 ($119,000 CLP)               │
-└──────────────────────────────────────────────────────────┘
-[📄 Ver Detalles Completos] [🖨️ Imprimir Resumen] [⬅️ Volver a Pagada (Grey)]
-```
-
----
+- Expose current state and whether this is a prepayment flow with clear text and
+  semantics. A badge, chip, timeline, or colored container is optional.
+- Expose only commands allowed by the current business state and keep their
+  accounting, payment, and inventory consequences understandable.
+- Let the canonical visual system determine action weight, feedback, status
+  treatment, and responsive composition. Do not assign one bright color to
+  each lifecycle state.
+- Risky reversals and physical receipt require an intentional, consequence-aware
+  decision. The correct surface depends on risk and host; a centered dialog is
+  not automatic.
+- Preserve purchase-list filters, selection, scroll, and invoice context while
+  entering supplier-invoice, payment, receipt, or reversal work.
 
 ## 🔐 BUSINESS RULES
 
@@ -1807,28 +1349,14 @@ class CompanySettings {
 }
 ```
 
-### Settings UI
+### Settings interaction contract
 
-```
-┌─────────────────────────────────────────────────┐
-│ Configuración de Compras                        │
-├─────────────────────────────────────────────────┤
-│                                                 │
-│ Modelo de Flujo de Facturas de Compra:         │
-│                                                 │
-│ ○ Pago Después de Recepción (Estándar)         │
-│   Flujo: Borrador → Recibida → Pagada          │
-│   Recomendado para proveedores locales.        │
-│                                                 │
-│ ● Pago Anticipado (Prepago)                    │
-│   Flujo: Borrador → Enviada → Confirmada →     │
-│          Pagada → Recibida                      │
-│   Recomendado para proveedores internacionales │
-│   o de confianza que requieren pago adelantado.│
-│                                                 │
-│         [Guardar Configuración]                 │
-└─────────────────────────────────────────────────┘
-```
+If a current settings owner exposes a default workflow model, show both choices,
+their lifecycle difference, and the effect on payment/receipt timing. Use the
+canonical settings composition and shared visual roles. This historical
+wireframe does not prescribe radio controls, a boxed panel, a full route, or a
+separate save bar.
+
 
 ---
 
@@ -1857,8 +1385,8 @@ class CompanySettings {
      // Use 3-status flow
    }
    ```
-4. ✅ Create separate UI components for each model
-5. ✅ Add Settings toggle to switch between models
+4. ✅ Reuse the canonical purchase editor and commands; introduce a model-specific composition only when task evidence requires it
+5. ✅ Expose model selection through the current canonical owner when configuration is still supported
 6. ✅ Ensure backward compatibility with existing invoices
 7. ✅ Test both flows thoroughly
 
@@ -1873,12 +1401,12 @@ class CompanySettings {
    - Option A: DR: Inventory, CR: Inventory on Order
    - Option B: Just update stock (no entry)
 
-### Code References (To Be Created):
+### Historical implementation references
 
-- **Service**: `lib/modules/purchases/services/purchase_service_prepaid.dart`
-- **UI**: `lib/modules/purchases/pages/purchase_invoice_form_page_prepaid.dart`
-- **SQL**: `supabase/sql/purchase_invoice_prepaid_workflow.sql`
-- **Settings**: `lib/modules/settings/models/company_settings.dart`
+The filenames once proposed here are not current architecture authority. Resolve
+the canonical purchase service, editor, database command, and settings owner
+from the live repository and surface registry. Do not create a parallel
+prepayment writer or duplicate form merely to mirror this historical document.
 
 ---
 
@@ -1888,8 +1416,8 @@ class CompanySettings {
 - [ ] Create Settings option for workflow model selection
 - [ ] Implement conditional routing in PurchaseService
 - [ ] Create new SQL triggers for prepayment flow
-- [ ] Update UI to show different buttons based on model
-- [ ] Add status badge colors (orange for Pagada in prepayment)
+- [ ] Update canonical action availability based on model
+- [ ] Expose state and prepayment model with theme-owned treatment, text, and semantics
 - [ ] Implement accounting logic (Option A or B)
 - [ ] Create reversal functions for each transition
 - [ ] Add inventory control (only at Recibida)

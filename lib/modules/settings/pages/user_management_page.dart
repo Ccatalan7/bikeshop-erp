@@ -1,13 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/user_management_service.dart';
+import '../../../shared/utils/auth_input_validation.dart';
 import '../../../shared/widgets/branded_loading.dart';
 
 enum _IdentityAudience { staff, customers, invitations }
@@ -105,10 +105,11 @@ class _UserManagementPageState extends State<UserManagementPage> {
         _selectedItem = _resolveSelection();
         _isLoading = false;
       });
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = error.toString();
+        _errorMessage =
+            'No pudimos cargar las identidades. Inténtalo nuevamente.';
         _isLoading = false;
       });
     }
@@ -800,7 +801,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                     ? null
                     : () => _sendPasswordReset(email),
                 icon: const Icon(Icons.lock_reset, size: 18),
-                label: const Text('Reset contraseña'),
+                label: const Text('Enviar acceso seguro'),
               ),
               OutlinedButton.icon(
                 onPressed: _isActionRunning || isSelf
@@ -819,12 +820,11 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 onPressed: _isActionRunning || user['emailConfirmed'] == true
                     ? null
                     : () => _runAction(
-                          'Email confirmado manualmente',
-                          () =>
-                              _userService.confirmEmail(user['id'].toString()),
+                          'Correo de acceso seguro enviado',
+                          () => _userService.sendPasswordReset(email),
                         ),
-                icon: const Icon(Icons.mark_email_read_outlined, size: 18),
-                label: const Text('Confirmar email'),
+                icon: const Icon(Icons.outgoing_mail, size: 18),
+                label: const Text('Reenviar acceso'),
               ),
               OutlinedButton.icon(
                 onPressed: _isActionRunning || isSelf
@@ -940,7 +940,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                         ? null
                         : () => _sendPasswordReset(email),
                 icon: const Icon(Icons.lock_reset, size: 18),
-                label: const Text('Reset contraseña'),
+                label: const Text('Enviar acceso seguro'),
               ),
               OutlinedButton.icon(
                 onPressed: _isActionRunning ||
@@ -959,18 +959,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 label: Text(isActive ? 'Limitar acceso' : 'Restaurar acceso'),
               ),
               OutlinedButton.icon(
-                onPressed: _isActionRunning ||
-                        authUserId == null ||
-                        isSharedStaffAccount
-                    ? null
-                    : () => _runAction(
-                          'Email confirmado manualmente',
-                          () => _userService.confirmEmail(authUserId),
-                        ),
-                icon: const Icon(Icons.mark_email_read_outlined, size: 18),
-                label: const Text('Confirmar email'),
-              ),
-              OutlinedButton.icon(
                 onPressed: _isActionRunning || !hasAuth || authUserId == null
                     ? null
                     : () => _confirmAccountRemoval(
@@ -979,7 +967,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                               ? 'Se retirará el acceso web. Si existe trazabilidad de mensajería, la identidad se conservará desactivada para auditoría.'
                               : isSharedStaffAccount
                                   ? 'Esto solo desvincula este cliente del login interno ERP. No elimina ni restringe el usuario del equipo.'
-                                  : 'Se retirará el acceso web y se conservarán la ficha CRM y su historial. La identidad Auth sólo se elimina cuando no existe evidencia que deba auditarse.',
+                                  : 'Se retirará el acceso web de esta tienda y se conservarán la identidad global, la ficha CRM y su historial.',
                           confirmLabel: 'Procesar baja',
                           action: () => isWebsiteOnlyAuth
                               ? _userService.deleteWebsiteAuthAccount(
@@ -1403,11 +1391,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
                       ? null
                       : () async {
                           Navigator.pop(dialogContext);
-                          Map<String, dynamic>? result;
                           await _runAction(
-                            'Invitación creada',
+                            'Invitación enviada por correo',
                             () async {
-                              result = await _userService.inviteInternalUser(
+                              await _userService.inviteInternalUser(
                                 email: emailController.text.trim(),
                                 role: selectedRole,
                                 permissions: permissions,
@@ -1417,10 +1404,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
                               );
                             },
                           );
-                          final link = result?['invitationLink']?.toString();
-                          if (link != null && link.isNotEmpty && mounted) {
-                            _showCopyDialog('Link de invitación', link);
-                          }
                         },
                   icon: const Icon(Icons.send_outlined, size: 18),
                   label: const Text('Enviar invitación'),
@@ -1578,6 +1561,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
   Future<void> _showCustomerAccountDialog(
       {Map<String, dynamic>? customer}) async {
+    final formKey = GlobalKey<FormState>();
     final isWebsiteOnlyAuth = customer?['isWebsiteOnlyAuth'] == true;
     final hasExistingAuth = customer?['hasAuth'] == true;
     final emailController =
@@ -1586,192 +1570,135 @@ class _UserManagementPageState extends State<UserManagementPage> {
         TextEditingController(text: customer?['displayName']?.toString() ?? '');
     final phoneController =
         TextEditingController(text: customer?['phone']?.toString() ?? '');
-    final passwordController = TextEditingController();
-    var mode = 'invite';
-    var confirmEmail = false;
 
     try {
       await showDialog<void>(
         context: context,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Text(isWebsiteOnlyAuth
-                  ? 'Crear ficha CRM y vincular'
-                  : customer == null
-                      ? 'Crear cuenta cliente web'
-                      : 'Crear o reparar cuenta web'),
-              content: SizedBox(
-                width: 560,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (isWebsiteOnlyAuth) ...[
-                        _noteBox(
-                          context,
-                          icon: Icons.link_outlined,
-                          text:
-                              'Esta cuenta web ya existe. Al guardar, se creará o reutilizará la ficha cliente CRM con este email y quedará vinculada al login del sitio.',
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      TextField(
-                        controller: emailController,
-                        decoration: const InputDecoration(
-                            labelText: 'Email',
-                            prefixIcon: Icon(Icons.email_outlined)),
-                        keyboardType: TextInputType.emailAddress,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(isWebsiteOnlyAuth
+              ? 'Crear ficha CRM y vincular'
+              : customer == null
+                  ? 'Crear cuenta cliente web'
+                  : 'Crear o reparar cuenta web'),
+          content: SizedBox(
+            width: 560,
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isWebsiteOnlyAuth) ...[
+                      _noteBox(
+                        dialogContext,
+                        icon: Icons.link_outlined,
+                        text:
+                            'Esta cuenta web ya existe. Al guardar, se creará o reutilizará la ficha cliente CRM con este email y quedará vinculada al login del sitio.',
                       ),
                       const SizedBox(height: 12),
-                      TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(
-                            labelText: 'Nombre cliente',
-                            prefixIcon: Icon(Icons.person_outline)),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: phoneController,
-                        decoration: const InputDecoration(
-                            labelText: 'Teléfono opcional',
-                            prefixIcon: Icon(Icons.phone_outlined)),
-                      ),
-                      const SizedBox(height: 16),
-                      SegmentedButton<String>(
-                        selected: {mode},
-                        showSelectedIcon: false,
-                        onSelectionChanged: (value) =>
-                            setDialogState(() => mode = value.first),
-                        segments: const [
-                          ButtonSegment(
-                              value: 'invite', label: Text('Enviar acceso')),
-                          ButtonSegment(
-                              value: 'temporary_password',
-                              label: Text('Clave temporal')),
-                        ],
-                      ),
-                      if (mode == 'invite') ...[
-                        const SizedBox(height: 10),
-                        _noteBox(
-                          context,
-                          icon: hasExistingAuth
-                              ? Icons.link_outlined
-                              : Icons.outgoing_mail,
-                          text: hasExistingAuth
-                              ? 'Para cuentas existentes se genera un link directo de recuperación para copiarlo o enviarlo manualmente si el correo no llega.'
-                              : 'Para cuentas nuevas se enviará una invitación por email. Si el proveedor devuelve un link, también se mostrará para respaldo.',
-                        ),
-                      ],
-                      if (mode == 'temporary_password') ...[
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: passwordController,
-                          decoration: const InputDecoration(
-                            labelText: 'Clave temporal opcional',
-                            helperText:
-                                'Si la dejas vacía, se generará una clave segura.',
-                            prefixIcon: Icon(Icons.key_outlined),
-                          ),
-                        ),
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          value: confirmEmail,
-                          onChanged: (value) =>
-                              setDialogState(() => confirmEmail = value),
-                          title: const Text('Confirmar email manualmente'),
-                          subtitle: const Text(
-                              'Usar solo cuando verificaste la identidad del cliente.'),
-                        ),
-                      ],
                     ],
-                  ),
+                    TextFormField(
+                      controller: emailController,
+                      decoration: const InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: Icon(Icons.email_outlined)),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: AuthInputValidation.validateEmail,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                          labelText: 'Nombre cliente',
+                          prefixIcon: Icon(Icons.person_outline)),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                              ? 'Ingrese el nombre del cliente'
+                              : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: phoneController,
+                      decoration: const InputDecoration(
+                          labelText: 'Teléfono opcional',
+                          prefixIcon: Icon(Icons.phone_outlined)),
+                    ),
+                    const SizedBox(height: 10),
+                    _noteBox(
+                      dialogContext,
+                      icon: hasExistingAuth
+                          ? Icons.lock_reset
+                          : Icons.outgoing_mail,
+                      text: hasExistingAuth
+                          ? 'Se enviará un correo seguro para recuperar el acceso. El ERP nunca ve ni define la contraseña del cliente.'
+                          : 'Se enviará una invitación por email para que el cliente defina su propia contraseña.',
+                    ),
+                  ],
                 ),
               ),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    child: const Text('Cancelar')),
-                FilledButton.icon(
-                  onPressed: _isActionRunning
-                      ? null
-                      : () async {
-                          final pageContext = this.context;
-                          Navigator.pop(dialogContext);
-                          setState(() => _isActionRunning = true);
-                          Map<String, dynamic>? result;
-                          try {
-                            final actionResult =
-                                await _userService.createCustomerAccount(
-                              customerId: customer?['customerId']?.toString(),
-                              email: emailController.text.trim(),
-                              name: nameController.text.trim(),
-                              phone: phoneController.text.trim().isEmpty
-                                  ? null
-                                  : phoneController.text.trim(),
-                              mode: mode,
-                              password: passwordController.text.trim().isEmpty
-                                  ? null
-                                  : passwordController.text.trim(),
-                              confirmEmail: confirmEmail,
-                            );
-                            result = actionResult;
-                            if (!pageContext.mounted) return;
-                            ScaffoldMessenger.of(pageContext).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  _customerAccountSuccessMessage(
-                                    actionResult,
-                                    mode,
-                                  ),
-                                ),
-                              ),
-                            );
-                            await _loadData(silent: true);
-                          } catch (error) {
-                            if (!pageContext.mounted) return;
-                            ScaffoldMessenger.of(pageContext).showSnackBar(
-                              SnackBar(
-                                content: Text('Error: $error'),
-                                backgroundColor:
-                                    Theme.of(pageContext).colorScheme.error,
-                              ),
-                            );
-                          } finally {
-                            if (mounted) {
-                              setState(() => _isActionRunning = false);
-                            }
-                          }
-                          final tempPassword =
-                              result?['temporaryPassword']?.toString();
-                          if (tempPassword != null &&
-                              tempPassword.isNotEmpty &&
-                              mounted) {
-                            _showCopyDialog(
-                                'Clave temporal del cliente', tempPassword);
-                          }
-                          final accessLink = result?['accessLink']?.toString();
-                          if (accessLink != null &&
-                              accessLink.isNotEmpty &&
-                              mounted) {
-                            _showCopyDialog(
-                                'Link de recuperación del cliente', accessLink);
-                          }
-                        },
-                  icon: const Icon(Icons.person_add_alt_1, size: 18),
-                  label: Text(
-                      isWebsiteOnlyAuth ? 'Vincular ficha' : 'Crear cuenta'),
-                ),
-              ],
-            );
-          },
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancelar')),
+            FilledButton.icon(
+              onPressed: _isActionRunning
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+
+                      final pageContext = context;
+                      final email = emailController.text.trim();
+                      final name = nameController.text.trim();
+                      final phone = phoneController.text.trim();
+                      Navigator.pop(dialogContext);
+                      setState(() => _isActionRunning = true);
+                      try {
+                        final actionResult =
+                            await _userService.createCustomerAccount(
+                          customerId: customer?['customerId']?.toString(),
+                          email: email,
+                          name: name,
+                          phone: phone.isEmpty ? null : phone,
+                        );
+                        if (!pageContext.mounted) return;
+                        ScaffoldMessenger.of(pageContext).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              _customerAccountSuccessMessage(actionResult),
+                            ),
+                          ),
+                        );
+                        await _loadData(silent: true);
+                      } catch (_) {
+                        if (!pageContext.mounted) return;
+                        ScaffoldMessenger.of(pageContext).showSnackBar(
+                          SnackBar(
+                            content: const Text(
+                              'No pudimos crear o vincular la cuenta. Inténtalo nuevamente.',
+                            ),
+                            backgroundColor:
+                                Theme.of(pageContext).colorScheme.error,
+                          ),
+                        );
+                      } finally {
+                        if (mounted) {
+                          setState(() => _isActionRunning = false);
+                        }
+                      }
+                    },
+              icon: const Icon(Icons.person_add_alt_1, size: 18),
+              label:
+                  Text(isWebsiteOnlyAuth ? 'Vincular ficha' : 'Crear cuenta'),
+            ),
+          ],
         ),
       );
     } finally {
       emailController.dispose();
       nameController.dispose();
       phoneController.dispose();
-      passwordController.dispose();
     }
   }
 
@@ -1870,11 +1797,13 @@ class _UserManagementPageState extends State<UserManagementPage> {
         SnackBar(content: Text(_accountRemovalResultMessage(result))),
       );
       await _loadData(silent: true);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $error'),
+          content: const Text(
+            'No pudimos procesar la baja. Inténtalo nuevamente.',
+          ),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -1890,11 +1819,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
       }
       return 'Membresía desactivada. La identidad sigue activa por otro acceso vigente y su historial quedó preservado.';
     }
-    if (result['authDetachedOnly'] == true) {
-      return 'Login web desvinculado. El usuario interno y la ficha histórica se conservaron.';
-    }
-    if (result['outcome'] == 'auth_deleted' || result['authDeleted'] == true) {
-      return 'Cuenta eliminada correctamente.';
+    if (result['outcome'] == 'tenant_access_detached' ||
+        result['authDetachedOnly'] == true) {
+      return 'Acceso a esta tienda desactivado. La identidad global y la ficha histórica se conservaron.';
     }
     return 'Baja procesada correctamente.';
   }
@@ -1908,11 +1835,13 @@ class _UserManagementPageState extends State<UserManagementPage> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(successMessage)));
       await _loadData(silent: true);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $error'),
+          content: const Text(
+            'No pudimos completar la acción. Inténtalo nuevamente.',
+          ),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -1922,30 +1851,15 @@ class _UserManagementPageState extends State<UserManagementPage> {
   }
 
   Future<void> _sendPasswordReset(String email) async {
-    Map<String, dynamic>? result;
     await _runAction(
-      'Link de recuperación generado',
-      () async {
-        result = await _userService.sendPasswordReset(email);
-      },
+      'Correo de acceso seguro enviado',
+      () => _userService.sendPasswordReset(email),
     );
-
-    final accessLink = result?['accessLink']?.toString();
-    if (accessLink != null && accessLink.isNotEmpty && mounted) {
-      _showCopyDialog('Link de recuperación', accessLink);
-    }
   }
 
   String _customerAccountSuccessMessage(
     Map<String, dynamic> result,
-    String mode,
   ) {
-    if (result['temporaryPassword']?.toString().isNotEmpty == true) {
-      return 'Cuenta vinculada. Se asignó una clave temporal para el cliente.';
-    }
-    if (result['passwordResetLinkGenerated'] == true) {
-      return 'Cuenta vinculada. Se generó un link para recuperar o crear la contraseña.';
-    }
     if (result['passwordResetSent'] == true) {
       return 'Cuenta vinculada. Se envió un email para crear o recuperar la contraseña.';
     }
@@ -1955,34 +1869,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
     if (result['sharedStaffAccount'] == true) {
       return 'Este cliente ya usa un login interno ERP; no se cambió el acceso.';
     }
-    return mode == 'temporary_password'
-        ? 'Cuenta cliente actualizada con clave temporal.'
-        : 'Cuenta cliente actualizada.';
-  }
-
-  Future<void> _showCopyDialog(String title, String value) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: SelectableText(value),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cerrar')),
-          FilledButton.icon(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: value));
-              Navigator.pop(context);
-              ScaffoldMessenger.of(this.context)
-                  .showSnackBar(const SnackBar(content: Text('Copiado')));
-            },
-            icon: const Icon(Icons.copy, size: 18),
-            label: const Text('Copiar'),
-          ),
-        ],
-      ),
-    );
+    return 'Cuenta cliente actualizada. Revisa el correo enviado para completar el acceso.';
   }
 
   Map<String, bool> _permissionsForRole(String role) {

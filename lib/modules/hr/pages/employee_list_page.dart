@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // For Clipboard
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
@@ -96,90 +95,25 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
     if (result != null) {
       _loadData();
 
-      // Show invitation link dialog if present
-      final invitationLink = result['invitationLink'] as String?;
+      final invitationRequested = result['invitationRequested'] == true;
+      final invitationEmailSent = result['invitationEmailSent'] == true;
       final email = result['email'] as String?;
 
-      if (invitationLink != null && email != null && mounted) {
-        // Wait a frame for the form dialog to fully close
-        await Future.delayed(const Duration(milliseconds: 150));
-
-        if (!mounted) return;
-
-        _showInvitationLinkDialog(invitationLink, email);
+      if (invitationRequested && mounted) {
+        final destination = email == null || email.isEmpty ? '' : ' a $email';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              invitationEmailSent
+                  ? 'Trabajador creado e invitación enviada$destination.'
+                  : 'Trabajador creado, pero el correo de invitación no fue enviado. Reinténtalo desde Usuarios y roles.',
+            ),
+            backgroundColor: invitationEmailSent ? Colors.green : Colors.orange,
+            duration: const Duration(seconds: 6),
+          ),
+        );
       }
     }
-  }
-
-  // Show invitation link dialog for manual sharing
-  void _showInvitationLinkDialog(String invitationLink, String email) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.link, color: Colors.blue),
-            SizedBox(width: 8),
-            Text('Enlace de Invitación'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Invitación creada para:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(email, style: const TextStyle(color: Colors.blue)),
-            const SizedBox(height: 16),
-            const Text(
-              'Copia este enlace y envíalo manualmente (WhatsApp, email, etc.):',
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: SelectableText(
-                invitationLink,
-                style: const TextStyle(fontSize: 12),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '⏰ El enlace expira en 7 días',
-              style: TextStyle(fontSize: 12, color: Colors.orange.shade700),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              // Copy to clipboard
-              final data = ClipboardData(text: invitationLink);
-              Clipboard.setData(data);
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('✅ Enlace copiado al portapapeles'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-            child: const Text('Copiar Enlace'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _deleteEmployee(Employee employee) async {
@@ -849,17 +783,19 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
           : await hrService.updateEmployee(employee);
 
       // If granting system access, create user account
-      String? invitationLink;
+      var invitationRequested = false;
+      var invitationEmailSent = false;
       if (_grantSystemAccess &&
           saved.id != null &&
           _selectedSystemRole != null) {
+        invitationRequested = true;
         try {
           // Get default permissions for the role
           final permissions =
               await jobRoleService.getDefaultPermissions(_selectedSystemRole!);
 
           // Create user invitation (will send email with setup link)
-          invitationLink = await hrService.createUserForEmployee(
+          invitationEmailSent = await hrService.createUserForEmployee(
             employeeId: saved.id!,
             email: _emailController.text,
             role: _selectedSystemRole!,
@@ -867,50 +803,27 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
             firstName: _firstNameController.text,
             lastName: _lastNameController.text,
           );
-
-          if (!mounted) return;
-
-          if (invitationLink == null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Trabajador creado e invitación generada. Revisa los logs para el enlace.',
-                ),
-                backgroundColor: Colors.orange,
-                duration: Duration(seconds: 5),
-              ),
-            );
-          }
-        } catch (inviteError) {
-          // Employee was created but user invitation failed
-          if (!mounted) return;
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Trabajador creado pero falló la invitación: $inviteError',
-              ),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 5),
-            ),
-          );
+        } catch (_) {
+          invitationEmailSent = false;
         }
       }
 
       if (!mounted) return;
 
-      // Return employee and invitation link (if any) to parent
       Navigator.pop(context, {
         'employee': saved,
-        'invitationLink': invitationLink,
+        'invitationRequested': invitationRequested,
+        'invitationEmailSent': invitationEmailSent,
         'email': _emailController.text,
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
+        const SnackBar(
+          content: Text(
+            'No pudimos guardar el trabajador o enviar su acceso. Inténtalo nuevamente.',
+          ),
           backgroundColor: Colors.red,
         ),
       );

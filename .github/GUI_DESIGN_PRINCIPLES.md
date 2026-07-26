@@ -1,546 +1,409 @@
-# 🎨 GUI DESIGN PRINCIPLES - VINABIKE ERP
-
-**Philosophy:** Professional, minimalist, data-dense interfaces that prioritize functionality over decoration, with a restrained premium/performance edge expressed through discipline rather than color noise.
-
-## Ownership and companion guide
-
-This file is the canonical owner of the shared visual language: color,
-typography, hierarchy, spacing, common accessibility, overlays, popovers, and
-rules that apply on every platform.
-
-For phone, tablet, or responsive work, also read
-[`GUI_MOBILE_DESIGN_PRINCIPLES.md`](GUI_MOBILE_DESIGN_PRINCIPLES.md). That
-companion guide owns compact composition, touch navigation, lists/cards,
-disclosures, forms with a virtual keyboard, SafeArea/scroll behavior, context
-preservation, breakpoints, and the real-device validation matrix. Mobile
-recipes belong there and are referenced rather than duplicated here.
-
----
-
-## 🎯 Core Design Principles
-
-### 1. **Minimalism Over Decoration**
-- ❌ **AVOID:** Excessive colors, gradients, shadows, or decorative elements
-- ❌ **AVOID:** Rainbow color palettes and "AI/startup circus" aesthetics
-- ❌ **AVOID:** Unnecessary icons cluttering every action
-- ❌ **AVOID:** Painting whole screens in bright blue/green by default just to force a "modern" look
-- ✅ **USE:** Clean whites, off-whites, charcoal/slate neutrals, and one restrained accent chosen deliberately for the context
-- ✅ **USE:** Strategic icon placement (only where they add clarity)
-- ✅ **USE:** Generous whitespace and clear visual hierarchy
-- ✅ **USE:** Typography, contrast, spacing rhythm, and material restraint to create a premium technical feel
-
-**Example:**
-```dart
-// ❌ WRONG: Excessive decoration
-Container(
-  decoration: BoxDecoration(
-    gradient: LinearGradient(colors: [Colors.blue, Colors.purple]),
-    boxShadow: [BoxShadow(blurRadius: 10, color: Colors.black26)],
-    borderRadius: BorderRadius.circular(20),
-  ),
-  child: Text('Invoice', style: TextStyle(color: Colors.white, fontSize: 24)),
-)
-
-// ✅ CORRECT: Clean and minimal
-Text(
-  'Invoice',
-  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-)
-```
-
----
-
-### 2. **Data Density & Space Optimization**
-- ✅ Maximize visible data without scrolling
-- ✅ Use compact spacing (8-16px padding, not 24-32px)
-- ✅ Tables should show 10-15 rows on desktop without scrolling
-- ✅ Forms should group related fields efficiently
-- ❌ Avoid wasting space with oversized headers or empty areas
-
-**Spacing Standards:**
-- Card padding: `12-16px`
-- List item spacing: `8-12px`
-- Section gaps: `16-24px`
-- Page margins: `16px` (mobile), `24px` (desktop)
-
----
-
-### 3. **Typography & Readability**
-- **Body text:** 14px (default)
-- **Labels:** 12-13px (slightly smaller, medium weight)
-- **Headers:** 18-24px (bold)
-- **Table cells:** 13-14px
-- **Monospace:** Use for codes, SKUs, invoice numbers
-
-**Font weights:**
-- Normal: `FontWeight.w400`
-- Medium: `FontWeight.w500` (labels, secondary headings)
-- Bold: `FontWeight.w600` or `w700` (primary headings)
-
----
-
-### 4. **Color Strategy**
-
-#### Primary Palette (Neutral-First)
-```dart
-// Neutral base
-Colors.white         // Backgrounds
-Colors.grey[50]      // Subtle backgrounds
-Colors.grey[200]     // Borders
-Colors.grey[600]     // Secondary text
-Colors.grey[900]     // Primary text
-
-// Deliberate accent
-// Choose one restrained accent for the experience if truly needed.
-// Follow the established module/brand palette outside the requested surface.
-
-// Semantic colors (use sparingly)
-Colors.green[700]    // Success, confirmations
-Colors.red[700]      // Errors, destructive actions
-Colors.orange[700]   // Warnings
-Colors.amber[800]    // Secondary caution states
-```
-
-#### Status Badge Colors
-- Draft: `Colors.grey` (neutral)
-- Informational / in progress: neutral or restrained accent with label/icon support
-- Paid/Complete: `Colors.green` (success)
-- Overdue/Error: `Colors.red` (urgent)
-- Cancelled: `Colors.orange` (warning)
-
-**Usage Rules:**
-- ❌ Don't use more than 2-3 colors per screen
-- ❌ Don't use color as the only indicator (add icons/text)
-- ❌ Don't build dashboards from rows of saturated KPI cards unless the color carries real operational meaning
-- ❌ Don't use bright green and bright blue as the app's generic personality layer
-- ❌ A localized redesign must never replace the global app theme, host-page
-  palette, navigation styling, list styling, or unrelated status treatments.
-- ✅ Sobriety does not mean monochrome. Use a restrained accent, warm/cool
-  surface variation, and semantic color to create hierarchy and identity.
-- ✅ Preserve the established module/brand palette outside the exact surface
-  the user requested to change.
-- ✅ Use color to reinforce meaning, not create it
-- ✅ Prefer neutral surfaces with small semantic markers over full-surface color fills
-
-#### KPI & Summary Surfaces
-- ✅ Prefer concise summaries, tabular metrics, and restrained section headers over colorful scorecard grids
-- ✅ If a KPI card is truly needed, keep the card surface neutral and let status color live in a border, icon, label, or small highlight
-- ❌ Avoid "dashboard candy": multicolor stat cards, oversized badges, glowing trend chips, and decorative gradients with little informational value
-- ✅ Restrained color families and subtle tonal surfaces are appropriate when
-  they create hierarchy; removing all color is not a substitute for design.
-
----
-
-### 5. **Tables - Clean & Professional**
-
-#### Standard Table Design
-```dart
-// Compact, borderless table with subtle dividers
-DataTable(
-  horizontalMargin: 16,
-  columnSpacing: 24,
-  headingRowHeight: 40,
-  dataRowHeight: 48,
-  decoration: BoxDecoration(
-    border: Border(
-      top: BorderSide(color: Colors.grey[200]!),
-      bottom: BorderSide(color: Colors.grey[200]!),
-    ),
-  ),
-  columns: [
-    DataColumn(
-      label: Text(
-        'Invoice #',
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: Colors.grey[700],
-        ),
-      ),
-    ),
-    // ...
-  ],
-  rows: [
-    DataRow(
-      cells: [
-        DataCell(Text('INV-001', style: TextStyle(fontSize: 14))),
-        // ...
-      ],
-    ),
-  ],
-)
-```
-
-#### Table Best Practices
-- ✅ Use subtle borders (`Colors.grey[200]`) for row separation
-- ✅ Align numbers to the right, text to the left
-- ✅ Make headers slightly smaller and bold (13px, w600)
-- ✅ Use monospace font for codes/numbers
-- ✅ Add hover effect on rows (subtle gray background)
-- ❌ Avoid heavy borders or alternating row colors
-- ❌ Don't use icons in every cell (only for actions)
-
-#### Column Width Guidelines
-- **Checkbox:** 48px
-- **Index/Row #:** 40-60px
-- **Status badge:** 100-120px
-- **Codes (SKU, Invoice #):** 120-150px
-- **Names/Descriptions:** Flexible (min 200px)
-- **Numbers (qty, price):** 100-130px
-- **Dates:** 100-120px
-- **Actions:** 48-80px (icon buttons)
-
----
-
-### 6. **Forms - Efficient & Scannable**
-
-#### Layout Patterns
-```dart
-// Two-column form (desktop)
-Row(
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
-    Expanded(
-      child: Column(
-        children: [
-          TextField(label: 'Customer'),
-          SizedBox(height: 12),
-          TextField(label: 'Invoice Number'),
-        ],
-      ),
-    ),
-    SizedBox(width: 24),
-    Expanded(
-      child: Column(
-        children: [
-          TextField(label: 'Date'),
-          SizedBox(height: 12),
-          TextField(label: 'Due Date'),
-        ],
-      ),
-    ),
-  ],
-)
-```
-
-#### Form Best Practices
-- ✅ Group related fields together
-- ✅ Use consistent field heights (48-56px)
-- ✅ Mark required fields with `*` (not color alone)
-- ✅ Show validation errors below the field
-- ✅ Use placeholder text sparingly (prefer labels)
-- ✅ Design around the operator's decision, not the persistence model. Historical
-  totals, derived balances and internal state buckets belong in secondary
-  context unless the operator can act on them directly.
-- ✅ Separate observation from disposition in exception workflows. First record
-  what physically happened; then offer a distinct, optional step for the
-  commercial, accounting or logistics resolution.
-- ✅ Let unresolved exceptions remain explicit and discoverable. A user must be
-  able to choose `Resolver después` without the UI inventing a credit, loss,
-  return or future delivery.
-- ❌ Avoid excessive helper text (keep it minimal)
-- ❌ Don't use floating labels (use fixed labels above)
-- ❌ Don't expose one editable table column per backend enum or quantity bucket
-  when one calculated difference plus a reason selector expresses the task.
-
----
-
-### 7. **Buttons & Actions**
-
-#### Button Hierarchy
-```dart
-// Primary action (most important)
-FilledButton(
-  onPressed: () {},
-  child: Text('Save Invoice'),
-)
-
-// Secondary action (common)
-OutlinedButton(
-  onPressed: () {},
-  child: Text('Cancel'),
-)
-
-// Tertiary/Destructive action
-TextButton(
-  onPressed: () {},
-  style: TextButton.styleFrom(foregroundColor: Colors.red),
-  child: Text('Delete'),
-)
-```
-
-#### Action Button Rules
-- ✅ **1 primary action** per screen (filled button)
-- ✅ **2-3 secondary actions** max (outlined/text buttons)
-- ✅ Use icons ONLY when they add clarity
-- ✅ Keep button text concise (1-2 words)
-- ✅ Let hierarchy come from placement, weight, and contrast before it comes from saturated fills
-- ❌ Don't use more than 1 filled button in the same context
-- ❌ Don't add icons to every button (visual noise)
-- ❌ Don't build "fun" button systems with mixed bright colors, oversized pills, or decorative gradients on ERP screens
-
-#### Icon-Only Buttons
-```dart
-// Use for compact actions in tables/toolbars
-IconButton(
-  icon: Icon(Icons.edit_outlined, size: 20),
-  onPressed: () {},
-  tooltip: 'Edit', // Always provide tooltip!
-)
-```
-
----
-
-### 8. **Split-Pane Layout (Selective Use)**
-
-#### When to Use Split-Pane
-✅ **USE for:**
-- Master-detail views (list + detail)
-- Document management (invoices, orders, quotes)
-- Entity browsers (customers, products, suppliers)
-- Workflows that benefit from context preservation
-
-❌ **DON'T USE for:**
-- Simple forms (create new entity)
-- Dashboard widgets
-- Settings pages
-- Reports (full-width preferred)
-- Phone/tablet split panes that cannot preserve useful touch widths; follow the
-  compact composition rules in `GUI_MOBILE_DESIGN_PRINCIPLES.md`
-
-#### Implementation Pattern
-```dart
-Row(
-  children: [
-    // Left pane: List (resizable)
-    AnimatedContainer(
-      width: _listPaneWidth, // 400-800px
-      child: ListView(...),
-    ),
-    
-    // Divider (resize handle)
-    GestureDetector(
-      onHorizontalDragUpdate: (details) {
-        setState(() => _listPaneWidth += details.delta.dx);
-      },
-      child: Container(
-        width: 1,
-        color: Colors.grey[300],
-      ),
-    ),
-    
-    // Right pane: Detail (fills remaining space)
-    Expanded(
-      child: _selectedItem == null
-        ? Center(child: Text('Select an item'))
-        : DetailView(item: _selectedItem),
-    ),
-  ],
-)
-```
-
-#### Split-Pane Best Practices
-- ✅ Make left pane resizable (save width in SharedPreferences)
-- ✅ Min width: 300px, max width: 50% of screen
-- ✅ Show "Select an item" placeholder when nothing selected
-- ✅ Highlight selected row in list
-- ✅ Add keyboard navigation (arrow keys)
-- ✅ Preserve the host while a document workflow is open: an action launched
-  from a split detail replaces that detail pane inline, not the entire route.
-- ✅ The same workflow launched from a routed form stays inside its existing
-  `MainLayout`; it must not mount a nested top-level `Scaffold` or `AppBar`.
-- ❌ Don't squeeze a desktop split pane into the phone/tablet classes defined
-  by `GUI_MOBILE_DESIGN_PRINCIPLES.md`
-- ❌ Don't make both panes scrollable independently (confusing)
-
----
-
-### 9. **Status & Feedback**
-
-#### Status Badges
-```dart
-Container(
-  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-  decoration: BoxDecoration(
-    color: statusColor.withOpacity(0.15),
-    borderRadius: BorderRadius.circular(12),
-  ),
-  child: Text(
-    statusText,
-    style: TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w600,
-      color: statusColor,
-    ),
-  ),
-)
-```
-
-#### Snackbar Messages
-```dart
-// Success (green)
-ScaffoldMessenger.of(context).showSnackBar(
-  SnackBar(
-    content: Text('Invoice saved successfully'),
-    backgroundColor: Colors.green[700],
-    duration: Duration(seconds: 2),
-  ),
-)
-
-// Error (red)
-ScaffoldMessenger.of(context).showSnackBar(
-  SnackBar(
-    content: Text('Failed to save invoice'),
-    backgroundColor: Colors.red[700],
-    duration: Duration(seconds: 4),
-  ),
-)
-```
-
-#### Loading States
-- ✅ Use `CircularProgressIndicator` (default size: 24-32px)
-- ✅ Disable buttons during async operations
-- ✅ Show skeleton loaders for lists (shimmer effect)
-- ❌ Don't block entire screen with loading overlay (unless necessary)
-
----
-
-### 10. **Navigation & Workflow**
-
-#### Breadcrumb Pattern
-```dart
-// Show context and hierarchy
-Row(
-  children: [
-    TextButton(
-      onPressed: () => context.go('/sales'),
-      child: Text('Sales'),
-    ),
-    Icon(Icons.chevron_right, size: 16),
-    Text('Invoices', style: TextStyle(fontWeight: FontWeight.w600)),
-  ],
-)
-```
-
-#### Action Bar Pattern (Invoice-style)
-```dart
-// Top action bar with status and buttons
-Container(
-  padding: EdgeInsets.all(16),
-  decoration: BoxDecoration(
-    color: Colors.white,
-    border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-  ),
-  child: Row(
-    children: [
-      // Entity info
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Invoice INV-001', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-            SizedBox(height: 4),
-            Text('Customer Name', style: TextStyle(color: Colors.grey[600])),
-          ],
-        ),
-      ),
-      
-      // Status badge
-      StatusBadge(status: status),
-      SizedBox(width: 16),
-      
-      // Actions (1-3 buttons max)
-      OutlinedButton(onPressed: () {}, child: Text('Edit')),
-      SizedBox(width: 8),
-      FilledButton(onPressed: () {}, child: Text('Confirm')),
-    ],
-  ),
-)
-```
-
----
-
-### 11. **Responsive Composition**
-
-The canonical phone/tablet/desktop classes, dedicated composition rules,
-touch contracts, and required boundary tests live in
-[`GUI_MOBILE_DESIGN_PRINCIPLES.md`](GUI_MOBILE_DESIGN_PRINCIPLES.md).
-
-The shared rule here is platform-independent: responsive variants may rearrange
-information and controls, but they must preserve the same business command,
-permissions, validation, and persistent effects. Do not use an operating-system
-check when the decision depends on available layout constraints.
-
----
-
-### 12. **Common Anti-Patterns to AVOID**
-
-❌ **Rainbow Dashboards**
-- Don't use 6+ colors on the same screen
-- Don't use gradients or color transitions
-- Don't color-code everything
-
-❌ **Icon Overload**
-- Don't add icons to every button/label
-- Don't use decorative icons
-- Don't use icons without labels (unless universally known)
-
-❌ **Excessive Shadows/Depth**
-- Don't use `elevation: 8` on every card
-- Don't stack shadows (card in card in card)
-- Use elevation sparingly (0-2 for most elements)
-
-❌ **Wasted Space**
-- Don't use 48px padding around everything
-- Don't center-align everything (use left-align for data)
-- Don't use giant headers that push content down
-
-❌ **Inconsistent Spacing**
-- Don't use random spacing values (8, 12, 15, 17, 20...)
-- Stick to 4px increments: 8, 12, 16, 24, 32
-
----
-
-### 13. **Anchored Popovers, Menus & Pickers**
+# GUI Design Principles — Viñabike ERP
+
+## Product design posture
+
+Viñabike ERP must feel contemporary, professional, operationally efficient,
+and visually considered. Professional does not mean colorless, flat, or
+lifeless. Modern does not mean playful, saturated, or covered in decorative
+chips, icons, gradients, and metric cards.
+
+The target is the deliberate middle:
+
+- a coherent visual identity with purposeful color;
+- strong hierarchy without a wall of borders;
+- compact information without cramped controls;
+- subtle depth and motion that explain structure and continuity;
+- familiar platform behavior without copying a generic Material demo;
+- fast access to operational commands without losing the user's context.
+
+Every visual or interaction choice must help recognition, orientation,
+comparison, decision-making, or feedback. Decoration without a job is noise,
+but removing all character is not design.
+
+## Ownership and precedence
+
+This file is the canonical owner of the shared UI language:
+
+- product design posture and visual quality;
+- theme roles, color, typography, hierarchy, spacing, and density;
+- controls, lists, tables, forms, feedback, and accessibility;
+- navigation continuity and choosing an interaction surface;
+- overlays, anchored popovers, and shared validation rules.
+
+For phone, tablet, compact, adaptive, or responsive work, also read
+[`GUI_MOBILE_DESIGN_PRINCIPLES.md`](GUI_MOBILE_DESIGN_PRINCIPLES.md). The
+mobile guide owns compact composition, touch navigation, mobile lists and
+cards, disclosures, virtual-keyboard behavior, SafeArea, compact scrolling,
+breakpoints, and the real-device validation matrix. It references this file
+for shared visual rules rather than duplicating them.
+
+`.github/copilot-instructions.md` is only the brief routing layer. It must link
+to these guides instead of restating their recipes.
+
+Historical prompts, screenshots, feature specifications, tests, and existing
+widgets do not override these guides. Their literal colors, radii, shadows,
+dimensions, dialogs, cards, or navigation structures are not visual precedent.
+A shared component is reusable only while it still satisfies the current
+guidance. Legacy consistency is not approval.
+
+## 1. Design the task, not a favorite pattern
+
+Start from the operator's task, frequency, risk, information relationships,
+available space, and input capabilities. Do not start from a preferred widget.
+
+- No module name automatically implies a table, card grid, split pane, dialog,
+  or full page.
+- No single successful implementation becomes a repository-wide template.
+- Long lists are a reason to evaluate scanning and detail continuity, not an
+  automatic mandate for a split pane.
+- A visually consistent application may use different compositions for
+  different tasks while sharing tokens, commands, permissions, and state.
+- Recompose when the platform or viewport changes; do not merely shrink a
+  desktop table or stretch a mobile card.
+
+Before choosing a surface, answer:
+
+1. What must remain visible while the user acts?
+2. Will the user compare or edit several records in sequence?
+3. Is this a local disclosure, a bounded secondary task, or an independent
+   workflow?
+4. Does the task need a durable URL, unusually large space, exclusive focus,
+   or a security boundary?
+5. How must Back, close, cancel, save, and system navigation behave?
+
+The answers select the pattern. The pattern does not define the task.
+
+## 2. Platform posture and capabilities
+
+macOS desktop is the priority operational surface. Desktop design must also
+behave professionally on Windows. Phone and tablet are first-class surfaces,
+not reduced desktop fallbacks, and must respect iOS and Android conventions.
+
+Viewport class and device capability are separate inputs:
+
+- width and height determine available composition;
+- pointer precision, hover, keyboard, shortcuts, and secondary click determine
+  desktop affordances;
+- touch, system Back, gestures, SafeArea, text scaling, and the virtual keyboard
+  determine mobile affordances;
+- browser history and deep links determine web navigation behavior.
+
+Do not infer all capabilities from an operating-system check or a breakpoint.
+The same business command may appear through a desktop popover, keyboard
+shortcut, mobile sheet, or inline control, but it must keep one canonical
+owner, permission check, validation path, and persistent effect.
+
+## 3. Visual system and color
+
+### Theme-owned roles
+
+Application chrome and feature UI must consume centrally owned theme or design
+system roles. A feature must not invent a Material swatch, literal hue, or hex
+value for its identity, action hierarchy, or status.
+
+The theme should provide coherent roles for concepts such as:
+
+- canvas and nested surfaces;
+- raised or selected surfaces;
+- primary and secondary text;
+- dividers, focus, and disabled states;
+- brand or interaction accents;
+- success, warning, danger, and information.
+
+The exact hues belong to the theme, not to feature code or prose guidance.
+Exceptions are limited to theme/token definitions, explicitly editor-owned or
+data-driven content, and external interoperability formats.
+
+### Purposeful color, not color quotas
+
+Use color when it improves hierarchy, navigation, affordance, selection,
+identity, status, or attention. Keep it measured and coherent, but do not
+impose an arbitrary maximum number of colors per screen.
+
+- A neutral foundation is a support structure, not a monochrome requirement.
+- Accent and tonal variation may give a surface identity and visual rhythm.
+- Semantic color should normally be localized instead of flooding a large
+  surface.
+- State must also be communicated through text, shape, iconography, position,
+  or semantics; color is never the only signal.
+- Saturation and prominence should match urgency and decision value.
+- An existing bright or dated module palette is debt to evaluate, not a palette
+  to preserve or copy into new work.
+
+Avoid both extremes:
+
+- rainbow interfaces where every card, icon, chip, and metric competes;
+- sterile interfaces made from undifferentiated white blocks, black text,
+  hard outlines, and no meaningful visual hierarchy.
+
+### Surfaces, borders, and depth
+
+Use grouping before containers. Related content can share alignment, spacing,
+tone, and typography without placing every element inside its own card.
+
+- Use a small, coherent surface hierarchy so users can distinguish shell,
+  workspace, selection, disclosure, and transient layers.
+- Combine tonal separation, spacing, dividers, and restrained shadow according
+  to the context. Do not prescribe one elevation or border recipe globally.
+- Avoid card-inside-card structures, repeated outlined rectangles, and grids
+  that resemble a collection of unrelated widgets.
+- Borders should clarify boundaries or interaction, not trace every component.
+- Rounded shapes are not inherently modern. Their radius and geometry must
+  belong to the shared system and fit the control's purpose.
+- Gradients or tonal transitions are acceptable when subtle, coherent, and
+  genuinely useful for identity or depth. Decorative multicolor gradients,
+  glow, and novelty effects do not belong in operational UI.
+
+## 4. Typography, spacing, and density
+
+Typography must establish identity, hierarchy, grouping, and reading order.
+Spacing must establish relationships. Neither should depend on a list of
+universal pixel constants copied into every feature.
+
+- Use shared type and spacing tokens.
+- Give identifiers, names, totals, warnings, and active state the emphasis
+  their operational importance requires.
+- Use tabular or monospaced treatment when it materially improves comparison of
+  codes or numbers, not as decoration.
+- Keep labels identifiable during entry, autofill, error, and review. Fixed or
+  floating behavior depends on the form and platform.
+- Let content, localization, text scale, density mode, and input target
+  requirements determine row and control height.
+- Remove duplicated host padding and nested gutters. Content should use the
+  available width responsibly without touching unsafe edges.
+- Optimize for useful information per viewport, not for the smallest possible
+  component or a fixed number of visible rows.
+
+Whitespace is active structure. Too little destroys grouping; too much hides
+the next useful record and creates oversized headers or empty bands.
+
+## 5. Controls, actions, and iconography
+
+Action hierarchy belongs to the current decision, not to the route as a whole.
+A long-lived workspace may have different primary actions as its state changes.
+
+- Make the next likely action clear through placement, contrast, label, and
+  control weight.
+- Group actions by scope: record, selection, section, or workspace.
+- Use shared button components with coherent hover, focus, pressed, loading,
+  selected, and disabled states.
+- Avoid an entire interface made from outlined buttons, oversized pills, or
+  colored icon squares.
+- Use labels long enough to remove ambiguity. A verb plus object is preferable
+  when a one-word label would be unclear.
+- Put infrequent or destructive commands in a discoverable secondary location;
+  do not hide frequent work behind repeated overflow menus.
+- Icon-only controls require an unambiguous symbol, semantic label, tooltip
+  where hover exists, and an accessible target.
+- Use one coherent icon family. Do not decorate headings and actions with
+  assorted colored emoji or repeat the same icon in every row.
+
+### Chips, badges, and metrics
+
+Chips and badges are compact semantic tools, not universal containers.
+
+Use them for compact selection, tagging, or a state whose persistent visual
+presence materially helps scanning. Do not use them as generic buttons,
+entity containers, metadata wrappers, or a wall of decorative labels.
+
+Metrics deserve prominent blocks only when they change a decision in the
+current workflow. Otherwise integrate them into a header, summary row, list,
+table, or disclosure where comparison is easier. Avoid one colored card or
+mini-block per metric and avoid ornamental trend indicators.
+
+A status may be expressed by text, a small marker, a tonal change, iconography,
+or a badge. Choose the least prominent treatment that remains unmistakable.
+
+## 6. Navigation and context continuity
+
+The user should never have to reconstruct the state of a workflow after
+inspecting related information.
+
+When one surface opens another, preserve the origin contract as applicable:
+
+- host module and route;
+- query, search, filters, scope, sort, and active tab;
+- selected record and expanded disclosures;
+- scroll position and pane dimensions;
+- draft values and unsaved intent;
+- focus when returning to the same control.
+
+Back, close, and cancel return to the exact origin, not automatically to the
+canonical list of the entity that was visited. Cross-module navigation must
+carry return context. Save may close or remain in place according to the
+workflow, but its behavior must be explicit and consistent.
+
+ERP routes keep `MainLayout` as the stable operational shell unless a documented
+boundary truly requires another host. Do not mount nested top-level scaffolds,
+duplicate global navigation, or add stacked header bars for local commands.
+Stable shell does not mean identical inner composition.
+
+Choose `push`, `replace`, `go`, or an equivalent API from history and return
+semantics, never merely to make an animation visible.
+
+### Choosing an interaction surface
+
+The following are decision aids, not mandatory mappings:
+
+| Resource | Strong signal for using it | Signal to choose something else |
+|---|---|---|
+| Inline or in-block disclosure/editing | The information belongs to the current object and can be understood without hiding the host | It overwhelms the host, needs durable navigation, or creates ambiguous nested scrolling |
+| Split pane | Repeated list-detail inspection, comparison, or editing benefits from keeping collection and selection visible, and both panes retain useful width | The list is short or incidental, the task needs exclusive focus, or available width makes either pane ineffective |
+| Anchored popover | A brief local choice, filter, preview, or command belongs to a visible trigger | The task is long, requires broad navigation, or cannot remain safely anchored |
+| Sheet or contextual drawer | A bounded secondary task needs more room while the host remains conceptually present | The task is truly blocking, deeply independent, or would create competing navigation |
+| Modal | A short atomic decision, confirmation, conflict, or risk genuinely requires exclusive attention | It is ordinary detail, filtering, browsing, or a form that benefits from context |
+| Full route | The workflow needs durable deep linking, substantial space, independent navigation, security isolation, or sustained focus | It is a short contextual inspection or edit whose route would destroy orientation |
+
+Use the lightest surface that preserves comprehension and supports the complete
+task. Do not put split panes everywhere because they work well for some long
+lists. Do not force every edit into a dialog because it is CRUD. Do not open a
+new full page merely because a row is clickable.
+
+When a full route is justified, preserve the shell and an exact return path.
+When an inline, pane, popover, or sheet version exposes the same operation, it
+must delegate to the same canonical command as the routed version.
+
+## 7. Lists, tables, cards, and detail workspaces
+
+Select the representation that best supports scanning and action:
+
+- Desktop tables are appropriate for comparing repeated fields across many
+  records.
+- Structured lists are appropriate when identity and a small number of
+  attributes dominate.
+- Cards are appropriate when a record needs meaningful grouping or direct
+  actions that a row cannot express cleanly; they are not the default mobile
+  replacement for every row.
+- A detail workspace may be inline, in-block, split, sheet-based, or routed
+  according to the criteria above.
+
+Shared requirements:
+
+- Align comparable numbers and fields consistently.
+- Keep the selected item and active state obvious without relying on color
+  alone.
+- Make the entire sensible row target interactive while preserving explicit
+  controls and semantics.
+- Keep common actions directly reachable; use overflow for secondary actions.
+- Hover may reveal supplemental affordance, but no important action may depend
+  on hover or secondary click.
+- Avoid repeated icons in every cell, alternating rainbow rows, heavy grid
+  borders, and nested cards.
+- Allow independent scrolling where stable panes contain distinct content.
+  Avoid multiple competing scroll owners inside the same pane.
+- If panes are resizable, the visual handle may be subtle but its hit area must
+  be comfortably operable and keyboard-accessible where appropriate.
+- Size columns, panes, and rows from content, task, viewport, and user-adjusted
+  preferences rather than universal constants.
+
+Phone and tablet recomposition is owned by the mobile guide. A desktop table
+must not become a horizontally scrolling miniature table by default.
+
+## 8. Forms and editing
+
+Forms should reflect the operator's mental model, not the storage schema.
+
+- Group fields by decision and sequence.
+- Keep labels, values, requirements, validation, and units unambiguous.
+- Show field errors next to their owner and provide an accessible summary when
+  several errors block submission.
+- Preserve entered values after validation or a recoverable failure.
+- Avoid placing every field in a separate card or exposing one control per
+  backend state when a clearer operational choice exists.
+- Derived totals and internal state belong in secondary context unless the
+  operator must act on them.
+- Separate observation from disposition in exception workflows: first record
+  what happened, then offer the commercial, accounting, or logistics response.
+- Let unresolved exceptions remain explicit and discoverable; never invent a
+  disposition to make the form appear complete.
+- Keep save/cancel behavior and dirty-state handling consistent across inline,
+  pane, sheet, and routed hosts.
+
+Compact forms must also follow the mobile guide's keyboard, focus, SafeArea,
+scroll-to-error, and persistent-action rules.
+
+## 9. Feedback and system states
+
+Feedback prominence must match scope and duration.
+
+- Field problems stay inline with the field.
+- A persistent operation exposes a status region tied to that operation.
+- A brief non-blocking confirmation may use the shared transient feedback
+  component.
+- A conflict or destructive decision may require a blocking surface.
+- Success, warning, and error treatments use theme roles plus clear language
+  and semantics; do not paint a whole feedback surface with a literal feature
+  color.
+
+Loading, empty, error, partial, stale, and offline states are first-class
+compositions:
+
+- preserve known structure and context when possible;
+- prevent layout jumps that break orientation;
+- use a skeleton only when it meaningfully previews stable structure;
+- avoid decorative perpetual shimmer;
+- expose retry and recovery where they are real;
+- never represent an authoritative load failure as a trustworthy empty result.
+
+## 10. Motion and transitions
+
+Motion should explain where content came from, what changed, and whether the
+host remains present.
+
+- Use short, coherent transitions for disclosure, selection, reordering, and
+  list-to-detail continuity.
+- Keep one owner for a route or workspace transition; stacked animations create
+  noise and can imply false navigation depth.
+- Do not change history semantics to obtain an animation.
+- Avoid bounce, glow, dramatic parallax, and decorative motion in operational
+  flows.
+- Respect reduced-motion preferences and ensure state remains understandable
+  with animation disabled.
+
+Subtle motion and tonal depth are allowed. Flatness is not an accessibility
+requirement.
+
+## 11. Anchored popovers, menus, and pickers
 
 An anchored surface is interaction infrastructure, not merely a floating card.
 Its positioning, overlay ownership, dismissal, focus, semantics, scrolling, and
 rendering behavior must be designed together.
 
-#### UX Contract
+### UX contract
 
-- Open a contextual popover next to its trigger, normally `4-8px` below it.
+- Open a contextual popover next to its trigger, normally `4–8px` below it.
 - Keep approximately `12px` between the popover and every viewport edge.
 - Align the trigger and popover on the leading edge when space permits; align
   their trailing edges when the surface would overflow horizontally.
 - Open above the trigger only when it does not fit below.
-- Keep desktop date pickers, filters, and contextual tools compact and
-  anchored. Do not replace them with a centered/full-page dialog or dim the
-  entire application unless the decision genuinely blocks the workflow.
+- Keep pointer-oriented date pickers, filters, previews, and contextual tools
+  compact and anchored when that surface supports the task.
+- Do not replace them automatically with a centered dialog or dim the entire
+  application unless the decision genuinely blocks the workflow.
 - Constrain tall content and scroll inside the popover rather than allowing it
   to escape the viewport.
 - Outside click, `Escape`, cancel, selection, route disposal, and host teardown
   must have explicit behavior. Restore focus to the trigger when appropriate.
 - If the host scrolls or resizes while the surface is open, the surface must
-  either follow/recompute or close. A detached popover is never acceptable.
+  either follow, recompute, or close. A detached popover is never acceptable.
 
-#### Choose the Flutter Primitive Deliberately
+### Choose the Flutter primitive deliberately
 
-There is no universal overlay primitive. Use this order:
+There is no universal overlay primitive. Use this evaluation order:
 
 1. Use a framework-managed `PopupMenuButton`, `MenuAnchor`, or equivalent when
    the standard component satisfies the interaction and geometry.
 2. For a complex, short-lived popover whose anchor is stable while open, render
    a `Positioned` child in the root Navigator overlay. Measure the trigger in
-   that **same overlay coordinate system**, clamp it to the viewport, and
-   implement the below/above and leading/trailing fallbacks.
+   that same overlay coordinate system, clamp it to the viewport, and implement
+   below/above and leading/trailing fallbacks.
 3. When the surface must continuously follow a scrolling, animated, or
    transformed anchor, prefer a tested shared implementation based on
    `OverlayPortal.overlayChildLayoutBuilder`.
 4. Use `CompositedTransformTarget` / `CompositedTransformFollower` only for a
    simple leaf surface that genuinely requires continuous tracking.
 
-`CompositedTransformFollower` is **not** the default for every dropdown. Never
+`CompositedTransformFollower` is not the default for every dropdown. Never
 place a widget that creates another overlay beneath a follower. This includes
 `Tooltip`, `PopupMenuButton`, `MenuAnchor`, `showMenu`, and another
 `OverlayPortal`. Flutter cannot reliably compute the nested portal's layout
@@ -548,13 +411,13 @@ transform because `RenderFollowerLayer` establishes it during paint, which can
 produce `RenderFollowerLayer` and `debugNeedsLayout` assertions and visible
 flicker. Use `OverlayPortal.overlayChildLayoutBuilder`, move the secondary
 surface outside the follower, or replace it with a local non-overlay hover
-label/in-place panel.
+label or in-place panel.
 
-#### One Coordinate Space, Including App Zoom
+### One coordinate space, including app zoom
 
-Never combine a transformed global origin with an untransformed `RenderBox.size`.
-The ERP normally runs inside `WindowZoomScope`, so transform both corners into
-the target overlay:
+Never combine a transformed global origin with an untransformed
+`RenderBox.size`. The ERP normally runs inside `WindowZoomScope`, so transform
+both corners into the target overlay:
 
 ```dart
 final anchorBox = anchorContext.findRenderObject()! as RenderBox;
@@ -578,206 +441,105 @@ Use `anchorRect` and `overlayBox.size` together. Do not calculate the trigger in
 screen/global coordinates and position its child in a route-local or nested
 overlay coordinate system.
 
-#### Mandatory Regression Gate
+### Mandatory regression gate
 
 Analyzer success and a screenshot are not sufficient for an anchored surface.
 Before marking it complete:
 
-- Open it through the real widget interaction in a widget test.
-- Assert its gap/alignment to the trigger, horizontal clamp, and vertical flip
-  near the left, right, top, and bottom edges.
-- Exercise a normal desktop host, the real compact host, a short viewport, and
-  the ERP's `80%` transformed/zoomed host.
-- Hover long enough to open every nested tooltip/menu and assert
-  `tester.takeException()` remains `null` after each overlay transition.
-- Verify inside selection, cancel, outside click, `Escape`, focus restoration,
-  scroll/resize policy, and disposal without orphaned entries.
-- Give the trigger and surface stable semantic labels/keys and test the keyboard
-  path where applicable.
-- Inspect the debug runtime log. It must contain no `RenderFollowerLayer`,
-  `debugNeedsLayout`, `RenderBox was not laid out`, semantics assertion, or
-  overflow from the interaction.
+- open it through the real widget interaction in a widget test;
+- assert its gap/alignment to the trigger, horizontal clamp, and vertical flip
+  near the left, right, top, and bottom edges;
+- exercise a normal desktop host, the real compact host, a short viewport, and
+  the ERP's transformed/zoomed host;
+- hover long enough to open every nested tooltip/menu and assert
+  `tester.takeException()` remains `null` after each overlay transition;
+- verify inside selection, cancel, outside click, `Escape`, focus restoration,
+  scroll/resize policy, and disposal without orphaned entries;
+- give the trigger and surface stable semantic labels/keys and test the keyboard
+  path where applicable;
+- inspect the debug runtime log for layout, semantics, follower-layer, or
+  overflow exceptions from the interaction.
 
 Current compact-popover reference:
 
-- Implementation:
-  `lib/shared/widgets/notifications_panel.dart`
-- Real geometry and nested-tooltip regression:
-  `test/widget/notification_period_popover_position_test.dart`
+- implementation: `lib/shared/widgets/notifications_panel.dart`;
+- geometry and nested-overlay regression:
+  `test/widget/notification_period_popover_position_test.dart`.
 
-#### Living UI Learning Rule
+## 12. Accessibility and input
 
-When a UI incident reveals a reusable rendering, layout, layering,
-accessibility, or interaction failure mode, update this guide and add the
-smallest behavioral regression test in the same task. Do not leave the lesson
-only in a chat, a one-off comment, or a private widget implementation.
+Accessibility is part of the component contract:
 
----
+- visible keyboard focus and logical traversal;
+- semantic labels, roles, values, selected state, and live feedback;
+- sufficient contrast in every interaction state;
+- targets appropriate to the active input mode and the mobile minimums in the
+  companion guide;
+- no required command available only through hover, color, drag, secondary
+  click, or gesture;
+- text scaling without clipping, hidden controls, or lost reading order;
+- reduced-motion behavior;
+- screen-reader and system Back behavior appropriate to the platform.
 
-## 📋 Module-by-Module Application Guide
+Pointer and keyboard efficiency must not reduce touch usability, and touch
+composition must not remove keyboard-accessible commands from desktop.
 
-### When to Use Split-Pane Layout
+## 13. Validation and living learning
 
-#### ✅ **RECOMMENDED FOR:**
-1. **Sales Module**
-   - Invoices list + detail view
-   - Quotes list + detail view
-   - Payments history + detail
+Validate behavior through the real host, not an isolated screenshot:
 
-2. **Purchases Module**
-   - Purchase orders + detail
-   - Supplier invoices + detail
+- inspect the existing desktop, tablet, and phone compositions before changing
+  a shared workflow;
+- interact through the actual entry points, return paths, editing commands,
+  overlays, and error states;
+- verify macOS and Windows desktop conventions where relevant;
+- verify iOS and Android touch, Back, SafeArea, and keyboard behavior where
+  relevant;
+- test resizing, text scale, focus traversal, semantics, reduced motion,
+  loading, empty, error, and offline states;
+- confirm the same canonical command and permission path is used by every
+  registered routed, embedded, pane, inline, and quick-action surface;
+- add the smallest behavioral regression that would fail if the validated
+  interaction regressed.
 
-3. **Inventory Module**
-   - Products list + detail/edit
-   - Stock movements + filter/detail
+### Reusable learning rule
 
-4. **CRM Module**
-   - Customers list + profile view
-   - Suppliers list + profile view
+When a UI requires several iterations to reach a satisfactory result, document
+the final reusable lesson rather than the experiments. Record:
 
-5. **Bikeshop (Trabajos) Module**
-   - Jobs list + detail/timeline
-   - Client logbook + bike history
+- problem observed;
+- technical or UX cause;
+- approved pattern and the conditions that justified it;
+- anti-pattern that must not be repeated;
+- currently validated implementation reference;
+- minimum mandatory test.
 
-6. **HR Module**
-   - Employees list + profile
-   - Attendance logs + detail
+The conditions are essential. A validated split pane, action rail, popover, or
+card composition is evidence for a class of task, not a universal template.
+References must identify the viewport/host and validation date or test. Remove
+their reference status when they no longer satisfy the guides.
 
-#### ❌ **NOT RECOMMENDED FOR:**
-1. **Accounting Module**
-   - Journal entries (prefer full-width table)
-   - Chart of accounts (tree view)
-   - Reports (need full width)
+## Review checklist
 
-2. **Analytics/Dashboard**
-   - Dashboards (widgets need full space)
-   - Reports (charts need full width)
+Before approving UI work, confirm:
 
-3. **Settings Module**
-   - Configuration forms (simple forms)
-   - User management (simple tables)
+- [ ] The result is contemporary and intentional without becoming playful or
+      sterile.
+- [ ] Feature code uses shared visual roles rather than literal palette choices.
+- [ ] Color, typography, surface tone, spacing, depth, and motion form one
+      coherent hierarchy.
+- [ ] Chips, cards, icons, outlines, and metrics exist only where they improve
+      the task.
+- [ ] The interaction surface was chosen from task evidence, not a module-wide
+      recipe.
+- [ ] Back, close, cancel, save, filters, selection, drafts, and scroll preserve
+      the intended context.
+- [ ] Desktop remains operationally efficient and compact surfaces are
+      dedicated compositions.
+- [ ] Keyboard, touch, semantics, text scale, contrast, and reduced motion were
+      verified.
+- [ ] Loading, empty, error, partial, and offline behavior were designed.
+- [ ] Real interaction tests cover the changed behavior and registered hosts.
 
-4. **POS Module**
-   - Point of sale (needs full screen)
-
-### When to Use Full-Width Layout
-
-#### ✅ **USE FOR:**
-- Dashboards with multiple widgets
-- Wide tables with many columns (>8 columns)
-- Forms with complex layouts
-- Reports with charts/graphs
-- Standalone high-throughput data entry screens (for example POS). A workflow
-  launched from an existing master/detail document keeps that host and context,
-  even when the inner table is horizontally scrollable.
-
----
-
-## 🎯 Quick Checklist for New Modules
-
-Before implementing ANY new module UI:
-
-- [ ] Color palette limited to 2-3 colors maximum
-- [ ] Tables use subtle borders, no alternating colors
-- [ ] Buttons follow hierarchy (1 primary, 2-3 secondary)
-- [ ] Spacing uses 4px increments (8, 12, 16, 24)
-- [ ] Icons used strategically (not everywhere)
-- [ ] Status badges use semantic colors only
-- [ ] Forms are scannable (clear labels, grouped fields)
-- [ ] Typography follows size/weight standards
-- [ ] Responsive matrix from `GUI_MOBILE_DESIGN_PRINCIPLES.md` implemented
-- [ ] Split-pane only if module fits use case
-- [ ] No loud decorative gradients or heavy shadows; subtle localized tonal
-      depth is allowed when it improves hierarchy
-- [ ] Data density optimized (10-15 rows visible)
-- [ ] Any anchored popover/menu/picker follows section 13 and passes its real
-      host, viewport, hover, zoom, dismissal, and render-exception checks
-
----
-
-## 🔍 Examples: Before & After
-
-### ❌ BEFORE: Cluttered Dashboard
-```dart
-// Excessive colors, shadows, icons
-Card(
-  elevation: 8,
-  color: Colors.blue[100],
-  child: ListTile(
-    leading: CircleAvatar(
-      backgroundColor: Colors.purple,
-      child: Icon(Icons.attach_money, color: Colors.yellow),
-    ),
-    title: Text('Total Sales', style: TextStyle(color: Colors.blue[900])),
-    subtitle: Text('\$45,000', style: TextStyle(fontSize: 24, color: Colors.green)),
-    trailing: Icon(Icons.trending_up, color: Colors.orange, size: 32),
-  ),
-)
-```
-
-### ✅ AFTER: Clean Dashboard
-```dart
-// Minimal, focused on data
-Container(
-  padding: EdgeInsets.all(16),
-  decoration: BoxDecoration(
-    color: Colors.white,
-    border: Border.all(color: Colors.grey[200]!),
-    borderRadius: BorderRadius.circular(4),
-  ),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        'Total Sales',
-        style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-      ),
-      SizedBox(height: 4),
-      Text(
-        '\$45,000',
-        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600),
-      ),
-    ],
-  ),
-)
-```
-
----
-
-## 🚀 Migration Strategy
-
-When redesigning existing modules:
-
-1. **Audit current UI** - Screenshot and list issues
-2. **Apply spacing standards** - Fix padding/margins first
-3. **Simplify color usage** - Remove excessive colors
-4. **Clean up tables** - Apply table design principles
-5. **Standardize buttons** - Follow button hierarchy
-6. **Add split-pane (if applicable)** - Only for list+detail modules
-7. **Test responsiveness** - Verify mobile/tablet/desktop
-8. **Remove decorations** - Strip gradients, heavy shadows, unnecessary icons
-
----
-
-## 📚 Reference Implementation
-
-**Primary Example:** `lib/modules/sales/pages/invoice_list_page.dart`
-- Split-pane layout
-- Clean table design
-- Minimalist action bar
-- Status badges
-- Resizable panels
-
-**Study These Patterns:**
-- Two-row action bar (invoice number + buttons)
-- Borderless button styling
-- Compact spacing (4px vertical padding on buttons)
-- Subtle dividers (1px gray borders)
-- Professional status badges
-
----
-
-**Remember:** Professional software should feel calm, precise, and intentional,
-not childish, noisy, flat, or lifeless. Prioritize clarity, efficiency, data
-density, and restrained character over decorative flair.
+The desired UI feels calm, capable, distinctive, and alive. It does not look
+like a toy, a generic component catalog, or a legacy monochrome database form.

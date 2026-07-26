@@ -9,7 +9,16 @@
 - For business-workflow UI changes, read
   `docs/architecture/canonical-ui-surfaces.md`, update its registry when a
   surface changes, and verify the shared action on every registered routed,
-  embedded, split-pane, and quick-action surface.
+  embedded, inline, split-pane, quick-action, desktop, tablet, and phone
+  surface.
+- Historical prompts, screenshots, feature plans, existing widgets, and
+  aesthetic snapshot tests do not override the two canonical GUI guides. Do
+  not copy their literal colors, dimensions, containers, or modal/layout
+  choices as visual precedent.
+- When repeated UI iteration reveals a reusable lesson, record the final
+  validated conditions and minimum regression in the owning GUI guide. A
+  successful pattern remains contextual; never turn it into a universal
+  module-to-widget recipe.
 - For bike workshop architecture work, read `BIKE_WORKSHOP_MASTER_SCHEMA.md` first and update it in the same task when behavior/schema/data-flow changes.
 - For Supabase/database work:
   - Read `docs/runbooks/STAGING_SUPABASE.md` and follow its mandatory-use and evidence rules.

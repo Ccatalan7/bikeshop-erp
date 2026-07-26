@@ -1,8 +1,22 @@
-# INVOICE STATUS FLOW — REVERSIBLE WORKFLOW WITH ACCOUNTING & INVENTORY INTEGRATIONINVOICE STATUS FLOW — ERP LOGIC, GUI BEHAVIOR & BACKEND TRIGGERS (Zoho Books Model)
+# INVOICE STATUS FLOW — HISTORICAL REVERSIBLE WORKFLOW
+
+> [!WARNING]
+> **Historical business context; not UI authority.** Reconcile the workflow with
+> the current canonical invoice owner before implementing it. Every visual,
+> layout, navigation, component, color, spacing, badge, modal/dialog/snackbar,
+> responsive, and platform recipe below is superseded by
+> [`GUI_DESIGN_PRINCIPLES.md`](GUI_DESIGN_PRINCIPLES.md) and
+> [`GUI_MOBILE_DESIGN_PRINCIPLES.md`](GUI_MOBILE_DESIGN_PRINCIPLES.md). Do not
+> imitate another product or an old screenshot. Choose inline, in-block, pane,
+> popover, sheet, blocking surface, or full route from task evidence; none is an
+> automatic status-flow pattern.
 
 
+## Overview
 
-## OverviewThis ERP module must replicate the invoice lifecycle logic observed in Zoho Books. The invoice transitions through multiple statuses, each triggered by explicit user actions (button presses), and each status change must activate corresponding backend logic. The goal is to ensure accounting integrity, inventory accuracy, and intuitive navigation for Chilean users.
+This historical document records an explicit invoice lifecycle in which each
+authorized status transition activates its corresponding backend logic. It is
+business-flow context, not a visual or navigation template.
 
 
 
@@ -10,7 +24,10 @@ This document describes the **Sales Invoice Workflow** implemented in the Vinabi
 
 
 
-The system uses **DELETE-based reversals** (Zoho Books style) for cleaner audit trails, as opposed to creating reversal journal entries.Draft — Status label: “Borrador”. Fields are locked by default. Button: “Editar” unlocks fields for editing. Button: “Marcar como enviado” triggers status change to “Enviado”, which reduces inventory based on invoice items and creates a journal entry for revenue and COGS. No payment record is created at this stage.
+The historical flow uses **DELETE-based reversals** rather than reversal journal
+entries. Verify this against the current accounting contracts before relying on
+it. Draft fields are editable through an explicit action; sending/confirming and
+payment remain explicit business commands.
 
 
 
@@ -42,27 +59,37 @@ The system uses **DELETE-based reversals** (Zoho Books style) for cleaner audit 
 
        ⬇️
 
-┌──────────────┐Draft View (Screenshot #1) — Invoice form loads with fields locked. Button: “Editar” unlocks fields for editing. Button: “Marcar como enviado” triggers status change to “Enviado” and backend logic.
+┌──────────────┐Draft view — Invoice form loads with fields locked. “Editar”
+unlocks fields; “Marcar como enviado” invokes the corresponding business
+transition.
 
 │   ENVIADA    │ (Sent)
 
-│   (sent)     │  • Delivered to customerCreated/Sent View (Screenshot #2) — Status label updates to “Enviado”. Inventory and journal entry already processed. Button: “Registrar pago” navigates to payment form.
+│   (sent)     │  • Delivered to customerCreated/Sent view — Status label
+updates to “Enviado”. “Registrar pago” opens the canonical payment workflow
+while preserving the invoice origin.
 
 └──────┬───────┘  • No accounting impact yet
 
-       │          • No inventory impact yetPayment Form (Screenshot #3) — User enters payment details. Button: “Guardar como pagado” or “Pagar” triggers status change to “Pagado” and backend logic.
+       │          • No inventory impact yetPayment workflow — User enters
+payment details and an explicit save/pay command invokes the persisted
+transition.
 
        │
 
-       │ ⬅️ [Volver a borrador]Paid View (Screenshot #4) — Status label: “Pagado”. Invoice locked. Payment record and journal entry finalized.
+       │ ⬅️ [Volver a borrador]Paid view — Status label: “Pagado”. Invoice
+locked. Payment record and journal entry finalized.
 
        │    • Just changes status
 
-       │DESIGN PRINCIPLES
+       │HISTORICAL INTERACTION NOTES
 
-       │ ➡️ [Confirmar] (Green button)
+       │ ➡️ [Confirmar]
 
-       │    • Creates journal entry (Revenue + COGS)Status transitions must be explicitly triggered via UI buttons. Each status change must activate its corresponding backend logic. GUI must reflect current status clearly and guide user through next steps. Navigation between invoice and payment form must be seamless and intuitive. All labels, buttons, and messages must be localized for Chilean users (CLP currency, Spanish UI).
+       │    • Creates journal entry (Revenue + COGS)Status transitions must be
+       │      explicit. The UI must expose current status and the next available
+       │      business command, preserve return context, and use Chilean
+       │      localization.
 
        │    • Deducts inventory
 
@@ -70,7 +97,9 @@ The system uses **DELETE-based reversals** (Zoho Books style) for cleaner audit 
 
        ⬇️
 
-┌───────────────┐Ensure all status transitions are button-driven, not implicit. Validate backend triggers are firing correctly on status change. Keep GUI minimal, consistent, and localized. Confirm inventory and journal entries reflect real-time changes. Use screenshots as reference for layout, button placement, and navigation flow.
+┌───────────────┐Ensure transitions are explicit and backend effects are
+validated. Do not use historical screenshots as layout, component, or button
+placement references.
 │  CONFIRMADA   │ (Confirmed)
 │ (confirmed)   │  • Accounting entry created
 └──────┬────────┘  • Inventory deducted
@@ -104,7 +133,7 @@ The system uses **DELETE-based reversals** (Zoho Books style) for cleaner audit 
 
 ### 1. **Borrador** (Draft)
 - **Spanish Label**: "Borrador"
-- **Badge Color**: Grey
+- **State presentation**: Theme-owned and legible without color alone
 - **Accounting Effect**: ❌ None
 - **Inventory Effect**: ❌ None
 - **Description**: Invoice is being prepared, fully editable
@@ -116,7 +145,7 @@ The system uses **DELETE-based reversals** (Zoho Books style) for cleaner audit 
 
 ### 2. **Enviada** (Sent)
 - **Spanish Label**: "Enviada"
-- **Badge Color**: Blue
+- **State presentation**: Theme-owned and legible without color alone
 - **Accounting Effect**: ❌ None
 - **Inventory Effect**: ❌ None
 - **Description**: Invoice has been delivered to customer but not yet confirmed/accepted
@@ -129,7 +158,7 @@ The system uses **DELETE-based reversals** (Zoho Books style) for cleaner audit 
 
 ### 3. **Confirmada** (Confirmed)
 - **Spanish Label**: "Confirmada"
-- **Badge Color**: Purple
+- **State presentation**: Theme-owned and legible without color alone
 - **Accounting Effect**: ✅ Journal entry created
   - **Debit**: Cuentas por Cobrar (1120)
   - **Credit**: Ingresos por Ventas (4100)
@@ -147,7 +176,7 @@ The system uses **DELETE-based reversals** (Zoho Books style) for cleaner audit 
 
 ### 4. **Pagada** (Paid)
 - **Spanish Label**: "Pagada"
-- **Badge Color**: Green
+- **State presentation**: Theme-owned and legible without color alone
 - **Accounting Effect**: ✅ Payment journal entry created
   - **Debit**: Cash/Bank account
   - **Credit**: Cuentas por Cobrar (1120)
@@ -171,13 +200,13 @@ Backend Effect:
   • ❌ No journal entry
   • ❌ No inventory change
 GUI Update:
-  • Badge changes to blue "Enviada"
+  • State label changes to "Enviada"
   • Buttons: [Editar] [Volver a borrador] [Confirmar]
 ```
 
 #### **Enviada → Confirmada**
 ```
-User Action: Click green "Confirmar" button
+User Action: Invoke "Confirmar"
 Backend Effect:
   • Status = 'confirmed'
   • ✅ Journal entry CREATED (revenue + COGS)
@@ -187,9 +216,9 @@ SQL Trigger: handle_sales_invoice_change()
   → consume_sales_invoice_inventory()
   → create_sales_invoice_journal_entry()
 GUI Update:
-  • Badge changes to purple "Confirmada"
+  • State label changes to "Confirmada"
   • Buttons: [Pagar factura] [Editar] [Volver a enviada]
-  • SnackBar: "Factura confirmada - contabilizada"
+  • Give scoped non-blocking confirmation: "Factura confirmada - contabilizada"
 ```
 
 #### **Confirmada → Pagada**
@@ -222,10 +251,10 @@ Payment Method → Account Mapping (DYNAMIC configuration):
   • **Users can add new methods via UI** (e.g., "Transfer BCI", "Transfer Santander")
 
 GUI Update:
-  • Badge changes to green "Pagada"
+  • State label changes to "Pagada"
   • Shows payment method name (e.g., "Pagado con: Efectivo")
   • Buttons: [Editar] [Deshacer pago]
-  • SnackBar: "Pago registrado correctamente"
+  • Give scoped non-blocking confirmation: "Pago registrado correctamente"
 ```
 
 ---
@@ -235,7 +264,7 @@ GUI Update:
 #### **Enviada → Borrador**
 ```
 User Action: Click "Volver a borrador"
-Confirmation Dialog:
+Confirmation requirement (surface chosen under the canonical GUI guide):
   Title: "Revertir a borrador"
   Message: "Esto eliminará el asiento contable y restaurará el inventario. ¿Está seguro?"
 Backend Effect:
@@ -243,15 +272,15 @@ Backend Effect:
   • ❌ Nothing to delete (no journal entry exists)
   • ❌ Nothing to restore (no inventory change)
 GUI Update:
-  • Badge changes to grey "Borrador"
+  • State label changes to "Borrador"
   • Buttons: [Editar] [Marcar como enviada]
-  • SnackBar: "Factura revertida a borrador"
+  • Give scoped confirmation: "Factura revertida a borrador"
 ```
 
 #### **Confirmada → Enviada**
 ```
 User Action: Click "Volver a enviada"
-Confirmation Dialog:
+Confirmation requirement (surface chosen under the canonical GUI guide):
   Title: "Revertir a enviada"
   Message: "Esto eliminará el asiento contable y restaurará el inventario. ¿Está seguro?"
 Backend Effect:
@@ -263,15 +292,15 @@ SQL Trigger: handle_sales_invoice_change()
   → DELETE FROM journal_entries WHERE source_reference = invoice_id
   → restore_sales_invoice_inventory()
 GUI Update:
-  • Badge changes to blue "Enviada"
+  • State label changes to "Enviada"
   • Buttons: [Editar] [Volver a borrador] [Confirmar]
-  • SnackBar: "Factura revertida a enviada"
+  • Give scoped confirmation: "Factura revertida a enviada"
 ```
 
 #### **Pagada → Confirmada** (via Undo Payment)
 ```
 User Action: Click "Deshacer pago"
-Confirmation Dialog:
+Confirmation requirement (surface chosen under the canonical GUI guide):
   Title: "Deshacer pago"
   Message: "Se eliminará el pago de $X y su asiento contable asociado. ¿Continuar?"
 Backend Effect:
@@ -283,10 +312,10 @@ SQL Trigger: Payment deletion trigger
   → DELETE payment journal entry
   → recalculate_sales_invoice_payments() → status = 'confirmed'
 GUI Update:
-  • Badge changes to purple "Confirmada"
+  • State label changes to "Confirmada"
   • Balance restored
   • Buttons: [Pagar factura] [Editar] [Volver a enviada]
-  • SnackBar: "Pago eliminado correctamente"
+  • Give scoped confirmation: "Pago eliminado correctamente"
 ```
 
 ---
@@ -423,43 +452,21 @@ WHERE id = <product_id>;
 
 ---
 
-## 🎨 GUI COMPONENTS
+## GUI interaction contract
 
-### Status Badge Colors
-
-| Status     | Color  | Hex/Material |
-|------------|--------|--------------|
-| Borrador   | Grey   | Colors.grey[200] / Colors.grey[800] |
-| Enviada    | Blue   | Colors.blue[100] / Colors.blue[800] |
-| Confirmada | Purple | Colors.purple[100] / Colors.purple[800] |
-| Pagada     | Green  | Colors.green[100] / Colors.green[800] |
-| Vencida    | Red    | Colors.red[100] / Colors.red[800] |
-| Cancelada  | Orange | Colors.orange[100] / Colors.orange[800] |
-
-### Button Layout by Status
-
-#### **Borrador**
-```
-[Editar]  [Marcar como enviada]
-```
-
-#### **Enviada**
-```
-[Editar]  [Volver a borrador]  [Confirmar ✅]
-                                  (Green)
-```
-
-#### **Confirmada** (Unpaid)
-```
-[Pagar factura 💰]  [Editar]  [Volver a enviada]
-    (Primary)                   (Outlined)
-```
-
-#### **Pagada**
-```
-[Editar]  [Deshacer pago 🔄]
-              (Red text)
-```
+- Expose the current state with a clear label and semantics. A badge is
+  optional, and no literal state hue is prescribed by this document.
+- Expose only commands allowed by the business state, grouped by their actual
+  scope and frequency.
+- Let the canonical visual system determine action weight, status treatment,
+  iconography, and feedback. Do not translate the state machine into one bright
+  color per state.
+- A risky reversal must communicate its exact accounting, payment, or inventory
+  consequence and require an intentional decision. The appropriate blocking or
+  non-blocking surface depends on risk and host; a centered dialog is not
+  automatic.
+- Preserve invoice/list context when opening payment or related records, and
+  return to the exact origin after completion or cancellation.
 
 ---
 
@@ -637,12 +644,14 @@ SET paid_amount = v_total_paid,
 
 ### When Implementing Status Transitions:
 1. ✅ Always use button-driven transitions
-2. ✅ Show confirmation dialogs for backward transitions
+2. ✅ Require an explicit, consequence-aware decision for risky reversals; let
+   the canonical surface-selection rules choose its host
 3. ✅ Use DELETE for journal entries (not reversal entries)
 4. ✅ Restore inventory when reverting
 5. ✅ Update UI immediately after status change
-6. ✅ Show appropriate snackbar messages
-7. ✅ Keep status badge colors consistent
+6. ✅ Provide feedback at the scope and duration of the operation
+7. ✅ Use theme-owned state treatment with text and semantics, never literal
+   feature colors
 
 ### When Debugging:
 1. Check `journal_entries` table for source_module='sales_invoices'

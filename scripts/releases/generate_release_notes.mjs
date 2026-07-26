@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { TextDecoder } from "node:util";
 import { fileURLToPath } from "node:url";
 
 const COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
@@ -37,6 +39,7 @@ const MAX_API_RESPONSE_BYTES = 256 * 1024;
 const MAX_MODEL_OUTPUT_CHARS = 32 * 1024;
 const MAX_PROMPT_CHANGES = 240;
 const MAX_PROMPT_COMMITS = 40;
+const MAX_CODEX_CANDIDATE_BASE64_CHARS = 16 * 1024;
 
 export const RELEASE_NOTE_MODULES = Object.freeze({
   workshop: "Taller",
@@ -850,7 +853,7 @@ export function validateReleaseNotes(
   return notes;
 }
 
-function aiOutputSchema() {
+export function releaseNotesCandidateSchema() {
   return {
     type: "object",
     additionalProperties: false,
@@ -933,6 +936,60 @@ function buildEvidenceCatalog(inventory) {
   });
 }
 
+function isCodexInspectableReleasePath(filePath) {
+  const lowerPath = filePath.toLowerCase();
+  if (
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu.test(filePath) ||
+    /\b(?:[0-9]{1,2}(?:\.[0-9]{3}){2}|[0-9]{7,8})-[0-9k]\b/iu.test(
+      filePath,
+    ) ||
+    /\+56(?:[-_. /]?[0-9]){8,}/u.test(filePath)
+  ) {
+    return false;
+  }
+  return !/(?:^|\/)(?:\.github|assets|coverage|docs?|fixtures?|mocks?|screenshots?|seeds?|test|tests)(?:\/|$)/u.test(
+    lowerPath,
+  );
+}
+
+function buildCodexEvidenceCatalog(inventory) {
+  return buildEvidenceCatalog(inventory).filter((entry) =>
+    isCodexInspectableReleasePath(entry.local_path),
+  );
+}
+
+function evidenceCatalogSha256(inventory) {
+  return createHash("sha256")
+    .update(JSON.stringify(buildCodexEvidenceCatalog(inventory)), "utf8")
+    .digest("hex");
+}
+
+export function createCodexReleaseContext(inventory) {
+  const codexEvidenceCatalog = buildCodexEvidenceCatalog(inventory);
+  return {
+    locale: "es-CL",
+    from_commit: inventory.from_commit,
+    to_commit: inventory.to_commit,
+    commit_count: inventory.commit_count,
+    change_count: inventory.all_changes.length,
+    included_change_count: codexEvidenceCatalog.length,
+    omitted_or_protected_change_count:
+      inventory.all_changes.length - codexEvidenceCatalog.length,
+    evidence_catalog_sha256: evidenceCatalogSha256(inventory),
+    module_labels: RELEASE_NOTE_MODULES,
+    topic_labels: RELEASE_NOTE_TOPICS,
+    changes: codexEvidenceCatalog.map((entry) => ({
+      evidence_id: entry.evidence_id,
+      module_id: entry.module_id,
+      topic_id: entry.topic_id,
+      status: entry.status,
+      additions: entry.additions,
+      deletions: entry.deletions,
+      path: entry.local_path,
+    })),
+  };
+}
+
 function buildAiMetadata(inventory) {
   const evidenceCatalog = buildEvidenceCatalog(inventory);
   return {
@@ -983,14 +1040,14 @@ function buildOpenAiRequest(inventory, model) {
         type: "json_schema",
         name: "vinabike_desktop_release_notes_by_evidence_id",
         strict: true,
-        schema: aiOutputSchema(),
+        schema: releaseNotesCandidateSchema(),
       },
     },
   };
 }
 
 function geminiAiOutputSchema() {
-  const schema = structuredClone(aiOutputSchema());
+  const schema = structuredClone(releaseNotesCandidateSchema());
   delete schema.properties.title.minLength;
   delete schema.properties.title.maxLength;
   delete schema.properties.summary.minLength;
@@ -1386,6 +1443,198 @@ function wrapAiCandidate(candidate, inventory) {
   };
 }
 
+const GENERIC_RELEASE_LANGUAGE =
+  /\b(?:ajustes?|cambios?|mejor(?:a|as|amos|ar|o|ó)|optimizaci[oó]n|actualizaciones?|estabilidad|funcionamiento general|experiencia general|puesta al d[ií]a|mantener (?:el )?(?:programa|sistema)|funciona mejor)\b/iu;
+const USER_OBSERVABLE_RELEASE_LANGUAGE =
+  /\b(?:ahora|puedes?|permite|incorpora|agrega|muestra|adapta|elige|selecciona|descarga|sube|env[ií]a|recibe|actualiza|revisa|busca|filtra|ordena|edita|guarda|registra|corrige|convierte|avisa|indica|recuerda|historial|per[ií]odo|m[oó]vil|pantallas?)\b/iu;
+const CONCRETE_RELEASE_LANGUAGE = Object.freeze({
+  workshop:
+    /\b(?:trabajos?|presupuestos?|bicicletas?|taller|cotizaciones?|servicios?|reparaciones?)\b/iu,
+  inventory:
+    /\b(?:inventario|productos?|existencias?|stock|cat[aá]logo|bodegas?)\b/iu,
+  sales:
+    /\b(?:ventas?|pagos?|cobros?|clientes?|boletas?|facturas?|caja)\b/iu,
+  purchases:
+    /\b(?:compras?|proveedores?|recepciones?|[oó]rdenes de compra)\b/iu,
+  hr: /\b(?:personal|empleados?|turnos?|asistencia|vacaciones?|remuneraciones?)\b/iu,
+  messaging:
+    /\b(?:mensajes?|conversaciones?|whatsapp|respuestas?|contactos?)\b/iu,
+  mail: /\b(?:correo|correos|bandeja|mensajes?|adjuntos?)\b/iu,
+  website:
+    /\b(?:sitio web|tienda|cat[aá]logo|categor[ií]as?|navegaci[oó]n|productos?)\b/iu,
+  storage: /\b(?:archivos?|documentos?|carpetas?|subidas?|descargas?)\b/iu,
+  accounting:
+    /\b(?:contabilidad|gastos?|asientos?|libro|cuentas?|conciliaci[oó]n)\b/iu,
+  settings:
+    /\b(?:configuraci[oó]n|accesos?|permisos?|usuarios?|sesiones?|contrase[nñ]as?)\b/iu,
+  general:
+    /\b(?:inicio|actualizaci[oó]n|novedades?|notificaciones?|b[uú]squeda|ventanas?|botones?|listas?|tablas?|filtros?|descargas?|instalaci[oó]n)\b/iu,
+});
+
+function isConcreteReleaseItem(item, moduleId) {
+  const modulePattern =
+    CONCRETE_RELEASE_LANGUAGE[moduleId] ??
+    CONCRETE_RELEASE_LANGUAGE.general;
+  const hasObservableBehavior = USER_OBSERVABLE_RELEASE_LANGUAGE.test(item);
+  if (GENERIC_RELEASE_LANGUAGE.test(item)) {
+    return (
+      modulePattern.test(item) &&
+      hasObservableBehavior &&
+      item.split(/\s+/u).length >= 8
+    );
+  }
+  return (
+    (modulePattern.test(item) || hasObservableBehavior) &&
+    item.split(/\s+/u).length >= 6
+  );
+}
+
+export function validateReleaseNotesQuality(
+  notes,
+  { inventory, evidenceEntries = inventory?.ai_changes } = {},
+) {
+  if (!inventory) throw new Error("Release inventory is required.");
+  if (!Array.isArray(evidenceEntries)) {
+    throw new Error("Release-note quality evidence is required.");
+  }
+  if (notes.source !== "ai") return notes;
+
+  const items = notes.modules.flatMap((module) =>
+    module.items.map((item) => ({
+      item,
+      moduleId: module.id,
+    })),
+  );
+  const concreteCount = items.filter(({ item, moduleId }) =>
+    isConcreteReleaseItem(item, moduleId),
+  ).length;
+  const significantRelease =
+    inventory.commit_count >= 2 || evidenceEntries.length >= 8;
+  const requiredConcreteItems = significantRelease
+    ? Math.min(2, items.length)
+    : 1;
+  const requiredConcreteRatio = significantRelease ? 0.5 : 0;
+  const changedModuleIds = new Set(
+    evidenceEntries.map((entry) => entry.module_id),
+  );
+  const representedModuleCount = new Set(
+    notes.modules
+      .map((module) => module.id)
+      .filter((moduleId) => changedModuleIds.has(moduleId)),
+  ).size;
+  const requiredModuleCount = significantRelease
+    ? Math.min(2, changedModuleIds.size)
+    : 1;
+
+  if (
+    concreteCount < requiredConcreteItems ||
+    concreteCount / items.length < requiredConcreteRatio ||
+    representedModuleCount < requiredModuleCount
+  ) {
+    throw new Error("AI release notes are too generic for this release.");
+  }
+  return notes;
+}
+
+export function acceptCodexReleaseEnvelope(envelope, { inventory } = {}) {
+  if (!inventory) throw new Error("Release inventory is required.");
+  if (
+    !envelope ||
+    typeof envelope !== "object" ||
+    Array.isArray(envelope) ||
+    !hasExactlyKeys(envelope, [
+      "schema_version",
+      "from_commit",
+      "to_commit",
+      "evidence_catalog_sha256",
+      "candidate",
+    ]) ||
+    envelope.schema_version !== 1 ||
+    envelope.from_commit !== inventory.from_commit ||
+    envelope.to_commit !== inventory.to_commit ||
+    !/^[0-9a-f]{64}$/u.test(envelope.evidence_catalog_sha256 ?? "") ||
+    envelope.evidence_catalog_sha256 !== evidenceCatalogSha256(inventory)
+  ) {
+    throw new Error("The Codex candidate does not match the release range.");
+  }
+
+  const allowedCodexEvidenceIds = new Set(
+    buildCodexEvidenceCatalog(inventory).map((entry) => entry.evidence_id),
+  );
+  if (
+    !Array.isArray(envelope.candidate?.modules) ||
+    envelope.candidate.modules.some(
+      (module) =>
+        !Array.isArray(module?.evidence_ids) ||
+        module.evidence_ids.some(
+          (evidenceId) => !allowedCodexEvidenceIds.has(evidenceId),
+        ),
+    )
+  ) {
+    throw new Error("The Codex candidate cites non-inspectable evidence.");
+  }
+
+  const releaseNotes = wrapAiCandidate(envelope.candidate, inventory);
+  validateReleaseNotes(releaseNotes, { inventory, source: "ai" });
+  validateReleaseNotesQuality(releaseNotes, {
+    inventory,
+    evidenceEntries: buildCodexEvidenceCatalog(inventory),
+  });
+  return releaseNotes;
+}
+
+export function createCodexReleaseEnvelope(candidate, { inventory } = {}) {
+  if (!inventory) throw new Error("Release inventory is required.");
+  const envelope = {
+    schema_version: 1,
+    from_commit: inventory.from_commit,
+    to_commit: inventory.to_commit,
+    evidence_catalog_sha256: evidenceCatalogSha256(inventory),
+    candidate,
+  };
+  acceptCodexReleaseEnvelope(envelope, { inventory });
+  return envelope;
+}
+
+export function decodeCodexReleaseEnvelopeBase64(value) {
+  if (value == null || value === "") {
+    return { provided: false, envelope: null, reason: null };
+  }
+  if (
+    typeof value !== "string" ||
+    value.length > MAX_CODEX_CANDIDATE_BASE64_CHARS ||
+    value.length % 4 !== 0 ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(
+      value,
+    )
+  ) {
+    return {
+      provided: true,
+      envelope: null,
+      reason: "invalid_codex_candidate_transport",
+    };
+  }
+
+  try {
+    const bytes = Buffer.from(value, "base64");
+    if (bytes.toString("base64") !== value) {
+      throw new Error("Non-canonical base64.");
+    }
+    const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return {
+      provided: true,
+      envelope: JSON.parse(decoded),
+      reason: null,
+    };
+  } catch {
+    return {
+      provided: true,
+      envelope: null,
+      reason: "invalid_codex_candidate_transport",
+    };
+  }
+}
+
 export async function generateReleaseNotes({
   repoDir = process.cwd(),
   fromCommit,
@@ -1399,6 +1648,9 @@ export async function generateReleaseNotes({
   fetchImpl = globalThis.fetch,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  codexCandidateEnvelope,
+  codexCandidateProvided = codexCandidateEnvelope != null,
+  codexCandidateTransportReason = null,
 } = {}) {
   if (!outputPath) throw new Error("An output path is required.");
   const inventory = collectReleaseInventory({
@@ -1412,11 +1664,33 @@ export async function generateReleaseNotes({
   const envelope = { release_notes: fallback };
   await writeJsonAtomically(outputPath, envelope);
 
+  let codexCandidateReason = codexCandidateTransportReason;
+  if (codexCandidateProvided && codexCandidateEnvelope) {
+    try {
+      const codexNotes = acceptCodexReleaseEnvelope(codexCandidateEnvelope, {
+        inventory,
+      });
+      await writeJsonAtomically(outputPath, { release_notes: codexNotes });
+      return {
+        source: "ai",
+        reason: null,
+        provider: "codex-local",
+        model: null,
+        inventory,
+        release_notes: codexNotes,
+      };
+    } catch {
+      codexCandidateReason = "invalid_codex_candidate";
+    }
+  } else if (codexCandidateProvided && !codexCandidateReason) {
+    codexCandidateReason = "invalid_codex_candidate";
+  }
+
   const provider = geminiApiKey ? "gemini" : apiKey ? "openai" : null;
   if (!provider) {
     return {
       source: "fallback",
-      reason: "missing_api_key",
+      reason: codexCandidateReason ?? "missing_api_key",
       inventory,
       release_notes: fallback,
     };
@@ -1484,6 +1758,7 @@ export async function generateReleaseNotes({
       try {
         const aiNotes = wrapAiCandidate(result.candidate, inventory);
         validateReleaseNotes(aiNotes, { inventory, source: "ai" });
+        validateReleaseNotesQuality(aiNotes, { inventory });
         try {
           await writeJsonAtomically(outputPath, { release_notes: aiNotes });
         } catch {
@@ -1575,6 +1850,7 @@ function printUsage() {
       "Optional environment:",
       "  GEMINI_RELEASE_API_KEY (preferred when present)",
       "  GEMINI_RELEASE_NOTES_MODEL (default: gemini-3.1-flash-lite)",
+      "  CODEX_RELEASE_NOTES_CANDIDATE_B64 (optional validated local draft)",
       "  OPENAI_API_KEY",
       "  OPENAI_RELEASE_NOTES_MODEL (default: gpt-5-mini)",
       "",
@@ -1589,6 +1865,9 @@ async function main() {
     return;
   }
 
+  const codexCandidate = decodeCodexReleaseEnvelopeBase64(
+    process.env.CODEX_RELEASE_NOTES_CANDIDATE_B64 ?? "",
+  );
   const result = await generateReleaseNotes({
     repoDir: process.cwd(),
     fromCommit: args.from_commit,
@@ -1601,14 +1880,21 @@ async function main() {
     endpoint: process.env.OPENAI_RELEASE_NOTES_ENDPOINT || DEFAULT_ENDPOINT,
     timeoutMs: process.env.OPENAI_RELEASE_NOTES_TIMEOUT_MS,
     maxAttempts: process.env.OPENAI_RELEASE_NOTES_MAX_ATTEMPTS,
+    codexCandidateEnvelope: codexCandidate.envelope,
+    codexCandidateProvided: codexCandidate.provided,
+    codexCandidateTransportReason: codexCandidate.reason,
   });
   const suffix = result.reason ? ` (${result.reason})` : "";
   const modelSuffix =
     result.provider === "gemini" && result.model
       ? `; Gemini model: ${result.model}`
       : "";
+  const providerSuffix =
+    result.provider && result.provider !== "gemini"
+      ? `; provider: ${result.provider}`
+      : "";
   process.stdout.write(
-    `Release notes source: ${result.source}${suffix}${modelSuffix}; wrote ${path.resolve(args.output)}\n`,
+    `Release notes source: ${result.source}${suffix}${providerSuffix}${modelSuffix}; wrote ${path.resolve(args.output)}\n`,
   );
 }
 

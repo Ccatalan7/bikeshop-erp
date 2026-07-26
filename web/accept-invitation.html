@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
   <title>Redirigiendo...</title>
   <style>
     body {
@@ -41,16 +42,19 @@
   </div>
   
   <script>
-    // Extract token from URL query parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
+    // Tokens live only in the fragment so browsers never send them in
+    // referrers or server request logs.
+    const fragmentParams = new URLSearchParams(window.location.hash.slice(1));
+    const token = fragmentParams.get('token');
     
     if (token) {
-      // Redirect to Flutter app with hash route
-      window.location.href = `/#/accept-invitation?token=${token}`;
+      // PathUrlStrategy uses a clean route; keep the secret in its fragment.
+      window.location.replace(
+        `/accept-invitation#token=${encodeURIComponent(token)}`,
+      );
     } else {
       // No token, redirect to home
-      window.location.href = '/';
+      window.location.replace('/');
     }
   </script>
 </body>

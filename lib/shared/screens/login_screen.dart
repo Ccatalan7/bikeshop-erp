@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
-import '../services/tenant_signup_service.dart';
+import '../utils/auth_input_validation.dart';
 import '../widgets/app_button.dart';
 import '../widgets/forgot_password_dialog.dart';
 
@@ -20,10 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _shopNameController =
-      TextEditingController(); // NEW: Shop name for signup
-  final _phoneController =
-      TextEditingController(); // NEW: Optional phone number
+  final _shopNameController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _isRegisterMode = false;
@@ -31,22 +28,58 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    // Check for access denied error from Staff-Only guard
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final uri = Uri.base;
-      final error = uri.queryParameters['error'];
-      if (error == 'access_denied' && mounted) {
+      _handleAccessDeniedSession();
+    });
+  }
+
+  Future<void> _handleAccessDeniedSession() async {
+    if (Uri.base.queryParameters['error'] != 'access_denied' || !mounted) {
+      return;
+    }
+
+    final authService = context.read<AuthService>();
+    final hasUnassignedSession = authService.currentSession != null &&
+        authService.isAccessProfileLoaded &&
+        !authService.isStaff &&
+        !authService.isWorker;
+
+    if (hasUnassignedSession) {
+      setState(() => _isLoading = true);
+      var sessionCleared = false;
+      try {
+        // Google may authenticate an identity that has no active ERP/worker
+        // membership. Clear it before allowing another login or owner signup.
+        await authService.signOut();
+        sessionCleared = true;
+      } catch (_) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              '🚫 Acceso denegado. Solo usuarios del equipo pueden acceder al panel de administración.',
+              'No pudimos cerrar la sesión sin acceso. Recarga la aplicación antes de intentarlo nuevamente.',
             ),
             backgroundColor: Colors.red,
-            duration: Duration(seconds: 5),
           ),
         );
+        return;
+      } finally {
+        if (mounted && sessionCleared) {
+          setState(() => _isLoading = false);
+        }
       }
-    });
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Acceso denegado. Usa una cuenta que tenga acceso activo al ERP.',
+        ),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 5),
+      ),
+    );
   }
 
   @override
@@ -55,7 +88,6 @@ class _LoginScreenState extends State<LoginScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _shopNameController.dispose();
-    _phoneController.dispose();
     super.dispose();
   }
 
@@ -83,11 +115,13 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error de inicio de sesión: ${e.toString()}'),
+          const SnackBar(
+            content: Text(
+              'No pudimos iniciar sesión. Revisa tus datos e inténtalo nuevamente.',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -114,30 +148,26 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final supabase = Supabase.instance.client;
+      final authService = context.read<AuthService>();
+      final shopName = _shopNameController.text.trim();
 
-      // Step 1: Sign up user with shop metadata (for database trigger)
-      final response = await supabase.auth.signUp(
+      // Auth signup is the only client write. The database trigger owns the
+      // tenant, staff profile, role metadata, and initial tenant data.
+      final response = await authService.signUpTenantOwner(
         email: _emailController.text.trim(),
         password: _passwordController.text,
-        data: {
-          'shop_name': _shopNameController.text.trim(),
-          'subdomain': _shopNameController.text.trim().toLowerCase().replaceAll(
-              RegExp(r'[^a-z0-9]'), ''), // Generate subdomain from shop name
-        },
+        shopName: shopName,
+        subdomain: AuthInputValidation.tenantSubdomain(shopName),
       );
 
-      // Step 2: Check if user was created
       final user = response.user;
       if (user == null) {
         throw Exception(
             'Error al crear la cuenta. Por favor intente con otro correo.');
       }
 
-      // Step 3: Check if email confirmation is required
       final session = response.session;
       if (session == null) {
-        // Email confirmation required - show message and don't create tenant yet
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -156,7 +186,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       'Por favor, haz clic en el enlace de confirmación.'),
                   const SizedBox(height: 4),
                   const Text(
-                      'Después podrás iniciar sesión y configurar tu tienda.'),
+                    'Tu tienda se preparará cuando confirmes el correo. Después podrás iniciar sesión.',
+                  ),
                 ],
               ),
               backgroundColor: Colors.blue,
@@ -171,31 +202,11 @@ class _LoginScreenState extends State<LoginScreen> {
             _passwordController.clear();
             _confirmPasswordController.clear();
             _shopNameController.clear();
-            _phoneController.clear();
           });
         }
         return;
       }
 
-      // Step 4: User is auto-confirmed (session exists) - create tenant
-      final tenantSignupService = TenantSignupService();
-      final tenant = await tenantSignupService.createTenantForUser(
-        userId: user.id,
-        email: _emailController.text.trim(),
-        shopName: _shopNameController.text.trim(),
-        phoneNumber: _phoneController.text.trim().isEmpty
-            ? null
-            : _phoneController.text.trim(),
-      );
-
-      if (tenant == null) {
-        // Failed to create tenant - show error and sign out
-        await supabase.auth.signOut();
-        throw Exception(
-            'Error al crear la tienda. Por favor intente nuevamente.');
-      }
-
-      // Step 5: Show success message with store URL
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -208,9 +219,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const SizedBox(height: 8),
-                Text('🏪 Tu tienda: ${tenant.shopName}'),
-                const SizedBox(height: 4),
-                Text('🌐 URL: https://${tenant.subdomain}.bikeshop-erp.app'),
+                Text('🏪 Tu tienda: $shopName'),
               ],
             ),
             backgroundColor: Colors.green,
@@ -230,11 +239,13 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al crear la cuenta: ${e.toString()}'),
+          const SnackBar(
+            content: Text(
+              'No pudimos crear la cuenta con estos datos. Inténtalo nuevamente.',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -269,23 +280,26 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       }
-    } on AuthException catch (e) {
+    } on AuthException {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error con Google: ${e.message}'),
+          const SnackBar(
+            content: Text(
+              'No pudimos iniciar sesión con Google. Inténtalo nuevamente.',
+            ),
             backgroundColor: Colors.red,
           ),
         );
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text('Error al iniciar sesión con Google: ${e.toString()}'),
+          const SnackBar(
+            content: Text(
+              'No pudimos iniciar sesión con Google. Inténtalo nuevamente.',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -302,13 +316,23 @@ class _LoginScreenState extends State<LoginScreen> {
     if (code.contains('email rate limit exceeded')) {
       return 'Has intentado demasiadas veces. Espera un momento e inténtalo nuevamente.';
     }
-    if (code.contains('email already registered')) {
-      return 'Ya existe una cuenta con este correo.';
-    }
     if (code.contains('password should be at least')) {
       return 'La contraseña debe cumplir los requisitos mínimos de seguridad.';
     }
-    return e.message;
+    return 'No pudimos completar la autenticación. Revisa los datos e inténtalo nuevamente.';
+  }
+
+  void _toggleAuthMode() {
+    FocusScope.of(context).unfocus();
+    _formKey.currentState?.reset();
+    setState(() {
+      _isRegisterMode = !_isRegisterMode;
+      _passwordController.clear();
+      _confirmPasswordController.clear();
+      if (!_isRegisterMode) {
+        _shopNameController.clear();
+      }
+    });
   }
 
   @override
@@ -353,60 +377,39 @@ class _LoginScreenState extends State<LoginScreen> {
                   // Shop Name Field (only in register mode)
                   if (_isRegisterMode) ...[
                     TextFormField(
+                      key: const ValueKey('signup-shop-name'),
                       controller: _shopNameController,
                       decoration: const InputDecoration(
                         labelText: 'Nombre de tu Tienda',
                         prefixIcon: Icon(Icons.store),
                         hintText: 'Ej: Vinabike',
-                        helperText:
-                            'Se usará para crear tu URL: nombre.bikeshop-erp.app',
+                        helperText: 'Se usará para preparar tu nueva tienda',
                       ),
-                      validator: (value) {
-                        if (!_isRegisterMode) return null;
-                        if (value == null || value.isEmpty) {
-                          return 'Por favor ingrese el nombre de su tienda';
-                        }
-                        if (value.length < 3) {
-                          return 'El nombre debe tener al menos 3 caracteres';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'Teléfono (Opcional)',
-                        prefixIcon: Icon(Icons.phone),
-                        hintText: 'Ej: +56912345678',
-                      ),
+                      validator: (value) => _isRegisterMode
+                          ? AuthInputValidation.validateShopName(value)
+                          : null,
                     ),
                     const SizedBox(height: 16),
                   ],
 
                   // Email Field
                   TextFormField(
+                    key: const ValueKey('auth-email'),
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
                       labelText: 'Correo Electrónico',
                       prefixIcon: Icon(Icons.email),
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Por favor ingrese su correo electrónico';
-                      }
-                      if (!value.contains('@')) {
-                        return 'Por favor ingrese un correo válido';
-                      }
-                      return null;
-                    },
+                    validator: AuthInputValidation.validateEmail,
                   ),
                   const SizedBox(height: 16),
 
                   // Password Field
                   TextFormField(
+                    key: ValueKey(
+                      _isRegisterMode ? 'signup-password' : 'login-password',
+                    ),
                     controller: _passwordController,
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
@@ -422,16 +425,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           setState(() => _obscurePassword = !_obscurePassword);
                         },
                       ),
+                      helperText: _isRegisterMode
+                          ? AuthInputValidation.strongPasswordHelper
+                          : null,
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Por favor ingrese su contraseña';
-                      }
-                      if (value.length < 6) {
-                        return 'La contraseña debe tener al menos 6 caracteres';
-                      }
-                      return null;
-                    },
+                    validator: (value) => AuthInputValidation.validatePassword(
+                      value,
+                      isNewPassword: _isRegisterMode,
+                    ),
                   ),
 
                   // Forgot Password Link (only in login mode)
@@ -454,24 +455,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   if (_isRegisterMode) ...[
                     TextFormField(
+                      key: const ValueKey('signup-password-confirmation'),
                       controller: _confirmPasswordController,
                       obscureText: _obscurePassword,
                       decoration: const InputDecoration(
                         labelText: 'Confirmar Contraseña',
                         prefixIcon: Icon(Icons.lock_outline),
                       ),
-                      validator: (value) {
-                        if (!_isRegisterMode) {
-                          return null;
-                        }
-                        if (value == null || value.isEmpty) {
-                          return 'Por favor confirme su contraseña';
-                        }
-                        if (value != _passwordController.text) {
-                          return 'Las contraseñas no coinciden';
-                        }
-                        return null;
-                      },
+                      validator: (value) => !_isRegisterMode
+                          ? null
+                          : AuthInputValidation.validatePasswordConfirmation(
+                              value,
+                              password: _passwordController.text,
+                            ),
                     ),
                     const SizedBox(height: 24),
                   ],
@@ -489,53 +485,51 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Divider
-                  Row(
-                    children: [
-                      const Expanded(child: Divider()),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'o continuar con',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 14,
+                  // OAuth is an access path for identities already assigned to
+                  // this ERP. New tenant owners must use the explicit signup
+                  // form so the server receives the required shop metadata.
+                  if (!_isRegisterMode) ...[
+                    Row(
+                      children: [
+                        const Expanded(child: Divider()),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            'o continuar con',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 14,
+                            ),
                           ),
                         ),
+                        const Expanded(child: Divider()),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      key: const ValueKey('existing-account-google-login'),
+                      onPressed: _isLoading ? null : _signInWithGoogle,
+                      icon: Image.network(
+                        'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+                        height: 20,
+                        width: 20,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(Icons.g_mobiledata, size: 20),
                       ),
-                      const Expanded(child: Divider()),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Google Sign-In Button
-                  OutlinedButton.icon(
-                    onPressed: _isLoading ? null : _signInWithGoogle,
-                    icon: Image.network(
-                      'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
-                      height: 20,
-                      width: 20,
-                      errorBuilder: (context, error, stackTrace) =>
-                          const Icon(Icons.g_mobiledata, size: 20),
+                      label:
+                          const Text('Ingresar con Google (cuenta existente)'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
                     ),
-                    label: const Text('Continuar con Google'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      minimumSize: const Size(double.infinity, 48),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 16),
+                  ],
 
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () {
-                              setState(() {
-                                _isRegisterMode = !_isRegisterMode;
-                              });
-                            },
+                      onPressed: _isLoading ? null : _toggleAuthMode,
                       child: Text(
                         _isRegisterMode
                             ? '¿Ya tienes cuenta? Inicia sesión'

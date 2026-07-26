@@ -1,4 +1,15 @@
-**Prompt for GitHub Copilot Chat Agent – Attendances Module Development (Odoo-like)**
+**Historical prompt — Attendances module**
+
+> [!WARNING]
+> **Historical business context; not UI authority.** This document may explain
+> original attendance behavior, data, and permissions. Every visual, layout,
+> navigation, component, color, spacing, modal/dialog/snackbar, responsive, and
+> platform recipe below is superseded by
+> [`GUI_DESIGN_PRINCIPLES.md`](GUI_DESIGN_PRINCIPLES.md) and
+> [`GUI_MOBILE_DESIGN_PRINCIPLES.md`](GUI_MOBILE_DESIGN_PRINCIPLES.md). Do not
+> imitate a reference product or screenshot. Inspect the current real hosts and
+> select inline, in-block, pane, popover, sheet, blocking surface, or full route
+> from task evidence; none is an automatic module-wide pattern.
 
 ### Project Context
 - **IDE:** Visual Studio Code  
@@ -27,7 +38,9 @@
 - Website Integration  
 
 ### Task Objective
-You need to **develop a new module: Attendances (Asistencias)** replicating the functionality and design logic of **Odoo's Attendances App**.
+The original objective was to develop **Attendances (Asistencias)** with the
+business capabilities listed below. Product composition and interaction must
+be designed for the current ERP rather than copied from another application.
 
 Before developing this module, the agent must ensure that the HR foundation is properly structured. This includes:
 - **Employees Section:** CRUD for employee data (name, position, ID, schedule, linked user, etc.).
@@ -39,7 +52,8 @@ If any of these sections are not created yet, the agent should create them first
 ---
 
 ### Module: Attendances (Asistencias)
-The module should mimic the main logic of **Odoo’s Attendances module**, as shown in the reference screenshots.
+The module needs the following attendance capabilities. References in the
+original prompt are behavioral context only.
 
 #### Core Features to Implement
 1. **Employee Time Tracking:**
@@ -52,9 +66,12 @@ The module should mimic the main logic of **Odoo’s Attendances module**, as sh
    - When they check out, the system calculates total worked hours.
 
 2. **View Modes:**
-   - **Day / Week / Month / Quarter / Year View** options (as shown in the screenshots).
-   - Data visualization similar to Odoo's grid table: rows = employees, columns = days, and cells = colored time blocks showing worked hours.
-   - Hover or click should show the exact timestamps.
+   - **Day / Week / Month / Quarter / Year View** period options, subject to
+     validation against the current operating workflow.
+   - Provide a period comparison that makes employee/day worked time legible.
+     The representation depends on the current task and viewport.
+   - Exact timestamps must be available through pointer, keyboard, and touch
+     paths; important information cannot depend on hover.
 
 3. **Filters and Grouping:**
    - Filters by date, employee, or department.
@@ -73,8 +90,10 @@ The module should mimic the main logic of **Odoo’s Attendances module**, as sh
    - If check_out is null, employee is currently clocked in.
 
 6. **Data Visualization:**
-   - Display attendance time blocks as colored cells or bars (similar to a Gantt-like chart but compact).
-   - Each cell shows total worked hours, with hover details showing check-in and check-out times.
+   - Display worked-time intervals and totals in a form suited to the selected
+     period and platform.
+   - State and duration must remain understandable without color alone, and
+     exact check-in/check-out times must be reachable without hover.
 
 7. **Permissions and Roles:**
    - Admins and HR managers can view all employee records.
@@ -84,7 +103,8 @@ The module should mimic the main logic of **Odoo’s Attendances module**, as sh
    - Important: The kiosk mode should behave as a separate sub-application.
    - When opened, it displays a full-screen list of all employees with their profile avatars and names.
    - Employees tap their name to check in/out.
-   - A pop-up confirms the action (e.g., “Su entrada ha sido registrada”).
+   - Give clear confirmation of the action through the shared feedback pattern
+     appropriate to its scope; a centered pop-up is not prescribed.
    - The mode should work in a touch-friendly layout.
 
    ⚠️ The kiosk mode will be addressed as the next subtask after the main Attendances module UI and backend are implemented.
@@ -92,13 +112,14 @@ The module should mimic the main logic of **Odoo’s Attendances module**, as sh
 ---
 
 ### UI/UX Requirements
-- Design must follow the same style as the current ERP (dark theme, clean, modern, responsive).
-- Layout and interaction inspired by Odoo’s Attendances module (as per provided screenshots).
+- Follow both canonical GUI guides linked in the warning above. The result must
+  be contemporary, professional, visually considered, and deliberately
+  composed for each supported viewport and input mode.
 - The data grid must dynamically update based on the selected time range.
-- Consider using Flutter widgets such as:
-  - `DataTable` or custom grid for weekly/monthly view.
-  - `DropdownButton`, `DateRangePicker`, and `SegmentedButton` for navigation.
-  - `AlertDialog` or `SnackBar` for action confirmations.
+- Choose the representation and interaction surface from the operating task.
+  Long comparisons may justify a grid; narrow or touch hosts may require a
+  dedicated composition. No Flutter widget or transient surface is mandatory
+  merely because it appeared in this historical prompt.
 
 ---
 
@@ -121,5 +142,7 @@ The module should mimic the main logic of **Odoo’s Attendances module**, as sh
 ---
 
 ### Goal for this Task
-> Build the Attendances module (Asistencias) fully integrated with HR, replicating Odoo’s functionality, layout, and logic. Ensure modularity so the kiosk mode can be implemented afterward as an extension of this system.
-
+> Build Attendances (Asistencias) fully integrated with HR, preserving the
+> required business behavior while following the current canonical UI and
+> platform guidance. Keep the architecture modular so kiosk mode can be added
+> as a distinct touch workflow.

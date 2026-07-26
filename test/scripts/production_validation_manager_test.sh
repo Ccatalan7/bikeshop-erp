@@ -94,6 +94,35 @@ if (production_validation_verify_acl_toc "$clean_toc") >/dev/null 2>&1; then
   fail "ACL guard accepted an archive without ACL entries"
 fi
 
+managed_post="$TEST_TMP/local-managed-post.sql"
+managed_post_early="$TEST_TMP/local-managed-post-early.sql"
+managed_post_late="$TEST_TMP/local-managed-post-late.sql"
+printf '%s\n' \
+  'CREATE INDEX users_email_idx ON auth.users USING btree (email);' \
+  '' \
+  'CREATE POLICY users_tenant_access ON auth.users USING ((EXISTS ( SELECT 1' \
+  '   FROM public.user_profiles profile' \
+  '  WHERE ((profile.user_id = auth.uid()) AND (profile.is_active IS TRUE)))));' \
+  '' \
+  'ALTER TABLE ONLY storage.objects' \
+  '    ADD CONSTRAINT objects_bucket_id_fkey FOREIGN KEY (bucket_id) REFERENCES storage.buckets(id);' \
+  >"$managed_post"
+production_validation_split_managed_post_data \
+  "$managed_post" \
+  "$managed_post_early" \
+  "$managed_post_late"
+grep -q 'CREATE INDEX users_email_idx' "$managed_post_early" ||
+  fail "managed post-data split lost an independent early statement"
+grep -q 'ADD CONSTRAINT objects_bucket_id_fkey' "$managed_post_early" ||
+  fail "managed post-data split lost a multiline early statement"
+if grep -q 'public\\.' "$managed_post_early"; then
+  fail "managed post-data split left a public-schema dependency in early SQL"
+fi
+grep -q 'CREATE POLICY users_tenant_access' "$managed_post_late" ||
+  fail "managed post-data split lost the deferred policy statement"
+grep -q 'FROM public.user_profiles profile' "$managed_post_late" ||
+  fail "managed post-data split detached the deferred policy body"
+
 stale_lock="$PRODUCTION_VALIDATION_LOCKS/stale"
 mkdir -p "$stale_lock"
 printf 'pid=999999\nhost=%s\n' "$(hostname)" >"$stale_lock/owner"

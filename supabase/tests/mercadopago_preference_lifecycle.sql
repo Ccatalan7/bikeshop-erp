@@ -60,10 +60,7 @@ insert into auth.users(
   '9e310000-0000-4000-8000-000000000099',
   'authenticated', 'authenticated', 'mp-preference@example.invalid', '', now(),
   '{}'::jsonb,
-  jsonb_build_object(
-    'account_type', 'staff',
-    'tenant_id', '9e310000-0000-4000-8000-000000000001'
-  ),
+  '{}'::jsonb,
   now(), now()
 );
 insert into public.user_profiles(user_id, tenant_id, role)

@@ -10,22 +10,53 @@ BUCKET="erp-mobile-releases"
 TENANT_ID="5443b130-cc28-45af-a420-cd500b288890"
 PACKAGE_NAME="com.vinabike.erp"
 EXPECTED_SIGNER_CERT_SHA256="7e651eb2989b22a9d9262f91f0657e3a512134ac7675715fed144273ad2a897c"
+MAX_ANDROID_VERSION_CODE=2100000000
 KEY_ALIAS="${VINABIKE_ANDROID_KEY_ALIAS:-vinabike-erp}"
 KEYSTORE_PATH="${VINABIKE_ANDROID_KEYSTORE_PATH:-${HOME}/Library/Application Support/Vinabike ERP/signing/android-release.jks}"
 KEYCHAIN_SIGNING_SERVICE="Vinabike ERP Android release keystore password"
 KEYCHAIN_SIGNING_ACCOUNT="com.vinabike.erp"
+LATEST_MANIFEST_PATH="${TENANT_ID}/android/latest.json"
 CHECK_ONLY=false
+PREPARE_VERSION=false
+CI_EXACT_SHA=''
+RELEASE_NOTES_JSON_PATH="${VINABIKE_ANDROID_RELEASE_NOTES_PATH:-}"
+RELEASE_EVIDENCE_PATH="${VINABIKE_ANDROID_RELEASE_EVIDENCE_PATH:-}"
 
-if [[ "${1:-}" == "--check" ]]; then
-  CHECK_ONLY=true
-elif [[ $# -gt 0 ]]; then
-  echo "Usage: $0 [--check]" >&2
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --check)
+      CHECK_ONLY=true
+      ;;
+    --prepare-version)
+      PREPARE_VERSION=true
+      CHECK_ONLY=true
+      ;;
+    --ci-exact-sha)
+      CI_EXACT_SHA="${2:?--ci-exact-sha requires a value}"
+      shift
+      ;;
+    *)
+      echo "Usage: $0 [--check | --prepare-version] [--ci-exact-sha <40-character-sha>]" >&2
+      exit 64
+      ;;
+  esac
+  shift
+done
+
+if [[ -n "$CI_EXACT_SHA" && "$PREPARE_VERSION" == true ]]; then
+  echo '--ci-exact-sha cannot be combined with local version preparation.' >&2
+  exit 64
+fi
+if [[ -n "$CI_EXACT_SHA" && "$CHECK_ONLY" == true ]]; then
+  echo '--ci-exact-sha is a protected publication mode, not a local preflight.' >&2
   exit 64
 fi
 
 cd "$PROJECT_ROOT"
 
-for required in awk base64 cat curl dd find git jq keytool security shasum sort stat tr; do
+for required in \
+  awk base64 cat chmod cp curl date dd dirname find git head jq keytool mktemp \
+  mv perl rm sed shasum sort stat tail tr; do
   if ! command -v "$required" >/dev/null 2>&1; then
     echo "$required is required." >&2
     exit 127
@@ -36,25 +67,92 @@ if command -v fvm >/dev/null 2>&1; then
   FLUTTER_COMMAND=(fvm flutter)
 elif [[ -x "${FLUTTER_BIN:-}" ]]; then
   FLUTTER_COMMAND=("$FLUTTER_BIN")
+elif [[ -n "$CI_EXACT_SHA" ]] && command -v flutter >/dev/null 2>&1; then
+  FLUTTER_COMMAND=(flutter)
 else
   echo "FVM or FLUTTER_BIN is required." >&2
   exit 127
 fi
 
-version_value="$(
-  sed -nE 's/^version:[[:space:]]*([^[:space:]]+).*$/\1/p' pubspec.yaml |
-    head -1
-)"
-if [[ ! "$version_value" =~ ^([^+]+)\+([0-9]+)$ ]]; then
-  echo "pubspec.yaml must contain version: <name>+<positive-code>." >&2
-  exit 65
+if [[ -n "$CI_EXACT_SHA" ]]; then
+  if [[ ! "$CI_EXACT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+    echo 'The CI source binding must be a full lowercase Git commit.' >&2
+    exit 64
+  fi
+  if [[ "$(git rev-parse HEAD)" != "$CI_EXACT_SHA" ]]; then
+    echo 'The checked-out source does not match the requested CI commit.' >&2
+    exit 73
+  fi
+  if [[ -n "${GITHUB_SHA:-}" && "$GITHUB_SHA" != "$CI_EXACT_SHA" ]]; then
+    echo 'The GitHub workflow source does not match the requested CI commit.' >&2
+    exit 73
+  fi
+  if [[ -n "$(git status --porcelain)" ]]; then
+    echo 'The protected Android publisher requires a clean exact-SHA checkout.' >&2
+    exit 73
+  fi
+  if [[
+    -z "${VINABIKE_ANDROID_KEYSTORE_PATH:-}" ||
+    -z "${VINABIKE_ANDROID_STORE_PASSWORD:-}" ||
+    -z "${VINABIKE_ANDROID_KEY_PASSWORD:-}" ||
+    -z "${VINABIKE_ANDROID_KEY_ALIAS:-}" ||
+    -z "${SUPABASE_RELEASE_SECRET:-}"
+  ]]; then
+    echo 'The protected Android publisher is missing a required Production secret.' >&2
+    exit 66
+  fi
 fi
-VERSION_NAME="${BASH_REMATCH[1]}"
-VERSION_CODE="${BASH_REMATCH[2]}"
-if (( VERSION_CODE <= 0 )); then
-  echo "Android version code must be positive." >&2
-  exit 65
-fi
+
+file_size_bytes() {
+  local file_path="$1"
+  local result
+
+  if result="$(stat -f '%z' "$file_path" 2>/dev/null)"; then
+    printf '%s' "$result"
+  else
+    stat -c '%s' "$file_path"
+  fi
+}
+
+read_pubspec_version() {
+  local version_value
+
+  version_value="$(
+    sed -nE 's/^version:[[:space:]]*([^[:space:]]+).*$/\1/p' pubspec.yaml |
+      head -1
+  )"
+  if [[ ! "$version_value" =~ ^([^+]+)\+([0-9]+)$ ]]; then
+    echo "pubspec.yaml must contain version: <name>+<positive-code>." >&2
+    exit 65
+  fi
+  VERSION_NAME="${BASH_REMATCH[1]}"
+  VERSION_CODE="${BASH_REMATCH[2]}"
+  if [[ ! "$VERSION_NAME" =~ ^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$ ]]; then
+    echo 'Android version name contains unsupported release-path characters.' >&2
+    exit 65
+  fi
+  if (( VERSION_CODE <= 0 || VERSION_CODE > MAX_ANDROID_VERSION_CODE )); then
+    echo "Android version code must be between 1 and ${MAX_ANDROID_VERSION_CODE}." >&2
+    exit 65
+  fi
+}
+
+write_pubspec_version_code() {
+  local next_code="$1"
+  local next_version="${VERSION_NAME}+${next_code}"
+
+  NEXT_ANDROID_VERSION="$next_version" \
+    perl -0pi -e \
+      's/^version:[ \t]*[^ \t\r\n]+.*$/version: $ENV{NEXT_ANDROID_VERSION}/m' \
+      pubspec.yaml
+  read_pubspec_version
+  if [[ "$VERSION_CODE" != "$next_code" ]]; then
+    echo 'Could not persist the next Android build code in pubspec.yaml.' >&2
+    exit 65
+  fi
+}
+
+read_pubspec_version
 
 resolve_signing_password() {
   local value="${VINABIKE_ANDROID_STORE_PASSWORD:-}"
@@ -62,10 +160,22 @@ resolve_signing_password() {
     printf '%s' "$value"
     return
   fi
+  if ! command -v security >/dev/null 2>&1; then
+    return 1
+  fi
   security find-generic-password \
     -s "$KEYCHAIN_SIGNING_SERVICE" \
     -a "$KEYCHAIN_SIGNING_ACCOUNT" \
     -w 2>/dev/null
+}
+
+resolve_signing_key_password() {
+  local value="${VINABIKE_ANDROID_KEY_PASSWORD:-}"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return
+  fi
+  resolve_signing_password
 }
 
 resolve_supabase_secret() {
@@ -74,20 +184,281 @@ resolve_supabase_secret() {
     printf '%s' "$value"
     return
   fi
+  value="${SUPABASE_RELEASE_SECRET:-}"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return
+  fi
+  if ! command -v security >/dev/null 2>&1; then
+    return 1
+  fi
   security find-generic-password \
     -s "Vinabike ERP Supabase secret key" \
     -a supabase \
     -w 2>/dev/null
 }
 
-SIGNING_PASSWORD="$(resolve_signing_password)"
-SUPABASE_RELEASE_SECRET="$(resolve_supabase_secret)"
+load_latest_android_release() {
+  local latest_json
+
+  if ! latest_json="$(
+    curl --fail --show-error --silent \
+      "${SUPABASE_URL}/storage/v1/object/authenticated/${BUCKET}/${LATEST_MANIFEST_PATH}" \
+      -H "apikey: ${SUPABASE_RELEASE_SECRET}" \
+      -H "Authorization: Bearer ${SUPABASE_RELEASE_SECRET}"
+  )"; then
+    echo 'Could not read the current private Android release manifest.' >&2
+    exit 69
+  fi
+  if ! jq -e \
+    '
+      .schema_version == 1
+      and (.version_name | type == "string" and length > 0)
+      and (.version_code | type == "number" and . > 0 and . <= 2100000000 and floor == .)
+      and (.commit | type == "string" and test("^[0-9a-f]{40}$"))
+    ' >/dev/null <<< "$latest_json"; then
+    echo 'The current private Android release manifest is invalid.' >&2
+    exit 69
+  fi
+
+  LATEST_ANDROID_RELEASE_JSON="$latest_json"
+  LATEST_ANDROID_VERSION_NAME="$(jq -r '.version_name' <<< "$latest_json")"
+  LATEST_ANDROID_VERSION_CODE="$(
+    jq -r '.version_code | floor' <<< "$latest_json"
+  )"
+  LATEST_ANDROID_COMMIT="$(jq -r '.commit' <<< "$latest_json")"
+}
+
+validate_complete_release_manifest() {
+  local manifest_json="$1"
+  local expected_commit="$2"
+
+  jq -e \
+    --arg tenant_id "$TENANT_ID" \
+    --arg package_name "$PACKAGE_NAME" \
+    --arg expected_commit "$expected_commit" \
+    '
+      (. | keys | sort) == [
+        "apk_object_path",
+        "apk_parts",
+        "commit",
+        "package_name",
+        "published_at",
+        "release_notes",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "version_code",
+        "version_name"
+      ]
+      and .schema_version == 1
+      and .package_name == $package_name
+      and (.version_name | type == "string" and length > 0 and length <= 64)
+      and (.version_code | type == "number" and . > 0 and . <= 2100000000 and floor == .)
+      and .commit == $expected_commit
+      and (
+        .apk_object_path
+        | type == "string"
+          and startswith($tenant_id + "/android/releases/")
+          and endswith(".apk")
+          and (contains("..") | not)
+          and (contains("\\") | not)
+      )
+      and (.sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+      and (.size_bytes | type == "number" and . > 0 and . <= 262144000 and floor == .)
+      and (.apk_parts | type == "array" and length > 0 and length <= 8)
+      and (
+        [
+          range(0; (.apk_parts | length)) as $index
+          | .apk_parts[$index] as $part
+          | (
+              ($part | keys | sort) == ["object_path", "sha256", "size_bytes"]
+              and $part.object_path
+                == (.apk_object_path + ".part" + ($index | tostring | ("000" + .)[-3:]))
+              and ($part.sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+              and (
+                $part.size_bytes
+                | type == "number"
+                  and . > 0
+                  and . <= 41943040
+                  and floor == .
+              )
+            )
+        ]
+        | all
+      )
+      and ([.apk_parts[].size_bytes] | add) == .size_bytes
+      and (.published_at | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T"))
+      and (
+        (.release_notes | keys | sort) == [
+          "from_commit",
+          "locale",
+          "modules",
+          "schema_version",
+          "source",
+          "summary",
+          "title",
+          "to_commit"
+        ]
+        and .release_notes.schema_version == 1
+        and .release_notes.locale == "es-CL"
+        and (.release_notes.source == "ai" or .release_notes.source == "fallback")
+        and (.release_notes.from_commit | type == "string" and test("^[0-9a-f]{40}$"))
+        and .release_notes.to_commit == $expected_commit
+        and (.release_notes.title | type == "string" and length > 0 and length <= 80)
+        and (.release_notes.summary | type == "string" and length > 0 and length <= 280)
+        and (.release_notes.modules | type == "array" and length > 0 and length <= 5)
+        and (
+          {
+            workshop: "Taller",
+            inventory: "Inventario",
+            sales: "Ventas y pagos",
+            purchases: "Compras",
+            hr: "Personal",
+            messaging: "Mensajes",
+            mail: "Correo",
+            website: "Sitio web",
+            storage: "Archivos",
+            accounting: "Contabilidad",
+            settings: "Configuración",
+            general: "General"
+          } as $labels
+          | .release_notes.modules
+          | all(
+              (. | keys | sort) == ["evidence_paths", "id", "items", "label"]
+              and ($labels[.id] // "") == .label
+              and (.items | type == "array" and length > 0 and length <= 3)
+              and (.items | all(type == "string" and length > 0 and length <= 160))
+              and (.evidence_paths | type == "array" and length <= 12)
+              and (
+                .evidence_paths
+                | all(type == "string" and length > 0 and length <= 512)
+              )
+            )
+        )
+      )
+    ' <<< "$manifest_json" >/dev/null
+}
+
+write_release_evidence() {
+  local manifest_json="$1"
+  local evidence_parent
+  local temporary_evidence
+
+  if [[ -z "$RELEASE_EVIDENCE_PATH" ]]; then
+    return
+  fi
+  evidence_parent="$(dirname "$RELEASE_EVIDENCE_PATH")"
+  [[ -d "$evidence_parent" ]] || {
+    echo 'The Android release evidence directory does not exist.' >&2
+    exit 70
+  }
+  temporary_evidence="${RELEASE_EVIDENCE_PATH}.tmp.$$"
+  printf '%s\n' "$manifest_json" > "$temporary_evidence"
+  chmod 600 "$temporary_evidence"
+  mv -f "$temporary_evidence" "$RELEASE_EVIDENCE_PATH"
+}
+
+prepare_ci_version() {
+  if [[
+    "$LATEST_ANDROID_COMMIT" == "$CI_EXACT_SHA" &&
+    "$LATEST_ANDROID_VERSION_NAME" == "$VERSION_NAME"
+  ]]; then
+    validate_complete_release_manifest \
+      "$LATEST_ANDROID_RELEASE_JSON" \
+      "$CI_EXACT_SHA"
+    write_release_evidence "$LATEST_ANDROID_RELEASE_JSON"
+    echo "Android ${LATEST_ANDROID_VERSION_NAME}+${LATEST_ANDROID_VERSION_CODE} is already published from commit $CI_EXACT_SHA."
+    exit 0
+  fi
+
+  if (( VERSION_CODE <= LATEST_ANDROID_VERSION_CODE )); then
+    if (( LATEST_ANDROID_VERSION_CODE >= MAX_ANDROID_VERSION_CODE )); then
+      echo 'The Android version-code range is exhausted.' >&2
+      exit 65
+    fi
+    VERSION_CODE=$((LATEST_ANDROID_VERSION_CODE + 1))
+  fi
+  echo "Protected Android release selected ${VERSION_NAME}+${VERSION_CODE}."
+}
+
+prepare_next_android_version() {
+  local current_head
+  local next_code
+
+  current_head="$(git rev-parse HEAD)"
+  if (( VERSION_CODE > LATEST_ANDROID_VERSION_CODE )); then
+    echo "Android build code ${VERSION_CODE} is ready (published: ${LATEST_ANDROID_VERSION_CODE})."
+    return
+  fi
+
+  if [[
+    "$VERSION_CODE" == "$LATEST_ANDROID_VERSION_CODE" &&
+    "$VERSION_NAME" == "$LATEST_ANDROID_VERSION_NAME" &&
+    "$current_head" == "$LATEST_ANDROID_COMMIT" &&
+    -z "$(git status --porcelain)"
+  ]]; then
+    echo "Android ${VERSION_NAME}+${VERSION_CODE} is already published from this clean commit."
+    return
+  fi
+
+  if (( LATEST_ANDROID_VERSION_CODE >= MAX_ANDROID_VERSION_CODE )); then
+    echo 'The Android version-code range is exhausted.' >&2
+    exit 65
+  fi
+  next_code=$((LATEST_ANDROID_VERSION_CODE + 1))
+  write_pubspec_version_code "$next_code"
+  printf 'Advanced Android build code to %s+%s for the shared ERP update.\n' \
+    "$VERSION_NAME" \
+    "$VERSION_CODE"
+}
+
+android_release_is_already_published() {
+  local release_commit="$1"
+
+  if [[ -n "$CI_EXACT_SHA" ]]; then
+    [[
+      "$VERSION_NAME" == "$LATEST_ANDROID_VERSION_NAME" &&
+      "$release_commit" == "$LATEST_ANDROID_COMMIT"
+    ]]
+    return
+  fi
+
+  [[
+    "$VERSION_CODE" == "$LATEST_ANDROID_VERSION_CODE" &&
+    "$VERSION_NAME" == "$LATEST_ANDROID_VERSION_NAME" &&
+    "$release_commit" == "$LATEST_ANDROID_COMMIT" &&
+    -z "$(git status --porcelain)"
+  ]]
+}
+
+assert_android_version_is_publishable() {
+  local release_commit="$1"
+
+  if android_release_is_already_published "$release_commit"; then
+    return 2
+  fi
+  if (( VERSION_CODE <= LATEST_ANDROID_VERSION_CODE )); then
+    echo "Android build code ${VERSION_CODE} is not newer than published code ${LATEST_ANDROID_VERSION_CODE}." >&2
+    echo "The next Android release requires build code $((LATEST_ANDROID_VERSION_CODE + 1))." >&2
+    return 1
+  fi
+  return 0
+}
+
+SIGNING_PASSWORD="$(resolve_signing_password || true)"
+SIGNING_KEY_PASSWORD="$(resolve_signing_key_password || true)"
+SUPABASE_RELEASE_SECRET="$(resolve_supabase_secret || true)"
 [[ -f "$KEYSTORE_PATH" && -n "$SIGNING_PASSWORD" ]] || {
   echo "Android release signing identity is not ready." >&2
   exit 66
 }
+[[ -n "$SIGNING_KEY_PASSWORD" ]] || {
+  echo "The Android release key password is unavailable." >&2
+  exit 66
+}
 [[ -n "$SUPABASE_RELEASE_SECRET" ]] || {
-  echo "The local Supabase maintenance credential is unavailable." >&2
+  echo "The Supabase release credential is unavailable." >&2
   exit 66
 }
 
@@ -121,26 +492,53 @@ VINABIKE_KEYSTORE_PASSWORD="$SIGNING_PASSWORD" \
     -storepass:env VINABIKE_KEYSTORE_PASSWORD \
     -alias "$KEY_ALIAS" >/dev/null
 
+load_latest_android_release
+
+if [[ -n "$CI_EXACT_SHA" ]]; then
+  prepare_ci_version
+fi
+
+if [[ "$PREPARE_VERSION" == true ]]; then
+  "${FLUTTER_COMMAND[@]}" pub get
+  read_pubspec_version
+  prepare_next_android_version
+  echo "Android shared-release preflight passed for ${VERSION_NAME}+${VERSION_CODE}."
+  exit 0
+fi
+
+release_commit="$(git rev-parse HEAD)"
+if [[ -z "$CI_EXACT_SHA" && "$CHECK_ONLY" == false && -n "$(git status --porcelain)" ]]; then
+  echo "Refusing to publish an Android release from an uncommitted worktree." >&2
+  exit 73
+fi
+
+version_status=0
+assert_android_version_is_publishable "$release_commit" || version_status=$?
+if (( version_status == 2 )); then
+  echo "Android ${VERSION_NAME}+${VERSION_CODE} is already published from commit $release_commit."
+  exit 0
+fi
+if (( version_status != 0 )); then
+  exit "$version_status"
+fi
+
 if [[ "$CHECK_ONLY" == true ]]; then
   echo "Android direct-release preflight passed for ${VERSION_NAME}+${VERSION_CODE}."
   exit 0
 fi
 
-if [[ -n "$(git status --porcelain)" ]]; then
-  echo "Refusing to publish an Android release from an uncommitted worktree." >&2
-  exit 73
-fi
-
-expected_confirmation="publish-${VERSION_NAME}+${VERSION_CODE}"
-if [[ "${VINABIKE_ANDROID_RELEASE_CONFIRM:-}" != "$expected_confirmation" ]]; then
-  echo "Set VINABIKE_ANDROID_RELEASE_CONFIRM=$expected_confirmation for this exact release." >&2
-  exit 64
+if [[ -z "$CI_EXACT_SHA" ]]; then
+  expected_confirmation="publish-${VERSION_NAME}+${VERSION_CODE}"
+  if [[ "${VINABIKE_ANDROID_RELEASE_CONFIRM:-}" != "$expected_confirmation" ]]; then
+    echo "Set VINABIKE_ANDROID_RELEASE_CONFIRM=$expected_confirmation for this exact release." >&2
+    exit 64
+  fi
 fi
 
 export VINABIKE_ANDROID_KEYSTORE_PATH="$KEYSTORE_PATH"
 export VINABIKE_ANDROID_STORE_PASSWORD="$SIGNING_PASSWORD"
 export VINABIKE_ANDROID_KEY_ALIAS="$KEY_ALIAS"
-export VINABIKE_ANDROID_KEY_PASSWORD="$SIGNING_PASSWORD"
+export VINABIKE_ANDROID_KEY_PASSWORD="$SIGNING_KEY_PASSWORD"
 
 "${FLUTTER_COMMAND[@]}" build apk \
   --release \
@@ -167,14 +565,91 @@ if [[ "$SIGNER_CERT_SHA256" != "$EXPECTED_SIGNER_CERT_SHA256" ]]; then
 fi
 
 APK_SHA256="$(shasum -a 256 "$APK_PATH" | awk '{print $1}')"
-APK_SIZE="$(stat -f '%z' "$APK_PATH")"
+APK_SIZE="$(file_size_bytes "$APK_PATH")"
+if (( APK_SIZE <= 0 || APK_SIZE > 262144000 )); then
+  echo 'The Android release APK is outside the supported size boundary.' >&2
+  exit 70
+fi
 PUBLISHED_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-GIT_COMMIT="$(git rev-parse HEAD)"
+GIT_COMMIT="$release_commit"
 APK_NAME="vinabike-erp-${VERSION_NAME}+${VERSION_CODE}-arm64-v8a.apk"
 APK_OBJECT_PATH="${TENANT_ID}/android/releases/${APK_NAME}"
 VERSIONED_MANIFEST_PATH="${TENANT_ID}/android/manifests/${VERSION_NAME}+${VERSION_CODE}.json"
-LATEST_MANIFEST_PATH="${TENANT_ID}/android/latest.json"
 RELEASE_NOTES="${VINABIKE_ANDROID_RELEASE_NOTES:-Piloto privado de Vinabike ERP para Android.}"
+RELEASE_NOTES_JSON=''
+
+if [[ -n "$RELEASE_NOTES_JSON_PATH" ]]; then
+  [[ -f "$RELEASE_NOTES_JSON_PATH" ]] || {
+    echo 'The prepared Android release notes are unavailable.' >&2
+    exit 65
+  }
+  if (( $(file_size_bytes "$RELEASE_NOTES_JSON_PATH") > 65536 )); then
+    echo 'The prepared Android release notes exceed the allowed size.' >&2
+    exit 65
+  fi
+  jq -e \
+    --arg head "$GIT_COMMIT" \
+    '
+      (. | keys | sort) == ["release_notes"]
+      and (.release_notes | keys | sort) == [
+        "from_commit",
+        "locale",
+        "modules",
+        "schema_version",
+        "source",
+        "summary",
+        "title",
+        "to_commit"
+      ]
+      and .release_notes.schema_version == 1
+      and .release_notes.locale == "es-CL"
+      and (.release_notes.source == "ai" or .release_notes.source == "fallback")
+      and (.release_notes.from_commit | type == "string" and test("^[0-9a-f]{40}$"))
+      and .release_notes.to_commit == $head
+      and (.release_notes.title | type == "string" and length > 0 and length <= 80)
+      and (.release_notes.summary | type == "string" and length > 0 and length <= 280)
+      and (.release_notes.modules | type == "array" and length > 0 and length <= 5)
+      and (
+        {
+          workshop: "Taller",
+          inventory: "Inventario",
+          sales: "Ventas y pagos",
+          purchases: "Compras",
+          hr: "Personal",
+          messaging: "Mensajes",
+          mail: "Correo",
+          website: "Sitio web",
+          storage: "Archivos",
+          accounting: "Contabilidad",
+          settings: "Configuración",
+          general: "General"
+        } as $labels
+        | .release_notes.modules
+        | all(
+            (. | keys | sort) == ["evidence_paths", "id", "items", "label"]
+            and ($labels[.id] // "") == .label
+            and (.items | type == "array" and length > 0 and length <= 3)
+            and (.items | all(type == "string" and length > 0 and length <= 160))
+            and (.evidence_paths | type == "array" and length <= 12)
+            and (
+              .evidence_paths
+              | all(type == "string" and length > 0 and length <= 512)
+            )
+          )
+      )
+    ' "$RELEASE_NOTES_JSON_PATH" >/dev/null || {
+      echo 'The prepared Android release notes are invalid.' >&2
+      exit 65
+    }
+  RELEASE_NOTES_JSON="$(
+    jq -c '.release_notes' "$RELEASE_NOTES_JSON_PATH"
+  )"
+elif [[ -n "$CI_EXACT_SHA" ]]; then
+  echo 'Protected Android publication requires exact-SHA structured release notes.' >&2
+  exit 65
+else
+  RELEASE_NOTES_JSON="$(jq -cn --arg release_notes "$RELEASE_NOTES" '$release_notes')"
+fi
 
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vinabike-android-release.XXXXXX")"
 trap 'rm -rf "$TEMP_DIR"' EXIT
@@ -196,7 +671,7 @@ while (( part_offset < APK_SIZE )); do
     bs="$APK_PART_BYTES" \
     skip="$part_index" \
     count=1 2>/dev/null
-  part_size="$(stat -f '%z' "$part_file")"
+  part_size="$(file_size_bytes "$part_file")"
   part_sha256="$(shasum -a 256 "$part_file" | awk '{print $1}')"
   APK_PARTS_JSON="$(
     jq \
@@ -224,7 +699,7 @@ jq -n \
   --argjson size_bytes "$APK_SIZE" \
   --argjson apk_parts "$APK_PARTS_JSON" \
   --arg published_at "$PUBLISHED_AT" \
-  --arg release_notes "$RELEASE_NOTES" \
+  --argjson release_notes "$RELEASE_NOTES_JSON" \
   --arg commit "$GIT_COMMIT" \
   '{
     schema_version: 1,
@@ -252,6 +727,63 @@ encode_storage_path() {
     encoded+="$(printf '%s' "$segment" | jq -sRr @uri)"
   done
   printf '%s' "$encoded"
+}
+
+download_private_object_if_present() {
+  local object_path="$1"
+  local destination="$2"
+  local encoded_path
+  local http_status
+
+  encoded_path="$(encode_storage_path "$object_path")"
+  http_status="$(
+    curl --show-error --silent \
+      --output "$destination" \
+      --write-out '%{http_code}' \
+      "${SUPABASE_URL}/storage/v1/object/authenticated/${BUCKET}/${encoded_path}" \
+      -H "apikey: ${SUPABASE_RELEASE_SECRET}" \
+      -H "Authorization: Bearer ${SUPABASE_RELEASE_SECRET}"
+  )"
+  case "$http_status" in
+    200)
+      return 0
+      ;;
+    404)
+      rm -f "$destination"
+      return 1
+      ;;
+    *)
+      rm -f "$destination"
+      echo "Could not inspect an existing Android release object (HTTP ${http_status})." >&2
+      return 2
+      ;;
+  esac
+}
+
+remote_object_matches_file() {
+  local object_path="$1"
+  local file_path="$2"
+  local remote_file="$TEMP_DIR/remote-object"
+  local download_status=0
+
+  download_private_object_if_present \
+    "$object_path" \
+    "$remote_file" || download_status=$?
+  if (( download_status == 1 )); then
+    return 1
+  fi
+  if (( download_status != 0 )); then
+    return "$download_status"
+  fi
+  if [[
+    "$(file_size_bytes "$remote_file")" != "$(file_size_bytes "$file_path")" ||
+    "$(shasum -a 256 "$remote_file" | awk '{print $1}')" != "$(shasum -a 256 "$file_path" | awk '{print $1}')"
+  ]]; then
+    echo 'An immutable Android release object already exists with different content.' >&2
+    return 2
+  fi
+  rm -f "$remote_file"
+  return 0
 }
 
 upload_object() {
@@ -305,7 +837,7 @@ upload_large_object() {
   local failures=0
   local chunk_size=6291456
 
-  file_size="$(stat -f '%z' "$file_path")"
+  file_size="$(file_size_bytes "$file_path")"
   if ! curl --fail-with-body --show-error --silent \
     --request POST \
     "${SUPABASE_STORAGE_URL}/storage/v1/upload/resumable" \
@@ -391,17 +923,105 @@ upload_large_object() {
   done
 }
 
+load_latest_android_release
+version_status=0
+assert_android_version_is_publishable "$GIT_COMMIT" || version_status=$?
+if (( version_status == 2 )); then
+  if [[ -n "$CI_EXACT_SHA" ]]; then
+    validate_complete_release_manifest \
+      "$LATEST_ANDROID_RELEASE_JSON" \
+      "$GIT_COMMIT"
+    write_release_evidence "$LATEST_ANDROID_RELEASE_JSON"
+  fi
+  echo "Android ${VERSION_NAME}+${VERSION_CODE} was published while this APK was building."
+  exit 0
+fi
+if (( version_status != 0 )); then
+  exit "$version_status"
+fi
+
 for part_array_index in "${!APK_PART_FILES[@]}"; do
-  upload_large_object \
+  existing_part_status=0
+  remote_object_matches_file \
     "${APK_PART_OBJECT_PATHS[$part_array_index]}" \
-    "${APK_PART_FILES[$part_array_index]}" \
-    "application/vnd.android.package-archive"
+    "${APK_PART_FILES[$part_array_index]}" || existing_part_status=$?
+  case "$existing_part_status" in
+    0)
+      printf 'Reusing verified Android APK part %d.\n' "$part_array_index"
+      ;;
+    1)
+      upload_large_object \
+        "${APK_PART_OBJECT_PATHS[$part_array_index]}" \
+        "${APK_PART_FILES[$part_array_index]}" \
+        "application/vnd.android.package-archive"
+      ;;
+    *)
+      exit "$existing_part_status"
+      ;;
+  esac
 done
-upload_object \
+
+existing_manifest_path="$TEMP_DIR/existing-versioned-manifest.json"
+existing_manifest_status=0
+download_private_object_if_present \
   "$VERSIONED_MANIFEST_PATH" \
-  "$MANIFEST_PATH" \
-  "application/json" \
-  "false"
+  "$existing_manifest_path" || existing_manifest_status=$?
+case "$existing_manifest_status" in
+  0)
+    jq -e \
+      --arg package_name "$PACKAGE_NAME" \
+      --arg version_name "$VERSION_NAME" \
+      --arg sha "$APK_SHA256" \
+      --argjson code "$VERSION_CODE" \
+      --arg commit "$GIT_COMMIT" \
+      --arg apk_object_path "$APK_OBJECT_PATH" \
+      --argjson size_bytes "$APK_SIZE" \
+      --argjson apk_parts "$APK_PARTS_JSON" \
+      '
+        .schema_version == 1
+        and .package_name == $package_name
+        and .version_name == $version_name
+        and .version_code == $code
+        and .commit == $commit
+        and .apk_object_path == $apk_object_path
+        and .sha256 == $sha
+        and .size_bytes == $size_bytes
+        and .apk_parts == $apk_parts
+        and (.published_at | type == "string" and length > 0)
+      ' "$existing_manifest_path" >/dev/null || {
+        echo 'The immutable Android version manifest already exists with different content.' >&2
+        exit 74
+      }
+    if [[ -n "$CI_EXACT_SHA" ]]; then
+      existing_manifest_json="$(cat "$existing_manifest_path")"
+      validate_complete_release_manifest \
+        "$existing_manifest_json" \
+        "$GIT_COMMIT"
+      RELEASE_NOTES_JSON="$(
+        jq -c '.release_notes' "$existing_manifest_path"
+      )"
+    elif ! jq -e \
+      --argjson release_notes "$RELEASE_NOTES_JSON" \
+      '.release_notes == $release_notes' \
+      "$existing_manifest_path" >/dev/null; then
+      echo 'The immutable Android version manifest has different release notes.' >&2
+      exit 74
+    fi
+    cp "$existing_manifest_path" "$MANIFEST_PATH"
+    echo 'Reusing the verified immutable Android version manifest.'
+    ;;
+  1)
+    upload_object \
+      "$VERSIONED_MANIFEST_PATH" \
+      "$MANIFEST_PATH" \
+      "application/json" \
+      "false"
+    ;;
+  *)
+    exit "$existing_manifest_status"
+    ;;
+esac
+
 upload_object \
   "$LATEST_MANIFEST_PATH" \
   "$MANIFEST_PATH" \
@@ -416,11 +1036,35 @@ curl --fail --show-error --silent \
   > "$TEMP_DIR/latest-readback.json"
 
 jq -e \
+  --arg package_name "$PACKAGE_NAME" \
+  --arg version_name "$VERSION_NAME" \
   --arg sha "$APK_SHA256" \
   --argjson code "$VERSION_CODE" \
-  '.sha256 == $sha and .version_code == $code' \
+  --arg commit "$GIT_COMMIT" \
+  --arg apk_object_path "$APK_OBJECT_PATH" \
+  --argjson size_bytes "$APK_SIZE" \
+  --argjson apk_parts "$APK_PARTS_JSON" \
+  --argjson release_notes "$RELEASE_NOTES_JSON" \
+  '
+    .schema_version == 1
+    and .package_name == $package_name
+    and .version_name == $version_name
+    and .version_code == $code
+    and .commit == $commit
+    and .apk_object_path == $apk_object_path
+    and .sha256 == $sha
+    and .size_bytes == $size_bytes
+    and .apk_parts == $apk_parts
+    and .release_notes == $release_notes
+  ' \
   "$TEMP_DIR/latest-readback.json" >/dev/null
 
-unset SIGNING_PASSWORD SUPABASE_RELEASE_SECRET
+LATEST_ANDROID_RELEASE_JSON="$(cat "$TEMP_DIR/latest-readback.json")"
+if [[ -n "$CI_EXACT_SHA" ]]; then
+  validate_complete_release_manifest "$LATEST_ANDROID_RELEASE_JSON" "$GIT_COMMIT"
+  write_release_evidence "$LATEST_ANDROID_RELEASE_JSON"
+fi
+
+unset SIGNING_PASSWORD SIGNING_KEY_PASSWORD SUPABASE_RELEASE_SECRET
 echo "Published Vinabike ERP Android ${VERSION_NAME}+${VERSION_CODE}."
 echo "Private page: https://vinabike.cl/cuenta/descargas/android"
