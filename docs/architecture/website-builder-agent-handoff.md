@@ -436,12 +436,21 @@ The first integrated collection slice is implemented in the current checkout:
   recursive visual-card browser projects each typed category destination to
   the same category-owned `WebsiteCatalogPresentation.mega_menu_image_url`:
   the branch owner uses it as the left overview and nested categories use it
-  as their card image. Hover or keyboard focus previews real children. For a
-  category that owns both products and child categories, the image drills the
-  right-hand card area with an explicit back control while the persistent
-  title row follows that category's existing typed destination; the drilled
-  view also exposes an explicit `Ver todo en …` action. Leaves remain one
-  unified typed destination. Missing images use placeholders.
+  as their card image. The same owner now also exposes the branch overview
+  width (`300–440` px) and the top/center/bottom placement of its text content;
+  legacy records retain `440` px and bottom placement. Each typed branch change
+  presents its slightly enlarged eyebrow, title, rule and explore action with
+  one smooth staggered fade/slide/scale entrance; reduced-motion preferences
+  skip the transition. Visual cards center a larger white category title over
+  their image. The image/title follows the category's typed destination, while
+  the separate always-blue
+  `Ver subcategorías` text-and-arrow hit target is the only hover/focus preview
+  trigger and the only drilldown control; blank space in its row is inert. A
+  category-owned card overlay can darken individual artwork without changing
+  the shared images or relying on renderer category names. The drilled view
+  exposes an explicit
+  `Ver todo en …` action. Leaves remain one unified typed destination. Missing
+  images use placeholders.
   The six direct **Transmisión** cards — Volantes, Piñones, Motores,
   Missinglink, Kits and Cadenas — now have authored media saved in that same
   canonical presentation registry; Volantes uses the corrected drive-side
@@ -545,7 +554,7 @@ taxonomy or category pages:
 |---|---|---|
 | Catalog management and inline product editing | Completed in the canonical product/category/featured owners; unlocked desktop management, rules, confirmation and inline editor passed | Responsive/mobile and save/reopen stress acceptance |
 | Root/category presentation and clean routes | Completed locally, including product/service slug aliases | Deliberate generated-redirect deployment smoke |
-| Mega menu and responsive navigation | Hover/click/keyboard/mobile behavior implemented from `website_navigation`; the existing editor-owned `Panel ancho` presentation control is active for `Componentes`. The desktop consumer is a full-width editorial panel, derives contrast from the configured header, measures the real rendered header bottom in standalone and ERP-hosted overlays, and uses recursive category cards with hover/focus child previews, separate parent-category and child-drill actions, drilldown/back, typed leaf destinations and editor-owned `mega_menu_image_url` media. All six direct Transmisión cards have authored category-owned media, including the corrected drive-side Volantes image. The first warm Ruedas batch is saved on the canonical category owners for Tubeless, Rodamientos and Rayos; the Rodamientos owner now uses the exact catalog UUID and a cache-safe v2 asset. Ruedas also owns its overview image: one detached rear MTB wheel with left-side text contrast. Unauthored deeper categories retain intentional placeholders | Mobile visual and screen-reader audit; review the first Ruedas batch, then author Nipples, Neumáticos and Mazas through the canonical presentation workspace |
+| Mega menu and responsive navigation | Hover/click/keyboard/mobile behavior implemented from `website_navigation`; the existing editor-owned `Panel ancho` presentation control is active for `Componentes`. The desktop consumer is a full-width editorial panel, derives contrast from the configured header, measures the real rendered header bottom in standalone and ERP-hosted overlays, and uses recursive category cards with a centered image title, an explicit always-blue subcategory preview/drill action, separate parent-category navigation, drilldown/back, typed leaf destinations and editor-owned `mega_menu_image_url` media, card/branch overlays, overview width and text placement. The saved Transmisión owner now requests a cropped version of its original photo with strong left-side contrast, a 330 px overview and vertically centered content; the current checkout consumes all four values, while publication of the new renderer remains a separate deliberate release action. All six direct Transmisión cards have authored category-owned media, including the corrected drive-side Volantes image; Volantes and Cadenas alone currently request the extra card darkening. The first warm Ruedas batch is saved on the canonical category owners for Tubeless, Rodamientos and Rayos; the Rodamientos owner now uses the exact catalog UUID and a cache-safe v2 asset. Ruedas also owns its overview image: one detached rear MTB wheel with left-side text contrast. Unauthored deeper categories retain intentional placeholders | Mobile visual and screen-reader audit; review the first Ruedas batch, then author Nipples, Neumáticos and Mazas through the canonical presentation workspace |
 | Theme projection | Catalog, detail, cart and checkout consume the saved theme projection | Real breakpoint/contrast audit and lower-frequency public pages |
 | Catalog facets | Ordered controls, URL state and one-scan wrappers deployed and registered as `20260722200000`; 52/52 pgTAP, benchmark, rollback probe, two reviews and live hash/ACL/result read-back passed. Management now batches the canonical availability RPC, removing the `544` versus `547` set-product undercount | Combined brand/price/history and responsive smoke |
 | SEO snapshots/indexation | Editor-owned values, restrictive runtime robots/canonical, category/product snapshots, sitemap and alias redirect generation implemented locally | Semantic collection structured data plus deployed/browser proof |

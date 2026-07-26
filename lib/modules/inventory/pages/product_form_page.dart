@@ -32,6 +32,7 @@ import '../services/brand_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
 import '../services/product_image_fingerprint_service.dart';
 import '../widgets/set_configuration_widget.dart';
+import '../widgets/product_sku_field_row.dart';
 import '../utils/product_spec_inference_utils.dart';
 import '../../../shared/services/barcode_scanner_service.dart';
 import '../services/spec_engine_service.dart';
@@ -7958,40 +7959,20 @@ class _ProductFormPageState extends State<ProductFormPage>
     String? helperText,
     required String buttonLabel,
   }) {
-    return Row(
-      children: [
-        Expanded(
-          flex: 3,
-          child: TextFormField(
-            controller: _skuController,
-            decoration: InputDecoration(
-              labelText: labelText,
-              hintText: hintText,
-              helperText: helperText,
-            ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'El SKU es requerido';
-              }
-              return null;
-            },
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: _isGeneratingSku ? null : () => _generateSku(),
-            icon: _isGeneratingSku
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.auto_fix_high_outlined),
-            label: Text(buttonLabel),
-          ),
-        ),
-      ],
+    return ProductSkuFieldRow(
+      controller: _skuController,
+      labelText: labelText,
+      hintText: hintText,
+      helperText: helperText,
+      buttonLabel: buttonLabel,
+      isGenerating: _isGeneratingSku,
+      onGenerate: _generateSku,
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return 'El SKU es requerido';
+        }
+        return null;
+      },
     );
   }
 

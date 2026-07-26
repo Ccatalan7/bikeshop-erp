@@ -347,304 +347,344 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
     final isEditing = widget.taskToEdit != null;
 
     return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 540, maxHeight: 700),
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isCompact = constraints.maxWidth < 420;
+            return Padding(
+              padding: EdgeInsets.all(isCompact ? 16 : 24),
+              child: Form(
+                key: _formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Icon(
-                        isEditing ? Icons.edit_note : Icons.add_task,
-                        color: Theme.of(context).colorScheme.primary,
+                      Row(
+                        children: [
+                          Icon(
+                            isEditing ? Icons.edit_note : Icons.add_task,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              isEditing ? 'Editar Tarea' : 'Nueva Tarea',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        isEditing ? 'Editar Tarea' : 'Nueva Tarea',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                  // Context Badges and Linking Area
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Wrap(
-                          spacing: 8,
-                          children: [
-                            if (_linkedJobNumber != null)
-                              Chip(
-                                avatar: const Icon(Icons.build, size: 16),
-                                label: Text('Trabajo #$_linkedJobNumber'),
-                                backgroundColor:
-                                    Colors.blue.withValues(alpha: 0.1),
-                                deleteIcon: const Icon(Icons.close, size: 16),
-                                onDeleted: () => setState(() {
-                                  _linkedJobId = null;
-                                  _linkedJobNumber = null;
-                                  _linkedCustomerName = null;
-                                }),
-                              ),
-                            if (_linkedPurchaseInvoiceNumber != null)
-                              Chip(
-                                avatar: const Icon(Icons.receipt, size: 16),
-                                label: Text(
-                                    'Compra #$_linkedPurchaseInvoiceNumber'),
-                                backgroundColor:
-                                    Colors.orange.withValues(alpha: 0.1),
-                                deleteIcon: const Icon(Icons.close, size: 16),
-                                onDeleted: () => setState(() {
-                                  _linkedPurchaseInvoiceId = null;
-                                  _linkedPurchaseInvoiceNumber = null;
-                                  _linkedSupplierName = null;
-                                }),
-                              ),
-                            if (_linkedSalesInvoiceNumber != null)
-                              Chip(
-                                avatar:
-                                    const Icon(Icons.point_of_sale, size: 16),
-                                label:
-                                    Text('Venta #$_linkedSalesInvoiceNumber'),
-                                backgroundColor:
-                                    Colors.green.withValues(alpha: 0.1),
-                                deleteIcon: const Icon(Icons.close, size: 16),
-                                onDeleted: () => setState(() {
-                                  _linkedSalesInvoiceId = null;
-                                  _linkedSalesInvoiceNumber = null;
-                                  _linkedCustomerName = null;
-                                }),
-                              ),
-                          ],
+                      // Context Badges and Linking Area
+                      _buildLinkingArea(isCompact: isCompact),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: _titleController,
+                        decoration: const InputDecoration(
+                          labelText: 'Título de la tarea',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (v) => v!.isEmpty ? 'Requerido' : null,
+                        autofocus: true,
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: _descriptionController,
+                        decoration: const InputDecoration(
+                          labelText: 'Descripción (Opcional)',
+                          border: OutlineInputBorder(),
+                          alignLabelWithHint: true,
+                        ),
+                        maxLines: 3,
+                      ),
+                      const SizedBox(height: 16),
+
+                      _buildPriorityAndStatusFields(isCompact: isCompact),
+                      const SizedBox(height: 16),
+
+                      InkWell(
+                        onTap: _selectDueDate,
+                        borderRadius: BorderRadius.circular(4),
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Fecha de Vencimiento',
+                            border: const OutlineInputBorder(),
+                            suffixIcon: _dueDate != null
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, size: 20),
+                                    onPressed: () =>
+                                        setState(() => _dueDate = null),
+                                  )
+                                : const Icon(Icons.calendar_today),
+                          ),
+                          child: Text(
+                            _dueDate != null
+                                ? DateFormat('dd/MM/yyyy').format(_dueDate!)
+                                : 'Sin fecha de vencimiento',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ),
-                      TextButton.icon(
-                        icon: const Icon(Icons.link, size: 18),
-                        label: const Text('Vincular...'),
-                        onPressed: () async {
-                          final result = await showDialog<TaskLinkResult>(
-                            context: context,
-                            builder: (context) => const TaskLinkDialog(),
-                          );
+                      const SizedBox(height: 16),
 
-                          if (result != null && mounted) {
+                      if (_isLoadingUsers)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      else
+                        DropdownButtonFormField<String?>(
+                          isExpanded: true,
+                          initialValue:
+                              _users.any((u) => u['id'] == _assignedToId)
+                                  ? _assignedToId
+                                  : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Asignar a',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            const DropdownMenuItem(
+                              value: null,
+                              child: Text('Sin asignar'),
+                            ),
+                            ..._users.map((user) {
+                              final name = user['full_name'] as String? ??
+                                  user['email'] as String? ??
+                                  'Usuario Desconocido';
+                              return DropdownMenuItem<String>(
+                                value: user['id'] as String,
+                                child: Text(name),
+                              );
+                            }),
+                          ],
+                          onChanged: (val) {
                             setState(() {
-                              if (result.type == 'job') {
-                                _linkedJobId = result.id;
-                                _linkedJobNumber = result.displayId;
-                                _linkedCustomerName = result.displayName;
-                              } else if (result.type == 'sales_invoice') {
-                                _linkedSalesInvoiceId = result.id;
-                                _linkedSalesInvoiceNumber = result.displayId;
-                                _linkedCustomerName = result.displayName;
-                              } else if (result.type == 'purchase_invoice') {
-                                _linkedPurchaseInvoiceId = result.id;
-                                _linkedPurchaseInvoiceNumber = result.displayId;
-                                _linkedSupplierName = result.displayName;
+                              _assignedToId = val;
+                              if (val != null) {
+                                final selectedUser =
+                                    _users.firstWhere((u) => u['id'] == val);
+                                _assigneeName =
+                                    selectedUser['full_name'] as String? ??
+                                        selectedUser['email'] as String?;
+                              } else {
+                                _assigneeName = null;
                               }
                             });
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: _titleController,
-                    decoration: const InputDecoration(
-                      labelText: 'Título de la tarea',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) => v!.isEmpty ? 'Requerido' : null,
-                    autofocus: true,
-                  ),
-                  const SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: _descriptionController,
-                    decoration: const InputDecoration(
-                      labelText: 'Descripción (Opcional)',
-                      border: OutlineInputBorder(),
-                      alignLabelWithHint: true,
-                    ),
-                    maxLines: 3,
-                  ),
-                  const SizedBox(height: 16),
-
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<TaskPriority>(
-                          initialValue: _selectedPriority,
-                          decoration: const InputDecoration(
-                            labelText: 'Prioridad',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                                value: TaskPriority.low, child: Text('Baja')),
-                            DropdownMenuItem(
-                                value: TaskPriority.normal,
-                                child: Text('Normal')),
-                            DropdownMenuItem(
-                                value: TaskPriority.high, child: Text('Alta')),
-                            DropdownMenuItem(
-                                value: TaskPriority.urgent,
-                                child: Text('Urgente')),
-                          ],
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _selectedPriority = val);
-                            }
                           },
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: DropdownButtonFormField<TaskStatus>(
-                          initialValue: _selectedStatus,
-                          decoration: const InputDecoration(
-                            labelText: 'Estado',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                                value: TaskStatus.pending,
-                                child: Text('Pendiente')),
-                            DropdownMenuItem(
-                                value: TaskStatus.inProgress,
-                                child: Text('En Curso')),
-                            DropdownMenuItem(
-                                value: TaskStatus.completed,
-                                child: Text('Completada')),
-                            DropdownMenuItem(
-                                value: TaskStatus.cancelled,
-                                child: Text('Cancelada')),
+
+                      const SizedBox(height: 20),
+
+                      // ── Attachments section ──
+                      _buildAttachmentsSection(isCompact: isCompact),
+
+                      const SizedBox(height: 24),
+
+                      if (isCompact)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            FilledButton(
+                              onPressed: _save,
+                              child: Text(isEditing ? 'Actualizar' : 'Guardar'),
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('Cancelar'),
+                            ),
                           ],
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _selectedStatus = val);
-                            }
-                          },
+                        )
+                      else
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('Cancelar'),
+                            ),
+                            const SizedBox(width: 16),
+                            FilledButton(
+                              onPressed: _save,
+                              child: Text(isEditing ? 'Actualizar' : 'Guardar'),
+                            ),
+                          ],
                         ),
-                      ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-
-                  InkWell(
-                    onTap: _selectDueDate,
-                    borderRadius: BorderRadius.circular(4),
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Fecha de Vencimiento',
-                        border: const OutlineInputBorder(),
-                        suffixIcon: _dueDate != null
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, size: 20),
-                                onPressed: () =>
-                                    setState(() => _dueDate = null),
-                              )
-                            : const Icon(Icons.calendar_today),
-                      ),
-                      child: Text(
-                        _dueDate != null
-                            ? DateFormat('dd/MM/yyyy').format(_dueDate!)
-                            : 'Sin fecha de vencimiento',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  if (_isLoadingUsers)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: CircularProgressIndicator(),
-                      ),
-                    )
-                  else
-                    DropdownButtonFormField<String?>(
-                      initialValue: _users.any((u) => u['id'] == _assignedToId)
-                          ? _assignedToId
-                          : null,
-                      decoration: const InputDecoration(
-                        labelText: 'Asignar a',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        const DropdownMenuItem(
-                          value: null,
-                          child: Text('Sin asignar'),
-                        ),
-                        ..._users.map((user) {
-                          final name = user['full_name'] as String? ??
-                              user['email'] as String? ??
-                              'Usuario Desconocido';
-                          return DropdownMenuItem<String>(
-                            value: user['id'] as String,
-                            child: Text(name),
-                          );
-                        }),
-                      ],
-                      onChanged: (val) {
-                        setState(() {
-                          _assignedToId = val;
-                          if (val != null) {
-                            final selectedUser =
-                                _users.firstWhere((u) => u['id'] == val);
-                            _assigneeName =
-                                selectedUser['full_name'] as String? ??
-                                    selectedUser['email'] as String?;
-                          } else {
-                            _assigneeName = null;
-                          }
-                        });
-                      },
-                    ),
-
-                  const SizedBox(height: 20),
-
-                  // ── Attachments section ──
-                  _buildAttachmentsSection(),
-
-                  const SizedBox(height: 24),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Cancelar'),
-                      ),
-                      const SizedBox(width: 16),
-                      FilledButton(
-                        onPressed: _save,
-                        child: Text(isEditing ? 'Actualizar' : 'Guardar'),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
+    );
+  }
+
+  Widget _buildLinkingArea({required bool isCompact}) {
+    final links = Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      children: [
+        if (_linkedJobNumber != null)
+          Chip(
+            avatar: const Icon(Icons.build, size: 16),
+            label: Text('Trabajo #$_linkedJobNumber'),
+            backgroundColor: Colors.blue.withValues(alpha: 0.1),
+            deleteIcon: const Icon(Icons.close, size: 16),
+            onDeleted: () => setState(() {
+              _linkedJobId = null;
+              _linkedJobNumber = null;
+              _linkedCustomerName = null;
+            }),
+          ),
+        if (_linkedPurchaseInvoiceNumber != null)
+          Chip(
+            avatar: const Icon(Icons.receipt, size: 16),
+            label: Text('Compra #$_linkedPurchaseInvoiceNumber'),
+            backgroundColor: Colors.orange.withValues(alpha: 0.1),
+            deleteIcon: const Icon(Icons.close, size: 16),
+            onDeleted: () => setState(() {
+              _linkedPurchaseInvoiceId = null;
+              _linkedPurchaseInvoiceNumber = null;
+              _linkedSupplierName = null;
+            }),
+          ),
+        if (_linkedSalesInvoiceNumber != null)
+          Chip(
+            avatar: const Icon(Icons.point_of_sale, size: 16),
+            label: Text('Venta #$_linkedSalesInvoiceNumber'),
+            backgroundColor: Colors.green.withValues(alpha: 0.1),
+            deleteIcon: const Icon(Icons.close, size: 16),
+            onDeleted: () => setState(() {
+              _linkedSalesInvoiceId = null;
+              _linkedSalesInvoiceNumber = null;
+              _linkedCustomerName = null;
+            }),
+          ),
+      ],
+    );
+    final linkButton = TextButton.icon(
+      icon: const Icon(Icons.link, size: 18),
+      label: const Text('Vincular...'),
+      onPressed: _openTaskLinkDialog,
+    );
+
+    if (isCompact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          links,
+          Align(alignment: Alignment.centerLeft, child: linkButton),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(child: links),
+        linkButton,
+      ],
+    );
+  }
+
+  Future<void> _openTaskLinkDialog() async {
+    final result = await showDialog<TaskLinkResult>(
+      context: context,
+      builder: (context) => const TaskLinkDialog(),
+    );
+
+    if (result == null || !mounted) return;
+    setState(() {
+      if (result.type == 'job') {
+        _linkedJobId = result.id;
+        _linkedJobNumber = result.displayId;
+        _linkedCustomerName = result.displayName;
+      } else if (result.type == 'sales_invoice') {
+        _linkedSalesInvoiceId = result.id;
+        _linkedSalesInvoiceNumber = result.displayId;
+        _linkedCustomerName = result.displayName;
+      } else if (result.type == 'purchase_invoice') {
+        _linkedPurchaseInvoiceId = result.id;
+        _linkedPurchaseInvoiceNumber = result.displayId;
+        _linkedSupplierName = result.displayName;
+      }
+    });
+  }
+
+  Widget _buildPriorityAndStatusFields({required bool isCompact}) {
+    final priorityField = DropdownButtonFormField<TaskPriority>(
+      key: const ValueKey('task-form-priority'),
+      isExpanded: true,
+      initialValue: _selectedPriority,
+      decoration: const InputDecoration(
+        labelText: 'Prioridad',
+        border: OutlineInputBorder(),
+      ),
+      items: const [
+        DropdownMenuItem(value: TaskPriority.low, child: Text('Baja')),
+        DropdownMenuItem(value: TaskPriority.normal, child: Text('Normal')),
+        DropdownMenuItem(value: TaskPriority.high, child: Text('Alta')),
+        DropdownMenuItem(value: TaskPriority.urgent, child: Text('Urgente')),
+      ],
+      onChanged: (value) {
+        if (value != null) setState(() => _selectedPriority = value);
+      },
+    );
+    final statusField = DropdownButtonFormField<TaskStatus>(
+      key: const ValueKey('task-form-status'),
+      isExpanded: true,
+      initialValue: _selectedStatus,
+      decoration: const InputDecoration(
+        labelText: 'Estado',
+        border: OutlineInputBorder(),
+      ),
+      items: const [
+        DropdownMenuItem(value: TaskStatus.pending, child: Text('Pendiente')),
+        DropdownMenuItem(value: TaskStatus.inProgress, child: Text('En Curso')),
+        DropdownMenuItem(
+            value: TaskStatus.completed, child: Text('Completada')),
+        DropdownMenuItem(value: TaskStatus.cancelled, child: Text('Cancelada')),
+      ],
+      onChanged: (value) {
+        if (value != null) setState(() => _selectedStatus = value);
+      },
+    );
+
+    if (isCompact) {
+      return Column(
+        children: [
+          priorityField,
+          const SizedBox(height: 12),
+          statusField,
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: priorityField),
+        const SizedBox(width: 16),
+        Expanded(child: statusField),
+      ],
     );
   }
 
@@ -652,38 +692,54 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
   // ATTACHMENTS UI
   // ══════════════════════════════════════════════════════════════════
 
-  Widget _buildAttachmentsSection() {
+  Widget _buildAttachmentsSection({required bool isCompact}) {
     final totalCount = _existingAttachments.length + _pendingAttachments.length;
     final theme = Theme.of(context);
+    final title = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.attach_file, size: 18, color: theme.colorScheme.primary),
+        const SizedBox(width: 6),
+        Text(
+          'Adjuntos${totalCount > 0 ? ' ($totalCount)' : ''}',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+      ],
+    );
+    final addButton = OutlinedButton.icon(
+      onPressed: _pickFiles,
+      icon: const Icon(Icons.upload_file, size: 16),
+      label: const Text('Agregar archivo'),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        textStyle: const TextStyle(fontSize: 12),
+      ),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Icon(Icons.attach_file, size: 18, color: theme.colorScheme.primary),
-            const SizedBox(width: 6),
-            Text(
-              'Adjuntos${totalCount > 0 ? ' ($totalCount)' : ''}',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
-            const Spacer(),
-            OutlinedButton.icon(
-              onPressed: _pickFiles,
-              icon: const Icon(Icons.upload_file, size: 16),
-              label: const Text('Agregar archivo'),
-              style: OutlinedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                textStyle: const TextStyle(fontSize: 12),
-              ),
-            ),
-          ],
-        ),
+        if (isCompact)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              title,
+              const SizedBox(height: 8),
+              addButton,
+            ],
+          )
+        else
+          Row(
+            children: [
+              title,
+              const Spacer(),
+              addButton,
+            ],
+          ),
         const SizedBox(height: 8),
         if (totalCount == 0)
           Container(

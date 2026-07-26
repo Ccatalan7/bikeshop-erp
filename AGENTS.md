@@ -1,7 +1,11 @@
 # Codex Agent Instructions (Repo-Wide)
 
 - Before making changes, read `.github/copilot-instructions.md` and follow it.
-- For UI/frontend work, read `.github/GUI_DESIGN_PRINCIPLES.md` first and follow it.
+- For any UI/frontend work, read `.github/GUI_DESIGN_PRINCIPLES.md` first and
+  follow it.
+- For mobile, tablet, compact, adaptive, or responsive UI work, read and follow
+  both `.github/GUI_DESIGN_PRINCIPLES.md` and
+  `.github/GUI_MOBILE_DESIGN_PRINCIPLES.md`.
 - For business-workflow UI changes, read
   `docs/architecture/canonical-ui-surfaces.md`, update its registry when a
   surface changes, and verify the shared action on every registered routed,

@@ -76,6 +76,7 @@ import 'modules/spreadsheets/services/spreadsheet_service.dart';
 import 'modules/ai_assistant/services/ai_assistant_context_service.dart';
 import 'shared/services/window_zoom_service.dart';
 import 'shared/services/right_toolbar_service.dart';
+import 'shared/utils/responsive_viewport.dart';
 import 'shared/services/ocr_file_handoff_service.dart';
 import 'shared/services/smart_screenshot_service.dart';
 import 'shared/services/desktop_update_service.dart';
@@ -762,23 +763,35 @@ class VinabikeApp extends StatelessWidget {
                     );
                   }
 
-                  // Scaffold and tab bar are stable - only IndexedStack rebuilds with workspace changes
+                  // Desktop keeps the multitasking tab strip. Compact surfaces
+                  // retain the same workspace stack but recover that vertical
+                  // space and expose extra workspaces from the main drawer.
                   return Scaffold(
                     body: Stack(
                       children: [
                         SafeArea(
                           bottom:
                               false, // Only add top padding for iOS status bar
-                          child: Column(
-                            children: [
-                              // Tab bar has its own internal Consumer, stable during rebuilds
-                              const WorkspaceTabBar(),
-                              Expanded(
-                                child: _WorkspaceShell(
-                                  authService: authService,
-                                ),
-                              ),
-                            ],
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final compact =
+                                  ResponsiveViewport.usesCompactShell(context);
+                              return Column(
+                                children: [
+                                  compact
+                                      ? const SizedBox.shrink()
+                                      : const WorkspaceTabBar(),
+                                  Expanded(
+                                    child: _WorkspaceShell(
+                                      key: const ValueKey(
+                                        'authenticated-workspace-shell',
+                                      ),
+                                      authService: authService,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                         ),
                         const QueryPerformanceGauge(),
@@ -1576,7 +1589,7 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
 }
 
 class _WorkspaceShell extends StatefulWidget {
-  const _WorkspaceShell({required this.authService});
+  const _WorkspaceShell({super.key, required this.authService});
 
   final AuthService authService;
 
@@ -1586,9 +1599,13 @@ class _WorkspaceShell extends StatefulWidget {
 
 class _WorkspaceShellState extends State<_WorkspaceShell> {
   final _toolbarKey = GlobalKey();
+  final _workspaceStackKey = GlobalKey(
+    debugLabel: 'authenticated-workspace-stack',
+  );
 
   Widget _buildWorkspaceStack() {
     return Selector<WorkspaceManager, (int, String)>(
+      key: _workspaceStackKey,
       selector: (_, workspaceManager) => (
         workspaceManager.activeStackIndex,
         workspaceManager.workspaceStackSignature,
@@ -1618,35 +1635,61 @@ class _WorkspaceShellState extends State<_WorkspaceShell> {
   @override
   Widget build(BuildContext context) {
     final appearanceService = context.watch<AppearanceService>();
-    final toolbar = RightToolbar(key: _toolbarKey);
+    final activeTool = context.watch<RightToolbarService>().activeTool;
 
-    if (!appearanceService.rightToolbarOverContent) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: _buildWorkspaceStack()),
-          toolbar,
-        ],
-      );
-    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = ResponsiveViewport.usesCompactShell(context);
+        final toolbar = compact
+            ? RightToolbar.compactWorkspace(key: _toolbarKey)
+            : RightToolbar(key: _toolbarKey);
 
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: Padding(
-            padding: const EdgeInsets.only(
-              right: RightToolbar.collapsedWidth,
+        if (compact) {
+          final hasCompactTool =
+              activeTool != null && activeTool != ToolbarTool.newJob;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              _buildWorkspaceStack(),
+              Positioned.fill(
+                child: Offstage(
+                  offstage: !hasCompactTool,
+                  child: toolbar,
+                ),
+              ),
+            ],
+          );
+        }
+
+        if (!appearanceService.rightToolbarOverContent) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _buildWorkspaceStack()),
+              toolbar,
+            ],
+          );
+        }
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  right: RightToolbar.collapsedWidth,
+                ),
+                child: _buildWorkspaceStack(),
+              ),
             ),
-            child: _buildWorkspaceStack(),
-          ),
-        ),
-        Positioned(
-          top: 0,
-          right: 0,
-          bottom: 0,
-          child: toolbar,
-        ),
-      ],
+            Positioned(
+              top: 0,
+              right: 0,
+              bottom: 0,
+              child: toolbar,
+            ),
+          ],
+        );
+      },
     );
   }
 }

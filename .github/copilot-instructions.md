@@ -370,6 +370,20 @@ For UI/UX work:
 - Avoid macOS-only assumptions in shared business logic, services, database flows, Supabase integrations, route handling, auth/OAuth, notifications, email/messaging, inventory/accounting logic, and data sync.
 - Native platform code may diverge when necessary, but shared domain behavior must remain consistent across platforms.
 
+## Mandatory UI guides
+
+For every UI change, read and follow
+`.github/GUI_DESIGN_PRINCIPLES.md`. For mobile, tablet, compact, adaptive, or
+responsive work, also read and follow
+`.github/GUI_MOBILE_DESIGN_PRINCIPLES.md`.
+
+macOS desktop remains the operational priority. Phone and tablet remain
+first-class and require dedicated compositions; neither a shrunken desktop
+table nor a stretched phone card layout is responsive design. All variants
+reuse the same business rules, commands, permissions, and persistent effects.
+The two GUI guides own the detailed visual, touch, breakpoint, navigation,
+accessibility, and verification recipes; do not duplicate them here.
+
 ## Verification Expectations
 
 When a task changes UI, UX, integrations, build behavior, routing, auth, notifications, messaging, files, printing/PDFs, scanning, or platform-specific plugins:
@@ -378,6 +392,10 @@ When a task changes UI, UX, integrations, build behavior, routing, auth, notific
 2. Identify which other supported surfaces are affected: Windows, iOS, Android, ERP web, public store web.
 3. Run or document the relevant cross-platform checks for those surfaces.
 4. If a platform cannot be tested in the current environment, say so explicitly and keep the implementation structured so that platform can be tested cleanly later.
+
+For responsive business-workflow changes, run the real-interaction and width
+matrix required by `.github/GUI_MOBILE_DESIGN_PRINCIPLES.md`; screenshots alone
+are not completion evidence.
 
 Do not mark a feature complete just because it works on macOS if the same code path obviously affects Windows, mobile, ERP web, or public store web.
 
@@ -3299,7 +3317,15 @@ Use Supabase Auth with OAuth2 (Google, GitHub, etc.) for secure login. Supports:
 
 # 🎨 GUI Design System
 
-**📘 CRITICAL: Read `.github/GUI_DESIGN_PRINCIPLES.md` for complete design guidelines**
+**📘 CRITICAL: Read `.github/GUI_DESIGN_PRINCIPLES.md` for shared design
+guidelines, and `.github/GUI_MOBILE_DESIGN_PRINCIPLES.md` for mobile, tablet,
+compact, adaptive, or responsive work.**
+
+That file is the canonical living UI playbook. Detailed component recipes,
+including anchored popovers/overlays, belong there rather than being duplicated
+in this already broad project guide. When a UI incident exposes a reusable
+failure mode, update the GUI guide and add the smallest behavioral regression
+test in the same task.
 
 **Core Principles:**
 - **Minimalism:** Professional, clean, data-dense (no circus colors/excessive icons)
@@ -3781,9 +3807,10 @@ Row(
 
 ---
 
-## 2. Responsive Table Layout with Horizontal Scroll
+## 2. Desktop Table Layout with Horizontal Scroll
 
-**Pattern:** Tables that shrink to minimum width but use available space
+**Pattern:** Desktop tables that shrink to a minimum width but use available
+space
 
 **Implementation:**
 ```dart
@@ -3839,122 +3866,29 @@ Container(
 - ✅ Fixed columns use exact widths (e.g., index 40px, actions 48px)
 - ✅ Flexible column takes remaining space: `maxWidth: tableWidth - fixedColumnsWidth`
 
-**Apply To:** Any data table, invoice line items, product lists, grid views
+**Apply To:** Desktop-class data tables, invoice line items, product lists, and
+grid views only. Phone/tablet recomposition is owned by
+`.github/GUI_MOBILE_DESIGN_PRINCIPLES.md`; horizontal desktop-table scroll is
+not its automatic substitute.
 
 ---
 
-## 3. Overlay Dropdowns with Scroll Tracking
+## 3. Anchored Popovers And Overlay Safety
 
-**Pattern:** Dropdown that follows parent widget when page scrolls
+The canonical decision tree, coordinate-space rules, nested-overlay
+restrictions, dismissal contract, accessibility requirements, and regression
+matrix live in section 13 of `.github/GUI_DESIGN_PRINCIPLES.md`.
 
-**Problem:** Absolute positioning (`Positioned` with `localToGlobal`) doesn't update on scroll
-
-**Solution:** Use `CompositedTransformFollower` with `LayerLink`
-
-**Implementation:**
-```dart
-// ProductAutocompleteField (shared/widgets/product_autocomplete_field.dart)
-class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
-  final LayerLink _layerLink = LayerLink();
-  
-  void _showOverlay() {
-    final renderBox = context.findRenderObject() as RenderBox;
-    final size = renderBox.size;
-    
-    // Minimum 300px width for dropdown (even if field is narrow)
-    final dropdownWidth = size.width < 300 ? 300.0 : size.width;
-    
-    _overlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        width: dropdownWidth, // Fixed minimum width
-        child: CompositedTransformFollower(
-          link: _layerLink, // Tracks target position
-          showWhenUnlinked: false,
-          offset: Offset(0, size.height + 4), // 4px gap below field
-          child: Material(
-            elevation: 8,
-            child: _buildDropdownContent(),
-          ),
-        ),
-      ),
-    );
-    
-    Overlay.of(context).insert(_overlayEntry!);
-  }
-  
-  @override
-  Widget build(BuildContext context) {
-    return CompositedTransformTarget(
-      link: _layerLink, // Links target to follower
-      child: TextField(...),
-    );
-  }
-}
-```
-
-**Key Principles:**
-- ✅ Use `LayerLink` to connect target widget and overlay
-- ✅ Wrap target in `CompositedTransformTarget`
-- ✅ Use `CompositedTransformFollower` for overlay (NOT `Positioned` with absolute coordinates)
-- ✅ Set minimum width for dropdown content (e.g., 300px for product search)
-- ✅ Dropdown automatically follows target when scrolling
-- ✅ Add small offset (4px) for visual separation
-
-**Apply To:** Autocomplete fields, custom dropdowns, context menus, tooltips
+Do not treat `CompositedTransformFollower`, absolute `Positioned` geometry, or a
+fixed focus-loss delay as a universal recipe. Choose the primitive from the
+surface's actual tracking and interaction requirements. In particular, a
+follower must not wrap `Tooltip`, `PopupMenuButton`, `MenuAnchor`, `showMenu`,
+or another `OverlayPortal`; use the safe alternatives and real widget-test gate
+defined in the canonical guide.
 
 ---
 
-## 4. Overlay Click Handling with Focus Delay
-
-**Pattern:** Prevent overlay from closing before tap events register
-
-**Problem:** Focus loss triggers overlay removal before tap completes
-
-**Solution:** 200ms delay before removing overlay
-
-**Implementation:**
-```dart
-_focusNode.addListener(() {
-  if (_focusNode.hasFocus) {
-    _showOverlay();
-  } else {
-    // Add delay to allow tap events to complete
-    Future.delayed(const Duration(milliseconds: 200), () {
-      if (!_focusNode.hasFocus && mounted) {
-        _removeOverlay();
-      }
-    });
-  }
-});
-
-// Wrap dropdown items in InkWell for better tap detection
-MouseRegion(
-  child: ListView.builder(
-    itemBuilder: (context, index) {
-      return InkWell( // Better than ListTile onTap
-        onTap: () => _onProductSelected(product),
-        child: ListTile(
-          title: Text(product.name),
-          subtitle: Text('SKU: ${product.sku}'),
-        ),
-      );
-    },
-  ),
-)
-```
-
-**Key Principles:**
-- ✅ Use `Future.delayed(Duration(milliseconds: 200))` before removing overlay
-- ✅ Check `mounted` before removing overlay (widget may be disposed)
-- ✅ Wrap list items in `InkWell` (more reliable than `ListTile.onTap`)
-- ✅ Use `MouseRegion` to keep overlay open when mouse hovers
-- ✅ 200ms is the sweet spot (100ms too fast, 300ms feels sluggish)
-
-**Apply To:** Any overlay with clickable content (autocomplete, menus, pickers)
-
----
-
-## 5. Hover-Based UI Elements (Desktop)
+## 4. Hover-Based UI Elements (Desktop)
 
 **Pattern:** Show actions/controls only when hovering over specific areas
 
@@ -4016,11 +3950,13 @@ Widget _buildLineRow(LineItem item, int index) {
 - ✅ Use small icons (size: 16) for compact inline actions
 - ✅ Always show critical actions (delete), hide secondary actions (reorder)
 
-**Apply To:** List items, table rows, cards, inline editing
+**Apply To:** Desktop list items, table rows, cards, and inline editing.
+Hover-only controls must never be the only path to an important action on a
+touch surface.
 
 ---
 
-## 6. Duplicate Items Handling in Lists
+## 5. Duplicate Items Handling in Lists
 
 **Pattern:** Allow same product/item on multiple lines (no auto-merge)
 
@@ -4061,7 +3997,7 @@ void _addProductLine(ProductSelection selection) {
 
 ---
 
-## 7. Grid Table Layout Guidelines
+## 6. Grid Table Layout Guidelines
 
 **When to use Grid Tables:**
 - Invoice line items (5+ columns)
@@ -4097,11 +4033,14 @@ final productColumnWidth = tableWidth - (
 
 ---
 
-## 8. Common GUI Mistakes to AVOID
+## 7. Common GUI Mistakes to AVOID
 
-❌ **Using absolute positioning for scrollable content**
-- Overlays detach from parent when scrolling
-- Use `CompositedTransformFollower` instead
+❌ **Mixing overlay coordinate spaces or using one primitive universally**
+- A positioned popover detaches if its host moves and no follow/close policy
+  exists; a follower can fail when its subtree creates a nested overlay.
+- Follow section 13 of `.github/GUI_DESIGN_PRINCIPLES.md`, keep trigger and
+  surface geometry in the same overlay coordinate system, and test the real
+  scroll/resize/hover behavior.
 
 ❌ **Fixed widths on flexible content**
 - Product names, descriptions need to expand
@@ -4115,9 +4054,9 @@ final productColumnWidth = tableWidth - (
 - Users expect separate lines for flexibility
 - Let users manually consolidate if needed
 
-❌ **Removing overlays immediately on focus loss**
-- Tap events don't have time to register
-- Add 200ms delay before removal
+❌ **Relying on an arbitrary focus-loss timer**
+- Focus, pointer selection, outside click, `Escape`, and teardown require one
+  explicit lifecycle; a delay alone is not an interaction contract.
 
 ❌ **Global hover state for lists**
 - Causes entire list to rebuild on hover
@@ -4133,22 +4072,29 @@ final productColumnWidth = tableWidth - (
 
 ---
 
-## 9. Quick Reference: Apply These Patterns
+## 8. Quick Reference: Apply These Patterns
 
-When creating **any form with line items** (invoices, orders, carts):
+When creating a **desktop form with line items** (invoices, orders, carts):
 1. Use grid table layout with fixed + flexible columns
 2. Set minTableWidth to 800px (or appropriate for your columns)
 3. Wrap in `LayoutBuilder` + `SingleChildScrollView(horizontal)`
 4. Allow duplicate products on separate lines
 5. Add hover-based reorder arrows (desktop only)
 
+For phone/tablet line items, follow the dedicated editable-record composition
+in `.github/GUI_MOBILE_DESIGN_PRINCIPLES.md` instead of applying this table
+recipe.
+
 When creating **any autocomplete/search field**:
-1. Use `CompositedTransformFollower` + `LayerLink` for overlay
+1. Follow section 13 of `.github/GUI_DESIGN_PRINCIPLES.md` and choose the
+   overlay primitive from the real tracking/nesting requirements
 2. Set minimum dropdown width (300px for product search)
-3. Add 200ms delay before removing overlay on focus loss
+3. Define focus, outside-click, `Escape`, selection, scroll, resize, and
+   teardown behavior explicitly
 4. Wrap items in `InkWell` for reliable tap detection
-5. Use `MouseRegion` to keep overlay open on hover
-6. Treat a limited initial result set as a preview only. When a user selects an
+5. Use `MouseRegion` only when hover behavior is part of the desktop contract
+6. Run the canonical real-host geometry, hover, zoom, and render-exception tests
+7. Treat a limited initial result set as a preview only. When a user selects an
    exclusive server-backed classification such as `Productos` or `Servicios`,
    include that classification in the database search; never filter a preview
    page in memory and present it as the full matching catalog.
@@ -4160,7 +4106,8 @@ When creating **any resizable panel**:
 4. Use `GestureDetector.onHorizontalDragUpdate` for dragging
 5. Clamp width to reasonable min/max
 
-**These patterns are PRODUCTION-TESTED and should be reused across ALL modules.**
+Reuse these patterns only within the constraints documented above; the GUI
+guide remains the canonical source when a detail here conflicts or evolves.
 
 ---
 
@@ -5997,7 +5944,8 @@ Sales IVA - Purchase IVA = Amount owed to tax authority
 
 - Use **flutter_calendar_carousel** for month view
 - Color coding by status (pending, in_progress, completed)
-- Click event → detail panel (split view on desktop, modal on mobile)
+- Click/tap event → the registered desktop split or dedicated compact detail
+  composition
 - Show bike brand/model instead of internal codes
 - Timeline items sorted by date DESC
 
@@ -6011,11 +5959,10 @@ Sales IVA - Purchase IVA = Amount owed to tax authority
 
 ## Responsive Design
 
-- Desktop (>900px): Sidebar + content area
-- Tablet (600-900px): Collapsible drawer
-- Mobile (<600px): Bottom navigation + hamburger menu
-- Tables adapt to cards on mobile
-- Forms stack vertically on narrow screens
+The canonical classes, dedicated phone/tablet compositions, touch navigation,
+table-to-record recomposition, compact forms, and validation matrix live in
+`.github/GUI_MOBILE_DESIGN_PRINCIPLES.md`. This section intentionally does not
+duplicate them.
 
 ## Loading States
 

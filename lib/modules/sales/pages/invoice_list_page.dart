@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,6 +17,7 @@ import '../../../shared/widgets/document_accounting_preview.dart';
 import '../../../shared/services/document_accounting_context_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/utils/invoice_pdf_generator.dart';
+import '../../../shared/utils/responsive_viewport.dart';
 import '../../settings/services/appearance_service.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
@@ -298,19 +298,229 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     final salesService = context.watch<SalesService>();
     final invoices = _getFilteredAndSortedInvoices(salesService.invoices);
 
-    // Use MediaQuery for robust detection, ignoring parent constraints issues
-    // FORCE mobile on Android/iOS app to avoid desktop layout on high-res phones/tablets
-    final screenWidth = MediaQuery.of(context).size.width;
-    final forceSplitPreview = widget.forceSplitView && _selectedInvoice != null;
-    final isMobile = !forceSplitPreview &&
-        (screenWidth < 1100 ||
-            (!kIsWeb && (Platform.isAndroid || Platform.isIOS)));
+    final usesCompactLayout = ResponsiveViewport.usesCompactShell(context);
+    final selectedInvoice = _selectedInvoice;
+
+    if (usesCompactLayout && selectedInvoice != null) {
+      return MainLayout(
+        title: selectedInvoice.invoiceNumber,
+        onBackPressed: () {
+          if (context.canPop()) {
+            context.pop();
+            return;
+          }
+          _closeSelectedInvoice();
+        },
+        compactHeader: MainLayoutCompactHeader(
+          title: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                selectedInvoice.invoiceNumber,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              Text(
+                selectedInvoice.customerName ?? 'Sin cliente',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+          actions: [
+            _buildCompactPreviewActions(selectedInvoice),
+          ],
+        ),
+        body: _isHydratingSelectedInvoice
+            ? const Center(child: BrandedLoading())
+            : _buildCompactInvoicePreview(selectedInvoice),
+      );
+    }
 
     return MainLayout(
-      title: isMobile ? 'Ventas' : 'Facturas',
-      child: isMobile
+      title: usesCompactLayout ? 'Ventas' : 'Facturas',
+      onBackPressed: context.canPop() ? () => context.pop() : null,
+      child: usesCompactLayout
           ? _buildMobileLayout(invoices)
           : _buildDesktopLayout(invoices, salesService),
+    );
+  }
+
+  void _closeSelectedInvoice() {
+    setState(() {
+      _selectedInvoice = null;
+      _showPaymentTerminal = false;
+      _accountingContextInvoiceId = null;
+      _accountingContextFuture = null;
+    });
+  }
+
+  Widget _buildCompactPreviewActions(Invoice invoice) {
+    return PopupMenuButton<String>(
+      tooltip: 'Acciones de la factura',
+      constraints: const BoxConstraints(
+        minWidth: 260,
+        maxWidth: 330,
+      ),
+      onSelected: (value) {
+        switch (value) {
+          case 'edit':
+            context.push('/sales/invoices/${invoice.id}/edit');
+            break;
+          case 'share':
+            _shareInvoice(invoice);
+            break;
+          case 'download_invoice':
+            _downloadInvoicePDF(
+              invoice,
+              mode: InvoicePdfExportMode.invoiceOnly,
+            );
+            break;
+          case 'download_invoice_diagnosis':
+            _downloadInvoicePDF(
+              invoice,
+              mode: InvoicePdfExportMode.invoiceWithDiagnosis,
+            );
+            break;
+          case 'print_invoice':
+            _printInvoice(
+              invoice,
+              mode: InvoicePdfExportMode.invoiceOnly,
+            );
+            break;
+        }
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: 'edit',
+          height: 56,
+          child: Row(
+            children: [
+              Icon(Icons.edit_outlined),
+              SizedBox(width: 12),
+              Expanded(child: Text('Editar factura')),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'share',
+          height: 56,
+          child: Row(
+            children: [
+              Icon(Icons.share_outlined),
+              SizedBox(width: 12),
+              Expanded(child: Text('Compartir')),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'download_invoice',
+          height: 56,
+          child: Row(
+            children: [
+              Icon(Icons.picture_as_pdf_outlined),
+              SizedBox(width: 12),
+              Expanded(child: Text('Descargar factura PDF')),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'download_invoice_diagnosis',
+          height: 56,
+          child: Row(
+            children: [
+              Icon(Icons.download_outlined),
+              SizedBox(width: 12),
+              Expanded(child: Text('PDF con diagnóstico')),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'print_invoice',
+          height: 56,
+          child: Row(
+            children: [
+              Icon(Icons.print_outlined),
+              SizedBox(width: 12),
+              Expanded(child: Text('Imprimir factura')),
+            ],
+          ),
+        ),
+      ],
+      child: const SizedBox(
+        width: 48,
+        height: 48,
+        child: Icon(Icons.more_vert),
+      ),
+    );
+  }
+
+  Widget _buildCompactInvoicePreview(Invoice invoice) {
+    final accountingFuture = _accountingContextInvoiceId == invoice.id
+        ? _accountingContextFuture
+        : null;
+
+    return ColoredBox(
+      color: const Color(0xFFF4F6FA),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final paperWidth =
+              (constraints.maxWidth - 16).clamp(280.0, 920.0).toDouble();
+
+          return FutureBuilder<DocumentAccountingContext>(
+            future: accountingFuture,
+            builder: (context, snapshot) {
+              final accounting =
+                  snapshot.data ?? DocumentAccountingContext.empty;
+              final isLoadingAccounting = accountingFuture != null &&
+                  snapshot.connectionState == ConnectionState.waiting;
+
+              return SingleChildScrollView(
+                key: const PageStorageKey(
+                  'sales-invoice-compact-preview-scroll',
+                ),
+                padding: EdgeInsets.fromLTRB(
+                  8,
+                  10,
+                  8,
+                  MediaQuery.paddingOf(context).bottom + 24,
+                ),
+                child: Column(
+                  children: [
+                    if (isLoadingAccounting)
+                      const DocumentAccountingLoadingStrip()
+                    else
+                      DocumentPaymentsDropdown(
+                        title: 'Pagos recibidos',
+                        payments: accounting.payments,
+                        onPaymentTap: _openLinkedPayment,
+                      ),
+                    const SizedBox(height: 10),
+                    DocumentPaperShell(
+                      width: paperWidth,
+                      status: _documentPreviewStatus(invoice),
+                      child: _buildInvoiceDocument(invoice, paperWidth),
+                    ),
+                    if (!isLoadingAccounting)
+                      DocumentJournalEntriesSection(
+                        entries: accounting.journalEntries,
+                        documentLabel: 'Factura',
+                        emptyReference: invoice.invoiceNumber,
+                      ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 

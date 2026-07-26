@@ -22,6 +22,12 @@ class PegaDetailView extends StatefulWidget {
   final VoidCallback? onProposalDocumentPressed;
   final VoidCallback? onProposalStatusPressed;
   final VoidCallback? onProposalConvertPressed;
+  final VoidCallback? onStatusPressed;
+  final VoidCallback? onProductsAndServicesPressed;
+  final VoidCallback? onInvoicePressed;
+  final VoidCallback? onPaymentPressed;
+  final VoidCallback? onBikePressed;
+  final VoidCallback? onCustomerPressed;
 
   const PegaDetailView({
     super.key,
@@ -39,6 +45,12 @@ class PegaDetailView extends StatefulWidget {
     this.onProposalDocumentPressed,
     this.onProposalStatusPressed,
     this.onProposalConvertPressed,
+    this.onStatusPressed,
+    this.onProductsAndServicesPressed,
+    this.onInvoicePressed,
+    this.onPaymentPressed,
+    this.onBikePressed,
+    this.onCustomerPressed,
   });
 
   @override
@@ -141,6 +153,7 @@ class _PegaDetailViewState extends State<PegaDetailView>
               Tab(text: 'Tareas', icon: Icon(Icons.checklist, size: 20)),
             ],
           ),
+          if (_hasQuickActions) _buildQuickActionsBar(),
 
           // Tab Views
           Expanded(
@@ -163,7 +176,7 @@ class _PegaDetailViewState extends State<PegaDetailView>
       return _buildStandaloneQuotationDetailsTab();
     }
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: _detailPadding(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -335,7 +348,7 @@ class _PegaDetailViewState extends State<PegaDetailView>
                 _buildProposalActions(),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
-                  onPressed: () => _showStatusChangeDialog(context),
+                  onPressed: () => _handleStatusPressed(context),
                   icon: const Icon(Icons.sync),
                   label: const Text('Cambiar estado operativo'),
                   style: OutlinedButton.styleFrom(
@@ -360,7 +373,7 @@ class _PegaDetailViewState extends State<PegaDetailView>
                 const SizedBox(width: 16),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () => _showStatusChangeDialog(context),
+                    onPressed: () => _handleStatusPressed(context),
                     icon: const Icon(Icons.sync),
                     label: const Text('Cambiar Estado'),
                     style: OutlinedButton.styleFrom(
@@ -385,7 +398,7 @@ class _PegaDetailViewState extends State<PegaDetailView>
             : 'Sin descripción comercial registrada';
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: _detailPadding(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -509,7 +522,7 @@ class _PegaDetailViewState extends State<PegaDetailView>
 
   Widget _buildSaleDetailsTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: _detailPadding(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -560,6 +573,129 @@ class _PegaDetailViewState extends State<PegaDetailView>
         ],
       ),
     );
+  }
+
+  bool get _hasQuickActions =>
+      widget.onStatusPressed != null ||
+      widget.onProductsAndServicesPressed != null ||
+      widget.onInvoicePressed != null ||
+      widget.onPaymentPressed != null ||
+      widget.onBikePressed != null ||
+      widget.onCustomerPressed != null;
+
+  EdgeInsets _detailPadding(BuildContext context) {
+    return EdgeInsets.all(MediaQuery.sizeOf(context).width < 600 ? 16 : 24);
+  }
+
+  Widget _buildQuickActionsBar() {
+    final actions = <Widget>[
+      if (widget.onStatusPressed != null)
+        _buildQuickAction(
+          key: const ValueKey('workshop-detail-action-status'),
+          icon: Icons.sync_rounded,
+          label: 'Estado',
+          semanticsLabel: 'Cambiar estado del trabajo',
+          onPressed: widget.onStatusPressed!,
+        ),
+      if (widget.onProductsAndServicesPressed != null)
+        _buildQuickAction(
+          key: const ValueKey('workshop-detail-action-items'),
+          icon: Icons.inventory_2_outlined,
+          label: 'Ítems',
+          semanticsLabel: 'Abrir productos y servicios del trabajo',
+          onPressed: widget.onProductsAndServicesPressed!,
+        ),
+      if (widget.onInvoicePressed != null)
+        _buildQuickAction(
+          key: const ValueKey('workshop-detail-action-invoice'),
+          icon: Icons.receipt_long_outlined,
+          label: 'Factura',
+          semanticsLabel: 'Abrir factura vinculada',
+          onPressed: widget.onInvoicePressed!,
+        ),
+      if (widget.onPaymentPressed != null)
+        _buildQuickAction(
+          key: const ValueKey('workshop-detail-action-payment'),
+          icon: Icons.payments_outlined,
+          label: 'Abono',
+          semanticsLabel: 'Registrar pago de la factura vinculada',
+          onPressed: widget.onPaymentPressed!,
+        ),
+      if (widget.onBikePressed != null)
+        _buildQuickAction(
+          key: const ValueKey('workshop-detail-action-bike'),
+          icon: Icons.pedal_bike_outlined,
+          label: 'Bici',
+          semanticsLabel: 'Abrir ficha de la bicicleta',
+          onPressed: widget.onBikePressed!,
+        ),
+      if (widget.onCustomerPressed != null)
+        _buildQuickAction(
+          key: const ValueKey('workshop-detail-action-customer'),
+          icon: Icons.person_outline,
+          label: 'Cliente',
+          semanticsLabel: 'Abrir ficha del cliente',
+          onPressed: widget.onCustomerPressed!,
+        ),
+    ];
+
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 7),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: Theme.of(context).dividerColor),
+          ),
+        ),
+        child: SingleChildScrollView(
+          key: const ValueKey('workshop-detail-quick-actions-scroll'),
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (var index = 0; index < actions.length; index++) ...[
+                if (index > 0) const SizedBox(width: 8),
+                actions[index],
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickAction({
+    required Key key,
+    required IconData icon,
+    required String label,
+    required String semanticsLabel,
+    required VoidCallback onPressed,
+  }) {
+    return Semantics(
+      button: true,
+      label: semanticsLabel,
+      child: OutlinedButton.icon(
+        key: key,
+        onPressed: onPressed,
+        icon: Icon(icon, size: 17),
+        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          visualDensity: VisualDensity.compact,
+        ),
+      ),
+    );
+  }
+
+  void _handleStatusPressed(BuildContext context) {
+    final canonicalAction = widget.onStatusPressed;
+    if (canonicalAction != null) {
+      canonicalAction();
+      return;
+    }
+    _showStatusChangeDialog(context);
   }
 
   void _showStatusChangeDialog(BuildContext context) {
@@ -625,12 +761,16 @@ class _PegaDetailViewState extends State<PegaDetailView>
             children: [
               Icon(icon, size: 16, color: iconColor),
               const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: labelColor,
-                  fontWeight: FontWeight.w500,
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: labelColor,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],

@@ -531,8 +531,30 @@ void main() {
     expect(model, contains('final String socialImageUrl;'));
     expect(model, contains('final String megaMenuImageUrl;'));
     expect(model, contains('final double megaMenuOverlay;'));
+    expect(model, contains('final double megaMenuCardOverlay;'));
+    expect(model, contains('final double megaMenuOverviewWidth;'));
+    expect(
+      model,
+      contains(
+        'final WebsiteMegaMenuContentAlignment megaMenuContentAlignment;',
+      ),
+    );
     expect(model, contains("'mega_menu_image_url': megaMenuImageUrl"));
     expect(model, contains("'mega_menu_overlay': megaMenuOverlay"));
+    expect(
+      model,
+      contains("'mega_menu_card_overlay': megaMenuCardOverlay"),
+    );
+    expect(
+      model,
+      contains("'mega_menu_overview_width': megaMenuOverviewWidth"),
+    );
+    expect(
+      model,
+      contains(
+        "'mega_menu_content_alignment': megaMenuContentAlignment.storageValue",
+      ),
+    );
     expect(model, contains('megaMenuOverlay.clamp(0.0, 0.85)'));
     expect(model, contains('final bool allowIndexing;'));
     expect(model, contains('final List<String> slugAliases;'));
@@ -557,6 +579,12 @@ void main() {
     expect(workspace, contains("'Megamenú'"));
     expect(workspace, contains('draft.megaMenuImageUrl'));
     expect(workspace, contains('draft.megaMenuOverlay'));
+    expect(workspace, contains('draft.megaMenuCardOverlay'));
+    expect(workspace, contains("'Oscurecimiento de la card"));
+    expect(workspace, contains('draft.megaMenuOverviewWidth'));
+    expect(workspace, contains('draft.megaMenuContentAlignment'));
+    expect(workspace, contains("'Ancho de portada"));
+    expect(workspace, contains("'Posición del contenido'"));
     expect(workspace, contains("'Quitar imagen del megamenú'"));
     expect(workspace, contains("'Rutas anteriores'"));
     expect(workspace, contains("'Agregar alias'"));

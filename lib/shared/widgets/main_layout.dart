@@ -5,13 +5,17 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import '../services/auth_service.dart';
 import '../services/navigation_service.dart';
+import '../services/query_performance_service.dart';
+import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
 import '../services/window_zoom_service.dart';
 import '../services/notification_service.dart';
+import '../utils/responsive_viewport.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
 import '../../modules/mail/providers/mail_account_manager.dart';
 import 'expandable_menu_item.dart';
+import 'toolbar_tool_presentation.dart';
 
 const List<MenuSubItem> _accountingMenuItems = [
   MenuSubItem(
@@ -264,9 +268,7 @@ void _openInWorkspace(BuildContext context, String route, String title) {
   debugPrint(
       '🚀 [MainLayout] _openInWorkspace called: route=$route, title=$title');
 
-  // Check for mobile/tablet screen width (< 800px)
-  // If small screen, use standard navigation instead of workspace tabs
-  final isSmallScreen = MediaQuery.of(context).size.width < 800;
+  final isSmallScreen = ResponsiveViewport.usesCompactShell(context);
   if (isSmallScreen) {
     debugPrint(
         '📱 [MainLayout] Small screen detected, using standard navigation.');
@@ -1030,11 +1032,23 @@ class _SidebarPalettePreview extends StatelessWidget {
   }
 }
 
+@immutable
+class MainLayoutCompactHeader {
+  const MainLayoutCompactHeader({
+    required this.title,
+    this.actions = const <Widget>[],
+  });
+
+  final Widget title;
+  final List<Widget> actions;
+}
+
 class MainLayout extends StatefulWidget {
   final Widget? child;
   final Widget? body;
   final String? title;
   final VoidCallback? onBackPressed;
+  final MainLayoutCompactHeader? compactHeader;
 
   const MainLayout({
     super.key,
@@ -1042,6 +1056,7 @@ class MainLayout extends StatefulWidget {
     this.body,
     this.title,
     this.onBackPressed,
+    this.compactHeader,
   });
 
   @override
@@ -1051,8 +1066,8 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final showSidebar = screenWidth > 768; // Show sidebar on larger screens
+    final screenWidth = ResponsiveViewport.widthOf(context);
+    final showSidebar = screenWidth >= ResponsiveViewport.desktopMin;
     final navigationService = Provider.of<NavigationService>(context);
     final workspaceManager = Provider.of<WorkspaceManager>(context);
     final scopedWorkspace = _maybeWorkspaceOf(context);
@@ -1217,6 +1232,7 @@ class _MainLayoutState extends State<MainLayout> {
               ? IconButton(
                   icon: const Icon(Icons.arrow_back),
                   onPressed: widget.onBackPressed,
+                  tooltip: 'Volver',
                   color: Theme.of(context).colorScheme.onSurface,
                 )
               : isPinnedWorkspace
@@ -1225,16 +1241,18 @@ class _MainLayoutState extends State<MainLayout> {
                       builder: (context) => IconButton(
                         icon: const Icon(Icons.menu),
                         onPressed: () => Scaffold.of(context).openDrawer(),
+                        tooltip: 'Abrir menú principal',
                         color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-          title: Text(
-            widget.title ?? 'Vinabike ERP',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          title: widget.compactHeader?.title ??
+              Text(
+                widget.title ?? 'Vinabike ERP',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
           backgroundColor: Theme.of(context).colorScheme.surface,
           elevation: 0,
           bottom: PreferredSize(
@@ -1247,20 +1265,7 @@ class _MainLayoutState extends State<MainLayout> {
           iconTheme: IconThemeData(
             color: Theme.of(context).colorScheme.onSurface,
           ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.settings_outlined),
-              onPressed: () {
-                context.push('/settings');
-              },
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-            IconButton(
-              icon: const Icon(Icons.logout_outlined),
-              onPressed: () => _handleLogout(context),
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ],
+          actions: widget.compactHeader?.actions ?? const <Widget>[],
         ),
         drawer: isPinnedWorkspace ? null : const AppDrawer(),
         body: widget.body ?? widget.child,
@@ -2167,8 +2172,11 @@ class AppDrawer extends StatefulWidget {
   State<AppDrawer> createState() => _AppDrawerState();
 }
 
+enum _AppDrawerMode { navigation, tools }
+
 class _AppDrawerState extends State<AppDrawer> {
   String? _expandedSection;
+  _AppDrawerMode _mode = _AppDrawerMode.navigation;
 
   void _handleExpansionChange(String sectionKey, bool isExpanded) {
     setState(() {
@@ -2182,9 +2190,9 @@ class _AppDrawerState extends State<AppDrawer> {
 
   void _handleMobileNavigation(
       BuildContext context, String route, String title) {
-    // Check for mobile/tablet screen width (< 800px)
+    // Phone and tablet use one routed surface instead of desktop workspaces.
     // If small screen, use standard navigation instead of workspace tabs
-    final isSmallScreen = MediaQuery.of(context).size.width < 800;
+    final isSmallScreen = ResponsiveViewport.usesCompactShell(context);
 
     if (isSmallScreen) {
       context.push(route);
@@ -2367,6 +2375,376 @@ class _AppDrawerState extends State<AppDrawer> {
     );
   }
 
+  Widget _buildCompactDrawerHeader(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        height: 68,
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+            ),
+          ),
+        ),
+        child: Consumer<AppearanceService>(
+          builder: (context, appearanceService, _) {
+            return Row(
+              children: [
+                InkWell(
+                  key: const ValueKey('mobile-drawer-home'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _handleMobileNavigation(context, '/dashboard', 'Dashboard');
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Padding(
+                      padding: const EdgeInsets.all(7),
+                      child: _buildAdaptiveCompanyLogo(
+                        context: context,
+                        appearanceService: appearanceService,
+                        fallbackBuilder: (_) => Icon(
+                          appearanceService.homeIcon,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Vinabike ERP',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        _mode == _AppDrawerMode.navigation
+                            ? 'Navegación'
+                            : 'Herramientas rápidas',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                  tooltip: 'Cerrar menú',
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDrawerModeSwitch(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const ValueKey('mobile-drawer-mode-switch'),
+      height: 56,
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildDrawerModeButton(
+              context,
+              mode: _AppDrawerMode.navigation,
+              label: 'Navegación',
+            ),
+          ),
+          Expanded(
+            child: _buildDrawerModeButton(
+              context,
+              mode: _AppDrawerMode.tools,
+              label: 'Herramientas',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDrawerModeButton(
+    BuildContext context, {
+    required _AppDrawerMode mode,
+    required String label,
+  }) {
+    final theme = Theme.of(context);
+    final selected = _mode == mode;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'Modo $label',
+      child: InkWell(
+        key: ValueKey('mobile-drawer-mode-${mode.name}'),
+        onTap: () => setState(() => _mode = mode),
+        borderRadius: BorderRadius.circular(9),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected
+                ? Color.alphaBlend(
+                    theme.colorScheme.primary.withValues(alpha: 0.1),
+                    theme.colorScheme.surface,
+                  )
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: selected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactWorkspaceAccess(BuildContext context) {
+    return Consumer<WorkspaceManager>(
+      builder: (context, manager, _) {
+        final workspaces = manager.workspaces;
+        if (workspaces.length <= 1) return const SizedBox.shrink();
+        final activeId = manager.activeWorkspace?.id;
+        return ExpansionTile(
+          key: const ValueKey('mobile-workspace-selector'),
+          minTileHeight: 48,
+          leading: const Icon(Icons.layers_outlined, size: 20),
+          title: Text(
+            'Espacios de trabajo · ${workspaces.length}',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          children: [
+            for (final workspace in workspaces)
+              ListTile(
+                key: ValueKey('mobile-workspace-${workspace.id}'),
+                minTileHeight: 48,
+                selected: workspace.id == activeId,
+                title: Text(
+                  workspace.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () {
+                  manager.switchToWorkspaceById(workspace.id);
+                  Navigator.pop(context);
+                },
+                trailing: workspaces.length <= 1
+                    ? null
+                    : IconButton(
+                        onPressed: () =>
+                            manager.closeWorkspaceById(workspace.id),
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        tooltip: 'Cerrar ${workspace.title}',
+                      ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCompactToolsMode(BuildContext context) {
+    final toolbarService = context.watch<RightToolbarService>();
+    final chatProvider = context.watch<ChatProvider>();
+    final visibleTools = ToolbarTool.values.where((tool) {
+      if (tool == ToolbarTool.performance) {
+        return QueryPerformanceService.isEnabled &&
+            toolbarService.isGaugePinned;
+      }
+      return true;
+    }).toList(growable: false);
+
+    return ValueListenableBuilder<int>(
+      valueListenable: NotificationService().unreadNotificationsCount,
+      builder: (context, notificationCount, _) {
+        final widgets = <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+            child: Text(
+              'Abre una herramienta en todo el espacio disponible. Al volver, '
+              'tu módulo queda exactamente donde estaba.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+            ),
+          ),
+        ];
+        for (final group in ToolbarToolGroup.values) {
+          final groupedTools = visibleTools
+              .where((tool) => tool.toolbarPresentation.group == group)
+              .toList(growable: false);
+          if (groupedTools.isEmpty) continue;
+          widgets.add(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 5),
+              child: Text(
+                group.label.toUpperCase(),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.55,
+                    ),
+              ),
+            ),
+          );
+          for (final tool in groupedTools) {
+            widgets.add(
+              _buildCompactToolRow(
+                context,
+                tool: tool,
+                toolbarService: toolbarService,
+                badgeCount: _compactToolBadgeCount(
+                  tool,
+                  chatProvider,
+                  notificationCount,
+                ),
+              ),
+            );
+          }
+        }
+        widgets.add(const SizedBox(height: 16));
+        return Column(
+          key: const ValueKey('mobile-drawer-tools-mode'),
+          mainAxisSize: MainAxisSize.min,
+          children: widgets,
+        );
+      },
+    );
+  }
+
+  int _compactToolBadgeCount(
+    ToolbarTool tool,
+    ChatProvider chatProvider,
+    int notificationCount,
+  ) {
+    if (tool == ToolbarTool.notifications) return notificationCount;
+    if (tool != ToolbarTool.messages && tool != ToolbarTool.supplierMessages) {
+      return 0;
+    }
+    final supplier = tool == ToolbarTool.supplierMessages;
+    return chatProvider.conversations.fold<int>(0, (sum, conversation) {
+      if (conversation.isSupplierConversation != supplier) return sum;
+      if (conversation.type == 'support' && conversation.status == 'pending') {
+        return sum +
+            (conversation.unreadCount > 0 ? conversation.unreadCount : 1);
+      }
+      return sum + conversation.unreadCount;
+    });
+  }
+
+  Widget _buildCompactToolRow(
+    BuildContext context, {
+    required ToolbarTool tool,
+    required RightToolbarService toolbarService,
+    required int badgeCount,
+  }) {
+    final theme = Theme.of(context);
+    final presentation = tool.toolbarPresentation;
+    final selected = toolbarService.activeTool == tool;
+    final badgeLabel = badgeCount > 99 ? '99+' : '$badgeCount';
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label:
+          '${presentation.title}${badgeCount > 0 ? ', $badgeCount pendientes' : ''}',
+      child: ListTile(
+        key: ValueKey('mobile-toolbar-tool-${tool.name}'),
+        minLeadingWidth: 32,
+        minVerticalPadding: 4,
+        selected: selected,
+        selectedTileColor: theme.colorScheme.primary.withValues(alpha: 0.075),
+        leading: Icon(
+          presentation.icon,
+          size: 21,
+          color: selected
+              ? theme.colorScheme.primary
+              : theme.colorScheme.onSurfaceVariant,
+        ),
+        title: Text(
+          presentation.title,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+          ),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (badgeCount > 0)
+              Container(
+                constraints: const BoxConstraints(
+                  minWidth: 24,
+                  minHeight: 22,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 7),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  badgeLabel,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onErrorContainer,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            const SizedBox(width: 6),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+        onTap: () {
+          final route = presentation.route;
+          if (route != null) {
+            Navigator.pop(context);
+            _handleMobileNavigation(context, route, presentation.title);
+            return;
+          }
+          toolbarService.openTool(tool);
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Safely get current location
@@ -2381,473 +2759,412 @@ class _AppDrawerState extends State<AppDrawer> {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          DrawerHeader(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              border: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).dividerColor,
-                  width: 1,
-                ),
-              ),
+          _buildCompactDrawerHeader(context),
+          _buildDrawerModeSwitch(context),
+          if (_mode == _AppDrawerMode.navigation) ...[
+            _buildCompactWorkspaceAccess(context),
+
+            // Dashboard
+            ExpandableMenuItem(
+              icon: Icons.dashboard_outlined,
+              activeIcon: Icons.dashboard,
+              title: 'Dashboard',
+              subItems: const [
+                MenuSubItem(
+                    icon: Icons.dashboard,
+                    title: 'Dashboard',
+                    route: '/dashboard')
+              ],
+              currentLocation: currentLocation,
+              isSingleItem: true,
+              onNavigate: (route) {
+                Navigator.pop(context);
+                _handleMobileNavigation(context, route, 'Dashboard');
+              },
             ),
-            child: Consumer<AppearanceService>(
-              builder: (context, appearanceService, _) {
-                return InkWell(
-                  onTap: () {
-                    // Navigate to dashboard when header is clicked
-                    Navigator.pop(context); // Close drawer first
-                    _handleMobileNavigation(context, '/dashboard', 'Dashboard');
+
+            const Divider(),
+
+            // Core Modules
+            _Helper.buildSectionHeader(context, 'MÓDULOS PRINCIPALES'),
+
+            // Mensajería (Chat)
+            Consumer<ChatProvider>(
+              builder: (context, chatProvider, child) {
+                return ExpandableMenuItem(
+                  icon: Icons.chat_bubble_outline,
+                  activeIcon: Icons.chat_bubble,
+                  title: 'Mensajería',
+                  subItems: const [
+                    MenuSubItem(
+                        icon: Icons.chat, title: 'Mensajería', route: '/chat')
+                  ],
+                  currentLocation: currentLocation,
+                  isSingleItem: true,
+                  badgeCount: chatProvider.totalUnreadCount,
+                  onNavigate: (route) {
+                    Navigator.pop(context);
+                    _handleMobileNavigation(context, route, 'Mensajería');
                   },
-                  borderRadius: BorderRadius.circular(12),
-                  child: appearanceService.hasCustomLogo
-                      ? Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: _buildAdaptiveCompanyLogo(
-                            context: context,
-                            appearanceService: appearanceService,
-                            fallbackBuilder: (context) =>
-                                _Helper.buildDefaultDrawerHeader(
-                              context,
-                              appearanceService,
-                            ),
-                          ),
-                        )
-                      : _Helper.buildDefaultDrawerHeader(
-                          context, appearanceService),
                 );
               },
             ),
-          ),
 
-          // Dashboard
-          ExpandableMenuItem(
-            icon: Icons.dashboard_outlined,
-            activeIcon: Icons.dashboard,
-            title: 'Dashboard',
-            subItems: const [
-              MenuSubItem(
-                  icon: Icons.dashboard,
-                  title: 'Dashboard',
-                  route: '/dashboard')
-            ],
-            currentLocation: currentLocation,
-            isSingleItem: true,
-            onNavigate: (route) {
-              Navigator.pop(context);
-              _handleMobileNavigation(context, route, 'Dashboard');
-            },
-          ),
+            ExpandableMenuItem(
+              icon: Icons.folder_open_outlined,
+              activeIcon: Icons.folder,
+              title: 'Archivos',
+              subItems: _storageMenuItems,
+              currentLocation: currentLocation,
+              isSingleItem: true,
+              onNavigate: (route) {
+                Navigator.pop(context);
+                _handleMobileNavigation(context, route, 'Archivos');
+              },
+            ),
 
-          const Divider(),
+            ExpandableMenuItem(
+              icon: Icons.account_balance_outlined,
+              activeIcon: Icons.account_balance,
+              title: 'Contabilidad',
+              subItems: _accountingMenuItems,
+              currentLocation: currentLocation,
+              isExpanded: _expandedSection == 'accounting',
+              onExpansionChanged: (expand) =>
+                  _handleExpansionChange('accounting', expand),
+              onNavigate: (route) {
+                Navigator.pop(context);
+                _handleMobileNavigation(context, route, 'Contabilidad');
+              },
+            ),
 
-          // Core Modules
-          _Helper.buildSectionHeader(context, 'MÓDULOS PRINCIPALES'),
+            ExpandableMenuItem(
+              icon: Icons.people_outline,
+              activeIcon: Icons.people,
+              title: 'Clientes',
+              subItems: _customersMenuItems,
+              currentLocation: currentLocation,
+              isExpanded: _expandedSection == 'customers',
+              onExpansionChanged: (expand) =>
+                  _handleExpansionChange('customers', expand),
+              onNavigate: (route) {
+                Navigator.pop(context);
+                _handleMobileNavigation(context, route, 'Clientes');
+              },
+            ),
 
-          // Mensajería (Chat)
-          Consumer<ChatProvider>(
-            builder: (context, chatProvider, child) {
-              return ExpandableMenuItem(
-                icon: Icons.chat_bubble_outline,
-                activeIcon: Icons.chat_bubble,
-                title: 'Mensajería',
-                subItems: const [
-                  MenuSubItem(
-                      icon: Icons.chat, title: 'Mensajería', route: '/chat')
-                ],
-                currentLocation: currentLocation,
-                isSingleItem: true,
-                badgeCount: chatProvider.totalUnreadCount,
-                onNavigate: (route) {
-                  Navigator.pop(context);
-                  _handleMobileNavigation(context, route, 'Mensajería');
-                },
-              );
-            },
-          ),
+            ExpandableMenuItem(
+              icon: Icons.pedal_bike_outlined,
+              activeIcon: Icons.pedal_bike,
+              title: 'Taller',
+              subItems: _workshopMenuItems,
+              currentLocation: currentLocation,
+              isExpanded: _expandedSection == 'workshop',
+              onExpansionChanged: (expand) =>
+                  _handleExpansionChange('workshop', expand),
+              onNavigate: (route) {
+                Navigator.pop(context);
+                _handleMobileNavigation(context, route, 'Taller');
+              },
+            ),
 
-          ExpandableMenuItem(
-            icon: Icons.folder_open_outlined,
-            activeIcon: Icons.folder,
-            title: 'Archivos',
-            subItems: _storageMenuItems,
-            currentLocation: currentLocation,
-            isSingleItem: true,
-            onNavigate: (route) {
-              Navigator.pop(context);
-              _handleMobileNavigation(context, route, 'Archivos');
-            },
-          ),
+            ExpandableMenuItem(
+              icon: Icons.lightbulb_outlined,
+              activeIcon: Icons.lightbulb,
+              title: 'Smart Features',
+              subItems: _smartFeaturesMenuItems,
+              currentLocation: currentLocation,
+              isExpanded: _expandedSection == 'smart_features',
+              onExpansionChanged: (expand) =>
+                  _handleExpansionChange('smart_features', expand),
+              onNavigate: (route) {
+                Navigator.pop(context);
+                _handleMobileNavigation(context, route, 'Smart Features');
+              },
+            ),
 
-          ExpandableMenuItem(
-            icon: Icons.account_balance_outlined,
-            activeIcon: Icons.account_balance,
-            title: 'Contabilidad',
-            subItems: _accountingMenuItems,
-            currentLocation: currentLocation,
-            isExpanded: _expandedSection == 'accounting',
-            onExpansionChanged: (expand) =>
-                _handleExpansionChange('accounting', expand),
-            onNavigate: (route) {
-              Navigator.pop(context);
-              _handleMobileNavigation(context, route, 'Contabilidad');
-            },
-          ),
+            ExpandableMenuItem(
+              icon: Icons.inventory_2_outlined,
+              activeIcon: Icons.inventory_2,
+              title: 'Inventario',
+              subItems: _inventoryMenuItems,
+              currentLocation: currentLocation,
+              isExpanded: _expandedSection == 'inventory',
+              onExpansionChanged: (expand) =>
+                  _handleExpansionChange('inventory', expand),
+              onNavigate: (route) {
+                Navigator.pop(context);
+                _handleMobileNavigation(context, route, 'Inventario');
+              },
+            ),
 
-          ExpandableMenuItem(
-            icon: Icons.people_outline,
-            activeIcon: Icons.people,
-            title: 'Clientes',
-            subItems: _customersMenuItems,
-            currentLocation: currentLocation,
-            isExpanded: _expandedSection == 'customers',
-            onExpansionChanged: (expand) =>
-                _handleExpansionChange('customers', expand),
-            onNavigate: (route) {
-              Navigator.pop(context);
-              _handleMobileNavigation(context, route, 'Clientes');
-            },
-          ),
+            ExpandableMenuItem(
+              icon: Icons.receipt_long_outlined,
+              activeIcon: Icons.receipt_long,
+              title: 'Ventas',
+              subItems: _salesMenuItems,
+              currentLocation: currentLocation,
+              isExpanded: _expandedSection == 'sales',
+              onExpansionChanged: (expand) =>
+                  _handleExpansionChange('sales', expand),
+              onNavigate: (route) {
+                Navigator.pop(context);
+                _handleMobileNavigation(context, route, 'Ventas');
+              },
+            ),
 
-          ExpandableMenuItem(
-            icon: Icons.pedal_bike_outlined,
-            activeIcon: Icons.pedal_bike,
-            title: 'Taller',
-            subItems: _workshopMenuItems,
-            currentLocation: currentLocation,
-            isExpanded: _expandedSection == 'workshop',
-            onExpansionChanged: (expand) =>
-                _handleExpansionChange('workshop', expand),
-            onNavigate: (route) {
-              Navigator.pop(context);
-              _handleMobileNavigation(context, route, 'Taller');
-            },
-          ),
+            ExpandableMenuItem(
+              icon: Icons.shopping_cart_outlined,
+              activeIcon: Icons.shopping_cart,
+              title: 'Compras',
+              subItems: _purchasesMenuItems,
+              currentLocation: currentLocation,
+              isExpanded: _expandedSection == 'purchases',
+              onExpansionChanged: (expand) =>
+                  _handleExpansionChange('purchases', expand),
+              onNavigate: (route) {
+                Navigator.pop(context);
+                _handleMobileNavigation(context, route, 'Compras');
+              },
+            ),
 
-          ExpandableMenuItem(
-            icon: Icons.lightbulb_outlined,
-            activeIcon: Icons.lightbulb,
-            title: 'Smart Features',
-            subItems: _smartFeaturesMenuItems,
-            currentLocation: currentLocation,
-            isExpanded: _expandedSection == 'smart_features',
-            onExpansionChanged: (expand) =>
-                _handleExpansionChange('smart_features', expand),
-            onNavigate: (route) {
-              Navigator.pop(context);
-              _handleMobileNavigation(context, route, 'Smart Features');
-            },
-          ),
+            ExpandableMenuItem(
+              icon: Icons.point_of_sale_outlined,
+              activeIcon: Icons.point_of_sale,
+              title: 'POS',
+              subItems: _posMenuItems,
+              currentLocation: currentLocation,
+              isExpanded: _expandedSection == 'pos',
+              onExpansionChanged: (expand) =>
+                  _handleExpansionChange('pos', expand),
+              onNavigate: (route) {
+                Navigator.pop(context);
+                _handleMobileNavigation(context, route, 'POS');
+              },
+            ),
 
-          ExpandableMenuItem(
-            icon: Icons.inventory_2_outlined,
-            activeIcon: Icons.inventory_2,
-            title: 'Inventario',
-            subItems: _inventoryMenuItems,
-            currentLocation: currentLocation,
-            isExpanded: _expandedSection == 'inventory',
-            onExpansionChanged: (expand) =>
-                _handleExpansionChange('inventory', expand),
-            onNavigate: (route) {
-              Navigator.pop(context);
-              _handleMobileNavigation(context, route, 'Inventario');
-            },
-          ),
+            ExpandableMenuItem(
+              icon: Icons.people_outline,
+              activeIcon: Icons.people,
+              title: 'RR.HH.',
+              subItems: _hrMenuItems,
+              currentLocation: currentLocation,
+              isExpanded: _expandedSection == 'hr',
+              onExpansionChanged: (expand) =>
+                  _handleExpansionChange('hr', expand),
+              onNavigate: (route) {
+                Navigator.pop(context);
+                _handleMobileNavigation(context, route, 'RR.HH.');
+              },
+            ),
 
-          ExpandableMenuItem(
-            icon: Icons.receipt_long_outlined,
-            activeIcon: Icons.receipt_long,
-            title: 'Ventas',
-            subItems: _salesMenuItems,
-            currentLocation: currentLocation,
-            isExpanded: _expandedSection == 'sales',
-            onExpansionChanged: (expand) =>
-                _handleExpansionChange('sales', expand),
-            onNavigate: (route) {
-              Navigator.pop(context);
-              _handleMobileNavigation(context, route, 'Ventas');
-            },
-          ),
+            const Divider(),
 
-          ExpandableMenuItem(
-            icon: Icons.shopping_cart_outlined,
-            activeIcon: Icons.shopping_cart,
-            title: 'Compras',
-            subItems: _purchasesMenuItems,
-            currentLocation: currentLocation,
-            isExpanded: _expandedSection == 'purchases',
-            onExpansionChanged: (expand) =>
-                _handleExpansionChange('purchases', expand),
-            onNavigate: (route) {
-              Navigator.pop(context);
-              _handleMobileNavigation(context, route, 'Compras');
-            },
-          ),
+            // Tools (WebView Modules)
+            _Helper.buildSectionHeader(context, 'HERRAMIENTAS'),
 
-          ExpandableMenuItem(
-            icon: Icons.point_of_sale_outlined,
-            activeIcon: Icons.point_of_sale,
-            title: 'POS',
-            subItems: _posMenuItems,
-            currentLocation: currentLocation,
-            isExpanded: _expandedSection == 'pos',
-            onExpansionChanged: (expand) =>
-                _handleExpansionChange('pos', expand),
-            onNavigate: (route) {
-              Navigator.pop(context);
-              _handleMobileNavigation(context, route, 'POS');
-            },
-          ),
+            ExpandableMenuItem(
+              icon: Icons.build_circle_outlined,
+              activeIcon: Icons.build_circle,
+              title: 'Herramientas Web',
+              subItems: _toolsMenuItems,
+              currentLocation: currentLocation,
+              isExpanded: _expandedSection == 'tools',
+              onExpansionChanged: (expand) =>
+                  _handleExpansionChange('tools', expand),
+              onNavigate: (route) {
+                Navigator.pop(context);
+                _handleMobileNavigation(context, route, 'Herramientas');
+              },
+            ),
 
-          ExpandableMenuItem(
-            icon: Icons.people_outline,
-            activeIcon: Icons.people,
-            title: 'RR.HH.',
-            subItems: _hrMenuItems,
-            currentLocation: currentLocation,
-            isExpanded: _expandedSection == 'hr',
-            onExpansionChanged: (expand) =>
-                _handleExpansionChange('hr', expand),
-            onNavigate: (route) {
-              Navigator.pop(context);
-              _handleMobileNavigation(context, route, 'RR.HH.');
-            },
-          ),
+            const Divider(),
 
-          const Divider(),
+            // Secondary Modules
+            _Helper.buildSectionHeader(context, 'OTROS MÓDULOS'),
 
-          // Tools (WebView Modules)
-          _Helper.buildSectionHeader(context, 'HERRAMIENTAS'),
+            ExpandableMenuItem(
+              icon: Icons.build_outlined,
+              activeIcon: Icons.build,
+              title: 'Mantención',
+              subItems: const [
+                MenuSubItem(
+                    icon: Icons.build,
+                    title: 'Mantención',
+                    route: '/maintenance')
+              ],
+              currentLocation: currentLocation,
+              isSingleItem: true,
+              enabled: false,
+              onNavigate: (_) {},
+            ),
 
-          ExpandableMenuItem(
-            icon: Icons.build_circle_outlined,
-            activeIcon: Icons.build_circle,
-            title: 'Herramientas Web',
-            subItems: _toolsMenuItems,
-            currentLocation: currentLocation,
-            isExpanded: _expandedSection == 'tools',
-            onExpansionChanged: (expand) =>
-                _handleExpansionChange('tools', expand),
-            onNavigate: (route) {
-              Navigator.pop(context);
-              _handleMobileNavigation(context, route, 'Herramientas');
-            },
-          ),
+            ExpandableMenuItem(
+              icon: Icons.analytics_outlined,
+              activeIcon: Icons.analytics,
+              title: 'Análisis',
+              subItems: const [
+                MenuSubItem(
+                    icon: Icons.analytics,
+                    title: 'Análisis',
+                    route: '/analytics')
+              ],
+              currentLocation: currentLocation,
+              isSingleItem: true,
+              enabled: false,
+              onNavigate: (_) {},
+            ),
 
-          const Divider(),
+            // Sitio Web module - ADDED for mobile access
+            ValueListenableBuilder<int>(
+              valueListenable: NotificationService().onlineOrderAlertCount,
+              builder: (context, onlineOrderAlerts, _) {
+                final visibleOrderAlerts =
+                    currentLocation.startsWith('/website/orders')
+                        ? 0
+                        : onlineOrderAlerts;
 
-          // Secondary Modules
-          _Helper.buildSectionHeader(context, 'OTROS MÓDULOS'),
-
-          ExpandableMenuItem(
-            icon: Icons.build_outlined,
-            activeIcon: Icons.build,
-            title: 'Mantención',
-            subItems: const [
-              MenuSubItem(
-                  icon: Icons.build, title: 'Mantención', route: '/maintenance')
-            ],
-            currentLocation: currentLocation,
-            isSingleItem: true,
-            enabled: false,
-            onNavigate: (_) {},
-          ),
-
-          ExpandableMenuItem(
-            icon: Icons.analytics_outlined,
-            activeIcon: Icons.analytics,
-            title: 'Análisis',
-            subItems: const [
-              MenuSubItem(
-                  icon: Icons.analytics, title: 'Análisis', route: '/analytics')
-            ],
-            currentLocation: currentLocation,
-            isSingleItem: true,
-            enabled: false,
-            onNavigate: (_) {},
-          ),
-
-          // Sitio Web module - ADDED for mobile access
-          ValueListenableBuilder<int>(
-            valueListenable: NotificationService().onlineOrderAlertCount,
-            builder: (context, onlineOrderAlerts, _) {
-              final visibleOrderAlerts =
-                  currentLocation.startsWith('/website/orders')
-                      ? 0
-                      : onlineOrderAlerts;
-
-              return ExpandableMenuItem(
-                icon: Icons.web_outlined,
-                activeIcon: Icons.web,
-                title: 'Sitio Web',
-                subItems: _websiteMenuItems,
-                currentLocation: currentLocation,
-                isExpanded: _expandedSection == _websiteSectionKey,
-                onExpansionChanged: (expand) =>
-                    _handleExpansionChange(_websiteSectionKey, expand),
-                enabled: true,
-                badgeCount: visibleOrderAlerts,
-                subItemBadgeCounts: {
-                  '/website/orders': visibleOrderAlerts,
-                },
-                onBadgeTap: visibleOrderAlerts > 0
-                    ? () {
-                        final resolvedRoute =
-                            _resolveWebsiteMenuRoute('/website/orders');
-                        Navigator.pop(context);
-                        _handleMobileNavigation(
-                          context,
-                          resolvedRoute,
-                          _getTitleFromRoute(resolvedRoute),
-                        );
-                      }
-                    : null,
-                onNavigate: (route) {
-                  final resolvedRoute = _resolveWebsiteMenuRoute(route);
-                  Navigator.pop(context);
-                  _handleMobileNavigation(context, resolvedRoute,
-                      _getTitleFromRoute(resolvedRoute));
-                },
-              );
-            },
-          ),
-
-          // Correo
-          AnimatedBuilder(
-            animation: MailAccountManager.instance,
-            builder: (context, _) {
-              return ExpandableMenuItem(
-                icon: Icons.email_outlined,
-                activeIcon: Icons.email,
-                title: 'Correo',
-                subItems: const [
-                  MenuSubItem(
-                      icon: Icons.email, title: 'Correo', route: '/mail')
-                ],
-                currentLocation: currentLocation,
-                isSingleItem: true,
-                enabled: true,
-                badgeCount: MailAccountManager.instance.unreadCount,
-                onNavigate: (route) {
-                  Navigator.pop(context);
-                  _handleMobileNavigation(context, route, 'Correo');
-                },
-              );
-            },
-          ),
-
-          const Divider(),
-
-          // Mobile Options Panel (Dark Mode, Zoom, Reorder)
-          _Helper.buildSectionHeader(context, 'OPCIONES'),
-
-          // Dark Mode Toggle
-          Consumer<AppearanceService>(
-            builder: (context, appearanceService, _) {
-              final isDark = appearanceService.themeMode == ThemeMode.dark;
-              return ListTile(
-                leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-                title: Text(isDark ? 'Modo claro' : 'Modo oscuro'),
-                trailing: Switch(
-                  value: isDark,
-                  onChanged: (value) {
-                    appearanceService
-                        .setThemeMode(value ? ThemeMode.dark : ThemeMode.light);
+                return ExpandableMenuItem(
+                  icon: Icons.web_outlined,
+                  activeIcon: Icons.web,
+                  title: 'Sitio Web',
+                  subItems: _websiteMenuItems,
+                  currentLocation: currentLocation,
+                  isExpanded: _expandedSection == _websiteSectionKey,
+                  onExpansionChanged: (expand) =>
+                      _handleExpansionChange(_websiteSectionKey, expand),
+                  enabled: true,
+                  badgeCount: visibleOrderAlerts,
+                  subItemBadgeCounts: {
+                    '/website/orders': visibleOrderAlerts,
                   },
-                ),
-                onTap: () {
-                  final newMode = isDark ? ThemeMode.light : ThemeMode.dark;
-                  appearanceService.setThemeMode(newMode);
-                },
-              );
-            },
-          ),
+                  onBadgeTap: visibleOrderAlerts > 0
+                      ? () {
+                          final resolvedRoute =
+                              _resolveWebsiteMenuRoute('/website/orders');
+                          Navigator.pop(context);
+                          _handleMobileNavigation(
+                            context,
+                            resolvedRoute,
+                            _getTitleFromRoute(resolvedRoute),
+                          );
+                        }
+                      : null,
+                  onNavigate: (route) {
+                    final resolvedRoute = _resolveWebsiteMenuRoute(route);
+                    Navigator.pop(context);
+                    _handleMobileNavigation(context, resolvedRoute,
+                        _getTitleFromRoute(resolvedRoute));
+                  },
+                );
+              },
+            ),
 
-          Consumer<AppearanceService>(
-            builder: (context, appearanceService, _) {
-              return ListTile(
-                leading: const Icon(Icons.chat_bubble_outline),
-                title: const Text('Paleta en mensajería y barra derecha'),
-                trailing: Switch(
-                  value: appearanceService.messagingUsesSidebarPalette,
-                  onChanged: appearanceService.setMessagingUsesSidebarPalette,
-                ),
-                onTap: () {
-                  appearanceService.setMessagingUsesSidebarPalette(
-                    !appearanceService.messagingUsesSidebarPalette,
-                  );
-                },
-              );
-            },
-          ),
-
-          // Zoom Controls - Now works on all platforms!
-          Consumer<WindowZoomService>(
-            builder: (context, zoomService, _) {
-              final zoomPercent = (zoomService.scale * 100).round();
-              return ListTile(
-                leading: const Icon(Icons.zoom_in),
-                title: const Text('Zoom'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.remove, size: 18),
-                      onPressed: zoomService.scale > 0.5
-                          ? () => zoomService.zoomOut()
-                          : null,
-                    ),
-                    SizedBox(
-                      width: 40,
-                      child: Text(
-                        '$zoomPercent%',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add, size: 18),
-                      onPressed: zoomService.scale < 3.0
-                          ? () => zoomService.zoomIn()
-                          : null,
-                    ),
+            // Correo
+            AnimatedBuilder(
+              animation: MailAccountManager.instance,
+              builder: (context, _) {
+                return ExpandableMenuItem(
+                  icon: Icons.email_outlined,
+                  activeIcon: Icons.email,
+                  title: 'Correo',
+                  subItems: const [
+                    MenuSubItem(
+                        icon: Icons.email, title: 'Correo', route: '/mail')
                   ],
-                ),
-              );
-            },
-          ),
+                  currentLocation: currentLocation,
+                  isSingleItem: true,
+                  enabled: true,
+                  badgeCount: MailAccountManager.instance.unreadCount,
+                  onNavigate: (route) {
+                    Navigator.pop(context);
+                    _handleMobileNavigation(context, route, 'Correo');
+                  },
+                );
+              },
+            ),
 
-          // Reorder Modules - Opens bottom sheet with drag-to-reorder
-          ListTile(
-            leading: const Icon(Icons.swap_vert),
-            title: const Text('Reordenar módulos'),
-            onTap: () => _showReorderSheet(context),
-          ),
+            const Divider(),
 
-          const Divider(),
+            // Mobile Options Panel (Dark Mode, Zoom, Reorder)
+            _Helper.buildSectionHeader(context, 'OPCIONES'),
 
-          // Settings
-          ExpandableMenuItem(
-            icon: Icons.settings_outlined,
-            activeIcon: Icons.settings,
-            title: 'Configuración',
-            subItems: const [
-              MenuSubItem(
-                  icon: Icons.settings,
-                  title: 'Configuración',
-                  route: '/settings')
-            ],
-            currentLocation: currentLocation,
-            isSingleItem: true,
-            enabled: true, // Enabled!
-            onNavigate: (route) {
-              Navigator.pop(context);
-              _handleMobileNavigation(context, route, 'Configuración');
-            },
-          ),
-          const SizedBox(height: 16),
+            // Dark Mode Toggle
+            Consumer<AppearanceService>(
+              builder: (context, appearanceService, _) {
+                final isDark = appearanceService.themeMode == ThemeMode.dark;
+                return ListTile(
+                  leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+                  title: Text(isDark ? 'Modo claro' : 'Modo oscuro'),
+                  trailing: Switch(
+                    value: isDark,
+                    onChanged: (value) {
+                      appearanceService.setThemeMode(
+                          value ? ThemeMode.dark : ThemeMode.light);
+                    },
+                  ),
+                  onTap: () {
+                    final newMode = isDark ? ThemeMode.light : ThemeMode.dark;
+                    appearanceService.setThemeMode(newMode);
+                  },
+                );
+              },
+            ),
+
+            Consumer<AppearanceService>(
+              builder: (context, appearanceService, _) {
+                return ListTile(
+                  leading: const Icon(Icons.chat_bubble_outline),
+                  title: const Text('Paleta en mensajería y barra derecha'),
+                  trailing: Switch(
+                    value: appearanceService.messagingUsesSidebarPalette,
+                    onChanged: appearanceService.setMessagingUsesSidebarPalette,
+                  ),
+                  onTap: () {
+                    appearanceService.setMessagingUsesSidebarPalette(
+                      !appearanceService.messagingUsesSidebarPalette,
+                    );
+                  },
+                );
+              },
+            ),
+
+            // Reorder Modules - Opens bottom sheet with drag-to-reorder
+            ListTile(
+              leading: const Icon(Icons.swap_vert),
+              title: const Text('Reordenar módulos'),
+              onTap: () => _showReorderSheet(context),
+            ),
+
+            const Divider(),
+
+            // Settings
+            ExpandableMenuItem(
+              icon: Icons.settings_outlined,
+              activeIcon: Icons.settings,
+              title: 'Configuración',
+              subItems: const [
+                MenuSubItem(
+                    icon: Icons.settings,
+                    title: 'Configuración',
+                    route: '/settings')
+              ],
+              currentLocation: currentLocation,
+              isSingleItem: true,
+              enabled: true, // Enabled!
+              onNavigate: (route) {
+                Navigator.pop(context);
+                _handleMobileNavigation(context, route, 'Configuración');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout_outlined),
+              title: const Text('Cerrar sesión'),
+              onTap: () => _handleLogout(context),
+            ),
+            const SizedBox(height: 16),
+          ] else
+            _buildCompactToolsMode(context),
         ],
       ),
     );
@@ -2865,41 +3182,6 @@ class _Helper {
               color: Theme.of(context).colorScheme.primary,
             ),
       ),
-    );
-  }
-
-  static Widget buildDefaultDrawerHeader(
-      BuildContext context, AppearanceService appearanceService) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(4),
-          child: Icon(
-            appearanceService.homeIcon,
-            color: theme.colorScheme.primary,
-            size: 48,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Vinabike ERP',
-          style: TextStyle(
-            color: theme.colorScheme.onSurface,
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          'Sistema Integral de Gestión',
-          style: TextStyle(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-            fontSize: 14,
-          ),
-        ),
-      ],
     );
   }
 }

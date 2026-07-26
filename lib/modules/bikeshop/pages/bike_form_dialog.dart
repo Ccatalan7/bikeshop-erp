@@ -18,6 +18,7 @@ import '../../../shared/services/image_service.dart';
 import '../../../shared/models/bike_catalog_models.dart';
 import '../../../shared/services/bike_catalog_service.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/utils/responsive_viewport.dart';
 import '../../../shared/widgets/branded_loading.dart';
 
 enum _BikeAggregateLoadState {
@@ -28,6 +29,11 @@ enum _BikeAggregateLoadState {
   failed,
   conflicted,
   outcomeUnknown,
+}
+
+enum _BikeMobileAction {
+  quickSave,
+  delete,
 }
 
 const Map<String, String> _suspensionLayoutOptions = {
@@ -279,8 +285,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   bool _loadingModels = false;
 
   // Keys for resetting fields programmatically
-  final Key _brandFieldKey =
-      UniqueKey(); // Used if we need to reset brand field
+  Key _brandFieldKey = UniqueKey(); // Used if we need to reset brand field
   Key _modelFieldKey =
       UniqueKey(); // Used to reset model field when brand changes
 
@@ -1516,7 +1521,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       if (propagateErrors) rethrow;
     } finally {
       if (mounted) {
-        setState(() => _loadingBrands = false);
+        setState(() {
+          _brandFieldKey = UniqueKey();
+          _modelFieldKey = UniqueKey();
+          _loadingBrands = false;
+        });
       }
     }
   }
@@ -1628,6 +1637,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           _selectedBrand = createdBrand;
           _selectedModel = null;
           _models = [];
+          _brandFieldKey = UniqueKey();
+          _modelFieldKey = UniqueKey();
         });
 
         if (createdBrand.id != null) {
@@ -1730,6 +1741,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
         setState(() {
           _selectedModel = createdModel;
+          _modelFieldKey = UniqueKey();
         });
 
         messenger.showSnackBar(
@@ -2399,6 +2411,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     required Widget child,
   }) {
     final theme = Theme.of(context);
+    final isPhone = ResponsiveViewport.widthOf(context) <
+        ResponsiveViewport.phoneMaxExclusive;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2406,22 +2420,29 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         Row(
           children: [
             Container(
-              width: 56,
-              height: 56,
+              width: isPhone ? 48 : 56,
+              height: isPhone ? 48 : 56,
               decoration: BoxDecoration(
                 color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(isPhone ? 14 : 16),
               ),
-              child: Icon(icon, size: 28, color: theme.colorScheme.primary),
+              child: Icon(
+                icon,
+                size: isPhone ? 24 : 28,
+                color: theme.colorScheme.primary,
+              ),
             ),
-            const SizedBox(width: 20),
+            SizedBox(width: isPhone ? 12 : 20),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    style: theme.textTheme.headlineSmall?.copyWith(
+                    style: (isPhone
+                            ? theme.textTheme.titleLarge
+                            : theme.textTheme.headlineSmall)
+                        ?.copyWith(
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.5,
                     ),
@@ -2430,7 +2451,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                     const SizedBox(height: 6),
                     Text(
                       description,
-                      style: theme.textTheme.titleSmall?.copyWith(
+                      style: (isPhone
+                              ? theme.textTheme.bodyMedium
+                              : theme.textTheme.titleSmall)
+                          ?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                         height: 1.4,
                       ),
@@ -2441,12 +2465,15 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
             ),
           ],
         ),
-        const SizedBox(height: 32),
+        SizedBox(height: isPhone ? 20 : 32),
         Expanded(
           child: SingleChildScrollView(
             child: Padding(
-              padding:
-                  const EdgeInsets.only(bottom: 24.0, right: 8.0, left: 4.0),
+              padding: EdgeInsets.only(
+                bottom: 24,
+                right: isPhone ? 0 : 8,
+                left: isPhone ? 0 : 4,
+              ),
               child: child,
             ),
           ),
@@ -2558,11 +2585,6 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         FocusNode fieldFocusNode,
         VoidCallback onFieldSubmitted,
       ) {
-        if (_selectedBrand != null &&
-            fieldTextEditingController.text != _selectedBrand!.name) {
-          fieldTextEditingController.text = _selectedBrand!.name;
-        }
-
         return TextFormField(
           controller: fieldTextEditingController,
           focusNode: fieldFocusNode,
@@ -2633,11 +2655,6 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         FocusNode fieldFocusNode,
         VoidCallback onFieldSubmitted,
       ) {
-        if (_selectedModel != null &&
-            fieldTextEditingController.text != _selectedModel!.name) {
-          fieldTextEditingController.text = _selectedModel!.name;
-        }
-
         return TextFormField(
           controller: fieldTextEditingController,
           focusNode: fieldFocusNode,
@@ -4907,11 +4924,202 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     }
   }
 
+  Widget _buildMobileActionRow(ThemeData theme, int stepCount) {
+    final navigationBlocked = _isSaving ||
+        _aggregateLoadState == _BikeAggregateLoadState.outcomeUnknown;
+    final editingBlocked = _isSaving || _aggregateLoadBlocksEditing;
+    final isLastStep = _currentStep == stepCount - 1;
+
+    void cancelOrGoBack() {
+      if (_currentStep > 0) {
+        setState(() {
+          _currentStep--;
+          _pageController.previousPage(
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOutCubic,
+          );
+        });
+        return;
+      }
+
+      if (widget.isEmbedded) {
+        widget.onCanceled?.call();
+      } else {
+        Navigator.of(context).pop();
+      }
+    }
+
+    void advance() {
+      if (_currentStep == 0 && !_formKey.currentState!.validate()) {
+        return;
+      }
+      setState(() {
+        _currentStep++;
+        _pageController.nextPage(
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic,
+        );
+      });
+    }
+
+    Widget buildSecondaryActions() {
+      if (widget.bike == null && isLastStep) {
+        return const SizedBox.shrink();
+      }
+
+      return Semantics(
+        container: true,
+        button: true,
+        label: 'Más acciones de bicicleta',
+        child: PopupMenuButton<_BikeMobileAction>(
+          tooltip: '',
+          enabled: !editingBlocked,
+          constraints: const BoxConstraints(
+            minWidth: 260,
+            maxWidth: 320,
+          ),
+          onSelected: (action) {
+            switch (action) {
+              case _BikeMobileAction.quickSave:
+                _saveBike(allowIncompleteTechnicalKernel: true);
+                break;
+              case _BikeMobileAction.delete:
+                _confirmDelete();
+                break;
+            }
+          },
+          itemBuilder: (context) => [
+            if (!isLastStep)
+              const PopupMenuItem(
+                value: _BikeMobileAction.quickSave,
+                height: 56,
+                child: Row(
+                  children: [
+                    Icon(Icons.flash_on_outlined),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Guardar rápido',
+                        maxLines: 2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (widget.bike != null)
+              PopupMenuItem(
+                value: _BikeMobileAction.delete,
+                height: 56,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.delete_outline,
+                      color: theme.colorScheme.error,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Eliminar bicicleta',
+                        maxLines: 2,
+                        style: TextStyle(color: theme.colorScheme.error),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          child: const Tooltip(
+            message: 'Más acciones de bicicleta',
+            excludeFromSemantics: true,
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: Icon(Icons.more_horiz),
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget buildPrimaryAction() {
+      if (!isLastStep) {
+        return FilledButton(
+          onPressed: editingBlocked ? null : advance,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 48),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: const Text(
+            'Siguiente',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+        );
+      }
+
+      return FilledButton(
+        onPressed: editingBlocked ? null : _saveBike,
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: Text(
+          _isSaving ? 'Guardando...' : 'Guardar',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      );
+    }
+
+    return SafeArea(
+      key: const ValueKey('bike-form-mobile-actions'),
+      top: false,
+      minimum: const EdgeInsets.all(8),
+      child: Row(
+        children: [
+          if (widget.bike != null || !isLastStep) ...[
+            buildSecondaryActions(),
+            const SizedBox(width: 2),
+          ],
+          Expanded(
+            child: TextButton(
+              onPressed: navigationBlocked ? null : cancelOrGoBack,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 48),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: Text(
+                _currentStep > 0 ? 'Atrás' : 'Cancelar',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 2,
+            child: buildPrimaryAction(),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.bike != null;
     final theme = Theme.of(context);
     final useDesktopPreviewShell = MediaQuery.sizeOf(context).width >= 1100;
+    final usesCompactHost = ResponsiveViewport.usesCompactShell(context);
+    final dialogRadius = usesCompactHost ? 18.0 : 28.0;
 
     final steps = [
       {
@@ -5124,9 +5332,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                   Expanded(
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(
-                        isMobile ? 24 : (showDesktopPreviewPane ? 24 : 40),
-                        isMobile ? 24 : 20,
-                        isMobile ? 24 : 36,
+                        isMobile ? 12 : (showDesktopPreviewPane ? 24 : 40),
+                        isMobile ? 16 : 20,
+                        isMobile ? 12 : 36,
                         0,
                       ),
                       child: AbsorbPointer(
@@ -5150,8 +5358,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
                   // Bottom Action Bar
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 32, vertical: 20),
+                    padding: isMobile
+                        ? EdgeInsets.zero
+                        : const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 20,
+                          ),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surface,
                       border: Border(
@@ -5167,152 +5379,160 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                         ),
                       ],
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Left side buttons
-                        Row(
-                          children: [
-                            if (widget.bike != null)
-                              TextButton.icon(
-                                onPressed:
-                                    _isSaving || _aggregateLoadBlocksEditing
-                                        ? null
-                                        : _confirmDelete,
-                                icon:
-                                    const Icon(Icons.delete, color: Colors.red),
-                                label: const Text('Eliminar',
-                                    style: TextStyle(color: Colors.red)),
-                              )
-                            else
-                              const SizedBox.shrink(),
-                          ],
-                        ),
-                        // Right side buttons
-                        Row(
-                          children: [
-                            if (_currentStep > 0)
-                              TextButton(
-                                onPressed:
-                                    _isSaving || _aggregateLoadBlocksEditing
-                                        ? null
-                                        : () {
-                                            setState(() {
-                                              _currentStep--;
-                                              _pageController.previousPage(
-                                                duration: const Duration(
-                                                    milliseconds: 350),
-                                                curve: Curves.easeOutCubic,
-                                              );
-                                            });
-                                          },
-                                child: const Text('Atrás',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.w600)),
-                              )
-                            else
-                              TextButton(
-                                onPressed: _isSaving ||
-                                        _aggregateLoadState ==
-                                            _BikeAggregateLoadState
-                                                .outcomeUnknown
-                                    ? null
-                                    : () {
-                                        if (widget.isEmbedded) {
-                                          widget.onCanceled?.call();
-                                        } else {
-                                          Navigator.of(context).pop();
-                                        }
-                                      },
-                                child: const Text('Cancelar',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.w600)),
+                    child: isMobile
+                        ? _buildMobileActionRow(theme, steps.length)
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              // Left side buttons
+                              Row(
+                                children: [
+                                  if (widget.bike != null)
+                                    TextButton.icon(
+                                      onPressed: _isSaving ||
+                                              _aggregateLoadBlocksEditing
+                                          ? null
+                                          : _confirmDelete,
+                                      icon: const Icon(Icons.delete,
+                                          color: Colors.red),
+                                      label: const Text('Eliminar',
+                                          style: TextStyle(color: Colors.red)),
+                                    )
+                                  else
+                                    const SizedBox.shrink(),
+                                ],
                               ),
-                            const SizedBox(width: 16),
-                            if (_currentStep < steps.length - 1) ...[
-                              FilledButton.tonalIcon(
-                                onPressed: _isSaving ||
-                                        _aggregateLoadBlocksEditing
-                                    ? null
-                                    : () {
-                                        _saveBike(
-                                          allowIncompleteTechnicalKernel: true,
-                                        );
-                                      },
-                                icon: const Icon(Icons.flash_on),
-                                label: const Text('Guardar rápido',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.w700)),
-                                style: FilledButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 20, vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12)),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              FilledButton.icon(
-                                onPressed:
-                                    _isSaving || _aggregateLoadBlocksEditing
-                                        ? null
-                                        : () {
-                                            // Validate before proceeding from Identidad
-                                            if (_currentStep == 0) {
-                                              if (!_formKey.currentState!
-                                                  .validate()) {
-                                                return;
+                              // Right side buttons
+                              Row(
+                                children: [
+                                  if (_currentStep > 0)
+                                    TextButton(
+                                      onPressed: _isSaving ||
+                                              _aggregateLoadBlocksEditing
+                                          ? null
+                                          : () {
+                                              setState(() {
+                                                _currentStep--;
+                                                _pageController.previousPage(
+                                                  duration: const Duration(
+                                                      milliseconds: 350),
+                                                  curve: Curves.easeOutCubic,
+                                                );
+                                              });
+                                            },
+                                      child: const Text('Atrás',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w600)),
+                                    )
+                                  else
+                                    TextButton(
+                                      onPressed: _isSaving ||
+                                              _aggregateLoadState ==
+                                                  _BikeAggregateLoadState
+                                                      .outcomeUnknown
+                                          ? null
+                                          : () {
+                                              if (widget.isEmbedded) {
+                                                widget.onCanceled?.call();
+                                              } else {
+                                                Navigator.of(context).pop();
                                               }
-                                            }
-                                            setState(() {
-                                              _currentStep++;
-                                              _pageController.nextPage(
-                                                duration: const Duration(
-                                                    milliseconds: 350),
-                                                curve: Curves.easeOutCubic,
+                                            },
+                                      child: const Text('Cancelar',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w600)),
+                                    ),
+                                  const SizedBox(width: 16),
+                                  if (_currentStep < steps.length - 1) ...[
+                                    FilledButton.tonalIcon(
+                                      onPressed: _isSaving ||
+                                              _aggregateLoadBlocksEditing
+                                          ? null
+                                          : () {
+                                              _saveBike(
+                                                allowIncompleteTechnicalKernel:
+                                                    true,
                                               );
-                                            });
-                                          },
-                                icon: const Icon(Icons.arrow_forward),
-                                label: const Text('Siguiente',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.w700)),
-                                style: FilledButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 24, vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12)),
-                                ),
-                              )
-                            ] else
-                              FilledButton.icon(
-                                onPressed:
-                                    _isSaving || _aggregateLoadBlocksEditing
-                                        ? null
-                                        : _saveBike,
-                                icon: _isSaving
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white),
-                                      )
-                                    : const Icon(Icons.save),
-                                label: Text(
-                                    _isSaving ? 'Guardando...' : 'Guardar',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w700)),
-                                style: FilledButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 28, vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12)),
-                                ),
+                                            },
+                                      icon: const Icon(Icons.flash_on),
+                                      label: const Text('Guardar rápido',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w700)),
+                                      style: FilledButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 20, vertical: 16),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12)),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    FilledButton.icon(
+                                      onPressed: _isSaving ||
+                                              _aggregateLoadBlocksEditing
+                                          ? null
+                                          : () {
+                                              // Validate before proceeding from Identidad
+                                              if (_currentStep == 0) {
+                                                if (!_formKey.currentState!
+                                                    .validate()) {
+                                                  return;
+                                                }
+                                              }
+                                              setState(() {
+                                                _currentStep++;
+                                                _pageController.nextPage(
+                                                  duration: const Duration(
+                                                      milliseconds: 350),
+                                                  curve: Curves.easeOutCubic,
+                                                );
+                                              });
+                                            },
+                                      icon: const Icon(Icons.arrow_forward),
+                                      label: const Text('Siguiente',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w700)),
+                                      style: FilledButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 24, vertical: 16),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12)),
+                                      ),
+                                    )
+                                  ] else
+                                    FilledButton.icon(
+                                      onPressed: _isSaving ||
+                                              _aggregateLoadBlocksEditing
+                                          ? null
+                                          : _saveBike,
+                                      icon: _isSaving
+                                          ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: Colors.white),
+                                            )
+                                          : const Icon(Icons.save),
+                                      label: Text(
+                                          _isSaving
+                                              ? 'Guardando...'
+                                              : 'Guardar',
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w700)),
+                                      style: FilledButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 28, vertical: 16),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12)),
+                                      ),
+                                    ),
+                                ],
                               ),
-                          ],
-                        ),
-                      ],
-                    ),
+                            ],
+                          ),
                   ),
                 ],
               ),
@@ -5334,14 +5554,21 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     return PopScope(
       canPop: _aggregateLoadState != _BikeAggregateLoadState.outcomeUnknown,
       child: Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        insetPadding: usesCompactHost
+            ? const EdgeInsets.all(8)
+            : const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
         backgroundColor: Colors.transparent,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1240, maxHeight: 860),
+          key: const ValueKey('bike-form-dialog-surface'),
+          constraints: BoxConstraints(
+            maxWidth: 1240,
+            maxHeight:
+                usesCompactHost ? MediaQuery.sizeOf(context).height - 16 : 860,
+          ),
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: theme.colorScheme.surfaceContainerLowest,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(dialogRadius),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.12),
@@ -5356,7 +5583,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(dialogRadius),
               child: content,
             ),
           ),

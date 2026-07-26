@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../services/window_zoom_service.dart';
+import '../utils/responsive_breakpoints.dart';
 
 enum ZoomCommand { zoomIn, zoomOut, reset }
 
@@ -94,6 +95,26 @@ class WindowZoomScope extends StatelessWidget {
   }
 }
 
+class WindowViewportMetrics extends InheritedWidget {
+  const WindowViewportMetrics({
+    super.key,
+    required this.unzoomedViewportSize,
+    required this.appliedScale,
+    required super.child,
+  });
+
+  final Size unzoomedViewportSize;
+  final double appliedScale;
+
+  static WindowViewportMetrics? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<WindowViewportMetrics>();
+
+  @override
+  bool updateShouldNotify(WindowViewportMetrics oldWidget) =>
+      unzoomedViewportSize != oldWidget.unzoomedViewportSize ||
+      appliedScale != oldWidget.appliedScale;
+}
+
 class _ZoomContent extends StatelessWidget {
   const _ZoomContent({required this.scale, required this.child});
 
@@ -102,39 +123,47 @@ class _ZoomContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!WindowZoomService.isSupportedPlatform || scale == 1.0) {
-      return child;
-    }
-
-    // Browser-style zoom: Scale the entire UI uniformly
-    // We use FittedBox with a scaled child to achieve true zoom behavior
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Calculate the scaled dimensions
-        final scaledWidth = constraints.maxWidth / scale;
-        final scaledHeight = constraints.maxHeight / scale;
+        final unzoomedViewportSize = constraints.biggest;
+        final appliedScale =
+            constraints.maxWidth < ResponsiveBreakpoints.desktopMin
+                ? 1.0
+                : scale;
 
-        return ClipRect(
+        // Keep this wrapper topology stable at both sides of 899/900. Swapping
+        // the compact branch to [child] directly would recreate the navigator
+        // and every stateful scope below it when the window crosses the
+        // breakpoint.
+        final content = ClipRect(
           child: OverflowBox(
             alignment: Alignment.topLeft,
             maxWidth: double.infinity,
             maxHeight: double.infinity,
             child: Transform.scale(
-              scale: scale,
+              scale: appliedScale,
               alignment: Alignment.topLeft,
               child: SizedBox(
-                width: scaledWidth,
-                height: scaledHeight,
+                width: constraints.maxWidth / appliedScale,
+                height: constraints.maxHeight / appliedScale,
                 child: MediaQuery(
-                  // Also adjust media query so widgets know the "logical" size
                   data: MediaQuery.of(context).copyWith(
-                    size: Size(scaledWidth, scaledHeight),
+                    size: Size(
+                      constraints.maxWidth / appliedScale,
+                      constraints.maxHeight / appliedScale,
+                    ),
                   ),
                   child: child,
                 ),
               ),
             ),
           ),
+        );
+
+        return WindowViewportMetrics(
+          unzoomedViewportSize: unzoomedViewportSize,
+          appliedScale: appliedScale,
+          child: content,
         );
       },
     );

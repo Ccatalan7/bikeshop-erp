@@ -19,13 +19,18 @@ class PegasTasksWidget extends StatefulWidget {
 }
 
 class _PegasTasksWidgetState extends State<PegasTasksWidget> {
+  static const double _compactBreakpoint = 900;
+  static const double _desktopMinimumContentWidth = 1200;
+
   // Filters
   TaskStatus? _statusFilter = TaskStatus.pending;
   TaskPriority? _priorityFilter;
   String _searchQuery = '';
+  late final TextEditingController _searchController;
 
   // Inline editing
   String? _editingTitleTaskId;
+  String? _savingTitleTaskId;
   late TextEditingController _titleController;
 
   // Users cache for assignee menu
@@ -35,12 +40,14 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   @override
   void initState() {
     super.initState();
+    _searchController = TextEditingController();
     _titleController = TextEditingController();
     _loadUsers();
   }
 
   @override
   void dispose() {
+    _searchController.dispose();
     _titleController.dispose();
     super.dispose();
   }
@@ -101,212 +108,546 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
                 t.status != TaskStatus.cancelled)
             .length;
 
-        return Column(
-          children: [
-            // Stats bar
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLowest,
-                border: Border(
-                  bottom: BorderSide(color: theme.dividerColor),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final isCompact = constraints.maxWidth < _compactBreakpoint;
+            if (!isCompact) {
+              return _buildDesktopWorkspace(
+                constraints: constraints,
+                theme: theme,
+                tasks: filteredTasks,
+                hasAnyTasks: allTasks.isNotEmpty,
+                pendingCount: pendingCount,
+                inProgressCount: inProgressCount,
+                completedCount: completedCount,
+                overdueCount: overdueCount,
+              );
+            }
+
+            return Column(
+              children: [
+                _buildCompactControls(
+                  theme: theme,
+                  visibleCount: filteredTasks.length,
+                  pendingCount: pendingCount,
+                  inProgressCount: inProgressCount,
+                  completedCount: completedCount,
+                  overdueCount: overdueCount,
                 ),
-              ),
-              child: Row(
-                children: [
-                  _buildStatChip(
-                    icon: Icons.pending_actions,
-                    label: '$pendingCount Pendientes',
-                    color: Colors.amber,
-                    isActive: _statusFilter == TaskStatus.pending,
-                    onTap: () => setState(() => _statusFilter =
-                        _statusFilter == TaskStatus.pending
-                            ? null
-                            : TaskStatus.pending),
-                  ),
-                  const SizedBox(width: 8),
-                  _buildStatChip(
-                    icon: Icons.play_circle_outline,
-                    label: '$inProgressCount En Curso',
-                    color: Colors.blue,
-                    isActive: _statusFilter == TaskStatus.inProgress,
-                    onTap: () => setState(() => _statusFilter =
-                        _statusFilter == TaskStatus.inProgress
-                            ? null
-                            : TaskStatus.inProgress),
-                  ),
-                  const SizedBox(width: 8),
-                  _buildStatChip(
-                    icon: Icons.check_circle_outline,
-                    label: '$completedCount Completadas',
-                    color: Colors.green,
-                    isActive: _statusFilter == TaskStatus.completed,
-                    onTap: () => setState(() => _statusFilter =
-                        _statusFilter == TaskStatus.completed
-                            ? null
-                            : TaskStatus.completed),
-                  ),
-                  if (overdueCount > 0) ...[
-                    const SizedBox(width: 8),
-                    _buildStatChip(
-                      icon: Icons.warning_amber_rounded,
-                      label: '$overdueCount Vencidas',
-                      color: Colors.red,
-                      isActive: false,
-                      onTap: null,
-                    ),
-                  ],
-                  const Spacer(),
-                  PopupMenuButton<TaskPriority?>(
-                    tooltip: 'Filtrar por prioridad',
-                    initialValue: _priorityFilter,
-                    onSelected: (val) => setState(() => _priorityFilter = val),
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                          value: null, child: Text('Todas las prioridades')),
-                      const PopupMenuDivider(),
-                      ...TaskPriority.values.map((p) => PopupMenuItem(
-                            value: p,
-                            child: Row(
-                              children: [
-                                Icon(_priorityIcon(p),
-                                    size: 16, color: _priorityColor(p)),
-                                const SizedBox(width: 8),
-                                Text(_translatePriority(p)),
-                              ],
-                            ),
-                          )),
-                    ],
-                    child: Chip(
-                      avatar: Icon(
-                        _priorityFilter != null
-                            ? _priorityIcon(_priorityFilter!)
-                            : Icons.filter_list,
-                        size: 16,
-                        color: _priorityFilter != null
-                            ? _priorityColor(_priorityFilter!)
-                            : null,
-                      ),
-                      label: Text(
-                        _priorityFilter != null
-                            ? _translatePriority(_priorityFilter!)
-                            : 'Prioridad',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Search + Add
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 38,
-                      child: TextField(
-                        decoration: InputDecoration(
-                          hintText: 'Buscar tareas...',
-                          prefixIcon: const Icon(Icons.search, size: 20),
-                          contentPadding: const EdgeInsets.symmetric(
-                              vertical: 0, horizontal: 16),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          filled: true,
-                          fillColor: theme.colorScheme.surfaceContainerHighest
-                              .withValues(alpha: 0.3),
-                        ),
-                        onChanged: (val) => setState(() => _searchQuery = val),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton.icon(
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) => const TaskFormDialog(),
-                      );
-                    },
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Nueva Tarea'),
-                  ),
-                ],
-              ),
-            ),
-
-            // Table header
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.3),
-                border: Border(
-                  top: BorderSide(color: theme.dividerColor),
-                  bottom: BorderSide(color: theme.dividerColor),
+                Expanded(
+                  child: filteredTasks.isEmpty
+                      ? _buildEmptyState(hasAnyTasks: allTasks.isNotEmpty)
+                      : _buildCompactTasksList(filteredTasks),
                 ),
-              ),
-              child: const Row(
-                children: [
-                  SizedBox(width: 36), // checkbox space
-                  Expanded(
-                    flex: 4,
-                    child: Text('Tarea',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 12)),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text('Estado',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 12)),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text('Prioridad',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 12)),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text('Fecha',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 12)),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text('Asignado',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 12)),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text('Adjuntos',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 12)),
-                  ),
-                  SizedBox(width: 40),
-                ],
-              ),
-            ),
-
-            // Task list
-            Expanded(
-              child: filteredTasks.isEmpty
-                  ? _buildEmptyState()
-                  : _buildTasksList(filteredTasks),
-            ),
-          ],
+              ],
+            );
+          },
         );
       },
+    );
+  }
+
+  Widget _buildDesktopWorkspace({
+    required BoxConstraints constraints,
+    required ThemeData theme,
+    required List<TaskModel> tasks,
+    required bool hasAnyTasks,
+    required int pendingCount,
+    required int inProgressCount,
+    required int completedCount,
+    required int overdueCount,
+  }) {
+    final contentWidth = constraints.maxWidth < _desktopMinimumContentWidth
+        ? _desktopMinimumContentWidth
+        : constraints.maxWidth;
+
+    return SingleChildScrollView(
+      key: const PageStorageKey('workshop-tasks-desktop-horizontal'),
+      scrollDirection: Axis.horizontal,
+      child: SizedBox(
+        width: contentWidth,
+        height: constraints.maxHeight,
+        child: Column(
+          children: [
+            _buildDesktopStatsBar(
+              theme: theme,
+              pendingCount: pendingCount,
+              inProgressCount: inProgressCount,
+              completedCount: completedCount,
+              overdueCount: overdueCount,
+            ),
+            _buildDesktopSearchBar(theme),
+            _buildDesktopTableHeader(theme),
+            Expanded(
+              child: tasks.isEmpty
+                  ? _buildEmptyState(hasAnyTasks: hasAnyTasks)
+                  : _buildTasksList(tasks),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopStatsBar({
+    required ThemeData theme,
+    required int pendingCount,
+    required int inProgressCount,
+    required int completedCount,
+    required int overdueCount,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        border: Border(bottom: BorderSide(color: theme.dividerColor)),
+      ),
+      child: Row(
+        children: [
+          _buildStatChip(
+            icon: Icons.pending_actions,
+            label: '$pendingCount Pendientes',
+            color: Colors.amber,
+            isActive: _statusFilter == TaskStatus.pending,
+            onTap: () => setState(() => _statusFilter =
+                _statusFilter == TaskStatus.pending
+                    ? null
+                    : TaskStatus.pending),
+          ),
+          const SizedBox(width: 8),
+          _buildStatChip(
+            icon: Icons.play_circle_outline,
+            label: '$inProgressCount En Curso',
+            color: Colors.blue,
+            isActive: _statusFilter == TaskStatus.inProgress,
+            onTap: () => setState(() => _statusFilter =
+                _statusFilter == TaskStatus.inProgress
+                    ? null
+                    : TaskStatus.inProgress),
+          ),
+          const SizedBox(width: 8),
+          _buildStatChip(
+            icon: Icons.check_circle_outline,
+            label: '$completedCount Completadas',
+            color: Colors.green,
+            isActive: _statusFilter == TaskStatus.completed,
+            onTap: () => setState(() => _statusFilter =
+                _statusFilter == TaskStatus.completed
+                    ? null
+                    : TaskStatus.completed),
+          ),
+          if (overdueCount > 0) ...[
+            const SizedBox(width: 8),
+            _buildStatChip(
+              icon: Icons.warning_amber_rounded,
+              label: '$overdueCount Vencidas',
+              color: Colors.red,
+              isActive: false,
+              onTap: null,
+            ),
+          ],
+          const Spacer(),
+          _buildPriorityFilter(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopSearchBar(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+      child: Row(
+        children: [
+          Expanded(child: _buildSearchField(theme)),
+          const SizedBox(width: 12),
+          FilledButton.icon(
+            onPressed: _showNewTaskDialog,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Nueva Tarea'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopTableHeader(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        border: Border(
+          top: BorderSide(color: theme.dividerColor),
+          bottom: BorderSide(color: theme.dividerColor),
+        ),
+      ),
+      child: const Row(
+        children: [
+          SizedBox(width: 36),
+          Expanded(
+            flex: 4,
+            child: Text(
+              'Tarea',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              'Estado',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              'Prioridad',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              'Fecha',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              'Asignado',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              'Adjuntos',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            ),
+          ),
+          SizedBox(width: 40),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactControls({
+    required ThemeData theme,
+    required int visibleCount,
+    required int pendingCount,
+    required int inProgressCount,
+    required int completedCount,
+    required int overdueCount,
+  }) {
+    return Container(
+      key: const ValueKey('workshop-tasks-compact-controls'),
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.shadow.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: _buildSearchField(theme, compact: true)),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 48,
+                child: FilledButton.icon(
+                  key: const ValueKey('workshop-tasks-compact-new'),
+                  onPressed: _showNewTaskDialog,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Nueva'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildCompactStatusFilter(
+                  pendingCount: pendingCount,
+                  inProgressCount: inProgressCount,
+                  completedCount: completedCount,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: _buildCompactPriorityFilter()),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 3,
+            children: [
+              Text(
+                '$visibleCount visibles',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              Text(
+                '$pendingCount pendientes',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              Text(
+                '$inProgressCount en curso',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              Text(
+                '$completedCount completadas',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (overdueCount > 0)
+                Text(
+                  '$overdueCount vencidas',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.error,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchField(
+    ThemeData theme, {
+    bool compact = false,
+  }) {
+    final field = TextField(
+      key: const ValueKey('workshop-tasks-search'),
+      controller: _searchController,
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: 'Buscar tareas…',
+        prefixIcon: const Icon(Icons.search, size: 20),
+        prefixIconConstraints: BoxConstraints(
+          minWidth: compact ? 48 : 42,
+          minHeight: compact ? 48 : 42,
+        ),
+        contentPadding: EdgeInsets.symmetric(
+          vertical: compact ? 12 : 0,
+          horizontal: 12,
+        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        filled: true,
+        fillColor:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+      ),
+      onChanged: (val) => setState(() => _searchQuery = val),
+    );
+
+    if (!compact) {
+      return SizedBox(height: 42, child: field);
+    }
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: field,
+    );
+  }
+
+  void _showNewTaskDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => const TaskFormDialog(),
+    );
+  }
+
+  Widget _buildPriorityFilter() {
+    return PopupMenuButton<String>(
+      tooltip: 'Filtrar por prioridad',
+      initialValue: _priorityFilter?.name ?? 'all',
+      onSelected: _selectPriorityFilter,
+      itemBuilder: _buildPriorityFilterItems,
+      child: Chip(
+        avatar: Icon(
+          _priorityFilter != null
+              ? _priorityIcon(_priorityFilter!)
+              : Icons.filter_list,
+          size: 16,
+          color:
+              _priorityFilter != null ? _priorityColor(_priorityFilter!) : null,
+        ),
+        label: Text(
+          _priorityFilter != null
+              ? _translatePriority(_priorityFilter!)
+              : 'Prioridad',
+          style: const TextStyle(fontSize: 12),
+        ),
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
+
+  List<PopupMenuEntry<String>> _buildPriorityFilterItems(
+    BuildContext context,
+  ) {
+    return [
+      const PopupMenuItem(
+        value: 'all',
+        child: Text('Todas las prioridades'),
+      ),
+      const PopupMenuDivider(),
+      ...TaskPriority.values.map(
+        (priority) => PopupMenuItem(
+          value: priority.name,
+          child: Row(
+            children: [
+              Icon(
+                _priorityIcon(priority),
+                size: 16,
+                color: _priorityColor(priority),
+              ),
+              const SizedBox(width: 8),
+              Text(_translatePriority(priority)),
+            ],
+          ),
+        ),
+      ),
+    ];
+  }
+
+  void _selectPriorityFilter(String value) {
+    setState(() {
+      _priorityFilter = value == 'all'
+          ? null
+          : TaskPriority.values
+              .firstWhere((priority) => priority.name == value);
+    });
+  }
+
+  Widget _buildCompactStatusFilter({
+    required int pendingCount,
+    required int inProgressCount,
+    required int completedCount,
+  }) {
+    final selectedLabel =
+        _statusFilter == null ? 'Todos' : _translateStatus(_statusFilter!);
+    final selectedCount = switch (_statusFilter) {
+      TaskStatus.pending => pendingCount,
+      TaskStatus.inProgress => inProgressCount,
+      TaskStatus.completed => completedCount,
+      TaskStatus.cancelled => null,
+      null => null,
+    };
+
+    return PopupMenuButton<String>(
+      key: const ValueKey('workshop-tasks-compact-status-filter'),
+      tooltip: 'Filtrar por estado',
+      initialValue: _statusFilter?.name ?? 'all',
+      onSelected: (value) {
+        setState(() {
+          _statusFilter = value == 'all'
+              ? null
+              : TaskStatus.values.firstWhere((status) => status.name == value);
+        });
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: 'all', child: Text('Todos los estados')),
+        const PopupMenuDivider(),
+        ...TaskStatus.values.map(
+          (status) => PopupMenuItem(
+            value: status.name,
+            child: Text(_translateStatus(status)),
+          ),
+        ),
+      ],
+      child: _buildCompactFilterButton(
+        eyebrow: 'Estado',
+        value: selectedCount == null
+            ? selectedLabel
+            : '$selectedLabel · $selectedCount',
+      ),
+    );
+  }
+
+  Widget _buildCompactPriorityFilter() {
+    return PopupMenuButton<String>(
+      key: const ValueKey('workshop-tasks-compact-priority-filter'),
+      tooltip: 'Filtrar por prioridad',
+      initialValue: _priorityFilter?.name ?? 'all',
+      onSelected: _selectPriorityFilter,
+      itemBuilder: _buildPriorityFilterItems,
+      child: _buildCompactFilterButton(
+        eyebrow: 'Prioridad',
+        value: _priorityFilter == null
+            ? 'Todas'
+            : _translatePriority(_priorityFilter!),
+      ),
+    );
+  }
+
+  Widget _buildCompactFilterButton({
+    required String eyebrow,
+    required String value,
+  }) {
+    final theme = Theme.of(context);
+    return Container(
+      constraints: const BoxConstraints(minHeight: 48),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.55),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  eyebrow,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.keyboard_arrow_down, size: 18),
+        ],
+      ),
     );
   }
 
@@ -354,30 +695,568 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState({required bool hasAnyTasks}) {
+    final isFilteredEmpty = hasAnyTasks;
+    final theme = Theme.of(context);
+
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.task_alt,
-              size: 64, color: Colors.grey.withValues(alpha: 0.4)),
-          const SizedBox(height: 16),
-          Text(
-            _statusFilter != null
-                ? 'No hay tareas con estado "${_translateStatus(_statusFilter!)}"'
-                : 'No hay tareas',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.grey.shade600,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Semantics(
+          container: true,
+          label: isFilteredEmpty
+              ? 'Sin resultados para los filtros de tareas'
+              : 'No hay tareas registradas',
+          child: Column(
+            key: ValueKey(
+              isFilteredEmpty
+                  ? 'workshop-tasks-filtered-empty'
+                  : 'workshop-tasks-empty',
+            ),
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                isFilteredEmpty
+                    ? Icons.filter_alt_off_outlined
+                    : Icons.task_alt,
+                size: 56,
+                color:
+                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                isFilteredEmpty
+                    ? 'Sin resultados para estos filtros'
+                    : 'Aún no hay tareas',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
                 ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isFilteredEmpty
+                    ? 'Cambia la búsqueda, el estado o la prioridad.'
+                    : 'Crea la primera tarea para organizar el trabajo del taller.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (isFilteredEmpty)
+                OutlinedButton(
+                  key: const ValueKey('workshop-tasks-clear-filters'),
+                  onPressed: _clearTaskFilters,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                  ),
+                  child: const Text('Limpiar filtros'),
+                )
+              else
+                FilledButton(
+                  key: const ValueKey('workshop-tasks-empty-new'),
+                  onPressed: _showNewTaskDialog,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                  ),
+                  child: const Text('Nueva tarea'),
+                ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Crea una nueva tarea o ajusta los filtros.',
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
-          ),
-        ],
+        ),
       ),
     );
+  }
+
+  void _clearTaskFilters() {
+    _searchController.clear();
+    setState(() {
+      _searchQuery = '';
+      _statusFilter = null;
+      _priorityFilter = null;
+    });
+  }
+
+  Widget _buildCompactTasksList(List<TaskModel> tasks) {
+    return ListView.separated(
+      key: const ValueKey('workshop-tasks-compact-list'),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+      itemCount: tasks.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 8),
+      itemBuilder: (context, index) => _buildCompactTaskCard(tasks[index]),
+    );
+  }
+
+  Widget _buildCompactTaskCard(TaskModel task) {
+    final theme = Theme.of(context);
+    final isCompleted = task.status == TaskStatus.completed;
+    final isCancelled = task.status == TaskStatus.cancelled;
+    final isDimmed = isCompleted || isCancelled;
+    final isOverdue = task.dueDate != null &&
+        task.dueDate!.isBefore(DateTime.now()) &&
+        !isCompleted &&
+        !isCancelled;
+    final isEditingTitle = _editingTitleTaskId == task.id;
+    final statusColor = _statusColor(task.status);
+
+    return Material(
+      key: ValueKey('workshop-task-compact-${task.id ?? task.title}'),
+      color: isDimmed
+          ? theme.colorScheme.surfaceContainerLowest
+          : theme.colorScheme.surface,
+      borderRadius: BorderRadius.circular(14),
+      elevation: 0,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isOverdue
+                ? theme.colorScheme.error.withValues(alpha: 0.55)
+                : theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: theme.colorScheme.shadow.withValues(alpha: 0.055),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 4, 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Semantics(
+                    button: true,
+                    label: isCompleted
+                        ? 'Marcar ${task.title} como pendiente'
+                        : 'Marcar ${task.title} como completada',
+                    child: InkResponse(
+                      key: ValueKey(
+                          'workshop-task-compact-toggle-${task.id ?? task.title}'),
+                      onTap: () => _toggleStatus(task),
+                      radius: 24,
+                      child: SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: Center(
+                          child: Container(
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isCompleted
+                                  ? theme.colorScheme.primary
+                                  : Colors.transparent,
+                              border: Border.all(
+                                color: isCompleted
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.outline,
+                                width: 2,
+                              ),
+                            ),
+                            child: isCompleted
+                                ? Icon(
+                                    Icons.check,
+                                    size: 14,
+                                    color: theme.colorScheme.onPrimary,
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 5),
+                      child: isEditingTitle
+                          ? _buildCompactTitleEditor(task)
+                          : InkWell(
+                              key: ValueKey(
+                                  'workshop-task-compact-title-${task.id ?? task.title}'),
+                              onTap: () {
+                                setState(() {
+                                  _editingTitleTaskId = task.id;
+                                  _titleController.text = task.title;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(6),
+                              child: ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(minHeight: 48),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      task.title,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style:
+                                          theme.textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        decoration: isCompleted
+                                            ? TextDecoration.lineThrough
+                                            : null,
+                                        color: isDimmed
+                                            ? theme.colorScheme.onSurfaceVariant
+                                            : theme.colorScheme.onSurface,
+                                      ),
+                                    ),
+                                    if (task.description != null &&
+                                        task.description!
+                                            .trim()
+                                            .isNotEmpty) ...[
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        task.description!,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style:
+                                            theme.textTheme.bodySmall?.copyWith(
+                                          color: theme
+                                              .colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: PopupMenuButton<String>(
+                      key: ValueKey(
+                          'workshop-task-compact-more-${task.id ?? task.title}'),
+                      tooltip: 'Acciones de tarea',
+                      icon: const Icon(Icons.more_horiz, size: 20),
+                      itemBuilder: _buildTaskActionMenuItems,
+                      onSelected: (value) => _handleMenuAction(value, task),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_hasLinks(task))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 6,
+                  children: [
+                    if (_hasLinkedJob(task))
+                      _buildCompactLink(
+                        key: ValueKey(
+                            'workshop-task-linked-job-${task.id ?? task.title}'),
+                        label: 'Trabajo ${task.linkedJobNumber}',
+                        onTap: () => _openLinkedJob(task),
+                      ),
+                    if (task.linkedPurchaseInvoiceNumber != null &&
+                        task.linkedPurchaseInvoiceId != null)
+                      _buildCompactLink(
+                        key: ValueKey(
+                            'workshop-task-linked-purchase-${task.id ?? task.title}'),
+                        label: 'Compra ${task.linkedPurchaseInvoiceNumber}',
+                        onTap: () => context
+                            .push('/purchases/${task.linkedPurchaseInvoiceId}'),
+                      ),
+                    if (task.linkedSalesInvoiceNumber != null &&
+                        task.linkedSalesInvoiceId != null)
+                      _buildCompactLink(
+                        key: ValueKey(
+                            'workshop-task-linked-sale-${task.id ?? task.title}'),
+                        label: 'Venta ${task.linkedSalesInvoiceNumber}',
+                        onTap: () => context.push(
+                            '/sales/invoices/${task.linkedSalesInvoiceId}'),
+                      ),
+                  ],
+                ),
+              ),
+            Divider(
+              height: 1,
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: Builder(
+                    builder: (anchorContext) => _buildCompactInfoAction(
+                      key: ValueKey(
+                          'workshop-task-compact-status-${task.id ?? task.title}'),
+                      label: 'Estado',
+                      value: _translateStatus(task.status),
+                      indicatorColor: statusColor,
+                      onTap: () => _showStatusMenu(
+                        task,
+                        anchorContext: anchorContext,
+                      ),
+                    ),
+                  ),
+                ),
+                _buildCompactVerticalDivider(theme),
+                Expanded(
+                  child: Builder(
+                    builder: (anchorContext) => _buildCompactInfoAction(
+                      key: ValueKey(
+                          'workshop-task-compact-priority-${task.id ?? task.title}'),
+                      label: 'Prioridad',
+                      value: _translatePriority(task.priority),
+                      onTap: () => _showPriorityMenu(
+                        task,
+                        anchorContext: anchorContext,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Divider(
+              height: 1,
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildCompactInfoAction(
+                    key: ValueKey(
+                        'workshop-task-compact-date-${task.id ?? task.title}'),
+                    label: isOverdue ? 'Vencida' : 'Plazo',
+                    value: task.dueDate == null
+                        ? 'Sin fecha'
+                        : DateFormat('dd/MM/yy').format(task.dueDate!),
+                    valueColor: isOverdue ? theme.colorScheme.error : null,
+                    onTap: () => _showDatePicker(task),
+                  ),
+                ),
+                _buildCompactVerticalDivider(theme),
+                Expanded(
+                  child: Builder(
+                    builder: (anchorContext) => _buildCompactInfoAction(
+                      key: ValueKey(
+                          'workshop-task-compact-assignee-${task.id ?? task.title}'),
+                      label: 'Asignado',
+                      value: task.assigneeName ?? 'Sin asignar',
+                      onTap: () => _showAssigneeMenu(
+                        task,
+                        anchorContext: anchorContext,
+                      ),
+                    ),
+                  ),
+                ),
+                _buildCompactVerticalDivider(theme),
+                Expanded(
+                  child: _buildCompactInfoAction(
+                    key: ValueKey(
+                        'workshop-task-compact-attachments-${task.id ?? task.title}'),
+                    label: 'Adjuntos',
+                    value: task.attachments.isEmpty
+                        ? 'Agregar'
+                        : '${task.attachments.length}',
+                    onTap: () => _pickFilesForTask(task),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactTitleEditor(TaskModel task) {
+    final isSaving = _savingTitleTaskId == task.id;
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            key: ValueKey(
+                'workshop-task-compact-title-editor-${task.id ?? task.title}'),
+            controller: _titleController,
+            autofocus: true,
+            enabled: !isSaving,
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onSubmitted: (value) => _saveTitleEdit(task, value),
+          ),
+        ),
+        SizedBox(
+          width: 48,
+          height: 48,
+          child: IconButton(
+            key: ValueKey(
+                'workshop-task-compact-title-save-${task.id ?? task.title}'),
+            tooltip: 'Guardar título',
+            icon: isSaving
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.check, size: 18),
+            onPressed: isSaving
+                ? null
+                : () => _saveTitleEdit(task, _titleController.text),
+          ),
+        ),
+        SizedBox(
+          width: 48,
+          height: 48,
+          child: IconButton(
+            key: ValueKey(
+                'workshop-task-compact-title-cancel-${task.id ?? task.title}'),
+            tooltip: 'Cancelar edición',
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: isSaving
+                ? null
+                : () => setState(() => _editingTitleTaskId = null),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactVerticalDivider(ThemeData theme) {
+    return Container(
+      width: 1,
+      height: 38,
+      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+    );
+  }
+
+  Widget _buildCompactInfoAction({
+    required Key key,
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+    Color? indicatorColor,
+    Color? valueColor,
+  }) {
+    final theme = Theme.of(context);
+    return InkWell(
+      key: key,
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 52),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  if (indicatorColor != null) ...[
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: indicatorColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                  ],
+                  Expanded(
+                    child: Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: valueColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactLink({
+    required Key key,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return Semantics(
+      button: true,
+      label: 'Abrir $label',
+      child: InkWell(
+        key: key,
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<PopupMenuEntry<String>> _buildTaskActionMenuItems(
+    BuildContext context,
+  ) {
+    return const [
+      PopupMenuItem(
+        value: 'edit',
+        child: Row(
+          children: [
+            Icon(Icons.edit_outlined, size: 16),
+            SizedBox(width: 8),
+            Text('Editar'),
+          ],
+        ),
+      ),
+      PopupMenuDivider(),
+      PopupMenuItem(
+        value: 'delete',
+        child: Row(
+          children: [
+            Icon(Icons.delete_outline, size: 16, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Eliminar', style: TextStyle(color: Colors.red)),
+          ],
+        ),
+      ),
+    ];
   }
 
   Widget _buildTasksList(List<TaskModel> tasks) {
@@ -562,12 +1441,12 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
               padding: const EdgeInsets.only(top: 4),
               child: Row(
                 children: [
-                  if (task.linkedJobNumber != null)
+                  if (_hasLinkedJob(task))
                     _buildLinkBadge(
                       icon: Icons.build,
                       label: 'Trabajo #${task.linkedJobNumber}',
                       color: Colors.blue,
-                      onTap: () => context.go('/taller/pegas'),
+                      onTap: () => _openLinkedJob(task),
                     ),
                   if (task.linkedPurchaseInvoiceNumber != null &&
                       task.linkedPurchaseInvoiceId != null)
@@ -576,7 +1455,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
                       label: 'Compra #${task.linkedPurchaseInvoiceNumber}',
                       color: Colors.orange,
                       onTap: () => context
-                          .go('/purchases/${task.linkedPurchaseInvoiceId}'),
+                          .push('/purchases/${task.linkedPurchaseInvoiceId}'),
                     ),
                   if (task.linkedSalesInvoiceNumber != null &&
                       task.linkedSalesInvoiceId != null)
@@ -585,7 +1464,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
                       label: 'Venta #${task.linkedSalesInvoiceNumber}',
                       color: Colors.green,
                       onTap: () => context
-                          .go('/sales/invoices/${task.linkedSalesInvoiceId}'),
+                          .push('/sales/invoices/${task.linkedSalesInvoiceId}'),
                     ),
                 ],
               ),
@@ -1063,15 +1942,31 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   // INLINE EDIT ACTIONS
   // ══════════════════════════════════════════════════════════════════
 
-  void _saveTitleEdit(TaskModel task, String newTitle) async {
-    setState(() => _editingTitleTaskId = null);
+  Future<void> _saveTitleEdit(TaskModel task, String newTitle) async {
     final trimmed = newTitle.trim();
-    if (trimmed.isEmpty || trimmed == task.title) return;
-    await _updateTask(task.copyWith(title: trimmed));
+    if (trimmed.isEmpty || trimmed == task.title) {
+      setState(() => _editingTitleTaskId = null);
+      return;
+    }
+
+    setState(() => _savingTitleTaskId = task.id);
+    final saved = await _updateTask(task.copyWith(title: trimmed));
+    if (!mounted) return;
+
+    setState(() {
+      _savingTitleTaskId = null;
+      if (saved) {
+        _editingTitleTaskId = null;
+      }
+    });
   }
 
-  void _showStatusMenu(TaskModel task) {
-    final RenderBox button = context.findRenderObject() as RenderBox;
+  void _showStatusMenu(
+    TaskModel task, {
+    BuildContext? anchorContext,
+  }) {
+    final menuContext = anchorContext ?? context;
+    final RenderBox button = menuContext.findRenderObject() as RenderBox;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
 
     showMenu<TaskStatus>(
@@ -1120,8 +2015,12 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     });
   }
 
-  void _showPriorityMenu(TaskModel task) {
-    final RenderBox button = context.findRenderObject() as RenderBox;
+  void _showPriorityMenu(
+    TaskModel task, {
+    BuildContext? anchorContext,
+  }) {
+    final menuContext = anchorContext ?? context;
+    final RenderBox button = menuContext.findRenderObject() as RenderBox;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
 
     showMenu<TaskPriority>(
@@ -1205,8 +2104,12 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     }
   }
 
-  void _showAssigneeMenu(TaskModel task) {
-    final RenderBox button = context.findRenderObject() as RenderBox;
+  void _showAssigneeMenu(
+    TaskModel task, {
+    BuildContext? anchorContext,
+  }) {
+    final menuContext = anchorContext ?? context;
+    final RenderBox button = menuContext.findRenderObject() as RenderBox;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
 
     final items = <PopupMenuEntry<String?>>[];
@@ -1308,14 +2211,16 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     _updateTask(task.copyWith(status: newStatus));
   }
 
-  Future<void> _updateTask(TaskModel updatedTask) async {
+  Future<bool> _updateTask(TaskModel updatedTask) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await context.read<TaskService>().updateTask(updatedTask);
+      return true;
     } catch (e) {
       if (mounted) {
         messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
       }
+      return false;
     }
   }
 
@@ -1392,11 +2297,23 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   }
 
   bool _hasLinks(TaskModel task) {
-    return task.linkedJobNumber != null ||
+    return _hasLinkedJob(task) ||
         (task.linkedPurchaseInvoiceNumber != null &&
             task.linkedPurchaseInvoiceId != null) ||
         (task.linkedSalesInvoiceNumber != null &&
             task.linkedSalesInvoiceId != null);
+  }
+
+  bool _hasLinkedJob(TaskModel task) {
+    return task.linkedJobNumber != null &&
+        task.linkedJobId != null &&
+        task.linkedJobId!.trim().isNotEmpty;
+  }
+
+  Future<void> _openLinkedJob(TaskModel task) async {
+    final jobId = task.linkedJobId?.trim();
+    if (jobId == null || jobId.isEmpty) return;
+    await context.push('/taller/pegas/${Uri.encodeComponent(jobId)}');
   }
 
   // ══════════════════════════════════════════════════════════════════

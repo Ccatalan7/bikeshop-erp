@@ -22,6 +22,7 @@ import '../../sales/services/sales_service.dart';
 import '../services/pos_service.dart';
 import '../models/pos_cart_item.dart';
 import '../widgets/pos_product_image.dart';
+import '../widgets/pos_quantity_stepper.dart';
 import '../widgets/product_tile.dart';
 import '../models/payment_method.dart' as old_pm; // Old enum-based model
 import '../models/pos_transaction.dart';
@@ -2775,35 +2776,48 @@ class _CashierPanelState extends State<_CashierPanel> {
         '\$${item.total.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 54),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _CartItemThumbnail(item: item),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 1, right: 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      item.displayName,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        height: 1.16,
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CartItemThumbnail(item: item),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        item.displayName,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          height: 1.16,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (item.product?.sku.isNotEmpty == true)
+                      if (item.product?.sku.isNotEmpty == true)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            'SKU: ${item.product!.sku}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              height: 1.1,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: Text(
-                          'SKU: ${item.product!.sku}',
+                          unitPriceText,
                           style: theme.textTheme.labelSmall?.copyWith(
                             height: 1.1,
                             color: theme.colorScheme.onSurfaceVariant,
@@ -2812,67 +2826,43 @@ class _CashierPanelState extends State<_CashierPanel> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        unitPriceText,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          height: 1.1,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 94,
-              height: 32,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: theme.colorScheme.outlineVariant
-                        .withValues(alpha: 0.65),
+                    ],
                   ),
-                  borderRadius: BorderRadius.circular(7),
-                ),
-                child: Row(
-                  children: [
-                    _QuantityButton(
-                      icon: Icons.remove_rounded,
-                      color: theme.colorScheme.onSurfaceVariant,
-                      onTap: () => posService.updateCartItemQuantity(
-                          item.id, item.quantity - 1),
-                    ),
-                    Expanded(
-                      child: Text(
-                        '${item.quantity}',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    _QuantityButton(
-                      icon: Icons.add_rounded,
-                      color: theme.colorScheme.primary,
-                      onTap: () => posService.updateCartItemQuantity(
-                          item.id, item.quantity + 1),
-                    ),
-                  ],
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 72,
-              height: 32,
-              child: Align(
-                alignment: Alignment.centerRight,
+              IconButton(
+                key: ValueKey('pos-cart-remove-${item.id}'),
+                onPressed: () => posService.removeFromCart(item.id),
+                tooltip: 'Quitar ${item.displayName}',
+                constraints: const BoxConstraints.tightFor(
+                  width: 48,
+                  height: 48,
+                ),
+                icon: Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              PosQuantityStepper(
+                itemName: item.displayName,
+                quantity: item.quantity,
+                onDecrement: () => posService.updateCartItemQuantity(
+                  item.id,
+                  item.quantity - 1,
+                ),
+                onIncrement: () => posService.updateCartItemQuantity(
+                  item.id,
+                  item.quantity + 1,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
                 child: Text(
                   lineTotalText,
                   textAlign: TextAlign.right,
@@ -2884,27 +2874,9 @@ class _CashierPanelState extends State<_CashierPanel> {
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 4),
-            SizedBox(
-              width: 18,
-              height: 32,
-              child: Tooltip(
-                message: 'Quitar',
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => posService.removeFromCart(item.id),
-                  child: Icon(
-                    Icons.close_rounded,
-                    size: 16,
-                    color: theme.colorScheme.onSurfaceVariant
-                        .withValues(alpha: 0.65),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -4242,31 +4214,6 @@ class _SearchableSelectorFieldState<T>
             widget.onChanged(selection);
           },
         ),
-      ),
-    );
-  }
-}
-
-class _QuantityButton extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _QuantityButton({
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: SizedBox(
-        width: 30,
-        height: 32,
-        child: Icon(icon, size: 15, color: color),
       ),
     );
   }

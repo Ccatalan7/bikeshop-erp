@@ -7,6 +7,11 @@ on:
     branches:
       - smartpegas1.0
     paths:
+      - "AGENTS.md"
+      - ".github/copilot-instructions.md"
+      - ".github/GUI_DESIGN_PRINCIPLES.md"
+      - ".github/GUI_MOBILE_DESIGN_PRINCIPLES.md"
+      - "docs/architecture/canonical-ui-surfaces.md"
       - "assets/**"
       - "lib/**"
       - "packages/**"

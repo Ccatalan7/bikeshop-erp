@@ -22,6 +22,7 @@ class AppFileStorageService {
   List<_SupplierUrlCandidate>? _supplierUrlCandidates;
   DateTime? _supplierUrlCandidatesLoadedAt;
   static const Duration _supplierUrlCacheMaxAge = Duration(minutes: 5);
+  static const int _historicalFilePageSize = 500;
 
   Stream<AppStoredFile> get savedFiles => _savedFileController.stream;
 
@@ -64,6 +65,53 @@ class AppFileStorageService {
     return (rows as List<dynamic>)
         .map((row) => AppStoredFile.fromJson(row as Map<String, dynamic>))
         .toList(growable: false);
+  }
+
+  /// Lists every active file created within [startsAt, endsAt).
+  ///
+  /// The boundaries are normalized to UTC and every page remains explicitly
+  /// tenant-scoped. This does not alter the existing latest-files behavior in
+  /// [listFiles].
+  Future<List<AppStoredFile>> listFilesForRange({
+    required DateTime startsAt,
+    required DateTime endsAt,
+  }) async {
+    final startUtc = startsAt.toUtc();
+    final endUtc = endsAt.toUtc();
+    if (!endUtc.isAfter(startUtc)) {
+      throw ArgumentError.value(
+        endsAt,
+        'endsAt',
+        'Must be after startsAt.',
+      );
+    }
+
+    final tenantId = await _requireTenantId();
+    final files = <AppStoredFile>[];
+    var offset = 0;
+
+    while (true) {
+      final rows = await _supabase
+          .from('app_files')
+          .select()
+          .eq('tenant_id', tenantId)
+          .isFilter('deleted_at', null)
+          .gte('created_at', startUtc.toIso8601String())
+          .lt('created_at', endUtc.toIso8601String())
+          .order('created_at', ascending: false)
+          .order('id', ascending: false)
+          .range(offset, offset + _historicalFilePageSize - 1);
+      final page = (rows as List<dynamic>)
+          .map(
+            (row) => AppStoredFile.fromJson(row as Map<String, dynamic>),
+          )
+          .toList(growable: false);
+      files.addAll(page);
+      if (page.length < _historicalFilePageSize) break;
+      offset += _historicalFilePageSize;
+    }
+
+    return files;
   }
 
   Future<AppStoredFile?> getFileById(String fileId) async {

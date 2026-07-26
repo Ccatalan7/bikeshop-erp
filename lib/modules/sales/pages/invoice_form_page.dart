@@ -17,6 +17,7 @@ import '../../../shared/services/barcode_scanner_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/utils/invoice_pdf_generator.dart';
+import '../../../shared/utils/responsive_viewport.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -35,6 +36,7 @@ import 'dart:io' show Platform, File;
 
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
+import '../widgets/responsive_invoice_section_card.dart';
 import '../widgets/sales_corrections_menu.dart';
 
 /// The main, full-screen page for creating and editing sales invoices.
@@ -2313,45 +2315,17 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   }
 
   Widget _buildSectionCard(
-    ThemeData theme, {
+    ThemeData _, {
     required IconData icon,
     required String title,
     required List<Widget> children,
     Widget? trailing,
   }) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor:
-                      theme.colorScheme.primary.withValues(alpha: 0.12),
-                  child: Icon(icon, color: theme.colorScheme.primary, size: 18),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  title,
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                if (trailing != null) ...[
-                  const Spacer(),
-                  trailing,
-                ],
-              ],
-            ),
-            const SizedBox(height: 20),
-            ...children,
-          ],
-        ),
-      ),
+    return ResponsiveInvoiceSectionCard(
+      icon: icon,
+      title: title,
+      trailing: trailing,
+      children: children,
     );
   }
 
@@ -3107,9 +3081,12 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   /// When a bike is selected here, all newly added line items are pre-assigned to it.
   Widget _buildDefaultBikeDropdown(ThemeData theme) {
     if (_availableJobBikes.isEmpty) return const SizedBox.shrink();
+    final usesPhoneLayout = ResponsiveViewport.widthOf(context) <
+        ResponsiveViewport.phoneMaxExclusive;
 
     return Container(
-      height: 32,
+      width: usesPhoneLayout ? double.infinity : null,
+      height: usesPhoneLayout ? 48 : 32,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: _defaultJobBikeId != null
@@ -3145,6 +3122,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   ? theme.colorScheme.primary
                   : theme.colorScheme.onSurfaceVariant),
           isDense: true,
+          isExpanded: usesPhoneLayout,
           items: [
             DropdownMenuItem<String?>(
               value: null,

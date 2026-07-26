@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -741,6 +742,7 @@ class MechanicJobFormPage extends StatefulWidget {
       initialJobType; // Pre-select type: 'service'|'warranty'|'quotation'|'item_service'
   final String? initialTab; // 'general'|'diagnosis'|'products'
   final bool isEmbedded;
+  final bool isInlineWorkspace;
   final VoidCallback? onSaved;
   final VoidCallback? onCanceled;
 
@@ -752,9 +754,13 @@ class MechanicJobFormPage extends StatefulWidget {
     this.initialJobType,
     this.initialTab,
     this.isEmbedded = false,
+    this.isInlineWorkspace = false,
     this.onSaved,
     this.onCanceled,
-  });
+  }) : assert(
+          !isInlineWorkspace || isEmbedded,
+          'isInlineWorkspace requires isEmbedded.',
+        );
 
   @override
   State<MechanicJobFormPage> createState() => _MechanicJobFormPageState();
@@ -892,6 +898,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   bool _isSaving = false;
   bool _isLoadingSelectedBikeProfile = false;
   String? _generatingNarrativeDraftTabId;
+  String? _inlineDraftBaselineFingerprint;
+  bool _isInlineDiscardPromptOpen = false;
 
   // Image handling
   List<String> _imageUrls = [];
@@ -1122,6 +1130,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         setState(() {
           _isLoading = false;
         });
+        _captureInlineDraftBaseline();
       }
     } catch (e) {
       if (mounted) {
@@ -1923,6 +1932,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   Future<Customer?> _createQuickCustomer(String name) async {
     if (name.trim().isEmpty) return null;
     try {
+      final customerService =
+          Provider.of<CustomerService>(context, listen: false);
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) {
         throw Exception('No se pudo obtener el tenant_id del usuario');
@@ -1934,9 +1945,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         rut: '',
       );
 
-      final customerService =
-          Provider.of<CustomerService>(context, listen: false);
       final created = await customerService.createCustomer(customer);
+      if (!mounted) return created;
 
       // Add to cached list
       setState(() {
@@ -2438,11 +2448,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 child: IconButton(
                   onPressed: canOpenProfile ? _openSelectedBikeRecord : null,
                   icon: const Icon(Icons.open_in_new_rounded, size: 17),
-                  visualDensity: VisualDensity.compact,
+                  visualDensity: VisualDensity.standard,
                   splashRadius: 18,
                   constraints: const BoxConstraints.tightFor(
-                    width: 34,
-                    height: 34,
+                    width: 48,
+                    height: 48,
                   ),
                   padding: EdgeInsets.zero,
                 ),
@@ -2457,7 +2467,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 icon: const Icon(Icons.edit_outlined, size: 16),
                 label: Text(actionLabel),
                 style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
+                  visualDensity: VisualDensity.standard,
+                  minimumSize: const Size(0, 48),
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 ),
@@ -2962,6 +2973,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }
 
   void _handleCancel() {
+    if (_isSaving) return;
+    if (widget.isInlineWorkspace) {
+      unawaited(_handleInlineWorkspaceCancel());
+      return;
+    }
+
     if (widget.isEmbedded) {
       if (widget.onCanceled != null) widget.onCanceled!();
     } else {
@@ -2971,6 +2988,199 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         context.go('/taller/pegas');
       }
     }
+  }
+
+  void _captureInlineDraftBaseline() {
+    if (!widget.isInlineWorkspace ||
+        _isLoading ||
+        _existingJobLoadError != null) {
+      return;
+    }
+    _inlineDraftBaselineFingerprint = _buildInlineDraftFingerprint();
+  }
+
+  bool get _inlineDraftHasUnsavedChanges {
+    final baseline = _inlineDraftBaselineFingerprint;
+    return widget.isInlineWorkspace &&
+        baseline != null &&
+        baseline != _buildInlineDraftFingerprint();
+  }
+
+  Future<void> _handleInlineWorkspaceCancel() async {
+    if (_isSaving || _isInlineDiscardPromptOpen) return;
+
+    if (_inlineDraftHasUnsavedChanges) {
+      _isInlineDiscardPromptOpen = true;
+      final shouldDiscard = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => Semantics(
+          namesRoute: true,
+          label: 'Confirmar descarte de cambios',
+          child: AlertDialog(
+            key: const ValueKey('mechanic-job-inline-discard-dialog'),
+            title: const Text('¿Descartar cambios?'),
+            content: const Text(
+              'Los cambios de este trabajo todavía no se han guardado.',
+            ),
+            actions: [
+              TextButton(
+                key: const ValueKey(
+                  'mechanic-job-inline-discard-cancel',
+                ),
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Seguir editando'),
+              ),
+              FilledButton(
+                key: const ValueKey(
+                  'mechanic-job-inline-discard-confirm',
+                ),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                  foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+                ),
+                child: const Text('Descartar'),
+              ),
+            ],
+          ),
+        ),
+      );
+      _isInlineDiscardPromptOpen = false;
+      if (!mounted || shouldDiscard != true || _isSaving) return;
+    }
+
+    widget.onCanceled?.call();
+  }
+
+  String _buildInlineDraftFingerprint() {
+    final draft = <String, Object?>{
+      'customer_id': _selectedCustomer?.id,
+      'selected_bike_id': _selectedBike?.id,
+      'job_type': _jobType.name,
+      'service_commercial_path': _serviceCommercialPath.name,
+      'subject_id': _selectedSubject?.id,
+      'subject_notes': _subjectNotesController.text.trim(),
+      'warranty_source_job_id': _selectedWarrantySource?.jobId,
+      'warranty_outcome': _warrantyOutcome?.name,
+      'warranty_reason': _warrantyDecisionReasonController.text.trim(),
+      'quotation_status': _quotationStatus?.name,
+      'quotation_valid_until': _quotationValidUntil,
+      'priority': _selectedPriority.name,
+      'status': _selectedStatus.name,
+      'custom_status_id': _selectedCustomStatus?.id,
+      'arrival_date': _selectedArrivalDate,
+      'delivery_deadline': _selectedDeadline,
+      'requires_approval': _requiresApproval,
+      'tax_treatment': _taxTreatment.name,
+      'discount': _discountAmount,
+      'estimated_duration_hours':
+          _inlineDraftNumber(_estimatedDurationController),
+      'actual_labor_hours': _inlineDraftNumber(_actualLaborHoursController),
+      'legacy_narrative': {
+        'client_request': _clientRequestController.text.trim(),
+        'diagnosis': _diagnosisController.text.trim(),
+        'work_summary': _workSummaryController.text.trim(),
+        'technician_notes': _technicianNotesController.text.trim(),
+      },
+      'bike_tabs': _bikeTabs.map(_inlineBikeTabDraft).toList(growable: false),
+      'standalone_items':
+          _partItems.map(_inlinePartDraft).toList(growable: false),
+      'services':
+          _serviceItems.map(_inlineServiceDraft).toList(growable: false),
+      'image_urls': List<String>.from(_imageUrls),
+      'new_images': _newImages
+          .map(
+            (image) => {
+              'name': image.name,
+              'length': image.bytes.length,
+            },
+          )
+          .toList(growable: false),
+      'pending_bike_profiles': _pendingBikeProfileOverrides.map(
+        (bikeId, profile) => MapEntry(bikeId, profile.toJson()),
+      ),
+      'pending_wizard_answers': _pendingServiceWizardAnswers,
+    };
+
+    return jsonEncode(_canonicalInlineDraftValue(draft));
+  }
+
+  double? _inlineDraftNumber(TextEditingController controller) {
+    return double.tryParse(
+      controller.text.trim().replaceAll(',', '.'),
+    );
+  }
+
+  Map<String, Object?> _inlineBikeTabDraft(_BikeTabData tab) {
+    return {
+      'tab_id': tab.tabId,
+      'job_bike_id': tab.jobBikeId,
+      'bike_id': tab.bike?.id,
+      'is_general': tab.isGeneralTab,
+      'client_request': tab.clientRequestController.text.trim(),
+      'diagnosis': tab.diagnosisController.text.trim(),
+      'work_requested': tab.workRequestedController.text.trim(),
+      'technician_notes': tab.technicianNotesController.text.trim(),
+      'diagnosis_sheet': tab.diagnosisSheet.toJson(),
+      'is_warranty_work': tab.isWarrantyWork,
+      'requires_approval': tab.requiresApproval,
+      'approved_by_customer': tab.approvedByCustomer,
+      'items': tab.partItems.map(_inlinePartDraft).toList(growable: false),
+    };
+  }
+
+  Map<String, Object?> _inlinePartDraft(_JobPartItem item) {
+    return {
+      'id': item.id,
+      'product_id': item.product?.id,
+      'name': item.name.trim(),
+      'is_catalog_product': item.isCatalogProduct,
+      'is_service_item': item.isServiceItem,
+      'quantity': item.quantity,
+      'unit_price': item.unitPrice,
+      'location': item.location.name,
+      'notes': item.notes?.trim(),
+      'wizard_answers': _effectiveWizardAnswersForItem(item),
+    };
+  }
+
+  Map<String, Object?> _inlineServiceDraft(_JobServiceItem item) {
+    return {
+      'id': item.id,
+      'product_id': item.serviceProduct?.id,
+      'description': item.description.trim(),
+      'hours': item.hours,
+      'hourly_rate': item.hourlyRate,
+      'date': item.date,
+    };
+  }
+
+  Object? _canonicalInlineDraftValue(Object? value) {
+    if (value == null || value is String || value is num || value is bool) {
+      return value;
+    }
+    if (value is DateTime) {
+      return value.toUtc().toIso8601String();
+    }
+    if (value is Enum) {
+      return value.name;
+    }
+    if (value is Map) {
+      final entries = value.entries
+          .map((entry) => MapEntry(entry.key.toString(), entry.value))
+          .toList()
+        ..sort((a, b) => a.key.compareTo(b.key));
+      return <String, Object?>{
+        for (final entry in entries)
+          entry.key: _canonicalInlineDraftValue(entry.value),
+      };
+    }
+    if (value is Iterable) {
+      return value
+          .map<Object?>((item) => _canonicalInlineDraftValue(item))
+          .toList(growable: false);
+    }
+    return value.toString();
   }
 
   Future<bool> _confirmDiagnosisOnlyAfterFinancialStateChange() async {
@@ -3953,6 +4163,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         _pendingWarrantyDecisionFingerprint = null;
         _pendingStatusTransitionOperationKey = null;
         _pendingStatusTransitionFingerprint = null;
+        _captureInlineDraftBaseline();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(widget.jobId != null
@@ -4255,9 +4466,22 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     );
 
     if (widget.isEmbedded) {
-      return Scaffold(
-        backgroundColor: Colors.white,
-        body: content,
+      final embeddedSurface = ColoredBox(
+        color: theme.colorScheme.surface,
+        child: content,
+      );
+
+      if (!widget.isInlineWorkspace) {
+        return embeddedSurface;
+      }
+
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop || _isSaving) return;
+          _handleCancel();
+        },
+        child: embeddedSurface,
       );
     }
 
@@ -4326,6 +4550,13 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 600;
+
+        if (isMobile && widget.isInlineWorkspace) {
+          return _buildInlineWorkspaceHeader(
+            theme,
+            isEditing: isEditing,
+          );
+        }
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -4475,6 +4706,130 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                 ),
         );
       },
+    );
+  }
+
+  Widget _buildInlineWorkspaceHeader(
+    ThemeData theme, {
+    required bool isEditing,
+  }) {
+    final jobLabel = _existingJob?.jobNumber?.trim();
+    final title = jobLabel != null && jobLabel.isNotEmpty
+        ? jobLabel
+        : isEditing
+            ? 'Trabajo'
+            : 'Nuevo trabajo';
+    final subtitle = switch (widget.initialTab) {
+      'products' => 'Productos y servicios',
+      'diagnosis' => 'Diagnóstico',
+      _ => 'Ficha del trabajo',
+    };
+    final canMessageCustomer =
+        isEditing && _selectedCustomer != null && _selectedBike != null;
+    final shouldNotifyReady = _selectedStatus == JobStatus.finalizado ||
+        _selectedStatus == JobStatus.entregado;
+    final messageLabel = shouldNotifyReady ? 'Avisar cliente' : 'WhatsApp';
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 58),
+      padding: const EdgeInsets.fromLTRB(4, 5, 8, 5),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.55),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            key: const ValueKey('mechanic-job-inline-back'),
+            onPressed: _isSaving ? null : _handleCancel,
+            tooltip: 'Volver a trabajos',
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
+          const SizedBox(width: 2),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          PopupMenuButton<String>(
+            key: const ValueKey('mechanic-job-inline-overflow'),
+            enabled: canMessageCustomer && !_isSaving,
+            tooltip: canMessageCustomer ? messageLabel : 'Más acciones',
+            icon: const Icon(Icons.more_vert_rounded),
+            onSelected: (value) {
+              if (value != 'message_customer') return;
+              if (shouldNotifyReady) {
+                unawaited(_openReadyForPickupConversation());
+              } else {
+                unawaited(_openJobStatusConversation());
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem<String>(
+                value: 'message_customer',
+                child: Row(
+                  children: [
+                    Icon(
+                      shouldNotifyReady
+                          ? Icons.check_circle_outline_rounded
+                          : Icons.chat_bubble_outline_rounded,
+                      size: 19,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(messageLabel),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 2),
+          FilledButton(
+            key: const ValueKey('mechanic-job-inline-save'),
+            onPressed: _canSaveJob ? _saveJob : null,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 13),
+            ),
+            child: _isSaving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(
+                    _isFinalQuotationReadOnly ? 'Solo lectura' : 'Guardar',
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -4830,8 +5185,29 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           );
         } else {
           // Single-column layout for narrow screens
+          final customerSection = _buildSectionCard(
+            theme,
+            icon: Icons.person_outline,
+            title: 'Cliente',
+            child: _lockFormContent(
+              _buildCustomerBikeSection(),
+              locked: _isFinalQuotationReadOnly,
+            ),
+          );
+          final workbenchSection = _buildJobDetailsSectionCard(
+            theme,
+            icon: Icons.build_outlined,
+            title: 'Detalles del Trabajo',
+            child: _buildWorkbenchContent(theme),
+          );
+          final prioritizesRequestedWorkbench = widget.isInlineWorkspace &&
+              (widget.initialTab == 'products' ||
+                  widget.initialTab == 'diagnosis');
+
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: widget.isInlineWorkspace
+                ? const EdgeInsets.fromLTRB(8, 12, 8, 16)
+                : const EdgeInsets.all(16),
             child: Column(
               children: [
                 if (_isCommercialSnapshotLocked ||
@@ -4839,23 +5215,15 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                   _buildCommercialLockBanner(theme),
                   const SizedBox(height: 16),
                 ],
-                _buildSectionCard(
-                  theme,
-                  icon: Icons.person_outline,
-                  title: 'Cliente',
-                  child: _lockFormContent(
-                    _buildCustomerBikeSection(),
-                    locked: _isFinalQuotationReadOnly,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Job details with embedded bike tabs (mobile)
-                _buildJobDetailsSectionCard(
-                  theme,
-                  icon: Icons.build_outlined,
-                  title: 'Detalles del Trabajo',
-                  child: _buildWorkbenchContent(theme),
-                ),
+                if (prioritizesRequestedWorkbench) ...[
+                  workbenchSection,
+                  const SizedBox(height: 16),
+                  customerSection,
+                ] else ...[
+                  customerSection,
+                  const SizedBox(height: 16),
+                  workbenchSection,
+                ],
                 const SizedBox(height: 16),
                 _buildSectionCard(
                   theme,
@@ -4937,6 +5305,52 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             ? 'Este documento ya salió de edición. Para aprobar, rechazar, reabrir o convertir usa las acciones auditadas de la tabla; así no se altera lo enviado al cliente.'
             : 'Este trabajo ya es un servicio cobrable y puede seguir actualizándose normalmente. Los valores que el cliente aprobó permanecen inmutables en el historial de la propuesta.';
 
+    if (widget.isInlineWorkspace &&
+        !isFinanciallyProtected &&
+        !isFinalQuotation) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.42),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: theme.colorScheme.secondary.withValues(alpha: 0.24),
+          ),
+        ),
+        child: Theme(
+          data: theme.copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            key: const ValueKey('commercial-history-inline-disclosure'),
+            minTileHeight: 52,
+            tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+            childrenPadding: const EdgeInsets.fromLTRB(48, 0, 14, 14),
+            leading: Icon(
+              Icons.lock_clock_outlined,
+              size: 20,
+              color: theme.colorScheme.onSecondaryContainer,
+            ),
+            title: Text(
+              title,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.onSecondaryContainer,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  message,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSecondaryContainer,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -4976,12 +5390,14 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          TextButton.icon(
-            onPressed: _handleCancel,
-            icon: const Icon(Icons.arrow_back, size: 16),
-            label: const Text('Ir a la tabla'),
-          ),
+          if (!widget.isInlineWorkspace) ...[
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: _handleCancel,
+              icon: const Icon(Icons.arrow_back, size: 16),
+              label: const Text('Ir a la tabla'),
+            ),
+          ],
         ],
       ),
     );
@@ -4993,11 +5409,20 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     required String title,
     required Widget child,
   }) {
+    final isCompactInline = widget.isInlineWorkspace;
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      margin: isCompactInline ? EdgeInsets.zero : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(isCompactInline ? 16 : 20),
+      ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        padding: EdgeInsets.fromLTRB(
+          isCompactInline ? 12 : 20,
+          isCompactInline ? 16 : 20,
+          isCompactInline ? 12 : 20,
+          isCompactInline ? 18 : 24,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -5033,16 +5458,25 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     required Widget child,
   }) {
     final hasBikeTabs = _selectedCustomer != null && _bikeTabs.isNotEmpty;
+    final isCompactInline = widget.isInlineWorkspace;
 
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      margin: isCompactInline ? EdgeInsets.zero : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(isCompactInline ? 16 : 20),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header with icon, title, and bike tabs
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            padding: EdgeInsets.fromLTRB(
+              isCompactInline ? 12 : 20,
+              isCompactInline ? 16 : 20,
+              isCompactInline ? 12 : 20,
+              0,
+            ),
             child: LayoutBuilder(builder: (context, constraints) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -5074,10 +5508,15 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               );
             }),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: isCompactInline ? 16 : 20),
           // Content
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            padding: EdgeInsets.fromLTRB(
+              isCompactInline ? 12 : 20,
+              0,
+              isCompactInline ? 12 : 20,
+              isCompactInline ? 18 : 24,
+            ),
             child: child,
           ),
         ],
@@ -14794,7 +15233,11 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Always use table layout with scroll
+        if (constraints.maxWidth < 600) {
+          return _buildMobilePartsSection(theme);
+        }
+
+        // Desktop keeps the dense table layout with horizontal fallback.
         const minTableWidth = 800.0;
         final tableWidth = constraints.maxWidth > minTableWidth
             ? constraints.maxWidth
@@ -14984,30 +15427,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                                         CrossAxisAlignment.stretch,
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      ProductAutocompleteField(
-                                        key: ValueKey(_partAutocompleteKey),
-                                        focusNode: _partAutocompleteFocus,
-                                        compatibilityContextKey:
-                                            _partCompatibilityContextKey,
-                                        compatibilityResolver:
-                                            _partCompatibilityContextKey == null
-                                                ? null
-                                                : _resolveCurrentBikePartCompatibility,
-                                        onProductSelected: (selection) {
-                                          if (selection.isCatalogProduct &&
-                                              selection.product != null) {
-                                            _addCatalogPart(selection.product!);
-                                          } else if (!selection
-                                              .isCatalogProduct) {
-                                            _addCustomPart(
-                                                selection.displayText);
-                                          }
-                                        },
-                                        allowCustomItems: true,
-                                        labelText: 'Agregar repuesto o parte',
-                                        hintText:
-                                            'Buscar en catálogo o escribir personalizado...',
-                                      ),
+                                      _buildPartAutocompleteField(),
                                     ],
                                   ),
                                 ),
@@ -15051,8 +15471,101 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     );
   }
 
+  Widget _buildMobilePartsSection(ThemeData theme) {
+    final itemCount = _currentPartItems.length + _serviceItems.length;
+
+    return Semantics(
+      container: true,
+      label: 'Editor móvil de productos y servicios',
+      child: Column(
+        key: const ValueKey('mobile_products_services_editor'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (itemCount == 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Aún no hay productos o servicios.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ..._currentPartItems.asMap().entries.map(
+                (entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _buildPartRow(
+                    theme,
+                    entry.key + 1,
+                    entry.value,
+                    entry.key,
+                    mobileLayout: true,
+                  ),
+                ),
+              ),
+          ..._serviceItems.asMap().entries.map(
+                (entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _buildMobileServiceRow(
+                    theme,
+                    _currentPartItems.length + entry.key + 1,
+                    entry.value,
+                    entry.key,
+                  ),
+                ),
+              ),
+          Semantics(
+            container: true,
+            label: 'Agregar producto o servicio',
+            child: Card(
+              key: const ValueKey('mobile_products_services_add_card'),
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.24),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: _buildPartAutocompleteField(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPartAutocompleteField() {
+    return ProductAutocompleteField(
+      key: ValueKey(_partAutocompleteKey),
+      focusNode: _partAutocompleteFocus,
+      compatibilityContextKey: _partCompatibilityContextKey,
+      compatibilityResolver: _partCompatibilityContextKey == null
+          ? null
+          : _resolveCurrentBikePartCompatibility,
+      onProductSelected: (selection) {
+        if (selection.isCatalogProduct && selection.product != null) {
+          _addCatalogPart(selection.product!);
+        } else if (!selection.isCatalogProduct) {
+          _addCustomPart(selection.displayText);
+        }
+      },
+      allowCustomItems: true,
+      labelText: 'Agregar repuesto o parte',
+      hintText: 'Buscar en catálogo o escribir personalizado...',
+    );
+  }
+
   Widget _buildPartRow(
-      ThemeData theme, int index, _JobPartItem item, int itemIndex) {
+    ThemeData theme,
+    int index,
+    _JobPartItem item,
+    int itemIndex, {
+    bool mobileLayout = false,
+  }) {
     return _PartItemRow(
       key: ValueKey('part_${item.id}'),
       item: item,
@@ -15070,6 +15583,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       priceWidth: _colPriceWidth,
       totalWidth: _colTotalWidth,
       actionsWidth: _colActionsWidth,
+      mobileLayout: mobileLayout,
       onChanged: (newItem) {
         setState(() {
           _currentPartItems[itemIndex] = newItem;
@@ -15489,35 +16003,261 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   /// Provides hover-based reorder arrows and consistent styling.
   Widget _buildMobileServiceRow(
       ThemeData theme, int index, _JobServiceItem item, int itemIndex) {
-    return const SizedBox.shrink();
+    final canMoveUp = itemIndex > 0;
+    final canMoveDown = itemIndex < _serviceItems.length - 1;
+    final lineLabel = item.displayName.trim().isEmpty
+        ? 'Servicio sin nombre'
+        : item.displayName;
+
+    return Semantics(
+      key: ValueKey('mobile_service_semantics_${item.id}'),
+      container: true,
+      label: 'Línea $index, $lineLabel',
+      child: Card(
+        key: ValueKey('mobile_service_card_${item.id}'),
+        margin: EdgeInsets.zero,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: theme.colorScheme.outline.withValues(alpha: 0.24),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Text(
+                      '$index',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Mano de obra',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    key: ValueKey('mobile_service_move_up_${item.id}'),
+                    onPressed: canMoveUp
+                        ? () => _moveServiceItem(itemIndex, itemIndex - 1)
+                        : null,
+                    tooltip: 'Mover hacia arriba',
+                    icon: const Icon(Icons.keyboard_arrow_up),
+                  ),
+                  IconButton(
+                    key: ValueKey('mobile_service_move_down_${item.id}'),
+                    onPressed: canMoveDown
+                        ? () => _moveServiceItem(itemIndex, itemIndex + 1)
+                        : null,
+                    tooltip: 'Mover hacia abajo',
+                    icon: const Icon(Icons.keyboard_arrow_down),
+                  ),
+                  IconButton(
+                    key: ValueKey('mobile_service_delete_${item.id}'),
+                    onPressed: () => _removeServiceItem(itemIndex),
+                    tooltip: 'Eliminar servicio',
+                    icon: Icon(
+                      Icons.delete_outline,
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: ValueKey('mobile_service_description_${item.id}'),
+                initialValue: item.description,
+                decoration: InputDecoration(
+                  labelText: item.serviceProduct == null
+                      ? 'Nombre del servicio'
+                      : 'Detalle del servicio',
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (value) {
+                  _updateServiceItem(
+                    itemIndex,
+                    item.copyWith(description: value),
+                  );
+                },
+              ),
+              if (item.serviceProduct != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  item.serviceProduct!.name,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      key: ValueKey('mobile_service_quantity_${item.id}'),
+                      initialValue: item.hours % 1 == 0
+                          ? item.hours.toStringAsFixed(0)
+                          : item.hours.toStringAsFixed(2),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Horas',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d*\.?\d{0,2}'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        _updateServiceItem(
+                          itemIndex,
+                          item.copyWith(
+                            hours: double.tryParse(value) ?? 0,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      key: ValueKey('mobile_service_price_${item.id}'),
+                      initialValue: item.hourlyRate.toStringAsFixed(0),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Precio unit.',
+                        prefixText: '\$ ',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d*\.?\d{0,2}'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        _updateServiceItem(
+                          itemIndex,
+                          item.copyWith(
+                            hourlyRate: double.tryParse(value) ?? 0,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      'Total',
+                      style: theme.textTheme.labelLarge,
+                    ),
+                    const Spacer(),
+                    Semantics(
+                      key: ValueKey('mobile_service_total_${item.id}'),
+                      label: 'Total del servicio',
+                      value: NumberFormat.currency(
+                        symbol: '\$',
+                        decimalDigits: 0,
+                      ).format(item.total),
+                      child: Text(
+                        NumberFormat.currency(
+                          symbol: '\$',
+                          decimalDigits: 0,
+                        ).format(item.total),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _moveServiceItem(int fromIndex, int toIndex) {
+    if (fromIndex < 0 ||
+        fromIndex >= _serviceItems.length ||
+        toIndex < 0 ||
+        toIndex >= _serviceItems.length) {
+      return;
+    }
+    setState(() {
+      final item = _serviceItems.removeAt(fromIndex);
+      _serviceItems.insert(toIndex, item);
+    });
+  }
+
+  void _removeServiceItem(int itemIndex) {
+    if (itemIndex < 0 || itemIndex >= _serviceItems.length) return;
+    setState(() => _serviceItems.removeAt(itemIndex));
+  }
+
+  void _updateServiceItem(int itemIndex, _JobServiceItem item) {
+    if (itemIndex < 0 || itemIndex >= _serviceItems.length) return;
+    setState(() => _serviceItems[itemIndex] = item);
   }
 
   Widget _buildServiceRow(
       ThemeData theme, int index, _JobServiceItem item, int itemIndex) {
     return LineRowWrapper(
-      key: ValueKey('service_${item.hashCode}_$index'),
+      key: ValueKey('service_${item.id}'),
       index: index,
       canMoveUp: itemIndex > 0,
       canMoveDown: itemIndex < _serviceItems.length - 1,
       onMoveUp: () {
         if (itemIndex > 0) {
-          setState(() {
-            final temp = _serviceItems[itemIndex];
-            _serviceItems[itemIndex] = _serviceItems[itemIndex - 1];
-            _serviceItems[itemIndex - 1] = temp;
-          });
+          _moveServiceItem(itemIndex, itemIndex - 1);
         }
       },
       onMoveDown: () {
         if (itemIndex < _serviceItems.length - 1) {
-          setState(() {
-            final temp = _serviceItems[itemIndex];
-            _serviceItems[itemIndex] = _serviceItems[itemIndex + 1];
-            _serviceItems[itemIndex + 1] = temp;
-          });
+          _moveServiceItem(itemIndex, itemIndex + 1);
         }
       },
-      onRemove: () => setState(() => _serviceItems.removeAt(itemIndex)),
+      onRemove: () => _removeServiceItem(itemIndex),
       canEdit: true,
       indexColumnWidth: _colIndexWidth,
       actionsColumnWidth: _colActionsWidth,
@@ -15639,15 +16379,10 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             ),
             onChanged: (value) {
               final newPrice = double.tryParse(value) ?? 0;
-              setState(() {
-                _serviceItems[itemIndex] = _JobServiceItem(
-                  serviceProduct: item.serviceProduct,
-                  description: item.description,
-                  hours: item.hours,
-                  hourlyRate: newPrice,
-                  date: item.date,
-                );
-              });
+              _updateServiceItem(
+                itemIndex,
+                item.copyWith(hourlyRate: newPrice),
+              );
             },
           ),
         ),
@@ -16003,6 +16738,7 @@ class _PartItemRow extends StatefulWidget {
   final double priceWidth;
   final double totalWidth;
   final double actionsWidth;
+  final bool mobileLayout;
 
   const _PartItemRow({
     super.key,
@@ -16029,6 +16765,7 @@ class _PartItemRow extends StatefulWidget {
     required this.priceWidth,
     required this.totalWidth,
     required this.actionsWidth,
+    this.mobileLayout = false,
   });
 
   @override
@@ -16066,6 +16803,14 @@ class _PartItemRowState extends State<_PartItemRow> {
     final theme = Theme.of(context);
     final item = widget.item;
 
+    if (widget.mobileLayout) {
+      return _buildMobileCard(theme, item);
+    }
+
+    return _buildDesktopRow(theme, item);
+  }
+
+  Widget _buildDesktopRow(ThemeData theme, _JobPartItem item) {
     return GestureDetector(
       onTap: widget.onTap,
       behavior: HitTestBehavior.translucent,
@@ -16086,118 +16831,7 @@ class _PartItemRowState extends State<_PartItemRow> {
             expanded: true,
             minWidth: 250,
             padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (item.isServiceItem) ...[
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      _ServiceLineBadge(item: item),
-                      if (widget.onEditWizard != null)
-                        TextButton.icon(
-                          onPressed: widget.onEditWizard,
-                          icon: Icon(
-                            item.hasWizardAnswers
-                                ? Icons.edit_outlined
-                                : Icons.tune,
-                            size: 16,
-                          ),
-                          label: Text(
-                            item.hasWizardAnswers
-                                ? 'Editar servicio'
-                                : 'Configurar',
-                          ),
-                          style: TextButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                SmartProductField(
-                  initialData: ProductFieldData(
-                    product: item.product,
-                    productName: item.displayName,
-                    productSku: item.product?.sku,
-                    isCatalogProduct: item.isCatalogProduct,
-                    description: item.hasWizardAnswers ? null : item.notes,
-                  ),
-                  selectedHeaderTrailing: item.isServiceItem
-                      ? _ServiceLocationDropdown(
-                          value: item.location,
-                          availableLocations: widget.availableServiceLocations,
-                          onChanged: (location) {
-                            widget.onChanged(item.copyWith(location: location));
-                          },
-                        )
-                      : null,
-                  compatibilityContextKey: widget.compatibilityContextKey,
-                  compatibilityResolver: widget.compatibilityResolver,
-                  hintText: 'Buscar por nombre...',
-                  allowCustomItems: true,
-                  showCost:
-                      false, // Job form usually shows price to customer, not cost
-                  onProductChanged: (selection) {
-                    if (selection == null) {
-                      // Clear product
-                      widget.onChanged(item.copyWith(
-                        clearProduct: true,
-                        clearWizard: true,
-                        name: '',
-                        isCatalogProduct: true,
-                        isServiceItem: false,
-                        location: BikeMemoryLocation.none,
-                        notes: '',
-                      ));
-                    } else if (selection.isCatalogProduct &&
-                        selection.product != null) {
-                      final isSameProduct =
-                          item.product?.id == selection.product!.id;
-                      final isServiceItem = selection.product!.isService;
-
-                      // Catalog product
-                      widget.onChanged(item.copyWith(
-                        product: selection.product,
-                        name: selection.productName ?? '',
-                        isCatalogProduct: true,
-                        isServiceItem: isServiceItem,
-                        // Only update price if it's a new selection, not a desc update
-                        unitPrice: selection.price > 0
-                            ? selection.price
-                            : item.unitPrice,
-                        notes: selection.description ?? '',
-                        clearWizard: !isSameProduct,
-                        location: isServiceItem && isSameProduct
-                            ? item.location
-                            : BikeMemoryLocation.none,
-                      ));
-                    } else {
-                      // Ad-hoc item
-                      widget.onChanged(item.copyWith(
-                        clearProduct: true,
-                        clearWizard: true,
-                        name: selection.productName ?? '',
-                        isCatalogProduct: false,
-                        isServiceItem: false,
-                        unitPrice: item.unitPrice,
-                        location: BikeMemoryLocation.none,
-                        notes: selection.description ?? '',
-                      ));
-                    }
-                  },
-                ),
-              ],
-            ),
+            child: _buildProductEditor(item, mobileLayout: false),
           ),
 
           // Quantity Column
@@ -16205,22 +16839,10 @@ class _PartItemRowState extends State<_PartItemRow> {
             width: widget.quantityWidth,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Center(
-              child: TextFormField(
-                initialValue: item.quantity.toString(),
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  border: OutlineInputBorder(),
-                ),
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                onChanged: (value) {
-                  final newQty = int.tryParse(value) ?? 1;
-                  widget.onChanged(item.copyWith(quantity: newQty));
-                },
+              child: _buildQuantityField(
+                theme,
+                item,
+                mobileLayout: false,
               ),
             ),
           ),
@@ -16230,27 +16852,10 @@ class _PartItemRowState extends State<_PartItemRow> {
             width: widget.priceWidth,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Center(
-              child: TextFormField(
-                initialValue: item.unitPrice.toStringAsFixed(0),
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  border: OutlineInputBorder(),
-                  prefixText: '\$ ',
-                ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(
-                    RegExp(r'^\d+\.?\d{0,2}'),
-                  ),
-                ],
-                onChanged: (value) {
-                  final newPrice = double.tryParse(value) ?? 0;
-                  widget.onChanged(item.copyWith(unitPrice: newPrice));
-                },
+              child: _buildPriceField(
+                theme,
+                item,
+                mobileLayout: false,
               ),
             ),
           ),
@@ -16262,17 +16867,357 @@ class _PartItemRowState extends State<_PartItemRow> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Align(
               alignment: Alignment.centerRight,
-              child: Text(
-                NumberFormat.currency(symbol: '\$', decimalDigits: 0)
-                    .format(item.quantity * item.unitPrice),
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
-                textAlign: TextAlign.right,
-              ),
+              child: _buildTotalText(theme, item),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMobileCard(ThemeData theme, _JobPartItem item) {
+    final lineLabel = item.displayName.trim().isEmpty
+        ? (item.isServiceItem ? 'Servicio sin nombre' : 'Producto sin nombre')
+        : item.displayName;
+
+    return Semantics(
+      key: ValueKey('mobile_part_semantics_${item.id}'),
+      container: true,
+      label: 'Línea ${widget.index}, $lineLabel',
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.translucent,
+        child: Card(
+          key: ValueKey('mobile_part_card_${item.id}'),
+          margin: EdgeInsets.zero,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: theme.colorScheme.outline.withValues(alpha: 0.24),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Text(
+                        '${widget.index}',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        item.isServiceItem ? 'Servicio' : 'Producto / repuesto',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      key: ValueKey('mobile_part_move_up_${item.id}'),
+                      onPressed: widget.isFirst ? null : widget.onMoveUp,
+                      tooltip: 'Mover hacia arriba',
+                      icon: const Icon(Icons.keyboard_arrow_up),
+                    ),
+                    IconButton(
+                      key: ValueKey('mobile_part_move_down_${item.id}'),
+                      onPressed: widget.isLast ? null : widget.onMoveDown,
+                      tooltip: 'Mover hacia abajo',
+                      icon: const Icon(Icons.keyboard_arrow_down),
+                    ),
+                    IconButton(
+                      key: ValueKey('mobile_part_delete_${item.id}'),
+                      onPressed: widget.onRemove,
+                      tooltip: 'Eliminar línea',
+                      icon: Icon(
+                        Icons.delete_outline,
+                        color: theme.colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _buildProductEditor(item, mobileLayout: true),
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _buildQuantityField(
+                        theme,
+                        item,
+                        mobileLayout: true,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildPriceField(
+                        theme,
+                        item,
+                        mobileLayout: true,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Total',
+                        style: theme.textTheme.labelLarge,
+                      ),
+                      const Spacer(),
+                      Semantics(
+                        key: ValueKey('mobile_part_total_${item.id}'),
+                        label: 'Total de la línea',
+                        value: _formattedTotal(item),
+                        excludeSemantics: true,
+                        child: _buildTotalText(
+                          theme,
+                          item,
+                          mobileLayout: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductEditor(
+    _JobPartItem item, {
+    required bool mobileLayout,
+  }) {
+    final locationDropdown = _ServiceLocationDropdown(
+      value: item.location,
+      availableLocations: widget.availableServiceLocations,
+      onChanged: (location) {
+        widget.onChanged(item.copyWith(location: location));
+      },
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (item.isServiceItem) ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _ServiceLineBadge(item: item),
+              if (widget.onEditWizard != null)
+                TextButton.icon(
+                  key: mobileLayout
+                      ? ValueKey('mobile_part_configure_${item.id}')
+                      : null,
+                  onPressed: widget.onEditWizard,
+                  icon: Icon(
+                    item.hasWizardAnswers ? Icons.edit_outlined : Icons.tune,
+                    size: 16,
+                  ),
+                  label: Text(
+                    item.hasWizardAnswers ? 'Editar servicio' : 'Configurar',
+                  ),
+                  style: mobileLayout
+                      ? TextButton.styleFrom(
+                          minimumSize: const Size(0, 48),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                        )
+                      : TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                        ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+        SmartProductField(
+          key: ValueKey(
+            '${mobileLayout ? 'mobile' : 'desktop'}_part_product_${item.id}',
+          ),
+          productNameController: _nameController,
+          initialData: ProductFieldData(
+            product: item.product,
+            productName: item.displayName,
+            productSku: item.product?.sku,
+            isCatalogProduct: item.isCatalogProduct,
+            description: item.hasWizardAnswers ? null : item.notes,
+          ),
+          selectedHeaderTrailing:
+              !mobileLayout && item.isServiceItem ? locationDropdown : null,
+          compatibilityContextKey: widget.compatibilityContextKey,
+          compatibilityResolver: widget.compatibilityResolver,
+          hintText: 'Buscar por nombre...',
+          allowCustomItems: true,
+          showCost: false,
+          onProductChanged: (selection) {
+            _handleProductChanged(item, selection);
+          },
+        ),
+        if (mobileLayout && item.isServiceItem) ...[
+          const SizedBox(height: 10),
+          locationDropdown,
+        ],
+      ],
+    );
+  }
+
+  void _handleProductChanged(
+    _JobPartItem item,
+    ProductFieldSelection? selection,
+  ) {
+    if (selection == null) {
+      widget.onChanged(item.copyWith(
+        clearProduct: true,
+        clearWizard: true,
+        name: '',
+        isCatalogProduct: true,
+        isServiceItem: false,
+        location: BikeMemoryLocation.none,
+        notes: '',
+      ));
+      return;
+    }
+
+    if (selection.isCatalogProduct && selection.product != null) {
+      final isSameProduct = item.product?.id == selection.product!.id;
+      final isServiceItem = selection.product!.isService;
+
+      widget.onChanged(item.copyWith(
+        product: selection.product,
+        name: selection.productName ?? '',
+        isCatalogProduct: true,
+        isServiceItem: isServiceItem,
+        unitPrice: selection.price > 0 ? selection.price : item.unitPrice,
+        notes: selection.description ?? '',
+        clearWizard: !isSameProduct,
+        location: isServiceItem && isSameProduct
+            ? item.location
+            : BikeMemoryLocation.none,
+      ));
+      return;
+    }
+
+    widget.onChanged(item.copyWith(
+      clearProduct: true,
+      clearWizard: true,
+      name: selection.productName ?? '',
+      isCatalogProduct: false,
+      isServiceItem: false,
+      unitPrice: item.unitPrice,
+      location: BikeMemoryLocation.none,
+      notes: selection.description ?? '',
+    ));
+  }
+
+  Widget _buildQuantityField(
+    ThemeData theme,
+    _JobPartItem item, {
+    required bool mobileLayout,
+  }) {
+    return TextFormField(
+      key: mobileLayout ? ValueKey('mobile_part_quantity_${item.id}') : null,
+      initialValue: item.quantity.toString(),
+      keyboardType: TextInputType.number,
+      textAlign: mobileLayout ? TextAlign.start : TextAlign.center,
+      style: theme.textTheme.bodyMedium,
+      decoration: InputDecoration(
+        labelText: mobileLayout ? 'Cantidad' : null,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        border: const OutlineInputBorder(),
+      ),
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      onChanged: (value) {
+        final newQty = int.tryParse(value) ?? 1;
+        widget.onChanged(item.copyWith(quantity: newQty));
+      },
+    );
+  }
+
+  Widget _buildPriceField(
+    ThemeData theme,
+    _JobPartItem item, {
+    required bool mobileLayout,
+  }) {
+    return TextFormField(
+      key: mobileLayout ? ValueKey('mobile_part_price_${item.id}') : null,
+      initialValue: item.unitPrice.toStringAsFixed(0),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      textAlign: mobileLayout ? TextAlign.start : TextAlign.center,
+      style: theme.textTheme.bodyMedium,
+      decoration: InputDecoration(
+        labelText: mobileLayout ? 'Precio unit.' : null,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        border: const OutlineInputBorder(),
+        prefixText: '\$ ',
+      ),
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(
+          RegExp(r'^\d+\.?\d{0,2}'),
+        ),
+      ],
+      onChanged: (value) {
+        final newPrice = double.tryParse(value) ?? 0;
+        widget.onChanged(item.copyWith(unitPrice: newPrice));
+      },
+    );
+  }
+
+  String _formattedTotal(_JobPartItem item) {
+    return NumberFormat.currency(symbol: '\$', decimalDigits: 0)
+        .format(item.quantity * item.unitPrice);
+  }
+
+  Widget _buildTotalText(
+    ThemeData theme,
+    _JobPartItem item, {
+    bool mobileLayout = false,
+  }) {
+    return Text(
+      _formattedTotal(item),
+      style: (mobileLayout
+              ? theme.textTheme.titleMedium
+              : theme.textTheme.bodyMedium)
+          ?.copyWith(fontWeight: FontWeight.w700),
+      textAlign: TextAlign.right,
     );
   }
 }
@@ -16425,7 +17370,7 @@ class _ServiceLocationDropdown extends StatelessWidget {
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 170, maxWidth: 190),
       child: Container(
-        height: 36,
+        height: 48,
         padding: const EdgeInsets.only(left: 10, right: 8),
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
@@ -16501,6 +17446,7 @@ class _ServiceLocationDropdown extends StatelessWidget {
 }
 
 class _JobServiceItem {
+  final String id;
   final Product? serviceProduct;
   final String description;
   final double hours;
@@ -16508,12 +17454,13 @@ class _JobServiceItem {
   final DateTime date;
 
   _JobServiceItem({
+    String? id,
     this.serviceProduct,
     required this.description,
     required this.hours,
     required this.hourlyRate,
     required this.date,
-  });
+  }) : id = id ?? DateTime.now().microsecondsSinceEpoch.toString();
 
   String get displayName => serviceProduct?.name ?? description;
 
@@ -16523,6 +17470,23 @@ class _JobServiceItem {
       description != serviceProduct!.name;
 
   double get total => hours * hourlyRate;
+
+  _JobServiceItem copyWith({
+    Product? serviceProduct,
+    String? description,
+    double? hours,
+    double? hourlyRate,
+    DateTime? date,
+  }) {
+    return _JobServiceItem(
+      id: id,
+      serviceProduct: serviceProduct ?? this.serviceProduct,
+      description: description ?? this.description,
+      hours: hours ?? this.hours,
+      hourlyRate: hourlyRate ?? this.hourlyRate,
+      date: date ?? this.date,
+    );
+  }
 }
 
 // Modern part item dialog with ProductAutocompleteField
@@ -17325,13 +18289,13 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
 
   Future<Customer?> _saveCustomerWithData(Map<String, String> data) async {
     try {
+      final customerService =
+          Provider.of<CustomerService>(context, listen: false);
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null || tenantId.isEmpty) {
         throw Exception('No se pudo obtener el tenant_id del usuario');
       }
 
-      final customerService =
-          Provider.of<CustomerService>(context, listen: false);
       final isEditing = _editingCustomer != null;
 
       final normalizedRut = (data['rut'] ?? '').trim();
@@ -17363,6 +18327,7 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
               ),
             );
 
+      if (!mounted) return saved;
       setState(() {
         final existingIndex =
             _allCustomers.indexWhere((item) => item.id == saved.id);

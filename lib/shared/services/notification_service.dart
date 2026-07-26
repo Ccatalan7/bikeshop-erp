@@ -720,15 +720,16 @@ class NotificationService {
   /// Unread ERP alerts created during the current local business day.
   ///
   /// The right-toolbar badge is a prompt for today's attention, not a lifetime
-  /// inbox counter. Older unread rows remain available in the seven-day
-  /// briefing and can still be marked read, but no longer accumulate into a
-  /// permanent `99+` badge.
+  /// inbox counter. Older unread rows remain available through the briefing's
+  /// calendar-period selector and can still be marked read, but no longer
+  /// accumulate into a permanent `99+` badge.
   final ValueNotifier<int> unreadNotificationsCount = ValueNotifier<int>(0);
 
   String? _notificationsTenantId;
   String? _notificationScopeKey;
   String? _notificationScopeTenantId;
   int _notificationScopeGeneration = 0;
+  static const int _historicalNotificationPageSize = 500;
 
   /// Clears process-wide notification projections when the authenticated
   /// user/tenant changes. The stable workspace shell calls this before loading
@@ -816,6 +817,66 @@ class NotificationService {
     }
   }
 
+  /// Loads every notification created within [startsAt, endsAt).
+  ///
+  /// This historical projection is tenant/scope safe and intentionally does
+  /// not publish into [notificationsFeed], which remains the latest realtime
+  /// projection used by the toolbar badge.
+  Future<List<Map<String, dynamic>>> loadNotificationsForRange({
+    required DateTime startsAt,
+    required DateTime endsAt,
+  }) async {
+    final startUtc = startsAt.toUtc();
+    final endUtc = endsAt.toUtc();
+    if (!endUtc.isAfter(startUtc)) {
+      throw ArgumentError.value(
+        endsAt,
+        'endsAt',
+        'Must be after startsAt.',
+      );
+    }
+
+    final tenantId = _notificationScopeTenantId;
+    if (tenantId == null || tenantId.isEmpty) return const [];
+    final generation = _notificationScopeGeneration;
+    final rows = <Map<String, dynamic>>[];
+    var offset = 0;
+
+    try {
+      while (true) {
+        final response = await _supabase
+            .from('erp_notifications')
+            .select(
+                'id,type,title,body,route,entity_type,entity_id,severity,data,read_at,created_at')
+            .eq('tenant_id', tenantId)
+            .gte('created_at', startUtc.toIso8601String())
+            .lt('created_at', endUtc.toIso8601String())
+            .order('created_at', ascending: false)
+            .order('id', ascending: false)
+            .range(
+              offset,
+              offset + _historicalNotificationPageSize - 1,
+            );
+
+        if (generation != _notificationScopeGeneration ||
+            _notificationScopeTenantId != tenantId) {
+          return const [];
+        }
+
+        final page = (response as List<dynamic>)
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .toList(growable: false);
+        rows.addAll(page);
+        if (page.length < _historicalNotificationPageSize) break;
+        offset += _historicalNotificationPageSize;
+      }
+      return rows;
+    } catch (e) {
+      debugPrint('⚠️ Could not load historical notifications: $e');
+      rethrow;
+    }
+  }
+
   /// Insert/refresh a single notification row (used by realtime inserts).
   void recordNotification(Map<String, dynamic> notification) {
     final id = notification['id']?.toString();
@@ -844,25 +905,81 @@ class NotificationService {
   Future<void> markNotificationRead(String notificationId) async {
     final id = notificationId.trim();
     if (id.isEmpty) return;
+    final tenantId = _notificationScopeTenantId;
+    if (tenantId == null || tenantId.isEmpty) return;
 
     final current = List<Map<String, dynamic>>.from(notificationsFeed.value);
     final index = current.indexWhere((row) => row['id']?.toString() == id);
-    if (index == -1) return;
-    if (current[index]['read_at'] != null) return;
-
     final nowIso = DateTime.now().toUtc().toIso8601String();
-    current[index] = {...current[index], 'read_at': nowIso};
-    notificationsFeed.value = current;
-    _recomputeUnreadCount();
+    if (index != -1 && current[index]['read_at'] == null) {
+      current[index] = {...current[index], 'read_at': nowIso};
+      notificationsFeed.value = current;
+      _recomputeUnreadCount();
+    }
 
     try {
       await _supabase
           .from('erp_notifications')
           .update({'read_at': nowIso})
+          .eq('tenant_id', tenantId)
           .eq('id', id)
           .isFilter('read_at', null);
     } catch (e) {
       debugPrint('⚠️ Could not mark notification read: $e');
+    }
+  }
+
+  /// Marks unread notifications created within [startsAt, endsAt) as read.
+  ///
+  /// Only matching rows in the latest local projection are reconciled. Rows
+  /// outside the latest feed are still updated through the tenant-scoped
+  /// database query.
+  Future<void> markNotificationsReadForRange({
+    required DateTime startsAt,
+    required DateTime endsAt,
+  }) async {
+    final startUtc = startsAt.toUtc();
+    final endUtc = endsAt.toUtc();
+    if (!endUtc.isAfter(startUtc)) {
+      throw ArgumentError.value(
+        endsAt,
+        'endsAt',
+        'Must be after startsAt.',
+      );
+    }
+
+    final tenantId = _notificationScopeTenantId;
+    if (tenantId == null || tenantId.isEmpty) return;
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    var changed = false;
+    final current = notificationsFeed.value.map((row) {
+      if (row['read_at'] != null) return row;
+      final createdAt =
+          DateTime.tryParse(row['created_at']?.toString() ?? '')?.toUtc();
+      if (createdAt == null ||
+          createdAt.isBefore(startUtc) ||
+          !createdAt.isBefore(endUtc)) {
+        return row;
+      }
+      changed = true;
+      return <String, dynamic>{...row, 'read_at': nowIso};
+    }).toList(growable: false);
+
+    if (changed) {
+      notificationsFeed.value = current;
+      _recomputeUnreadCount();
+    }
+
+    try {
+      await _supabase
+          .from('erp_notifications')
+          .update({'read_at': nowIso})
+          .eq('tenant_id', tenantId)
+          .gte('created_at', startUtc.toIso8601String())
+          .lt('created_at', endUtc.toIso8601String())
+          .isFilter('read_at', null);
+    } catch (e) {
+      debugPrint('⚠️ Could not mark historical notifications read: $e');
     }
   }
 

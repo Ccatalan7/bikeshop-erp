@@ -1035,6 +1035,107 @@ time evidence. Any change to those workflows must update the guide source and
 regenerate its PDF in the same task; the manual must never become a competing
 source of business rules.
 
+### Responsive Jobs workspace (2026-07-25)
+
+The canonical Jobs workspace now treats desktop and compact layouts as
+different compositions of the same operational surface. At `>=900px` of the
+unzoomed logical application viewport the dense table remains the
+high-throughput owner. It keeps its deliberate horizontal scroll even when
+desktop sidebar or zoom leaves less than `800px` of content; it never falls
+back to a hybrid desktop shell with mobile cards. Below `900px`, each job card
+keeps the same command boundaries reachable
+through touch: State delegates to the existing status/proposal coordinator,
+customer and bicycle open their canonical records, invoice totals come from the
+linked invoice including paid and outstanding amounts. The collapsed projection
+keeps identity, state, object, intake date, payable/proposal amount, and direct
+actions dense enough to show at least three ordinary records at the `384x824`
+canary after real application chrome. A labelled inline disclosure expands
+customer request, canonical timing, deadline, and full total/paid/balance
+without navigating or losing list scroll.
+In compact Lista, `Trabajo`, `Ítems`, Factura, and proposal PDF replace the list
+body inside one in-page workspace instead of pushing a second route. `Trabajo`
+and `Ítems` embed the canonical `MechanicJobFormPage` at General or Products and
+Services respectively; its minimal back action uses the embedded cancel
+callback, and a successful save automatically refreshes and returns to the
+list. The `Ítems` entry also prioritizes that requested workbench above customer
+context on a narrow inline form, so it lands on the real editable line surface
+instead of only changing the header subtitle. Factura embeds the canonical
+compact `SalesInvoiceEditor` without its
+full-screen expansion. It edits the existing linked invoice when present, or
+uses the same job/customer context and guarded `createInvoiceFromJob` command
+when the link does not exist; save and close both return through the host
+callbacks rather than replacing `/taller/pegas`. Only a host that passes that
+explicit close callback may close its surrounding workspace; compact calendar
+embedding keeps its established local cancel/revert behavior.
+
+Proposal PDF uses the same `InvoicePdfGenerator`, but preparation now returns a
+side-effect-free bytes/file-name artifact. The inline `PdfPreview` consumes that
+artifact, and only the explicit share/save control invokes the platform export;
+opening the preview never launches a file picker or share sheet by itself.
+Loading, retry/error, and a minimal back action all stay inside the same content
+area. The list owner retains its scope, view, search, advanced filters,
+expanded-card keys, and mobile scroll controller while any inline surface is
+open, so close or save returns to the prior operating context. A labelled sheet
+continues to keep only secondary payment, proposal-conversion, classification,
+contact, and archive/restore actions. If constraints cross a responsive
+breakpoint while the inline child is open, the host keeps that child mounted
+until save, cancel, or confirmed discard; resize must not silently dispose a
+draft.
+
+The compact application shell is now part of that same continuity contract.
+Below `900px` it does not mount the desktop workspace tab strip or persistent
+right rail. `MainLayout` exposes labelled `Navegación` and `Herramientas` modes;
+each existing right-toolbar tool opens its canonical panel as a full workspace
+with one minimal Back action. Compact uses an effective application scale of
+`1.0`, while the stored `0.8` browser-style scale remains desktop-only. The
+authenticated shell slot, zoom wrapper topology, and globally identified
+workspace stack remain stable across `899/900`; route data, filters, disclosure
+state, scroll, and dirty inline children therefore survive without a transient
+empty reload.
+
+This in-page composition is compact-only. The desktop dense table and optional
+`PegaDetailView` split inspector are unchanged, and routed
+`/taller/pegas/:id` remains the canonical deep-link/external-entry surface.
+Mobile does not detour through `PegaDetailView`.
+
+Compact mode edits the same canonical scope, view, custom-status, priority,
+overdue, and unpaid owners as desktop. Its workload disclosure preserves linked
+bicycle/component/warranty/proposal counts, bicycle-state breakdown, and the
+shared financial projection without turning the first screen into a KPI wall.
+Lista, Tablero, Calendario, Gantt, and Tareas remain reachable from one selector.
+Within the tablet class, Lista uses its documented internal `720px` content
+breakpoint: `600-719px` keeps one card column and `720-899px` pairs the same
+cards in two columns, retaining one scroll owner and the same commands.
+Calendar stacks month and day agenda below `900px`; Gantt stacks its navigation
+and scale controls, gives compact bars a touchable height, and preserves
+deliberate horizontal timeline panning; Tasks uses a compact search/create/filter
+dock plus task cards and a stacked narrow create form instead of its desktop
+table. `Tareas` continues to disclose that it owns independent task filters
+instead of pretending the Jobs scope filtered its dataset.
+
+The visual contract is modern but restrained: a tonal command dock and softly
+elevated record surfaces establish depth, one low-saturation status treatment
+communicates state, and only the primary `Trabajo` action receives the main
+accent. It must not regress either into rainbow icon/chip walls or into a flat
+outlined wireframe where every row and field competes equally.
+
+Below `600px`, the canonical Products and Services tab no longer exposes the
+desktop minimum-800px table as its only editor. It composes the same line
+models and callbacks as vertical editable cards: catalog/custom identity,
+service configuration and location, quantity or hours, unit price, line total,
+ordering and removal remain available. Desktop keeps the established dense
+table.
+
+This is a presentation/discoverability change only. It does not change schema,
+job/invoice ownership, status commands, proposal conversion, payment, bike
+profile truth, visit diagnosis, executed-work metadata, or derived bike memory.
+Centralization is strengthened because phone actions reuse the existing
+coordinators, routes, `BikeFormDialog`, invoice/payment surfaces and line-item
+state instead of adding mobile writers. Remaining responsive gaps are explicit:
+multi-bike phone access still needs a dedicated canonical chooser, the native
+Galaxy S23 Ultra landscape canary remains to be proven, and the remaining
+job-form tabs still need the same focused compact audit.
+
 ### Invoice-linked inventory integrity (current rule)
 
 - A posted sales invoice item edit must replace the previously posted inventory snapshot atomically; leaving an invoice confirmed/paid is not a reason to ignore product or quantity changes.
@@ -2777,13 +2878,14 @@ This is the ordered queue a fresh agent should assume unless the user explicitly
 
 Validation rule for every queued item below: use the debug-only `Prueba rápida` harness in `lib/modules/bikeshop/pages/pegas_table_page.dart` and record which scenario/stage proved the change before widening scope or calling the slice done.
 
-1. Finish the client boundary of the isolated workshop-mode release: the five database migrations are deployed/registered/read back and the only backfill normalized exactly `PG-00468` with zero unintended payment/stock/journal effects. Run the normal employee quotation and `Revisar modo` browser paths against that live contract, publish exactly the gated client commit, and repeat the routed table/form/invoice smoke plus production health readback. Staging remains suspended/non-authoritative.
-2. Add a durable local pending-command outbox plus structured attempt/outcome telemetry and orphaned-bike-image cleanup so recovery survives browser/process termination and support can distinguish offline, rejected, stale, committed, and reconciled attempts.
-3. Move remaining profile-only service-wizard promotion from generic full-row upsert to a dedicated server-side technical-key patch command with explicit removal semantics and its own concurrency/retry receipt. Then decide whether job + promotions/photos need a wider job command boundary.
-4. Improve upstream drivetrain bike truth coverage (`drivetrainConfig`, `drivetrainSpeeds`, `freehubType`) only through real service/profile flows, without over-inferring from weak `derailleurs` answers. Historical backfill remains intentionally skipped until live structured `service_configuration_data` rows actually exist.
-5. Finish the next bottom-bracket / crankset seam after the richer service-flow carry-through: the bike form/read model/debug harness and bottom-bracket service wizards now round-trip `bottomBracketFamily`, `bbShellWidthMm`, `bbShellDiameterMm`, and `spindleInterface`, but the broader chainline, mounting, crank-length, and exact shell/adapter seams remain open before compatibility population.
-6. Do not start broad compatibility population yet. Only after the bottom-bracket/crankset seams are tighter should the catalog move into cautious packaging-backed population of explicit compatibility fields.
-7. When validating bike reassignment from a work row, prove both paths: direct bike-profile opening from the table and the guarded title dropdown reassignment that keeps `mechanic_jobs.bike_id` and any single `mechanic_job_bikes` row aligned.
+1. Continue the user-directed responsive workshop pass from the 2026-07-25 Jobs slice: prove the native Galaxy S23 Ultra landscape canary, add canonical multi-bike phone access, then audit the remaining job-form tabs without weakening desktop density, progressive disclosure, or shared actions. The portrait Jobs list now shares canonical scopes/views/filters, its wide-tablet Lista uses two columns, its Calendar/Gantt/Tasks variants recompose for compact constraints, Trabajo/Ítems/Factura/PDF complete an inline round trip through the canonical form, invoice editor, and document generator without replacing the Jobs route, and the global workspace tab/right-toolbar chrome already has its dedicated compact shell plus full-workspace tool mode.
+2. Finish the client boundary of the isolated workshop-mode release: the five database migrations are deployed/registered/read back and the only backfill normalized exactly `PG-00468` with zero unintended payment/stock/journal effects. Run the normal employee quotation and `Revisar modo` browser paths against that live contract, publish exactly the gated client commit, and repeat the routed table/form/invoice smoke plus production health readback. Staging remains suspended/non-authoritative.
+3. Add a durable local pending-command outbox plus structured attempt/outcome telemetry and orphaned-bike-image cleanup so recovery survives browser/process termination and support can distinguish offline, rejected, stale, committed, and reconciled attempts.
+4. Move remaining profile-only service-wizard promotion from generic full-row upsert to a dedicated server-side technical-key patch command with explicit removal semantics and its own concurrency/retry receipt. Then decide whether job + promotions/photos need a wider job command boundary.
+5. Improve upstream drivetrain bike truth coverage (`drivetrainConfig`, `drivetrainSpeeds`, `freehubType`) only through real service/profile flows, without over-inferring from weak `derailleurs` answers. Historical backfill remains intentionally skipped until live structured `service_configuration_data` rows actually exist.
+6. Finish the next bottom-bracket / crankset seam after the richer service-flow carry-through: the bike form/read model/debug harness and bottom-bracket service wizards now round-trip `bottomBracketFamily`, `bbShellWidthMm`, `bbShellDiameterMm`, and `spindleInterface`, but the broader chainline, mounting, crank-length, and exact shell/adapter seams remain open before compatibility population.
+7. Do not start broad compatibility population yet. Only after the bottom-bracket/crankset seams are tighter should the catalog move into cautious packaging-backed population of explicit compatibility fields.
+8. When validating bike reassignment from a work row, prove both paths: direct bike-profile opening from the table and the guarded title dropdown reassignment that keeps `mechanic_jobs.bike_id` and any single `mechanic_job_bikes` row aligned.
 
 ## The Most Important Direction From Here
 
