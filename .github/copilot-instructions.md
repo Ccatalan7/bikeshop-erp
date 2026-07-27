@@ -4258,6 +4258,43 @@ Deployment/cache rules:
 
 When optimizing first-load speed, improve parallelism, bundle size, image payloads, or edge warm-up first. Treat slower website-editor reflection as a regression, even if Lighthouse improves.
 
+### HTML-first storefront evolution is allowed
+
+The current Flutter public storefront is not an immutable architectural
+constraint. When measured cold-start performance justifies it, agents may
+design and implement an HTML-first public storefront through static generation,
+SSR, deploy-time prerendering, or a real HTML shell that hands off seamlessly
+to Flutter. This is an allowed future evolution, not a requirement for routine
+storefront work.
+
+An HTML-first layer is a **consumer**, never a second CMS or content owner:
+
+- It must derive content, navigation, theme, media, catalog, policy, and SEO
+  state from the same canonical Website Builder owners used by Edit, Preview,
+  Flutter, snapshots, and publication.
+- Every durable value must remain discoverable, editable, saveable, reloadable,
+  and reconstructible through the existing editor/management controls. Do not
+  hardcode a hero, copy CMS truth into a parallel configuration, or introduce
+  an HTML-only editing path.
+- Preserve route semantics, responsive visual quality, accessibility,
+  structured-data ownership, analytics correctness, and commerce behavior.
+  Avoid blank replacement frames, duplicate tracking, duplicate JSON-LD, or a
+  visible mismatch while HTML hands off to Flutter.
+- Retain equal-or-better freshness and explicit cache invalidation so a
+  published editor change reaches the HTML output as reliably as the current
+  origin-revalidated storefront.
+- Prefer an incremental, measurable, rollbackable migration. Compare cold
+  visual-ready time and transferred bytes against the current production
+  release, verify direct routes and editor round trips, and seal the generated
+  HTML in the same release evidence as the runtime bundle.
+
+Before implementation, document Owner → Control → Operation → Consumers,
+which routes remain Flutter-owned, the handoff/hydration boundary, generation
+and invalidation paths, rollback, and production verification. Flutter may
+remain the owner of authenticated or app-like flows while public discovery
+routes become HTML-first, provided both consume the same canonical business and
+CMS truth.
+
 ---
 
 ## 🚨 CRITICAL: EDITOR ARCHITECTURE (Dec 2025)
