@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -24,6 +25,12 @@ import 'package:vinabike_erp/public_store/utils/product_url.dart';
 import 'package:vinabike_erp/public_store/utils/structured_data.dart';
 import 'package:vinabike_erp/shared/widgets/safe_layout_builder.dart';
 import 'package:vinabike_erp/public_store/services/meta_pixel_service.dart';
+
+void _productDetailDebugLog(String message) {
+  if (kDebugMode || const bool.fromEnvironment('STORE_PERF_LOGS')) {
+    debugPrint(message);
+  }
+}
 
 class ProductDetailPage extends StatefulWidget {
   final String productId;
@@ -128,7 +135,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       Product? loadedProduct;
       if (widget.productId.startsWith('sku:')) {
         final sku = widget.productId.substring(4); // Remove "sku:" prefix
-        debugPrint('🔍 [ProductDetail] Looking up product by SKU: $sku');
+        _productDetailDebugLog(
+            '🔍 [ProductDetail] Looking up product by SKU: $sku');
         loadedProduct = await inventoryService.getProductBySku(
           sku: sku,
           tenantId: tenantId,
@@ -180,7 +188,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           contentName: _commerceProjection(_product!).title,
           value: _commerceProjection(_product!).price,
         );
-        debugPrint('✅ [ProductDetail] Found product: ${_product!.name}');
+        _productDetailDebugLog(
+            '✅ [ProductDetail] Found product: ${_product!.name}');
         // Render immediately, then load related products in background.
         setState(() => _isLoading = false);
         _updateSeo();

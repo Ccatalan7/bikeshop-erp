@@ -26,6 +26,12 @@ import '../../modules/website/services/website_service.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 import '../widgets/public_store_layout.dart';
 
+void _catalogDebugLog(String message) {
+  if (kDebugMode || const bool.fromEnvironment('STORE_PERF_LOGS')) {
+    debugPrint(message);
+  }
+}
+
 class ProductCatalogPage extends StatefulWidget {
   const ProductCatalogPage({super.key});
 
@@ -720,7 +726,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
         _allProducts = products;
         _totalProductCount = products.length;
-        debugPrint('[ProductCatalogPage] Loaded ${products.length} products');
+        _catalogDebugLog(
+            '[ProductCatalogPage] Loaded ${products.length} products');
         // `_loadProducts` already applied the requested reset at entry. Keep
         // the route-restored page when this load came from direct navigation.
         _applyLocalFilters(resetPage: false);
@@ -830,7 +837,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         _isRefreshing = false;
       });
 
-      debugPrint(
+      _catalogDebugLog(
         '🧭 [StoreCatalogTrace] PUBLIC_RESPONSE token=$token '
         'category=$_selectedCategoryId '
         'products=${page.products.length} total=${page.totalCount}',
@@ -1002,7 +1009,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           _allCategoriesById = nodesById;
         });
       }
-      debugPrint(
+      _catalogDebugLog(
           '[ProductCatalogPage] Loaded ${visibleCategoryIds.length} visible categories, ${rootCategories.length} root nodes');
     } catch (e) {
       debugPrint('[ProductCatalogPage] Error loading visible categories: $e');

@@ -258,7 +258,10 @@ class TenantDetectionService {
         if (user != null) {
           final tenantFromAuth = await _getTenantFromAuthenticatedUser(user.id);
           if (tenantFromAuth != null) {
-            debugPrint('📱 [TenantDetection] Using authenticated user tenant');
+            if (_perfLogsEnabled) {
+              debugPrint(
+                  '📱 [TenantDetection] Using authenticated user tenant');
+            }
             if (_perfLogsEnabled) {
               debugPrint(
                   '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (authenticated_user)');
@@ -272,7 +275,10 @@ class TenantDetectionService {
       // This allows the store to work without authentication
       const defaultTenantId =
           '5443b130-cc28-45af-a420-cd500b288890'; // Viñabike
-      debugPrint('📱 [TenantDetection] Using default mobile tenant (Viñabike)');
+      if (_perfLogsEnabled) {
+        debugPrint(
+            '📱 [TenantDetection] Using default mobile tenant (Viñabike)');
+      }
       if (_perfLogsEnabled) {
         debugPrint(
             '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (default_mobile)');
@@ -306,9 +312,9 @@ class TenantDetectionService {
     // This skips the DB query entirely for production domains, saving ~674ms
     final knownTenantId = _knownDomainTenants[normalizedHost];
     if (knownTenantId != null) {
-      debugPrint(
-          '⚡ [TenantDetection] Using hardcoded tenant for $normalizedHost');
       if (_perfLogsEnabled) {
+        debugPrint(
+            '⚡ [TenantDetection] Using hardcoded tenant for $normalizedHost');
         debugPrint(
             '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (hardcoded_domain)');
       }
@@ -327,9 +333,9 @@ class TenantDetectionService {
     // matches: vinabike-store--mobile-test-i0dyo35h.web.app
     if (normalizedHost.startsWith('vinabike-store--') &&
         normalizedHost.endsWith('.web.app')) {
-      debugPrint(
-          '⚡ [TenantDetection] Using hardcoded tenant for PREVIEW CHANNEL');
       if (_perfLogsEnabled) {
+        debugPrint(
+            '⚡ [TenantDetection] Using hardcoded tenant for PREVIEW CHANNEL');
         debugPrint(
             '⏱️ [TenantDetectionPerf] Total: ${swTotal.elapsedMilliseconds}ms (firebase_preview_channel)');
       }
