@@ -3,11 +3,53 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../shared/models/product.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
 import '../../modules/inventory/models/category_models.dart';
+import 'public_product_snapshot_cache.dart';
 
 void _publicInventoryDebugLog(String message) {
   if (kDebugMode || const bool.fromEnvironment('STORE_PERF_LOGS')) {
     debugPrint(message);
   }
+}
+
+@visibleForTesting
+List<Map<String, dynamic>> mergePublicProductEnrichmentRows({
+  required List<Map<String, dynamic>> baseRows,
+  required Iterable<List<Map<String, dynamic>>> enrichmentLayers,
+}) {
+  final baseById = <String, Map<String, dynamic>>{
+    for (final row in baseRows)
+      if (row['id'] != null) row['id'].toString(): row,
+  };
+  final mergedById = <String, Map<String, dynamic>>{
+    for (final row in baseRows)
+      if (row['id'] != null)
+        row['id'].toString(): Map<String, dynamic>.from(row),
+  };
+
+  for (final layer in enrichmentLayers) {
+    for (final row in layer) {
+      final id = row['id']?.toString();
+      if (id == null || !mergedById.containsKey(id)) continue;
+      final base = baseById[id]!;
+      final changedFields = <String, dynamic>{
+        for (final entry in row.entries)
+          if (entry.key != 'id' &&
+              (!base.containsKey(entry.key) || base[entry.key] != entry.value))
+            entry.key: entry.value,
+      };
+      mergedById[id] = <String, dynamic>{
+        ...mergedById[id]!,
+        ...changedFields,
+      };
+    }
+  }
+
+  return baseRows.map((row) {
+    final id = row['id']?.toString();
+    return id == null
+        ? Map<String, dynamic>.from(row)
+        : mergedById[id] ?? Map<String, dynamic>.from(row);
+  }).toList(growable: false);
 }
 
 class PublicProductPage {
@@ -96,6 +138,11 @@ class PublicInventoryService extends ChangeNotifier {
 
   // Prevent duplicate concurrent fetches per tenant
   final Map<String, Future<List<Category>>> _categoriesInFlight = {};
+  final Map<String, int> _categoryCacheGenerations = {};
+  final Map<String, Future<PublicProductPage>> _productPagesInFlight = {};
+  int _productPageGeneration = 0;
+  final PublicProductSnapshotCache<Product> _productSnapshots =
+      PublicProductSnapshotCache<Product>();
 
   // Cache duration: 5 minutes
   static const _cacheDuration = Duration(minutes: 5);
@@ -127,6 +174,51 @@ class PublicInventoryService extends ChangeNotifier {
       cleaned[entry.key] = value;
     }
     return cleaned;
+  }
+
+  Product? getCachedProductForIdentifier({
+    required String tenantId,
+    required String productIdentifier,
+  }) {
+    if (productIdentifier.startsWith('sku:')) {
+      return _productSnapshots.peekBySku(
+        tenantId: tenantId,
+        sku: productIdentifier.substring(4),
+      );
+    }
+    return _productSnapshots.peekById(
+      tenantId: tenantId,
+      id: productIdentifier,
+    );
+  }
+
+  /// Seeds a detail transition from a trusted public projection already
+  /// rendered elsewhere in the storefront (for example a persisted cart).
+  ///
+  /// The detail page still performs an origin revalidation before treating
+  /// the projection as authoritative for SEO or purchase decisions.
+  void primeProductSnapshotForNavigation({
+    required String tenantId,
+    required Product product,
+  }) {
+    _cacheProductSnapshots(
+      tenantId: tenantId,
+      products: [product],
+    );
+  }
+
+  void _cacheProductSnapshots({
+    required String tenantId,
+    required Iterable<Product> products,
+  }) {
+    for (final product in products) {
+      _productSnapshots.put(
+        tenantId: tenantId,
+        id: product.id,
+        sku: product.sku,
+        value: product,
+      );
+    }
   }
 
   /// The main public catalog RPC predates checkout tax classification and does
@@ -298,7 +390,150 @@ class PublicInventoryService extends ChangeNotifier {
     }
   }
 
+  Future<List<Map<String, dynamic>>> _enrichPublicProductRows({
+    required String tenantId,
+    required List<Map<String, dynamic>> rows,
+  }) async {
+    if (rows.isEmpty) return rows;
+
+    // Tax, set/public identity, and canonical brand all depend only on the
+    // base product rows. Start them together instead of paying three
+    // additional network round trips in sequence on every catalog page.
+    final layers = await Future.wait<List<Map<String, dynamic>>>([
+      _attachCheckoutTaxRates(
+        tenantId: tenantId,
+        rows: rows,
+      ),
+      _attachSetIdentity(
+        tenantId: tenantId,
+        rows: rows,
+      ),
+      _attachCanonicalBrandNames(
+        tenantId: tenantId,
+        rows: rows,
+      ),
+    ]);
+
+    return mergePublicProductEnrichmentRows(
+      baseRows: rows,
+      enrichmentLayers: layers,
+    );
+  }
+
   Future<PublicProductPage> getProductPageForTenant({
+    required String tenantId,
+    List<String>? categoryIds,
+    List<String>? productIds,
+    String? sku,
+    String? searchQuery,
+    ProductType? productType,
+    PublicProductVisibilityPolicy? policy,
+    bool onlyInStock = true,
+    bool applyAvailabilityFacet = false,
+    List<String>? brandIds,
+    double? minPrice,
+    double? maxPrice,
+    String sortBy = 'name',
+    int limit = 20,
+    int offset = 0,
+  }) {
+    final requestKey = _productPageRequestKey(
+      tenantId: tenantId,
+      categoryIds: categoryIds,
+      productIds: productIds,
+      sku: sku,
+      searchQuery: searchQuery,
+      productType: productType,
+      policy: policy,
+      onlyInStock: onlyInStock,
+      applyAvailabilityFacet: applyAvailabilityFacet,
+      brandIds: brandIds,
+      minPrice: minPrice,
+      maxPrice: maxPrice,
+      sortBy: sortBy,
+      limit: limit,
+      offset: offset,
+    );
+    final pending = _productPagesInFlight[requestKey];
+    if (pending != null) return pending;
+
+    final generation = _productPageGeneration;
+    late final Future<PublicProductPage> future;
+    future = _fetchProductPageForTenant(
+      tenantId: tenantId,
+      categoryIds: categoryIds,
+      productIds: productIds,
+      sku: sku,
+      searchQuery: searchQuery,
+      productType: productType,
+      policy: policy,
+      onlyInStock: onlyInStock,
+      applyAvailabilityFacet: applyAvailabilityFacet,
+      brandIds: brandIds,
+      minPrice: minPrice,
+      maxPrice: maxPrice,
+      sortBy: sortBy,
+      limit: limit,
+      offset: offset,
+    ).then((page) {
+      if (_productPageGeneration == generation) {
+        _cacheProductSnapshots(
+          tenantId: tenantId,
+          products: page.products,
+        );
+      }
+      return page;
+    }).whenComplete(() {
+      if (identical(_productPagesInFlight[requestKey], future)) {
+        _productPagesInFlight.remove(requestKey);
+      }
+    });
+    _productPagesInFlight[requestKey] = future;
+    return future;
+  }
+
+  String _productPageRequestKey({
+    required String tenantId,
+    required List<String>? categoryIds,
+    required List<String>? productIds,
+    required String? sku,
+    required String? searchQuery,
+    required ProductType? productType,
+    required PublicProductVisibilityPolicy? policy,
+    required bool onlyInStock,
+    required bool applyAvailabilityFacet,
+    required List<String>? brandIds,
+    required double? minPrice,
+    required double? maxPrice,
+    required String sortBy,
+    required int limit,
+    required int offset,
+  }) {
+    final categories = [...?categoryIds]..sort();
+    final products = [...?productIds]..sort();
+    final brands = [...?brandIds]..sort();
+    final policyEntries = policy?.toSettings().entries.toList() ?? [];
+    policyEntries.sort((a, b) => a.key.compareTo(b.key));
+    return <Object?>[
+      tenantId.trim(),
+      categories.join(','),
+      products.join(','),
+      sku?.trim().toUpperCase(),
+      searchQuery?.trim().toLowerCase(),
+      productType?.name,
+      policyEntries.map((entry) => '${entry.key}=${entry.value}').join(','),
+      onlyInStock,
+      applyAvailabilityFacet,
+      brands.join(','),
+      minPrice,
+      maxPrice,
+      sortBy,
+      limit,
+      offset,
+    ].map((value) => Uri.encodeComponent(value?.toString() ?? '')).join('|');
+  }
+
+  Future<PublicProductPage> _fetchProductPageForTenant({
     required String tenantId,
     List<String>? categoryIds,
     List<String>? productIds,
@@ -359,23 +594,14 @@ class PublicInventoryService extends ChangeNotifier {
       final rows = (response as List)
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
-      final classifiedRows = await _attachCheckoutTaxRates(
+      final enrichedRows = await _enrichPublicProductRows(
         tenantId: tenantId,
         rows: rows,
       );
-      final setAwareRows = await _attachSetIdentity(
-        tenantId: tenantId,
-        rows: classifiedRows,
-      );
-      final brandAwareRows = await _attachCanonicalBrandNames(
-        tenantId: tenantId,
-        rows: setAwareRows,
-      );
-      final products = brandAwareRows.map(Product.fromJson).toList();
-      final totalCount = classifiedRows.isEmpty
+      final products = enrichedRows.map(Product.fromJson).toList();
+      final totalCount = rows.isEmpty
           ? 0
-          : (classifiedRows.first['total_count'] as num?)?.toInt() ??
-              products.length;
+          : (rows.first['total_count'] as num?)?.toInt() ?? products.length;
 
       _publicInventoryDebugLog(
           '⏱️ [PublicInventory] Product page RPC: ${sw.elapsedMilliseconds}ms (${products.length}/$totalCount products)');
@@ -706,10 +932,17 @@ class PublicInventoryService extends ChangeNotifier {
   /// Returns list of categories or empty list on error
   Future<List<Category>> getCategoriesForTenant({
     required String tenantId,
+    bool forceRefresh = false,
   }) async {
     final sw = Stopwatch()..start();
     final cacheKey = 'categories_$tenantId';
+    final staleFallback = _categoriesCache[cacheKey];
+    Future<List<Category>>? ownedFuture;
     try {
+      if (forceRefresh) {
+        _invalidateCategoryCacheKey(cacheKey);
+      }
+
       // Check cache first
       if (_isCacheValid(cacheKey)) {
         _publicInventoryDebugLog(
@@ -720,25 +953,38 @@ class PublicInventoryService extends ChangeNotifier {
       // Avoid duplicate requests if multiple widgets trigger it on startup
       final inFlight = _categoriesInFlight[cacheKey];
       if (inFlight != null) {
+        ownedFuture = inFlight;
         _publicInventoryDebugLog(
             '⏳ [PublicInventory] Categories already loading; awaiting in-flight request');
         return await inFlight;
       }
 
-      final future = _fetchCategoriesForTenant(tenantId: tenantId, sw: sw);
+      final future = _fetchCategoriesForTenant(
+        tenantId: tenantId,
+        cacheKey: cacheKey,
+        generation: _categoryCacheGenerations[cacheKey] ?? 0,
+        sw: sw,
+      );
+      ownedFuture = future;
       _categoriesInFlight[cacheKey] = future;
       return await future;
     } catch (e) {
       debugPrint(
           '❌ PublicInventoryService: Error fetching categories: $e (${sw.elapsedMilliseconds}ms)');
-      return [];
+      if (forceRefresh) rethrow;
+      return staleFallback ?? const [];
     } finally {
-      _categoriesInFlight.remove(cacheKey);
+      if (ownedFuture != null &&
+          identical(_categoriesInFlight[cacheKey], ownedFuture)) {
+        _categoriesInFlight.remove(cacheKey);
+      }
     }
   }
 
   Future<List<Category>> _fetchCategoriesForTenant({
     required String tenantId,
+    required String cacheKey,
+    required int generation,
     required Stopwatch sw,
   }) async {
     final response = await _supabase
@@ -763,11 +1009,20 @@ class PublicInventoryService extends ChangeNotifier {
         '✅ PublicInventoryService: Found ${categories.length} categories (${sw.elapsedMilliseconds}ms)');
 
     // Cache results
-    final cacheKey = 'categories_$tenantId';
-    _categoriesCache[cacheKey] = categories;
-    _cacheTimestamps[cacheKey] = DateTime.now();
+    if ((_categoryCacheGenerations[cacheKey] ?? 0) == generation) {
+      _categoriesCache[cacheKey] = categories;
+      _cacheTimestamps[cacheKey] = DateTime.now();
+    }
 
     return categories;
+  }
+
+  void _invalidateCategoryCacheKey(String cacheKey) {
+    _categoryCacheGenerations[cacheKey] =
+        (_categoryCacheGenerations[cacheKey] ?? 0) + 1;
+    _categoriesCache.remove(cacheKey);
+    _cacheTimestamps.remove(cacheKey);
+    _categoriesInFlight.remove(cacheKey);
   }
 
   /// Get single product by ID (public access)
@@ -781,6 +1036,7 @@ class PublicInventoryService extends ChangeNotifier {
     required String productId,
     required String tenantId,
     PublicProductVisibilityPolicy? policy,
+    bool rethrowErrors = false,
   }) async {
     try {
       _publicInventoryDebugLog(
@@ -805,6 +1061,7 @@ class PublicInventoryService extends ChangeNotifier {
       return product;
     } catch (e) {
       debugPrint('❌ PublicInventoryService: Error fetching product: $e');
+      if (rethrowErrors) rethrow;
       return null;
     }
   }
@@ -820,6 +1077,7 @@ class PublicInventoryService extends ChangeNotifier {
     required String sku,
     required String tenantId,
     PublicProductVisibilityPolicy? policy,
+    bool rethrowErrors = false,
   }) async {
     try {
       _publicInventoryDebugLog(
@@ -845,6 +1103,7 @@ class PublicInventoryService extends ChangeNotifier {
       return product;
     } catch (e) {
       debugPrint('❌ PublicInventoryService: Error fetching product by SKU: $e');
+      if (rethrowErrors) rethrow;
       return null;
     }
   }
@@ -876,19 +1135,15 @@ class PublicInventoryService extends ChangeNotifier {
       final rows = (response as List)
           .map((json) => Map<String, dynamic>.from(json as Map))
           .toList();
-      final classifiedRows = await _attachCheckoutTaxRates(
+      final enrichedRows = await _enrichPublicProductRows(
         tenantId: tenantId,
         rows: rows,
       );
-      final setAwareRows = await _attachSetIdentity(
+      final products = enrichedRows.map(Product.fromJson).toList();
+      _cacheProductSnapshots(
         tenantId: tenantId,
-        rows: classifiedRows,
+        products: products,
       );
-      final brandAwareRows = await _attachCanonicalBrandNames(
-        tenantId: tenantId,
-        rows: setAwareRows,
-      );
-      final products = brandAwareRows.map(Product.fromJson).toList();
 
       _publicInventoryDebugLog(
           '✅ PublicInventoryService: Found ${products.length} featured products');
@@ -933,16 +1188,29 @@ class PublicInventoryService extends ChangeNotifier {
   ///
   /// Call this when products/categories are updated
   void clearCache({String? tenantId}) {
+    _productPageGeneration++;
+    _productPagesInFlight.clear();
     if (tenantId != null) {
       _productsCache.remove('products_$tenantId');
-      _categoriesCache.remove('categories_$tenantId');
+      _productSnapshots.clear(tenantId: tenantId);
       _cacheTimestamps.remove('products_$tenantId');
-      _cacheTimestamps.remove('categories_$tenantId');
+      _invalidateCategoryCacheKey('categories_$tenantId');
       _publicInventoryDebugLog(
           '🗑️ PublicInventoryService: Cleared cache for tenant $tenantId');
     } else {
       _productsCache.clear();
+      _productSnapshots.clear();
+      final categoryKeys = <String>{
+        ..._categoriesCache.keys,
+        ..._categoriesInFlight.keys,
+        ..._categoryCacheGenerations.keys,
+      };
+      for (final cacheKey in categoryKeys) {
+        _categoryCacheGenerations[cacheKey] =
+            (_categoryCacheGenerations[cacheKey] ?? 0) + 1;
+      }
       _categoriesCache.clear();
+      _categoriesInFlight.clear();
       _cacheTimestamps.clear();
       _publicInventoryDebugLog('🗑️ PublicInventoryService: Cleared all cache');
     }
@@ -965,8 +1233,10 @@ class PublicInventoryService extends ChangeNotifier {
   Future<List<Category>> refreshCategoriesForTenant({
     required String tenantId,
   }) async {
-    clearCache(tenantId: tenantId);
-    return getCategoriesForTenant(tenantId: tenantId);
+    return getCategoriesForTenant(
+      tenantId: tenantId,
+      forceRefresh: true,
+    );
   }
 
   /// Search products using fuzzy matching (RPC) for live preview
@@ -996,22 +1266,18 @@ class PublicInventoryService extends ChangeNotifier {
       final rows = (response as List)
           .map((json) => Map<String, dynamic>.from(json as Map))
           .toList();
-      final classifiedRows = await _attachCheckoutTaxRates(
+      final enrichedRows = await _enrichPublicProductRows(
         tenantId: tenantId,
         rows: rows,
       );
-      final setAwareRows = await _attachSetIdentity(
-        tenantId: tenantId,
-        rows: classifiedRows,
-      );
-      final brandAwareRows = await _attachCanonicalBrandNames(
-        tenantId: tenantId,
-        rows: setAwareRows,
-      );
-      final products = brandAwareRows.map(Product.fromJson).toList();
+      final products = enrichedRows.map(Product.fromJson).toList();
       final visibleProducts = policy == null
           ? products
           : products.where(policy.allowsProduct).toList();
+      _cacheProductSnapshots(
+        tenantId: tenantId,
+        products: visibleProducts,
+      );
 
       _publicInventoryDebugLog(
           '✅ PublicInventoryService: Found ${visibleProducts.length} matches for "$searchTerm"');

@@ -606,6 +606,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
   List<Map<String, dynamic>> _blocks = [];
   String? _pageId;
   bool _editModeChecked = false;
+  int _loadGeneration = 0;
 
   // Keep this page alive in memory to prevent reloading on navigation
   @override
@@ -614,22 +615,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
   @override
   void initState() {
     super.initState();
-
-    // If we have cached blocks, render immediately (no 1-frame spinner flicker).
-    final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
-    if (tenantId != null && tenantId.isNotEmpty) {
-      final websiteService = context.read<WebsiteService>();
-      final snapshot = websiteService.peekPageWithBlocks(
-        widget.slug,
-        tenantId: tenantId,
-      );
-      if (snapshot != null) {
-        _pageId = snapshot.page.id;
-        _blocks = snapshot.blocks;
-        _loading = false;
-      }
-    }
-
+    _seedFromSnapshot(widget.slug);
     _loadPage();
   }
 
@@ -638,8 +624,34 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.slug != widget.slug) {
       _editModeChecked = false;
+      _seedFromSnapshot(widget.slug, clearOnMiss: true);
       _loadPage();
     }
+  }
+
+  bool _seedFromSnapshot(String slug, {bool clearOnMiss = false}) {
+    final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
+    final snapshot = tenantId == null || tenantId.isEmpty
+        ? null
+        : context
+            .read<WebsiteService>()
+            .peekPageWithBlocks(slug, tenantId: tenantId);
+
+    if (snapshot != null) {
+      _pageId = snapshot.page.id;
+      _blocks = snapshot.blocks;
+      _loading = false;
+      _error = null;
+      return true;
+    }
+
+    if (clearOnMiss) {
+      _pageId = null;
+      _blocks = [];
+      _loading = true;
+      _error = null;
+    }
+    return false;
   }
 
   bool _providerHasBlocksForThisPage(WebsiteEditModeProvider editProvider) {
@@ -701,7 +713,9 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
   }
 
   Future<void> _loadPage() async {
-    final shouldShowSpinner = _blocks.isEmpty;
+    final loadGeneration = ++_loadGeneration;
+    final requestedSlug = widget.slug;
+    final shouldShowSpinner = _pageId == null;
     if (shouldShowSpinner) {
       setState(() {
         _loading = true;
@@ -732,32 +746,49 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
       if (tenantId == null) {
         throw Exception('No tenant detected');
       }
-      if (!mounted) return;
+      if (!mounted ||
+          loadGeneration != _loadGeneration ||
+          requestedSlug != widget.slug) {
+        return;
+      }
 
-      // Use WebsiteService for cached page loading
       final websiteService = context.read<WebsiteService>();
-      final cached = await websiteService.loadPageWithBlocks(
-        widget.slug,
+      if (_pageId == null) {
+        setState(() {
+          _seedFromSnapshot(requestedSlug);
+        });
+      }
+
+      // Even when a snapshot painted synchronously, this always revalidates
+      // the canonical CMS page and blocks against the origin.
+      final refreshed = await websiteService.loadPageWithBlocks(
+        requestedSlug,
         tenantId: tenantId,
       );
 
-      if (cached == null) {
+      if (!mounted ||
+          loadGeneration != _loadGeneration ||
+          requestedSlug != widget.slug) {
+        return;
+      }
+
+      if (refreshed == null) {
         throw Exception('Página no encontrada');
       }
 
-      _pageId = cached.page.id;
-      _blocks = cached.blocks;
-
-      // Prefetch other policy pages in the background so switching between them
-      // is instant and doesn't show loading UI.
-      _prefetchOtherPolicyPages(
-          websiteService: websiteService, tenantId: tenantId);
-
-      if (mounted) {
-        setState(() => _loading = false);
-      } else {
+      setState(() {
+        _pageId = refreshed.page.id;
+        _blocks = refreshed.blocks;
         _loading = false;
-      }
+        _error = null;
+      });
+
+      // Warm the other policy snapshots only when missing. Opening one still
+      // performs its own mandatory background origin revalidation.
+      _prefetchOtherPolicyPages(
+        websiteService: websiteService,
+        tenantId: tenantId,
+      );
 
       // If the user navigated here while already in edit/preview mode,
       // update the provider so the right panel can edit selected blocks.
@@ -765,14 +796,13 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
         _updateEditProviderIfNeeded();
       });
     } catch (e) {
-      if (mounted) {
+      if (mounted &&
+          loadGeneration == _loadGeneration &&
+          requestedSlug == widget.slug) {
         setState(() {
           _loading = false;
           _error = e.toString();
         });
-      } else {
-        _loading = false;
-        _error = e.toString();
       }
     }
   }
@@ -784,7 +814,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
     for (final slug in _policySlugs) {
       if (slug == widget.slug) continue;
       // Fire-and-forget.
-      websiteService.loadPageWithBlocks(slug, tenantId: tenantId);
+      websiteService.prefetchPageWithBlocks(slug, tenantId: tenantId);
     }
   }
 

@@ -16,6 +16,17 @@ class DeferredCustomerRoutePage extends StatefulWidget {
   final String routeKey;
   final String? argument;
 
+  static Future<void>? _preloadFuture;
+
+  /// Starts downloading the account route unit as soon as navigation intent
+  /// is known. It remains deferred, so first storefront paint is unaffected.
+  static Future<void> preload() {
+    return _preloadFuture ??= customer_routes.loadLibrary().catchError((error) {
+      _preloadFuture = null;
+      throw error;
+    });
+  }
+
   @override
   State<DeferredCustomerRoutePage> createState() =>
       _DeferredCustomerRoutePageState();
@@ -27,12 +38,12 @@ class _DeferredCustomerRoutePageState extends State<DeferredCustomerRoutePage> {
   @override
   void initState() {
     super.initState();
-    _libraryFuture = customer_routes.loadLibrary();
+    _libraryFuture = DeferredCustomerRoutePage.preload();
   }
 
   void _retry() {
     setState(() {
-      _libraryFuture = customer_routes.loadLibrary();
+      _libraryFuture = DeferredCustomerRoutePage.preload();
     });
   }
 

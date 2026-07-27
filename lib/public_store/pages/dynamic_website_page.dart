@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../modules/website/models/website_font_registry.dart';
-import '../../modules/website/models/website_page_models.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
@@ -46,6 +45,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   String? _pageId;
   bool _editModeChecked =
       false; // Track if we've checked edit mode for this navigation
+  int _loadGeneration = 0;
 
   // Theme settings
   Color _primaryColor = const Color(0xFF2E7D32);
@@ -72,6 +72,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   @override
   void initState() {
     super.initState();
+    _seedFromSnapshot(widget.slug);
     _loadPageData();
   }
 
@@ -87,11 +88,47 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.slug != widget.slug) {
       _editModeChecked = false; // Reset on slug change
+      _seedFromSnapshot(widget.slug, clearOnMiss: true);
       _loadPageData().then((_) {
         // After loading new page data, update edit provider if in edit mode
         _updateEditProviderIfNeeded();
       });
     }
+  }
+
+  String? _publicTenantId() {
+    try {
+      return context.read<PublicStoreTenantProvider>().tenantId;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _seedFromSnapshot(String slug, {bool clearOnMiss = false}) {
+    final tenantId = _publicTenantId();
+    final snapshot = tenantId == null || tenantId.isEmpty
+        ? null
+        : context
+            .read<WebsiteService>()
+            .peekPageWithBlocks(slug, tenantId: tenantId);
+
+    if (snapshot != null && snapshot.page.isPublished) {
+      _pageId = snapshot.page.id;
+      _blocks = snapshot.blocks
+          .where((block) => block['is_visible'] == true)
+          .toList();
+      _isLoading = false;
+      _error = null;
+      return true;
+    }
+
+    if (clearOnMiss) {
+      _pageId = null;
+      _blocks = [];
+      _isLoading = true;
+      _error = null;
+    }
+    return false;
   }
 
   /// Update the edit provider with new page's blocks if we're in edit mode
@@ -305,13 +342,18 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   }
 
   Future<void> _loadPageData() async {
+    final loadGeneration = ++_loadGeneration;
+    final requestedSlug = widget.slug;
     debugPrint(
-        '🔄 [DynamicPage] _loadPageData() called for slug: "${widget.slug}"');
+        '🔄 [DynamicPage] _loadPageData() called for slug: "$requestedSlug"');
 
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+    if (mounted) {
+      setState(() {
+        // Keep a matching snapshot visible while the origin is revalidated.
+        _isLoading = _pageId == null;
+        _error = null;
+      });
+    }
 
     try {
       final websiteService = context.read<WebsiteService>();
@@ -340,22 +382,54 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
       // Wait for tenant detection if still not ready
       if (tenantId == null) {
         debugPrint('⏳ [DynamicWebsitePage] Waiting for tenant detection...');
-        // Re-try after a short delay
-        await Future.delayed(const Duration(milliseconds: 500));
-        if (mounted) {
+        await Future.delayed(const Duration(milliseconds: 250));
+        if (mounted &&
+            loadGeneration == _loadGeneration &&
+            requestedSlug == widget.slug) {
           _loadPageData();
         }
         return;
       }
 
-      debugPrint(
-          '🏪 [DynamicWebsitePage] Loading page "${widget.slug}" for tenant: $tenantId');
-
-      // Load settings first (for theme)
-      if (websiteService.settings.isEmpty) {
-        await websiteService.loadSettingsForTenant(tenantId);
+      if (loadGeneration != _loadGeneration ||
+          requestedSlug != widget.slug ||
+          !mounted) {
+        return;
       }
-      if (!mounted) return;
+
+      // Tenant detection can finish after initState. Seed at that point too so
+      // a revisit still paints before the origin request completes.
+      if (_pageId == null) {
+        setState(() {
+          _seedFromSnapshot(requestedSlug);
+        });
+      }
+
+      debugPrint(
+          '🏪 [DynamicWebsitePage] Loading page "$requestedSlug" for tenant: $tenantId');
+
+      // Start the joined page+blocks request immediately. Theme settings may
+      // load alongside it; they must not create a page -> blocks waterfall.
+      final pageFuture = websiteService.loadPageWithBlocks(
+        requestedSlug,
+        tenantId: tenantId,
+      );
+      final settingsFuture = websiteService.settings.isEmpty
+          ? websiteService.loadSettingsForTenant(tenantId)
+          : Future<void>.value();
+      await settingsFuture;
+      final snapshot = await pageFuture;
+
+      if (loadGeneration != _loadGeneration ||
+          requestedSlug != widget.slug ||
+          !mounted) {
+        return;
+      }
+
+      if (snapshot == null || !snapshot.page.isPublished) {
+        throw Exception('Page not found: $requestedSlug');
+      }
+
       WebsiteEditModeProvider? editProvider;
       try {
         editProvider = context.read<WebsiteEditModeProvider>();
@@ -363,75 +437,34 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
         editProvider = null;
       }
 
-      _loadThemeFromSettings(websiteService, editProvider: editProvider);
+      debugPrint(
+          '📄 [DynamicWebsitePage] Found page: "${snapshot.page.title}" (id: ${snapshot.page.id}, slug: ${snapshot.page.slug})');
 
-      // Load pages using public method (no auth required)
-      await websiteService.loadPagesForTenant(tenantId);
-      final pages = websiteService.pages;
-
-      debugPrint('📄 [DynamicWebsitePage] Found ${pages.length} pages total');
-
-      // Find the page by slug (or home page for empty slug)
-      WebsitePage? page;
-      if (widget.slug.isEmpty) {
-        // Look for home page
-        page = pages.firstWhere(
-          (p) => p.isHome && p.isPublished,
-          orElse: () => pages.firstWhere(
-            (p) => p.isPublished,
-            orElse: () => throw Exception('No published pages found'),
-          ),
+      setState(() {
+        _loadThemeFromSettings(
+          websiteService,
+          editProvider: editProvider,
         );
-      } else {
-        // Find by slug
-        page = pages.firstWhere(
-          (p) => p.slug == widget.slug && p.isPublished,
-          orElse: () => throw Exception('Page not found: ${widget.slug}'),
-        );
-      }
+        _pageId = snapshot.page.id;
+        _blocks = snapshot.blocks
+            .where((block) => block['is_visible'] == true)
+            .toList();
+        _isLoading = false;
+        _error = null;
+      });
 
-      // Store page ID for editing
-      _pageId = page.id;
-
-      debugPrint(
-          '📄 [DynamicWebsitePage] Found page: "${page.title}" (id: ${page.id}, slug: ${page.slug})');
-
-      // Load blocks for this page (pass tenantId explicitly for public store)
-      final blocks = await websiteService.loadBlocksForPage(
-        page.id,
-        tenantId: tenantId,
-      );
-
-      debugPrint(
-          '📦 [DynamicWebsitePage] Loaded ${blocks.length} raw blocks from database');
-      for (final block in blocks) {
-        debugPrint(
-            '   - Block: ${block['block_type']} (id: ${block['id']}, page_id: ${block['page_id']})');
-      }
-
-      // Filter visible blocks only (but keep all for editing)
-      _blocks = blocks.where((block) {
-        return block['is_visible'] == true;
-      }).toList();
-
-      debugPrint(
-          '✅ [DynamicWebsitePage] Showing ${_blocks.length} visible blocks');
-
-      if (mounted) {
-        setState(() => _isLoading = false);
-
-        // If we arrived here while already inside the persistent editor shell
-        // (edit/preview), we must sync the provider to THIS page; otherwise the
-        // editor panel will still be pointing at the previous page (often home).
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          if (!TickerMode.of(context)) return;
-          _updateEditProviderIfNeeded();
-        });
-      }
+      // If we arrived here while already inside the persistent editor shell
+      // (edit/preview), keep its canonical page context synchronized.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (!TickerMode.of(context)) return;
+        _updateEditProviderIfNeeded();
+      });
     } catch (e) {
       debugPrint('❌ [DynamicWebsitePage] Error: $e');
-      if (mounted) {
+      if (mounted &&
+          loadGeneration == _loadGeneration &&
+          requestedSlug == widget.slug) {
         setState(() {
           _isLoading = false;
           _error = e.toString();
@@ -537,7 +570,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     final blocksToRender =
         (isInEditorContext && matchesPage) ? editProvider.blocks : _blocks;
 
-    if (_isLoading) {
+    if (_isLoading && _pageId == null) {
       return const FullPageLoading();
     }
 

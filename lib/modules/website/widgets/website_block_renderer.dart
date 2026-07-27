@@ -69,6 +69,7 @@ class WebsiteBlockRenderer {
     required Color primaryColor,
     required Color accentColor,
     List<Product>? featuredProducts,
+    bool featuredProductsReady = true,
     bool previewMode = false,
     String? headingFont,
     String? bodyFont,
@@ -151,6 +152,7 @@ class WebsiteBlockRenderer {
           primaryColor: primaryColor,
           accentColor: accentColor,
           featuredProducts: featuredProducts,
+          featuredProductsReady: featuredProductsReady,
           previewMode: previewMode,
           bodyFont: bodyFont,
           onNavigate: onNavigate,
@@ -1146,6 +1148,7 @@ class WebsiteBlockRenderer {
     required Color primaryColor,
     required Color accentColor,
     List<Product>? featuredProducts,
+    bool featuredProductsReady = true,
     bool previewMode = false,
     String? bodyFont,
     void Function(String route)? onNavigate,
@@ -1157,6 +1160,7 @@ class WebsiteBlockRenderer {
       primaryColor: primaryColor,
       accentColor: accentColor,
       featuredProducts: featuredProducts,
+      featuredProductsReady: featuredProductsReady,
       previewMode: previewMode,
       bodyFont: bodyFont,
       onNavigate: onNavigate,
@@ -5073,6 +5077,7 @@ class _ProductsBlockWidget extends StatefulWidget {
   final Color primaryColor;
   final Color accentColor;
   final List<Product>? featuredProducts;
+  final bool featuredProductsReady;
   final bool previewMode;
   final String? bodyFont;
   final void Function(String route)? onNavigate;
@@ -5083,6 +5088,7 @@ class _ProductsBlockWidget extends StatefulWidget {
     required this.primaryColor,
     required this.accentColor,
     this.featuredProducts,
+    this.featuredProductsReady = true,
     this.previewMode = false,
     this.bodyFont,
     this.onNavigate,
@@ -5096,6 +5102,7 @@ class _ProductsBlockWidget extends StatefulWidget {
 class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
   List<Product> _products = [];
   bool _isLoading = true;
+  int _loadToken = 0;
 
   @override
   void initState() {
@@ -5113,6 +5120,15 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                 widget.data['selectedProducts']?.toString() ||
             oldWidget.data['categoryId'] != widget.data['categoryId'] ||
             oldWidget.data['maxProducts'] != widget.data['maxProducts'] ||
+            oldWidget.featuredProductsReady != widget.featuredProductsReady ||
+            !listEquals(
+              oldWidget.featuredProducts
+                  ?.map((product) => product.id)
+                  .toList(growable: false),
+              widget.featuredProducts
+                  ?.map((product) => product.id)
+                  .toList(growable: false),
+            ) ||
             oldWidget.tenantId != widget.tenantId;
 
     if (shouldReload) {
@@ -5134,6 +5150,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
 
   Future<void> _loadProducts() async {
     if (!mounted) return;
+    final loadToken = ++_loadToken;
 
     final tenantId = widget.tenantId;
 
@@ -5141,6 +5158,15 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
     if (tenantId == null || tenantId.isEmpty) {
       // Keep _isLoading = true to show loading placeholders
       // Don't set error state - tenant detection may still be in progress
+      return;
+    }
+    if (!widget.previewMode &&
+        _productSource == 'featured' &&
+        widget.featuredProducts != null &&
+        !widget.featuredProductsReady) {
+      if (!_isLoading) {
+        setState(() => _isLoading = true);
+      }
       return;
     }
 
@@ -5154,7 +5180,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
 
       if (!widget.previewMode) {
         products = await _loadPublicProductsFromPolicy();
-        if (mounted) {
+        if (mounted && loadToken == _loadToken) {
           setState(() {
             _products = products.take(_maxProducts).toList();
             _isLoading = false;
@@ -5263,7 +5289,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
 
       products = await _hydratePreviewAvailability(products);
 
-      if (mounted) {
+      if (mounted && loadToken == _loadToken) {
         setState(() {
           _products = products.take(_maxProducts).toList();
           _isLoading = false;
@@ -5271,7 +5297,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
       }
     } catch (e) {
       debugPrint('[ProductsBlock] Error: $e');
-      if (mounted) {
+      if (mounted && loadToken == _loadToken) {
         setState(() {
           _isLoading = false;
         });
@@ -5353,8 +5379,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
 
       case 'featured':
       default:
-        if (widget.featuredProducts != null &&
-            widget.featuredProducts!.isNotEmpty) {
+        if (widget.featuredProducts != null && widget.featuredProductsReady) {
           return widget.featuredProducts!
               .where(
                 (product) => policy == null || policy.allowsProduct(product),

@@ -19,6 +19,8 @@ import 'package:web/web.dart'
 
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
+import '../routes/deferred_commerce_route_page.dart';
+import '../routes/deferred_customer_route_page.dart';
 import '../services/public_store_scroll_state.dart';
 import '../theme/public_store_theme.dart';
 import '../theme/public_header_contrast.dart';
@@ -136,6 +138,15 @@ class PublicStoreLayout extends StatefulWidget {
     // Using go() avoids stacking routes on web (which can lead to blank frames
     // when a layout exception occurs in an offstage route).
     context.go(normalized);
+  }
+
+  /// Starts route-specific read-only warm-up when a pointer/focus indicates
+  /// likely navigation. Deferred features remain outside the initial bundle.
+  static void prepareHref(BuildContext context, String href) {
+    final state = context.findAncestorStateOfType<_PublicStoreLayoutState>();
+    state?._warmDeferredRouteForPath(
+      Uri.tryParse(href.trim())?.path ?? href.trim(),
+    );
   }
 
   @override
@@ -3945,7 +3956,15 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                     ),
                                     if (isDesktopHeader) ...[
                                       const SizedBox(width: 10),
-                                      CustomerAccountMenu(textColor: textColor),
+                                      MouseRegion(
+                                        onEnter: (_) =>
+                                            _warmDeferredRouteForPath(
+                                          '/cuenta',
+                                        ),
+                                        child: CustomerAccountMenu(
+                                          textColor: textColor,
+                                        ),
+                                      ),
                                     ] else ...[
                                       const SizedBox(width: 4),
                                       IconButton(
@@ -5341,6 +5360,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             )
           : MouseRegion(
               cursor: isEditMode ? SystemMouseCursors.click : MouseCursor.defer,
+              onEnter:
+                  isEditMode ? null : (_) => _warmDeferredRouteForPath(href),
               child: InkWell(
                 onTap: isEditMode
                     ? () => _beginInlineFooterNavEdit(editProvider, effective)
@@ -5376,22 +5397,25 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        onTap: isEditMode
-            ? null
-            : () {
-                _navigateToHref(
-                  context,
-                  path,
-                  forceHomeRefresh: forceHomeRefresh,
-                );
-              },
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white70,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-              ),
+      child: MouseRegion(
+        onEnter: isEditMode ? null : (_) => _warmDeferredRouteForPath(path),
+        child: InkWell(
+          onTap: isEditMode
+              ? null
+              : () {
+                  _navigateToHref(
+                    context,
+                    path,
+                    forceHomeRefresh: forceHomeRefresh,
+                  );
+                },
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.white70,
+                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                ),
+          ),
         ),
       ),
     );
@@ -5892,6 +5916,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // exacerbate "RenderBox was not laid out" failures and lead to blank
     // frames). Keep push() for detail routes like product pages.
     final targetPath = Uri.tryParse(target)?.path ?? target;
+    _warmDeferredRouteForPath(targetPath);
     final isHomeTarget = targetPath == '/' ||
         targetPath == '/tienda' ||
         targetPath == '/tienda/';
@@ -5972,6 +5997,47 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     }
   }
 
+  void _warmDeferredRouteForPath(String path) {
+    var normalized = path.trim().toLowerCase();
+    if (normalized.startsWith('/tienda/')) {
+      normalized = normalized.substring('/tienda'.length);
+    } else if (normalized == '/tienda') {
+      normalized = '/';
+    }
+
+    if (normalized == '/cuenta' || normalized.startsWith('/cuenta/')) {
+      DeferredCustomerRoutePage.preload().ignore();
+    }
+    if (normalized == '/checkout' || normalized.startsWith('/pedido/')) {
+      DeferredCommerceRoutePage.preload().ignore();
+    }
+
+    String? cmsSlug;
+    const policySlugs = <String>{
+      '/nosotros',
+      '/terminos',
+      '/privacidad',
+      '/devoluciones',
+      '/envios',
+    };
+    if (policySlugs.contains(normalized)) {
+      cmsSlug = normalized.substring(1);
+    } else if (normalized.startsWith('/pagina/')) {
+      cmsSlug = Uri.decodeComponent(normalized.substring('/pagina/'.length));
+    }
+    if (cmsSlug == null || cmsSlug.isEmpty || !mounted) return;
+
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    if (editProvider.isInEditorContext) return;
+    final tenantId =
+        context.read<PublicStoreTenantProvider>().tenantId?.trim() ?? '';
+    if (tenantId.isEmpty) return;
+    context
+        .read<WebsiteService>()
+        .prefetchPageWithBlocks(cmsSlug, tenantId: tenantId)
+        .ignore();
+  }
+
   bool _shouldReplaceForPublicStoreNav(String path) {
     final p = path.trim().toLowerCase();
     if (p.isEmpty) return true;
@@ -6034,37 +6100,40 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final href = _routeForPublicStore(nav.href ?? '/');
     final isActive = GoRouterState.of(context).matchedLocation == href;
 
-    return InkWell(
-      onTap: isEditMode
-          ? null
-          : () {
-              _navigateToHref(context, href, openInNewTab: nav.openInNewTab);
-            },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 5),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: isActive ? primaryColor : Colors.transparent,
-              width: 2,
+    return MouseRegion(
+      onEnter: isEditMode ? null : (_) => _warmDeferredRouteForPath(href),
+      child: InkWell(
+        onTap: isEditMode
+            ? null
+            : () {
+                _navigateToHref(context, href, openInNewTab: nav.openInNewTab);
+              },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: isActive ? primaryColor : Colors.transparent,
+                width: 2,
+              ),
             ),
           ),
-        ),
-        child: Semantics(
-          label: nav.label,
-          excludeSemantics: true,
-          child: Text(
-            uppercaseLabel ? nav.label.toUpperCase() : nav.label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontSize: 14,
-                  letterSpacing: 0.1,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                  color: isActive
-                      ? primaryColor
-                      : (primaryColor == Colors.white
-                          ? Colors.white
-                          : PublicStoreTheme.textPrimary),
-                ),
+          child: Semantics(
+            label: nav.label,
+            excludeSemantics: true,
+            child: Text(
+              uppercaseLabel ? nav.label.toUpperCase() : nav.label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontSize: 14,
+                    letterSpacing: 0.1,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                    color: isActive
+                        ? primaryColor
+                        : (primaryColor == Colors.white
+                            ? Colors.white
+                            : PublicStoreTheme.textPrimary),
+                  ),
+            ),
           ),
         ),
       ),
@@ -6076,6 +6145,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     List<WebsiteNavigation> navItems, {
     required bool isEditMode,
   }) {
+    _warmDeferredRouteForPath('/cuenta');
     // IMPORTANT: The bottom-sheet builder gets its own BuildContext. After
     // `Navigator.pop(sheetContext)`, that context can be disposed; using it for
     // navigation can make taps appear to do nothing (especially on mobile).

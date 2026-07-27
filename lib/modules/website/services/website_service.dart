@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -458,16 +459,41 @@ class WebsiteService extends ChangeNotifier {
   RealtimeChannel? _ordersChannel;
 
   // ============================================================
-  // PAGE CACHE - Load once, instant on revisit (5 min TTL)
+  // PAGE SNAPSHOTS - instant paint, followed by mandatory origin revalidation
   // ============================================================
-  static final Map<String, _CachedPage> _pageCache = {};
   static const Duration _cacheTTL = Duration(minutes: 5);
+  static final WebsitePageSnapshotCache _pageCache =
+      WebsitePageSnapshotCache(ttl: _cacheTTL);
 
   /// Clear all cached pages (call when content is edited)
   static void clearPageCache() => _pageCache.clear();
 
   /// Clear cache for a specific slug
-  static void invalidatePageCache(String slug) => _pageCache.remove(slug);
+  static void invalidatePageCache(String slug, {String? tenantId}) {
+    final normalizedSlug = _normalizePageSlug(slug);
+    _pageCache.invalidateWhere((key) {
+      final separator = key.indexOf('\u0000');
+      if (separator < 0) return false;
+      final keyTenantId = key.substring(0, separator);
+      final keySlug = key.substring(separator + 1);
+      return keySlug == normalizedSlug &&
+          (tenantId == null || tenantId == keyTenantId);
+    });
+  }
+
+  static String _normalizePageSlug(String slug) {
+    var normalized = slug.trim().toLowerCase();
+    while (normalized.startsWith('/')) {
+      normalized = normalized.substring(1);
+    }
+    while (normalized.endsWith('/')) {
+      normalized = normalized.substring(0, normalized.length - 1);
+    }
+    return normalized;
+  }
+
+  static String _pageCacheKey(String tenantId, String slug) =>
+      '$tenantId\u0000${_normalizePageSlug(slug)}';
 
   List<WebsiteBanner> get banners => _banners;
   List<FeaturedProduct> get featuredProducts => _featuredProducts;
@@ -1385,6 +1411,7 @@ class WebsiteService extends ChangeNotifier {
     try {
       await _supabase.from('website_blocks').delete().eq('id', id);
 
+      WebsiteService.clearPageCache();
       await loadBlocks();
     } catch (e) {
       _error = 'Error al eliminar bloque: $e';
@@ -3299,6 +3326,7 @@ class WebsiteService extends ChangeNotifier {
 
       final newPage = WebsitePage.fromJson(response);
       _pages.add(newPage);
+      WebsiteService.clearPageCache();
       _safeNotifyListeners();
 
       return newPage;
@@ -3326,6 +3354,7 @@ class WebsiteService extends ChangeNotifier {
       if (index >= 0) {
         _pages[index] = updatedPage;
       }
+      WebsiteService.clearPageCache();
       _safeNotifyListeners();
 
       return updatedPage;
@@ -3342,6 +3371,7 @@ class WebsiteService extends ChangeNotifier {
       await _supabase.from('website_pages').delete().eq('id', pageId);
 
       _pages.removeWhere((p) => p.id == pageId);
+      WebsiteService.clearPageCache();
       _safeNotifyListeners();
     } catch (e) {
       _error = 'Error al eliminar página: $e';
@@ -3358,6 +3388,7 @@ class WebsiteService extends ChangeNotifier {
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', pageId);
 
+      WebsiteService.clearPageCache();
       await loadPages();
     } catch (e) {
       _error = 'Error al publicar página: $e';
@@ -3374,6 +3405,7 @@ class WebsiteService extends ChangeNotifier {
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', pageId);
 
+      WebsiteService.clearPageCache();
       await loadPages();
     } catch (e) {
       _error = 'Error al establecer página de inicio: $e';
@@ -4553,53 +4585,110 @@ class WebsiteService extends ChangeNotifier {
   // CACHED PAGE LOADING - For public store policy pages
   // ============================================================================
 
-  /// Load a page by slug with caching (for instant revisits)
-  /// Returns page info and blocks, or null if not found
+  /// Revalidate a public page snapshot against the origin.
+  ///
+  /// Call [peekPageWithBlocks] before this method when an immediate paint is
+  /// possible. This method deliberately does not short-circuit on a cache hit:
+  /// every real navigation refreshes the canonical CMS state in the
+  /// background. Concurrent refreshes for the same tenant and slug share one
+  /// joined Supabase request.
   Future<CachedPageSnapshot?> loadPageWithBlocks(
     String slug, {
     required String tenantId,
   }) async {
-    // Check cache first
-    final cacheKey = '$tenantId:$slug';
-    final cached = _pageCache[cacheKey];
-    if (cached != null && !cached.isExpired) {
-      return CachedPageSnapshot(page: cached.page, blocks: cached.blocks);
-    }
+    final cacheKey = _pageCacheKey(tenantId, slug);
+    final fallback = _pageCache.peek(cacheKey);
 
     try {
-      // Load page
-      final page = await getPageBySlug(slug, tenantId: tenantId);
-      if (page == null) return null;
-
-      // Load blocks
-      final blocks = await loadBlocksForPage(page.id, tenantId: tenantId);
-
-      // Cache and return
-      final result = _CachedPage(
-        page: page,
-        blocks: blocks,
-        cachedAt: DateTime.now(),
+      return await _pageCache.revalidate(
+        cacheKey,
+        () => _loadPageWithBlocksFromOrigin(
+          slug,
+          tenantId: tenantId,
+        ),
       );
-      _pageCache[cacheKey] = result;
-      return CachedPageSnapshot(page: result.page, blocks: result.blocks);
     } catch (e) {
       debugPrint('Error loading page with blocks: $e');
-      return null;
+      // A transient origin failure must not blank already rendered CMS
+      // content. The next navigation will revalidate again.
+      return fallback;
     }
+  }
+
+  /// Warm a page snapshot without issuing another request when it is already
+  /// cached. A subsequent real navigation still calls [loadPageWithBlocks] and
+  /// therefore revalidates the origin.
+  Future<CachedPageSnapshot?> prefetchPageWithBlocks(
+    String slug, {
+    required String tenantId,
+  }) {
+    final cached = peekPageWithBlocks(slug, tenantId: tenantId);
+    if (cached != null) return Future.value(cached);
+    return loadPageWithBlocks(slug, tenantId: tenantId);
+  }
+
+  Future<CachedPageSnapshot?> _loadPageWithBlocksFromOrigin(
+    String slug, {
+    required String tenantId,
+  }) async {
+    final normalizedSlug = _normalizePageSlug(slug);
+
+    // website_blocks is linked to website_pages by
+    // website_blocks_page_id_fkey. Fetching both owners together removes the
+    // old page-list -> page lookup -> blocks waterfall.
+    final Map<String, dynamic>? response;
+    if (normalizedSlug.isEmpty) {
+      response = await _supabase
+          .from('website_pages')
+          .select('*, website_blocks(*)')
+          .eq('tenant_id', tenantId)
+          .eq('is_published', true)
+          .order('is_home', ascending: false)
+          .order('created_at', ascending: true)
+          .limit(1)
+          .maybeSingle();
+    } else {
+      response = await _supabase
+          .from('website_pages')
+          .select('*, website_blocks(*)')
+          .eq('tenant_id', tenantId)
+          .eq('slug', normalizedSlug)
+          .eq('is_published', true)
+          .limit(1)
+          .maybeSingle();
+    }
+
+    if (response == null) return null;
+
+    final page = WebsitePage.fromJson(response);
+    final rawBlocks = response['website_blocks'] as List? ?? const [];
+    final blocks = <Map<String, dynamic>>[
+      for (final rawBlock in rawBlocks)
+        if (rawBlock is Map &&
+            rawBlock['tenant_id']?.toString() == tenantId &&
+            rawBlock['page_id']?.toString() == page.id)
+          Map<String, dynamic>.from(rawBlock),
+    ]..sort(
+        (a, b) => ((a['order_index'] as num?)?.toInt() ?? 0)
+            .compareTo((b['order_index'] as num?)?.toInt() ?? 0),
+      );
+
+    return CachedPageSnapshot(
+      page: page,
+      blocks: _normalizeBlocksList(blocks),
+    );
   }
 
   /// Synchronously peek the in-memory cache for a page+blocks.
   ///
-  /// Use this to render policy pages instantly without showing a 1-frame
-  /// loading spinner when the data is already cached.
+  /// Use this to render CMS pages instantly without showing a 1-frame loading
+  /// spinner when the data is already cached. Always follow it with
+  /// [loadPageWithBlocks] so public content is origin-revalidated.
   CachedPageSnapshot? peekPageWithBlocks(
     String slug, {
     required String tenantId,
   }) {
-    final cacheKey = '$tenantId:$slug';
-    final cached = _pageCache[cacheKey];
-    if (cached == null || cached.isExpired) return null;
-    return CachedPageSnapshot(page: cached.page, blocks: cached.blocks);
+    return _pageCache.peek(_pageCacheKey(tenantId, slug));
   }
 
   @override
@@ -4634,18 +4723,146 @@ class CachedPageSnapshot {
   });
 }
 
-/// Cached page data with TTL
+/// Tenant/slug page snapshot cache used by public CMS routes.
+///
+/// It owns bounded LRU retention, concurrent request de-duplication, and
+/// generation isolation so an invalidated in-flight response cannot restore
+/// stale content after an editor save.
+@visibleForTesting
+class WebsitePageSnapshotCache {
+  final Duration ttl;
+  final int capacity;
+
+  final LinkedHashMap<String, _CachedPage> _entries =
+      LinkedHashMap<String, _CachedPage>();
+  final Map<String, Future<CachedPageSnapshot?>> _inFlight =
+      <String, Future<CachedPageSnapshot?>>{};
+  final Map<String, int> _keyGenerations = <String, int>{};
+  int _generation = 0;
+
+  WebsitePageSnapshotCache({
+    this.ttl = const Duration(minutes: 5),
+    this.capacity = 96,
+  }) : assert(capacity > 0);
+
+  @visibleForTesting
+  int get length => _entries.length;
+
+  CachedPageSnapshot? peek(String key) {
+    final cached = _entries.remove(key);
+    if (cached == null) return null;
+    if (cached.isExpired(ttl)) return null;
+
+    // Reinsert to mark this key as the most recently used.
+    _entries[key] = cached;
+    return _copySnapshot(cached.snapshot);
+  }
+
+  Future<CachedPageSnapshot?> revalidate(
+    String key,
+    Future<CachedPageSnapshot?> Function() loader,
+  ) {
+    final existing = _inFlight[key];
+    if (existing != null) return existing;
+
+    final generation = _generation;
+    final keyGeneration = _keyGenerations[key] ?? 0;
+    final completer = Completer<CachedPageSnapshot?>();
+    final future = completer.future;
+    _inFlight[key] = future;
+
+    unawaited(() async {
+      try {
+        final loaded = await loader();
+        final isCurrent = generation == _generation &&
+            keyGeneration == (_keyGenerations[key] ?? 0);
+        if (!isCurrent) {
+          completer.complete(peek(key));
+          return;
+        }
+
+        if (loaded == null) {
+          _entries.remove(key);
+          completer.complete(null);
+          return;
+        }
+
+        _put(key, loaded);
+        completer.complete(peek(key));
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      } finally {
+        if (identical(_inFlight[key], future)) {
+          _inFlight.remove(key);
+        }
+      }
+    }());
+
+    return future;
+  }
+
+  void invalidateKey(String key) {
+    _entries.remove(key);
+    _inFlight.remove(key);
+    _keyGenerations[key] = (_keyGenerations[key] ?? 0) + 1;
+  }
+
+  void invalidateWhere(bool Function(String key) predicate) {
+    final keys = <String>{..._entries.keys, ..._inFlight.keys};
+    for (final key in keys) {
+      if (predicate(key)) invalidateKey(key);
+    }
+  }
+
+  void clear() {
+    _generation += 1;
+    _entries.clear();
+    _inFlight.clear();
+    _keyGenerations.clear();
+  }
+
+  void _put(String key, CachedPageSnapshot snapshot) {
+    _entries.remove(key);
+    _entries[key] = _CachedPage(
+      snapshot: _copySnapshot(snapshot),
+      cachedAt: DateTime.now(),
+    );
+    while (_entries.length > capacity) {
+      _entries.remove(_entries.keys.first);
+    }
+  }
+
+  CachedPageSnapshot _copySnapshot(CachedPageSnapshot snapshot) {
+    return CachedPageSnapshot(
+      page: snapshot.page,
+      blocks: <Map<String, dynamic>>[
+        for (final block in snapshot.blocks) _copyBlock(block),
+      ],
+    );
+  }
+
+  Map<String, dynamic> _copyBlock(Map<String, dynamic> block) {
+    final copy = Map<String, dynamic>.from(block);
+    final blockData = copy['block_data'];
+    if (blockData is Map) {
+      copy['block_data'] = Map<String, dynamic>.from(blockData);
+    }
+    final data = copy['data'];
+    if (data is Map) {
+      copy['data'] = Map<String, dynamic>.from(data);
+    }
+    return copy;
+  }
+}
+
 class _CachedPage {
-  final WebsitePage page;
-  final List<Map<String, dynamic>> blocks;
+  final CachedPageSnapshot snapshot;
   final DateTime cachedAt;
 
   _CachedPage({
-    required this.page,
-    required this.blocks,
+    required this.snapshot,
     required this.cachedAt,
   });
 
-  bool get isExpired =>
-      DateTime.now().difference(cachedAt) > WebsiteService._cacheTTL;
+  bool isExpired(Duration ttl) => DateTime.now().difference(cachedAt) > ttl;
 }

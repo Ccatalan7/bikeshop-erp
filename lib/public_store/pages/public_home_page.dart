@@ -1058,6 +1058,7 @@ class _PublicHomePageState extends State<PublicHomePage>
             accentColor: accentColor,
             featuredProducts:
                 blockType == 'products' ? _featuredProducts : null,
+            featuredProductsReady: _featuredProductsLoaded,
             previewMode: false,
             headingFont: resolvedHeadingFont,
             bodyFont: resolvedBodyFont,

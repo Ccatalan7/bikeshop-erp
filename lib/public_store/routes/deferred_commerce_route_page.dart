@@ -17,6 +17,17 @@ class DeferredCommerceRoutePage extends StatefulWidget {
   final String? orderId;
   final String? paymentStatus;
 
+  static Future<void>? _preloadFuture;
+
+  /// Starts downloading checkout/payment code on navigation intent without
+  /// moving it back into the storefront's critical JavaScript unit.
+  static Future<void> preload() {
+    return _preloadFuture ??= commerce_routes.loadLibrary().catchError((error) {
+      _preloadFuture = null;
+      throw error;
+    });
+  }
+
   @override
   State<DeferredCommerceRoutePage> createState() =>
       _DeferredCommerceRoutePageState();
@@ -28,12 +39,12 @@ class _DeferredCommerceRoutePageState extends State<DeferredCommerceRoutePage> {
   @override
   void initState() {
     super.initState();
-    _libraryFuture = commerce_routes.loadLibrary();
+    _libraryFuture = DeferredCommerceRoutePage.preload();
   }
 
   void _retry() {
     setState(() {
-      _libraryFuture = commerce_routes.loadLibrary();
+      _libraryFuture = DeferredCommerceRoutePage.preload();
     });
   }
 

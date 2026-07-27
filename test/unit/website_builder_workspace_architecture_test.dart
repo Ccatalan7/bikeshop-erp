@@ -411,8 +411,12 @@ void main() {
     final catalog = File(
       'lib/public_store/pages/product_catalog_page.dart',
     ).readAsStringSync();
+    final publicInventory = File(
+      'lib/public_store/services/public_inventory_service.dart',
+    ).readAsStringSync();
 
-    expect(catalog, contains(".eq('is_active', true)"));
+    expect(catalog, contains('getCategoriesForTenant('));
+    expect(publicInventory, contains(".eq('is_active', true)"));
     expect(catalog, isNot(contains(".eq('show_on_website', true)")));
     expect(catalog, contains('final bool showOnWebsite;'));
     expect(catalog, contains('child.showOnWebsite &&'));

@@ -11,6 +11,7 @@ import '../../shared/models/product.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
 import '../../modules/website/services/website_service.dart';
 import '../utils/product_url.dart';
+import '../models/public_commerce_product_projection.dart';
 
 class SearchOverlay extends StatefulWidget {
   final String tenantId;
@@ -84,6 +85,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
   Timer? _debounce;
   List<Product> _results = [];
   bool _isLoading = false;
+  int _searchToken = 0;
 
   static const int _suggestionsLimit = 20;
 
@@ -124,20 +126,26 @@ class _SearchOverlayState extends State<SearchOverlay> {
 
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
+    final searchToken = ++_searchToken;
 
     if (query.trim().isEmpty) {
-      if (mounted) setState(() => _results = []);
+      if (mounted) {
+        setState(() {
+          _results = [];
+          _isLoading = false;
+        });
+      }
       return;
     }
 
     if (mounted) setState(() => _isLoading = true);
 
     _debounce = Timer(const Duration(milliseconds: 300), () async {
-      await _performSearch(query);
+      await _performSearch(query, searchToken);
     });
   }
 
-  Future<void> _performSearch(String query) async {
+  Future<void> _performSearch(String query, int searchToken) async {
     if (!mounted) return;
 
     final inventoryService = context.read<PublicInventoryService>();
@@ -151,14 +159,14 @@ class _SearchOverlayState extends State<SearchOverlay> {
         limit: _suggestionsLimit,
       );
 
-      if (!mounted) return;
+      if (!mounted || searchToken != _searchToken) return;
 
       setState(() {
         _results = results;
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || searchToken != _searchToken) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ocurrió un error al buscar')),
@@ -328,6 +336,13 @@ class _SearchOverlayState extends State<SearchOverlay> {
                               const Divider(height: 1, indent: 76),
                           itemBuilder: (context, index) {
                             final product = _results[index];
+                            final commerce =
+                                PublicCommerceProductProjection.fromProduct(
+                              product,
+                            );
+                            final imageUrl = commerce.imageUrls.isEmpty
+                                ? null
+                                : commerce.imageUrls.first;
                             return InkWell(
                               onTap: () => _goToProduct(product),
                               hoverColor: Colors.grey[50],
@@ -344,21 +359,18 @@ class _SearchOverlayState extends State<SearchOverlay> {
                                       decoration: BoxDecoration(
                                         color: Colors.grey[100],
                                         borderRadius: BorderRadius.circular(8),
-                                        image:
-                                            product.imageUrl?.isNotEmpty == true
-                                                ? DecorationImage(
-                                                    image: NetworkImage(
-                                                        product.imageUrl!),
-                                                    fit: BoxFit.cover,
-                                                  )
-                                                : null,
+                                        image: imageUrl == null
+                                            ? null
+                                            : DecorationImage(
+                                                image: NetworkImage(imageUrl),
+                                                fit: BoxFit.cover,
+                                              ),
                                       ),
-                                      child:
-                                          product.imageUrl?.isNotEmpty != true
-                                              ? const Icon(
-                                                  Icons.shopping_bag_outlined,
-                                                  color: Colors.grey)
-                                              : null,
+                                      child: imageUrl == null
+                                          ? const Icon(
+                                              Icons.shopping_bag_outlined,
+                                              color: Colors.grey)
+                                          : null,
                                     ),
                                     const SizedBox(width: 16),
                                     Expanded(

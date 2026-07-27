@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import '../theme/public_store_surface_theme.dart';
 import '../providers/cart_provider.dart';
+import '../providers/public_store_tenant_provider.dart';
+import '../services/public_inventory_service.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
@@ -158,7 +159,10 @@ class CartPage extends StatelessWidget {
               ),
               const SizedBox(height: 32),
               FilledButton.icon(
-                onPressed: () => context.go('/productos'),
+                onPressed: () => PublicStoreLayout.navigateToHref(
+                  context,
+                  '/productos',
+                ),
                 icon: const Icon(Icons.shopping_bag_outlined),
                 label: const Text('EXPLORAR PRODUCTOS'),
                 style: FilledButton.styleFrom(
@@ -173,7 +177,10 @@ class CartPage extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               OutlinedButton(
-                onPressed: () => context.go('/tienda'),
+                onPressed: () => PublicStoreLayout.navigateToHref(
+                  context,
+                  '/',
+                ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: storeTheme.primary,
                   side: BorderSide(color: storeTheme.primary),
@@ -283,10 +290,25 @@ class CartPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                     InkWell(
-                      onTap: () => PublicStoreLayout.navigateToHref(
-                        context,
-                        publicProductPath(product),
-                      ),
+                      onTap: () {
+                        final tenantId = context
+                                .read<PublicStoreTenantProvider>()
+                                .tenantId
+                                ?.trim() ??
+                            '';
+                        if (tenantId.isNotEmpty) {
+                          context
+                              .read<PublicInventoryService>()
+                              .primeProductSnapshotForNavigation(
+                                tenantId: tenantId,
+                                product: product,
+                              );
+                        }
+                        PublicStoreLayout.navigateToHref(
+                          context,
+                          publicProductPath(product),
+                        );
+                      },
                       child: Text(
                         commerce.title.toUpperCase(),
                         style: storeTheme.text.headlineSmall?.copyWith(
@@ -523,26 +545,37 @@ class CartPage extends StatelessWidget {
           const SizedBox(height: 26),
           SizedBox(
             width: double.infinity,
-            child: FilledButton(
-              onPressed: taxSummary.isValid
-                  ? () => context.go('/tienda/checkout')
+            child: MouseRegion(
+              onEnter: taxSummary.isValid
+                  ? (_) => PublicStoreLayout.prepareHref(context, '/checkout')
                   : null,
-              style: FilledButton.styleFrom(
-                backgroundColor: storeTheme.primary,
-                foregroundColor: storeTheme.onPrimary,
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
+              child: FilledButton(
+                onPressed: taxSummary.isValid
+                    ? () => PublicStoreLayout.navigateToHref(
+                          context,
+                          '/checkout',
+                        )
+                    : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: storeTheme.primary,
+                  foregroundColor: storeTheme.onPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                 ),
+                child: const Text('PROCEDER AL PAGO'),
               ),
-              child: const Text('PROCEDER AL PAGO'),
             ),
           ),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
-              onPressed: () => context.go('/productos'),
+              onPressed: () => PublicStoreLayout.navigateToHref(
+                context,
+                '/productos',
+              ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: storeTheme.primary,
                 side: BorderSide(color: storeTheme.primary),

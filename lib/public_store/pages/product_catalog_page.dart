@@ -6,8 +6,8 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 // import '../theme/public_store_theme.dart'; // Unused
+import '../services/catalog_page_prefetch_cache.dart';
 import '../services/public_inventory_service.dart';
 import '../services/public_store_scroll_state.dart';
 import '../../shared/models/product.dart';
@@ -53,6 +53,17 @@ Set<String> resolveCatalogCategoryIdsForScope({
     selectedCategoryId,
     ...subtreeCategoryIds,
   });
+}
+
+@visibleForTesting
+int resolveCatalogPageFromTotalCount({
+  required int requestedPage,
+  required int pageSize,
+  required int totalCount,
+}) {
+  assert(pageSize > 0);
+  final totalPages = totalCount <= 0 ? 1 : ((totalCount - 1) ~/ pageSize) + 1;
+  return requestedPage.clamp(1, totalPages).toInt();
 }
 
 /// Represents a category node in the hierarchical tree
@@ -101,12 +112,27 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   int _loadToken = 0;
   int? _facetCategoryCountsLoadToken;
   String _lastCategoryCountsSignature = '';
+  String? _activeCatalogPageSignature;
   String? _lastLoggedModeKey;
   String? _lastDependencyModeKey;
   String? _lastSeoSignature;
   Timer? _searchDebounce;
+  PublicInventoryService? _observedInventoryService;
+  String? _loadedCategoriesTenantId;
+  bool _inventoryInvalidationScheduled = false;
   WebsiteCatalogPresentationRegistry _presentationRegistry =
       const WebsiteCatalogPresentationRegistry({});
+  final CatalogPagePrefetchCache<PublicProductPage> _catalogPageCache =
+      CatalogPagePrefetchCache<PublicProductPage>(
+    maxAge: const Duration(seconds: 30),
+    maxEntries: 6,
+  );
+  final CatalogPagePrefetchCache<PublicCatalogFacetSnapshot>
+      _catalogFacetCache = CatalogPagePrefetchCache<PublicCatalogFacetSnapshot>(
+    maxAge: const Duration(seconds: 30),
+    maxEntries: 1,
+    shouldCache: (snapshot) => snapshot.isAvailable,
+  );
 
   // Hierarchical category tree (only root-level visible categories)
   List<_CategoryNode> _categoryTree = [];
@@ -162,6 +188,13 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final inventoryService = context.read<PublicInventoryService>();
+    if (!identical(_observedInventoryService, inventoryService)) {
+      _observedInventoryService
+          ?.removeListener(_handlePublicInventoryInvalidated);
+      _observedInventoryService = inventoryService
+        ..addListener(_handlePublicInventoryInvalidated);
+    }
     final editProvider = context.read<WebsiteEditModeProvider>();
     final modeKey = editProvider.isEditMode
         ? 'edit'
@@ -170,6 +203,32 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         _lastDependencyModeKey != null && _lastDependencyModeKey != modeKey;
     _lastDependencyModeKey = modeKey;
     _syncFiltersFromRoute(reloadForModeChange: shouldReloadForMode);
+  }
+
+  void _handlePublicInventoryInvalidated() {
+    _loadToken++;
+    _activeCatalogPageSignature = null;
+    _catalogPageCache.clear();
+    _catalogFacetCache.clear();
+    if (!mounted || _inventoryInvalidationScheduled) return;
+    _inventoryInvalidationScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _inventoryInvalidationScheduled = false;
+      if (!mounted) return;
+      setState(() {
+        _loadedCategoriesTenantId = null;
+        _catalogFacets = const PublicCatalogFacetSnapshot.unavailable();
+        _directCategoryProductCounts = const {};
+        _categoryTotalCount = 0;
+      });
+      unawaited(
+        _loadProducts(
+          resetPage: false,
+          forceCategoryRefresh: true,
+        ),
+      );
+    });
   }
 
   void _syncFiltersFromRoute({bool reloadForModeChange = false}) {
@@ -304,6 +363,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       }
       if (reloadForModeChange) {
         _lastCategoryCountsSignature = '';
+        _activeCatalogPageSignature = null;
+        _catalogPageCache.clear();
+        _catalogFacetCache.clear();
         if (kDebugMode) {
           debugPrint(
             '🧭 [StoreModeTrace][Catalog] RELOAD_FOR_MODE '
@@ -313,7 +375,12 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         // The URL is authoritative during a mode transition. In particular,
         // keep a direct/back-forward `?page=N` request on that page instead of
         // silently loading page 1 under a page-N URL.
-        unawaited(_loadProducts(resetPage: false));
+        unawaited(
+          _loadProducts(
+            resetPage: false,
+            forceCategoryRefresh: true,
+          ),
+        );
       } else {
         _handleFiltersChanged(resetPage: false);
       }
@@ -540,7 +607,77 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     }
   }
 
-  Future<void> _loadProducts({bool resetPage = false}) async {
+  String _catalogPageSignature({
+    required String tenantId,
+    required List<String>? categoryIds,
+    required String searchQuery,
+    required ProductType? productType,
+    required PublicProductVisibilityPolicy? policy,
+    required bool onlyInStock,
+    required bool applyAvailabilityFacet,
+    required List<String> brandIds,
+    required double? minPrice,
+    required double? maxPrice,
+    required String sortBy,
+    required int pageSize,
+  }) {
+    final categories = [...?categoryIds]..sort();
+    final brands = [...brandIds]..sort();
+    final policySettings = policy?.toSettings().entries.toList() ?? [];
+    policySettings.sort((a, b) => a.key.compareTo(b.key));
+
+    return <String>[
+      'catalog-page-v1',
+      tenantId,
+      categories.join(','),
+      searchQuery.trim().toLowerCase(),
+      productType?.name ?? '',
+      policySettings.map((entry) => '${entry.key}=${entry.value}').join(','),
+      onlyInStock.toString(),
+      applyAvailabilityFacet.toString(),
+      brands.join(','),
+      minPrice?.toString() ?? '',
+      maxPrice?.toString() ?? '',
+      sortBy,
+      pageSize.toString(),
+    ].map(Uri.encodeComponent).join('|');
+  }
+
+  String _catalogFacetSignature({
+    required String tenantId,
+    required List<String>? categoryIds,
+    required String searchQuery,
+    required ProductType? productType,
+    required PublicProductVisibilityPolicy? policy,
+    required bool onlyInStock,
+    required bool applyAvailabilityFacet,
+    required List<String> brandIds,
+    required double? minPrice,
+    required double? maxPrice,
+  }) {
+    final categories = [...?categoryIds]..sort();
+    final brands = [...brandIds]..sort();
+    final policySettings = policy?.toSettings().entries.toList() ?? [];
+    policySettings.sort((a, b) => a.key.compareTo(b.key));
+    return <String>[
+      'catalog-facets-v1',
+      tenantId,
+      categories.join(','),
+      searchQuery.trim().toLowerCase(),
+      productType?.name ?? '',
+      policySettings.map((entry) => '${entry.key}=${entry.value}').join(','),
+      onlyInStock.toString(),
+      applyAvailabilityFacet.toString(),
+      brands.join(','),
+      minPrice?.toString() ?? '',
+      maxPrice?.toString() ?? '',
+    ].map(Uri.encodeComponent).join('|');
+  }
+
+  Future<void> _loadProducts({
+    bool resetPage = false,
+    bool forceCategoryRefresh = false,
+  }) async {
     final token = ++_loadToken;
     if (resetPage) _currentPage = 1;
 
@@ -588,6 +725,15 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       return;
     }
 
+    if (_loadedCategoriesTenantId != null &&
+        _loadedCategoriesTenantId != tenantId) {
+      setState(() {
+        _loadedCategoriesTenantId = null;
+        _categoryTree = const [];
+        _allCategoriesById = const {};
+      });
+    }
+
     // Use public inventory service (works for anonymous users)
     final publicInventoryService = context.read<PublicInventoryService>();
     try {
@@ -604,10 +750,6 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       _catalogLoadError = null;
       if (!_hasLoadedInitialProducts) {
         _isLoading = true;
-      } else if (!editProvider.isEditMode) {
-        _isRefreshing = true;
-        _filteredProducts = const [];
-        _totalProductCount = 0;
       }
     });
 
@@ -629,24 +771,50 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     try {
       // Load visible categories (show_on_website = true). Start it early so
       // the first product/service page can overlap with filter metadata work.
-      final categoriesFuture = _loadVisibleCategories(tenantId);
+      final categoriesFuture = _allCategoriesById.isEmpty ||
+              _loadedCategoriesTenantId != tenantId ||
+              forceCategoryRefresh
+          ? _loadVisibleCategories(
+              tenantId,
+              publicInventoryService,
+              token: token,
+              forceRefresh: forceCategoryRefresh,
+            )
+          : Future<void>.value();
 
-      Future<void>? categoryCountsFuture;
       Future<PublicProductPage>? productPageFuture;
       Future<PublicCatalogFacetSnapshot>? facetSnapshotFuture;
-      final canStartPageBeforeCategories = !editProvider.isEditMode &&
-          _pendingRouteCategoryValue == null &&
-          _selectedCategoryId == null;
-      if (canStartPageBeforeCategories) {
-        categoryCountsFuture = _loadCategoryCounts(
+      String? productPageSignature;
+
+      Future<PublicProductPage> fetchPageForCategoryIds({
+        required List<String>? categoryIds,
+        required int pageNumber,
+        int? pageLimit,
+      }) {
+        final effectiveLimit = pageLimit ?? requestPageSize;
+        Future<PublicProductPage> loader() {
+          return publicInventoryService.getProductPageForTenant(
+            tenantId: tenantId,
+            categoryIds: categoryIds,
+            searchQuery: requestSearch.isEmpty ? null : requestSearch,
+            productType: requestProductType,
+            policy: visibilityPolicy,
+            onlyInStock: requestCanonicalStockPolicy,
+            applyAvailabilityFacet: requestApplyAvailabilityFacet,
+            brandIds: requestBrandIds,
+            minPrice: requestMinPrice,
+            maxPrice: requestMaxPrice,
+            sortBy: requestSort,
+            limit: effectiveLimit,
+            offset: (pageNumber - 1) * effectiveLimit,
+          );
+        }
+
+        if (effectiveLimit != requestPageSize) return loader();
+        final signature = _catalogPageSignature(
           tenantId: tenantId,
-          service: publicInventoryService,
-          policy: visibilityPolicy,
-          token: token,
-        );
-        productPageFuture = publicInventoryService.getProductPageForTenant(
-          tenantId: tenantId,
-          searchQuery: requestSearch.isEmpty ? null : requestSearch,
+          categoryIds: categoryIds,
+          searchQuery: requestSearch,
           productType: requestProductType,
           policy: visibilityPolicy,
           onlyInStock: requestCanonicalStockPolicy,
@@ -655,19 +823,70 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           minPrice: requestMinPrice,
           maxPrice: requestMaxPrice,
           sortBy: requestSort,
-          limit: requestPageSize,
-          offset: (requestPage - 1) * requestPageSize,
+          pageSize: requestPageSize,
         );
-        facetSnapshotFuture = publicInventoryService.getCatalogFacetsForTenant(
+        return _catalogPageCache.load(
+          signature: signature,
+          pageNumber: pageNumber,
+          loader: loader,
+        );
+      }
+
+      Future<PublicCatalogFacetSnapshot> fetchFacetsForCategoryIds(
+        List<String>? categoryIds,
+      ) {
+        final signature = _catalogFacetSignature(
           tenantId: tenantId,
-          searchQuery: requestSearch.isEmpty ? null : requestSearch,
+          categoryIds: categoryIds,
+          searchQuery: requestSearch,
           productType: requestProductType,
+          policy: visibilityPolicy,
           onlyInStock: requestCanonicalStockPolicy,
           applyAvailabilityFacet: requestApplyAvailabilityFacet,
           brandIds: requestBrandIds,
           minPrice: requestMinPrice,
           maxPrice: requestMaxPrice,
         );
+        return _catalogFacetCache.load(
+          signature: signature,
+          pageNumber: 1,
+          loader: () => publicInventoryService.getCatalogFacetsForTenant(
+            tenantId: tenantId,
+            categoryIds: categoryIds,
+            searchQuery: requestSearch.isEmpty ? null : requestSearch,
+            productType: requestProductType,
+            onlyInStock: requestCanonicalStockPolicy,
+            applyAvailabilityFacet: requestApplyAvailabilityFacet,
+            brandIds: requestBrandIds,
+            minPrice: requestMinPrice,
+            maxPrice: requestMaxPrice,
+          ),
+        );
+      }
+
+      final canStartPageBeforeCategories = !editProvider.isEditMode &&
+          _pendingRouteCategoryValue == null &&
+          _selectedCategoryId == null;
+      if (canStartPageBeforeCategories) {
+        productPageSignature = _catalogPageSignature(
+          tenantId: tenantId,
+          categoryIds: null,
+          searchQuery: requestSearch,
+          productType: requestProductType,
+          policy: visibilityPolicy,
+          onlyInStock: requestCanonicalStockPolicy,
+          applyAvailabilityFacet: requestApplyAvailabilityFacet,
+          brandIds: requestBrandIds,
+          minPrice: requestMinPrice,
+          maxPrice: requestMaxPrice,
+          sortBy: requestSort,
+          pageSize: requestPageSize,
+        );
+        productPageFuture = fetchPageForCategoryIds(
+          categoryIds: null,
+          pageNumber: requestPage,
+        );
+        facetSnapshotFuture = fetchFacetsForCategoryIds(null);
       }
 
       await categoriesFuture;
@@ -734,13 +953,6 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         return;
       }
 
-      categoryCountsFuture ??= _loadCategoryCounts(
-        tenantId: tenantId,
-        service: publicInventoryService,
-        policy: visibilityPolicy,
-        token: token,
-      );
-
       final selectedCategoryIds = _selectedCategoryId == null
           ? null
           : resolveCatalogCategoryIdsForScope(
@@ -754,21 +966,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         required int pageNumber,
         int? pageLimit,
       }) {
-        final effectiveLimit = pageLimit ?? requestPageSize;
-        return publicInventoryService.getProductPageForTenant(
-          tenantId: tenantId,
+        return fetchPageForCategoryIds(
           categoryIds: selectedCategoryIds,
-          searchQuery: requestSearch.isEmpty ? null : requestSearch,
-          productType: requestProductType,
-          policy: visibilityPolicy,
-          onlyInStock: requestCanonicalStockPolicy,
-          applyAvailabilityFacet: requestApplyAvailabilityFacet,
-          brandIds: requestBrandIds,
-          minPrice: requestMinPrice,
-          maxPrice: requestMaxPrice,
-          sortBy: requestSort,
-          limit: effectiveLimit,
-          offset: (pageNumber - 1) * effectiveLimit,
+          pageNumber: pageNumber,
+          pageLimit: pageLimit,
         );
       }
 
@@ -786,18 +987,42 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
             'page=$requestPage limit=$requestPageSize',
           );
         }
-        productPageFuture = fetchPublicPage(pageNumber: requestPage);
-        facetSnapshotFuture = publicInventoryService.getCatalogFacetsForTenant(
+        productPageSignature = _catalogPageSignature(
           tenantId: tenantId,
           categoryIds: selectedCategoryIds,
-          searchQuery: requestSearch.isEmpty ? null : requestSearch,
+          searchQuery: requestSearch,
           productType: requestProductType,
+          policy: visibilityPolicy,
           onlyInStock: requestCanonicalStockPolicy,
           applyAvailabilityFacet: requestApplyAvailabilityFacet,
           brandIds: requestBrandIds,
           minPrice: requestMinPrice,
           maxPrice: requestMaxPrice,
+          sortBy: requestSort,
+          pageSize: requestPageSize,
         );
+        productPageFuture = fetchPublicPage(pageNumber: requestPage);
+        facetSnapshotFuture = fetchFacetsForCategoryIds(selectedCategoryIds);
+      }
+
+      _activeCatalogPageSignature = productPageSignature;
+      final cachedPage = _catalogPageCache.peek(
+        signature: productPageSignature!,
+        pageNumber: requestPage,
+      );
+      if (_hasLoadedInitialProducts) {
+        setState(() {
+          if (cachedPage != null) {
+            _allProducts = cachedPage.products;
+            _filteredProducts = cachedPage.products;
+            _totalProductCount = cachedPage.totalCount;
+            _isRefreshing = false;
+          } else {
+            _isRefreshing = true;
+            _filteredProducts = const [];
+            _totalProductCount = 0;
+          }
+        });
       }
 
       var page = await productPageFuture;
@@ -808,9 +1033,11 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         // the whole catalog into a false zero-result state.
         final countProbe = await fetchPublicPage(pageNumber: 1, pageLimit: 1);
         if (!mounted || token != _loadToken) return;
-        final resolvedPage = countProbe.totalCount == 0
-            ? 1
-            : ((countProbe.totalCount - 1) ~/ requestPageSize) + 1;
+        final resolvedPage = resolveCatalogPageFromTotalCount(
+          requestedPage: requestPage,
+          pageSize: requestPageSize,
+          totalCount: countProbe.totalCount,
+        );
         if (_currentPage != resolvedPage) {
           setState(() => _currentPage = resolvedPage);
           _syncCatalogQueryToRoute();
@@ -819,21 +1046,28 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
             ? countProbe
             : await fetchPublicPage(pageNumber: resolvedPage);
       }
-      final facetSnapshot = await facetSnapshotFuture!;
       if (!mounted || token != _loadToken) return;
+
+      if (page.products.isNotEmpty && requestPage > 1) {
+        final resolvedPage = resolveCatalogPageFromTotalCount(
+          requestedPage: requestPage,
+          pageSize: requestPageSize,
+          totalCount: page.totalCount,
+        );
+        if (requestPage > resolvedPage && _currentPage != resolvedPage) {
+          // The faceted RPC clamps an excessive offset internally. Keep the
+          // visible page and URL aligned with the rows it actually returned.
+          setState(() => _currentPage = resolvedPage);
+          _syncCatalogQueryToRoute();
+        }
+      }
 
       setState(() {
         _allProducts = page.products;
         _filteredProducts = page.products;
         _totalProductCount = page.totalCount;
-        _catalogFacets = facetSnapshot;
-        if (facetSnapshot.isAvailable &&
-            facetSnapshot.filteredTotalCount != null) {
-          _directCategoryProductCounts = facetSnapshot.directCategoryCounts;
-          _categoryTotalCount = facetSnapshot.filteredTotalCount!;
-          _facetCategoryCountsLoadToken = token;
-        }
         _hasLoadedInitialProducts = true;
+        _isLoading = false;
         _isRefreshing = false;
       });
 
@@ -843,9 +1077,47 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         'products=${page.products.length} total=${page.totalCount}',
       );
 
-      // Counts are secondary UI; let them finish without holding the product
-      // grid spinner on first load.
-      unawaited(categoryCountsFuture);
+      final totalPages = page.totalCount == 0
+          ? 1
+          : ((page.totalCount - 1) ~/ requestPageSize) + 1;
+      final effectivePage = _currentPage.clamp(1, totalPages).toInt();
+      if (effectivePage < totalPages) {
+        unawaited(
+          _warmAdjacentCatalogPage(
+            signature: productPageSignature,
+            pageNumber: effectivePage + 1,
+            loader: () => fetchPublicPage(pageNumber: effectivePage + 1),
+          ),
+        );
+      }
+
+      // Facets describe the result set, not an individual page. A page turn
+      // reuses the prior snapshot, and a genuinely new snapshot updates in the
+      // background without holding the product grid behind it.
+      final facetSnapshot = await facetSnapshotFuture!;
+      if (!mounted || token != _loadToken) return;
+      setState(() {
+        _catalogFacets = facetSnapshot;
+        if (facetSnapshot.isAvailable &&
+            facetSnapshot.filteredTotalCount != null) {
+          _directCategoryProductCounts = facetSnapshot.directCategoryCounts;
+          _categoryTotalCount = facetSnapshot.filteredTotalCount!;
+          _facetCategoryCountsLoadToken = token;
+        }
+      });
+
+      if (!facetSnapshot.isAvailable) {
+        // The legacy counts RPC is a fallback only. Running it beside a healthy
+        // facets query repeats the expensive availability scan.
+        unawaited(
+          _loadCategoryCounts(
+            tenantId: tenantId,
+            service: publicInventoryService,
+            policy: visibilityPolicy,
+            token: token,
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('[ProductCatalogPage] Error loading products: $e');
       if (mounted && token == _loadToken) {
@@ -866,6 +1138,46 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           _hasLoadedInitialProducts = true;
         });
       }
+    }
+  }
+
+  Future<void> _warmAdjacentCatalogPage({
+    required String? signature,
+    required int pageNumber,
+    required Future<PublicProductPage> Function() loader,
+  }) async {
+    if (signature == null || pageNumber < 1) return;
+    try {
+      // Let the current page claim bandwidth and decode time first. Warming
+      // only the next page's first visible row keeps the transition snappy
+      // without downloading every below-the-fold image in advance.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || !_catalogPageCache.isActive(signature)) return;
+
+      final page = await loader();
+      if (!mounted || !_catalogPageCache.isActive(signature)) return;
+
+      final width = MediaQuery.sizeOf(context).width;
+      final firstRowCount = width >= 900
+          ? 4
+          : width >= 600
+              ? 3
+              : 2;
+      final urls = page.products
+          .take(firstRowCount)
+          .map((product) => product.imageUrlOptimized ?? product.imageUrl)
+          .whereType<String>()
+          .map((url) => url.trim())
+          .where((url) => url.isNotEmpty)
+          .toSet();
+
+      await Future.wait<void>(
+        urls.map(
+          (url) => precacheImage(NetworkImage(url), context).catchError((_) {}),
+        ),
+      );
+    } catch (_) {
+      // Prefetch is opportunistic. The foreground load remains authoritative.
     }
   }
 
@@ -921,53 +1233,47 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     }
   }
 
-  Future<void> _loadVisibleCategories(String tenantId) async {
+  Future<void> _loadVisibleCategories(
+    String tenantId,
+    PublicInventoryService publicInventoryService, {
+    required int token,
+    bool forceRefresh = false,
+  }) async {
     try {
       // Load every active category to build membership through the complete
       // hierarchy. `show_on_website` owns navigation/filter eligibility; it
       // restricts product eligibility only when the separate public rule says
       // so. Hidden descendants therefore remain part of a published parent's
       // result without becoming public navigation options themselves.
-      final response = await Supabase.instance.client
-          .from('product_categories')
-          .select(
-            'id,name,full_path,parent_id,description,image_url,sort_order,'
-            'show_on_website',
-          )
-          .eq('tenant_id', tenantId)
-          .eq('is_active', true)
-          .order('name');
-
-      final allCategories = <String, Map<String, dynamic>>{};
+      final categories = forceRefresh
+          ? await publicInventoryService.refreshCategoriesForTenant(
+              tenantId: tenantId,
+            )
+          : await publicInventoryService.getCategoriesForTenant(
+              tenantId: tenantId,
+            );
+      if (!mounted || token != _loadToken) return;
       final visibleCategoryIds = <String>{};
 
-      // First pass: collect all categories and identify visible ones
-      for (final row in response as List) {
-        final id = row['id'] as String?;
-        if (id == null) continue;
-        allCategories[id] = row as Map<String, dynamic>;
-        if (row['show_on_website'] == true) {
-          visibleCategoryIds.add(id);
-        }
-      }
-
-      // Build nodes for all categories
+      // Build nodes for all categories while separately tracking which ones
+      // the Website Builder publishes as public navigation/filter choices.
       final nodesById = <String, _CategoryNode>{};
-      for (final entry in allCategories.entries) {
-        final id = entry.key;
-        final data = entry.value;
+      for (final category in categories) {
+        final id = category.id;
+        if (id == null) continue;
         nodesById[id] = _CategoryNode(
           id: id,
-          name: data['name'] as String? ?? 'Sin nombre',
-          fullPath: data['full_path'] as String? ??
-              data['name'] as String? ??
-              'Sin nombre',
-          parentId: data['parent_id'] as String?,
-          description: data['description'] as String? ?? '',
-          imageUrl: data['image_url'] as String? ?? '',
-          sortOrder: (data['sort_order'] as num?)?.toInt() ?? 0,
-          showOnWebsite: data['show_on_website'] == true,
+          name: category.name,
+          fullPath: category.fullPath,
+          parentId: category.parentId,
+          description: category.description ?? '',
+          imageUrl: category.imageUrl ?? '',
+          sortOrder: category.sortOrder,
+          showOnWebsite: category.showOnWebsite,
         );
+        if (category.showOnWebsite) {
+          visibleCategoryIds.add(id);
+        }
       }
 
       // Build parent-child relationships
@@ -1007,6 +1313,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         setState(() {
           _categoryTree = rootCategories;
           _allCategoriesById = nodesById;
+          _loadedCategoriesTenantId = tenantId;
         });
       }
       _catalogDebugLog(
@@ -1353,10 +1660,14 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         _isRefreshing = true;
         _filteredProducts = const [];
         _totalProductCount = 0;
+        _catalogFacets = const PublicCatalogFacetSnapshot.unavailable();
+        _directCategoryProductCounts = const {};
+        _categoryTotalCount = 0;
       });
     }
 
     _searchDebounce?.cancel();
+    _activeCatalogPageSignature = null;
     if (debounce) {
       _searchDebounce = Timer(const Duration(milliseconds: 300), () {
         if (mounted) {
@@ -1749,6 +2060,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   void dispose() {
     // Debug: dispose
     _searchDebounce?.cancel();
+    _observedInventoryService
+        ?.removeListener(_handlePublicInventoryInvalidated);
+    _catalogPageCache.clear();
+    _catalogFacetCache.clear();
     _filtersSearchController.dispose();
     _minPriceController.dispose();
     _maxPriceController.dispose();
@@ -3275,7 +3590,30 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   void _goToPage(int page) {
     final nextPage = page < 1 ? 1 : page;
     if (nextPage == _currentPage) return;
-    setState(() => _currentPage = nextPage);
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final signature = _activeCatalogPageSignature;
+    final cachedPage = signature == null
+        ? null
+        : _catalogPageCache.peek(
+            signature: signature,
+            pageNumber: nextPage,
+          );
+    setState(() {
+      _currentPage = nextPage;
+      if (!editProvider.isEditMode) {
+        if (cachedPage != null) {
+          _allProducts = cachedPage.products;
+          _filteredProducts = cachedPage.products;
+          _totalProductCount = cachedPage.totalCount;
+          _isRefreshing = false;
+        } else {
+          _allProducts = const [];
+          _filteredProducts = const [];
+          _totalProductCount = 0;
+          _isRefreshing = true;
+        }
+      }
+    });
 
     final currentUri = GoRouterState.of(context).uri;
     final scrollState = context.read<PublicStoreScrollState>();
@@ -3283,9 +3621,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     scrollState.requestScrollToTopForPath(currentUri.path);
     _syncCatalogQueryToRoute();
 
-    final editProvider = context.read<WebsiteEditModeProvider>();
     if (!editProvider.isEditMode) {
-      _loadProducts();
+      unawaited(_loadProducts(resetPage: false));
     }
   }
 

@@ -9,6 +9,7 @@ import '../theme/public_store_theme.dart';
 import '../theme/public_store_surface_theme.dart';
 import '../models/public_commerce_product_projection.dart';
 import '../providers/cart_provider.dart';
+import '../providers/public_store_tenant_provider.dart';
 import '../services/public_inventory_service.dart';
 import '../utils/public_store_tenant_resolver.dart';
 import '../widgets/full_page_loading.dart';
@@ -53,8 +54,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   List<Category> _categoryTrail = const [];
   List<Product> _relatedProducts = [];
   bool _isLoading = true;
+  bool _isProductValidated = false;
+  bool _productValidationFailed = false;
   bool _isLoadingRelated = false;
   bool _isLoadingTechnicalSpecs = false;
+  bool _technicalSpecsRequested = false;
+  String? _validatedTenantId;
   int _selectedDetailsTab = 0;
   int _quantity = 1;
   int _selectedImageIndex = 0;
@@ -64,6 +69,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   Timer? _productFeedbackTimer;
   Timer? _productFeedbackRemovalTimer;
   ValueNotifier<bool>? _productFeedbackVisible;
+  PublicInventoryService? _observedInventoryService;
+  String? _seededRouteKey;
+  String? _trackedProductIdForRoute;
 
   // DISABLED: AutomaticKeepAliveClientMixin causes element activation conflicts
   // during edit/preview mode switches. The performance cost of reloading is acceptable.
@@ -80,6 +88,19 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final inventoryService = context.read<PublicInventoryService>();
+    if (!identical(_observedInventoryService, inventoryService)) {
+      _observedInventoryService
+          ?.removeListener(_handlePublicInventoryInvalidated);
+      _observedInventoryService = inventoryService
+        ..addListener(_handlePublicInventoryInvalidated);
+    }
+    _seedProductFromSessionSnapshot();
+  }
+
+  @override
   void didUpdateWidget(ProductDetailPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.productId != oldWidget.productId) {
@@ -88,34 +109,93 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       _categoryTrail = const [];
       _relatedProducts = [];
       _technicalSpecs = const [];
+      _isProductValidated = false;
+      _productValidationFailed = false;
       _isLoadingTechnicalSpecs = false;
+      _technicalSpecsRequested = false;
+      _validatedTenantId = null;
       _selectedDetailsTab = 0;
       _quantity = 1;
       _selectedImageIndex = 0;
-      _loadProduct();
+      _seededRouteKey = null;
+      _trackedProductIdForRoute = null;
+      _seedProductFromSessionSnapshot();
+      unawaited(_loadProduct());
     }
   }
 
   @override
   void dispose() {
+    _observedInventoryService
+        ?.removeListener(_handlePublicInventoryInvalidated);
     _hideProductFeedbackBanner(animated: false);
     removeStructuredDataScript(_structuredDataScriptId);
     super.dispose();
   }
 
+  void _handlePublicInventoryInvalidated() {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _isProductValidated = false;
+        _productValidationFailed = false;
+      });
+      unawaited(_loadProduct());
+    });
+  }
+
+  void _seedProductFromSessionSnapshot() {
+    String tenantId;
+    try {
+      tenantId =
+          context.read<PublicStoreTenantProvider>().tenantId?.trim() ?? '';
+    } catch (_) {
+      return;
+    }
+    if (tenantId.isEmpty) return;
+    final routeKey = '$tenantId:${widget.productId}';
+    if (_seededRouteKey == routeKey) return;
+    _seededRouteKey = routeKey;
+
+    final cached =
+        context.read<PublicInventoryService>().getCachedProductForIdentifier(
+              tenantId: tenantId,
+              productIdentifier: widget.productId,
+            );
+    if (cached == null) return;
+
+    _product = cached;
+    _isLoading = false;
+    _isProductValidated = false;
+    _productValidationFailed = false;
+  }
+
   Future<void> _loadProduct() async {
     final token = ++_loadToken;
+    final hadVisibleProduct = _product != null;
     setState(() {
-      _isLoading = true;
+      // A product card, related card, home block, search result or cart item
+      // may already have given us a complete public projection. Keep it on
+      // screen while origin data is revalidated instead of flashing a
+      // full-page spinner between every storefront route.
+      _isLoading = !hadVisibleProduct;
+      _isProductValidated = false;
+      _productValidationFailed = false;
       _isLoadingRelated = false;
       _isLoadingTechnicalSpecs = false;
+      _technicalSpecsRequested = false;
       _relatedProducts = [];
       _technicalSpecs = const [];
     });
     // Product detail is the canonical SEO owner for every product route.
     // Install a restrictive state immediately so a slow, missing or rejected
     // product can never inherit indexable metadata from the previous page.
-    _updateUnavailableSeo(token);
+    // Session snapshots are a paint optimization only. Until the origin
+    // confirms the current publication/visibility policy, do not emit Product
+    // JSON-LD or indexable metadata for the cached projection.
+    removeStructuredDataScript(_structuredDataScriptId);
+    _updateUnavailableSeo(token, force: true);
 
     try {
       final inventoryService = context.read<PublicInventoryService>();
@@ -141,12 +221,14 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           sku: sku,
           tenantId: tenantId,
           policy: visibilityPolicy,
+          rethrowErrors: true,
         );
       } else {
         loadedProduct = await inventoryService.getProductById(
           productId: widget.productId,
           tenantId: tenantId,
           policy: visibilityPolicy,
+          rethrowErrors: true,
         );
       }
 
@@ -161,43 +243,46 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             productId: aliasProductId,
             tenantId: tenantId,
             policy: visibilityPolicy,
+            rethrowErrors: true,
           );
         }
       }
 
       if (!mounted || token != _loadToken) return;
 
-      final categoryTrail = loadedProduct == null
-          ? const <Category>[]
-          : await _resolveCategoryTrail(
-              inventoryService: inventoryService,
-              tenantId: tenantId,
-              product: loadedProduct,
-            );
-      if (!mounted || token != _loadToken) return;
-
       _product = loadedProduct;
-      _categoryTrail = categoryTrail;
+      _categoryTrail = const [];
 
       if (_product != null) {
-        MetaPixelService.instance.trackViewContent(
-          contentId: MetaPixelService.catalogContentId(
-            sku: _product!.sku,
-            productId: _product!.id,
-          ),
-          contentName: _commerceProjection(_product!).title,
-          value: _commerceProjection(_product!).price,
-        );
+        _isProductValidated = true;
+        _productValidationFailed = false;
+        _validatedTenantId = tenantId;
+        if (_trackedProductIdForRoute != _product!.id) {
+          _trackedProductIdForRoute = _product!.id;
+          MetaPixelService.instance.trackViewContent(
+            contentId: MetaPixelService.catalogContentId(
+              sku: _product!.sku,
+              productId: _product!.id,
+            ),
+            contentName: _commerceProjection(_product!).title,
+            value: _commerceProjection(_product!).price,
+          );
+        }
         _productDetailDebugLog(
             '✅ [ProductDetail] Found product: ${_product!.name}');
-        // Render immediately, then load related products in background.
+        // Paint the authoritative product immediately. Breadcrumb metadata,
+        // technical specs and suggestions are independent and must never
+        // extend the route's critical path.
         setState(() => _isLoading = false);
         _updateSeo();
         _updateStructuredData();
-        _loadTechnicalSpecs(
-          token: token,
-          tenantId: tenantId,
-          productId: _product!.id,
+        unawaited(
+          _loadCategoryTrail(
+            token: token,
+            inventoryService: inventoryService,
+            tenantId: tenantId,
+            product: _product!,
+          ),
         );
         _loadRelatedProducts(
           token: token,
@@ -208,6 +293,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         );
         _scheduleCanonicalProductUrlReplacement(_product!, token);
       } else {
+        _isProductValidated = false;
         debugPrint('❌ [ProductDetail] Product not found: ${widget.productId}');
         removeStructuredDataScript(_structuredDataScriptId);
         setState(() => _isLoading = false);
@@ -215,12 +301,35 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       }
     } catch (e) {
       debugPrint('[ProductDetailPage] Error loading product: $e');
-      removeStructuredDataScript(_structuredDataScriptId);
-      if (mounted) {
+      if (mounted && token == _loadToken && _product == null) {
+        removeStructuredDataScript(_structuredDataScriptId);
         setState(() => _isLoading = false);
         _updateUnavailableSeo(token);
+      } else if (mounted && token == _loadToken) {
+        // A transport failure is not proof that the cached product vanished.
+        // Keep the useful session snapshot visible and retry on the next
+        // navigation/invalidation.
+        setState(() {
+          _isLoading = false;
+          _productValidationFailed = true;
+        });
       }
     }
+  }
+
+  Future<void> _loadCategoryTrail({
+    required int token,
+    required PublicInventoryService inventoryService,
+    required String tenantId,
+    required Product product,
+  }) async {
+    final categoryTrail = await _resolveCategoryTrail(
+      inventoryService: inventoryService,
+      tenantId: tenantId,
+      product: product,
+    );
+    if (!mounted || token != _loadToken || _product?.id != product.id) return;
+    setState(() => _categoryTrail = categoryTrail);
   }
 
   Future<List<Category>> _resolveCategoryTrail({
@@ -294,7 +403,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     required String tenantId,
     required String productId,
   }) async {
-    if (productId.isEmpty) return;
+    if (productId.isEmpty || _technicalSpecsRequested) return;
+    _technicalSpecsRequested = true;
     setState(() => _isLoadingTechnicalSpecs = true);
     try {
       final response = await Supabase.instance.client.rpc(
@@ -337,9 +447,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
     setState(() => _isLoadingRelated = true);
     try {
-      final allProducts = await inventoryService.getProductsForTenant(
+      final page = await inventoryService.getProductPageForTenant(
         tenantId: tenantId,
-        categoryId: categoryId,
+        categoryIds: [categoryId],
         policy: visibilityPolicy,
         onlyInStock: true,
         limit: 12,
@@ -347,8 +457,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
       if (!mounted || token != _loadToken) return;
       setState(() {
-        _relatedProducts =
-            allProducts.where((p) => p.id != product.id).take(4).toList();
+        _relatedProducts = page.products
+            .where((candidate) => candidate.id != product.id)
+            .take(4)
+            .toList(growable: false);
         _isLoadingRelated = false;
       });
     } catch (_) {
@@ -505,7 +617,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     });
   }
 
-  void _updateUnavailableSeo(int token) {
+  void _updateUnavailableSeo(int token, {bool force = false}) {
     final websiteService = context.read<WebsiteService>();
     final storeName =
         websiteService.getSetting('store_name', 'Vinabike').trim();
@@ -529,7 +641,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         .toString();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || token != _loadToken || _product != null) return;
+      if (!mounted ||
+          token != _loadToken ||
+          _isProductValidated ||
+          (!force && _product != null)) {
+        return;
+      }
       SeoHelper.updateSeo(
         title:
             'Producto no disponible | ${storeName.isEmpty ? 'Tienda' : storeName}',
@@ -589,7 +706,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   }
 
   void _addToCart() {
-    if (_product == null) return;
+    if (_product == null || !_isProductValidated) return;
 
     final isStockTracked =
         _product!.productType != ProductType.service && _product!.trackStock;
@@ -617,7 +734,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   }
 
   void _buyNow() {
-    if (_product == null) return;
+    if (_product == null || !_isProductValidated) return;
 
     final isStockTracked =
         _product!.productType != ProductType.service && _product!.trackStock;
@@ -632,7 +749,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
     context.read<CartProvider>().addProduct(_product!, quantity: _quantity);
     setState(() => _quantity = 1);
-    context.go('/checkout');
+    PublicStoreLayout.navigateToHref(context, '/checkout');
   }
 
   void _showProductFeedbackBanner({
@@ -1184,6 +1301,45 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         Divider(height: 1, color: _storeTheme.commerceLine),
         SizedBox(height: isMobile ? 18 : 22),
         _buildStockSkuRow(inStock: inStock),
+        if (!_isProductValidated) ...[
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              if (_productValidationFailed)
+                Icon(
+                  Icons.cloud_off_outlined,
+                  size: 15,
+                  color: _storeTheme.commerceTextSecondary,
+                )
+              else
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: _storeTheme.commerceTextSecondary,
+                  ),
+                ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _productValidationFailed
+                      ? 'No pudimos confirmar precio y disponibilidad.'
+                      : 'Actualizando precio y disponibilidad…',
+                  style: _storeTheme.text.bodySmall?.copyWith(
+                    fontSize: 12,
+                    color: _storeTheme.commerceTextSecondary,
+                  ),
+                ),
+              ),
+              if (_productValidationFailed)
+                TextButton(
+                  onPressed: () => unawaited(_loadProduct()),
+                  child: const Text('Reintentar'),
+                ),
+            ],
+          ),
+        ],
         SizedBox(height: isMobile ? 18 : 22),
         if (inStock)
           Column(
@@ -1191,7 +1347,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             children: [
               if (isMobile) ...[
                 _buildQuantitySelector(
-                  canIncrease: canIncrease,
+                  canIncrease: _isProductValidated && canIncrease,
                   expand: true,
                 ),
                 const SizedBox(height: 14),
@@ -1203,7 +1359,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildQuantitySelector(canIncrease: canIncrease),
+                    _buildQuantitySelector(
+                      canIncrease: _isProductValidated && canIncrease,
+                    ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: _buildCartAction(
@@ -1356,7 +1514,23 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   Widget _buildDetailsTabButton(String label, int index) {
     final selected = _selectedDetailsTab == index;
     return InkWell(
-      onTap: () => setState(() => _selectedDetailsTab = index),
+      onTap: () {
+        setState(() => _selectedDetailsTab = index);
+        final product = _product;
+        final tenantId = _validatedTenantId;
+        if (index == 1 &&
+            _isProductValidated &&
+            product != null &&
+            tenantId != null) {
+          unawaited(
+            _loadTechnicalSpecs(
+              token: _loadToken,
+              tenantId: tenantId,
+              productId: product.id,
+            ),
+          );
+        }
+      },
       child: Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: DecoratedBox(
@@ -2111,7 +2285,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         children: [
           _buildQuantityButton(
             icon: Icons.remove,
-            enabled: _quantity > 1,
+            enabled: _isProductValidated && _quantity > 1,
             onTap: () => setState(() => _quantity--),
           ),
           Expanded(
@@ -2167,23 +2341,28 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     return SizedBox(
       width: double.infinity,
       height: isMobile ? 52 : 50,
-      child: OutlinedButton(
-        onPressed: _buyNow,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: _storeTheme.commerceAccent,
-          backgroundColor: _storeTheme.surface,
-          side: BorderSide(color: _storeTheme.commerceLine),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(5),
+      child: MouseRegion(
+        onEnter: _isProductValidated
+            ? (_) => PublicStoreLayout.prepareHref(context, '/checkout')
+            : null,
+        child: OutlinedButton(
+          onPressed: _isProductValidated ? _buyNow : null,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _storeTheme.commerceAccent,
+            backgroundColor: _storeTheme.surface,
+            side: BorderSide(color: _storeTheme.commerceLine),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(5),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-        child: const Text(
-          'Comprar ahora',
-          style: TextStyle(
-            fontFamily: null,
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
+          child: const Text(
+            'Comprar ahora',
+            style: TextStyle(
+              fontFamily: null,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),
@@ -2198,7 +2377,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       width: width,
       height: 50,
       child: FilledButton.icon(
-        onPressed: _addToCart,
+        onPressed: _isProductValidated ? _addToCart : null,
         style: FilledButton.styleFrom(
           backgroundColor: _storeTheme.commerceAccent,
           foregroundColor: _storeTheme.onCommerceAccent,
