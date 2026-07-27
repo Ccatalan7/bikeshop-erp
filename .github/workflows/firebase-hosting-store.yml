@@ -105,7 +105,31 @@ jobs:
 
       - name: Verify exact live storefront commit
         run: |
-          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
-            -H 'Cache-Control: no-cache' \
-            "https://vinabike-store.web.app/release.json?commit=${{ github.sha }}" \
-            | jq -e --arg commit "${{ github.sha }}" '.commit == $commit'
+          expected_commit="${{ github.sha }}"
+          for release_url in \
+            "https://vinabike-store.web.app/release.json" \
+            "https://vinabike.cl/release.json"; do
+            verified=false
+            for attempt in $(seq 1 10); do
+              live_commit=$(
+                curl --fail --silent --show-error \
+                  -H 'Cache-Control: no-cache' \
+                  "${release_url}?commit=${expected_commit}&attempt=${attempt}" \
+                  | jq -r '.commit // empty'
+              ) || live_commit=""
+
+              if [ "$live_commit" = "$expected_commit" ]; then
+                echo "Verified $release_url at $expected_commit"
+                verified=true
+                break
+              fi
+
+              echo "Waiting for $release_url (attempt $attempt/10, live=${live_commit:-unavailable})"
+              sleep 3
+            done
+
+            if [ "$verified" != true ]; then
+              echo "Live storefront did not converge to $expected_commit at $release_url" >&2
+              exit 1
+            fi
+          done
