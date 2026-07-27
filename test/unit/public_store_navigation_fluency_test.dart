@@ -96,6 +96,32 @@ void main() {
     );
   });
 
+  test('related products prefetch data, snapshots, and images', () {
+    final detail = File(
+      'lib/public_store/pages/product_detail_page.dart',
+    ).readAsStringSync();
+
+    expect(
+      detail,
+      contains('CatalogPagePrefetchCache<PublicProductPage>'),
+    );
+    expect(detail, contains('_relatedPageCache.load('));
+    expect(
+      detail,
+      contains('primeProductSnapshotForNavigation('),
+    );
+    expect(detail, contains('precacheImage(NetworkImage(url), context)'));
+
+    final parallelWarmStart = detail.indexOf(
+      'final seededProduct = _product;',
+    );
+    final authoritativeLookupStart = detail.indexOf(
+      '// Load the product - support both UUID and SKU-based lookups',
+    );
+    expect(parallelWarmStart, greaterThan(0));
+    expect(parallelWarmStart, lessThan(authoritativeLookupStart));
+  });
+
   test('active homepage product surfaces use gapless inventory SWR', () {
     final home = File(
       'lib/public_store/pages/public_home_page.dart',

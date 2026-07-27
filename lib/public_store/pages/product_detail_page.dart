@@ -10,6 +10,7 @@ import '../theme/public_store_surface_theme.dart';
 import '../models/public_commerce_product_projection.dart';
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
+import '../services/catalog_page_prefetch_cache.dart';
 import '../services/public_inventory_service.dart';
 import '../utils/public_store_tenant_resolver.dart';
 import '../widgets/full_page_loading.dart';
@@ -48,6 +49,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   // snapshot instead of leaving Google two conflicting Product entities.
   static const _structuredDataScriptId = 'seo-product-jsonld';
   static const _originTrustWindow = Duration(seconds: 8);
+  static final CatalogPagePrefetchCache<PublicProductPage> _relatedPageCache =
+      CatalogPagePrefetchCache<PublicProductPage>(
+    maxAge: const Duration(seconds: 20),
+    retainFor: const Duration(minutes: 10),
+    maxEntries: 32,
+  );
 
   PublicStoreSurfaceTheme get _storeTheme =>
       PublicStoreSurfaceTheme.of(context);
@@ -115,7 +122,6 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       removeStructuredDataScript(_structuredDataScriptId);
       _product = null;
       _categoryTrail = const [];
-      _relatedProducts = [];
       _technicalSpecs = const [];
       _isProductValidated = false;
       _productValidationFailed = false;
@@ -147,6 +153,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       _inventoryRevalidationPending = true;
       return;
     }
+    _relatedPageCache.markStale();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() {
@@ -226,6 +233,22 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         return;
       }
       final visibilityPolicy = _readVisibilityPolicy();
+
+      // A catalog/related card already carries the category projection. Start
+      // warming suggestions and their navigation snapshots in parallel with
+      // the authoritative product lookup instead of serializing both calls.
+      final seededProduct = _product;
+      if (seededProduct != null) {
+        unawaited(
+          _loadRelatedProducts(
+            token: token,
+            inventoryService: inventoryService,
+            tenantId: tenantId,
+            product: seededProduct,
+            visibilityPolicy: visibilityPolicy,
+          ),
+        );
+      }
 
       // Load the product - support both UUID and SKU-based lookups
       // SKU format: "sku:S56467" (from legacy /shop/ URLs)
@@ -494,35 +517,125 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final categoryId = product.categoryId;
     if (categoryId == null || categoryId.isEmpty) return;
 
-    setState(() => _isLoadingRelated = true);
-    try {
-      final page = await inventoryService.getProductPageForTenant(
+    final signature = _relatedPageSignature(
+      tenantId: tenantId,
+      categoryId: categoryId,
+      visibilityPolicy: visibilityPolicy,
+    );
+    final cachedPage = _relatedPageCache.peek(
+      signature: signature,
+      pageNumber: 1,
+    );
+    if (cachedPage != null) {
+      _applyRelatedPage(
+        page: cachedPage,
+        product: product,
+        token: token,
         tenantId: tenantId,
-        categoryIds: [categoryId],
-        policy: visibilityPolicy,
-        onlyInStock: true,
-        limit: 12,
+        inventoryService: inventoryService,
+        isRefreshing: !_relatedPageCache.isFresh(
+          signature: signature,
+          pageNumber: 1,
+        ),
+      );
+    } else if (!_isLoadingRelated) {
+      setState(() => _isLoadingRelated = true);
+    }
+
+    try {
+      final page = await _relatedPageCache.load(
+        signature: signature,
+        pageNumber: 1,
+        loader: () => inventoryService.getProductPageForTenant(
+          tenantId: tenantId,
+          categoryIds: [categoryId],
+          policy: visibilityPolicy,
+          onlyInStock: true,
+          limit: 12,
+        ),
       );
 
-      if (!mounted || token != _loadToken) return;
-      final nextProducts = page.products
-          .where((candidate) => candidate.id != product.id)
-          .take(4)
-          .toList(growable: false);
-      if (_sameRelatedProducts(_relatedProducts, nextProducts)) {
-        if (_isLoadingRelated) {
-          setState(() => _isLoadingRelated = false);
-        }
-      } else {
-        setState(() {
-          _relatedProducts = nextProducts;
-          _isLoadingRelated = false;
-        });
-      }
+      _applyRelatedPage(
+        page: page,
+        product: product,
+        token: token,
+        tenantId: tenantId,
+        inventoryService: inventoryService,
+        isRefreshing: false,
+      );
     } catch (_) {
       if (!mounted || token != _loadToken) return;
       setState(() => _isLoadingRelated = false);
     }
+  }
+
+  String _relatedPageSignature({
+    required String tenantId,
+    required String categoryId,
+    required PublicProductVisibilityPolicy? visibilityPolicy,
+  }) {
+    final settings = visibilityPolicy?.toSettings();
+    final policy = settings == null
+        ? 'server'
+        : (settings.entries.toList()
+              ..sort((left, right) => left.key.compareTo(right.key)))
+            .map((entry) => '${entry.key}=${entry.value}')
+            .join('&');
+    return '$tenantId\u0000$categoryId\u0000$policy\u0000in-stock\u000012';
+  }
+
+  void _applyRelatedPage({
+    required PublicProductPage page,
+    required Product product,
+    required int token,
+    required String tenantId,
+    required PublicInventoryService inventoryService,
+    required bool isRefreshing,
+  }) {
+    if (!mounted || token != _loadToken || _product?.id != product.id) return;
+    final nextProducts = page.products
+        .where((candidate) => candidate.id != product.id)
+        .take(4)
+        .toList(growable: false);
+    if (!_sameRelatedProducts(_relatedProducts, nextProducts) ||
+        _isLoadingRelated != isRefreshing) {
+      setState(() {
+        _relatedProducts = nextProducts;
+        _isLoadingRelated = isRefreshing;
+      });
+    }
+    _warmRelatedProductNavigation(
+      tenantId: tenantId,
+      inventoryService: inventoryService,
+      products: nextProducts,
+    );
+  }
+
+  void _warmRelatedProductNavigation({
+    required String tenantId,
+    required PublicInventoryService inventoryService,
+    required List<Product> products,
+  }) {
+    for (final product in products) {
+      inventoryService.primeProductSnapshotForNavigation(
+        tenantId: tenantId,
+        product: product,
+      );
+    }
+
+    final imageUrls = products
+        .map((product) => product.imageUrlOptimized ?? product.imageUrl)
+        .whereType<String>()
+        .map((url) => url.trim())
+        .where((url) => url.isNotEmpty)
+        .toSet();
+    unawaited(
+      Future.wait<void>(
+        imageUrls.map(
+          (url) => precacheImage(NetworkImage(url), context).catchError((_) {}),
+        ),
+      ),
+    );
   }
 
   bool _sameRelatedProducts(List<Product> current, List<Product> next) {
