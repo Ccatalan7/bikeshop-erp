@@ -5933,6 +5933,25 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       scrollState.requestScrollToTopForPath(targetPath);
     }
 
+    // The logo/Inicio action is also the storefront's explicit clean refresh.
+    // Keep ordinary navigation soft, but preserve this deliberate escape hatch
+    // so customers can reload the latest deployment and origin-backed state.
+    if (kIsWeb && forceHomeRefresh && isHomeTarget && !isEditMode) {
+      try {
+        final currentPath = Uri.parse(web.window.location.href).path;
+        final desiredPath = targetPath.isEmpty ? '/' : targetPath;
+
+        if (currentPath == desiredPath) {
+          web.window.location.reload();
+        } else {
+          web.window.location.assign(target);
+        }
+        return;
+      } catch (_) {
+        // Fall through to normal navigation outside a browser runtime.
+      }
+    }
+
     // If we're already on the target route, still honor explicit "home"
     // navigations (logo / Inicio) by scrolling to top and revalidating through
     // the normal data owners. A browser reload would discard the persistent

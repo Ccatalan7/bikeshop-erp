@@ -41,8 +41,14 @@ void main() {
       ).allMatches(layout),
       hasLength(2),
     );
-    expect(layout, isNot(contains('web.window.location.reload()')));
-    expect(layout, isNot(contains('web.window.location.assign(target)')));
+    expect(
+      layout,
+      contains(
+        'kIsWeb && forceHomeRefresh && isHomeTarget && !isEditMode',
+      ),
+    );
+    expect(layout, contains('web.window.location.reload()'));
+    expect(layout, contains('web.window.location.assign(target)'));
   });
 
   test('a cache miss keeps prior catalog geometry but disables stale cards',
