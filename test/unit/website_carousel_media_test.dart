@@ -55,4 +55,23 @@ void main() {
       isFalse,
     );
   });
+
+  test('warms only the visible and next carousel slides', () {
+    expect(
+      websiteCarouselPreloadOrder(slideCount: 0, currentIndex: 0),
+      isEmpty,
+    );
+    expect(
+      websiteCarouselPreloadOrder(slideCount: 1, currentIndex: 0),
+      [0],
+    );
+    expect(
+      websiteCarouselPreloadOrder(slideCount: 4, currentIndex: 1),
+      [1, 2],
+    );
+    expect(
+      websiteCarouselPreloadOrder(slideCount: 4, currentIndex: 3),
+      [3, 0],
+    );
+  });
 }

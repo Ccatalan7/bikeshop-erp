@@ -3,6 +3,12 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+void _mercadoPagoDebugLog(String message) {
+  if (kDebugMode || const bool.fromEnvironment('STORE_PERF_LOGS')) {
+    debugPrint(message);
+  }
+}
+
 class MercadoPagoCheckoutException implements Exception {
   const MercadoPagoCheckoutException(this.message, {this.retryable = false});
 
@@ -57,7 +63,7 @@ class MercadoPagoService extends ChangeNotifier {
   /// Set the tenant ID for multi-tenant filtering
   void setTenantId(String tenantId) {
     _tenantId = tenantId;
-    debugPrint('🔧 [MercadoPago] Set tenant_id: $tenantId');
+    _mercadoPagoDebugLog('🔧 [MercadoPago] Set tenant_id: $tenantId');
   }
 
   /// Initialize MercadoPago with credentials from database settings
@@ -98,7 +104,7 @@ class MercadoPagoService extends ChangeNotifier {
         }
       }
 
-      debugPrint(
+      _mercadoPagoDebugLog(
           '🔧 [MercadoPago] Initialized - configured: $isConfigured, tenant: $_tenantId');
 
       notifyListeners();
@@ -117,7 +123,7 @@ class MercadoPagoService extends ChangeNotifier {
     _accessToken = accessToken;
     _isTestMode = isTestMode;
     notifyListeners();
-    debugPrint('🔧 [MercadoPago] Credentials set manually');
+    _mercadoPagoDebugLog('🔧 [MercadoPago] Credentials set manually');
   }
 
   /// Save MercadoPago credentials to database
@@ -149,7 +155,8 @@ class MercadoPagoService extends ChangeNotifier {
       _accessToken = accessToken;
       _isTestMode = testMode;
 
-      debugPrint('✅ [MercadoPago] Credentials saved for tenant: $_tenantId');
+      _mercadoPagoDebugLog(
+          '✅ [MercadoPago] Credentials saved for tenant: $_tenantId');
       notifyListeners();
     } catch (e) {
       debugPrint('Error saving MercadoPago credentials: $e');
@@ -161,7 +168,8 @@ class MercadoPagoService extends ChangeNotifier {
   /// Returns a list of payment methods with secure_thumbnail
   Future<List<Map<String, dynamic>>> getPaymentMethods() async {
     if (_publicKey == null) {
-      debugPrint('🔧 [MercadoPago] No public key, skipping getPaymentMethods');
+      _mercadoPagoDebugLog(
+          '🔧 [MercadoPago] No public key, skipping getPaymentMethods');
       return [];
     }
 
@@ -169,12 +177,14 @@ class MercadoPagoService extends ChangeNotifier {
       final url = Uri.parse(
           'https://api.mercadopago.com/v1/payment_methods?public_key=$_publicKey');
 
-      debugPrint('🔧 [MercadoPago] Fetching payment methods from $url');
+      _mercadoPagoDebugLog(
+          '🔧 [MercadoPago] Fetching payment methods from $url');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        debugPrint('🔧 [MercadoPago] Got ${data.length} total payment methods');
+        _mercadoPagoDebugLog(
+            '🔧 [MercadoPago] Got ${data.length} total payment methods');
 
         // Filter for credit_card and debit_card
         final filtered = data
@@ -187,7 +197,7 @@ class MercadoPagoService extends ChangeNotifier {
 
         // Log what we're returning for debugging
         for (final pm in filtered) {
-          debugPrint(
+          _mercadoPagoDebugLog(
               '🔧 [MercadoPago] ${pm['name']}: thumbnail=${pm['thumbnail']}, secure=${pm['secure_thumbnail']}');
         }
 
@@ -312,6 +322,6 @@ class MercadoPagoService extends ChangeNotifier {
   Future<void> handleWebhook(Map<String, dynamic> notification) async {
     // This is a placeholder - actual webhook handling should be done
     // in a Supabase Edge Function for security
-    debugPrint('Webhook received: $notification');
+    _mercadoPagoDebugLog('Webhook received: $notification');
   }
 }

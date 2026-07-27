@@ -181,9 +181,13 @@ class CustomerAddressesPage extends StatelessWidget {
   }
 
   void _showAddressDialog(BuildContext context, CustomerAddress? address) {
+    final autocompleteService = context.read<AddressAutocompleteService>();
     showDialog(
       context: context,
-      builder: (context) => _AddressFormDialog(address: address),
+      builder: (_) => ChangeNotifierProvider<AddressAutocompleteService>.value(
+        value: autocompleteService,
+        child: _AddressFormDialog(address: address),
+      ),
     );
   }
 

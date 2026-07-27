@@ -12,7 +12,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'public_store/providers/cart_provider.dart';
 import 'public_store/providers/public_store_tenant_provider.dart';
 import 'public_store/routes/public_store_router.dart';
-import 'public_store/services/address_autocomplete_service.dart';
 import 'public_store/services/public_store_scroll_state.dart';
 import 'public_store/services/customer_account_service.dart';
 import 'public_store/services/public_inventory_service.dart';
@@ -24,7 +23,6 @@ import 'shared/services/tenant_detection_service.dart';
 import 'shared/utils/web_url.dart';
 import 'shared/widgets/app_selection_scope.dart';
 import 'modules/website/providers/website_edit_mode_provider.dart';
-import 'modules/website/services/mercadopago_service.dart';
 import 'modules/website/services/website_service.dart';
 import 'modules/messaging/providers/chat_provider.dart';
 
@@ -121,10 +119,10 @@ Future<void> main() async {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
-    // Initialize SharedPreferences BEFORE the app starts
-    // This allows us to access cache synchronously in the first frame
-    final prefs = await SharedPreferences.getInstance();
-    WebsiteService.setSharedPreferences(prefs);
+    // Start independent browser-storage and Supabase initialization together.
+    // Both still complete before providers mount, but neither needlessly waits
+    // for the other during the critical bootstrap.
+    final preferencesFuture = SharedPreferences.getInstance();
 
     // Clean URLs (no hash #) for web
     usePathUrlStrategy();
@@ -136,13 +134,17 @@ Future<void> main() async {
       );
     }
 
-    await Supabase.initialize(
+    final supabaseFuture = Supabase.initialize(
       url: SupabaseConfig.url,
       anonKey: SupabaseConfig.anonKey,
       authOptions: const FlutterAuthClientOptions(
         autoRefreshToken: true,
       ),
     );
+
+    final prefs = await preferencesFuture;
+    await supabaseFuture;
+    WebsiteService.setSharedPreferences(prefs);
 
     await _resetLocalStoreDebugStateIfNeeded(prefs);
 
@@ -224,19 +226,6 @@ class PublicStoreApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PublicInventoryService()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
-        ChangeNotifierProvider(create: (_) => AddressAutocompleteService()),
-        ChangeNotifierProxyProvider<PublicStoreTenantProvider,
-            MercadoPagoService>(
-          create: (_) => MercadoPagoService(),
-          update: (context, tenantProvider, service) {
-            service ??= MercadoPagoService();
-            final tenantId = tenantProvider.tenantId;
-            if (tenantId != null && tenantId.isNotEmpty) {
-              service.setTenantId(tenantId);
-            }
-            return service;
-          },
-        ),
         ChangeNotifierProxyProvider<PublicStoreTenantProvider,
             CustomerAccountService>(
           create: (_) => CustomerAccountService(),

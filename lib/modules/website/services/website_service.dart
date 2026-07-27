@@ -762,8 +762,10 @@ class WebsiteService extends ChangeNotifier {
           );
         }
 
-        debugPrint('✅ [WebsiteService] Load complete ($source): '
-            '${_settings.length} settings, ${_blocks.length} blocks');
+        if (_perfLogsEnabled) {
+          debugPrint('✅ [WebsiteService] Load complete ($source): '
+              '${_settings.length} settings, ${_blocks.length} blocks');
+        }
       }
 
       _hasLoadedForTenant = true;
@@ -856,13 +858,13 @@ class WebsiteService extends ChangeNotifier {
       notify: false,
     );
 
-    if (settingsLoaded) {
+    if (settingsLoaded && _perfLogsEnabled) {
       debugPrint('💾 [WebsiteService] Loaded settings from SYNC cache (0ms)');
     }
-    if (blocksLoaded) {
+    if (blocksLoaded && _perfLogsEnabled) {
       debugPrint('💾 [WebsiteService] Loaded blocks from SYNC cache (0ms)');
     }
-    if (navLoaded) {
+    if (navLoaded && _perfLogsEnabled) {
       debugPrint('💾 [WebsiteService] Loaded navigation from SYNC cache (0ms)');
     }
 
@@ -4158,9 +4160,14 @@ class WebsiteService extends ChangeNotifier {
       while (_isLoadingNavigationForTenant) {
         await Future.delayed(const Duration(milliseconds: 50));
       }
-      if (!forceRefresh &&
-          _hasLoadedNavigationForTenant &&
+      // An in-flight navigation load always performs a real origin read. Once
+      // it completes it also satisfies concurrent force-refresh callers; do
+      // not issue the exact same Supabase query a second time.
+      if (_hasLoadedNavigationForTenant &&
           _loadedNavigationTenantId == tenantId) {
+        if (notify) {
+          _safeNotifyListeners();
+        }
         return;
       }
     }

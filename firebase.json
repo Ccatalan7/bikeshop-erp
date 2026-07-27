@@ -175,6 +175,7 @@
     {
       "target": "store",
       "public": "build/web_store",
+      "trailingSlash": false,
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -413,6 +414,15 @@
           ]
         },
         {
+          "source": "**/*.part.js",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
           "source": "/manifest.json",
           "headers": [
             {
@@ -471,12 +481,21 @@
           "headers": [
             {
               "key": "Cache-Control",
+              "value": "public, max-age=3600, s-maxage=604800"
+            }
+          ]
+        },
+        {
+          "source": "**/*.{wasm,mjs}",
+          "headers": [
+            {
+              "key": "Cache-Control",
               "value": "public, max-age=0, must-revalidate"
             }
           ]
         },
         {
-          "source": "**/*.{png,jpg,jpeg,webp,svg,ico,wasm,mjs}",
+          "source": "**/*.{png,jpg,jpeg,webp,svg,ico}",
           "headers": [
             {
               "key": "Cache-Control",

@@ -58,13 +58,37 @@
     })();
   </script>
 
-  <!-- Google Analytics GA4 -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-FR5Q37BW43"></script>
+  <!-- Google Analytics GA4: queue immediately, fetch after critical loading. -->
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag() { dataLayer.push(arguments); }
     gtag('js', new Date());
-    gtag('config', 'G-FR5Q37BW43');
+    gtag('config', "G-FR5Q37BW43");
+
+    (function () {
+      var loaded = false;
+      function loadGoogleAnalytics() {
+        if (loaded) return;
+        loaded = true;
+        var script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://www.googletagmanager.com/gtag/js?id=' +
+          encodeURIComponent("G-FR5Q37BW43");
+        document.head.appendChild(script);
+      }
+      function scheduleGoogleAnalytics() {
+        if ('requestIdleCallback' in window) {
+          window.requestIdleCallback(loadGoogleAnalytics, { timeout: 2500 });
+        } else {
+          window.setTimeout(loadGoogleAnalytics, 0);
+        }
+      }
+      if (document.readyState === 'complete') {
+        scheduleGoogleAnalytics();
+      } else {
+        window.addEventListener('load', scheduleGoogleAnalytics, { once: true });
+      }
+    })();
   </script>
 
   <!-- Meta Pixel is initialized at runtime from the tenant website setting. -->
@@ -151,8 +175,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="preconnect" href="https://vinabike-edge-cache.vinabike.workers.dev" crossorigin>
   <link rel="dns-prefetch" href="//vinabike-edge-cache.vinabike.workers.dev">
-  <link rel="preload" href="flutter_bootstrap.js" as="script">
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="//www.gstatic.com">
+  <link rel="preconnect" href="https://xzdvtzdqjeyqxnkqprtf.supabase.co" crossorigin>
+  <link rel="dns-prefetch" href="//xzdvtzdqjeyqxnkqprtf.supabase.co">
   <link rel="preload" href="main.dart.js" as="script">
+  <link rel="preload" href="loading-logo.png" as="image" type="image/png" fetchpriority="high">
   
   <style>
     html,
@@ -212,43 +240,7 @@
   
   <!-- JSON-LD Structured Data for LocalBusiness -->
   <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "name": "Viñabike",
-    "legalName": "NEWEN SpA",
-    "taxID": "77.541.999-7",
-    "telephone": "+56 9 9835 7797",
-    "email": "contacto@vinabike.cl",
-    "url": "https://vinabike.cl",
-    "address": {
-      "@type": "PostalAddress",
-      "streetAddress": "Alvarez 32, Local 17",
-      "addressLocality": "Viña del Mar",
-      "addressRegion": "Valparaíso",
-      "postalCode": "2520000",
-      "addressCountry": "Chile"
-    },
-    "areaServed": {"@type": "Country", "name": "Chile"},
-    "contactPoint": {
-      "@type": "ContactPoint",
-      "contactType": "customer support",
-      "telephone": "+56 9 9835 7797",
-      "email": "contacto@vinabike.cl",
-      "areaServed": "CL",
-      "availableLanguage": ["es"]
-    },
-    "hasMerchantReturnPolicy": {
-      "@type": "MerchantReturnPolicy",
-      "applicableCountry": "CL",
-      "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
-      "merchantReturnDays": 10,
-      "returnMethod": ["https://schema.org/ReturnByMail", "https://schema.org/ReturnInStore"],
-      "returnFees": "https://schema.org/ReturnFeesCustomerResponsibility",
-      "url": "https://vinabike.cl/devoluciones"
-    },
-    "sameAs": ["https://www.instagram.com/vina.bike"]
-  }
+  {"@context":"https://schema.org","@type":"LocalBusiness","name":"Viñabike","legalName":"NEWEN SpA","taxID":"77.541.999-7","telephone":"+56 9 9835 7797","email":"contacto@vinabike.cl","url":"https://vinabike.cl","address":{"@type":"PostalAddress","streetAddress":"Alvarez 32, Local 17","addressLocality":"Viña del Mar","addressRegion":"Valparaíso","postalCode":"2520000","addressCountry":"Chile"},"areaServed":{"@type":"Country","name":"Chile"},"contactPoint":{"@type":"ContactPoint","contactType":"customer support","telephone":"+56 9 9835 7797","email":"contacto@vinabike.cl","areaServed":"CL","availableLanguage":["es"]},"hasMerchantReturnPolicy":{"@type":"MerchantReturnPolicy","applicableCountry":"CL","returnPolicyCategory":"https://schema.org/MerchantReturnFiniteReturnWindow","merchantReturnDays":10,"returnMethod":["https://schema.org/ReturnByMail","https://schema.org/ReturnInStore"],"returnFees":"https://schema.org/ReturnFeesCustomerResponsibility","url":"https://vinabike.cl/devoluciones"},"sameAs":["https://www.instagram.com/vina.bike"]}
   </script>
 
   <!-- Pre-fetch public store data ASAP (overlaps Flutter engine startup) -->
@@ -298,8 +290,11 @@
   <div id="app-shell">
     <img 
       id="loading-logo"
-      src="vinabike-logo.png" 
+      src="loading-logo.png"
       alt="Viñabike"
+      width="200"
+      height="200"
+      fetchpriority="high"
     />
     
     <noscript id="storefront-nojs-fallback">
@@ -373,11 +368,13 @@
       }
     }, { passive: false });
   </script>
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    {{flutter_bootstrap_js}}
+  </script>
   <!-- 
-    NOTE: Using default flutter_bootstrap.js loading.
+    NOTE: Flutter's generated default bootstrap is inlined above.
     Custom renderer selection was removed because:
-    1. It caused double initialization (flutter_bootstrap.js + custom load call)
+    1. A second custom load call caused double initialization.
     2. CanvasKit has font loading bugs (BindingError with Noto fonts)
     The app now uses Flutter's default renderer selection.
   -->

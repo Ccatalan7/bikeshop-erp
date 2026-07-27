@@ -3,26 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../shared/pages/auth_callback_page.dart';
 import '../pages/cart_page.dart';
-import '../pages/checkout_page.dart';
 import '../pages/contact_page.dart';
-import '../pages/customer_addresses_page.dart';
-import '../pages/customer_auth_page.dart';
-import '../pages/customer_bikes_page.dart';
-import '../pages/customer_chat_detail_page.dart';
-import '../pages/customer_chat_hub_page.dart';
-import '../pages/customer_chat_list_page.dart';
-import '../pages/customer_dashboard_page.dart';
-import '../pages/customer_orders_page.dart';
-import '../pages/customer_profile_page.dart';
-import '../pages/customer_service_history_page.dart';
-import '../pages/android_app_download_page.dart';
 import '../pages/dynamic_website_page.dart';
-import '../pages/order_confirmation_page.dart';
 import '../pages/product_catalog_page.dart';
 import '../pages/product_detail_page.dart';
 import '../pages/public_home_page.dart';
 import '../pages/static_policy_page.dart';
 import '../widgets/public_store_layout.dart';
+import 'deferred_commerce_route_page.dart';
+import 'deferred_customer_route_page.dart';
 
 // Match the tenant detection perf logging pattern.
 // Enable in debug, or in release via:
@@ -486,7 +475,7 @@ class PublicStoreRouter {
           pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const CustomerDashboardPage(),
+            const DeferredCustomerRoutePage(routeKey: 'dashboard'),
           ),
         ),
 
@@ -612,7 +601,7 @@ class PublicStoreRouter {
           pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const CheckoutPage(),
+            const DeferredCommerceRoutePage(routeKey: 'checkout'),
           ),
         ),
 
@@ -625,7 +614,8 @@ class PublicStoreRouter {
             return _buildPage(
               context,
               state,
-              OrderConfirmationPage(
+              DeferredCommerceRoutePage(
+                routeKey: 'orderConfirmation',
                 orderId: orderId,
                 paymentStatus: status,
               ),
@@ -641,7 +631,7 @@ class PublicStoreRouter {
           pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const CustomerAuthPage(),
+            const DeferredCustomerRoutePage(routeKey: 'login'),
           ),
         ),
         GoRoute(
@@ -649,7 +639,7 @@ class PublicStoreRouter {
           pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const AndroidAppDownloadPage(),
+            const DeferredCustomerRoutePage(routeKey: 'androidDownload'),
           ),
         ),
         GoRoute(
@@ -657,7 +647,7 @@ class PublicStoreRouter {
           pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const CustomerProfilePage(),
+            const DeferredCustomerRoutePage(routeKey: 'profile'),
           ),
         ),
         GoRoute(
@@ -665,7 +655,7 @@ class PublicStoreRouter {
           pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const CustomerAddressesPage(),
+            const DeferredCustomerRoutePage(routeKey: 'addresses'),
           ),
         ),
         GoRoute(
@@ -673,7 +663,7 @@ class PublicStoreRouter {
           pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const CustomerOrdersPage(),
+            const DeferredCustomerRoutePage(routeKey: 'orders'),
           ),
         ),
         GoRoute(
@@ -681,7 +671,7 @@ class PublicStoreRouter {
           pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const CustomerBikesPage(),
+            const DeferredCustomerRoutePage(routeKey: 'bikes'),
           ),
         ),
         GoRoute(
@@ -691,7 +681,10 @@ class PublicStoreRouter {
             return _buildPage(
               context,
               state,
-              CustomerServiceHistoryPage(bikeId: bikeId),
+              DeferredCustomerRoutePage(
+                routeKey: 'serviceHistory',
+                argument: bikeId,
+              ),
             );
           },
         ),
@@ -702,7 +695,7 @@ class PublicStoreRouter {
           pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const CustomerChatListPage(),
+            const DeferredCustomerRoutePage(routeKey: 'messages'),
           ),
         ),
         GoRoute(
@@ -712,7 +705,10 @@ class PublicStoreRouter {
             return _buildPageNoScroll(
               context,
               state,
-              CustomerChatDetailPage(conversationId: conversationId),
+              DeferredCustomerRoutePage(
+                routeKey: 'messageDetail',
+                argument: conversationId,
+              ),
             );
           },
         ),
@@ -721,7 +717,7 @@ class PublicStoreRouter {
           pageBuilder: (context, state) => _buildPage(
             context,
             state,
-            const CustomerChatHubPage(),
+            const DeferredCustomerRoutePage(routeKey: 'chats'),
           ),
         ),
         GoRoute(
@@ -731,7 +727,10 @@ class PublicStoreRouter {
             return _buildPageNoScroll(
               context,
               state,
-              CustomerChatHubPage(initialConversationId: conversationId),
+              DeferredCustomerRoutePage(
+                routeKey: 'chatDetail',
+                argument: conversationId,
+              ),
             );
           },
         ),

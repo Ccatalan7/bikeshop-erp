@@ -4,6 +4,12 @@ import '../../shared/models/product.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
 import '../../modules/inventory/models/category_models.dart';
 
+void _publicInventoryDebugLog(String message) {
+  if (kDebugMode || const bool.fromEnvironment('STORE_PERF_LOGS')) {
+    debugPrint(message);
+  }
+}
+
 class PublicProductPage {
   final List<Product> products;
   final int totalCount;
@@ -371,7 +377,7 @@ class PublicInventoryService extends ChangeNotifier {
           : (classifiedRows.first['total_count'] as num?)?.toInt() ??
               products.length;
 
-      debugPrint(
+      _publicInventoryDebugLog(
           '⏱️ [PublicInventory] Product page RPC: ${sw.elapsedMilliseconds}ms (${products.length}/$totalCount products)');
       return PublicProductPage(products: products, totalCount: totalCount);
     } catch (e) {
@@ -574,7 +580,7 @@ class PublicInventoryService extends ChangeNotifier {
           limit == null &&
           !includeUnpublished &&
           _isCacheValid(cacheKey)) {
-        debugPrint(
+        _publicInventoryDebugLog(
             '⏱️ [PublicInventory] Products from cache: ${sw.elapsedMilliseconds}ms');
         return _productsCache[cacheKey] ?? [];
       }
@@ -637,7 +643,7 @@ class PublicInventoryService extends ChangeNotifier {
           ? await orderedQuery.range(offset, offset + limit - 1)
           : await orderedQuery;
 
-      debugPrint(
+      _publicInventoryDebugLog(
           '⏱️ [PublicInventory] Products query: ${sw.elapsedMilliseconds}ms');
 
       final rows = (response as List)
@@ -668,7 +674,7 @@ class PublicInventoryService extends ChangeNotifier {
         return products.where(effectivePolicy.allowsProduct).toList();
       }
 
-      debugPrint(
+      _publicInventoryDebugLog(
           '⏱️ [PublicInventory] Products total: ${sw.elapsedMilliseconds}ms (${products.length} products)');
 
       // Cache results if no filters (default view)
@@ -706,7 +712,7 @@ class PublicInventoryService extends ChangeNotifier {
     try {
       // Check cache first
       if (_isCacheValid(cacheKey)) {
-        debugPrint(
+        _publicInventoryDebugLog(
             '⏱️ [PublicInventory] Categories from cache: ${sw.elapsedMilliseconds}ms');
         return _categoriesCache[cacheKey] ?? [];
       }
@@ -714,7 +720,7 @@ class PublicInventoryService extends ChangeNotifier {
       // Avoid duplicate requests if multiple widgets trigger it on startup
       final inFlight = _categoriesInFlight[cacheKey];
       if (inFlight != null) {
-        debugPrint(
+        _publicInventoryDebugLog(
             '⏳ [PublicInventory] Categories already loading; awaiting in-flight request');
         return await inFlight;
       }
@@ -745,7 +751,7 @@ class PublicInventoryService extends ChangeNotifier {
         .order('sort_order', ascending: true)
         .order('name', ascending: true);
 
-    debugPrint(
+    _publicInventoryDebugLog(
         '⏱️ [PublicInventory] Categories query: ${sw.elapsedMilliseconds}ms');
 
     final categories = (response as List)
@@ -753,7 +759,7 @@ class PublicInventoryService extends ChangeNotifier {
             (json) => Category.fromJson(Map<String, dynamic>.from(json as Map)))
         .toList();
 
-    debugPrint(
+    _publicInventoryDebugLog(
         '✅ PublicInventoryService: Found ${categories.length} categories (${sw.elapsedMilliseconds}ms)');
 
     // Cache results
@@ -777,7 +783,7 @@ class PublicInventoryService extends ChangeNotifier {
     PublicProductVisibilityPolicy? policy,
   }) async {
     try {
-      debugPrint(
+      _publicInventoryDebugLog(
           '🔍 PublicInventoryService: Fetching product $productId for tenant $tenantId');
 
       final page = await getProductPageForTenant(
@@ -794,7 +800,8 @@ class PublicInventoryService extends ChangeNotifier {
       }
 
       final product = page.products.first;
-      debugPrint('✅ PublicInventoryService: Found product: ${product.name}');
+      _publicInventoryDebugLog(
+          '✅ PublicInventoryService: Found product: ${product.name}');
       return product;
     } catch (e) {
       debugPrint('❌ PublicInventoryService: Error fetching product: $e');
@@ -815,7 +822,7 @@ class PublicInventoryService extends ChangeNotifier {
     PublicProductVisibilityPolicy? policy,
   }) async {
     try {
-      debugPrint(
+      _publicInventoryDebugLog(
           '🔍 PublicInventoryService: Fetching product by SKU $sku for tenant $tenantId');
 
       final page = await getProductPageForTenant(
@@ -833,7 +840,7 @@ class PublicInventoryService extends ChangeNotifier {
       }
 
       final product = page.products.first;
-      debugPrint(
+      _publicInventoryDebugLog(
           '✅ PublicInventoryService: Found product by SKU: ${product.name}');
       return product;
     } catch (e) {
@@ -855,7 +862,7 @@ class PublicInventoryService extends ChangeNotifier {
     PublicProductVisibilityPolicy? policy,
   }) async {
     try {
-      debugPrint(
+      _publicInventoryDebugLog(
           '🔍 PublicInventoryService: Fetching featured products for tenant: $tenantId');
 
       final response = await _supabase.rpc(
@@ -883,7 +890,7 @@ class PublicInventoryService extends ChangeNotifier {
       );
       final products = brandAwareRows.map(Product.fromJson).toList();
 
-      debugPrint(
+      _publicInventoryDebugLog(
           '✅ PublicInventoryService: Found ${products.length} featured products');
       return products;
     } catch (e) {
@@ -913,7 +920,8 @@ class PublicInventoryService extends ChangeNotifier {
       );
       final count = page.totalCount;
 
-      debugPrint('📊 PublicInventoryService: Product count = $count');
+      _publicInventoryDebugLog(
+          '📊 PublicInventoryService: Product count = $count');
       return count;
     } catch (e) {
       debugPrint('❌ PublicInventoryService: Error counting products: $e');
@@ -930,13 +938,13 @@ class PublicInventoryService extends ChangeNotifier {
       _categoriesCache.remove('categories_$tenantId');
       _cacheTimestamps.remove('products_$tenantId');
       _cacheTimestamps.remove('categories_$tenantId');
-      debugPrint(
+      _publicInventoryDebugLog(
           '🗑️ PublicInventoryService: Cleared cache for tenant $tenantId');
     } else {
       _productsCache.clear();
       _categoriesCache.clear();
       _cacheTimestamps.clear();
-      debugPrint('🗑️ PublicInventoryService: Cleared all cache');
+      _publicInventoryDebugLog('🗑️ PublicInventoryService: Cleared all cache');
     }
     notifyListeners();
   }
@@ -973,7 +981,8 @@ class PublicInventoryService extends ChangeNotifier {
     if (searchTerm.trim().isEmpty) return [];
 
     try {
-      debugPrint('🔍 PublicInventoryService: Fuzzy search for "$searchTerm"');
+      _publicInventoryDebugLog(
+          '🔍 PublicInventoryService: Fuzzy search for "$searchTerm"');
 
       final response = await _supabase.rpc(
         'search_public_products',
@@ -1004,7 +1013,7 @@ class PublicInventoryService extends ChangeNotifier {
           ? products
           : products.where(policy.allowsProduct).toList();
 
-      debugPrint(
+      _publicInventoryDebugLog(
           '✅ PublicInventoryService: Found ${visibleProducts.length} matches for "$searchTerm"');
       return visibleProducts;
     } catch (e) {

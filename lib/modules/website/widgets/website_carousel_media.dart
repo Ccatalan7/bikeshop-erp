@@ -40,6 +40,27 @@ bool websiteCarouselSlideUsesComposition(Map<String, dynamic> slide) {
   return elements is List && elements.isNotEmpty;
 }
 
+/// Returns the minimal warm-up order for a carousel's current playback state.
+///
+/// The visible slide is warmed first so layered compositions appear atomically,
+/// followed only by the next autoplay slide. Preloading every saved slide at
+/// startup competes with the storefront's critical requests and can download
+/// several megabytes that the visitor never sees.
+List<int> websiteCarouselPreloadOrder({
+  required int slideCount,
+  required int currentIndex,
+}) {
+  if (slideCount <= 0) return const <int>[];
+
+  final normalizedIndex = currentIndex % slideCount;
+  if (slideCount == 1) return <int>[normalizedIndex];
+
+  return <int>[
+    normalizedIndex,
+    (normalizedIndex + 1) % slideCount,
+  ];
+}
+
 bool _isImageField(String? fieldName) {
   if (fieldName == null) return false;
   final normalized = fieldName.toLowerCase();

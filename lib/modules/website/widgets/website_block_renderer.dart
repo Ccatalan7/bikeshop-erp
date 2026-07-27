@@ -4340,13 +4340,18 @@ class _CarouselBannerState extends State<_CarouselBanner> {
   late Duration _transitionDuration;
   late _CarouselAnimation _animation;
   Timer? _timer;
-  final Set<String> _requestedPrecacheUrls = <String>{};
+  final Map<String, Future<void>> _imageWarmups = <String, Future<void>>{};
+  final Map<int, Future<void>> _slideWarmups = <int, Future<void>>{};
   int _mediaPreloadGeneration = 0;
+  int _slideIntentGeneration = 0;
+  int? _pendingSlideIndex;
+  late String _configurationSignature;
   bool _initialMediaPreloadScheduled = false;
 
   @override
   void initState() {
     super.initState();
+    _configurationSignature = jsonEncode(widget.data);
     _refreshConfiguration(resetIndex: true);
   }
 
@@ -4361,6 +4366,13 @@ class _CarouselBannerState extends State<_CarouselBanner> {
   @override
   void didUpdateWidget(covariant _CarouselBanner oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final nextSignature = jsonEncode(widget.data);
+    if (nextSignature != _configurationSignature) {
+      _configurationSignature = nextSignature;
+      _slideIntentGeneration++;
+      _slideWarmups.clear();
+      _pendingSlideIndex = null;
+    }
     setState(_refreshConfiguration);
     _scheduleMediaPreload();
   }
@@ -4369,6 +4381,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
   void dispose() {
     _timer?.cancel();
     _mediaPreloadGeneration++;
+    _slideIntentGeneration++;
     super.dispose();
   }
 
@@ -4383,34 +4396,65 @@ class _CarouselBannerState extends State<_CarouselBanner> {
   Future<void> _preloadSlideMedia(int generation) async {
     if (_slides.isEmpty) return;
 
-    if (_slides.any(websiteCarouselSlideUsesComposition)) {
-      unawaited(preloadDeferredCanvasLibrary());
+    final preloadOrder = websiteCarouselPreloadOrder(
+      slideCount: _slides.length,
+      currentIndex: _currentIndex,
+    );
+
+    // Keep the critical request queue small: warm the visible slide and the
+    // next autoplay slide only. Each subsequent transition schedules the same
+    // look-ahead, preserving seamless playback without downloading every
+    // campaign image during first paint.
+    for (final slideIndex in preloadOrder) {
+      if (!mounted || generation != _mediaPreloadGeneration) return;
+      await _ensureSlideReady(slideIndex);
+    }
+  }
+
+  Future<void> _ensureSlideReady(int slideIndex) {
+    if (!mounted || slideIndex < 0 || slideIndex >= _slides.length) {
+      return Future<void>.value();
     }
 
-    // Respect the visible slide first, then warm every following slide in its
-    // real playback order. Images within a slide load concurrently so a
-    // layered composition appears atomically when the carousel reaches it.
-    for (var offset = 0; offset < _slides.length; offset++) {
-      if (!mounted || generation != _mediaPreloadGeneration) return;
-      final slideIndex = (_currentIndex + offset) % _slides.length;
-      final urls = collectWebsiteCarouselSlideImageUrls(_slides[slideIndex])
-          .where(_requestedPrecacheUrls.add)
-          .toList(growable: false);
-      if (urls.isEmpty) continue;
+    return _slideWarmups.putIfAbsent(slideIndex, () async {
+      final futures = <Future<void>>[];
+      if (websiteCarouselSlideUsesComposition(_slides[slideIndex])) {
+        futures.add(
+          preloadDeferredCanvasLibrary().onError((_, __) {
+            // The deferred renderer owns its visible error state. Remove this
+            // slide future after the wait so a later interaction can retry.
+            _slideWarmups.remove(slideIndex);
+          }),
+        );
+      }
 
-      await Future.wait<void>(
+      final urls =
+          collectWebsiteCarouselSlideImageUrls(_slides[slideIndex]).toSet();
+      futures.addAll(
         urls.map(
-          (url) => precacheImage(
-            NetworkImage(url),
-            context,
-            onError: (_, __) {
-              // Rendering keeps the existing per-image error UI. A failed
-              // speculative request must never break carousel playback.
-            },
+          (url) => _imageWarmups.putIfAbsent(
+            url,
+            () => precacheImage(
+              NetworkImage(url),
+              context,
+              onError: (_, __) {
+                // Rendering keeps the existing per-image error UI. A failed
+                // speculative request must never break carousel playback.
+                _imageWarmups.remove(url);
+              },
+            ),
           ),
         ),
       );
-    }
+
+      if (futures.isNotEmpty) {
+        await Future.wait<void>(futures);
+      }
+    });
+  }
+
+  void _warmSlide(int slideIndex) {
+    unawaited(_ensureSlideReady(slideIndex));
   }
 
   void _refreshConfiguration({bool resetIndex = false}) {
@@ -4431,7 +4475,9 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     _transitionDuration = _parseAnimationDuration(widget.data);
     _animation = _parseAnimation(widget.data['animation']);
 
-    _restartTimer();
+    if (_pendingSlideIndex == null) {
+      _restartTimer();
+    }
   }
 
   @override
@@ -4468,18 +4514,34 @@ class _CarouselBannerState extends State<_CarouselBanner> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: List.generate(_slides.length, (index) {
                       final isActive = index == _currentIndex;
+                      final isPending = index == _pendingSlideIndex;
                       return GestureDetector(
+                        onTapDown: (_) => _warmSlide(index),
                         onTap: () => _goToSlide(index),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          margin: const EdgeInsets.symmetric(horizontal: 5),
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: isActive
-                                ? Colors.white
-                                : Colors.white.withValues(alpha: 0.4),
-                            shape: BoxShape.circle,
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: Center(
+                            child: isPending
+                                ? const SizedBox(
+                                    width: 12,
+                                    height: 12,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : AnimatedContainer(
+                                    duration: const Duration(milliseconds: 250),
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: isActive
+                                          ? Colors.white
+                                          : Colors.white.withValues(alpha: 0.4),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
                           ),
                         ),
                       );
@@ -4492,10 +4554,16 @@ class _CarouselBannerState extends State<_CarouselBanner> {
                   top: 0,
                   bottom: 0,
                   child: Center(
-                    child: _buildArrowButton(
-                      icon: Icons.chevron_left,
-                      onTap: _previousSlide,
-                    ),
+                    child: Builder(builder: (context) {
+                      final target =
+                          (_currentIndex - 1 + _slides.length) % _slides.length;
+                      return _buildArrowButton(
+                        icon: Icons.chevron_left,
+                        isPending: _pendingSlideIndex == target,
+                        onWarmUp: () => _warmSlide(target),
+                        onTap: _previousSlide,
+                      );
+                    }),
                   ),
                 ),
                 Positioned(
@@ -4503,10 +4571,15 @@ class _CarouselBannerState extends State<_CarouselBanner> {
                   top: 0,
                   bottom: 0,
                   child: Center(
-                    child: _buildArrowButton(
-                      icon: Icons.chevron_right,
-                      onTap: _nextSlide,
-                    ),
+                    child: Builder(builder: (context) {
+                      final target = (_currentIndex + 1) % _slides.length;
+                      return _buildArrowButton(
+                        icon: Icons.chevron_right,
+                        isPending: _pendingSlideIndex == target,
+                        onWarmUp: () => _warmSlide(target),
+                        onTap: _nextSlide,
+                      );
+                    }),
                   ),
                 ),
               ],
@@ -4823,10 +4896,18 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     }
   }
 
-  Widget _buildArrowButton(
-      {required IconData icon, required VoidCallback onTap}) {
+  Widget _buildArrowButton({
+    required IconData icon,
+    required bool isPending,
+    required VoidCallback onTap,
+    required VoidCallback onWarmUp,
+  }) {
     return InkWell(
       onTap: onTap,
+      onTapDown: (_) => onWarmUp(),
+      onHover: (isHovering) {
+        if (isHovering) onWarmUp();
+      },
       customBorder: const CircleBorder(),
       child: Container(
         decoration: const BoxDecoration(
@@ -4834,31 +4915,68 @@ class _CarouselBannerState extends State<_CarouselBanner> {
           shape: BoxShape.circle,
         ),
         padding: const EdgeInsets.all(8),
-        child: Icon(icon, color: Colors.white, size: 28),
+        child: SizedBox(
+          width: 28,
+          height: 28,
+          child: isPending
+              ? const Padding(
+                  padding: EdgeInsets.all(5),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Colors.white,
+                  ),
+                )
+              : Icon(icon, color: Colors.white, size: 28),
+        ),
       ),
     );
   }
 
   void _nextSlide() {
     if (!mounted || _slides.length <= 1) return;
-    setState(() {
-      _currentIndex = (_currentIndex + 1) % _slides.length;
-    });
+    unawaited(_requestSlide((_currentIndex + 1) % _slides.length));
   }
 
   void _previousSlide() {
     if (!mounted || _slides.length <= 1) return;
-    setState(() {
-      _currentIndex = (_currentIndex - 1 + _slides.length) % _slides.length;
-    });
-    _restartTimer();
+    unawaited(
+      _requestSlide(
+        (_currentIndex - 1 + _slides.length) % _slides.length,
+      ),
+    );
   }
 
   void _goToSlide(int index) {
     if (!mounted || index < 0 || index >= _slides.length) return;
+    unawaited(_requestSlide(index));
+  }
+
+  Future<void> _requestSlide(int index) async {
+    if (!mounted || index < 0 || index >= _slides.length) return;
+    if (index == _currentIndex) {
+      _restartTimer();
+      return;
+    }
+
+    _timer?.cancel();
+    final intent = ++_slideIntentGeneration;
+    setState(() {
+      _pendingSlideIndex = index;
+    });
+
+    try {
+      await _ensureSlideReady(index);
+    } catch (_) {
+      // The slide renderer retains its normal media/deferred-library error UI.
+      // A speculative warm-up failure must not make navigation impossible.
+    }
+
+    if (!mounted || intent != _slideIntentGeneration) return;
     setState(() {
       _currentIndex = index;
+      _pendingSlideIndex = null;
     });
+    _scheduleMediaPreload();
     _restartTimer();
   }
 

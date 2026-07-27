@@ -15,6 +15,9 @@ on:
       - "firebase.json"
       - "scripts/generate_product_seo_snapshots.dart"
       - "scripts/generated_product_redirects.json"
+      - "scripts/check_storefront_bundle_budget.sh"
+      - "scripts/sync_seo_index.sh"
+      - "scripts/write_storefront_release_evidence.sh"
       - ".firebaserc"
       - ".github/workflows/firebase-hosting-store.yml"
   workflow_dispatch:
@@ -49,17 +52,11 @@ jobs:
 
       - name: Build storefront release
         run: |
+          rm -rf -- build/web_store
           flutter build web --release --pwa-strategy=none \
             --dart-define=VINABIKE_BUILD_TAG=${{ github.sha }} \
             -t lib/main_store.dart -o build/web_store
-          jq -n \
-            --arg commit "${{ github.sha }}" \
-            --arg run "${{ github.run_id }}" \
-            --arg built_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{commit: $commit, run: $run, built_at: $built_at, target: "store"}' \
-            > build/web_store/release.json
-          sha256sum build/web_store/main.dart.js build/web_store/release.json \
-            > build/web_store/release.sha256
+          bash scripts/check_storefront_bundle_budget.sh build/web_store
 
       - name: Generate SEO snapshots, sitemap, and product redirects
         env:
@@ -71,6 +68,15 @@ jobs:
             --tenant-id 5443b130-cc28-45af-a420-cd500b288890 \
             --store-url https://vinabike.cl \
             --product-scope published
+
+      - name: Seal storefront release evidence
+        run: |
+          bash scripts/write_storefront_release_evidence.sh \
+            build/web_store \
+            "${{ github.sha }}" \
+            "${{ github.run_id }}" \
+            github-actions \
+            false
 
       - name: Verify generated crawler assets and redirects
         run: |

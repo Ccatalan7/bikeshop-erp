@@ -110,6 +110,58 @@ SHIPPING_URL=$(get_setting "seo_shipping_policy_url" "/politica-de-envios")
 PRIVACY_URL=$(get_setting "seo_privacy_policy_url" "/politica-de-privacidad")
 GA_ID=$(get_setting "seo_ga_id" "G-FR5Q37BW43")
 
+if [[ ! "$GA_ID" =~ ^G-[A-Z0-9]+$ ]]; then
+  echo "Invalid GA4 measurement ID in website settings: $GA_ID" >&2
+  exit 65
+fi
+GA_ID_JSON=$(jq -n --arg value "$GA_ID" '$value')
+
+require_https_url() {
+  local name="$1"
+  local value="$2"
+  local allow_empty="${3:-false}"
+
+  if [[ -z "$value" && "$allow_empty" == true ]]; then
+    return 0
+  fi
+  if [[ ! "$value" =~ ^https://[^[:space:]]+$ ]]; then
+    echo "$name must be an HTTPS URL, got: $value" >&2
+    exit 65
+  fi
+}
+
+require_public_link() {
+  local name="$1"
+  local value="$2"
+  if [[ "$value" =~ ^https://[^[:space:]]+$ ]]; then
+    return 0
+  fi
+  if [[ "$value" == /* && "$value" != //* && "$value" != *[$'\r\n']* ]]; then
+    return 0
+  fi
+  echo "$name must be an HTTPS URL or a root-relative path, got: $value" >&2
+  exit 65
+}
+
+html_escape() {
+  jq -nr --arg value "$1" '
+    $value
+    | gsub("&"; "&amp;")
+    | gsub("<"; "&lt;")
+    | gsub(">"; "&gt;")
+    | gsub("\""; "&quot;")
+    | gsub("\u0027"; "&#39;")
+  '
+}
+
+require_https_url "seo_canonical_url" "$CANONICAL_URL"
+require_https_url "seo_og_image" "$OG_IMAGE" true
+require_https_url "instagram" "$INSTAGRAM" true
+require_public_link "seo_refund_policy_url" "$REFUND_URL"
+require_public_link "seo_terms_url" "$TERMS_URL"
+require_public_link "seo_shipping_policy_url" "$SHIPPING_URL"
+require_public_link "seo_privacy_policy_url" "$PRIVACY_URL"
+
 # Theme fonts are bundled as Flutter assets so browser CSS caching does not
 # diverge from Flutter's own font resolution.
 GOOGLE_FONTS_LINKS=""
@@ -212,10 +264,88 @@ ADDRESS_STREET=$(normalize_street_address "$ADDRESS_STREET_RAW" "$ADDRESS_CITY" 
 
 # Full address (safe from duplicates)
 FULL_ADDRESS=$(build_full_address "$ADDRESS_STREET" "$ADDRESS_CITY" "$ADDRESS_REGION" "$ADDRESS_POSTAL" "$ADDRESS_COUNTRY")
-SAME_AS_JSON=""
-if [[ -n "$INSTAGRAM" ]]; then
-  SAME_AS_JSON=$(printf ',\n    "sameAs": ["%s"]' "$INSTAGRAM")
+if [[ "$REFUND_URL" =~ ^https:// ]]; then
+  RETURN_POLICY_URL="$REFUND_URL"
+else
+  RETURN_POLICY_URL="${CANONICAL_URL%/}$REFUND_URL"
 fi
+
+BUSINESS_NAME_HTML=$(html_escape "$BUSINESS_NAME")
+PHONE_HTML=$(html_escape "$PHONE")
+EMAIL_HTML=$(html_escape "$EMAIL")
+ADDRESS_CITY_HTML=$(html_escape "$ADDRESS_CITY")
+FULL_ADDRESS_HTML=$(html_escape "$FULL_ADDRESS")
+META_TITLE_HTML=$(html_escape "$META_TITLE")
+META_DESCRIPTION_HTML=$(html_escape "$META_DESCRIPTION")
+CANONICAL_URL_HTML=$(html_escape "$CANONICAL_URL")
+OG_IMAGE_HTML=$(html_escape "$OG_IMAGE")
+REFUND_URL_HTML=$(html_escape "$REFUND_URL")
+TERMS_URL_HTML=$(html_escape "$TERMS_URL")
+SHIPPING_URL_HTML=$(html_escape "$SHIPPING_URL")
+PRIVACY_URL_HTML=$(html_escape "$PRIVACY_URL")
+
+OG_IMAGE_OPEN_GRAPH_HTML=""
+OG_IMAGE_TWITTER_HTML=""
+if [[ -n "$OG_IMAGE_HTML" ]]; then
+  OG_IMAGE_OPEN_GRAPH_HTML="<meta property=\"og:image\" content=\"$OG_IMAGE_HTML\">"
+  OG_IMAGE_TWITTER_HTML="<meta name=\"twitter:image\" content=\"$OG_IMAGE_HTML\">"
+fi
+
+JSON_LD=$(jq -cn \
+  --arg name "$BUSINESS_NAME" \
+  --arg legal_name "$LEGAL_NAME" \
+  --arg tax_id "$TAX_ID" \
+  --arg phone "$PHONE" \
+  --arg email "$EMAIL" \
+  --arg url "$CANONICAL_URL" \
+  --arg street "$ADDRESS_STREET" \
+  --arg locality "$ADDRESS_CITY" \
+  --arg region "$ADDRESS_REGION" \
+  --arg postal "$ADDRESS_POSTAL" \
+  --arg country "$ADDRESS_COUNTRY" \
+  --arg return_url "$RETURN_POLICY_URL" \
+  --arg instagram "$INSTAGRAM" \
+  '{
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    name: $name,
+    legalName: $legal_name,
+    taxID: $tax_id,
+    telephone: $phone,
+    email: $email,
+    url: $url,
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: $street,
+      addressLocality: $locality,
+      addressRegion: $region,
+      postalCode: $postal,
+      addressCountry: $country
+    },
+    areaServed: {"@type": "Country", name: "Chile"},
+    contactPoint: {
+      "@type": "ContactPoint",
+      contactType: "customer support",
+      telephone: $phone,
+      email: $email,
+      areaServed: "CL",
+      availableLanguage: ["es"]
+    },
+    hasMerchantReturnPolicy: {
+      "@type": "MerchantReturnPolicy",
+      applicableCountry: "CL",
+      returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+      merchantReturnDays: 10,
+      returnMethod: [
+        "https://schema.org/ReturnByMail",
+        "https://schema.org/ReturnInStore"
+      ],
+      returnFees: "https://schema.org/ReturnFeesCustomerResponsibility",
+      url: $return_url
+    }
+  } + if $instagram == "" then {} else {sameAs: [$instagram]} end')
+JSON_LD_SAFE=$(printf '%s' "$JSON_LD" |
+  perl -pe 's/&/\\u0026/g; s/</\\u003c/g; s/>/\\u003e/g')
 
 echo "✅ Fetched settings:"
 echo "   Business: $BUSINESS_NAME"
@@ -235,27 +365,27 @@ cat > "$INDEX_FILE" << HEREDOC
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   
   <!-- Primary Meta Tags -->
-  <title>$META_TITLE</title>
-  <meta name="title" content="$META_TITLE">
-  <meta name="description" content="$META_DESCRIPTION">
+  <title>$META_TITLE_HTML</title>
+  <meta name="title" content="$META_TITLE_HTML">
+  <meta name="description" content="$META_DESCRIPTION_HTML">
   
   <!-- Canonical -->
-  <link rel="canonical" href="$CANONICAL_URL">
+  <link rel="canonical" href="$CANONICAL_URL_HTML">
   
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
-  <meta property="og:url" content="$CANONICAL_URL">
-  <meta property="og:title" content="$META_TITLE">
-  <meta property="og:description" content="$META_DESCRIPTION">
-  <meta property="og:site_name" content="$BUSINESS_NAME">
-  ${OG_IMAGE:+<meta property="og:image" content="$OG_IMAGE">}
+  <meta property="og:url" content="$CANONICAL_URL_HTML">
+  <meta property="og:title" content="$META_TITLE_HTML">
+  <meta property="og:description" content="$META_DESCRIPTION_HTML">
+  <meta property="og:site_name" content="$BUSINESS_NAME_HTML">
+  $OG_IMAGE_OPEN_GRAPH_HTML
   
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:url" content="$CANONICAL_URL">
-  <meta name="twitter:title" content="$META_TITLE">
-  <meta name="twitter:description" content="$META_DESCRIPTION">
-  ${OG_IMAGE:+<meta name="twitter:image" content="$OG_IMAGE">}
+  <meta name="twitter:url" content="$CANONICAL_URL_HTML">
+  <meta name="twitter:title" content="$META_TITLE_HTML">
+  <meta name="twitter:description" content="$META_DESCRIPTION_HTML">
+  $OG_IMAGE_TWITTER_HTML
 
   ${GOOGLE_FONTS_LINKS}
 
@@ -286,13 +416,37 @@ cat > "$INDEX_FILE" << HEREDOC
     })();
   </script>
 
-  <!-- Google Analytics GA4 -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=$GA_ID"></script>
+  <!-- Google Analytics GA4: queue immediately, fetch after critical loading. -->
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag() { dataLayer.push(arguments); }
     gtag('js', new Date());
-    gtag('config', '$GA_ID');
+    gtag('config', $GA_ID_JSON);
+
+    (function () {
+      var loaded = false;
+      function loadGoogleAnalytics() {
+        if (loaded) return;
+        loaded = true;
+        var script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://www.googletagmanager.com/gtag/js?id=' +
+          encodeURIComponent($GA_ID_JSON);
+        document.head.appendChild(script);
+      }
+      function scheduleGoogleAnalytics() {
+        if ('requestIdleCallback' in window) {
+          window.requestIdleCallback(loadGoogleAnalytics, { timeout: 2500 });
+        } else {
+          window.setTimeout(loadGoogleAnalytics, 0);
+        }
+      }
+      if (document.readyState === 'complete') {
+        scheduleGoogleAnalytics();
+      } else {
+        window.addEventListener('load', scheduleGoogleAnalytics, { once: true });
+      }
+    })();
   </script>
 
   <!-- Meta Pixel is initialized at runtime from the tenant website setting. -->
@@ -351,7 +505,7 @@ cat > "$INDEX_FILE" << HEREDOC
 
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="$BUSINESS_NAME">
+  <meta name="apple-mobile-web-app-title" content="$BUSINESS_NAME_HTML">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
   <link rel="icon" type="image/png" href="favicon.png" />
   <script>
@@ -379,8 +533,12 @@ cat > "$INDEX_FILE" << HEREDOC
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="preconnect" href="https://vinabike-edge-cache.vinabike.workers.dev" crossorigin>
   <link rel="dns-prefetch" href="//vinabike-edge-cache.vinabike.workers.dev">
-  <link rel="preload" href="flutter_bootstrap.js" as="script">
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="//www.gstatic.com">
+  <link rel="preconnect" href="https://xzdvtzdqjeyqxnkqprtf.supabase.co" crossorigin>
+  <link rel="dns-prefetch" href="//xzdvtzdqjeyqxnkqprtf.supabase.co">
   <link rel="preload" href="main.dart.js" as="script">
+  <link rel="preload" href="loading-logo.png" as="image" type="image/png" fetchpriority="high">
   
   <style>
     html,
@@ -440,42 +598,7 @@ cat > "$INDEX_FILE" << HEREDOC
   
   <!-- JSON-LD Structured Data for LocalBusiness -->
   <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "name": "$BUSINESS_NAME",
-    "legalName": "$LEGAL_NAME",
-    "taxID": "$TAX_ID",
-    "telephone": "$PHONE",
-    "email": "$EMAIL",
-    "url": "$CANONICAL_URL",
-    "address": {
-      "@type": "PostalAddress",
-      "streetAddress": "$ADDRESS_STREET",
-      "addressLocality": "$ADDRESS_CITY",
-      "addressRegion": "$ADDRESS_REGION",
-      "postalCode": "$ADDRESS_POSTAL",
-      "addressCountry": "$ADDRESS_COUNTRY"
-    },
-    "areaServed": {"@type": "Country", "name": "Chile"},
-    "contactPoint": {
-      "@type": "ContactPoint",
-      "contactType": "customer support",
-      "telephone": "$PHONE",
-      "email": "$EMAIL",
-      "areaServed": "CL",
-      "availableLanguage": ["es"]
-    },
-    "hasMerchantReturnPolicy": {
-      "@type": "MerchantReturnPolicy",
-      "applicableCountry": "CL",
-      "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
-      "merchantReturnDays": 10,
-      "returnMethod": ["https://schema.org/ReturnByMail", "https://schema.org/ReturnInStore"],
-      "returnFees": "https://schema.org/ReturnFeesCustomerResponsibility",
-      "url": "$CANONICAL_URL$REFUND_URL"
-    }$SAME_AS_JSON
-  }
+  $JSON_LD_SAFE
   </script>
 
   <!-- Pre-fetch public store data ASAP (overlaps Flutter engine startup) -->
@@ -525,8 +648,11 @@ cat > "$INDEX_FILE" << HEREDOC
   <div id="app-shell">
     <img 
       id="loading-logo"
-      src="vinabike-logo.png" 
-      alt="$BUSINESS_NAME"
+      src="loading-logo.png"
+      alt="$BUSINESS_NAME_HTML"
+      width="200"
+      height="200"
+      fetchpriority="high"
     />
     
     <noscript id="storefront-nojs-fallback">
@@ -563,8 +689,8 @@ cat > "$INDEX_FILE" << HEREDOC
         }
       </style>
       <main class="storefront-nojs-fallback">
-        <h1>$BUSINESS_NAME - Tienda de Bicicletas en $ADDRESS_CITY</h1>
-        <p>$META_DESCRIPTION</p>
+        <h1>$BUSINESS_NAME_HTML - Tienda de Bicicletas en $ADDRESS_CITY_HTML</h1>
+        <p>$META_DESCRIPTION_HTML</p>
 
         <nav aria-label="Navegación principal">
           <a href="/productos">Productos</a>
@@ -573,16 +699,16 @@ cat > "$INDEX_FILE" << HEREDOC
         </nav>
 
         <address>
-          <p>Dirección: $FULL_ADDRESS</p>
-          <p>Teléfono: $PHONE</p>
-          <p>Email: $EMAIL</p>
+          <p>Dirección: $FULL_ADDRESS_HTML</p>
+          <p>Teléfono: $PHONE_HTML</p>
+          <p>Email: $EMAIL_HTML</p>
         </address>
 
         <footer aria-label="Información legal">
-          <a href="$REFUND_URL">Política de Reembolso</a>
-          <a href="$TERMS_URL">Términos y Condiciones</a>
-          <a href="$SHIPPING_URL">Política de Envíos</a>
-          <a href="$PRIVACY_URL">Política de Privacidad</a>
+          <a href="$REFUND_URL_HTML">Política de Reembolso</a>
+          <a href="$TERMS_URL_HTML">Términos y Condiciones</a>
+          <a href="$SHIPPING_URL_HTML">Política de Envíos</a>
+          <a href="$PRIVACY_URL_HTML">Política de Privacidad</a>
         </footer>
       </main>
     </noscript>
@@ -600,11 +726,13 @@ cat > "$INDEX_FILE" << HEREDOC
       }
     }, { passive: false });
   </script>
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    {{flutter_bootstrap_js}}
+  </script>
   <!-- 
-    NOTE: Using default flutter_bootstrap.js loading.
+    NOTE: Flutter's generated default bootstrap is inlined above.
     Custom renderer selection was removed because:
-    1. It caused double initialization (flutter_bootstrap.js + custom load call)
+    1. A second custom load call caused double initialization.
     2. CanvasKit has font loading bugs (BindingError with Noto fonts)
     The app now uses Flutter's default renderer selection.
   -->

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -22,6 +22,12 @@ import '../../shared/utils/chilean_utils.dart';
 import '../../shared/utils/auth_input_validation.dart';
 import '../../shared/models/customer_address.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
+
+void _checkoutDebugLog(String message) {
+  if (kDebugMode || const bool.fromEnvironment('STORE_PERF_LOGS')) {
+    debugPrint(message);
+  }
+}
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -581,19 +587,19 @@ class _CheckoutPageState extends State<CheckoutPage>
   }
 
   Future<void> _placeOrder() async {
-    debugPrint('🔵 [Checkout] _placeOrder() CALLED!');
+    _checkoutDebugLog('🔵 [Checkout] _placeOrder() CALLED!');
 
     if (!_formKey.currentState!.validate()) {
-      debugPrint('🔵 [Checkout] Form validation FAILED');
+      _checkoutDebugLog('🔵 [Checkout] Form validation FAILED');
       return;
     }
-    debugPrint('🔵 [Checkout] Form validation PASSED');
+    _checkoutDebugLog('🔵 [Checkout] Form validation PASSED');
 
     final cart = Provider.of<CartProvider>(context, listen: false);
-    debugPrint('🔵 [Checkout] Cart items: ${cart.items.length}');
+    _checkoutDebugLog('🔵 [Checkout] Cart items: ${cart.items.length}');
 
     if (cart.items.isEmpty) {
-      debugPrint('🔵 [Checkout] Cart is EMPTY, showing snackbar');
+      _checkoutDebugLog('🔵 [Checkout] Cart is EMPTY, showing snackbar');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('El carrito está vacío')),
       );
@@ -641,45 +647,46 @@ class _CheckoutPageState extends State<CheckoutPage>
       return;
     }
 
-    debugPrint('🔵 [Checkout] Setting _isProcessing = true');
+    _checkoutDebugLog('🔵 [Checkout] Setting _isProcessing = true');
     setState(() => _isProcessing = true);
 
     try {
-      debugPrint('🔵 [Checkout] Getting services...');
+      _checkoutDebugLog('🔵 [Checkout] Getting services...');
       final websiteService =
           Provider.of<WebsiteService>(context, listen: false);
-      debugPrint('🔵 [Checkout] Got WebsiteService');
+      _checkoutDebugLog('🔵 [Checkout] Got WebsiteService');
 
       final mercadopagoService =
           Provider.of<MercadoPagoService>(context, listen: false);
-      debugPrint('🔵 [Checkout] Got MercadoPagoService');
+      _checkoutDebugLog('🔵 [Checkout] Got MercadoPagoService');
 
       final accountService = _accountService ??
           Provider.of<CustomerAccountService>(context, listen: false);
-      debugPrint('🔵 [Checkout] Got CustomerAccountService');
+      _checkoutDebugLog('🔵 [Checkout] Got CustomerAccountService');
 
       final profile = accountService.customerProfile;
       final isPickup = _deliveryType == 'pickup';
       final resolvedAddress = isPickup ? null : _shippingAddressForOrder();
-      debugPrint(
+      _checkoutDebugLog(
           '🔵 [Checkout] Profile: ${profile != null ? "exists" : "null"}, delivery type: $_deliveryType');
 
       // ⚠️ CRITICAL: Get tenant_id from detected tenant (subdomain)
-      debugPrint('🔵 [Checkout] Getting tenant provider...');
+      _checkoutDebugLog('🔵 [Checkout] Getting tenant provider...');
       final tenantProvider = context.read<PublicStoreTenantProvider>();
-      debugPrint(
+      _checkoutDebugLog(
           '🔵 [Checkout] Got tenant provider, tenantId: ${tenantProvider.tenantId}');
       final tenantId = tenantProvider.tenantId;
-      debugPrint('🔵 [Checkout] tenantId assigned: $tenantId');
+      _checkoutDebugLog('🔵 [Checkout] tenantId assigned: $tenantId');
 
       if (tenantId == null) {
-        debugPrint('🔵 [Checkout] ❌ tenantId is NULL! Throwing exception...');
+        _checkoutDebugLog(
+            '🔵 [Checkout] ❌ tenantId is NULL! Throwing exception...');
         throw Exception(
             'No se pudo detectar la tienda. Por favor recarga la página.');
       }
-      debugPrint('🔵 [Checkout] ✅ tenantId is valid, continuing...');
+      _checkoutDebugLog('🔵 [Checkout] ✅ tenantId is valid, continuing...');
 
-      debugPrint('🔵 [Checkout] Creating orderData map...');
+      _checkoutDebugLog('🔵 [Checkout] Creating orderData map...');
       // Create order data (database will generate id and orderNumber)
       final Map<String, dynamic> orderData = {
         'tenant_id': tenantId, // ⚠️ REQUIRED for multi-tenant isolation
@@ -734,15 +741,15 @@ class _CheckoutPageState extends State<CheckoutPage>
             ? _notesController.text.trim()
             : null,
       };
-      debugPrint(
+      _checkoutDebugLog(
           '🔵 [Checkout] orderData created: ${orderData.keys.join(', ')}');
 
       if (profile != null && profile['id'] != null) {
         orderData['customer_id'] = profile['id'];
-        debugPrint('🔵 [Checkout] Added customer_id to orderData');
+        _checkoutDebugLog('🔵 [Checkout] Added customer_id to orderData');
       }
 
-      debugPrint('🔵 [Checkout] Creating orderItems...');
+      _checkoutDebugLog('🔵 [Checkout] Creating orderItems...');
       final orderItems = cart.items.map((item) {
         final commerce = item.commerce;
         return {
@@ -755,10 +762,11 @@ class _CheckoutPageState extends State<CheckoutPage>
           'subtotal': commerce.price * item.quantity,
         };
       }).toList();
-      debugPrint(
+      _checkoutDebugLog(
           '🔵 [Checkout] orderItems created: ${orderItems.length} items');
 
-      debugPrint('🔵 [Checkout] Calling websiteService.createOrder()...');
+      _checkoutDebugLog(
+          '🔵 [Checkout] Calling websiteService.createOrder()...');
       final checkoutAccess =
           await websiteService.createOrder(orderData, orderItems);
       final orderId = checkoutAccess.orderId;
@@ -769,7 +777,7 @@ class _CheckoutPageState extends State<CheckoutPage>
         orderId: orderId,
         accessToken: checkoutAccess.accessToken,
       );
-      debugPrint('🔵 [Checkout] ✅ Secure order created');
+      _checkoutDebugLog('🔵 [Checkout] ✅ Secure order created');
 
       if (!mounted) return;
 
@@ -798,11 +806,11 @@ class _CheckoutPageState extends State<CheckoutPage>
       if (_paymentMethod == 'mercadopago') {
         // Redirect to MercadoPago checkout
         try {
-          debugPrint(
+          _checkoutDebugLog(
               '🔵 [Checkout] Starting MercadoPago flow for order: $orderId');
 
           // Initialize MercadoPago with tenant context
-          debugPrint(
+          _checkoutDebugLog(
               '🔵 [Checkout] Initializing MercadoPago with tenant: $tenantId');
           await mercadopagoService.initialize(tenantId: tenantId);
 
@@ -811,18 +819,19 @@ class _CheckoutPageState extends State<CheckoutPage>
             throw Exception(
                 'MercadoPago no está configurado para esta tienda.');
           }
-          debugPrint('✅ [Checkout] MercadoPago is configured');
+          _checkoutDebugLog('✅ [Checkout] MercadoPago is configured');
 
-          debugPrint('🔵 [Checkout] Creating MercadoPago preference...');
+          _checkoutDebugLog('🔵 [Checkout] Creating MercadoPago preference...');
           final preference = await mercadopagoService.createPreference(
             orderId: orderId,
             orderAccessToken: checkoutAccess.accessToken,
           );
-          debugPrint('✅ [Checkout] Preference created: ${preference.keys}');
+          _checkoutDebugLog(
+              '✅ [Checkout] Preference created: ${preference.keys}');
 
           // Open MercadoPago checkout
           final initPoint = preference['init_point'] as String?;
-          debugPrint(
+          _checkoutDebugLog(
             '🔵 [Checkout] MercadoPago checkout URL received: '
             '${initPoint?.isNotEmpty == true}',
           );
@@ -832,7 +841,7 @@ class _CheckoutPageState extends State<CheckoutPage>
             throw Exception('MercadoPago no devolvió URL de pago');
           }
 
-          debugPrint('🚀 [Checkout] Redirecting to MercadoPago');
+          _checkoutDebugLog('🚀 [Checkout] Redirecting to MercadoPago');
           if (kIsWeb) {
             // For web, use window.open to redirect to MercadoPago
             web_utils.WebUtils.openUrl(initPoint);
@@ -901,7 +910,7 @@ class _CheckoutPageState extends State<CheckoutPage>
     _accountService ??=
         Provider.of<CustomerAccountService>(context, listen: false);
 
-    debugPrint(
+    _checkoutDebugLog(
         '🛒 [CheckoutPage.build] cart.isEmpty: ${cart.isEmpty}, items: ${cart.items.length}');
 
     if (cart.isNotEmpty) {
@@ -914,7 +923,8 @@ class _CheckoutPageState extends State<CheckoutPage>
         ? 'edit'
         : (editProvider.isPreviewMode ? 'preview' : 'normal');
 
-    debugPrint('🛒 [CheckoutPage.build] Cart has items, showing checkout form');
+    _checkoutDebugLog(
+        '🛒 [CheckoutPage.build] Building ${cart.isEmpty ? "empty-cart" : "checkout"} state');
     return MediaQueryLayoutBuilder(
       key: ValueKey('checkout_layout_$modeKey'),
       builder: (context, constraints) {
