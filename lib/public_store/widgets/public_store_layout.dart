@@ -83,6 +83,12 @@ class PublicStoreLayout extends StatefulWidget {
   final bool enablePageViewScrolling;
   final String? routePath;
 
+  /// Whether [child] is the persistent Navigator owned by a ShellRoute.
+  ///
+  /// A route-keyed AnimatedSwitcher must not retain an outgoing copy of the
+  /// same Navigator while mounting its incoming copy.
+  final bool containsPersistentRouteNavigator;
+
   /// When true, the editor panel is rendered externally (by PersistentEditorShell)
   /// so this layout should not render it.
   final bool useExternalEditorPanel;
@@ -94,6 +100,7 @@ class PublicStoreLayout extends StatefulWidget {
     this.enablePageViewScrolling = true,
     this.useExternalEditorPanel = true,
     this.routePath,
+    this.containsPersistentRouteNavigator = false,
   });
 
   /// Centralized navigation entry-point for public store UI elements.
@@ -626,9 +633,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           // The ERP child is one persistent StatefulNavigationShell. An
           // AnimatedSwitcher would retain the outgoing URI subtree while
           // mounting that same shell for the incoming URI, duplicating every
-          // branch Navigator GlobalKey. Standalone storefront routes do not
-          // share that shell and may keep the visual transition.
+          // branch Navigator GlobalKey.
           _isErpMountedStore()) {
+        return expand ? SizedBox.expand(child: child) : child;
+      }
+
+      // The standalone ShellRoute now follows the same stable-shell contract.
+      if (widget.containsPersistentRouteNavigator) {
         return expand ? SizedBox.expand(child: child) : child;
       }
 
@@ -5922,29 +5933,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         targetPath == '/tienda/';
     final shouldReplace = _shouldReplaceForPublicStoreNav(targetPath);
 
-    // Web-only: if the user explicitly asked for a "home refresh" (logo/Inicio)
-    // behave like a traditional website and force a full page reload.
-    // This avoids cases where soft-refresh signals are imperceptible due to
-    // caching or when the route doesn't change (already on home).
-    if (kIsWeb && forceHomeRefresh && isHomeTarget && !isEditMode) {
-      try {
-        final currentPath = Uri.parse(web.window.location.href).path;
-        final desiredPath = targetPath.isEmpty ? '/' : targetPath;
-
-        if (currentPath == desiredPath) {
-          web.window.location.reload();
-        } else {
-          // Navigate + reload in one step.
-          web.window.location.assign(target);
-        }
-        return;
-      } catch (e) {
-        // Fallback for non-web platforms - just navigate normally
-      }
-    }
-
     // If we're already on the target route, still honor explicit "home"
-    // navigations (logo / Inicio) by scrolling to top.
+    // navigations (logo / Inicio) by scrolling to top and revalidating through
+    // the normal data owners. A browser reload would discard the persistent
+    // shell and make returning home feel like a cold launch.
     if (current == target) {
       if (shouldReplace) {
         context.read<PublicStoreScrollState>().requestScrollToTop(target);
@@ -7358,6 +7350,8 @@ class _PublicStoreScrollViewState extends State<_PublicStoreScrollView> {
   final ScrollController _scrollController = ScrollController();
   String? _routeKey;
   bool _restoredForRoute = false;
+  bool _isRestoringRouteScroll = false;
+  int _routeRestoreGeneration = 0;
   PublicStoreScrollState? _scrollState;
 
   @override
@@ -7382,6 +7376,7 @@ class _PublicStoreScrollViewState extends State<_PublicStoreScrollView> {
     if (_routeKey != nextKey) {
       _routeKey = nextKey;
       _restoredForRoute = false;
+      _routeRestoreGeneration++;
     }
 
     if (_restoredForRoute) return;
@@ -7397,12 +7392,7 @@ class _PublicStoreScrollViewState extends State<_PublicStoreScrollView> {
 
     if (key != null && shouldScrollToTop) {
       scrollState.clear(key);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (!_scrollController.hasClients) return;
-        if (_scrollController.offset <= 0) return;
-        _scrollController.jumpTo(0);
-      });
+      _restoreScrollForRoute(targetOffset: 0);
     } else {
       _restoreScrollForRoute();
     }
@@ -7434,24 +7424,33 @@ class _PublicStoreScrollViewState extends State<_PublicStoreScrollView> {
     });
   }
 
-  void _restoreScrollForRoute() {
+  void _restoreScrollForRoute({double? targetOffset}) {
     final key = _routeKey;
     if (key == null) return;
 
-    final offset = context.read<PublicStoreScrollState>().getOffset(key);
-    if (offset <= 0) return;
+    final offset =
+        targetOffset ?? context.read<PublicStoreScrollState>().getOffset(key);
+    final restoreGeneration = _routeRestoreGeneration;
+    _isRestoringRouteScroll = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (!_scrollController.hasClients) return;
+      if (restoreGeneration != _routeRestoreGeneration) return;
+      if (!_scrollController.hasClients) {
+        _isRestoringRouteScroll = false;
+        return;
+      }
       final max = _scrollController.position.maxScrollExtent;
       final clamped = offset.clamp(0.0, max);
-      if ((_scrollController.offset - clamped).abs() < 1.0) return;
-      _scrollController.jumpTo(clamped);
+      if ((_scrollController.offset - clamped).abs() >= 1.0) {
+        _scrollController.jumpTo(clamped);
+      }
+      _isRestoringRouteScroll = false;
     });
   }
 
   void _onScroll() {
+    if (_isRestoringRouteScroll) return;
     final key = _routeKey;
     if (key == null) return;
     context
@@ -7556,11 +7555,13 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
   static const double _fallbackReservedHeaderHeight = 66;
 
   final ScrollController _scrollController = ScrollController();
+  final ValueNotifier<double> _headerScrollOffset = ValueNotifier<double>(0);
   final GlobalKey _headerKey = GlobalKey();
-  double _scrollOffset = 0;
   double _reservedHeaderHeight = _fallbackReservedHeaderHeight;
   String? _routeKey;
   bool _restoredForRoute = false;
+  bool _isRestoringRouteScroll = false;
+  int _routeRestoreGeneration = 0;
   PublicStoreScrollState? _scrollState;
 
   @override
@@ -7590,6 +7591,7 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
     if (_routeKey != nextKey) {
       _routeKey = nextKey;
       _restoredForRoute = false;
+      _routeRestoreGeneration++;
     }
 
     if (!_restoredForRoute) {
@@ -7605,12 +7607,7 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
       if (key != null && shouldScrollToTop) {
         // Explicit home navigation: land at top, don't restore.
         scrollState.clear(key);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          if (!_scrollController.hasClients) return;
-          if (_scrollController.offset <= 0) return;
-          _scrollController.jumpTo(0);
-        });
+        _restoreScrollForRoute(targetOffset: 0);
       } else {
         _restoreScrollForRoute();
       }
@@ -7647,37 +7644,49 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _headerScrollOffset.dispose();
     _scrollState?.scrollToTopSignal.removeListener(_onScrollToTopSignal);
     super.dispose();
   }
 
   void _onScroll() {
-    setState(() {
-      _scrollOffset = _scrollController.offset;
-    });
+    final offset = _scrollController.offset;
+    // Inner routes use an always-solid header, so they need no scroll-driven
+    // rebuild at all. On the overlay homepage, notify only the header subtree.
+    if (widget.allowOverlayAtTop) {
+      _headerScrollOffset.value = offset;
+    }
 
-    final key = _routeKey;
-    if (key == null) return;
-    context
-        .read<PublicStoreScrollState>()
-        .setOffset(key, _scrollController.offset);
+    if (!_isRestoringRouteScroll) {
+      final key = _routeKey;
+      if (key == null) return;
+      context.read<PublicStoreScrollState>().setOffset(key, offset);
+    }
   }
 
-  void _restoreScrollForRoute() {
+  void _restoreScrollForRoute({double? targetOffset}) {
     final key = _routeKey;
     if (key == null) return;
 
-    final targetOffset = context.read<PublicStoreScrollState>().getOffset(key);
-    if (targetOffset <= 0) return;
+    final offset =
+        targetOffset ?? context.read<PublicStoreScrollState>().getOffset(key);
+    final restoreGeneration = _routeRestoreGeneration;
+    _isRestoringRouteScroll = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (!_scrollController.hasClients) return;
+      if (restoreGeneration != _routeRestoreGeneration) return;
+      if (!_scrollController.hasClients) {
+        _isRestoringRouteScroll = false;
+        return;
+      }
 
       final max = _scrollController.position.maxScrollExtent;
-      final clamped = targetOffset.clamp(0.0, max);
-      if ((_scrollController.offset - clamped).abs() < 1.0) return;
-      _scrollController.jumpTo(clamped);
+      final clamped = offset.clamp(0.0, max);
+      if ((_scrollController.offset - clamped).abs() >= 1.0) {
+        _scrollController.jumpTo(clamped);
+      }
+      _isRestoringRouteScroll = false;
     });
   }
 
@@ -7715,22 +7724,7 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
   @override
   Widget build(BuildContext context) {
     _scheduleHeaderMeasurement();
-
-    // Calculate header opacity based on scroll (0 = transparent, 1 = solid)
-    // Transition happens over the first 100 pixels of scroll
-    final bool allowOverlayAtTop = widget.allowOverlayAtTop;
-    final double headerOpacity =
-        allowOverlayAtTop ? (_scrollOffset / 100).clamp(0.0, 1.0) : 1.0;
-    final bool isScrolled = allowOverlayAtTop && _scrollOffset > 50;
-
-    // When scrolled, switch to light mode (dark text on white bg)
-    final String effectiveColorMode =
-        allowOverlayAtTop && isScrolled ? 'light' : widget.headerColorMode;
-    final Color effectiveBgColor = allowOverlayAtTop
-        ? (isScrolled
-            ? widget.headerBgColor
-            : widget.headerBgColor.withValues(alpha: headerOpacity))
-        : widget.headerBgColor;
+    final allowOverlayAtTop = widget.allowOverlayAtTop;
 
     return Stack(
       // On Flutter Web (HTML renderer especially), clipping can create DOM
@@ -7763,33 +7757,53 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
           top: 0,
           left: 0,
           right: 0,
-          child: KeyedSubtree(
-            key: _headerKey,
-            child: widget.buildHeader(
-              context: context,
-              storeName: widget.storeName,
-              storeDescription: widget.storeDescription,
-              logoUrl: widget.logoUrl,
-              topBannerText: widget.topBannerText,
-              contactPhone: widget.contactPhone,
-              contactEmail: widget.contactEmail,
-              primaryColor: widget.primaryColor,
-              accentColor: widget.accentColor,
-              isEditMode: widget.isEditMode,
-              headerStyle: 'transparent',
-              headerColorMode: effectiveColorMode,
-              showTopBanner: allowOverlayAtTop
-                  ? widget.showTopBanner && !isScrolled
-                  : widget.showTopBanner,
-              headerShadow: allowOverlayAtTop
-                  ? widget.headerShadow && isScrolled
-                  : widget.headerShadow,
-              headerBgColor: effectiveBgColor,
-              menuSurfaceColor: widget.headerMenuSurfaceColor,
-              menuRailColor: widget.headerMenuRailColor,
-              navItems: widget.navItems,
-              isOverlay: allowOverlayAtTop && !isScrolled,
-            ),
+          child: ValueListenableBuilder<double>(
+            valueListenable: _headerScrollOffset,
+            builder: (context, scrollOffset, _) {
+              // Calculate header opacity based on scroll (0 = transparent,
+              // 1 = solid). Only this header subtree rebuilds while scrolling.
+              final headerOpacity = allowOverlayAtTop
+                  ? (scrollOffset / 100).clamp(0.0, 1.0)
+                  : 1.0;
+              final isScrolled = allowOverlayAtTop && scrollOffset > 50;
+              final effectiveColorMode = allowOverlayAtTop && isScrolled
+                  ? 'light'
+                  : widget.headerColorMode;
+              final effectiveBgColor = allowOverlayAtTop
+                  ? (isScrolled
+                      ? widget.headerBgColor
+                      : widget.headerBgColor.withValues(alpha: headerOpacity))
+                  : widget.headerBgColor;
+
+              return KeyedSubtree(
+                key: _headerKey,
+                child: widget.buildHeader(
+                  context: context,
+                  storeName: widget.storeName,
+                  storeDescription: widget.storeDescription,
+                  logoUrl: widget.logoUrl,
+                  topBannerText: widget.topBannerText,
+                  contactPhone: widget.contactPhone,
+                  contactEmail: widget.contactEmail,
+                  primaryColor: widget.primaryColor,
+                  accentColor: widget.accentColor,
+                  isEditMode: widget.isEditMode,
+                  headerStyle: 'transparent',
+                  headerColorMode: effectiveColorMode,
+                  showTopBanner: allowOverlayAtTop
+                      ? widget.showTopBanner && !isScrolled
+                      : widget.showTopBanner,
+                  headerShadow: allowOverlayAtTop
+                      ? widget.headerShadow && isScrolled
+                      : widget.headerShadow,
+                  headerBgColor: effectiveBgColor,
+                  menuSurfaceColor: widget.headerMenuSurfaceColor,
+                  menuRailColor: widget.headerMenuRailColor,
+                  navItems: widget.navItems,
+                  isOverlay: allowOverlayAtTop && !isScrolled,
+                ),
+              );
+            },
           ),
         ),
       ],

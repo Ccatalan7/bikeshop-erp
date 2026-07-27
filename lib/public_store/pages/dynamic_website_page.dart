@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -43,9 +44,13 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
 
   // Page info for editing
   String? _pageId;
+  String? _snapshotFingerprint;
   bool _editModeChecked =
       false; // Track if we've checked edit mode for this navigation
   int _loadGeneration = 0;
+  WebsiteService? _observedWebsiteService;
+  bool _cmsRevalidationPending = false;
+  bool _cmsRevalidationScheduled = false;
 
   // Theme settings
   Color _primaryColor = const Color(0xFF2E7D32);
@@ -79,6 +84,20 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final websiteService = context.read<WebsiteService>();
+    if (!identical(_observedWebsiteService, websiteService)) {
+      _observedWebsiteService?.cmsPageFreshnessSignal
+          .removeListener(_handleCmsPageFreshnessSignal);
+      _observedWebsiteService = websiteService;
+      websiteService.cmsPageFreshnessSignal
+          .addListener(_handleCmsPageFreshnessSignal);
+    }
+
+    if (_cmsRevalidationPending && TickerMode.of(context)) {
+      _cmsRevalidationPending = false;
+      _scheduleCmsPageOriginRevalidation();
+    }
+
     // Reset edit mode check flag on each navigation
     _editModeChecked = false;
   }
@@ -94,6 +113,36 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
         _updateEditProviderIfNeeded();
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _observedWebsiteService?.cmsPageFreshnessSignal
+        .removeListener(_handleCmsPageFreshnessSignal);
+    super.dispose();
+  }
+
+  void _handleCmsPageFreshnessSignal() {
+    if (!mounted) return;
+    if (!TickerMode.of(context)) {
+      _cmsRevalidationPending = true;
+      return;
+    }
+    _scheduleCmsPageOriginRevalidation();
+  }
+
+  void _scheduleCmsPageOriginRevalidation() {
+    if (_cmsRevalidationScheduled) return;
+    _cmsRevalidationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cmsRevalidationScheduled = false;
+      if (!mounted) return;
+      if (!TickerMode.of(context)) {
+        _cmsRevalidationPending = true;
+        return;
+      }
+      unawaited(_loadPageData());
+    });
   }
 
   String? _publicTenantId() {
@@ -114,6 +163,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
 
     if (snapshot != null && snapshot.page.isPublished) {
       _pageId = snapshot.page.id;
+      _snapshotFingerprint = snapshot.fingerprint;
       _blocks = snapshot.blocks
           .where((block) => block['is_visible'] == true)
           .toList();
@@ -124,6 +174,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
 
     if (clearOnMiss) {
       _pageId = null;
+      _snapshotFingerprint = null;
       _blocks = [];
       _isLoading = true;
       _error = null;
@@ -347,10 +398,11 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     debugPrint(
         '🔄 [DynamicPage] _loadPageData() called for slug: "$requestedSlug"');
 
-    if (mounted) {
+    final shouldShowLoading = _pageId == null;
+    if (mounted && (_isLoading != shouldShowLoading || _error != null)) {
       setState(() {
         // Keep a matching snapshot visible while the origin is revalidated.
-        _isLoading = _pageId == null;
+        _isLoading = shouldShowLoading;
         _error = null;
       });
     }
@@ -440,18 +492,24 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
       debugPrint(
           '📄 [DynamicWebsitePage] Found page: "${snapshot.page.title}" (id: ${snapshot.page.id}, slug: ${snapshot.page.slug})');
 
-      setState(() {
-        _loadThemeFromSettings(
-          websiteService,
-          editProvider: editProvider,
-        );
-        _pageId = snapshot.page.id;
-        _blocks = snapshot.blocks
-            .where((block) => block['is_visible'] == true)
-            .toList();
-        _isLoading = false;
-        _error = null;
-      });
+      final nextBlocks = snapshot.blocks
+          .where((block) => block['is_visible'] == true)
+          .toList(growable: false);
+      final didContentChange = _snapshotFingerprint != snapshot.fingerprint ||
+          _pageId != snapshot.page.id;
+      _loadThemeFromSettings(
+        websiteService,
+        editProvider: editProvider,
+      );
+      if (didContentChange || _isLoading || _error != null) {
+        setState(() {
+          _pageId = snapshot.page.id;
+          _snapshotFingerprint = snapshot.fingerprint;
+          _blocks = nextBlocks;
+          _isLoading = false;
+          _error = null;
+        });
+      }
 
       // If we arrived here while already inside the persistent editor shell
       // (edit/preview), keep its canonical page context synchronized.
@@ -643,9 +701,12 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
               tenantId: tenantId,
             );
 
-      return Padding(
-        padding: EdgeInsets.only(bottom: _sectionSpacing),
-        child: blockWidget,
+      return KeyedSubtree(
+        key: ValueKey<String>('website-block-$blockId'),
+        child: Padding(
+          padding: EdgeInsets.only(bottom: _sectionSpacing),
+          child: blockWidget,
+        ),
       );
     }).toList();
   }

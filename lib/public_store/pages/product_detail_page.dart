@@ -47,6 +47,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   // Static product snapshots use the same ID. A hydrated product replaces that
   // snapshot instead of leaving Google two conflicting Product entities.
   static const _structuredDataScriptId = 'seo-product-jsonld';
+  static const _originTrustWindow = Duration(seconds: 8);
 
   PublicStoreSurfaceTheme get _storeTheme =>
       PublicStoreSurfaceTheme.of(context);
@@ -72,6 +73,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   PublicInventoryService? _observedInventoryService;
   String? _seededRouteKey;
   String? _trackedProductIdForRoute;
+  bool _inventoryRevalidationPending = false;
 
   // DISABLED: AutomaticKeepAliveClientMixin causes element activation conflicts
   // during edit/preview mode switches. The performance cost of reloading is acceptable.
@@ -98,6 +100,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         ..addListener(_handlePublicInventoryInvalidated);
     }
     _seedProductFromSessionSnapshot();
+    if (_inventoryRevalidationPending && TickerMode.of(context)) {
+      _inventoryRevalidationPending = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _handlePublicInventoryInvalidated();
+      });
+    }
   }
 
   @override
@@ -135,6 +143,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
   void _handlePublicInventoryInvalidated() {
     if (!mounted) return;
+    if (!TickerMode.of(context)) {
+      _inventoryRevalidationPending = true;
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() {
@@ -158,35 +170,40 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     if (_seededRouteKey == routeKey) return;
     _seededRouteKey = routeKey;
 
-    final cached =
-        context.read<PublicInventoryService>().getCachedProductForIdentifier(
-              tenantId: tenantId,
-              productIdentifier: widget.productId,
-            );
-    if (cached == null) return;
+    final snapshot = context
+        .read<PublicInventoryService>()
+        .getCachedProductSnapshotForIdentifier(
+          tenantId: tenantId,
+          productIdentifier: widget.productId,
+        );
+    if (snapshot == null) return;
 
-    _product = cached;
+    _product = snapshot.value;
     _isLoading = false;
-    _isProductValidated = false;
+    _isProductValidated = snapshot.isOriginFresh(_originTrustWindow);
     _productValidationFailed = false;
+    _validatedTenantId = _isProductValidated ? tenantId : null;
   }
 
   Future<void> _loadProduct() async {
     final token = ++_loadToken;
     final hadVisibleProduct = _product != null;
+    final hadRecentValidation = _isProductValidated;
     setState(() {
       // A product card, related card, home block, search result or cart item
       // may already have given us a complete public projection. Keep it on
       // screen while origin data is revalidated instead of flashing a
       // full-page spinner between every storefront route.
       _isLoading = !hadVisibleProduct;
-      _isProductValidated = false;
+      _isProductValidated = hadRecentValidation;
       _productValidationFailed = false;
-      _isLoadingRelated = false;
-      _isLoadingTechnicalSpecs = false;
-      _technicalSpecsRequested = false;
-      _relatedProducts = [];
-      _technicalSpecs = const [];
+      if (!hadVisibleProduct) {
+        _isLoadingRelated = false;
+        _isLoadingTechnicalSpecs = false;
+        _technicalSpecsRequested = false;
+        _relatedProducts = [];
+        _technicalSpecs = const [];
+      }
     });
     // Product detail is the canonical SEO owner for every product route.
     // Install a restrictive state immediately so a slow, missing or rejected
@@ -250,7 +267,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
       if (!mounted || token != _loadToken) return;
 
-      _product = loadedProduct;
+      final previousProduct = _product;
+      _product = previousProduct != null &&
+              loadedProduct != null &&
+              _sameProductSnapshot(previousProduct, loadedProduct)
+          ? previousProduct
+          : loadedProduct;
       _categoryTrail = const [];
 
       if (_product != null) {
@@ -315,6 +337,33 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         });
       }
     }
+  }
+
+  bool _sameProductSnapshot(Product current, Product next) {
+    return current.id == next.id &&
+        current.updatedAt == next.updatedAt &&
+        current.name == next.name &&
+        current.sku == next.sku &&
+        current.price == next.price &&
+        current.stockQuantity == next.stockQuantity &&
+        current.imageUrl == next.imageUrl &&
+        current.imageUrlOptimized == next.imageUrlOptimized &&
+        _sameStrings(current.imageUrls, next.imageUrls) &&
+        current.websiteName == next.websiteName &&
+        current.websitePrice == next.websitePrice &&
+        current.websiteDescription == next.websiteDescription &&
+        current.description == next.description &&
+        current.brand == next.brand &&
+        current.categoryId == next.categoryId &&
+        current.categoryName == next.categoryName;
+  }
+
+  bool _sameStrings(List<String> current, List<String> next) {
+    if (current.length != next.length) return false;
+    for (var index = 0; index < current.length; index++) {
+      if (current[index] != next[index]) return false;
+    }
+    return true;
   }
 
   Future<void> _loadCategoryTrail({
@@ -456,17 +505,32 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       );
 
       if (!mounted || token != _loadToken) return;
-      setState(() {
-        _relatedProducts = page.products
-            .where((candidate) => candidate.id != product.id)
-            .take(4)
-            .toList(growable: false);
-        _isLoadingRelated = false;
-      });
+      final nextProducts = page.products
+          .where((candidate) => candidate.id != product.id)
+          .take(4)
+          .toList(growable: false);
+      if (_sameRelatedProducts(_relatedProducts, nextProducts)) {
+        if (_isLoadingRelated) {
+          setState(() => _isLoadingRelated = false);
+        }
+      } else {
+        setState(() {
+          _relatedProducts = nextProducts;
+          _isLoadingRelated = false;
+        });
+      }
     } catch (_) {
       if (!mounted || token != _loadToken) return;
       setState(() => _isLoadingRelated = false);
     }
+  }
+
+  bool _sameRelatedProducts(List<Product> current, List<Product> next) {
+    if (current.length != next.length) return false;
+    for (var index = 0; index < current.length; index++) {
+      if (!_sameProductSnapshot(current[index], next[index])) return false;
+    }
+    return true;
   }
 
   PublicProductVisibilityPolicy? _readVisibilityPolicy() {
@@ -968,93 +1032,101 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         final horizontalMargin = isMobile ? 16.0 : (isTablet ? 24.0 : 48.0);
         final verticalMargin = isMobile ? 18.0 : 30.0;
 
-        return SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+        // PublicStoreLayout owns the single vertical scroll viewport. A nested
+        // scroll view adds a second layout/paint pass and causes route-size
+        // jumps while product data is revalidated.
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: Alignment.topCenter,
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 1420),
+                margin: EdgeInsets.fromLTRB(
+                  horizontalMargin,
+                  verticalMargin,
+                  horizontalMargin,
+                  0,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!isMobile) _buildBreadcrumb(),
+                    if (!isMobile) const SizedBox(height: 30),
+                    if (isMobile) ...[
+                      _buildImageGallery(isMobile: true),
+                      const SizedBox(height: 24),
+                      _buildProductInfo(isMobile: true),
+                    ] else ...[
+                      LayoutBuilder(
+                        builder: (context, rowConstraints) {
+                          final rowWidth = rowConstraints.maxWidth.isFinite
+                              ? rowConstraints.maxWidth
+                              : constraints.maxWidth - (horizontalMargin * 2);
+                          final columnGap = isTablet ? 32.0 : 56.0;
+                          final galleryWidth = isTablet
+                              ? ((rowWidth - columnGap) * 0.52)
+                              : ((rowWidth - columnGap) * 0.54);
+                          final infoWidth = rowWidth - columnGap - galleryWidth;
+
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: galleryWidth,
+                                child: _buildImageGallery(),
+                              ),
+                              SizedBox(width: columnGap),
+                              SizedBox(
+                                width: infoWidth,
+                                child: _buildProductInfo(),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: isMobile ? 48 : 64),
+            _buildProductDetails(
+              isMobile: isMobile,
+              horizontalMargin: horizontalMargin,
+            ),
+            SizedBox(height: isMobile ? 56 : 80),
+            if (_isLoadingRelated || _relatedProducts.isNotEmpty)
               Align(
                 alignment: Alignment.topCenter,
                 child: Container(
-                  constraints: const BoxConstraints(maxWidth: 1420),
-                  margin: EdgeInsets.fromLTRB(
-                    horizontalMargin,
-                    verticalMargin,
-                    horizontalMargin,
-                    0,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (!isMobile) _buildBreadcrumb(),
-                      if (!isMobile) const SizedBox(height: 30),
-                      if (isMobile) ...[
-                        _buildImageGallery(isMobile: true),
-                        const SizedBox(height: 24),
-                        _buildProductInfo(isMobile: true),
-                      ] else ...[
-                        LayoutBuilder(
-                          builder: (context, rowConstraints) {
-                            final rowWidth = rowConstraints.maxWidth.isFinite
-                                ? rowConstraints.maxWidth
-                                : constraints.maxWidth - (horizontalMargin * 2);
-                            final columnGap = isTablet ? 32.0 : 56.0;
-                            final galleryWidth = isTablet
-                                ? ((rowWidth - columnGap) * 0.52)
-                                : ((rowWidth - columnGap) * 0.54);
-                            final infoWidth =
-                                rowWidth - columnGap - galleryWidth;
-
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                SizedBox(
-                                  width: galleryWidth,
-                                  child: _buildImageGallery(),
-                                ),
-                                SizedBox(width: columnGap),
-                                SizedBox(
-                                  width: infoWidth,
-                                  child: _buildProductInfo(),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(height: isMobile ? 48 : 64),
-              _buildProductDetails(
-                isMobile: isMobile,
-                horizontalMargin: horizontalMargin,
-              ),
-              SizedBox(height: isMobile ? 56 : 80),
-              if (_isLoadingRelated || _relatedProducts.isNotEmpty)
-                Align(
-                  alignment: Alignment.topCenter,
-                  child: Container(
-                    constraints: const BoxConstraints(maxWidth: 1320),
-                    margin: EdgeInsets.symmetric(horizontal: horizontalMargin),
-                    child: _isLoadingRelated
-                        ? const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 24),
-                            child: Center(
-                              child: SizedBox(
-                                width: 40,
-                                height: 40,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              ),
+                  constraints: const BoxConstraints(maxWidth: 1320),
+                  margin: EdgeInsets.symmetric(horizontal: horizontalMargin),
+                  child: _isLoadingRelated && _relatedProducts.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(
+                            child: SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             ),
-                          )
-                        : _buildRelatedProducts(),
-                  ),
+                          ),
+                        )
+                      : Column(
+                          children: [
+                            if (_isLoadingRelated)
+                              const SizedBox(
+                                height: 2,
+                                child: LinearProgressIndicator(minHeight: 2),
+                              ),
+                            _buildRelatedProducts(),
+                          ],
+                        ),
                 ),
-              SizedBox(height: isMobile ? 72 : 88),
-            ],
-          ),
+              ),
+            SizedBox(height: isMobile ? 72 : 88),
+          ],
         );
       },
     );
@@ -1181,6 +1253,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             alignment: Alignment.center,
             fit: BoxFit.contain,
             filterQuality: FilterQuality.medium,
+            gaplessPlayback: true,
             errorBuilder: (context, error, stackTrace) {
               return Center(
                 child: Icon(
@@ -1301,11 +1374,18 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         Divider(height: 1, color: _storeTheme.commerceLine),
         SizedBox(height: isMobile ? 18 : 22),
         _buildStockSkuRow(inStock: inStock),
-        if (!_isProductValidated) ...[
-          const SizedBox(height: 10),
-          Row(
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 34,
+          child: Row(
             children: [
-              if (_productValidationFailed)
+              if (_isProductValidated)
+                Icon(
+                  Icons.check_circle_outline,
+                  size: 15,
+                  color: _storeTheme.commerceAccent,
+                )
+              else if (_productValidationFailed)
                 Icon(
                   Icons.cloud_off_outlined,
                   size: 15,
@@ -1323,9 +1403,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  _productValidationFailed
-                      ? 'No pudimos confirmar precio y disponibilidad.'
-                      : 'Actualizando precio y disponibilidad…',
+                  _isProductValidated
+                      ? 'Precio y disponibilidad actualizados.'
+                      : _productValidationFailed
+                          ? 'No pudimos confirmar precio y disponibilidad.'
+                          : 'Actualizando precio y disponibilidad…',
                   style: _storeTheme.text.bodySmall?.copyWith(
                     fontSize: 12,
                     color: _storeTheme.commerceTextSecondary,
@@ -1335,11 +1417,16 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               if (_productValidationFailed)
                 TextButton(
                   onPressed: () => unawaited(_loadProduct()),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 30),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                   child: const Text('Reintentar'),
                 ),
             ],
           ),
-        ],
+        ),
         SizedBox(height: isMobile ? 18 : 22),
         if (inStock)
           Column(
@@ -2211,6 +2298,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         child: Image.network(
           imageUrl,
           fit: BoxFit.contain,
+          gaplessPlayback: true,
           errorBuilder: (context, error, stackTrace) {
             return Icon(
               Icons.broken_image_outlined,

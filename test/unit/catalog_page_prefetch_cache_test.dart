@@ -108,6 +108,132 @@ void main() {
       expect(cache.cachedPageCount, 1);
     });
 
+    test('retains a soft-expired page while one origin refresh replaces it',
+        () async {
+      var now = DateTime(2026, 7, 26, 12);
+      final cache = CatalogPagePrefetchCache<String>(
+        maxAge: const Duration(seconds: 5),
+        retainFor: const Duration(minutes: 10),
+        now: () => now,
+      );
+      var loads = 0;
+
+      expect(
+        await cache.load(
+          signature: 'products',
+          pageNumber: 1,
+          loader: () async {
+            loads++;
+            return 'old';
+          },
+        ),
+        'old',
+      );
+
+      now = now.add(const Duration(seconds: 6));
+      expect(cache.peek(signature: 'products', pageNumber: 1), 'old');
+      expect(
+        cache.isFresh(signature: 'products', pageNumber: 1),
+        isFalse,
+      );
+
+      final gate = Completer<String>();
+      final first = cache.load(
+        signature: 'products',
+        pageNumber: 1,
+        loader: () {
+          loads++;
+          return gate.future;
+        },
+      );
+      final second = cache.load(
+        signature: 'products',
+        pageNumber: 1,
+        loader: () async => 'duplicate',
+      );
+
+      expect(cache.peek(signature: 'products', pageNumber: 1), 'old');
+      expect(loads, 2);
+      gate.complete('new');
+      expect(await first, 'new');
+      expect(await second, 'new');
+      expect(cache.peek(signature: 'products', pageNumber: 1), 'new');
+    });
+
+    test('markStale retains paint data and forces the next load', () async {
+      final cache = CatalogPagePrefetchCache<String>(
+        maxAge: const Duration(minutes: 1),
+        retainFor: const Duration(minutes: 10),
+      );
+      var loads = 0;
+
+      await cache.load(
+        signature: 'products',
+        pageNumber: 1,
+        loader: () async {
+          loads++;
+          return 'one';
+        },
+      );
+      cache.markStale(signature: 'products');
+
+      expect(cache.peek(signature: 'products', pageNumber: 1), 'one');
+      expect(
+        await cache.load(
+          signature: 'products',
+          pageNumber: 1,
+          loader: () async {
+            loads++;
+            return 'two';
+          },
+        ),
+        'two',
+      );
+      expect(loads, 2);
+    });
+
+    test(
+        'markStale detaches an in-flight request and blocks stale repopulation',
+        () async {
+      final cache = CatalogPagePrefetchCache<String>();
+      final staleCompleter = Completer<String>();
+      final freshCompleter = Completer<String>();
+      var loads = 0;
+
+      final stale = cache.load(
+        signature: 'products',
+        pageNumber: 1,
+        loader: () {
+          loads++;
+          return staleCompleter.future;
+        },
+      );
+
+      cache.markStale(signature: 'products');
+      expect(cache.inFlightCount, 0);
+
+      final fresh = cache.load(
+        signature: 'products',
+        pageNumber: 1,
+        loader: () {
+          loads++;
+          return freshCompleter.future;
+        },
+      );
+      expect(loads, 2);
+      expect(cache.inFlightCount, 1);
+
+      staleCompleter.complete('stale');
+      expect(await stale, 'stale');
+      expect(cache.peek(signature: 'products', pageNumber: 1), isNull);
+      expect(cache.inFlightCount, 1);
+
+      freshCompleter.complete('fresh');
+      expect(await fresh, 'fresh');
+      expect(cache.peek(signature: 'products', pageNumber: 1), 'fresh');
+      expect(cache.inFlightCount, 0);
+    });
+
     test('failed loads are retried instead of cached', () async {
       final cache = CatalogPagePrefetchCache<String>();
       var attempts = 0;

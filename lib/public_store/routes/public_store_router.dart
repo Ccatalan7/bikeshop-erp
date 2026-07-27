@@ -12,6 +12,7 @@ import '../pages/static_policy_page.dart';
 import '../widgets/public_store_layout.dart';
 import 'deferred_commerce_route_page.dart';
 import 'deferred_customer_route_page.dart';
+import 'public_store_shell_policy.dart';
 
 // Match the tenant detection perf logging pattern.
 // Enable in debug, or in release via:
@@ -179,11 +180,10 @@ String _storefrontMode(GoRouterState state) {
 @visibleForTesting
 LocalKey publicStoreRoutePageKey(GoRouterState state) => state.pageKey;
 
-/// Recreates only the storefront layout when Edit/Preview mode changes.
+/// Recreates routed content when Edit/Preview mode changes.
 ///
-/// This key is intentionally separate from the Navigator [Page] key. Its
-/// parent page scopes it, so two routes can coexist safely while a replacement
-/// is being reconciled.
+/// This key is intentionally separate from the Navigator [Page] key so the
+/// persistent storefront shell can stay mounted while the active page updates.
 @visibleForTesting
 LocalKey publicStoreModeContentKey(GoRouterState state) {
   return ValueKey<(LocalKey, String, String)>(
@@ -194,6 +194,14 @@ LocalKey publicStoreModeContentKey(GoRouterState state) {
     ),
   );
 }
+
+/// Remounts the persistent shell only when its CMS mode changes.
+///
+/// Route changes deliberately do not participate in this key: the header,
+/// footer, image elements and scroll owner must survive normal navigation.
+@visibleForTesting
+LocalKey publicStoreShellModeKey(GoRouterState state) =>
+    ValueKey<String>('public-store-shell-${_storefrontMode(state)}');
 
 Page<dynamic> _buildPage(
   BuildContext context,
@@ -223,15 +231,11 @@ Page<dynamic> _buildPage(
 
   final pageKey = publicStoreRoutePageKey(state);
 
-  // Recreate the layout on mode changes without changing or sharing the
-  // Navigator Page identity.
+  // The ShellRoute owns PublicStoreLayout. Only routed content belongs here,
+  // otherwise every navigation remounts the full header/footer/scroll tree.
   final pageChild = KeyedSubtree(
     key: publicStoreModeContentKey(state),
-    child: PublicStoreLayout(
-      routePath: state.uri.path,
-      enablePageViewScrolling: true,
-      child: child,
-    ),
+    child: child,
   );
 
   // Respect user reduce-motion settings.
@@ -289,98 +293,6 @@ Page<dynamic> _buildPage(
   );
 }
 
-Page<dynamic> _buildPageNoScroll(
-  BuildContext context,
-  GoRouterState state,
-  Widget child,
-) {
-  final mediaQuery = MediaQuery.maybeOf(context);
-  final disableAnimations = mediaQuery?.disableAnimations ?? false;
-  final accessibleNavigation = mediaQuery?.accessibleNavigation ?? false;
-  final reduceMotion = disableAnimations || accessibleNavigation;
-
-  final isSmallScreen = (mediaQuery?.size.shortestSide ?? 9999) < 600;
-
-  if (_storeNavLogsEnabled) {
-    debugPrint(
-      '➡️ [PublicStoreRouter] build(noScroll) uri=${state.uri} matched=${state.matchedLocation} reduceMotion=$reduceMotion',
-    );
-    if (reduceMotion) {
-      debugPrint(
-        '🟡 [PublicStoreRouter] Transitions disabled (reduce motion, noScroll): '
-        'disableAnimations=$disableAnimations accessibleNavigation=$accessibleNavigation',
-      );
-    }
-  }
-
-  final pageKey = publicStoreRoutePageKey(state);
-
-  // Recreate the layout on mode changes without changing or sharing the
-  // Navigator Page identity.
-  final pageChild = KeyedSubtree(
-    key: publicStoreModeContentKey(state),
-    child: PublicStoreLayout(
-      routePath: state.uri.path,
-      enablePageViewScrolling: false,
-      child: child,
-    ),
-  );
-
-  // Respect user reduce-motion settings.
-  // Also disable transitions on web due to Flutter web rendering bug where
-  // FadeTransition/ScaleTransition can get "stuck" at invisible state.
-  if (reduceMotion || kIsWeb) {
-    return NoTransitionPage<void>(
-      key: pageKey,
-      name: state.uri.toString(),
-      child: pageChild,
-    );
-  }
-
-  return CustomTransitionPage<void>(
-    key: pageKey,
-    name: state.uri.toString(),
-    child: pageChild,
-    transitionDuration: isSmallScreen
-        ? const Duration(milliseconds: 420)
-        : const Duration(milliseconds: 300),
-    reverseTransitionDuration: isSmallScreen
-        ? const Duration(milliseconds: 380)
-        : const Duration(milliseconds: 260),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      _attachTransitionDebugOnce(
-        animation,
-        uri: state.uri,
-        kind: 'transition(noScroll)',
-      );
-
-      if (_storeNavLogsEnabled) {
-        final id = '${state.pageKey}_${state.uri}_noScroll';
-        if (_loggedTransitionFirstFrame.add(id)) {
-          debugPrint(
-            '🎞️ [PublicStoreRouter] transition builder(noScroll) uri=${state.uri} '
-            'value=${animation.value.toStringAsFixed(3)} status=${animation.status}',
-          );
-        }
-      }
-
-      if (isSmallScreen) {
-        return _mobilePremiumTransition(
-          animation: animation,
-          secondaryAnimation: secondaryAnimation,
-          child: child,
-        );
-      }
-
-      return _desktopTransition(
-        animation: animation,
-        child: child,
-        isSmallScreen: isSmallScreen,
-      );
-    },
-  );
-}
-
 // ============================================================================
 // ROUTER CONFIGURATION
 // ============================================================================
@@ -404,508 +316,527 @@ class PublicStoreRouter {
         if (_storeNavLogsEnabled) _PublicStoreNavObserver(),
       ],
       routes: [
-        // Stable OAuth landing route. Supabase exchanges the provider code here
-        // before navigation continues to the tenant-scoped customer portal.
-        GoRoute(
-          path: '/auth/callback',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const AuthCallbackPage(fallbackPath: '/cuenta'),
-          ),
-        ),
-
-        // ====================================================================
-        // MAIN PAGES
-        // ====================================================================
-
-        // Home
-        GoRoute(
-          path: '/',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const PublicHomePage(),
-          ),
-        ),
-
-        // Products
-        GoRoute(
-          path: '/productos',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const ProductCatalogPage(),
-          ),
-        ),
-
-        // Services catalog
-        GoRoute(
-          path: '/servicios',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const ProductCatalogPage(),
-          ),
-        ),
-
-        // Contact
-        GoRoute(
-          path: '/contacto',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const ContactPage(),
-          ),
-        ),
-
-        // Cart
-        GoRoute(
-          path: '/carrito',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const CartPage(),
-          ),
-        ),
-
-        // Account dashboard
-        GoRoute(
-          path: '/cuenta',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const DeferredCustomerRoutePage(routeKey: 'dashboard'),
-          ),
-        ),
-
-        // ====================================================================
-        // POLICY PAGES
-        // ====================================================================
-        GoRoute(
-          path: '/nosotros',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const StaticPolicyPage(
-              slug: 'nosotros',
-              fallbackTitle: 'Sobre Nosotros',
-            ),
-          ),
-        ),
-        GoRoute(
-          path: '/terminos',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const StaticPolicyPage(
-              slug: 'terminos',
-              fallbackTitle: 'Términos y Condiciones',
-            ),
-          ),
-        ),
-        GoRoute(
-          path: '/privacidad',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const StaticPolicyPage(
-              slug: 'privacidad',
-              fallbackTitle: 'Política de Privacidad',
-            ),
-          ),
-        ),
-        GoRoute(
-          path: '/devoluciones',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const StaticPolicyPage(
-              slug: 'devoluciones',
-              fallbackTitle: 'Política de Devoluciones',
-            ),
-          ),
-        ),
-        GoRoute(
-          path: '/envios',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const StaticPolicyPage(
-              slug: 'envios',
-              fallbackTitle: 'Información de Envíos',
-            ),
-          ),
-        ),
-
-        // ====================================================================
-        // DETAIL PAGES
-        // ====================================================================
-
-        // Product category landing pages (SEO-friendly filtered catalog)
-        GoRoute(
-          path: '/productos/categoria/:category',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const ProductCatalogPage(),
-          ),
-        ),
-
-        // Service category landing pages (SEO-friendly filtered catalog)
-        GoRoute(
-          path: '/servicios/categoria/:category',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const ProductCatalogPage(),
-          ),
-        ),
-
-        // Product detail (canonical: /productos/:slug/:sku)
-        GoRoute(
-          path: '/productos/:slug/:sku',
-          pageBuilder: (context, state) {
-            final sku = state.pathParameters['sku']!;
-            return _buildPage(
-              context,
-              state,
-              ProductDetailPage(productId: 'sku:$sku'),
-            );
-          },
-        ),
-
-        // Previous canonical product detail. ProductDetailPage upgrades the URL.
-        GoRoute(
-          path: '/productos/:id',
-          pageBuilder: (context, state) {
-            final productId = state.pathParameters['id']!;
-            return _buildPage(
-              context,
-              state,
-              ProductDetailPage(productId: productId),
-            );
-          },
-        ),
-
-        // Legacy product detail (redirect to canonical)
-        GoRoute(
-          path: '/producto/:id',
-          redirect: (context, state) =>
-              '/productos/${state.pathParameters['id']}',
-        ),
-
-        // Checkout
-        GoRoute(
-          path: '/checkout',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const DeferredCommerceRoutePage(routeKey: 'checkout'),
-          ),
-        ),
-
-        // Order confirmation
-        GoRoute(
-          path: '/pedido/:id',
-          pageBuilder: (context, state) {
-            final orderId = state.pathParameters['id']!;
-            final status = state.uri.queryParameters['status'];
-            return _buildPage(
-              context,
-              state,
-              DeferredCommerceRoutePage(
-                routeKey: 'orderConfirmation',
-                orderId: orderId,
-                paymentStatus: status,
+        ShellRoute(
+          observers: [
+            if (_storeNavLogsEnabled) _PublicStoreNavObserver(),
+          ],
+          builder: (context, state, child) {
+            return KeyedSubtree(
+              key: publicStoreShellModeKey(state),
+              child: PublicStoreLayout(
+                routePath: state.uri.path,
+                enablePageViewScrolling:
+                    publicStoreRouteUsesPageViewScrolling(state.uri.path),
+                containsPersistentRouteNavigator: true,
+                child: child,
               ),
             );
           },
-        ),
-
-        // ====================================================================
-        // CUSTOMER ACCOUNT SUB-PAGES
-        // ====================================================================
-        GoRoute(
-          path: '/cuenta/login',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const DeferredCustomerRoutePage(routeKey: 'login'),
-          ),
-        ),
-        GoRoute(
-          path: '/cuenta/descargas/android',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const DeferredCustomerRoutePage(routeKey: 'androidDownload'),
-          ),
-        ),
-        GoRoute(
-          path: '/cuenta/perfil',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const DeferredCustomerRoutePage(routeKey: 'profile'),
-          ),
-        ),
-        GoRoute(
-          path: '/cuenta/direcciones',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const DeferredCustomerRoutePage(routeKey: 'addresses'),
-          ),
-        ),
-        GoRoute(
-          path: '/cuenta/pedidos',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const DeferredCustomerRoutePage(routeKey: 'orders'),
-          ),
-        ),
-        GoRoute(
-          path: '/cuenta/bicicletas',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const DeferredCustomerRoutePage(routeKey: 'bikes'),
-          ),
-        ),
-        GoRoute(
-          path: '/cuenta/servicios',
-          pageBuilder: (context, state) {
-            final bikeId = state.uri.queryParameters['bike_id'];
-            return _buildPage(
-              context,
-              state,
-              DeferredCustomerRoutePage(
-                routeKey: 'serviceHistory',
-                argument: bikeId,
+          routes: [
+            // Stable OAuth landing route. Supabase exchanges the provider code here
+            // before navigation continues to the tenant-scoped customer portal.
+            GoRoute(
+              path: '/auth/callback',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const AuthCallbackPage(fallbackPath: '/cuenta'),
               ),
-            );
-          },
-        ),
+            ),
 
-        // Chat / Support
-        GoRoute(
-          path: '/cuenta/mensajes',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const DeferredCustomerRoutePage(routeKey: 'messages'),
-          ),
-        ),
-        GoRoute(
-          path: '/cuenta/mensajes/:id',
-          pageBuilder: (context, state) {
-            final conversationId = state.pathParameters['id']!;
-            return _buildPageNoScroll(
-              context,
-              state,
-              DeferredCustomerRoutePage(
-                routeKey: 'messageDetail',
-                argument: conversationId,
+            // ====================================================================
+            // MAIN PAGES
+            // ====================================================================
+
+            // Home
+            GoRoute(
+              path: '/',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const PublicHomePage(),
               ),
-            );
-          },
-        ),
-        GoRoute(
-          path: '/cuenta/chats',
-          pageBuilder: (context, state) => _buildPage(
-            context,
-            state,
-            const DeferredCustomerRoutePage(routeKey: 'chats'),
-          ),
-        ),
-        GoRoute(
-          path: '/cuenta/chats/:id',
-          pageBuilder: (context, state) {
-            final conversationId = state.pathParameters['id']!;
-            return _buildPageNoScroll(
-              context,
-              state,
-              DeferredCustomerRoutePage(
-                routeKey: 'chatDetail',
-                argument: conversationId,
-              ),
-            );
-          },
-        ),
+            ),
 
-        // ====================================================================
-        // DYNAMIC PAGES
-        // ====================================================================
-        GoRoute(
-          path: '/pagina/:slug',
-          pageBuilder: (context, state) {
-            final slug = state.pathParameters['slug'] ?? 'home';
-            return _buildPage(
-              context,
-              state,
-              DynamicWebsitePage(slug: slug),
-            );
-          },
-        ),
-
-        // Legacy Google Merchant URLs
-        GoRoute(
-          path: '/shop/:slug',
-          pageBuilder: (context, state) {
-            final slug = state.pathParameters['slug'] ?? '';
-            String productId = slug;
-            final skuMatch = RegExp(r'^[sS]?(\d+)').firstMatch(slug);
-            if (skuMatch != null) {
-              final sku = skuMatch.group(0)!.toUpperCase();
-              productId = 'sku:$sku';
-            }
-            return _buildPage(
-              context,
-              state,
-              ProductDetailPage(productId: productId),
-            );
-          },
-        ),
-
-        // ====================================================================
-        // LEGACY /tienda/* REDIRECTS
-        // ====================================================================
-        GoRoute(
-          path: '/tienda',
-          redirect: (context, state) => '/',
-        ),
-        GoRoute(
-          path: '/tienda/productos',
-          redirect: (context, state) {
-            final qp = state.uri.queryParameters;
-            return Uri(
+            // Products
+            GoRoute(
               path: '/productos',
-              queryParameters: qp.isEmpty ? null : qp,
-            ).toString();
-          },
-        ),
-        GoRoute(
-          path: '/tienda/servicios',
-          redirect: (context, state) {
-            final qp = state.uri.queryParameters;
-            return Uri(
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const ProductCatalogPage(),
+              ),
+            ),
+
+            // Services catalog
+            GoRoute(
               path: '/servicios',
-              queryParameters: qp.isEmpty ? null : qp,
-            ).toString();
-          },
-        ),
-        GoRoute(
-          path: '/tienda/producto/:id',
-          redirect: (context, state) =>
-              '/productos/${state.pathParameters['id']}',
-        ),
-        GoRoute(
-          path: '/tienda/carrito',
-          redirect: (context, state) => '/carrito',
-        ),
-        GoRoute(
-          path: '/tienda/checkout',
-          redirect: (context, state) => '/checkout',
-        ),
-        GoRoute(
-          path: '/tienda/pedido/:id',
-          redirect: (context, state) {
-            final status = state.uri.queryParameters['status'];
-            final id = state.pathParameters['id'];
-            return status != null
-                ? '/pedido/$id?status=$status'
-                : '/pedido/$id';
-          },
-        ),
-        GoRoute(
-          path: '/tienda/contacto',
-          redirect: (context, state) => '/contacto',
-        ),
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const ProductCatalogPage(),
+              ),
+            ),
 
-        // Customer account legacy redirects
-        GoRoute(
-          path: '/tienda/cuenta',
-          redirect: (context, state) => '/cuenta',
-        ),
-        GoRoute(
-          path: '/tienda/cuenta/login',
-          redirect: (context, state) => '/cuenta/login',
-        ),
-        GoRoute(
-          path: '/tienda/cuenta/descargas/android',
-          redirect: (context, state) => '/cuenta/descargas/android',
-        ),
-        GoRoute(
-          path: '/tienda/cuenta/perfil',
-          redirect: (context, state) => '/cuenta/perfil',
-        ),
-        GoRoute(
-          path: '/tienda/cuenta/direcciones',
-          redirect: (context, state) => '/cuenta/direcciones',
-        ),
-        GoRoute(
-          path: '/tienda/cuenta/pedidos',
-          redirect: (context, state) => '/cuenta/pedidos',
-        ),
-        GoRoute(
-          path: '/tienda/cuenta/bicicletas',
-          redirect: (context, state) => '/cuenta/bicicletas',
-        ),
-        GoRoute(
-          path: '/tienda/cuenta/servicios',
-          redirect: (context, state) {
-            final bikeId = state.uri.queryParameters['bike_id'];
-            return bikeId != null
-                ? '/cuenta/servicios?bike_id=$bikeId'
-                : '/cuenta/servicios';
-          },
-        ),
-        GoRoute(
-          path: '/tienda/cuenta/mensajes',
-          redirect: (context, state) => '/cuenta/mensajes',
-        ),
-        GoRoute(
-          path: '/tienda/cuenta/mensajes/:id',
-          redirect: (context, state) =>
-              '/cuenta/mensajes/${state.pathParameters['id']}',
-        ),
-        GoRoute(
-          path: '/tienda/cuenta/chats',
-          redirect: (context, state) => '/cuenta/chats',
-        ),
-        GoRoute(
-          path: '/tienda/cuenta/chats/:id',
-          redirect: (context, state) =>
-              '/cuenta/chats/${state.pathParameters['id']}',
-        ),
+            // Contact
+            GoRoute(
+              path: '/contacto',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const ContactPage(),
+              ),
+            ),
 
-        // Policy pages legacy redirects
-        GoRoute(
-          path: '/tienda/nosotros',
-          redirect: (context, state) => '/nosotros',
-        ),
-        GoRoute(
-          path: '/tienda/terminos',
-          redirect: (context, state) => '/terminos',
-        ),
-        GoRoute(
-          path: '/tienda/privacidad',
-          redirect: (context, state) => '/privacidad',
-        ),
-        GoRoute(
-          path: '/tienda/devoluciones',
-          redirect: (context, state) => '/devoluciones',
-        ),
-        GoRoute(
-          path: '/tienda/envios',
-          redirect: (context, state) => '/envios',
-        ),
-        GoRoute(
-          path: '/tienda/pagina/:slug',
-          redirect: (context, state) =>
-              '/pagina/${state.pathParameters['slug']}',
+            // Cart
+            GoRoute(
+              path: '/carrito',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const CartPage(),
+              ),
+            ),
+
+            // Account dashboard
+            GoRoute(
+              path: '/cuenta',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const DeferredCustomerRoutePage(routeKey: 'dashboard'),
+              ),
+            ),
+
+            // ====================================================================
+            // POLICY PAGES
+            // ====================================================================
+            GoRoute(
+              path: '/nosotros',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const StaticPolicyPage(
+                  slug: 'nosotros',
+                  fallbackTitle: 'Sobre Nosotros',
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/terminos',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const StaticPolicyPage(
+                  slug: 'terminos',
+                  fallbackTitle: 'Términos y Condiciones',
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/privacidad',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const StaticPolicyPage(
+                  slug: 'privacidad',
+                  fallbackTitle: 'Política de Privacidad',
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/devoluciones',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const StaticPolicyPage(
+                  slug: 'devoluciones',
+                  fallbackTitle: 'Política de Devoluciones',
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/envios',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const StaticPolicyPage(
+                  slug: 'envios',
+                  fallbackTitle: 'Información de Envíos',
+                ),
+              ),
+            ),
+
+            // ====================================================================
+            // DETAIL PAGES
+            // ====================================================================
+
+            // Product category landing pages (SEO-friendly filtered catalog)
+            GoRoute(
+              path: '/productos/categoria/:category',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const ProductCatalogPage(),
+              ),
+            ),
+
+            // Service category landing pages (SEO-friendly filtered catalog)
+            GoRoute(
+              path: '/servicios/categoria/:category',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const ProductCatalogPage(),
+              ),
+            ),
+
+            // Product detail (canonical: /productos/:slug/:sku)
+            GoRoute(
+              path: '/productos/:slug/:sku',
+              pageBuilder: (context, state) {
+                final sku = state.pathParameters['sku']!;
+                return _buildPage(
+                  context,
+                  state,
+                  ProductDetailPage(productId: 'sku:$sku'),
+                );
+              },
+            ),
+
+            // Previous canonical product detail. ProductDetailPage upgrades the URL.
+            GoRoute(
+              path: '/productos/:id',
+              pageBuilder: (context, state) {
+                final productId = state.pathParameters['id']!;
+                return _buildPage(
+                  context,
+                  state,
+                  ProductDetailPage(productId: productId),
+                );
+              },
+            ),
+
+            // Legacy product detail (redirect to canonical)
+            GoRoute(
+              path: '/producto/:id',
+              redirect: (context, state) =>
+                  '/productos/${state.pathParameters['id']}',
+            ),
+
+            // Checkout
+            GoRoute(
+              path: '/checkout',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const DeferredCommerceRoutePage(routeKey: 'checkout'),
+              ),
+            ),
+
+            // Order confirmation
+            GoRoute(
+              path: '/pedido/:id',
+              pageBuilder: (context, state) {
+                final orderId = state.pathParameters['id']!;
+                final status = state.uri.queryParameters['status'];
+                return _buildPage(
+                  context,
+                  state,
+                  DeferredCommerceRoutePage(
+                    routeKey: 'orderConfirmation',
+                    orderId: orderId,
+                    paymentStatus: status,
+                  ),
+                );
+              },
+            ),
+
+            // ====================================================================
+            // CUSTOMER ACCOUNT SUB-PAGES
+            // ====================================================================
+            GoRoute(
+              path: '/cuenta/login',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const DeferredCustomerRoutePage(routeKey: 'login'),
+              ),
+            ),
+            GoRoute(
+              path: '/cuenta/descargas/android',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const DeferredCustomerRoutePage(routeKey: 'androidDownload'),
+              ),
+            ),
+            GoRoute(
+              path: '/cuenta/perfil',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const DeferredCustomerRoutePage(routeKey: 'profile'),
+              ),
+            ),
+            GoRoute(
+              path: '/cuenta/direcciones',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const DeferredCustomerRoutePage(routeKey: 'addresses'),
+              ),
+            ),
+            GoRoute(
+              path: '/cuenta/pedidos',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const DeferredCustomerRoutePage(routeKey: 'orders'),
+              ),
+            ),
+            GoRoute(
+              path: '/cuenta/bicicletas',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const DeferredCustomerRoutePage(routeKey: 'bikes'),
+              ),
+            ),
+            GoRoute(
+              path: '/cuenta/servicios',
+              pageBuilder: (context, state) {
+                final bikeId = state.uri.queryParameters['bike_id'];
+                return _buildPage(
+                  context,
+                  state,
+                  DeferredCustomerRoutePage(
+                    routeKey: 'serviceHistory',
+                    argument: bikeId,
+                  ),
+                );
+              },
+            ),
+
+            // Chat / Support
+            GoRoute(
+              path: '/cuenta/mensajes',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const DeferredCustomerRoutePage(routeKey: 'messages'),
+              ),
+            ),
+            GoRoute(
+              path: '/cuenta/mensajes/:id',
+              pageBuilder: (context, state) {
+                final conversationId = state.pathParameters['id']!;
+                return _buildPage(
+                  context,
+                  state,
+                  DeferredCustomerRoutePage(
+                    routeKey: 'messageDetail',
+                    argument: conversationId,
+                  ),
+                );
+              },
+            ),
+            GoRoute(
+              path: '/cuenta/chats',
+              pageBuilder: (context, state) => _buildPage(
+                context,
+                state,
+                const DeferredCustomerRoutePage(routeKey: 'chats'),
+              ),
+            ),
+            GoRoute(
+              path: '/cuenta/chats/:id',
+              pageBuilder: (context, state) {
+                final conversationId = state.pathParameters['id']!;
+                return _buildPage(
+                  context,
+                  state,
+                  DeferredCustomerRoutePage(
+                    routeKey: 'chatDetail',
+                    argument: conversationId,
+                  ),
+                );
+              },
+            ),
+
+            // ====================================================================
+            // DYNAMIC PAGES
+            // ====================================================================
+            GoRoute(
+              path: '/pagina/:slug',
+              pageBuilder: (context, state) {
+                final slug = state.pathParameters['slug'] ?? 'home';
+                return _buildPage(
+                  context,
+                  state,
+                  DynamicWebsitePage(slug: slug),
+                );
+              },
+            ),
+
+            // Legacy Google Merchant URLs
+            GoRoute(
+              path: '/shop/:slug',
+              pageBuilder: (context, state) {
+                final slug = state.pathParameters['slug'] ?? '';
+                String productId = slug;
+                final skuMatch = RegExp(r'^[sS]?(\d+)').firstMatch(slug);
+                if (skuMatch != null) {
+                  final sku = skuMatch.group(0)!.toUpperCase();
+                  productId = 'sku:$sku';
+                }
+                return _buildPage(
+                  context,
+                  state,
+                  ProductDetailPage(productId: productId),
+                );
+              },
+            ),
+
+            // ====================================================================
+            // LEGACY /tienda/* REDIRECTS
+            // ====================================================================
+            GoRoute(
+              path: '/tienda',
+              redirect: (context, state) => '/',
+            ),
+            GoRoute(
+              path: '/tienda/productos',
+              redirect: (context, state) {
+                final qp = state.uri.queryParameters;
+                return Uri(
+                  path: '/productos',
+                  queryParameters: qp.isEmpty ? null : qp,
+                ).toString();
+              },
+            ),
+            GoRoute(
+              path: '/tienda/servicios',
+              redirect: (context, state) {
+                final qp = state.uri.queryParameters;
+                return Uri(
+                  path: '/servicios',
+                  queryParameters: qp.isEmpty ? null : qp,
+                ).toString();
+              },
+            ),
+            GoRoute(
+              path: '/tienda/producto/:id',
+              redirect: (context, state) =>
+                  '/productos/${state.pathParameters['id']}',
+            ),
+            GoRoute(
+              path: '/tienda/carrito',
+              redirect: (context, state) => '/carrito',
+            ),
+            GoRoute(
+              path: '/tienda/checkout',
+              redirect: (context, state) => '/checkout',
+            ),
+            GoRoute(
+              path: '/tienda/pedido/:id',
+              redirect: (context, state) {
+                final status = state.uri.queryParameters['status'];
+                final id = state.pathParameters['id'];
+                return status != null
+                    ? '/pedido/$id?status=$status'
+                    : '/pedido/$id';
+              },
+            ),
+            GoRoute(
+              path: '/tienda/contacto',
+              redirect: (context, state) => '/contacto',
+            ),
+
+            // Customer account legacy redirects
+            GoRoute(
+              path: '/tienda/cuenta',
+              redirect: (context, state) => '/cuenta',
+            ),
+            GoRoute(
+              path: '/tienda/cuenta/login',
+              redirect: (context, state) => '/cuenta/login',
+            ),
+            GoRoute(
+              path: '/tienda/cuenta/descargas/android',
+              redirect: (context, state) => '/cuenta/descargas/android',
+            ),
+            GoRoute(
+              path: '/tienda/cuenta/perfil',
+              redirect: (context, state) => '/cuenta/perfil',
+            ),
+            GoRoute(
+              path: '/tienda/cuenta/direcciones',
+              redirect: (context, state) => '/cuenta/direcciones',
+            ),
+            GoRoute(
+              path: '/tienda/cuenta/pedidos',
+              redirect: (context, state) => '/cuenta/pedidos',
+            ),
+            GoRoute(
+              path: '/tienda/cuenta/bicicletas',
+              redirect: (context, state) => '/cuenta/bicicletas',
+            ),
+            GoRoute(
+              path: '/tienda/cuenta/servicios',
+              redirect: (context, state) {
+                final bikeId = state.uri.queryParameters['bike_id'];
+                return bikeId != null
+                    ? '/cuenta/servicios?bike_id=$bikeId'
+                    : '/cuenta/servicios';
+              },
+            ),
+            GoRoute(
+              path: '/tienda/cuenta/mensajes',
+              redirect: (context, state) => '/cuenta/mensajes',
+            ),
+            GoRoute(
+              path: '/tienda/cuenta/mensajes/:id',
+              redirect: (context, state) =>
+                  '/cuenta/mensajes/${state.pathParameters['id']}',
+            ),
+            GoRoute(
+              path: '/tienda/cuenta/chats',
+              redirect: (context, state) => '/cuenta/chats',
+            ),
+            GoRoute(
+              path: '/tienda/cuenta/chats/:id',
+              redirect: (context, state) =>
+                  '/cuenta/chats/${state.pathParameters['id']}',
+            ),
+
+            // Policy pages legacy redirects
+            GoRoute(
+              path: '/tienda/nosotros',
+              redirect: (context, state) => '/nosotros',
+            ),
+            GoRoute(
+              path: '/tienda/terminos',
+              redirect: (context, state) => '/terminos',
+            ),
+            GoRoute(
+              path: '/tienda/privacidad',
+              redirect: (context, state) => '/privacidad',
+            ),
+            GoRoute(
+              path: '/tienda/devoluciones',
+              redirect: (context, state) => '/devoluciones',
+            ),
+            GoRoute(
+              path: '/tienda/envios',
+              redirect: (context, state) => '/envios',
+            ),
+            GoRoute(
+              path: '/tienda/pagina/:slug',
+              redirect: (context, state) =>
+                  '/pagina/${state.pathParameters['slug']}',
+            ),
+          ],
         ),
       ],
     );

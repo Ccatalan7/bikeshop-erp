@@ -41,6 +41,11 @@ class _PublicHomePageState extends State<PublicHomePage>
 
   PublicStoreScrollState? _scrollState;
   int _lastHomeRefreshSignal = 0;
+  PublicInventoryService? _observedInventoryService;
+  bool _inventoryRevalidationPending = false;
+  bool _inventoryRevalidationScheduled = false;
+  bool _inventoryTickerActive = true;
+  bool _featuredProductsLoadActive = false;
 
   // Progressive rendering to reduce first-frame jank on mobile.
   // We render only a couple of blocks initially, then expand shortly after.
@@ -111,13 +116,35 @@ class _PublicHomePageState extends State<PublicHomePage>
       // Ignore; home should still render with existing cached data.
     }
 
-    // 2) Refresh featured products.
+    // 2) Refresh featured products without replacing the current cards with
+    // placeholders while the origin request is in flight.
     if (!mounted) return;
-    setState(() {
-      _featuredProductsLoaded = false;
-      _featuredProducts = [];
+    await _loadFeaturedProductsOnce(forceRefresh: true);
+  }
+
+  void _handlePublicInventoryInvalidated() {
+    if (!mounted) return;
+    _inventoryRevalidationPending = true;
+    _scheduleInventoryRevalidation();
+  }
+
+  void _scheduleInventoryRevalidation() {
+    if (!mounted ||
+        !_inventoryTickerActive ||
+        _inventoryRevalidationScheduled ||
+        !_inventoryRevalidationPending) {
+      return;
+    }
+    _inventoryRevalidationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _inventoryRevalidationScheduled = false;
+      if (!mounted || !_inventoryTickerActive) return;
+      if (!_inventoryRevalidationPending) return;
+      if (_featuredProductsLoadActive) return;
+
+      _inventoryRevalidationPending = false;
+      unawaited(_loadFeaturedProductsOnce(forceRefresh: true));
     });
-    await _loadFeaturedProductsOnce();
   }
 
   int get _initialBlockRenderLimit {
@@ -192,15 +219,22 @@ class _PublicHomePageState extends State<PublicHomePage>
     return id ?? _resolvedTenantId;
   }
 
-  Future<void> _loadFeaturedProductsOnce() async {
+  Future<void> _loadFeaturedProductsOnce({bool forceRefresh = false}) async {
     if (!mounted) return;
-    if (_featuredProductsLoaded) return;
-
-    final tenantId = await _effectiveTenantId();
-    if (!mounted) return;
-    if (tenantId == null || tenantId.isEmpty) return;
+    if (_featuredProductsLoaded && !forceRefresh) return;
+    if (_featuredProductsLoadActive) {
+      if (forceRefresh) {
+        _inventoryRevalidationPending = true;
+      }
+      return;
+    }
+    _featuredProductsLoadActive = true;
 
     try {
+      final tenantId = await _effectiveTenantId();
+      if (!mounted) return;
+      if (tenantId == null || tenantId.isEmpty) return;
+
       final inventoryService = context.read<PublicInventoryService>();
       final websiteService = context.read<WebsiteService>();
       final visibilityPolicy =
@@ -215,14 +249,46 @@ class _PublicHomePageState extends State<PublicHomePage>
         limit: 8,
       );
       if (!mounted) return;
-      setState(() {
-        _featuredProducts = products;
-        _featuredProductsLoaded = true;
-      });
+      final nextProducts = products.take(8).toList(growable: false);
+      if (!_featuredProductsLoaded ||
+          !_samePublicProductSnapshots(_featuredProducts, nextProducts)) {
+        setState(() {
+          _featuredProducts = nextProducts;
+          _featuredProductsLoaded = true;
+        });
+      }
     } catch (_) {
       if (!mounted) return;
-      setState(() => _featuredProductsLoaded = true);
+      if (!_featuredProductsLoaded) {
+        setState(() => _featuredProductsLoaded = true);
+      }
+    } finally {
+      _featuredProductsLoadActive = false;
+      if (mounted && _inventoryTickerActive && _inventoryRevalidationPending) {
+        _scheduleInventoryRevalidation();
+      }
     }
+  }
+
+  bool _samePublicProductSnapshots(
+    List<Product> current,
+    List<Product> next,
+  ) {
+    if (current.length != next.length) return false;
+    return _publicProductFingerprint(current) ==
+        _publicProductFingerprint(next);
+  }
+
+  String _publicProductFingerprint(List<Product> products) {
+    return jsonEncode([
+      for (final product in products)
+        <String, dynamic>{
+          ...product.toJson(),
+          'available_stock_quantity': product.availableStockQuantity,
+          'full_sets_available': product.fullSetsAvailable,
+          'is_partial': product.isPartial,
+        },
+    ]);
   }
 
   /// Check edit mode using GoRouter state (called from build method)
@@ -358,6 +424,24 @@ class _PublicHomePageState extends State<PublicHomePage>
       _scrollState = nextScrollState;
       _lastHomeRefreshSignal = nextScrollState.homeRefreshSignal.value;
       nextScrollState.homeRefreshSignal.addListener(_onHomeRefreshSignal);
+    }
+
+    PublicInventoryService? nextInventoryService;
+    try {
+      nextInventoryService = context.read<PublicInventoryService>();
+    } catch (_) {
+      // ERP-hosted previews may not provide the public inventory service.
+    }
+    if (_observedInventoryService != nextInventoryService) {
+      _observedInventoryService
+          ?.removeListener(_handlePublicInventoryInvalidated);
+      _observedInventoryService = nextInventoryService;
+      nextInventoryService?.addListener(_handlePublicInventoryInvalidated);
+    }
+
+    _inventoryTickerActive = TickerMode.of(context);
+    if (_inventoryTickerActive && _inventoryRevalidationPending) {
+      _scheduleInventoryRevalidation();
     }
   }
 
@@ -504,6 +588,8 @@ class _PublicHomePageState extends State<PublicHomePage>
   void dispose() {
     // Debug: dispose
     _scrollState?.homeRefreshSignal.removeListener(_onHomeRefreshSignal);
+    _observedInventoryService
+        ?.removeListener(_handlePublicInventoryInvalidated);
     super.dispose();
   }
 

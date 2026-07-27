@@ -98,5 +98,101 @@ void main() {
       expect(cache.peekBySku(tenantId: 'tenant-a', sku: 'OLD'), isNull);
       expect(cache.peekBySku(tenantId: 'tenant-a', sku: 'NEW'), 'new');
     });
+
+    test('tracks short-lived origin authority separately from visual retention',
+        () {
+      var now = DateTime(2026, 7, 26, 12);
+      final cache = PublicProductSnapshotCache<String>(
+        maxAge: const Duration(minutes: 10),
+        now: () => now,
+      );
+      cache.put(
+        tenantId: 'tenant-a',
+        id: 'product-1',
+        sku: 'SKU-1',
+        value: 'origin',
+        originValidated: true,
+      );
+
+      final fresh = cache.peekSnapshotById(
+        tenantId: 'tenant-a',
+        id: 'product-1',
+      );
+      expect(
+        fresh!.isOriginFresh(
+          const Duration(seconds: 8),
+          now: () => now,
+        ),
+        isTrue,
+      );
+
+      now = now.add(const Duration(seconds: 9));
+      final retained = cache.peekSnapshotBySku(
+        tenantId: 'tenant-a',
+        sku: 'sku-1',
+      );
+      expect(retained!.value, 'origin');
+      expect(
+        retained.isOriginFresh(
+          const Duration(seconds: 8),
+          now: () => now,
+        ),
+        isFalse,
+      );
+    });
+
+    test('markOriginStale revokes authority without erasing paint data', () {
+      final cache = PublicProductSnapshotCache<String>();
+      cache.put(
+        tenantId: 'tenant-a',
+        id: 'product-1',
+        sku: 'SKU-1',
+        value: 'snapshot',
+        originValidated: true,
+      );
+
+      cache.markOriginStale(tenantId: 'tenant-a');
+
+      final retained = cache.peekSnapshotById(
+        tenantId: 'tenant-a',
+        id: 'product-1',
+      );
+      expect(retained!.value, 'snapshot');
+      expect(retained.originValidatedAt, isNull);
+    });
+
+    test('visual replacement revokes authority from the replaced value', () {
+      var now = DateTime(2026, 7, 26, 12);
+      final cache = PublicProductSnapshotCache<String>(now: () => now);
+      cache.put(
+        tenantId: 'tenant-a',
+        id: 'product-1',
+        sku: 'SKU-1',
+        value: 'origin',
+        originValidated: true,
+      );
+
+      now = now.add(const Duration(seconds: 1));
+      cache.put(
+        tenantId: 'tenant-a',
+        id: 'product-1',
+        sku: 'SKU-1',
+        value: 'visual seed',
+      );
+
+      final replacement = cache.peekSnapshotById(
+        tenantId: 'tenant-a',
+        id: 'product-1',
+      );
+      expect(replacement!.value, 'visual seed');
+      expect(replacement.originValidatedAt, isNull);
+      expect(
+        replacement.isOriginFresh(
+          const Duration(seconds: 8),
+          now: () => now,
+        ),
+        isFalse,
+      );
+    });
   });
 }

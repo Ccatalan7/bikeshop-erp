@@ -1,0 +1,121 @@
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/public_store/routes/public_store_shell_policy.dart';
+
+void main() {
+  test('standalone storefront owns one persistent routed layout', () {
+    final router = File(
+      'lib/public_store/routes/public_store_router.dart',
+    ).readAsStringSync();
+
+    expect(router, contains('ShellRoute('));
+    expect(
+      RegExp(r'child: PublicStoreLayout\(').allMatches(router),
+      hasLength(1),
+    );
+    expect(router, contains('containsPersistentRouteNavigator: true'));
+    expect(router, isNot(contains('_buildPageNoScroll')));
+  });
+
+  test('only conversation detail routes bypass page scrolling', () {
+    expect(
+      publicStoreRouteUsesPageViewScrolling('/cuenta/mensajes/thread-1'),
+      isFalse,
+    );
+    expect(
+      publicStoreRouteUsesPageViewScrolling('/cuenta/chats/thread-1/'),
+      isFalse,
+    );
+    expect(
+      publicStoreRouteUsesPageViewScrolling('/cuenta/mensajes'),
+      isTrue,
+    );
+    expect(
+      publicStoreRouteUsesPageViewScrolling('/cuenta/chats'),
+      isTrue,
+    );
+    expect(
+      publicStoreRouteUsesPageViewScrolling('/productos/example/SKU-1'),
+      isTrue,
+    );
+  });
+
+  test('sticky scrolling rebuilds only the header and home stays soft-routed',
+      () {
+    final layout = File(
+      'lib/public_store/widgets/public_store_layout.dart',
+    ).readAsStringSync();
+    final stickyStateStart = layout.indexOf('class _StickyHeaderScaffoldState');
+    final onScrollStart = layout.indexOf(
+      'void _onScroll() {',
+      stickyStateStart,
+    );
+    final restoreStart = layout.indexOf(
+      'void _restoreScrollForRoute({',
+      onScrollStart,
+    );
+    final onScrollBody = layout.substring(onScrollStart, restoreStart);
+
+    expect(onScrollBody, contains('_headerScrollOffset.value = offset'));
+    expect(onScrollBody, isNot(contains('setState(')));
+    expect(layout, contains('ValueListenableBuilder<double>'));
+    expect(
+      RegExp(
+        r'_restoreScrollForRoute\(targetOffset: 0\)',
+      ).allMatches(layout),
+      hasLength(2),
+    );
+    expect(layout, isNot(contains('web.window.location.reload()')));
+    expect(layout, isNot(contains('web.window.location.assign(target)')));
+  });
+
+  test('a cache miss keeps prior catalog geometry but disables stale cards',
+      () {
+    final catalog = File(
+      'lib/public_store/pages/product_catalog_page.dart',
+    ).readAsStringSync();
+
+    expect(catalog, contains('bool _isShowingPreviousResults = false'));
+    expect(
+      catalog,
+      contains('absorbing: _isShowingPreviousResults'),
+    );
+    expect(
+      catalog,
+      contains('excluding: _isShowingPreviousResults'),
+    );
+  });
+
+  test('active homepage product surfaces use gapless inventory SWR', () {
+    final home = File(
+      'lib/public_store/pages/public_home_page.dart',
+    ).readAsStringSync();
+    final renderer = File(
+      'lib/modules/website/widgets/website_block_renderer.dart',
+    ).readAsStringSync();
+
+    for (final source in [home, renderer]) {
+      expect(
+        source,
+        contains('addListener(_handlePublicInventoryInvalidated)'),
+      );
+      expect(
+        source,
+        contains('removeListener(_handlePublicInventoryInvalidated)'),
+      );
+      expect(source, contains('TickerMode.of(context)'));
+      expect(source, contains('_inventoryRevalidationPending = true'));
+    }
+
+    expect(
+      home,
+      contains('_loadFeaturedProductsOnce(forceRefresh: true)'),
+    );
+    expect(renderer, contains('_loadProducts(preserveVisible: true)'));
+    expect(renderer, contains('_usesParentFeaturedProducts'));
+    expect(renderer, contains('preserveVisible: !ownerChanged'));
+    expect(home, contains('...product.toJson()'));
+    expect(renderer, contains('...product.toJson()'));
+  });
+}

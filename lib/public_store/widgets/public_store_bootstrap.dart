@@ -7,6 +7,7 @@ import '../../modules/website/services/website_service.dart';
 import '../../shared/utils/web_url.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/meta_pixel_service.dart';
+import '../services/public_inventory_service.dart';
 
 /// SIMPLE bootstrap widget for public store
 ///
@@ -28,16 +29,23 @@ class PublicStoreBootstrap extends StatefulWidget {
   State<PublicStoreBootstrap> createState() => _PublicStoreBootstrapState();
 }
 
-class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
+class _PublicStoreBootstrapState extends State<PublicStoreBootstrap>
+    with WidgetsBindingObserver {
   bool _splashHidden = false;
   bool _isBootstrapping = true;
   bool _hasTenant = false;
   String? _error;
   bool _bootstrapStarted = false;
+  Timer? _freshnessTimer;
+  DateTime? _lastInventoryFreshnessPulse;
+  DateTime? _lastWebsiteFreshnessPulse;
+  bool _freshnessRefreshActive = false;
+  bool _isForeground = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     // Let Flutter paint first, then schedule bootstrap on the next task.
     // This avoids provider `notifyListeners()` running inside a build scope.
@@ -47,6 +55,21 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
         unawaited(_bootstrap());
       });
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _freshnessTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _isForeground = state == AppLifecycleState.resumed;
+    if (_isForeground) {
+      unawaited(_refreshActiveStorefront(onResume: true));
+    }
   }
 
   void _hideHtmlSplash() {
@@ -125,6 +148,7 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
         _hasTenant = true;
         _error = null;
       });
+      _startFreshnessMonitoring();
       _hideHtmlSplashAfterFrame();
     } catch (e) {
       setState(() {
@@ -133,6 +157,64 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
         _error = e.toString();
       });
       _hideHtmlSplashAfterFrame();
+    }
+  }
+
+  void _startFreshnessMonitoring() {
+    _lastInventoryFreshnessPulse ??= DateTime.now();
+    _lastWebsiteFreshnessPulse ??= DateTime.now();
+    _freshnessTimer ??= Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => unawaited(_refreshActiveStorefront()),
+    );
+  }
+
+  Future<void> _refreshActiveStorefront({bool onResume = false}) async {
+    if (!mounted || !_hasTenant || !_isForeground || _freshnessRefreshActive) {
+      return;
+    }
+    final tenantId =
+        context.read<PublicStoreTenantProvider>().tenantId?.trim() ?? '';
+    if (tenantId.isEmpty) return;
+
+    final now = DateTime.now();
+    final inventoryAge = _lastInventoryFreshnessPulse == null
+        ? const Duration(days: 1)
+        : now.difference(_lastInventoryFreshnessPulse!);
+    final websiteAge = _lastWebsiteFreshnessPulse == null
+        ? const Duration(days: 1)
+        : now.difference(_lastWebsiteFreshnessPulse!);
+    final inventoryDue = inventoryAge >= Duration(seconds: onResume ? 8 : 30);
+    final websiteDue = websiteAge >= Duration(seconds: onResume ? 15 : 60);
+    if (!inventoryDue && !websiteDue) return;
+
+    _freshnessRefreshActive = true;
+    try {
+      if (inventoryDue) {
+        _lastInventoryFreshnessPulse = now;
+        context
+            .read<PublicInventoryService>()
+            .markCacheStale(tenantId: tenantId);
+      }
+      if (websiteDue) {
+        _lastWebsiteFreshnessPulse = now;
+        final websiteService = context.read<WebsiteService>();
+        try {
+          await websiteService.loadPublicStoreDataUnified(
+            tenantId,
+            forceRefresh: true,
+          );
+        } finally {
+          // Unified data owns settings/navigation/home blocks. Route-owned CMS
+          // pages keep their current paint and revalidate their own joined
+          // page+blocks projection only when active.
+          websiteService.requestActiveCmsPageOriginRevalidation();
+        }
+      }
+    } catch (error) {
+      debugPrint('⚠️ [Bootstrap] Background freshness check failed: $error');
+    } finally {
+      _freshnessRefreshActive = false;
     }
   }
 

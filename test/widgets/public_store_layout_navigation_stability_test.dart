@@ -184,4 +184,84 @@ void main() {
       expect(find.text('/productos'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'standalone ShellRoute keeps one bounded storefront layout across routes',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1400, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final editMode = WebsiteEditModeProvider();
+      final website = WebsiteService();
+      final tenant = PublicStoreTenantProvider(TenantDetectionService());
+      final cart = CartProvider();
+      final scrollState = PublicStoreScrollState();
+
+      Widget routeBody(String label) => SizedBox(
+            height: 1400,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Text(label),
+            ),
+          );
+
+      final router = GoRouter(
+        initialLocation: '/one',
+        routes: [
+          ShellRoute(
+            builder: (context, state, child) {
+              return MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  size: const Size(700, 900),
+                ),
+                child: MultiProvider(
+                  providers: [
+                    ChangeNotifierProvider.value(value: editMode),
+                    ChangeNotifierProvider.value(value: website),
+                    ChangeNotifierProvider.value(value: tenant),
+                    ChangeNotifierProvider.value(value: cart),
+                    Provider.value(value: scrollState),
+                  ],
+                  child: PublicStoreLayout(
+                    routePath: state.uri.path,
+                    containsPersistentRouteNavigator: true,
+                    child: child,
+                  ),
+                ),
+              );
+            },
+            routes: [
+              GoRoute(
+                path: '/one',
+                builder: (context, state) => routeBody('one'),
+              ),
+              GoRoute(
+                path: '/two',
+                builder: (context, state) => routeBody('two'),
+              ),
+            ],
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      final originalLayoutState = tester.state(find.byType(PublicStoreLayout));
+
+      router.go('/two');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(tester.takeException(), isNull);
+      expect(find.text('two'), findsOneWidget);
+      expect(
+        identical(
+          tester.state(find.byType(PublicStoreLayout)),
+          originalLayoutState,
+        ),
+        isTrue,
+      );
+    },
+  );
 }

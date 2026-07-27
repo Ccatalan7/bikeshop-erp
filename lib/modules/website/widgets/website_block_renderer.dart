@@ -5103,6 +5103,11 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
   List<Product> _products = [];
   bool _isLoading = true;
   int _loadToken = 0;
+  PublicInventoryService? _observedInventoryService;
+  bool _inventoryRevalidationPending = false;
+  bool _inventoryRevalidationScheduled = false;
+  bool _inventoryTickerActive = true;
+  bool _productLoadActive = false;
 
   @override
   void initState() {
@@ -5111,33 +5116,88 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    PublicInventoryService? nextInventoryService;
+    try {
+      nextInventoryService = context.read<PublicInventoryService>();
+    } catch (_) {
+      // ERP-hosted previews may not provide the public inventory service.
+    }
+    if (_observedInventoryService != nextInventoryService) {
+      _observedInventoryService
+          ?.removeListener(_handlePublicInventoryInvalidated);
+      _observedInventoryService = nextInventoryService;
+      nextInventoryService?.addListener(_handlePublicInventoryInvalidated);
+    }
+
+    _inventoryTickerActive = TickerMode.of(context);
+    if (_inventoryTickerActive && _inventoryRevalidationPending) {
+      _scheduleInventoryRevalidation();
+    }
+  }
+
+  @override
   void didUpdateWidget(_ProductsBlockWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Reload if source, selected products, OR tenantId changed
-    final shouldReload =
+    final ownerChanged =
         oldWidget.data['productSource'] != widget.data['productSource'] ||
             oldWidget.data['selectedProducts']?.toString() !=
                 widget.data['selectedProducts']?.toString() ||
             oldWidget.data['categoryId'] != widget.data['categoryId'] ||
             oldWidget.data['maxProducts'] != widget.data['maxProducts'] ||
-            oldWidget.featuredProductsReady != widget.featuredProductsReady ||
-            !listEquals(
-              oldWidget.featuredProducts
-                  ?.map((product) => product.id)
-                  .toList(growable: false),
-              widget.featuredProducts
-                  ?.map((product) => product.id)
-                  .toList(growable: false),
-            ) ||
-            oldWidget.tenantId != widget.tenantId;
+            oldWidget.tenantId != widget.tenantId ||
+            oldWidget.previewMode != widget.previewMode;
+    final featuredInputChanged =
+        oldWidget.featuredProductsReady != widget.featuredProductsReady ||
+            !_samePublicProductSnapshots(
+              oldWidget.featuredProducts,
+              widget.featuredProducts,
+            );
 
-    if (shouldReload) {
-      _loadProducts();
+    if (ownerChanged || featuredInputChanged) {
+      _loadProducts(
+        preserveVisible: !ownerChanged && _products.isNotEmpty,
+      );
     }
+  }
+
+  void _handlePublicInventoryInvalidated() {
+    if (!mounted || widget.previewMode || _usesParentFeaturedProducts) return;
+    _inventoryRevalidationPending = true;
+    _scheduleInventoryRevalidation();
+  }
+
+  void _scheduleInventoryRevalidation() {
+    if (!mounted ||
+        !_inventoryTickerActive ||
+        _inventoryRevalidationScheduled ||
+        !_inventoryRevalidationPending) {
+      return;
+    }
+    _inventoryRevalidationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _inventoryRevalidationScheduled = false;
+      if (!mounted || !_inventoryTickerActive) return;
+      if (!_inventoryRevalidationPending) return;
+      if (_usesParentFeaturedProducts) {
+        _inventoryRevalidationPending = false;
+        return;
+      }
+      if (_productLoadActive) return;
+
+      _inventoryRevalidationPending = false;
+      unawaited(_loadProducts(preserveVisible: true));
+    });
   }
 
   String get _productSource =>
       widget.data['productSource']?.toString() ?? 'featured';
+  bool get _usesParentFeaturedProducts =>
+      !widget.previewMode &&
+      _productSource == 'featured' &&
+      widget.featuredProducts != null;
 
   List<String> get _selectedProductIds {
     final raw = widget.data['selectedProducts'];
@@ -5148,44 +5208,40 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
   String? get _categoryId => widget.data['categoryId']?.toString();
   int get _maxProducts => (widget.data['maxProducts'] as num?)?.toInt() ?? 8;
 
-  Future<void> _loadProducts() async {
+  Future<void> _loadProducts({bool preserveVisible = false}) async {
     if (!mounted) return;
     final loadToken = ++_loadToken;
+    _productLoadActive = true;
 
-    final tenantId = widget.tenantId;
-
-    // If no tenantId yet, stay in loading state and wait for didUpdateWidget
-    if (tenantId == null || tenantId.isEmpty) {
-      // Keep _isLoading = true to show loading placeholders
-      // Don't set error state - tenant detection may still be in progress
-      return;
-    }
-    if (!widget.previewMode &&
-        _productSource == 'featured' &&
-        widget.featuredProducts != null &&
-        !widget.featuredProductsReady) {
-      if (!_isLoading) {
-        setState(() => _isLoading = true);
+    if (!preserveVisible) {
+      if (_products.isNotEmpty || !_isLoading) {
+        setState(() {
+          _products = [];
+          _isLoading = true;
+        });
       }
-      return;
+    } else if (_products.isEmpty && !_isLoading) {
+      setState(() => _isLoading = true);
     }
-
-    setState(() {
-      _isLoading = true;
-    });
 
     try {
+      final tenantId = widget.tenantId;
+
+      // If no tenantId yet, stay in loading state and wait for didUpdateWidget.
+      if (tenantId == null || tenantId.isEmpty) return;
+      if (!widget.previewMode &&
+          _productSource == 'featured' &&
+          widget.featuredProducts != null &&
+          !widget.featuredProductsReady) {
+        return;
+      }
+
       final supabase = Supabase.instance.client;
       List<Product> products = [];
 
       if (!widget.previewMode) {
         products = await _loadPublicProductsFromPolicy();
-        if (mounted && loadToken == _loadToken) {
-          setState(() {
-            _products = products.take(_maxProducts).toList();
-            _isLoading = false;
-          });
-        }
+        _applyLoadedProducts(products, loadToken: loadToken);
         return;
       }
 
@@ -5288,13 +5344,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
       }
 
       products = await _hydratePreviewAvailability(products);
-
-      if (mounted && loadToken == _loadToken) {
-        setState(() {
-          _products = products.take(_maxProducts).toList();
-          _isLoading = false;
-        });
-      }
+      _applyLoadedProducts(products, loadToken: loadToken);
     } catch (e) {
       debugPrint('[ProductsBlock] Error: $e');
       if (mounted && loadToken == _loadToken) {
@@ -5302,7 +5352,62 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
           _isLoading = false;
         });
       }
+    } finally {
+      if (loadToken == _loadToken) {
+        _productLoadActive = false;
+        if (mounted &&
+            _inventoryTickerActive &&
+            _inventoryRevalidationPending) {
+          _scheduleInventoryRevalidation();
+        }
+      }
     }
+  }
+
+  void _applyLoadedProducts(
+    List<Product> products, {
+    required int loadToken,
+  }) {
+    if (!mounted || loadToken != _loadToken) return;
+    final nextProducts = products.take(_maxProducts).toList(growable: false);
+    if (_isLoading || !_samePublicProductSnapshots(_products, nextProducts)) {
+      setState(() {
+        _products = nextProducts;
+        _isLoading = false;
+      });
+    }
+  }
+
+  bool _samePublicProductSnapshots(
+    List<Product>? current,
+    List<Product>? next,
+  ) {
+    if (identical(current, next)) return true;
+    if (current == null || next == null || current.length != next.length) {
+      return false;
+    }
+    return _publicProductFingerprint(current) ==
+        _publicProductFingerprint(next);
+  }
+
+  String _publicProductFingerprint(List<Product> products) {
+    return jsonEncode([
+      for (final product in products)
+        <String, dynamic>{
+          ...product.toJson(),
+          'available_stock_quantity': product.availableStockQuantity,
+          'full_sets_available': product.fullSetsAvailable,
+          'is_partial': product.isPartial,
+        },
+    ]);
+  }
+
+  @override
+  void dispose() {
+    _loadToken++;
+    _observedInventoryService
+        ?.removeListener(_handlePublicInventoryInvalidated);
+    super.dispose();
   }
 
   Future<List<Product>> _hydratePreviewAvailability(

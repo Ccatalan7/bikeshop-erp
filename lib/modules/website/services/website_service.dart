@@ -22,6 +22,30 @@ import '../../../shared/models/product_tax_treatment.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/web_data_bridge.dart';
 
+const String _publicStoreCacheNamespace = 'website_public_v2';
+final RegExp _sensitivePublicWebsiteSettingKey = RegExp(
+  r'(access[_-]?token|refresh[_-]?token|secret|password|private|credential|api[_-]?key)',
+  caseSensitive: false,
+);
+
+@visibleForTesting
+bool isPublicWebsiteSettingCacheSafe(String key) {
+  return !_sensitivePublicWebsiteSettingKey.hasMatch(key.trim());
+}
+
+@visibleForTesting
+Map<String, dynamic> filterPublicWebsiteSettingsForCache(
+  Map<String, dynamic> settings,
+) {
+  return <String, dynamic>{
+    for (final entry in settings.entries)
+      if (isPublicWebsiteSettingCacheSafe(entry.key)) entry.key: entry.value,
+  };
+}
+
+String _publicStoreCacheKey(String kind, String tenantId) =>
+    '${_publicStoreCacheNamespace}_${kind}_$tenantId';
+
 class WebsiteEditorSaveResult {
   final String? pageId;
   final String? pageSlug;
@@ -39,6 +63,7 @@ class WebsiteService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
   final TenantService _tenantService = TenantService();
   final http.Client _httpClient = http.Client();
+  final Set<String> _legacyPublicCacheEvictionStarted = <String>{};
 
   // Perf logs are enabled in debug, or in release via:
   // flutter build web --release --dart-define=STORE_PERF_LOGS=true
@@ -461,9 +486,24 @@ class WebsiteService extends ChangeNotifier {
   // ============================================================
   // PAGE SNAPSHOTS - instant paint, followed by mandatory origin revalidation
   // ============================================================
-  static const Duration _cacheTTL = Duration(minutes: 5);
-  static final WebsitePageSnapshotCache _pageCache =
-      WebsitePageSnapshotCache(ttl: _cacheTTL);
+  static const Duration _cacheTTL = Duration(seconds: 30);
+  static final WebsitePageSnapshotCache _pageCache = WebsitePageSnapshotCache(
+    ttl: _cacheTTL,
+    retainFor: const Duration(hours: 24),
+  );
+  final ValueNotifier<int> _cmsPageFreshnessSignal = ValueNotifier<int>(0);
+
+  /// Requests an origin revalidation from the currently visible CMS page.
+  ///
+  /// This signal is deliberately separate from [notifyListeners]: periodic
+  /// freshness checks must not rebuild the entire storefront shell. Route
+  /// owners listen to it and revalidate only while they are ticker-enabled.
+  ValueListenable<int> get cmsPageFreshnessSignal => _cmsPageFreshnessSignal;
+
+  void requestActiveCmsPageOriginRevalidation() {
+    if (_disposed) return;
+    _cmsPageFreshnessSignal.value = _cmsPageFreshnessSignal.value + 1;
+  }
 
   /// Clear all cached pages (call when content is edited)
   static void clearPageCache() => _pageCache.clear();
@@ -541,7 +581,8 @@ class WebsiteService extends ChangeNotifier {
 
   // Local cache refresh TTL for public store bootstrap.
   // If we have recent cached settings+blocks, skip the immediate network refresh.
-  static const Duration _publicStoreBootstrapRefreshTTL = Duration(minutes: 5);
+  static const Duration _publicStoreBootstrapRefreshTTL = Duration(seconds: 30);
+  static const Duration _publicStoreBootstrapRetainTTL = Duration(hours: 24);
 
   /// Load ALL public store data - tries edge cache first, falls back to Supabase
   /// Edge cache: ~50ms (cache hit) vs Supabase direct: ~700ms
@@ -693,16 +734,22 @@ class WebsiteService extends ChangeNotifier {
         // Parse settings/blocks.
         // NOTE: On the public store we don't need theme presets, so avoid
         // decoding them here (saves work on the UI isolate).
-        final settingsData =
-            response['settings'] as Map<String, dynamic>? ?? {};
+        final settingsData = filterPublicWebsiteSettingsForCache(
+          response['settings'] is Map
+              ? Map<String, dynamic>.from(response['settings'] as Map)
+              : const <String, dynamic>{},
+        );
         final blocksData = response['blocks'] as List? ?? [];
 
         // If we already rendered from sync cache and the network returns the
         // exact same payload, avoid triggering a full rebuild.
         final prefs = _prefs;
-        final cachedSettingsJson =
-            prefs?.getString('website_settings_$tenantId');
-        final cachedBlocksJson = prefs?.getString('website_blocks_$tenantId');
+        final cachedSettingsJson = prefs?.getString(
+          _publicStoreCacheKey('settings', tenantId),
+        );
+        final cachedBlocksJson = prefs?.getString(
+          _publicStoreCacheKey('blocks', tenantId),
+        );
         final hasExistingData = _settings.isNotEmpty || _blocks.isNotEmpty;
 
         bool isSameAsCache = false;
@@ -832,12 +879,48 @@ class WebsiteService extends ChangeNotifier {
     _prefs = prefs;
   }
 
-  bool _hasFreshPublicStoreCache(String tenantId) {
-    if (_prefs == null) return false;
+  void _evictLegacyPublicStoreCache(String tenantId) {
+    final prefs = _prefs;
+    final normalizedTenantId = tenantId.trim();
+    if (prefs == null ||
+        normalizedTenantId.isEmpty ||
+        !_legacyPublicCacheEvictionStarted.add(normalizedTenantId)) {
+      return;
+    }
 
-    final settingsKey = 'website_settings_$tenantId';
-    final blocksKey = 'website_blocks_$tenantId';
-    final lastRefreshKey = 'website_public_store_last_refresh_$tenantId';
+    // The legacy namespace predates the public settings projection. Never
+    // hydrate it, even during the stale-while-revalidate paint path.
+    unawaited(
+      Future.wait<bool>([
+        prefs.remove('website_settings_$normalizedTenantId'),
+        prefs.remove('website_blocks_$normalizedTenantId'),
+        prefs.remove('website_navigation_$normalizedTenantId'),
+        prefs.remove('website_public_store_last_refresh_$normalizedTenantId'),
+      ]),
+    );
+  }
+
+  bool _hasFreshPublicStoreCache(String tenantId) {
+    return _hasPublicStoreCacheWithin(
+      tenantId,
+      _publicStoreBootstrapRefreshTTL,
+    );
+  }
+
+  bool _hasRetainedPublicStoreCache(String tenantId) {
+    return _hasPublicStoreCacheWithin(
+      tenantId,
+      _publicStoreBootstrapRetainTTL,
+    );
+  }
+
+  bool _hasPublicStoreCacheWithin(String tenantId, Duration maxAge) {
+    if (_prefs == null) return false;
+    _evictLegacyPublicStoreCache(tenantId);
+
+    final settingsKey = _publicStoreCacheKey('settings', tenantId);
+    final blocksKey = _publicStoreCacheKey('blocks', tenantId);
+    final lastRefreshKey = _publicStoreCacheKey('last_refresh', tenantId);
 
     final hasSettings = _prefs!.getString(settingsKey) != null;
     final hasBlocks = _prefs!.getString(blocksKey) != null;
@@ -847,15 +930,14 @@ class WebsiteService extends ChangeNotifier {
     if (lastRefreshMs == null) return false;
 
     final lastRefresh = DateTime.fromMillisecondsSinceEpoch(lastRefreshMs);
-    return DateTime.now().difference(lastRefresh) <
-        _publicStoreBootstrapRefreshTTL;
+    return DateTime.now().difference(lastRefresh) < maxAge;
   }
 
   Future<void> _persistPublicStoreLastRefresh(String tenantId) async {
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
       _prefs = prefs;
-      final key = 'website_public_store_last_refresh_$tenantId';
+      final key = _publicStoreCacheKey('last_refresh', tenantId);
       await prefs.setInt(key, DateTime.now().millisecondsSinceEpoch);
     } catch (_) {
       // Ignore cache write errors
@@ -865,7 +947,10 @@ class WebsiteService extends ChangeNotifier {
   /// Loads BOTH settings + blocks from the synchronous cache and notifies once.
   /// This reduces boot-time rebuild churn (helps avoid skipped frames).
   bool preloadPublicStoreFromSynchronousCache(String tenantId) {
-    if (!_hasFreshPublicStoreCache(tenantId)) {
+    // Paint a bounded stale snapshot immediately. The bootstrap always starts
+    // a direct origin revalidation when this returns true, so retention never
+    // becomes freshness authority.
+    if (!_hasRetainedPublicStoreCache(tenantId)) {
       return false;
     }
 
@@ -913,13 +998,20 @@ class WebsiteService extends ChangeNotifier {
     bool parseThemePresets = true,
   }) {
     if (_prefs == null) return false;
+    _evictLegacyPublicStoreCache(tenantId);
 
     try {
-      final cacheKey = 'website_settings_$tenantId';
+      final cacheKey = _publicStoreCacheKey('settings', tenantId);
       final cachedJson = _prefs!.getString(cacheKey);
 
       if (cachedJson != null) {
-        final settingsData = jsonDecode(cachedJson) as Map<String, dynamic>;
+        final decoded = Map<String, dynamic>.from(
+          jsonDecode(cachedJson) as Map,
+        );
+        final settingsData = filterPublicWebsiteSettingsForCache(decoded);
+        if (settingsData.length != decoded.length) {
+          unawaited(_prefs!.setString(cacheKey, jsonEncode(settingsData)));
+        }
         _settings =
             settingsData.map((k, v) => MapEntry(k, v?.toString() ?? ''));
         if (parseThemePresets) {
@@ -950,9 +1042,10 @@ class WebsiteService extends ChangeNotifier {
     required bool notify,
   }) {
     if (_prefs == null) return false;
+    _evictLegacyPublicStoreCache(tenantId);
 
     try {
-      final cacheKey = 'website_blocks_$tenantId';
+      final cacheKey = _publicStoreCacheKey('blocks', tenantId);
       final cachedJson = _prefs!.getString(cacheKey);
 
       if (cachedJson != null) {
@@ -996,8 +1089,9 @@ class WebsiteService extends ChangeNotifier {
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
       _prefs = prefs;
-      final cacheKey = 'website_settings_$tenantId';
-      await prefs.setString(cacheKey, jsonEncode(settingsData));
+      final cacheKey = _publicStoreCacheKey('settings', tenantId);
+      final publicSettings = filterPublicWebsiteSettingsForCache(settingsData);
+      await prefs.setString(cacheKey, jsonEncode(publicSettings));
     } catch (e) {
       // Ignore cache write errors
     }
@@ -1008,7 +1102,7 @@ class WebsiteService extends ChangeNotifier {
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
       _prefs = prefs;
-      final cacheKey = 'website_blocks_$tenantId';
+      final cacheKey = _publicStoreCacheKey('blocks', tenantId);
       await prefs.setString(cacheKey, jsonEncode(blocks));
     } catch (e) {
       // Ignore cache write errors
@@ -4051,9 +4145,10 @@ class WebsiteService extends ChangeNotifier {
     required bool notify,
   }) {
     if (_prefs == null) return false;
+    _evictLegacyPublicStoreCache(tenantId);
 
     try {
-      final cacheKey = 'website_navigation_$tenantId';
+      final cacheKey = _publicStoreCacheKey('navigation', tenantId);
       final cachedJson = _prefs!.getString(cacheKey);
       if (cachedJson == null) return false;
 
@@ -4094,7 +4189,7 @@ class WebsiteService extends ChangeNotifier {
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
       _prefs = prefs;
-      final cacheKey = 'website_navigation_$tenantId';
+      final cacheKey = _publicStoreCacheKey('navigation', tenantId);
       await prefs.setString(
         cacheKey,
         jsonEncode(_navigation.map((e) => e.toJson()).toList()),
@@ -4206,6 +4301,9 @@ class WebsiteService extends ChangeNotifier {
 
     _isLoadingNavigationForTenant = true;
     try {
+      final previousTenantId = _loadedNavigationTenantId;
+      final previousFingerprint =
+          jsonEncode(_navigation.map((item) => item.toJson()).toList());
       final response = await _supabase
           .from('website_navigation')
           .select()
@@ -4234,12 +4332,18 @@ class WebsiteService extends ChangeNotifier {
 
       _buildNavigationHierarchy();
 
+      final nextFingerprint =
+          jsonEncode(_navigation.map((item) => item.toJson()).toList());
+      final didChange = previousTenantId != tenantId ||
+          previousFingerprint != nextFingerprint;
       _hasLoadedNavigationForTenant = true;
       _loadedNavigationTenantId = tenantId;
 
-      await _persistNavigationToLocalCache(tenantId);
+      if (didChange) {
+        await _persistNavigationToLocalCache(tenantId);
+      }
 
-      if (notify) {
+      if (notify && didChange) {
         _safeNotifyListeners();
       }
     } catch (e) {
@@ -4622,8 +4726,11 @@ class WebsiteService extends ChangeNotifier {
     String slug, {
     required String tenantId,
   }) {
+    final cacheKey = _pageCacheKey(tenantId, slug);
     final cached = peekPageWithBlocks(slug, tenantId: tenantId);
-    if (cached != null) return Future.value(cached);
+    if (cached != null && _pageCache.isFresh(cacheKey)) {
+      return Future.value(cached);
+    }
     return loadPageWithBlocks(slug, tenantId: tenantId);
   }
 
@@ -4695,6 +4802,7 @@ class WebsiteService extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _ordersChannel?.unsubscribe();
+    _cmsPageFreshnessSignal.dispose();
     _httpClient.close();
     super.dispose();
   }
@@ -4716,11 +4824,15 @@ class _LooseAddressParts {
 class CachedPageSnapshot {
   final WebsitePage page;
   final List<Map<String, dynamic>> blocks;
+  final String fingerprint;
 
   CachedPageSnapshot({
     required this.page,
     required this.blocks,
-  });
+  }) : fingerprint = jsonEncode(<Object?>[
+          page.toJson(),
+          blocks,
+        ]);
 }
 
 /// Tenant/slug page snapshot cache used by public CMS routes.
@@ -4731,6 +4843,7 @@ class CachedPageSnapshot {
 @visibleForTesting
 class WebsitePageSnapshotCache {
   final Duration ttl;
+  final Duration retainFor;
   final int capacity;
 
   final LinkedHashMap<String, _CachedPage> _entries =
@@ -4742,8 +4855,11 @@ class WebsitePageSnapshotCache {
 
   WebsitePageSnapshotCache({
     this.ttl = const Duration(minutes: 5),
+    Duration? retainFor,
     this.capacity = 96,
-  }) : assert(capacity > 0);
+  })  : assert(capacity > 0),
+        assert((retainFor ?? ttl) >= ttl),
+        retainFor = retainFor ?? ttl;
 
   @visibleForTesting
   int get length => _entries.length;
@@ -4751,11 +4867,16 @@ class WebsitePageSnapshotCache {
   CachedPageSnapshot? peek(String key) {
     final cached = _entries.remove(key);
     if (cached == null) return null;
-    if (cached.isExpired(ttl)) return null;
+    if (cached.isExpired(retainFor)) return null;
 
     // Reinsert to mark this key as the most recently used.
     _entries[key] = cached;
     return _copySnapshot(cached.snapshot);
+  }
+
+  bool isFresh(String key) {
+    final cached = _entries[key];
+    return cached != null && !cached.isExpired(ttl);
   }
 
   Future<CachedPageSnapshot?> revalidate(
@@ -4822,9 +4943,13 @@ class WebsitePageSnapshotCache {
   }
 
   void _put(String key, CachedPageSnapshot snapshot) {
-    _entries.remove(key);
+    final previous = _entries.remove(key);
+    final retainedSnapshot =
+        previous?.snapshot.fingerprint == snapshot.fingerprint
+            ? previous!.snapshot
+            : _copySnapshot(snapshot);
     _entries[key] = _CachedPage(
-      snapshot: _copySnapshot(snapshot),
+      snapshot: retainedSnapshot,
       cachedAt: DateTime.now(),
     );
     while (_entries.length > capacity) {
@@ -4842,16 +4967,24 @@ class WebsitePageSnapshotCache {
   }
 
   Map<String, dynamic> _copyBlock(Map<String, dynamic> block) {
-    final copy = Map<String, dynamic>.from(block);
-    final blockData = copy['block_data'];
-    if (blockData is Map) {
-      copy['block_data'] = Map<String, dynamic>.from(blockData);
+    return Map<String, dynamic>.from(
+      _deepCopyJson(block) as Map,
+    );
+  }
+
+  Object? _deepCopyJson(Object? value) {
+    if (value is Map) {
+      return <String, dynamic>{
+        for (final entry in value.entries)
+          entry.key.toString(): _deepCopyJson(entry.value),
+      };
     }
-    final data = copy['data'];
-    if (data is Map) {
-      copy['data'] = Map<String, dynamic>.from(data);
+    if (value is List) {
+      return <Object?>[
+        for (final item in value) _deepCopyJson(item),
+      ];
     }
-    return copy;
+    return value;
   }
 }
 

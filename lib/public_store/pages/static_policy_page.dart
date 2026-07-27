@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -605,8 +607,12 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
   String? _error;
   List<Map<String, dynamic>> _blocks = [];
   String? _pageId;
+  String? _snapshotFingerprint;
   bool _editModeChecked = false;
   int _loadGeneration = 0;
+  WebsiteService? _observedWebsiteService;
+  bool _cmsRevalidationPending = false;
+  bool _cmsRevalidationScheduled = false;
 
   // Keep this page alive in memory to prevent reloading on navigation
   @override
@@ -620,6 +626,24 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final websiteService = context.read<WebsiteService>();
+    if (!identical(_observedWebsiteService, websiteService)) {
+      _observedWebsiteService?.cmsPageFreshnessSignal
+          .removeListener(_handleCmsPageFreshnessSignal);
+      _observedWebsiteService = websiteService;
+      websiteService.cmsPageFreshnessSignal
+          .addListener(_handleCmsPageFreshnessSignal);
+    }
+
+    if (_cmsRevalidationPending && TickerMode.of(context)) {
+      _cmsRevalidationPending = false;
+      _scheduleCmsPageOriginRevalidation();
+    }
+  }
+
+  @override
   void didUpdateWidget(covariant StaticPolicyPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.slug != widget.slug) {
@@ -627,6 +651,36 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
       _seedFromSnapshot(widget.slug, clearOnMiss: true);
       _loadPage();
     }
+  }
+
+  @override
+  void dispose() {
+    _observedWebsiteService?.cmsPageFreshnessSignal
+        .removeListener(_handleCmsPageFreshnessSignal);
+    super.dispose();
+  }
+
+  void _handleCmsPageFreshnessSignal() {
+    if (!mounted) return;
+    if (!TickerMode.of(context)) {
+      _cmsRevalidationPending = true;
+      return;
+    }
+    _scheduleCmsPageOriginRevalidation();
+  }
+
+  void _scheduleCmsPageOriginRevalidation() {
+    if (_cmsRevalidationScheduled) return;
+    _cmsRevalidationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cmsRevalidationScheduled = false;
+      if (!mounted) return;
+      if (!TickerMode.of(context)) {
+        _cmsRevalidationPending = true;
+        return;
+      }
+      unawaited(_loadPage());
+    });
   }
 
   bool _seedFromSnapshot(String slug, {bool clearOnMiss = false}) {
@@ -639,6 +693,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
 
     if (snapshot != null) {
       _pageId = snapshot.page.id;
+      _snapshotFingerprint = snapshot.fingerprint;
       _blocks = snapshot.blocks;
       _loading = false;
       _error = null;
@@ -647,6 +702,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
 
     if (clearOnMiss) {
       _pageId = null;
+      _snapshotFingerprint = null;
       _blocks = [];
       _loading = true;
       _error = null;
@@ -776,12 +832,17 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
         throw Exception('Página no encontrada');
       }
 
-      setState(() {
-        _pageId = refreshed.page.id;
-        _blocks = refreshed.blocks;
-        _loading = false;
-        _error = null;
-      });
+      final didContentChange = _snapshotFingerprint != refreshed.fingerprint ||
+          _pageId != refreshed.page.id;
+      if (didContentChange || _loading || _error != null) {
+        setState(() {
+          _pageId = refreshed.page.id;
+          _snapshotFingerprint = refreshed.fingerprint;
+          _blocks = refreshed.blocks;
+          _loading = false;
+          _error = null;
+        });
+      }
 
       // Warm the other policy snapshots only when missing. Opening one still
       // performs its own mandatory background origin revalidation.
@@ -1010,19 +1071,24 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
       child: Column(
         children: [
           for (final block in blocksToRender) ...[
-            Padding(
-              padding: EdgeInsets.only(bottom: sectionSpacing),
-              child: _buildBlockWidget(
-                context: context,
-                block: block,
-                isEditMode: isEditMode,
-                primaryColor: primaryColor,
-                accentColor: accentColor,
-                headingFont: headingFont,
-                bodyFont: bodyFont,
-                headingSize: headingSize,
-                bodySize: bodySize,
-                tenantId: tenantId,
+            KeyedSubtree(
+              key: ValueKey<String>(
+                'policy-block-${block['id']?.toString() ?? ''}',
+              ),
+              child: Padding(
+                padding: EdgeInsets.only(bottom: sectionSpacing),
+                child: _buildBlockWidget(
+                  context: context,
+                  block: block,
+                  isEditMode: isEditMode,
+                  primaryColor: primaryColor,
+                  accentColor: accentColor,
+                  headingFont: headingFont,
+                  bodyFont: bodyFont,
+                  headingSize: headingSize,
+                  bodySize: bodySize,
+                  tenantId: tenantId,
+                ),
               ),
             ),
           ],

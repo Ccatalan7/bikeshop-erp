@@ -113,6 +113,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   int? _facetCategoryCountsLoadToken;
   String _lastCategoryCountsSignature = '';
   String? _activeCatalogPageSignature;
+  String? _visibleCatalogPageSignature;
+  int? _visibleCatalogPageNumber;
+  bool _isShowingPreviousResults = false;
   String? _lastLoggedModeKey;
   String? _lastDependencyModeKey;
   String? _lastSeoSignature;
@@ -120,17 +123,23 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   PublicInventoryService? _observedInventoryService;
   String? _loadedCategoriesTenantId;
   bool _inventoryInvalidationScheduled = false;
+  bool _inventoryRevalidationPending = false;
   WebsiteCatalogPresentationRegistry _presentationRegistry =
       const WebsiteCatalogPresentationRegistry({});
-  final CatalogPagePrefetchCache<PublicProductPage> _catalogPageCache =
+  // Shared across routed catalog instances so catalog -> detail -> back keeps
+  // the already-painted pages. Soft expiry starts a silent origin refresh;
+  // retained values are visual continuity, never purchase authority.
+  static final CatalogPagePrefetchCache<PublicProductPage> _catalogPageCache =
       CatalogPagePrefetchCache<PublicProductPage>(
-    maxAge: const Duration(seconds: 30),
-    maxEntries: 6,
+    maxAge: const Duration(seconds: 8),
+    retainFor: const Duration(minutes: 10),
+    maxEntries: 24,
   );
-  final CatalogPagePrefetchCache<PublicCatalogFacetSnapshot>
+  static final CatalogPagePrefetchCache<PublicCatalogFacetSnapshot>
       _catalogFacetCache = CatalogPagePrefetchCache<PublicCatalogFacetSnapshot>(
-    maxAge: const Duration(seconds: 30),
-    maxEntries: 1,
+    maxAge: const Duration(seconds: 20),
+    retainFor: const Duration(minutes: 10),
+    maxEntries: 12,
     shouldCache: (snapshot) => snapshot.isAvailable,
   );
 
@@ -203,25 +212,33 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         _lastDependencyModeKey != null && _lastDependencyModeKey != modeKey;
     _lastDependencyModeKey = modeKey;
     _syncFiltersFromRoute(reloadForModeChange: shouldReloadForMode);
+    if (_inventoryRevalidationPending && TickerMode.of(context)) {
+      _inventoryRevalidationPending = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _handlePublicInventoryInvalidated();
+      });
+    }
   }
 
   void _handlePublicInventoryInvalidated() {
     _loadToken++;
     _activeCatalogPageSignature = null;
-    _catalogPageCache.clear();
-    _catalogFacetCache.clear();
-    if (!mounted || _inventoryInvalidationScheduled) return;
+    // Invalidation means "refresh now", not "erase what the customer sees".
+    // Mark retained values stale so the next load reaches the origin while the
+    // current grid, facets and geometry remain stable.
+    _catalogPageCache.markStale();
+    _catalogFacetCache.markStale();
+    if (!mounted) return;
+    if (!TickerMode.of(context)) {
+      _inventoryRevalidationPending = true;
+      return;
+    }
+    if (_inventoryInvalidationScheduled) return;
     _inventoryInvalidationScheduled = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _inventoryInvalidationScheduled = false;
       if (!mounted) return;
-      setState(() {
-        _loadedCategoriesTenantId = null;
-        _catalogFacets = const PublicCatalogFacetSnapshot.unavailable();
-        _directCategoryProductCounts = const {};
-        _categoryTotalCount = 0;
-      });
       unawaited(
         _loadProducts(
           resetPage: false,
@@ -1010,18 +1027,27 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         signature: productPageSignature!,
         pageNumber: requestPage,
       );
-      if (_hasLoadedInitialProducts) {
+      if (cachedPage != null) {
         setState(() {
-          if (cachedPage != null) {
-            _allProducts = cachedPage.products;
-            _filteredProducts = cachedPage.products;
-            _totalProductCount = cachedPage.totalCount;
-            _isRefreshing = false;
-          } else {
-            _isRefreshing = true;
-            _filteredProducts = const [];
-            _totalProductCount = 0;
-          }
+          _allProducts = cachedPage.products;
+          _filteredProducts = cachedPage.products;
+          _totalProductCount = cachedPage.totalCount;
+          _visibleCatalogPageSignature = productPageSignature;
+          _visibleCatalogPageNumber = requestPage;
+          _isShowingPreviousResults = false;
+          _hasLoadedInitialProducts = true;
+          _isLoading = false;
+          _isRefreshing = false;
+        });
+      } else if (_hasLoadedInitialProducts) {
+        // Keep the last stable grid mounted while a genuinely new query is in
+        // flight. Adjacent pages are normally prefetched, but filters and
+        // direct links can still miss.
+        setState(() {
+          _isRefreshing = true;
+          _isShowingPreviousResults = _filteredProducts.isNotEmpty &&
+              (_visibleCatalogPageSignature != productPageSignature ||
+                  _visibleCatalogPageNumber != requestPage);
         });
       }
 
@@ -1062,14 +1088,33 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         }
       }
 
-      setState(() {
-        _allProducts = page.products;
-        _filteredProducts = page.products;
-        _totalProductCount = page.totalCount;
-        _hasLoadedInitialProducts = true;
-        _isLoading = false;
-        _isRefreshing = false;
-      });
+      if (!_sameProductPage(
+        products: _filteredProducts,
+        totalCount: _totalProductCount,
+        nextProducts: page.products,
+        nextTotalCount: page.totalCount,
+      )) {
+        setState(() {
+          _allProducts = page.products;
+          _filteredProducts = page.products;
+          _totalProductCount = page.totalCount;
+          _visibleCatalogPageSignature = productPageSignature;
+          _visibleCatalogPageNumber = _currentPage;
+          _isShowingPreviousResults = false;
+          _hasLoadedInitialProducts = true;
+          _isLoading = false;
+          _isRefreshing = false;
+        });
+      } else if (_isLoading || _isRefreshing || !_hasLoadedInitialProducts) {
+        setState(() {
+          _visibleCatalogPageSignature = productPageSignature;
+          _visibleCatalogPageNumber = _currentPage;
+          _isShowingPreviousResults = false;
+          _hasLoadedInitialProducts = true;
+          _isLoading = false;
+          _isRefreshing = false;
+        });
+      }
 
       _catalogDebugLog(
         '🧭 [StoreCatalogTrace] PUBLIC_RESPONSE token=$token '
@@ -1128,6 +1173,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           _allProducts = const [];
           _filteredProducts = const [];
           _totalProductCount = 0;
+          _visibleCatalogPageSignature = null;
+          _visibleCatalogPageNumber = null;
+          _isShowingPreviousResults = false;
         });
       }
     } finally {
@@ -1179,6 +1227,32 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     } catch (_) {
       // Prefetch is opportunistic. The foreground load remains authoritative.
     }
+  }
+
+  bool _sameProductPage({
+    required List<Product> products,
+    required int totalCount,
+    required List<Product> nextProducts,
+    required int nextTotalCount,
+  }) {
+    if (totalCount != nextTotalCount ||
+        products.length != nextProducts.length) {
+      return false;
+    }
+    for (var index = 0; index < products.length; index++) {
+      final current = products[index];
+      final next = nextProducts[index];
+      if (current.id != next.id ||
+          current.updatedAt != next.updatedAt ||
+          current.name != next.name ||
+          current.price != next.price ||
+          current.stockQuantity != next.stockQuantity ||
+          current.imageUrl != next.imageUrl ||
+          current.imageUrlOptimized != next.imageUrlOptimized) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<void> _loadCategoryCounts({
@@ -2062,8 +2136,6 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     _searchDebounce?.cancel();
     _observedInventoryService
         ?.removeListener(_handlePublicInventoryInvalidated);
-    _catalogPageCache.clear();
-    _catalogFacetCache.clear();
     _filtersSearchController.dispose();
     _minPriceController.dispose();
     _maxPriceController.dispose();
@@ -3493,7 +3565,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   }
 
   Widget _buildProductGrid(String modeKey) {
-    if (_isRefreshing) {
+    if (_isRefreshing && _filteredProducts.isEmpty) {
       return const SizedBox(
         height: 320,
         child: Center(
@@ -3560,20 +3632,39 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
         return Column(
           children: [
-            // Product Grid
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: metrics.crossAxisCount,
-                childAspectRatio: metrics.childAspectRatio,
-                crossAxisSpacing: metrics.crossAxisSpacing,
-                mainAxisSpacing: metrics.mainAxisSpacing,
+            if (_isRefreshing)
+              const SizedBox(
+                height: 2,
+                child: LinearProgressIndicator(minHeight: 2),
               ),
-              itemCount: paginatedProducts.length,
-              itemBuilder: (context, index) {
-                return _CatalogProductCard(product: paginatedProducts[index]);
-              },
+            // Product Grid
+            AbsorbPointer(
+              absorbing: _isShowingPreviousResults,
+              child: ExcludeSemantics(
+                excluding: _isShowingPreviousResults,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 120),
+                  opacity: _isShowingPreviousResults ? 0.64 : 1,
+                  child: GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: metrics.crossAxisCount,
+                      childAspectRatio: metrics.childAspectRatio,
+                      crossAxisSpacing: metrics.crossAxisSpacing,
+                      mainAxisSpacing: metrics.mainAxisSpacing,
+                    ),
+                    itemCount: paginatedProducts.length,
+                    itemBuilder: (context, index) {
+                      final product = paginatedProducts[index];
+                      return _CatalogProductCard(
+                        key: ValueKey<String>('catalog-product-${product.id}'),
+                        product: product,
+                      );
+                    },
+                  ),
+                ),
+              ),
             ),
 
             // Pagination Controls
@@ -3605,12 +3696,13 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           _allProducts = cachedPage.products;
           _filteredProducts = cachedPage.products;
           _totalProductCount = cachedPage.totalCount;
+          _visibleCatalogPageSignature = signature;
+          _visibleCatalogPageNumber = nextPage;
+          _isShowingPreviousResults = false;
           _isRefreshing = false;
         } else {
-          _allProducts = const [];
-          _filteredProducts = const [];
-          _totalProductCount = 0;
           _isRefreshing = true;
+          _isShowingPreviousResults = _filteredProducts.isNotEmpty;
         }
       }
     });
@@ -3754,7 +3846,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 class _CatalogProductCard extends StatefulWidget {
   final Product product;
 
-  const _CatalogProductCard({required this.product});
+  const _CatalogProductCard({
+    super.key,
+    required this.product,
+  });
 
   @override
   State<_CatalogProductCard> createState() => _CatalogProductCardState();
@@ -3827,6 +3922,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
                           ? Image.network(
                               displayImageUrl,
                               fit: BoxFit.contain,
+                              gaplessPlayback: true,
                               errorBuilder: (context, error, stackTrace) {
                                 return Center(
                                   child: Icon(

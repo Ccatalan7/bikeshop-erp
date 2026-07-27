@@ -180,13 +180,23 @@ class PublicInventoryService extends ChangeNotifier {
     required String tenantId,
     required String productIdentifier,
   }) {
+    return getCachedProductSnapshotForIdentifier(
+      tenantId: tenantId,
+      productIdentifier: productIdentifier,
+    )?.value;
+  }
+
+  PublicProductSnapshotValue<Product>? getCachedProductSnapshotForIdentifier({
+    required String tenantId,
+    required String productIdentifier,
+  }) {
     if (productIdentifier.startsWith('sku:')) {
-      return _productSnapshots.peekBySku(
+      return _productSnapshots.peekSnapshotBySku(
         tenantId: tenantId,
         sku: productIdentifier.substring(4),
       );
     }
-    return _productSnapshots.peekById(
+    return _productSnapshots.peekSnapshotById(
       tenantId: tenantId,
       id: productIdentifier,
     );
@@ -204,12 +214,14 @@ class PublicInventoryService extends ChangeNotifier {
     _cacheProductSnapshots(
       tenantId: tenantId,
       products: [product],
+      originValidated: false,
     );
   }
 
   void _cacheProductSnapshots({
     required String tenantId,
     required Iterable<Product> products,
+    bool originValidated = true,
   }) {
     for (final product in products) {
       _productSnapshots.put(
@@ -217,6 +229,7 @@ class PublicInventoryService extends ChangeNotifier {
         id: product.id,
         sku: product.sku,
         value: product,
+        originValidated: originValidated,
       );
     }
   }
@@ -1187,6 +1200,25 @@ class PublicInventoryService extends ChangeNotifier {
   /// Clear cache for specific tenant
   ///
   /// Call this when products/categories are updated
+  void markCacheStale({String? tenantId}) {
+    _productPageGeneration++;
+    _productPagesInFlight.clear();
+    _productSnapshots.markOriginStale(tenantId: tenantId);
+
+    if (tenantId != null) {
+      _cacheTimestamps.remove('products_$tenantId');
+      _cacheTimestamps.remove('categories_$tenantId');
+    } else {
+      _cacheTimestamps.clear();
+    }
+
+    // Consumers revalidate in the background while retaining their current
+    // visual state. This is the normal SWR invalidation path.
+    notifyListeners();
+  }
+
+  /// Destructively clears retained values. Reserve this for tenant changes or
+  /// explicit editor resets; ordinary freshness pulses use [markCacheStale].
   void clearCache({String? tenantId}) {
     _productPageGeneration++;
     _productPagesInFlight.clear();
