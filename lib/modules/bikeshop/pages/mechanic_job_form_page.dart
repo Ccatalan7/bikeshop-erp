@@ -16,6 +16,7 @@ import '../../../shared/models/product.dart';
 import '../../../shared/models/product_compatibility.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/database_service.dart';
+import '../../../shared/utils/responsive_viewport.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
@@ -102,6 +103,8 @@ enum _JobWorkbenchTab { general, diagnosis, products }
 enum _DiagnosisWorkbenchTab { narrative, structured }
 
 enum _NarrativeDraftInsertMode { replace, append }
+
+enum _MechanicJobFormIssueOwner { customer, general, products, costSummary }
 
 final List<BikeSystemControllerSpec> _kStructuredDiagnosisEditableSystems =
     kBikeSystemControllerSpecs
@@ -734,6 +737,815 @@ class _ServiceWizardDialogConfig {
   });
 }
 
+@visibleForTesting
+abstract final class MechanicJobResponsivePolicy {
+  static bool usesCompactComposition(double viewportWidth) =>
+      viewportWidth < ResponsiveViewport.desktopMin;
+}
+
+@visibleForTesting
+class MechanicJobCompactWorkbenchNavigation extends StatelessWidget {
+  const MechanicJobCompactWorkbenchNavigation({
+    super.key,
+    required this.selectedIndex,
+    required this.showDiagnosis,
+    required this.productsLabel,
+    required this.onSelected,
+  });
+
+  final int selectedIndex;
+  final bool showDiagnosis;
+  final String productsLabel;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final destinations = <({int index, String label, String semanticsLabel})>[
+      (index: 0, label: 'General', semanticsLabel: 'General'),
+      if (showDiagnosis)
+        (
+          index: 1,
+          label: 'Diagnóstico',
+          semanticsLabel: 'Diagnóstico',
+        ),
+      (
+        index: 2,
+        label: productsLabel,
+        semanticsLabel: productsLabel == 'Cobro'
+            ? 'Productos y cobro'
+            : 'Productos y servicios',
+      ),
+    ];
+
+    return Container(
+      key: const ValueKey('mechanic-job-compact-workbench-navigation'),
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          for (var position = 0;
+              position < destinations.length;
+              position++) ...[
+            if (position > 0) const SizedBox(width: 3),
+            Expanded(
+              child: _MechanicJobCompactWorkbenchDestination(
+                index: destinations[position].index,
+                label: destinations[position].label,
+                semanticsLabel: destinations[position].semanticsLabel,
+                selected: selectedIndex == destinations[position].index,
+                onTap: onSelected,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MechanicJobCompactWorkbenchDestination extends StatelessWidget {
+  const _MechanicJobCompactWorkbenchDestination({
+    required this.index,
+    required this.label,
+    required this.semanticsLabel,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final int index;
+  final String label;
+  final String semanticsLabel;
+  final bool selected;
+  final ValueChanged<int> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: semanticsLabel,
+      child: ExcludeSemantics(
+        child: Material(
+          color: selected ? theme.colorScheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+          child: InkWell(
+            key: ValueKey('mechanic-job-workbench-tab-$index'),
+            onTap: () => onTap(index),
+            borderRadius: BorderRadius.circular(9),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: selected
+                            ? theme.colorScheme.onPrimary
+                            : theme.colorScheme.onSurface,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+@visibleForTesting
+class MechanicJobCompactChoice {
+  const MechanicJobCompactChoice({
+    required this.id,
+    required this.label,
+    required this.icon,
+    required this.statusLabel,
+    required this.statusColor,
+  });
+
+  final String id;
+  final String label;
+  final IconData icon;
+  final String statusLabel;
+  final Color statusColor;
+}
+
+@visibleForTesting
+class MechanicJobCompactChoiceMenu extends StatelessWidget {
+  const MechanicJobCompactChoiceMenu({
+    super.key,
+    required this.controlLabel,
+    required this.selectedId,
+    required this.choices,
+    required this.onSelected,
+  });
+
+  final String controlLabel;
+  final String selectedId;
+  final List<MechanicJobCompactChoice> choices;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final selected = choices.firstWhere(
+      (choice) => choice.id == selectedId,
+      orElse: () => choices.first,
+    );
+
+    return MenuAnchor(
+      menuChildren: choices
+          .map(
+            (choice) => MenuItemButton(
+              key: ValueKey('mechanic-job-choice-${choice.id}'),
+              onPressed: () => onSelected(choice.id),
+              leadingIcon: Icon(choice.icon, size: 19),
+              trailingIcon: Semantics(
+                label: 'Estado ${choice.statusLabel}',
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: choice.statusColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              style: MenuItemButton.styleFrom(
+                minimumSize: const Size(240, 48),
+              ),
+              child: Text(choice.label),
+            ),
+          )
+          .toList(growable: false),
+      builder: (context, controller, _) {
+        final actionLabel = controller.isOpen ? 'Cerrar opciones' : 'Cambiar';
+        return Semantics(
+          button: true,
+          expanded: controller.isOpen,
+          label:
+              '$controlLabel. ${selected.label}. Estado ${selected.statusLabel}. $actionLabel',
+          child: ExcludeSemantics(
+            child: OutlinedButton(
+              key: ValueKey(
+                'mechanic-job-compact-${controlLabel.toLowerCase()}-menu',
+              ),
+              onPressed: () =>
+                  controller.isOpen ? controller.close() : controller.open(),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 52),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                alignment: Alignment.centerLeft,
+              ),
+              child: Row(
+                children: [
+                  Icon(selected.icon, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          controlLabel,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        Text(
+                          selected.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    width: 9,
+                    height: 9,
+                    decoration: BoxDecoration(
+                      color: selected.statusColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                  Flexible(
+                    child: Text(
+                      selected.statusLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.keyboard_arrow_down_rounded),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+@visibleForTesting
+class MechanicJobDiscardDialog extends StatelessWidget {
+  const MechanicJobDiscardDialog({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      namesRoute: true,
+      label: 'Confirmar descarte de cambios',
+      child: AlertDialog(
+        key: const ValueKey('mechanic-job-inline-discard-dialog'),
+        title: const Text('¿Descartar cambios?'),
+        content: const Text(
+          'Los cambios de este trabajo todavía no se han guardado.',
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('mechanic-job-inline-discard-cancel'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Seguir editando'),
+          ),
+          FilledButton(
+            key: const ValueKey('mechanic-job-inline-discard-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            child: const Text('Descartar'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Responsive presentation for the bicycle context used by the canonical job
+/// form. The compact disclosure changes composition only; the snapshot and every
+/// command still belong to the same job-form owners used on larger surfaces.
+@visibleForTesting
+class MechanicJobBikeContextCard extends StatefulWidget {
+  final BikeRecordSnapshot snapshot;
+  final bool isLoading;
+  final bool loadFailed;
+  final VoidCallback? onRetry;
+  final VoidCallback? onOpenProfile;
+  final VoidCallback onEditProfile;
+  final String editActionLabel;
+
+  const MechanicJobBikeContextCard({
+    super.key,
+    required this.snapshot,
+    required this.isLoading,
+    required this.loadFailed,
+    required this.onRetry,
+    required this.onOpenProfile,
+    required this.onEditProfile,
+    required this.editActionLabel,
+  });
+
+  @override
+  State<MechanicJobBikeContextCard> createState() =>
+      _MechanicJobBikeContextCardState();
+}
+
+class _MechanicJobBikeContextCardState
+    extends State<MechanicJobBikeContextCard> {
+  bool _phoneExpanded = false;
+
+  String get _bikeIdentity =>
+      widget.snapshot.profile?.identityLine ??
+      BikeProfileSummaryBuilder.buildIdentityLine(widget.snapshot.bike);
+
+  @override
+  void didUpdateWidget(MechanicJobBikeContextCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final previousIdentity =
+        oldWidget.snapshot.bike.id ?? oldWidget.snapshot.identityTitle;
+    final currentIdentity =
+        widget.snapshot.bike.id ?? widget.snapshot.identityTitle;
+    if (previousIdentity != currentIdentity) {
+      _phoneExpanded = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isCompact = MechanicJobResponsivePolicy.usesCompactComposition(
+      ResponsiveViewport.widthOf(context),
+    );
+    final theme = Theme.of(context);
+
+    if (!isCompact) {
+      return _buildExpandedCard(theme);
+    }
+
+    return Container(
+      key: const ValueKey('mechanic-job-bike-context-card'),
+      margin: const EdgeInsets.only(top: 16),
+      decoration: _cardDecoration(theme),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildPhoneDisclosure(theme),
+          if (_phoneExpanded) ...[
+            Divider(
+              height: 1,
+              color: theme.dividerColor.withValues(alpha: 0.4),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+              child: _buildPhoneExpandedDetails(theme),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  BoxDecoration _cardDecoration(ThemeData theme) {
+    return BoxDecoration(
+      color: theme.colorScheme.surfaceContainerLowest,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(
+        color: theme.dividerColor.withValues(alpha: 0.4),
+      ),
+    );
+  }
+
+  Widget _buildPhoneDisclosure(ThemeData theme) {
+    final warnings = widget.snapshot.warnings;
+    final firstException = widget.loadFailed
+        ? 'No se pudo cargar la ficha técnica'
+        : warnings.isEmpty
+            ? null
+            : warnings.first;
+    final remainingWarningCount =
+        widget.loadFailed || warnings.length <= 1 ? 0 : warnings.length - 1;
+    final actionLabel = _phoneExpanded ? 'Ocultar contexto' : 'Ver contexto';
+    final semanticsParts = <String>[
+      'Contexto de la bicicleta',
+      _bikeIdentity,
+      if (firstException != null) firstException,
+      if (remainingWarningCount > 0)
+        '$remainingWarningCount advertencia adicional',
+      actionLabel,
+    ];
+
+    return Semantics(
+      key: const ValueKey('mechanic-job-bike-context-disclosure'),
+      container: true,
+      button: true,
+      expanded: _phoneExpanded,
+      label: semanticsParts.join('. '),
+      child: ExcludeSemantics(
+        child: InkWell(
+          onTap: () => setState(() => _phoneExpanded = !_phoneExpanded),
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 10, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.summarize_outlined,
+                        size: 18,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Contexto de la bicicleta',
+                              maxLines: 2,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _bikeIdentity,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        _phoneExpanded
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ],
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    actionLabel,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (widget.isLoading) ...[
+                  const SizedBox(height: 6),
+                  const LinearProgressIndicator(),
+                ] else if (firstException != null) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        widget.loadFailed
+                            ? Icons.cloud_off_outlined
+                            : Icons.warning_amber_rounded,
+                        size: 16,
+                        color: theme.colorScheme.error,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          firstException,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.error,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      if (remainingWarningCount > 0) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          '+$remainingWarningCount '
+                          '${remainingWarningCount == 1 ? 'pendiente' : 'pendientes'}',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.error,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhoneExpandedDetails(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildProfileDetails(theme, compact: true),
+        const SizedBox(height: 12),
+        Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (widget.onOpenProfile != null)
+              OutlinedButton.icon(
+                key: const ValueKey(
+                  'mechanic-job-bike-context-open-profile',
+                ),
+                onPressed: widget.onOpenProfile,
+                icon: const Icon(Icons.open_in_new_rounded, size: 17),
+                label: const Text('Ver perfil completo'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 48),
+                ),
+              ),
+            TextButton.icon(
+              key: const ValueKey('mechanic-job-bike-context-edit-profile'),
+              onPressed: widget.onEditProfile,
+              icon: const Icon(Icons.edit_outlined, size: 16),
+              label: Text(widget.editActionLabel),
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 48),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExpandedCard(ThemeData theme) {
+    return Container(
+      key: const ValueKey('mechanic-job-bike-context-card'),
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDecoration(theme),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.summarize_outlined,
+                size: 18,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Contexto de la bicicleta',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Tooltip(
+                message: 'Ver perfil completo',
+                child: IconButton(
+                  onPressed: widget.onOpenProfile,
+                  icon: const Icon(Icons.open_in_new_rounded, size: 17),
+                  visualDensity: VisualDensity.standard,
+                  splashRadius: 18,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 48,
+                    height: 48,
+                  ),
+                  padding: EdgeInsets.zero,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: widget.onEditProfile,
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: Text(widget.editActionLabel),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.standard,
+                  minimumSize: const Size(0, 48),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _bikeIdentity,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _buildProfileDetails(theme, compact: false),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileDetails(
+    ThemeData theme, {
+    required bool compact,
+  }) {
+    final snapshot = widget.snapshot;
+    final highlights = snapshot.summaryHighlights;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.isLoading)
+          const LinearProgressIndicator()
+        else if (widget.loadFailed)
+          _buildLoadFailure(theme, compact: compact)
+        else ...[
+          if (!snapshot.hasStructuredProfile)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Aun no hay perfil estructurado guardado para esta bicicleta.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            )
+          else if (highlights.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Aun no hay resumen disponible para esta bicicleta.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          if (highlights.isNotEmpty)
+            if (compact)
+              Text(
+                highlights.join(' · '),
+                key: const ValueKey(
+                  'mechanic-job-bike-context-highlight-text',
+                ),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  height: 1.45,
+                ),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: highlights
+                    .map(
+                      (line) => Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surface,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: theme.dividerColor.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        child: Text(line, style: theme.textTheme.bodySmall),
+                      ),
+                    )
+                    .toList(),
+              ),
+        ],
+        if (snapshot.warnings.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          ...snapshot.warnings.map(
+            (warning) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: 16,
+                    color: theme.colorScheme.error,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      warning,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+        if (snapshot.lastConfirmedAt != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Ultima confirmacion: ${DateFormat('dd/MM/yyyy').format(snapshot.lastConfirmedAt!)}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildLoadFailure(
+    ThemeData theme, {
+    required bool compact,
+  }) {
+    final message = Text(
+      'No se pudo cargar la ficha. No se tratará como vacía.',
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.onErrorContainer,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+    final retry = TextButton(
+      onPressed: widget.onRetry,
+      child: const Text('Reintentar'),
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: compact
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.cloud_off_outlined,
+                      size: 18,
+                      color: theme.colorScheme.onErrorContainer,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: message),
+                  ],
+                ),
+                Align(alignment: Alignment.centerRight, child: retry),
+              ],
+            )
+          : Row(
+              children: [
+                Icon(
+                  Icons.cloud_off_outlined,
+                  size: 18,
+                  color: theme.colorScheme.onErrorContainer,
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: message),
+                retry,
+              ],
+            ),
+    );
+  }
+}
+
 class MechanicJobFormPage extends StatefulWidget {
   final String? jobId; // Null for new job, ID for editing
   final String? customerId; // Pre-select customer if provided
@@ -886,6 +1698,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   // Key to reset autocomplete field after adding product
   int _partAutocompleteKey = 0;
   final FocusNode _partAutocompleteFocus = FocusNode();
+  final FocusNode _discountFocusNode = FocusNode();
 
   // Data
   List<Customer> _customers = [];
@@ -900,6 +1713,14 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   String? _generatingNarrativeDraftTabId;
   String? _inlineDraftBaselineFingerprint;
   bool _isInlineDiscardPromptOpen = false;
+  bool _allowRoutePop = false;
+  bool _hasAttemptedSave = false;
+  final GlobalKey _workbenchSectionKey =
+      GlobalKey(debugLabel: 'mechanic-job-workbench');
+  final GlobalKey _customerSectionKey =
+      GlobalKey(debugLabel: 'mechanic-job-customer');
+  final GlobalKey _costSummarySectionKey =
+      GlobalKey(debugLabel: 'mechanic-job-cost-summary');
 
   // Image handling
   List<String> _imageUrls = [];
@@ -1014,6 +1835,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     _subjectNotesController.dispose();
     _warrantyDecisionReasonController.dispose();
     _partAutocompleteFocus.dispose();
+    _discountFocusNode.dispose();
     for (final tab in _bikeTabs) {
       tab.dispose();
     }
@@ -2406,7 +3228,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   Widget _buildBikeProfileSummaryCard() {
     if (_selectedBike == null) return const SizedBox.shrink();
 
-    final theme = Theme.of(context);
     final snapshot = BikeRecordSnapshot.fromBikeAndProfile(
       bike: _selectedBike!,
       profile: _selectedBikeProfile,
@@ -2415,187 +3236,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         _selectedCustomer?.id != null && _selectedBike?.id != null;
     final actionLabel =
         snapshot.hasStructuredProfile ? 'Editar ficha' : 'Completar ficha';
-    final highlights = snapshot.summaryHighlights;
-
-    return Container(
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: theme.dividerColor.withValues(alpha: 0.4),
+    return MechanicJobBikeContextCard(
+      snapshot: snapshot,
+      isLoading: _isLoadingSelectedBikeProfile,
+      loadFailed: _selectedBikeProfileLoadFailed,
+      onRetry: () => _loadSelectedBikeProfile(_selectedBike),
+      onOpenProfile:
+          canOpenProfile ? () => unawaited(_openSelectedBikeRecord()) : null,
+      onEditProfile: () => unawaited(
+        _openBikeDialog(
+          bike: _selectedBike,
+          selectSavedBike: true,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.summarize_outlined,
-                  size: 18, color: theme.colorScheme.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Contexto de la bicicleta',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Tooltip(
-                message: 'Ver perfil completo',
-                child: IconButton(
-                  onPressed: canOpenProfile ? _openSelectedBikeRecord : null,
-                  icon: const Icon(Icons.open_in_new_rounded, size: 17),
-                  visualDensity: VisualDensity.standard,
-                  splashRadius: 18,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 48,
-                    height: 48,
-                  ),
-                  padding: EdgeInsets.zero,
-                ),
-              ),
-              TextButton.icon(
-                onPressed: () async {
-                  await _openBikeDialog(
-                    bike: _selectedBike,
-                    selectSavedBike: true,
-                  );
-                },
-                icon: const Icon(Icons.edit_outlined, size: 16),
-                label: Text(actionLabel),
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.standard,
-                  minimumSize: const Size(0, 48),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            snapshot.profile?.identityLine ??
-                BikeProfileSummaryBuilder.buildIdentityLine(_selectedBike!),
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (_isLoadingSelectedBikeProfile)
-            const LinearProgressIndicator()
-          else if (_selectedBikeProfileLoadFailed)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.cloud_off_outlined,
-                    size: 18,
-                    color: theme.colorScheme.onErrorContainer,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'No se pudo cargar la ficha. No se tratará como vacía.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onErrorContainer,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => _loadSelectedBikeProfile(_selectedBike),
-                    child: const Text('Reintentar'),
-                  ),
-                ],
-              ),
-            )
-          else ...[
-            if (!snapshot.hasStructuredProfile)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(
-                  'Aun no hay perfil estructurado guardado para esta bicicleta.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              )
-            else if (highlights.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(
-                  'Aun no hay resumen disponible para esta bicicleta.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            if (highlights.isNotEmpty)
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: highlights
-                    .map(
-                      (line) => Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surface,
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: theme.dividerColor.withValues(alpha: 0.35),
-                          ),
-                        ),
-                        child: Text(line, style: theme.textTheme.bodySmall),
-                      ),
-                    )
-                    .toList(),
-              ),
-          ],
-          if (snapshot.warnings.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            ...snapshot.warnings.map(
-              (warning) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.warning_amber_rounded,
-                        size: 16, color: theme.colorScheme.error),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        warning,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-          if (snapshot.lastConfirmedAt != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Ultima confirmacion: ${DateFormat('dd/MM/yyyy').format(snapshot.lastConfirmedAt!)}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ],
-      ),
+      editActionLabel: actionLabel,
     );
   }
 
@@ -2974,26 +3628,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
   void _handleCancel() {
     if (_isSaving) return;
-    if (widget.isInlineWorkspace) {
-      unawaited(_handleInlineWorkspaceCancel());
-      return;
-    }
-
-    if (widget.isEmbedded) {
-      if (widget.onCanceled != null) widget.onCanceled!();
-    } else {
-      if (context.canPop()) {
-        context.pop();
-      } else {
-        context.go('/taller/pegas');
-      }
-    }
+    unawaited(_handleInlineWorkspaceCancel());
   }
 
   void _captureInlineDraftBaseline() {
-    if (!widget.isInlineWorkspace ||
-        _isLoading ||
-        _existingJobLoadError != null) {
+    if (_isLoading || _existingJobLoadError != null) {
       return;
     }
     _inlineDraftBaselineFingerprint = _buildInlineDraftFingerprint();
@@ -3001,9 +3640,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
   bool get _inlineDraftHasUnsavedChanges {
     final baseline = _inlineDraftBaselineFingerprint;
-    return widget.isInlineWorkspace &&
-        baseline != null &&
-        baseline != _buildInlineDraftFingerprint();
+    return baseline != null && baseline != _buildInlineDraftFingerprint();
   }
 
   Future<void> _handleInlineWorkspaceCancel() async {
@@ -3013,43 +3650,36 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       _isInlineDiscardPromptOpen = true;
       final shouldDiscard = await showDialog<bool>(
         context: context,
-        builder: (dialogContext) => Semantics(
-          namesRoute: true,
-          label: 'Confirmar descarte de cambios',
-          child: AlertDialog(
-            key: const ValueKey('mechanic-job-inline-discard-dialog'),
-            title: const Text('¿Descartar cambios?'),
-            content: const Text(
-              'Los cambios de este trabajo todavía no se han guardado.',
-            ),
-            actions: [
-              TextButton(
-                key: const ValueKey(
-                  'mechanic-job-inline-discard-cancel',
-                ),
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Seguir editando'),
-              ),
-              FilledButton(
-                key: const ValueKey(
-                  'mechanic-job-inline-discard-confirm',
-                ),
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Theme.of(dialogContext).colorScheme.error,
-                  foregroundColor: Theme.of(dialogContext).colorScheme.onError,
-                ),
-                child: const Text('Descartar'),
-              ),
-            ],
-          ),
-        ),
+        builder: (_) => const MechanicJobDiscardDialog(),
       );
       _isInlineDiscardPromptOpen = false;
       if (!mounted || shouldDiscard != true || _isSaving) return;
     }
 
-    widget.onCanceled?.call();
+    await _completeCancelNavigation();
+  }
+
+  Future<void> _completeCancelNavigation() async {
+    if (widget.isEmbedded) {
+      widget.onCanceled?.call();
+      return;
+    }
+    await _leaveRoutedForm();
+  }
+
+  Future<void> _leaveRoutedForm({Object? result}) async {
+    if (!mounted) return;
+    if (!context.canPop()) {
+      context.go('/taller/pegas');
+      return;
+    }
+
+    setState(() {
+      _allowRoutePop = true;
+    });
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    context.pop(result);
   }
 
   String _buildInlineDraftFingerprint() {
@@ -3217,6 +3847,64 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return confirmed == true;
   }
 
+  void _revealFormIssue(
+    _MechanicJobFormIssueOwner owner,
+    String message,
+  ) {
+    final nextWorkbenchTab = switch (owner) {
+      _MechanicJobFormIssueOwner.general => _JobWorkbenchTab.general,
+      _MechanicJobFormIssueOwner.products => _JobWorkbenchTab.products,
+      _MechanicJobFormIssueOwner.customer ||
+      _MechanicJobFormIssueOwner.costSummary =>
+        null,
+    };
+    if (nextWorkbenchTab != null && nextWorkbenchTab != _selectedWorkbenchTab) {
+      setState(() {
+        _selectedWorkbenchTab = nextWorkbenchTab;
+      });
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final targetContext = switch (owner) {
+        _MechanicJobFormIssueOwner.customer =>
+          _customerSectionKey.currentContext,
+        _MechanicJobFormIssueOwner.general ||
+        _MechanicJobFormIssueOwner.products =>
+          _workbenchSectionKey.currentContext,
+        _MechanicJobFormIssueOwner.costSummary =>
+          _costSummarySectionKey.currentContext,
+      };
+      if (targetContext != null) {
+        await Scrollable.ensureVisible(
+          targetContext,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          alignment: 0.04,
+        );
+      }
+      if (!mounted) return;
+      switch (owner) {
+        case _MechanicJobFormIssueOwner.products:
+          _partAutocompleteFocus.requestFocus();
+        case _MechanicJobFormIssueOwner.costSummary:
+          _discountFocusNode.requestFocus();
+        case _MechanicJobFormIssueOwner.customer:
+        case _MechanicJobFormIssueOwner.general:
+          break;
+      }
+    });
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
   Future<void> _saveJob() async {
     if (!_canSaveJob) {
       if (_hasBlockingWarrantyLoadFailure || _existingJobLoadError != null) {
@@ -3247,13 +3935,24 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       return;
     }
 
-    if (!_formKey.currentState!.validate()) {
+    if (_selectedCustomer == null) {
+      setState(() {
+        _hasAttemptedSave = true;
+      });
+      _revealFormIssue(
+        _MechanicJobFormIssueOwner.customer,
+        'Selecciona un cliente para continuar.',
+      );
       return;
     }
 
-    if (_selectedCustomer == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Debe seleccionar un cliente')),
+    if (!_formKey.currentState!.validate()) {
+      setState(() {
+        _hasAttemptedSave = true;
+      });
+      _revealFormIssue(
+        _MechanicJobFormIssueOwner.costSummary,
+        'Revisa el descuento antes de guardar.',
       );
       return;
     }
@@ -3268,9 +3967,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     // Bike-based service/warranty jobs require a bicycle. Component-only
     // warranty claims inherit their subject from the original work instead.
     if (requiresBike && _bikeTabs.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Debe seleccionar al menos una bicicleta')),
+      _revealFormIssue(
+        _MechanicJobFormIssueOwner.customer,
+        'Selecciona al menos una bicicleta para continuar.',
       );
       return;
     }
@@ -3278,10 +3977,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     if (_jobType == JobType.warranty &&
         _warrantySaveCheckpoint.requiresSourceSelection &&
         _selectedWarrantySource == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Seleccione el trabajo original de la garantía'),
-        ),
+      _revealFormIssue(
+        _MechanicJobFormIssueOwner.general,
+        'Selecciona el trabajo original de la garantía.',
       );
       return;
     }
@@ -3290,33 +3988,24 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     if (_jobType == JobType.warranty && warrantySource != null) {
       final object = warrantySource.physicalObject;
       if (_isLoadingWarrantySourceObject) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Espera a que se confirme el objeto del trabajo original.',
-            ),
-          ),
+        _revealFormIssue(
+          _MechanicJobFormIssueOwner.general,
+          'Espera a que se confirme el objeto del trabajo original.',
         );
         return;
       }
       if (_warrantySourceObjectError != null || !object.isValid) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _warrantySourceObjectError ??
-                  'Clasifique primero la recepción del trabajo original.',
-            ),
-          ),
+        _revealFormIssue(
+          _MechanicJobFormIssueOwner.general,
+          _warrantySourceObjectError ??
+              'Clasifica primero la recepción del trabajo original.',
         );
         return;
       }
       if (!_warrantySourceObjectMatchesForm(warrantySource)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'El objeto de la garantía no coincide exactamente con el trabajo original. Vuelva a seleccionarlo antes de guardar.',
-            ),
-          ),
+        _revealFormIssue(
+          _MechanicJobFormIssueOwner.general,
+          'El objeto de la garantía no coincide con el trabajo original. Vuelve a seleccionarlo.',
         );
         return;
       }
@@ -3345,10 +4034,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     if (_jobType == JobType.warranty &&
         warrantyDecisionNeedsReason &&
         _warrantyDecisionReasonController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ingrese la justificación de la decisión de garantía'),
-        ),
+      _revealFormIssue(
+        _MechanicJobFormIssueOwner.general,
+        'Ingresa la justificación de la decisión de garantía.',
       );
       return;
     }
@@ -3356,45 +4044,33 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     if (_jobType == JobType.itemService &&
         _selectedSubject == null &&
         _subjectNotesController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Selecciona un componente del catálogo o descríbelo manualmente.',
-          ),
-        ),
+      _revealFormIssue(
+        _MechanicJobFormIssueOwner.customer,
+        'Selecciona un componente del catálogo o descríbelo manualmente.',
       );
       return;
     }
 
     if (_jobType == JobType.quotation &&
         _subjectNotesController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Describa qué producto o servicio desea cotizar'),
-        ),
+      _revealFormIssue(
+        _MechanicJobFormIssueOwner.customer,
+        'Describe qué producto o servicio deseas cotizar.',
       );
       return;
     }
 
     if (_jobType == JobType.sale && !_hasSaleCatalogProduct) {
-      setState(() => _selectedWorkbenchTab = _JobWorkbenchTab.products);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Agrega al menos un producto del catálogo para registrar la venta.',
-          ),
-        ),
+      _revealFormIssue(
+        _MechanicJobFormIssueOwner.products,
+        'Agrega al menos un producto del catálogo para registrar la venta.',
       );
       return;
     }
     if (_jobType == JobType.sale && _saleHasUnsupportedLines) {
-      setState(() => _selectedWorkbenchTab = _JobWorkbenchTab.products);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'La venta solo admite productos del catálogo; quita servicios o líneas personalizadas.',
-          ),
-        ),
+      _revealFormIssue(
+        _MechanicJobFormIssueOwner.products,
+        'La venta solo admite productos del catálogo; quita servicios o líneas personalizadas.',
       );
       return;
     }
@@ -4175,11 +4851,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         if (widget.isEmbedded) {
           if (widget.onSaved != null) widget.onSaved!();
         } else {
-          if (context.canPop()) {
-            context.pop(true);
-          } else {
-            context.go('/taller/pegas');
-          }
+          await _leaveRoutedForm(result: true);
         }
       }
     } catch (e) {
@@ -4465,27 +5137,21 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       ),
     );
 
-    if (widget.isEmbedded) {
-      final embeddedSurface = ColoredBox(
-        color: theme.colorScheme.surface,
-        child: content,
-      );
+    final surface = widget.isEmbedded
+        ? ColoredBox(
+            color: theme.colorScheme.surface,
+            child: content,
+          )
+        : MainLayout(child: content);
 
-      if (!widget.isInlineWorkspace) {
-        return embeddedSurface;
-      }
-
-      return PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, _) {
-          if (didPop || _isSaving) return;
-          _handleCancel();
-        },
-        child: embeddedSurface,
-      );
-    }
-
-    return MainLayout(child: content);
+    return PopScope(
+      canPop: _allowRoutePop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || _isSaving) return;
+        _handleCancel();
+      },
+      child: surface,
+    );
   }
 
   Widget _buildExistingJobLoadFailure(ThemeData theme) {
@@ -4549,9 +5215,11 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 600;
+        final isCompact = MechanicJobResponsivePolicy.usesCompactComposition(
+          ResponsiveViewport.widthOf(context),
+        );
 
-        if (isMobile && widget.isInlineWorkspace) {
+        if (isCompact) {
           return _buildInlineWorkspaceHeader(
             theme,
             isEditing: isEditing,
@@ -4569,7 +5237,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               ),
             ),
           ),
-          child: isMobile
+          child: isCompact
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -5098,11 +5766,14 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                           const SizedBox(height: 16),
                         ],
                         // Job details with embedded bike tabs
-                        _buildJobDetailsSectionCard(
-                          theme,
-                          icon: Icons.build_outlined,
-                          title: 'Detalles del Trabajo',
-                          child: _buildWorkbenchContent(theme),
+                        KeyedSubtree(
+                          key: _workbenchSectionKey,
+                          child: _buildJobDetailsSectionCard(
+                            theme,
+                            icon: Icons.build_outlined,
+                            title: 'Detalles del Trabajo',
+                            child: _buildWorkbenchContent(theme),
+                          ),
                         ),
                         const SizedBox(height: 16),
                         _buildSectionCard(
@@ -5125,23 +5796,29 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                   child: SingleChildScrollView(
                     child: Column(
                       children: [
-                        _buildSectionCard(
-                          theme,
-                          icon: Icons.person_outline,
-                          title: 'Cliente',
-                          child: _lockFormContent(
-                            _buildCustomerBikeSection(),
-                            locked: _isFinalQuotationReadOnly,
+                        KeyedSubtree(
+                          key: _customerSectionKey,
+                          child: _buildSectionCard(
+                            theme,
+                            icon: Icons.person_outline,
+                            title: 'Cliente',
+                            child: _lockFormContent(
+                              _buildCustomerBikeSection(),
+                              locked: _isFinalQuotationReadOnly,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildSectionCard(
-                          theme,
-                          icon: Icons.calculate_outlined,
-                          title: 'Resumen de Costos',
-                          child: _lockFormContent(
-                            _buildCostSummary(),
-                            locked: _isCommercialSnapshotLocked,
+                        KeyedSubtree(
+                          key: _costSummarySectionKey,
+                          child: _buildSectionCard(
+                            theme,
+                            icon: Icons.calculate_outlined,
+                            title: 'Resumen de Costos',
+                            child: _lockFormContent(
+                              _buildCostSummary(),
+                              locked: _isCommercialSnapshotLocked,
+                            ),
                           ),
                         ),
                         if (_existingJob?.invoiceId != null) ...[
@@ -5185,24 +5862,29 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           );
         } else {
           // Single-column layout for narrow screens
-          final customerSection = _buildSectionCard(
-            theme,
-            icon: Icons.person_outline,
-            title: 'Cliente',
-            child: _lockFormContent(
-              _buildCustomerBikeSection(),
-              locked: _isFinalQuotationReadOnly,
+          final customerSection = KeyedSubtree(
+            key: _customerSectionKey,
+            child: _buildSectionCard(
+              theme,
+              icon: Icons.person_outline,
+              title: 'Cliente',
+              child: _lockFormContent(
+                _buildCustomerBikeSection(),
+                locked: _isFinalQuotationReadOnly,
+              ),
             ),
           );
-          final workbenchSection = _buildJobDetailsSectionCard(
-            theme,
-            icon: Icons.build_outlined,
-            title: 'Detalles del Trabajo',
-            child: _buildWorkbenchContent(theme),
+          final workbenchSection = KeyedSubtree(
+            key: _workbenchSectionKey,
+            child: _buildJobDetailsSectionCard(
+              theme,
+              icon: Icons.build_outlined,
+              title: 'Detalles del Trabajo',
+              child: _buildWorkbenchContent(theme),
+            ),
           );
-          final prioritizesRequestedWorkbench = widget.isInlineWorkspace &&
-              (widget.initialTab == 'products' ||
-                  widget.initialTab == 'diagnosis');
+          final prioritizesRequestedWorkbench =
+              widget.isInlineWorkspace && widget.jobId != null;
 
           return SingleChildScrollView(
             padding: widget.isInlineWorkspace
@@ -5235,13 +5917,16 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                   ),
                 ),
                 const SizedBox(height: 16),
-                _buildSectionCard(
-                  theme,
-                  icon: Icons.calculate_outlined,
-                  title: 'Resumen de Costos',
-                  child: _lockFormContent(
-                    _buildCostSummary(),
-                    locked: _isCommercialSnapshotLocked,
+                KeyedSubtree(
+                  key: _costSummarySectionKey,
+                  child: _buildSectionCard(
+                    theme,
+                    icon: Icons.calculate_outlined,
+                    title: 'Resumen de Costos',
+                    child: _lockFormContent(
+                      _buildCostSummary(),
+                      locked: _isCommercialSnapshotLocked,
+                    ),
                   ),
                 ),
                 if (_existingJob?.invoiceId != null) ...[
@@ -5459,6 +6144,22 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   }) {
     final hasBikeTabs = _selectedCustomer != null && _bikeTabs.isNotEmpty;
     final isCompactInline = widget.isInlineWorkspace;
+    final isCompact = MechanicJobResponsivePolicy.usesCompactComposition(
+      ResponsiveViewport.widthOf(context),
+    );
+
+    if (isCompact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (hasBikeTabs) ...[
+            _buildInlineBikeTabs(theme),
+            const SizedBox(height: 10),
+          ],
+          child,
+        ],
+      );
+    }
 
     return Card(
       elevation: 0,
@@ -5595,10 +6296,12 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                           onTap: _showAddBikeSelector,
                           borderRadius: BorderRadius.circular(6),
                           hoverColor: primary.withValues(alpha: 0.08),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 10),
-                            child: Icon(Icons.add, size: 16, color: primary),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              minWidth: 48,
+                              minHeight: 48,
+                            ),
+                            child: Icon(Icons.add, size: 18, color: primary),
                           ),
                         ),
                       ),
@@ -5671,6 +6374,20 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   }
 
   Widget _buildWorkbenchTabs(ThemeData theme) {
+    final isCompact = MechanicJobResponsivePolicy.usesCompactComposition(
+      ResponsiveViewport.widthOf(context),
+    );
+    if (isCompact) {
+      return MechanicJobCompactWorkbenchNavigation(
+        selectedIndex: _selectedWorkbenchTab.index,
+        showDiagnosis: _jobType != JobType.sale,
+        productsLabel: _jobType == JobType.sale ? 'Cobro' : 'Ítems',
+        onSelected: (index) => _selectWorkbenchTab(
+          _JobWorkbenchTab.values[index],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -5726,12 +6443,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       color: isSelected ? theme.colorScheme.primary : Colors.transparent,
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
-        onTap: () {
-          if (_selectedWorkbenchTab == tab) return;
-          setState(() {
-            _selectedWorkbenchTab = tab;
-          });
-        },
+        onTap: () => _selectWorkbenchTab(tab),
         borderRadius: BorderRadius.circular(10),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -5763,6 +6475,32 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
         ),
       ),
     );
+  }
+
+  void _selectWorkbenchTab(_JobWorkbenchTab tab) {
+    if (_selectedWorkbenchTab == tab) return;
+    setState(() {
+      _selectedWorkbenchTab = tab;
+    });
+
+    if (!MechanicJobResponsivePolicy.usesCompactComposition(
+      ResponsiveViewport.widthOf(context),
+    )) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final workbenchContext = _workbenchSectionKey.currentContext;
+      if (workbenchContext == null) return;
+      unawaited(
+        Scrollable.ensureVisible(
+          workbenchContext,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          alignment: 0.02,
+        ),
+      );
+    });
   }
 
   void _updateCurrentDiagnosisSheet(
@@ -9820,6 +10558,9 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     TextEditingController diagnosisCtrl,
   ) {
     final diagnosisSheet = _currentDiagnosisSheet;
+    final isCompact = MechanicJobResponsivePolicy.usesCompactComposition(
+      ResponsiveViewport.widthOf(context),
+    );
     final statuses = _kStructuredDiagnosisEditableSystems
         .map(
           (spec) => _structuredDiagnosisStatus(diagnosisSheet, spec.systemKey),
@@ -9836,105 +10577,78 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     final criticalSystems = statuses
         .where((status) => status == BikeSystemOverallStatus.critical)
         .length;
+    final reviewedSummary = trackedSystems == 0
+        ? 'Aún no hay sistemas revisados.'
+        : '$trackedSystems de ${_kStructuredDiagnosisEditableSystems.length} sistemas revisados.';
+    final exceptionSummary = criticalSystems == 0
+        ? 'Sin alertas críticas.'
+        : '$criticalSystems ${criticalSystems == 1 ? 'alerta crítica' : 'alertas críticas'}.';
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.7)),
-        color: theme.colorScheme.surfaceContainerLowest,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+    final workspace = Column(
+      key: const ValueKey('mechanic-job-diagnosis-workspace'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          container: true,
+          label:
+              'Diagnóstico ${currentTab.bike?.displayName ?? ''}. $reviewedSummary $exceptionSummary',
+          child: ExcludeSemantics(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Diagnóstico ${currentTab.bike?.displayName ?? ''}'
-                                .trim(),
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Narrativa técnica y storage model sincronizados por bicicleta.',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer
-                            .withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        'Sync ${_formatDiagnosisSheetTimestamp(currentTab.diagnosisSheetUpdatedAt)}',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.onPrimaryContainer,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
+                Text(
+                  'Diagnóstico ${currentTab.bike?.displayName ?? ''}'.trim(),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 10,
-                  children: [
-                    _buildDiagnosisSummaryChip(
-                      theme,
-                      icon: Icons.auto_awesome_mosaic_outlined,
-                      label: 'Template ${diagnosisSheet.templateKey}',
-                    ),
-                    _buildDiagnosisSummaryChip(
-                      theme,
-                      icon: Icons.checklist_rtl_rounded,
-                      label: '$trackedSystems sistemas revisados',
-                    ),
-                    _buildDiagnosisSummaryChip(
-                      theme,
-                      icon: Icons.warning_amber_rounded,
-                      label: '$criticalSystems críticos',
-                      tint: criticalSystems > 0
-                          ? theme.colorScheme.error
-                          : theme.colorScheme.tertiary,
-                    ),
-                  ],
+                const SizedBox(height: 4),
+                Text(
+                  '$reviewedSummary $exceptionSummary',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: criticalSystems > 0
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.onSurfaceVariant,
+                    fontWeight:
+                        criticalSystems > 0 ? FontWeight.w700 : FontWeight.w500,
+                  ),
                 ),
+                if (!isCompact) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    'Actualizado ${_formatDiagnosisSheetTimestamp(currentTab.diagnosisSheetUpdatedAt)}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-            child: _buildDiagnosisSubtabs(theme),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-            child: _selectedDiagnosisWorkbenchTab ==
-                    _DiagnosisWorkbenchTab.narrative
-                ? _buildNarrativeDiagnosisPanel(
-                    theme, currentTab, diagnosisCtrl)
-                : _buildStructuredDiagnosisPanel(theme, currentTab),
-          ),
-        ],
+        ),
+        SizedBox(height: isCompact ? 12 : 16),
+        _buildDiagnosisSubtabs(theme),
+        SizedBox(height: isCompact ? 12 : 18),
+        _selectedDiagnosisWorkbenchTab == _DiagnosisWorkbenchTab.narrative
+            ? _buildNarrativeDiagnosisPanel(theme, currentTab, diagnosisCtrl)
+            : _buildStructuredDiagnosisPanel(theme, currentTab),
+      ],
+    );
+
+    if (isCompact) {
+      return workspace;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.7),
+        ),
+        color: theme.colorScheme.surfaceContainerLowest,
       ),
+      child: workspace,
     );
   }
 
@@ -10163,38 +10877,10 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     );
   }
 
-  Widget _buildDiagnosisSummaryChip(
-    ThemeData theme, {
-    required IconData icon,
-    required String label,
-    Color? tint,
-  }) {
-    final color = tint ?? theme.colorScheme.primary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: color.withValues(alpha: 0.8)),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: color.withValues(alpha: 0.9),
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildDiagnosisSubtabs(ThemeData theme) {
+    final isCompact = MechanicJobResponsivePolicy.usesCompactComposition(
+      ResponsiveViewport.widthOf(context),
+    );
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -10208,7 +10894,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               theme: theme,
               tab: _DiagnosisWorkbenchTab.structured,
               icon: Icons.auto_awesome_mosaic_rounded,
-              label: 'Modelo estructurado',
+              label: isCompact ? 'Por sistema' : 'Modelo estructurado',
             ),
           ),
           Expanded(
@@ -10216,7 +10902,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               theme: theme,
               tab: _DiagnosisWorkbenchTab.narrative,
               icon: Icons.description_rounded,
-              label: 'Ficha narrativa',
+              label: isCompact ? 'Notas' : 'Ficha narrativa',
             ),
           ),
         ],
@@ -10231,47 +10917,64 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     required String label,
   }) {
     final isSelected = _selectedDiagnosisWorkbenchTab == tab;
+    final semanticsLabel = tab == _DiagnosisWorkbenchTab.structured
+        ? 'Diagnóstico por sistema'
+        : 'Notas de diagnóstico';
 
-    return Material(
-      color: isSelected ? theme.colorScheme.surface : Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
-      elevation: isSelected ? 1 : 0,
-      shadowColor: Colors.black.withValues(alpha: 0.2),
-      child: InkWell(
-        onTap: () {
-          if (_selectedDiagnosisWorkbenchTab == tab) return;
-          setState(() {
-            _selectedDiagnosisWorkbenchTab = tab;
-          });
-        },
-        borderRadius: BorderRadius.circular(10),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: isSelected
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                    color: isSelected
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.onSurfaceVariant,
-                    letterSpacing: -0.2,
-                  ),
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: semanticsLabel,
+      child: ExcludeSemantics(
+        child: Material(
+          color: isSelected ? theme.colorScheme.surface : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          elevation: isSelected ? 1 : 0,
+          shadowColor: Colors.black.withValues(alpha: 0.2),
+          child: InkWell(
+            onTap: () {
+              if (_selectedDiagnosisWorkbenchTab == tab) return;
+              setState(() {
+                _selectedDiagnosisWorkbenchTab = tab;
+              });
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 18,
+                      color: isSelected
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 7),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight:
+                                isSelected ? FontWeight.w800 : FontWeight.w600,
+                            color: isSelected
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurfaceVariant,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -10285,9 +10988,51 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   ) {
     final isGenerating = _isGeneratingNarrativeDraftFor(currentTab);
     final canGenerate = currentTab.diagnosisSheet.hasMeaningfulData;
+    final isCompact = MechanicJobResponsivePolicy.usesCompactComposition(
+      ResponsiveViewport.widthOf(context),
+    );
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Notas de diagnóstico',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Registra hallazgos, acciones y repuestos en una nota legible.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+    final generateAction = FilledButton.icon(
+      onPressed: isGenerating || !canGenerate
+          ? null
+          : () => _handleGenerateNarrativeDraft(currentTab),
+      icon: isGenerating
+          ? SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: theme.colorScheme.onPrimary,
+              ),
+            )
+          : const Icon(Icons.auto_awesome_outlined, size: 16),
+      label: Text(
+        isGenerating ? 'Redactando...' : 'Redactar desde revisión',
+      ),
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(0, 48),
+      ),
+    );
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(isCompact ? 12 : 16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
@@ -10297,50 +11042,19 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Diagnosis sheet narrativa',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Editor técnico con atajos para dejar hallazgos, acciones y repuestos en una sola hoja.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              FilledButton.icon(
-                onPressed: isGenerating || !canGenerate
-                    ? null
-                    : () => _handleGenerateNarrativeDraft(currentTab),
-                icon: isGenerating
-                    ? SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: theme.colorScheme.onPrimary,
-                        ),
-                      )
-                    : const Icon(Icons.auto_awesome_outlined, size: 16),
-                label: Text(
-                  isGenerating ? 'Redactando...' : 'Redactar desde modelo',
-                ),
-              ),
-            ],
-          ),
+          if (isCompact) ...[
+            heading,
+            const SizedBox(height: 10),
+            SizedBox(width: double.infinity, child: generateAction),
+          ] else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: heading),
+                const SizedBox(width: 12),
+                generateAction,
+              ],
+            ),
           const SizedBox(height: 10),
           Text(
             canGenerate
@@ -10423,7 +11137,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                   'Describe hallazgos, pruebas realizadas, riesgos y acciones recomendadas. Puedes usar títulos markdown como ### Freno delantero.',
             ),
             maxLines: 12,
-            minLines: 10,
+            minLines: isCompact ? 6 : 10,
             onChanged: (_) => setState(() {}),
           ),
           if (diagnosisCtrl.text.trim().isNotEmpty) ...[
@@ -10431,22 +11145,11 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             _buildNarrativePreviewCard(theme, diagnosisCtrl.text),
           ],
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Text(
-                '${diagnosisCtrl.text.trim().isEmpty ? 0 : diagnosisCtrl.text.trim().split(RegExp(r'\s+')).length} palabras',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'Se guarda en el diagnóstico narrativo de esta bicicleta',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
+          Text(
+            '${diagnosisCtrl.text.trim().isEmpty ? 0 : diagnosisCtrl.text.trim().split(RegExp(r'\s+')).length} palabras · Se guarda con esta bicicleta',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -10531,6 +11234,9 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       bike: currentTab.bike,
     );
     final brakeType = profile?.technicalValues['brakeType']?.toString();
+    final isCompact = MechanicJobResponsivePolicy.usesCompactComposition(
+      ResponsiveViewport.widthOf(context),
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -10551,6 +11257,48 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           brakeType: brakeType,
         );
 
+        if (isCompact) {
+          final choices = _kStructuredDiagnosisEditableSystems.map(
+            (spec) {
+              final status = _structuredDiagnosisStatus(
+                diagnosisSheet,
+                spec.systemKey,
+              );
+              return MechanicJobCompactChoice(
+                id: spec.systemKey,
+                label: spec.label,
+                icon: spec.icon,
+                statusLabel: status.displayName,
+                statusColor: _diagnosisStatusColor(theme, status),
+              );
+            },
+          ).toList(growable: false);
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              MechanicJobCompactChoiceMenu(
+                controlLabel: 'Sistema',
+                selectedId: activeSystemKey,
+                choices: choices,
+                onSelected: (systemKey) {
+                  setState(() {
+                    _selectedStructuredDiagnosisSystemKey = systemKey;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              inspectorPanel,
+              const SizedBox(height: 12),
+              _buildDiagnosisMapDisclosure(
+                theme,
+                diagramPanel: diagramPanel,
+                compact: true,
+              ),
+            ],
+          );
+        }
+
         if (wideLayout) {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -10563,13 +11311,52 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
         }
 
         return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            diagramPanel,
-            const SizedBox(height: 16),
             inspectorPanel,
+            const SizedBox(height: 16),
+            _buildDiagnosisMapDisclosure(
+              theme,
+              diagramPanel: diagramPanel,
+              compact: false,
+            ),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildDiagnosisMapDisclosure(
+    ThemeData theme, {
+    required Widget diagramPanel,
+    required bool compact,
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.65),
+        ),
+      ),
+      child: Theme(
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          key: const ValueKey('mechanic-job-diagnosis-map-disclosure'),
+          minTileHeight: 52,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+          childrenPadding: EdgeInsets.fromLTRB(
+            compact ? 8 : 12,
+            0,
+            compact ? 8 : 12,
+            compact ? 8 : 12,
+          ),
+          leading: const Icon(Icons.pedal_bike_outlined, size: 20),
+          title: const Text('Mapa de la bicicleta'),
+          subtitle: const Text('Vista opcional para elegir un sistema'),
+          children: [diagramPanel],
+        ),
+      ),
     );
   }
 
@@ -11025,9 +11812,12 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     final rimBrakeFamily = _selectedBike?.id == currentTab.bike?.id
         ? _selectedBikeProfile?.technicalValues['rimBrakeFamily']?.toString()
         : null;
+    final isCompact = MechanicJobResponsivePolicy.usesCompactComposition(
+      ResponsiveViewport.widthOf(context),
+    );
 
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isCompact ? 12 : 24),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(20),
@@ -11046,7 +11836,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Mapa técnico interactivo',
+            'Vista técnica de la bicicleta',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w800,
               letterSpacing: -0.3,
@@ -11054,7 +11844,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           ),
           const SizedBox(height: 6),
           Text(
-            'Selecciona un sistema sobre la bicicleta para editar el mismo diagnosis sheet de la visita.',
+            'Selecciona un sistema sobre la bicicleta para abrir su revisión.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -11090,9 +11880,9 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                   _selectedStructuredDiagnosisSystemKey = null;
                 });
               },
-              idleHintText: 'Haz clic en un sistema para cambiar la vista.',
+              idleHintText: 'Selecciona un sistema para cambiar la vista.',
               selectedHintText:
-                  'Haz clic en otro componente para cambiar la vista.',
+                  'Selecciona otro componente para cambiar la vista.',
             ),
           ),
           const SizedBox(height: 12),
@@ -11580,6 +12370,30 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
         statusForComponent,
     required ValueChanged<String> onSelected,
   }) {
+    if (specs.isEmpty) return const SizedBox.shrink();
+    if (MechanicJobResponsivePolicy.usesCompactComposition(
+      ResponsiveViewport.widthOf(context),
+    )) {
+      final choices = specs.map(
+        (spec) {
+          final status = statusForComponent(spec.componentKey);
+          return MechanicJobCompactChoice(
+            id: spec.componentKey,
+            label: spec.label,
+            icon: spec.icon,
+            statusLabel: status.displayName,
+            statusColor: _diagnosisStatusColor(theme, status),
+          );
+        },
+      ).toList(growable: false);
+      return MechanicJobCompactChoiceMenu(
+        controlLabel: 'Componente',
+        selectedId: selectedComponentKey ?? specs.first.componentKey,
+        choices: choices,
+        onSelected: onSelected,
+      );
+    }
+
     return _DiagnosisComponentSelectorStrip(
       key: ValueKey(
           specs.isEmpty ? 'diag_components_empty' : specs.first.systemKey),
@@ -12091,23 +12905,9 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     required CockpitDiagnosisSheet cockpitSheet,
     required _CockpitDiagnosisSheetUpdater update,
   }) {
-    final theme = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _buildStructuredDiagnosisMetaChip(
-              theme,
-              icon: Icons.tune,
-              label: 'Headset y direccion anclados en cockpit',
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
         _buildDiagnosisSelectField(
           keySuffix:
               'diag_cockpit_bearing_${currentTab.tabId}_${cockpitSheet.headsetBearingCondition ?? 'empty'}',
@@ -12561,22 +13361,31 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     required ValueChanged<BikeSystemOverallStatus> onStatusChanged,
     required Widget child,
   }) {
+    final isCompact = MechanicJobResponsivePolicy.usesCompactComposition(
+      ResponsiveViewport.widthOf(context),
+    );
     return Container(
       clipBehavior: Clip.antiAlias,
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isCompact ? 12 : 24),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: theme.dividerColor.withValues(alpha: 0.15),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: isCompact
+            ? Colors.transparent
+            : theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(isCompact ? 0 : 20),
+        border: isCompact
+            ? null
+            : Border.all(
+                color: theme.dividerColor.withValues(alpha: 0.15),
+              ),
+        boxShadow: isCompact
+            ? const []
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -12604,21 +13413,22 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                   ],
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: statusTint.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  status.displayName,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: statusTint,
-                    fontWeight: FontWeight.w700,
+              if (!isCompact)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: statusTint.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    status.displayName,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: statusTint,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -13433,28 +14243,34 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Customer selector with quick add
-        InkWell(
-          onTap: widget.jobId != null
-              ? null // Disable editing customer in edit mode
-              : _showCustomerSelector,
-          child: InputDecorator(
-            decoration: InputDecoration(
-              labelText: 'Cliente *',
-              border: const OutlineInputBorder(),
-              prefixIcon: const Icon(Icons.person),
-              suffixIcon: widget.jobId == null
-                  ? const Icon(Icons.arrow_drop_down)
-                  : null,
-              errorText:
-                  _selectedCustomer == null && _formKey.currentState != null
-                      ? 'Seleccione un cliente'
-                      : null,
-            ),
-            child: Text(
-              _selectedCustomer?.name ?? 'Seleccione un cliente',
-              style: _selectedCustomer != null
-                  ? null
-                  : TextStyle(color: Colors.grey[600]),
+        Semantics(
+          button: widget.jobId == null,
+          label: _selectedCustomer == null
+              ? 'Seleccionar cliente'
+              : 'Cliente ${_selectedCustomer!.name}',
+          child: InkWell(
+            key: const ValueKey('mechanic-job-customer-selector'),
+            onTap: widget.jobId != null
+                ? null // Disable editing customer in edit mode
+                : _showCustomerSelector,
+            child: InputDecorator(
+              decoration: InputDecoration(
+                labelText: 'Cliente *',
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.person),
+                suffixIcon: widget.jobId == null
+                    ? const Icon(Icons.arrow_drop_down)
+                    : null,
+                errorText: _hasAttemptedSave && _selectedCustomer == null
+                    ? 'Seleccione un cliente'
+                    : null,
+              ),
+              child: Text(
+                _selectedCustomer?.name ?? 'Seleccione un cliente',
+                style: _selectedCustomer != null
+                    ? null
+                    : TextStyle(color: Colors.grey[600]),
+              ),
             ),
           ),
         ),
@@ -14385,10 +15201,10 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
-          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.34),
+          color: theme.colorScheme.surfaceContainerLow.withValues(alpha: 0.72),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: theme.colorScheme.primary.withValues(alpha: 0.20),
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.55),
           ),
         ),
         child: Row(
@@ -14400,7 +15216,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               child: Text(
                 label,
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: theme.colorScheme.primary,
+                  color: theme.colorScheme.onSurface,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -14408,7 +15224,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             Icon(
               Icons.info_outline,
               size: 16,
-              color: theme.colorScheme.primary,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ],
         ),
@@ -15233,7 +16049,9 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 600) {
+        if (MechanicJobResponsivePolicy.usesCompactComposition(
+          ResponsiveViewport.widthOf(context),
+        )) {
           return _buildMobilePartsSection(theme);
         }
 
@@ -16418,6 +17236,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               width: 150,
               child: TextFormField(
                 controller: _discountController,
+                focusNode: _discountFocusNode,
                 enabled: !_isCommercialSnapshotLocked,
                 decoration: const InputDecoration(
                   prefixText: '\$ ',
@@ -18906,91 +19725,100 @@ class _BikeTabButtonState extends State<_BikeTabButton> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isCompact = MechanicJobResponsivePolicy.usesCompactComposition(
+      ResponsiveViewport.widthOf(context),
+    );
     final showClose = widget.canClose &&
         widget.onClose != null &&
-        (_isHovered || widget.isSelected);
+        (isCompact || _isHovered || widget.isSelected);
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            curve: Curves.easeOut,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: widget.isSelected
-                  ? widget.primaryColor.withValues(alpha: 0.08)
-                  : Colors.transparent,
-              border: Border(
-                bottom: BorderSide(
-                  color: widget.isSelected
-                      ? widget.primaryColor
-                      : Colors.transparent,
-                  width: 2.5,
-                ),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  widget.icon,
-                  size: 16,
-                  color: widget.isSelected
-                      ? widget.primaryColor
-                      : widget.inactiveColor,
-                ),
-                const SizedBox(width: 8),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 150),
-                  child: Text(
-                    widget.label,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight:
-                          widget.isSelected ? FontWeight.w700 : FontWeight.w500,
-                      color: widget.isSelected
-                          ? theme.colorScheme.onSurface
-                          : widget.inactiveColor,
-                    ),
+    return Semantics(
+      button: true,
+      selected: widget.isSelected,
+      label: 'Bicicleta ${widget.label}',
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOut,
+              constraints: const BoxConstraints(minHeight: 48),
+              padding: const EdgeInsets.only(left: 14),
+              decoration: BoxDecoration(
+                color: widget.isSelected
+                    ? widget.primaryColor.withValues(alpha: 0.08)
+                    : Colors.transparent,
+                border: Border(
+                  bottom: BorderSide(
+                    color: widget.isSelected
+                        ? widget.primaryColor
+                        : Colors.transparent,
+                    width: 2.5,
                   ),
                 ),
-                if (widget.canClose) ...[
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    widget.icon,
+                    size: 16,
+                    color: widget.isSelected
+                        ? widget.primaryColor
+                        : widget.inactiveColor,
+                  ),
                   const SizedBox(width: 8),
-                  AnimatedOpacity(
-                    duration: const Duration(milliseconds: 140),
-                    opacity: showClose ? 1 : 0,
-                    child: IgnorePointer(
-                      ignoring: !showClose,
-                      child: InkWell(
-                        onTap: widget.onClose,
-                        borderRadius: BorderRadius.circular(999),
-                        hoverColor:
-                            theme.colorScheme.error.withValues(alpha: 0.12),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: showClose
-                                ? theme.colorScheme.surfaceContainerHighest
-                                    .withValues(alpha: 0.6)
-                                : Colors.transparent,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.close,
-                            size: 13,
-                            color: theme.colorScheme.onSurfaceVariant,
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 150),
+                    child: Text(
+                      widget.label,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: widget.isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: widget.isSelected
+                            ? theme.colorScheme.onSurface
+                            : widget.inactiveColor,
+                      ),
+                    ),
+                  ),
+                  if (widget.canClose)
+                    AnimatedOpacity(
+                      duration: const Duration(milliseconds: 140),
+                      opacity: showClose ? 1 : 0,
+                      child: IgnorePointer(
+                        ignoring: !showClose,
+                        child: Semantics(
+                          button: true,
+                          label: 'Quitar ${widget.label} del trabajo',
+                          child: Tooltip(
+                            message: 'Quitar ${widget.label}',
+                            child: InkWell(
+                              onTap: widget.onClose,
+                              borderRadius: BorderRadius.circular(999),
+                              hoverColor: theme.colorScheme.error
+                                  .withValues(alpha: 0.12),
+                              child: SizedBox(
+                                width: 48,
+                                height: 48,
+                                child: Icon(
+                                  Icons.close,
+                                  size: 17,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
                 ],
-              ],
+              ),
             ),
           ),
         ),

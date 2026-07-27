@@ -11,6 +11,7 @@ import '../services/auth_service.dart';
 import '../services/current_user_profile_service.dart';
 import '../services/self_password_service.dart';
 import '../services/tenant_service.dart';
+import '../services/user_management_navigation.dart';
 import '../services/workspace_manager.dart';
 import '../utils/auth_input_validation.dart';
 import '../utils/responsive_breakpoints.dart';
@@ -201,11 +202,6 @@ class MyProfileContentState extends State<MyProfileContent> {
   final _emergencyName = TextEditingController();
   final _emergencyPhone = TextEditingController();
 
-  final _sectionKeys = List<GlobalKey>.generate(
-    _ProfileSectionId.values.length,
-    (index) => GlobalKey(debugLabel: 'profile-section-$index'),
-  );
-
   CurrentUserProfileService? _service;
   String? _boundUserId;
   String? _boundEmployeeVersion;
@@ -221,7 +217,7 @@ class MyProfileContentState extends State<MyProfileContent> {
   bool _synchronizingControllers = false;
   String? _displayNameSaveError;
   String? _contactSaveError;
-  _ProfileSectionId _selectedSection = _ProfileSectionId.summary;
+  _ProfileSectionId _selectedSection = _ProfileSectionId.personal;
 
   bool get isSaving => _service?.isSaving ?? false;
 
@@ -514,18 +510,10 @@ class MyProfileContentState extends State<MyProfileContent> {
     await widget.onRefresh();
   }
 
-  Future<void> _goToSection(_ProfileSectionId section) async {
+  void _goToSection(_ProfileSectionId section) {
+    if (section == _selectedSection) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _selectedSection = section);
-    final targetContext = _sectionKeys[section.index].currentContext;
-    if (targetContext == null) return;
-    await Scrollable.ensureVisible(
-      targetContext,
-      duration: MediaQuery.disableAnimationsOf(context)
-          ? Duration.zero
-          : const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      alignment: 0.02,
-    );
   }
 
   @override
@@ -551,82 +539,60 @@ class MyProfileContentState extends State<MyProfileContent> {
       top: false,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final showSectionRail =
-              constraints.maxWidth >= ResponsiveBreakpoints.desktopMin;
           final pagePadding =
               constraints.maxWidth >= ResponsiveBreakpoints.phoneMaxExclusive
-                  ? 28.0
-                  : 16.0;
-
-          final scrollable = RefreshIndicator(
-            onRefresh: _refreshSafely,
-            child: SingleChildScrollView(
-              key: const ValueKey('erp-profile-scroll'),
-              controller: _scrollController,
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(
-                pagePadding,
-                showSectionRail ? 28 : 20,
-                pagePadding,
-                56 + MediaQuery.paddingOf(context).bottom,
-              ),
-              child: _ProfileDetailsWorkspace(
-                profile: profile,
-                service: service,
-                sectionKeys: _sectionKeys,
-                showPageTitle: !ResponsiveViewport.usesCompactShell(context),
-                showStaleNotice: stale,
-                onRefresh: _refreshSafely,
-                editingDisplayName: _editingDisplayName,
-                editingContact: _editingContact,
-                dirty: _dirty,
-                displayNameController: _displayName,
-                displayNameFocus: _displayNameFocus,
-                displayNameFormKey: _displayNameFormKey,
-                displayNameSaveError: _displayNameSaveError,
-                contactFormKey: _contactFormKey,
-                phoneController: _phone,
-                addressController: _address,
-                cityController: _city,
-                emergencyNameController: _emergencyName,
-                emergencyPhoneController: _emergencyPhone,
-                contactSaveError: _contactSaveError,
-                onBeginDisplayNameEdit: _beginDisplayNameEdit,
-                onBeginContactEdit: _beginContactEdit,
-                onCancelEditing: _cancelEditing,
-                onSaveDisplayName: _saveDisplayName,
-                onSaveContact: _saveContact,
-              ),
-            ),
-          );
+                  ? 24.0
+                  : 14.0;
 
           return Stack(
             children: [
-              if (showSectionRail)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(
-                      width: 224,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 28, 12, 28),
-                        child: _ProfileSectionNavigator(
-                          selected: _selectedSection,
-                          profile: profile,
-                          onSelected: _goToSection,
-                        ),
-                      ),
-                    ),
-                    VerticalDivider(
-                      width: 1,
-                      thickness: 1,
-                      color: Theme.of(context).dividerColor,
-                    ),
-                    Expanded(child: scrollable),
-                  ],
-                )
-              else
-                scrollable,
+              RefreshIndicator(
+                onRefresh: _refreshSafely,
+                child: SingleChildScrollView(
+                  key: const ValueKey('erp-profile-scroll'),
+                  controller: _scrollController,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    pagePadding,
+                    constraints.maxWidth >= ResponsiveBreakpoints.desktopMin
+                        ? 24
+                        : 16,
+                    pagePadding,
+                    48 + MediaQuery.paddingOf(context).bottom,
+                  ),
+                  child: _ProfileDetailsWorkspace(
+                    profile: profile,
+                    service: service,
+                    desktopLayout: constraints.maxWidth >=
+                        ResponsiveBreakpoints.desktopMin,
+                    selectedSection: _selectedSection,
+                    onSectionSelected: _goToSection,
+                    showPageTitle:
+                        !ResponsiveViewport.usesCompactShell(context),
+                    showStaleNotice: stale,
+                    onRefresh: _refreshSafely,
+                    editingDisplayName: _editingDisplayName,
+                    editingContact: _editingContact,
+                    dirty: _dirty,
+                    displayNameController: _displayName,
+                    displayNameFocus: _displayNameFocus,
+                    displayNameFormKey: _displayNameFormKey,
+                    displayNameSaveError: _displayNameSaveError,
+                    contactFormKey: _contactFormKey,
+                    phoneController: _phone,
+                    addressController: _address,
+                    cityController: _city,
+                    emergencyNameController: _emergencyName,
+                    emergencyPhoneController: _emergencyPhone,
+                    contactSaveError: _contactSaveError,
+                    onBeginDisplayNameEdit: _beginDisplayNameEdit,
+                    onBeginContactEdit: _beginContactEdit,
+                    onCancelEditing: _cancelEditing,
+                    onSaveDisplayName: _saveDisplayName,
+                    onSaveContact: _saveContact,
+                  ),
+                ),
+              ),
               if (service.isLoading)
                 const Positioned(
                   top: 0,
@@ -656,7 +622,6 @@ class MyProfileContentState extends State<MyProfileContent> {
 }
 
 enum _ProfileSectionId {
-  summary,
   personal,
   employment,
   access,
@@ -665,7 +630,6 @@ enum _ProfileSectionId {
 
 extension on _ProfileSectionId {
   String get label => switch (this) {
-        _ProfileSectionId.summary => 'Resumen',
         _ProfileSectionId.personal => 'Datos personales',
         _ProfileSectionId.employment => 'Vínculo laboral',
         _ProfileSectionId.access => 'Acceso',
@@ -673,161 +637,131 @@ extension on _ProfileSectionId {
       };
 }
 
-class _ProfileSectionNavigator extends StatelessWidget {
-  const _ProfileSectionNavigator({
+class _ProfileSectionNavigation extends StatelessWidget {
+  const _ProfileSectionNavigation({
     required this.selected,
-    required this.profile,
     required this.onSelected,
   });
 
   final _ProfileSectionId selected;
-  final CurrentUserProfile profile;
   final ValueChanged<_ProfileSectionId> onSelected;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final background = Color.alphaBlend(
-      colors.primary.withValues(alpha: 0.055),
-      colors.surface,
-    );
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 8, 18, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return Semantics(
+      container: true,
+      label: 'Secciones de Mi perfil',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final columns =
+                  constraints.maxWidth < ResponsiveBreakpoints.phoneMaxExclusive
+                      ? 2
+                      : 4;
+              const gap = 4.0;
+              final itemWidth =
+                  (constraints.maxWidth - (columns - 1) * gap) / columns;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
                 children: [
-                  Text(
-                    'MI PERFIL',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: colors.onSurfaceVariant,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.8,
-                        ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    profile.displayName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
+                  for (final section in _ProfileSectionId.values)
+                    SizedBox(
+                      width: itemWidth,
+                      child: _ProfileSectionButton(
+                        section: section,
+                        selected: section == selected,
+                        onTap: () => onSelected(section),
+                      ),
+                    ),
                 ],
-              ),
-            ),
-            for (final section in _ProfileSectionId.values)
-              _SectionNavigationRow(
-                label: section.label,
-                selected: section == selected,
-                onTap: () => onSelected(section),
-              ),
-            const Spacer(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
-              child: _LinkStateSummary(profile: profile),
-            ),
-          ],
+              );
+            },
+          ),
         ),
       ),
     );
   }
 }
 
-class _SectionNavigationRow extends StatelessWidget {
-  const _SectionNavigationRow({
-    required this.label,
+class _ProfileSectionButton extends StatelessWidget {
+  const _ProfileSectionButton({
+    required this.section,
     required this.selected,
     required this.onTap,
   });
 
-  final String label;
+  final _ProfileSectionId section;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Row(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 140),
-                width: 3,
-                height: selected ? 28 : 0,
-                decoration: BoxDecoration(
-                  color: colors.primary,
-                  borderRadius: const BorderRadius.horizontal(
-                    right: Radius.circular(3),
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'Sección ${section.label}',
+      child: Material(
+        color: selected
+            ? Color.alphaBlend(
+                colors.primary.withValues(alpha: 0.1),
+                colors.surfaceContainerLow,
+              )
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: ValueKey('erp-profile-section-nav-${section.name}'),
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 56),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ExcludeSemantics(
+                    child: Text(
+                      section.label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: selected
+                                ? colors.primary
+                                : colors.onSurfaceVariant,
+                            fontWeight:
+                                selected ? FontWeight.w700 : FontWeight.w600,
+                            height: 1.15,
+                          ),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 4),
+                  AnimatedContainer(
+                    duration: MediaQuery.disableAnimationsOf(context)
+                        ? Duration.zero
+                        : const Duration(milliseconds: 140),
+                    width: selected ? 24 : 0,
+                    height: 2,
+                    decoration: BoxDecoration(
+                      color: colors.primary,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Text(
-                  label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color:
-                            selected ? colors.primary : colors.onSurfaceVariant,
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w500,
-                      ),
-                ),
-              ),
-              const SizedBox(width: 12),
-            ],
+            ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _LinkStateSummary extends StatelessWidget {
-  const _LinkStateSummary({required this.profile});
-
-  final CurrentUserProfile profile;
-
-  @override
-  Widget build(BuildContext context) {
-    final linked = profile.employeeLinkState == EmployeeLinkState.linked;
-    final colors = Theme.of(context).colorScheme;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          linked ? Icons.link : Icons.info_outline,
-          size: 18,
-          color: linked ? colors.primary : colors.onSurfaceVariant,
-        ),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Text(
-            linked
-                ? 'Cuenta vinculada a una ficha laboral.'
-                : 'Cuenta aún sin ficha laboral vinculada.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colors.onSurfaceVariant,
-                  height: 1.35,
-                ),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -836,7 +770,9 @@ class _ProfileDetailsWorkspace extends StatelessWidget {
   const _ProfileDetailsWorkspace({
     required this.profile,
     required this.service,
-    required this.sectionKeys,
+    required this.desktopLayout,
+    required this.selectedSection,
+    required this.onSectionSelected,
     required this.showPageTitle,
     required this.showStaleNotice,
     required this.onRefresh,
@@ -863,7 +799,9 @@ class _ProfileDetailsWorkspace extends StatelessWidget {
 
   final CurrentUserProfile profile;
   final CurrentUserProfileService service;
-  final List<GlobalKey> sectionKeys;
+  final bool desktopLayout;
+  final _ProfileSectionId selectedSection;
+  final ValueChanged<_ProfileSectionId> onSectionSelected;
   final bool showPageTitle;
   final bool showStaleNotice;
   final Future<void> Function() onRefresh;
@@ -889,64 +827,67 @@ class _ProfileDetailsWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (showPageTitle) ...[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Mi perfil',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1280),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (showPageTitle) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Mi perfil',
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Identidad, vínculo, acceso y seguridad de tu cuenta.',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 5),
-                    Text(
-                      'Tu identidad, datos personales, acceso y seguridad en un solo lugar.',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                  ],
-                ),
+                  ),
+                  IconButton(
+                    key: const ValueKey('erp-profile-refresh-desktop'),
+                    tooltip: 'Actualizar perfil',
+                    onPressed: dirty || service.isSaving ? null : onRefresh,
+                    icon: const Icon(Icons.refresh),
+                  ),
+                ],
               ),
-              IconButton(
-                key: const ValueKey('erp-profile-refresh-desktop'),
-                tooltip: 'Actualizar perfil',
-                onPressed: dirty || service.isSaving ? null : onRefresh,
-                icon: const Icon(Icons.refresh),
-              ),
+              const SizedBox(height: 16),
             ],
-          ),
-          const SizedBox(height: 24),
-        ],
-        if (showStaleNotice) ...[
-          _StaleProfileNotice(onRetry: onRefresh),
-          const SizedBox(height: 18),
-        ],
-        KeyedSubtree(
-          key: sectionKeys[_ProfileSectionId.summary.index],
-          child: _ProfileHero(profile: profile),
-        ),
-        const SizedBox(height: 34),
-        KeyedSubtree(
-          key: sectionKeys[_ProfileSectionId.personal.index],
-          child: _ProfileSection(
-            title: 'Datos personales',
-            description: profile.employee == null
-                ? 'Administra el nombre visible de tu cuenta. El correo de acceso se mantiene como identidad de inicio de sesión.'
-                : 'Actualiza únicamente la información personal que te corresponde. Los datos legales siguen bajo control de RR.HH.',
-            child: _PersonalDetails(
+            if (showStaleNotice) ...[
+              _StaleProfileNotice(onRetry: onRefresh),
+              const SizedBox(height: 14),
+            ],
+            _ProfileIdentityHeader(profile: profile),
+            const SizedBox(height: 14),
+            _ProfileSectionNavigation(
+              selected: selectedSection,
+              onSelected: onSectionSelected,
+            ),
+            const SizedBox(height: 24),
+            _ProfileSelectedSection(
               profile: profile,
               service: service,
+              desktopLayout: desktopLayout,
+              section: selectedSection,
               editingDisplayName: editingDisplayName,
               editingContact: editingContact,
               displayNameController: displayNameController,
@@ -966,72 +907,40 @@ class _ProfileDetailsWorkspace extends StatelessWidget {
               onSaveDisplayName: onSaveDisplayName,
               onSaveContact: onSaveContact,
             ),
-          ),
+          ],
         ),
-        KeyedSubtree(
-          key: sectionKeys[_ProfileSectionId.employment.index],
-          child: _ProfileSection(
-            title: 'Vínculo laboral',
-            description:
-                'Explica cómo tu usuario ERP se relaciona con la ficha de trabajador y quién puede modificar cada dato.',
-            child: _EmploymentDetails(profile: profile),
-          ),
-        ),
-        KeyedSubtree(
-          key: sectionKeys[_ProfileSectionId.access.index],
-          child: _ProfileSection(
-            title: 'Acceso al ERP',
-            description:
-                'El negocio, el rol y los permisos son de solo lectura y los administra un responsable autorizado.',
-            child: _AccessDetails(profile: profile),
-          ),
-        ),
-        KeyedSubtree(
-          key: sectionKeys[_ProfileSectionId.security.index],
-          child: _ProfileSection(
-            title: 'Seguridad',
-            description:
-                'Protege tu cuenta y revisa la consecuencia de cada acción antes de continuar.',
-            showDivider: false,
-            child: _SecurityDetails(profile: profile, service: service),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _ProfileHero extends StatelessWidget {
-  const _ProfileHero({required this.profile});
+class _ProfileIdentityHeader extends StatelessWidget {
+  const _ProfileIdentityHeader({required this.profile});
 
   final CurrentUserProfile profile;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final background = Color.alphaBlend(
-      colors.primary.withValues(alpha: 0.075),
-      colors.surface,
-    );
     return Semantics(
+      key: const ValueKey('erp-profile-identity-header'),
       container: true,
       label:
-          '${profile.displayName}, ${_roleLabel(profile.role)}, ${profile.tenantName}',
+          '${profile.displayName}, ${profile.email}, ${_roleLabel(profile.role)}, ${profile.tenantName}',
       child: Container(
         decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(22),
+          color: colors.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(18),
         ),
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(16),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final roomy =
-                constraints.maxWidth >= ResponsiveBreakpoints.phoneMaxExclusive;
+            final roomy = constraints.maxWidth >= 720;
             final identity = Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _ProfileAvatar(profile: profile, radius: roomy ? 35 : 30),
-                const SizedBox(width: 16),
+                _ProfileAvatar(profile: profile, radius: 22),
+                const SizedBox(width: 13),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1039,45 +948,54 @@ class _ProfileHero extends StatelessWidget {
                       Text(
                         profile.displayName,
                         key: const ValueKey('erp-profile-display-name'),
-                        style:
-                            Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.12,
-                                ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        profile.email,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: colors.onSurfaceVariant,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              height: 1.12,
                             ),
                       ),
-                      const SizedBox(height: 9),
-                      _InlineStatus(
-                        icon: profile.emailVerified
-                            ? Icons.verified_outlined
-                            : Icons.warning_amber_outlined,
-                        label: profile.emailVerified
-                            ? 'Correo verificado'
-                            : 'Correo sin verificar',
-                        isWarning: !profile.emailVerified,
+                      const SizedBox(height: 3),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 9,
+                        runSpacing: 4,
+                        children: [
+                          Text(
+                            profile.email,
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: colors.onSurfaceVariant,
+                                    ),
+                          ),
+                          _InlineStatus(
+                            icon: profile.emailVerified
+                                ? Icons.verified_outlined
+                                : Icons.warning_amber_outlined,
+                            label: profile.emailVerified
+                                ? 'Correo verificado'
+                                : 'Correo sin verificar',
+                            isWarning: !profile.emailVerified,
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
               ],
             );
-            final contextSummary = _HeroContextSummary(profile: profile);
+            final accountContext = _IdentityAccountContext(profile: profile);
 
             if (!roomy) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   identity,
-                  const SizedBox(height: 20),
-                  Divider(color: Theme.of(context).dividerColor),
-                  const SizedBox(height: 10),
-                  contextSummary,
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 57),
+                    child: accountContext,
+                  ),
                 ],
               );
             }
@@ -1085,16 +1003,15 @@ class _ProfileHero extends StatelessWidget {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Expanded(flex: 3, child: identity),
-                const SizedBox(width: 28),
-                SizedBox(
-                  height: 76,
-                  child: VerticalDivider(
-                    color: Theme.of(context).dividerColor,
+                Expanded(flex: 5, child: identity),
+                const SizedBox(width: 30),
+                Flexible(
+                  flex: 4,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: accountContext,
                   ),
                 ),
-                const SizedBox(width: 28),
-                Expanded(flex: 2, child: contextSummary),
               ],
             );
           },
@@ -1104,38 +1021,37 @@ class _ProfileHero extends StatelessWidget {
   }
 }
 
-class _HeroContextSummary extends StatelessWidget {
-  const _HeroContextSummary({required this.profile});
+class _IdentityAccountContext extends StatelessWidget {
+  const _IdentityAccountContext({required this.profile});
 
   final CurrentUserProfile profile;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final employee = profile.employee;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          profile.tenantName,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          '${profile.tenantName} · ${_roleLabel(profile.role)}',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
         ),
         const SizedBox(height: 4),
         Text(
-          _roleLabel(profile.role),
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          profile.employee == null
-              ? 'Cuenta ERP sin ficha laboral vinculada'
-              : '${profile.employee!.jobTitle} · ${profile.employee!.departmentName ?? 'Sin departamento'}',
+          employee == null
+              ? 'Sin ficha de trabajador vinculada'
+              : 'Vinculada a ${employee.fullName} · ${employee.jobTitle}',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colors.onSurfaceVariant,
-                height: 1.35,
+                height: 1.3,
               ),
         ),
       ],
@@ -1143,48 +1059,213 @@ class _HeroContextSummary extends StatelessWidget {
   }
 }
 
-class _ProfileSection extends StatelessWidget {
-  const _ProfileSection({
-    required this.title,
-    required this.description,
-    required this.child,
-    this.showDivider = true,
+class _ProfileSelectedSection extends StatelessWidget {
+  const _ProfileSelectedSection({
+    required this.profile,
+    required this.service,
+    required this.desktopLayout,
+    required this.section,
+    required this.editingDisplayName,
+    required this.editingContact,
+    required this.displayNameController,
+    required this.displayNameFocus,
+    required this.displayNameFormKey,
+    required this.displayNameSaveError,
+    required this.contactFormKey,
+    required this.phoneController,
+    required this.addressController,
+    required this.cityController,
+    required this.emergencyNameController,
+    required this.emergencyPhoneController,
+    required this.contactSaveError,
+    required this.onBeginDisplayNameEdit,
+    required this.onBeginContactEdit,
+    required this.onCancelEditing,
+    required this.onSaveDisplayName,
+    required this.onSaveContact,
   });
 
-  final String title;
+  final CurrentUserProfile profile;
+  final CurrentUserProfileService service;
+  final bool desktopLayout;
+  final _ProfileSectionId section;
+  final bool editingDisplayName;
+  final bool editingContact;
+  final TextEditingController displayNameController;
+  final FocusNode displayNameFocus;
+  final GlobalKey<FormState> displayNameFormKey;
+  final String? displayNameSaveError;
+  final GlobalKey<FormState> contactFormKey;
+  final TextEditingController phoneController;
+  final TextEditingController addressController;
+  final TextEditingController cityController;
+  final TextEditingController emergencyNameController;
+  final TextEditingController emergencyPhoneController;
+  final String? contactSaveError;
+  final VoidCallback onBeginDisplayNameEdit;
+  final VoidCallback onBeginContactEdit;
+  final VoidCallback onCancelEditing;
+  final Future<void> Function() onSaveDisplayName;
+  final Future<void> Function() onSaveContact;
+
+  @override
+  Widget build(BuildContext context) {
+    late final String description;
+    late final String ownership;
+    late final Widget content;
+
+    switch (section) {
+      case _ProfileSectionId.personal:
+        description = profile.employee == null
+            ? 'Qué nombre puedes mostrar en el ERP y cuál es tu identidad de acceso.'
+            : 'Qué información de contacto puedes mantener directamente.';
+        ownership = profile.employee == null
+            ? 'Tu cuenta administra el nombre visible. El correo de acceso se mantiene sin cambios.'
+            : 'Tú administras contacto y emergencia. RR.HH. conserva la identidad legal y laboral.';
+        content = _PersonalDetails(
+          profile: profile,
+          service: service,
+          editingDisplayName: editingDisplayName,
+          editingContact: editingContact,
+          displayNameController: displayNameController,
+          displayNameFocus: displayNameFocus,
+          displayNameFormKey: displayNameFormKey,
+          displayNameSaveError: displayNameSaveError,
+          contactFormKey: contactFormKey,
+          phoneController: phoneController,
+          addressController: addressController,
+          cityController: cityController,
+          emergencyNameController: emergencyNameController,
+          emergencyPhoneController: emergencyPhoneController,
+          contactSaveError: contactSaveError,
+          onBeginDisplayNameEdit: onBeginDisplayNameEdit,
+          onBeginContactEdit: onBeginContactEdit,
+          onCancelEditing: onCancelEditing,
+          onSaveDisplayName: onSaveDisplayName,
+          onSaveContact: onSaveContact,
+        );
+        break;
+      case _ProfileSectionId.employment:
+        description = 'Qué ficha de trabajador está vinculada a tu usuario.';
+        ownership =
+            'RR.HH. o un responsable autorizado administra el vínculo y los datos laborales.';
+        content = _EmploymentDetails(profile: profile);
+        break;
+      case _ProfileSectionId.access:
+        description =
+            'A qué negocio entras, con qué rol y qué operaciones puedes realizar.';
+        ownership =
+            'Esta información es de solo lectura. Un administrador gestiona roles y permisos.';
+        content = _AccessDetails(profile: profile);
+        break;
+      case _ProfileSectionId.security:
+        description = 'Cómo cambiar tu contraseña y cerrar las demás sesiones.';
+        ownership =
+            'La verificación y el cierre se ejecutan sobre tu identidad autenticada.';
+        content = _SecurityDetails(profile: profile, service: service);
+        break;
+    }
+
+    return _ProfileSectionWorkspace(
+      key: ValueKey('erp-profile-section-body-${section.name}'),
+      section: section,
+      desktopLayout: desktopLayout,
+      description: description,
+      ownership: ownership,
+      child: content,
+    );
+  }
+}
+
+class _ProfileSectionWorkspace extends StatelessWidget {
+  const _ProfileSectionWorkspace({
+    required this.section,
+    required this.desktopLayout,
+    required this.description,
+    required this.ownership,
+    required this.child,
+    super.key,
+  });
+
+  final _ProfileSectionId section;
+  final bool desktopLayout;
   final String description;
+  final String ownership;
   final Widget child;
-  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          description,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: colors.onSurfaceVariant,
-                height: 1.45,
-              ),
-        ),
-        const SizedBox(height: 20),
-        child,
-        if (showDivider) ...[
-          const SizedBox(height: 30),
-          Divider(color: Theme.of(context).dividerColor),
-          const SizedBox(height: 30),
-        ] else
+    final contextCopy = KeyedSubtree(
+      key: const ValueKey('erp-profile-section-context'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            section.label,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            description,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                  height: 1.4,
+                ),
+          ),
           const SizedBox(height: 12),
-      ],
+          Text(
+            ownership,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                  height: 1.4,
+                ),
+          ),
+        ],
+      ),
+    );
+    final boundedContent = KeyedSubtree(
+      key: const ValueKey('erp-profile-section-content'),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720),
+        child: child,
+      ),
+    );
+
+    return Semantics(
+      container: true,
+      label: 'Sección ${section.label} seleccionada',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (!desktopLayout) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                contextCopy,
+                const SizedBox(height: 22),
+                boundedContent,
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 250, child: contextCopy),
+              const SizedBox(width: 44),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: boundedContent,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -1704,9 +1785,16 @@ class _EmploymentDetails extends StatelessWidget {
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
-                onPressed: () => context.push('/settings/users'),
-                icon: const Icon(Icons.arrow_forward),
-                label: const Text('Gestionar vínculos de usuarios'),
+                onPressed: () => UserManagementNavigation.open(
+                  context,
+                  audience: UserManagementAudience.staff,
+                  target: UserManagementTarget.user,
+                  targetId: profile.userId,
+                ),
+                icon: const Icon(Icons.manage_accounts_outlined),
+                label: const Text(
+                  'Administrar vínculo en Usuarios y roles',
+                ),
                 style: TextButton.styleFrom(
                   minimumSize: const Size(48, 48),
                 ),
@@ -1761,7 +1849,7 @@ class _EmploymentDetails extends StatelessWidget {
             child: TextButton.icon(
               onPressed: () => context.push('/hr/employees/${employee.id}'),
               icon: const Icon(Icons.open_in_new),
-              label: const Text('Abrir ficha laboral'),
+              label: const Text('Abrir ficha de trabajador en RR.HH.'),
               style: TextButton.styleFrom(
                 minimumSize: const Size(48, 48),
               ),
@@ -1948,10 +2036,7 @@ class _SecurityDetails extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          colors.primary.withValues(alpha: 0.045),
-          colors.surface,
-        ),
+        color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(18),
       ),
       padding: const EdgeInsets.all(20),
@@ -2052,26 +2137,11 @@ class _DefinitionGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final twoColumns =
-            constraints.maxWidth >= ResponsiveBreakpoints.phoneMaxExclusive;
-        const gap = 28.0;
-        final width = twoColumns
-            ? (constraints.maxWidth - gap) / 2
-            : constraints.maxWidth;
-        return Wrap(
-          spacing: gap,
-          runSpacing: 0,
-          children: [
-            for (final item in items)
-              SizedBox(
-                width: width,
-                child: _DefinitionItem(data: item),
-              ),
-          ],
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final item in items) _DefinitionItem(data: item),
+      ],
     );
   }
 }
@@ -2084,44 +2154,77 @@ class _DefinitionItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Container(
-      constraints: const BoxConstraints(minHeight: 70),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: Theme.of(context).dividerColor.withValues(alpha: 0.72),
-          ),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            data.label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            data.value,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-          if (data.supporting != null && data.supporting!.isNotEmpty) ...[
-            const SizedBox(height: 3),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final horizontal =
+            constraints.maxWidth >= ResponsiveBreakpoints.phoneMaxExclusive;
+        final value = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
             Text(
-              data.supporting!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
+              data.value,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
             ),
+            if (data.supporting != null && data.supporting!.isNotEmpty) ...[
+              const SizedBox(height: 3),
+              Text(
+                data.supporting!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+              ),
+            ],
           ],
-        ],
-      ),
+        );
+        return Container(
+          constraints: BoxConstraints(minHeight: horizontal ? 58 : 66),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).dividerColor.withValues(alpha: 0.58),
+              ),
+            ),
+          ),
+          child: horizontal
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 158,
+                      child: Text(
+                        data.label,
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: colors.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(child: value),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      data.label,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: colors.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 5),
+                    value,
+                  ],
+                ),
+        );
+      },
     );
   }
 }
@@ -2140,7 +2243,7 @@ class _InlineStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final color = isWarning ? colors.error : colors.primary;
+    final color = isWarning ? colors.error : colors.tertiary;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -2175,13 +2278,10 @@ class _InlineNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final accent = positive ? colors.primary : colors.onSurfaceVariant;
+    final accent = positive ? colors.tertiary : colors.onSurfaceVariant;
     return Container(
       decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          accent.withValues(alpha: positive ? 0.065 : 0.04),
-          colors.surface,
-        ),
+        color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
       ),
       padding: const EdgeInsets.all(16),
@@ -2291,10 +2391,7 @@ class _InlineNoticeWithAction extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          colors.primary.withValues(alpha: 0.055),
-          colors.surface,
-        ),
+        color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Wrap(
@@ -2352,8 +2449,8 @@ class _ProfileAvatar extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final fallback = CircleAvatar(
       radius: radius,
-      backgroundColor: colors.primary,
-      foregroundColor: colors.onPrimary,
+      backgroundColor: colors.surfaceContainerHighest,
+      foregroundColor: colors.onSurfaceVariant,
       child: Text(
         profile.initials,
         style: TextStyle(
@@ -2406,18 +2503,15 @@ class _ProfileLoadingWorkspace extends StatelessWidget {
                 const SizedBox(height: 20),
               ],
               Container(
-                constraints: const BoxConstraints(minHeight: 150),
+                constraints: const BoxConstraints(minHeight: 124),
                 decoration: BoxDecoration(
-                  color: Color.alphaBlend(
-                    colors.primary.withValues(alpha: 0.065),
-                    colors.surface,
-                  ),
-                  borderRadius: BorderRadius.circular(22),
+                  color: colors.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(18),
                 ),
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(20),
                 child: const Center(child: BrandedLoading()),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 22),
               Text(
                 'Cargando identidad, vínculo laboral y permisos…',
                 style: Theme.of(context).textTheme.titleMedium,

@@ -141,12 +141,15 @@ void main() {
     expect(
       source,
       contains(
-        'Expanded(\n'
-        '            child: showTechnicalControls\n'
-        '                ? _buildTechnicalSchemaNavigator(',
+        'if (showTechnicalControls)\n'
+        '            Expanded(\n'
+        '              child: _buildTechnicalSchemaNavigator(',
       ),
     );
     expect(source, contains('fitControllerToAvailableHeight: true'));
+    expect(source, contains('if (isCompact) ...['));
+    expect(source, contains('_buildCompactTechnicalSystemSelector(theme)'));
+    expect(source, contains('_buildCompactTechnicalMapDisclosure('));
   });
 
   test('database snapshot and service expose the shared atomic contract', () {

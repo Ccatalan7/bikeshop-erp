@@ -210,7 +210,14 @@ export async function handler(req: Request) {
 
     switch (action) {
       case "overview":
-        return respond(await getOverview(serviceClient, caller, body.search ?? ""));
+        return respond(
+          await getOverview(
+            serviceClient,
+            caller,
+            body.search ?? "",
+            body.customerId,
+          ),
+        );
       case "get_worker_portal_access":
         return respond(await getWorkerPortalAccess(serviceClient, caller, body));
       case "create_internal_invitation":
@@ -427,7 +434,12 @@ export async function getCallerContext(
   };
 }
 
-async function getOverview(serviceClient: SupabaseClient, caller: CallerContext, search: string) {
+async function getOverview(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  search: string,
+  selectedCustomerId?: string,
+) {
   const searchTerm = search.trim();
   const [
     staffUsers,
@@ -438,7 +450,12 @@ async function getOverview(serviceClient: SupabaseClient, caller: CallerContext,
   ] = await Promise.all([
     getStaffUsers(serviceClient, caller.tenantId),
     getPendingInvitations(serviceClient, caller.tenantId),
-    getCustomerAccounts(serviceClient, caller.tenantId, searchTerm),
+    getCustomerAccounts(
+      serviceClient,
+      caller.tenantId,
+      searchTerm,
+      selectedCustomerId,
+    ),
     getEmployeeAccessStates(serviceClient, caller.tenantId),
     getSummary(serviceClient, caller.tenantId),
   ]);
@@ -678,10 +695,13 @@ async function getCustomerAccounts(
   serviceClient: SupabaseClient,
   tenantId: string,
   search: string,
+  selectedCustomerId?: string,
 ) {
+  const customerProjection =
+    "id, name, email, phone, is_active, auth_user_id, created_at, updated_at";
   let query = serviceClient
     .from("customers")
-    .select("id, name, email, phone, is_active, auth_user_id, created_at, updated_at")
+    .select(customerProjection)
     .eq("tenant_id", tenantId)
     .order("updated_at", { ascending: false });
 
@@ -696,7 +716,21 @@ async function getCustomerAccounts(
   const { data, error } = await query;
   if (error) throw error;
 
-  const rows = data ?? [];
+  const rows = [...(data ?? [])];
+  const normalizedCustomerId = selectedCustomerId?.trim();
+  if (
+    normalizedCustomerId &&
+    !rows.some((customer: any) => customer.id === normalizedCustomerId)
+  ) {
+    const { data: selectedCustomer, error: selectedCustomerError } = await serviceClient
+      .from("customers")
+      .select(customerProjection)
+      .eq("tenant_id", tenantId)
+      .eq("id", normalizedCustomerId)
+      .maybeSingle();
+    if (selectedCustomerError) throw selectedCustomerError;
+    if (selectedCustomer) rows.unshift(selectedCustomer);
+  }
   const customerAccounts = await Promise.all(rows.map(async (customer: any) => {
     const authUser = customer.auth_user_id
       ? await getAuthUser(serviceClient, customer.auth_user_id)

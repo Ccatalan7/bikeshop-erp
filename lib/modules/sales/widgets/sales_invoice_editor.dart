@@ -51,6 +51,7 @@ class SalesInvoiceEditor extends StatefulWidget {
   final bool isCompact; // Enable compact mode for side panels
   final VoidCallback? onSaved; // Callback after successful save
   final VoidCallback? onCloseRequested;
+  final Future<void> Function(Invoice invoice)? onRegisterPaymentRequested;
   final bool allowFullScreenExpansion;
 
   const SalesInvoiceEditor({
@@ -61,6 +62,7 @@ class SalesInvoiceEditor extends StatefulWidget {
     this.isCompact = false,
     this.onSaved,
     this.onCloseRequested,
+    this.onRegisterPaymentRequested,
     this.allowFullScreenExpansion = true,
   });
 
@@ -108,6 +110,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   bool _isDirty = false; // Tracks unsaved changes to protect from rebuilds
   bool _isDiscardPromptOpen = false;
   bool _isGeneratingPdf = false;
+  bool _isRequestingPayment = false;
 
   StreamSubscription? _scanSubscription;
   final _remoteScannerService = RemoteScannerService();
@@ -464,6 +467,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         }
 
         // Check if this invoice is linked to a job, to load bikes
+        if (!mounted) return;
         final db = Provider.of<DatabaseService>(context, listen: false);
         try {
           _debugBikeMessage =
@@ -943,7 +947,47 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     }
   }
 
-  // Payment logic temporarily disabled for side panel simplicity
+  double get _outstandingAmount {
+    final invoice = _loadedInvoice;
+    if (invoice == null) return 0;
+    return (invoice.total - invoice.paidAmount).clamp(0, double.infinity);
+  }
+
+  bool get _canRequestPayment {
+    return widget.onRegisterPaymentRequested != null &&
+        _loadedInvoice != null &&
+        !_canEditFields &&
+        _status != InvoiceStatus.paid &&
+        _status != InvoiceStatus.cancelled &&
+        _outstandingAmount > 0.01;
+  }
+
+  Future<void> _requestPayment() async {
+    final invoice = _loadedInvoice;
+    final onRegisterPaymentRequested = widget.onRegisterPaymentRequested;
+    if (!_canRequestPayment ||
+        invoice == null ||
+        onRegisterPaymentRequested == null ||
+        _isRequestingPayment) {
+      return;
+    }
+
+    setState(() => _isRequestingPayment = true);
+    try {
+      await onRegisterPaymentRequested(invoice);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo abrir el registro de abono: $error'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isRequestingPayment = false);
+      }
+    }
+  }
 
   double get _subtotal {
     final value = _lineEntries.fold<double>(
@@ -1408,6 +1452,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
       final resolvedBikeNames =
           await InvoicePdfGenerator.resolveBikeNames(context, _loadedInvoice!);
+      if (!mounted) return;
 
       final diagnosisNarratives =
           mode == InvoicePdfExportMode.invoiceWithDiagnosis
@@ -1958,6 +2003,29 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     }
 
     final actionButtons = <Widget>[];
+
+    if (widget.isCompact && _canRequestPayment) {
+      actionButtons.add(
+        FilledButton.tonalIcon(
+          key: const ValueKey('invoice-editor-register-payment'),
+          onPressed: _isRequestingPayment || _isSaving || _isUpdatingStatus
+              ? null
+              : () => unawaited(_requestPayment()),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(48, 48),
+          ),
+          icon: _isRequestingPayment
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.payments_outlined, size: 18),
+          label: const Text('Registrar abono'),
+        ),
+      );
+      actionButtons.add(const SizedBox(width: 4));
+    }
 
     // -1. EXPAND BUTTON (Only in compact mode)
     if (widget.isCompact && widget.allowFullScreenExpansion) {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
@@ -5,13 +6,19 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../modules/accounting/services/financial_projection_refresh_coordinator.dart';
 import '../../modules/accounting/widgets/accounting_dashboard_section.dart';
 import '../models/strategic_dashboard_metrics.dart';
 import '../services/database_service.dart';
 import '../services/strategic_dashboard_service.dart';
 
 class StrategicDashboardDeck extends StatefulWidget {
-  const StrategicDashboardDeck({super.key});
+  const StrategicDashboardDeck({
+    super.key,
+    this.financialProjectionRefresh,
+  });
+
+  final FinancialProjectionRefreshCoordinator? financialProjectionRefresh;
 
   @override
   State<StrategicDashboardDeck> createState() => _StrategicDashboardDeckState();
@@ -39,7 +46,13 @@ class _StrategicDashboardDeckState extends State<StrategicDashboardDeck> {
   late StrategicDashboardDateWindow _dateWindow;
   StrategicDashboardMetrics? _metrics;
   Object? _error;
-  bool _loading = true;
+  bool _loading = false;
+  int _metricsRequestGeneration = 0;
+  FinancialProjectionRefreshCoordinator? _refreshCoordinator;
+  StreamSubscription<FinancialProjectionRefreshSignal>? _refreshSubscription;
+  Future<void>? _activeMetricsLoad;
+  bool _metricsRefreshPending = false;
+  bool _surfaceActive = true;
 
   @override
   void initState() {
@@ -48,17 +61,110 @@ class _StrategicDashboardDeckState extends State<StrategicDashboardDeck> {
       _periodPreset,
       today: StrategicDashboardService.businessToday(),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadMetrics());
+    _bindRefreshCoordinator(
+      widget.financialProjectionRefresh ??
+          FinancialProjectionRefreshCoordinator.fallback,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant StrategicDashboardDeck oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextCoordinator = widget.financialProjectionRefresh ??
+        FinancialProjectionRefreshCoordinator.fallback;
+    _bindRefreshCoordinator(nextCoordinator);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final wasActive = _surfaceActive;
+    _surfaceActive = TickerMode.of(context);
+    if (!wasActive && _surfaceActive && _metricsRefreshPending && _page > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_loadMetrics());
+      });
+    }
   }
 
   @override
   void dispose() {
+    _metricsRequestGeneration++;
+    unawaited(_refreshSubscription?.cancel());
+    _refreshSubscription = null;
     _controller.dispose();
     super.dispose();
   }
 
-  Future<void> _loadMetrics() async {
+  void _bindRefreshCoordinator(
+    FinancialProjectionRefreshCoordinator coordinator,
+  ) {
+    if (identical(coordinator, _refreshCoordinator)) return;
+    unawaited(_refreshSubscription?.cancel());
+    _refreshCoordinator = coordinator;
+    _refreshSubscription = coordinator.signals.listen(
+      _onFinancialProjectionChanged,
+    );
+  }
+
+  void _onFinancialProjectionChanged(
+    FinancialProjectionRefreshSignal signal,
+  ) {
     if (!mounted) return;
+    final tenantChanged = signal.changes.contains(
+      FinancialProjectionChangeKind.tenantScope,
+    );
+    final hadStrategicState =
+        _metrics != null || _activeMetricsLoad != null || _page > 0;
+
+    if (tenantChanged) {
+      _metricsRequestGeneration++;
+      setState(() {
+        // Strategic panels share the same tenant boundary as panel one.
+        _metrics = null;
+        _error = null;
+        _loading = false;
+      });
+      _metricsRefreshPending = hadStrategicState;
+    } else {
+      if (_metrics == null && _activeMetricsLoad == null) return;
+      _metricsRequestGeneration++;
+      _metricsRefreshPending = true;
+    }
+
+    if (_surfaceActive && _page > 0) {
+      unawaited(_loadMetrics());
+    }
+  }
+
+  Future<void> _loadMetrics() {
+    if (!mounted) return Future<void>.value();
+    if (!_surfaceActive || _page == 0) {
+      _metricsRefreshPending = true;
+      return Future<void>.value();
+    }
+    final activeLoad = _activeMetricsLoad;
+    if (activeLoad != null) {
+      _metricsRefreshPending = true;
+      return activeLoad;
+    }
+
+    _metricsRefreshPending = false;
+    final load = _runMetricsLoad();
+    _activeMetricsLoad = load;
+    return load.whenComplete(() {
+      if (!mounted) return;
+      _activeMetricsLoad = null;
+      if (_metricsRefreshPending && _surfaceActive && _page > 0) {
+        unawaited(_loadMetrics());
+      }
+    });
+  }
+
+  Future<void> _runMetricsLoad() async {
+    if (!mounted) return;
+    final requestGeneration = ++_metricsRequestGeneration;
+    final requestedWindow = _dateWindow;
     setState(() {
       _loading = true;
       _error = null;
@@ -67,14 +173,26 @@ class _StrategicDashboardDeckState extends State<StrategicDashboardDeck> {
       final service = StrategicDashboardService(
         context.read<DatabaseService>(),
       );
-      final metrics = await service.load(window: _dateWindow);
-      if (!mounted) return;
+      final metrics = await service.load(window: requestedWindow);
+      if (!mounted ||
+          requestGeneration != _metricsRequestGeneration ||
+          !_surfaceActive ||
+          _page == 0) {
+        _metricsRefreshPending = true;
+        return;
+      }
       setState(() {
         _metrics = metrics;
         _loading = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted ||
+          requestGeneration != _metricsRequestGeneration ||
+          !_surfaceActive ||
+          _page == 0) {
+        _metricsRefreshPending = true;
+        return;
+      }
       setState(() {
         _error = error;
         _loading = false;
@@ -156,12 +274,20 @@ class _StrategicDashboardDeckState extends State<StrategicDashboardDeck> {
       _periodPreset = preset;
       _dateWindow = window;
     });
+    _metricsRequestGeneration++;
+    _metricsRefreshPending = true;
     await _loadMetrics();
+  }
+
+  void _loadMetricsWhenNeeded(int page) {
+    if (page == 0 || (_metrics != null && !_metricsRefreshPending)) return;
+    unawaited(_loadMetrics());
   }
 
   void _goTo(int page) {
     if (page < 0 || page >= _titles.length || page == _page) return;
     setState(() => _page = page);
+    _loadMetricsWhenNeeded(page);
     _controller.animateToPage(
       page,
       duration: const Duration(milliseconds: 360),
@@ -201,11 +327,14 @@ class _StrategicDashboardDeckState extends State<StrategicDashboardDeck> {
                 physics: const NeverScrollableScrollPhysics(),
                 onPageChanged: (page) {
                   if (_page != page) setState(() => _page = page);
+                  _loadMetricsWhenNeeded(page);
                 },
                 children: [
-                  const SingleChildScrollView(
-                    physics: NeverScrollableScrollPhysics(),
-                    child: AccountingDashboardSection(),
+                  SingleChildScrollView(
+                    physics: const NeverScrollableScrollPhysics(),
+                    child: AccountingDashboardSection(
+                      refreshCoordinator: widget.financialProjectionRefresh,
+                    ),
                   ),
                   _OperationalPageState(
                     loading: _loading,

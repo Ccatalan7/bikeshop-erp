@@ -12,14 +12,12 @@ import '../config/bottom_bracket_canonical_data.dart';
 import '../config/drivetrain_canonical_data.dart';
 import '../models/bikeshop_models.dart';
 import '../services/bikeshop_service.dart';
-import '../widgets/bike_diagram_illustration.dart';
 import '../widgets/bike_system_controller.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/models/bike_catalog_models.dart';
 import '../../../shared/services/bike_catalog_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/responsive_viewport.dart';
-import '../../../shared/widgets/branded_loading.dart';
 
 enum _BikeAggregateLoadState {
   creating,
@@ -343,6 +341,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   bool _isSaving = false;
   int _currentStep = 0;
   String? _selectedTechnicalSystemKey;
+  bool _showCompactTechnicalMap = false;
+  bool _showCompactTechnicalRules = false;
   final PageController _pageController = PageController();
 
   @override
@@ -1403,7 +1403,6 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     messenger.showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.orange,
       ),
     );
   }
@@ -1559,105 +1558,106 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     }
   }
 
-  // Quick-add brand dialog
+  Future<String?> _requestNewReferenceName({
+    required String title,
+    required String label,
+    required String hint,
+  }) async {
+    if (ResponsiveViewport.usesCompactShell(context)) {
+      return showModalBottomSheet<String>(
+        context: context,
+        useSafeArea: true,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (_) => _BikeReferenceNameSheet(
+          title: title,
+          label: label,
+          hint: hint,
+        ),
+      );
+    }
+
+    return showDialog<String>(
+      context: context,
+      builder: (_) => _BikeReferenceNameDialog(
+        title: title,
+        label: label,
+        hint: hint,
+      ),
+    );
+  }
+
   Future<void> _showQuickAddBrandDialog() async {
-    final nameController = TextEditingController();
+    final brandName = await _requestNewReferenceName(
+      title: 'Nueva marca',
+      label: 'Nombre de la marca',
+      hint: 'Trek, Giant, Specialized...',
+    );
+    if (!mounted || brandName == null || brandName.isEmpty) return;
+
     final service = context.read<BikeshopService>();
     final tenantService = context.read<TenantService>();
     final messenger = ScaffoldMessenger.of(context);
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Nueva Marca'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(
-            labelText: 'Nombre de la marca',
-            hintText: 'Trek, Giant, Specialized...',
-          ),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameController.text.trim().isEmpty) return;
-              Navigator.pop(context, true);
-            },
-            child: const Text('Crear'),
-          ),
-        ],
-      ),
-    );
+    final errorColor = Theme.of(context).colorScheme.error;
 
-    if (result == true && nameController.text.trim().isNotEmpty) {
-      try {
-        final tenantId = await tenantService.getTenantId();
-        if (!mounted) return;
-        if (tenantId == null || tenantId.isEmpty) {
-          throw Exception('No se pudo obtener el tenant_id del usuario');
-        }
+    try {
+      final tenantId = await tenantService.getTenantId();
+      if (!mounted) return;
+      if (tenantId == null || tenantId.isEmpty) {
+        throw Exception('No se pudo obtener el tenant_id del usuario');
+      }
 
-        // Check if brand already exists
-        final brandName = nameController.text.trim();
-        final existingBrand = _brands.firstWhere(
-          (b) => b.name.toLowerCase() == brandName.toLowerCase(),
-          orElse: () => BikeBrand(tenantId: tenantId, name: '', isActive: true),
+      final existingBrand = _brands.firstWhere(
+        (b) => b.name.toLowerCase() == brandName.toLowerCase(),
+        orElse: () => BikeBrand(tenantId: tenantId, name: '', isActive: true),
+      );
+
+      if (existingBrand.id != null) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('La marca "$brandName" ya existe')),
         );
+        return;
+      }
 
-        if (existingBrand.id != null) {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text('La marca "$brandName" ya existe'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-          return;
-        }
-
-        final newBrand = BikeBrand(
+      final created = await service.createBikeBrand(
+        BikeBrand(
           tenantId: tenantId,
           name: brandName,
           isActive: true,
-        );
+        ),
+      );
 
-        final created = await service.createBikeBrand(newBrand);
+      await _loadBrands();
+      final createdBrand = _brands.firstWhere(
+        (b) => b.id == created.id,
+        orElse: () => created,
+      );
 
-        // Reload brands and find the created one
-        await _loadBrands();
-        final createdBrand = _brands.firstWhere(
-          (b) => b.id == created.id,
-          orElse: () => created,
-        );
+      setState(() {
+        _selectedBrand = createdBrand;
+        _selectedModel = null;
+        _models = [];
+        _brandFieldKey = UniqueKey();
+        _modelFieldKey = UniqueKey();
+      });
 
-        setState(() {
-          _selectedBrand = createdBrand;
-          _selectedModel = null;
-          _models = [];
-          _brandFieldKey = UniqueKey();
-          _modelFieldKey = UniqueKey();
-        });
-
-        if (createdBrand.id != null) {
-          await _loadModels(createdBrand.id!);
-        }
-
-        messenger.showSnackBar(
-          SnackBar(content: Text('Marca "${created.name}" creada')),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-                'Error: ${e.toString().contains('duplicate') ? 'La marca ya existe' : e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      if (createdBrand.id != null) {
+        await _loadModels(createdBrand.id!);
       }
+
+      messenger.showSnackBar(
+        SnackBar(content: Text('Marca "${created.name}" creada')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Error: ${e.toString().contains('duplicate') ? 'La marca ya existe' : e.toString()}',
+          ),
+          backgroundColor: errorColor,
+        ),
+      );
     }
   }
 
@@ -1665,98 +1665,75 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   Future<void> _showQuickAddModelDialog() async {
     if (_selectedBrand == null) return;
 
-    final nameController = TextEditingController();
+    final modelName = await _requestNewReferenceName(
+      title: 'Nuevo modelo · ${_selectedBrand!.name}',
+      label: 'Nombre del modelo',
+      hint: 'Marlin 7, Escape 3...',
+    );
+    if (!mounted || modelName == null || modelName.isEmpty) return;
+
     final service = context.read<BikeshopService>();
     final tenantService = context.read<TenantService>();
     final messenger = ScaffoldMessenger.of(context);
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Nuevo Modelo - ${_selectedBrand!.name}'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(
-            labelText: 'Nombre del modelo',
-            hintText: 'Marlin 7, Escape 3...',
-          ),
-          autofocus: true,
+    final errorColor = Theme.of(context).colorScheme.error;
+
+    try {
+      final tenantId = await tenantService.getTenantId();
+      if (!mounted) return;
+      if (tenantId == null || tenantId.isEmpty) {
+        throw Exception('No se pudo obtener el tenant_id del usuario');
+      }
+
+      final existingModel = _models.firstWhere(
+        (m) => m.name.toLowerCase() == modelName.toLowerCase(),
+        orElse: () => BikeModel(
+          tenantId: tenantId,
+          brandId: '',
+          name: '',
+          isActive: true,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameController.text.trim().isEmpty) return;
-              Navigator.pop(context, true);
-            },
-            child: const Text('Crear'),
-          ),
-        ],
-      ),
-    );
+      );
 
-    if (result == true && nameController.text.trim().isNotEmpty) {
-      try {
-        final tenantId = await tenantService.getTenantId();
-        if (!mounted) return;
-        if (tenantId == null || tenantId.isEmpty) {
-          throw Exception('No se pudo obtener el tenant_id del usuario');
-        }
-
-        // Check if model already exists
-        final modelName = nameController.text.trim();
-        final existingModel = _models.firstWhere(
-          (m) => m.name.toLowerCase() == modelName.toLowerCase(),
-          orElse: () => BikeModel(
-              tenantId: tenantId, brandId: '', name: '', isActive: true),
+      if (existingModel.id != null) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('El modelo "$modelName" ya existe')),
         );
+        return;
+      }
 
-        if (existingModel.id != null) {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text('El modelo "$modelName" ya existe'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-          return;
-        }
-
-        final newModel = BikeModel(
+      final created = await service.createBikeModel(
+        BikeModel(
           tenantId: tenantId,
           brandId: _selectedBrand!.id!,
           name: modelName,
           isActive: true,
-        );
+        ),
+      );
 
-        final created = await service.createBikeModel(newModel);
+      await _loadModels(_selectedBrand!.id!);
+      final createdModel = _models.firstWhere(
+        (m) => m.id == created.id,
+        orElse: () => created,
+      );
 
-        // Reload models and find the created one
-        await _loadModels(_selectedBrand!.id!);
-        final createdModel = _models.firstWhere(
-          (m) => m.id == created.id,
-          orElse: () => created,
-        );
+      setState(() {
+        _selectedModel = createdModel;
+        _modelFieldKey = UniqueKey();
+      });
 
-        setState(() {
-          _selectedModel = createdModel;
-          _modelFieldKey = UniqueKey();
-        });
-
-        messenger.showSnackBar(
-          SnackBar(content: Text('Modelo "${created.name}" creado')),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-                'Error: ${e.toString().contains('duplicate') ? 'El modelo ya existe' : e.toString()}'),
-            backgroundColor: Colors.red,
+      messenger.showSnackBar(
+        SnackBar(content: Text('Modelo "${created.name}" creado')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Error: ${e.toString().contains('duplicate') ? 'El modelo ya existe' : e.toString()}',
           ),
-        );
-      }
+          backgroundColor: errorColor,
+        ),
+      );
     }
   }
 
@@ -2050,7 +2027,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           'No se puede guardar porque la ficha no se cargó. Reintenta la carga primero.',
       };
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.orange[800]),
+        SnackBar(content: Text(message)),
       );
       return;
     }
@@ -2259,7 +2236,6 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           content: Text(widget.bike == null
               ? 'Bicicleta creada exitosamente'
               : 'Bicicleta actualizada exitosamente'),
-          backgroundColor: Colors.green,
         ),
       );
     } catch (e) {
@@ -2286,7 +2262,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                   : isOutcomeUnknown
                       ? 'No se pudo confirmar el guardado. Revisa la conexión y usa Confirmar guardado; se reutilizará la misma operación sin duplicar la bicicleta.\n$e'
                       : 'No se pudo completar el guardado. $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.error,
           duration: const Duration(seconds: 8),
         ),
       );
@@ -2358,7 +2334,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
             child: const Text('Eliminar'),
           ),
         ],
@@ -2385,10 +2364,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           navigator.pop(null); // Return null to indicate deletion
         }
         messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Bicicleta eliminada exitosamente'),
-            backgroundColor: Colors.green,
-          ),
+          const SnackBar(content: Text('Bicicleta eliminada exitosamente')),
         );
       } catch (e) {
         if (!mounted) return;
@@ -2397,7 +2373,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         messenger.showSnackBar(
           SnackBar(
             content: Text('Error al eliminar bicicleta: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -2413,26 +2389,24 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     final theme = Theme.of(context);
     final isPhone = ResponsiveViewport.widthOf(context) <
         ResponsiveViewport.phoneMaxExclusive;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: isPhone ? 48 : 56,
-              height: isPhone ? 48 : 56,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(isPhone ? 14 : 16),
-              ),
+            SizedBox(
+              width: isPhone ? 28 : 52,
+              height: isPhone ? 32 : 52,
               child: Icon(
                 icon,
-                size: isPhone ? 24 : 28,
+                size: isPhone ? 22 : 26,
                 color: theme.colorScheme.primary,
               ),
             ),
-            SizedBox(width: isPhone ? 12 : 20),
+            SizedBox(width: isPhone ? 10 : 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2440,23 +2414,23 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                   Text(
                     title,
                     style: (isPhone
-                            ? theme.textTheme.titleLarge
+                            ? theme.textTheme.titleMedium
                             : theme.textTheme.headlineSmall)
                         ?.copyWith(
                       fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
+                      letterSpacing: isPhone ? 0 : -0.5,
                     ),
                   ),
                   if (description != null) ...[
-                    const SizedBox(height: 6),
+                    SizedBox(height: isPhone ? 3 : 6),
                     Text(
                       description,
                       style: (isPhone
-                              ? theme.textTheme.bodyMedium
+                              ? theme.textTheme.bodySmall
                               : theme.textTheme.titleSmall)
                           ?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
-                        height: 1.4,
+                        height: isPhone ? 1.32 : 1.4,
                       ),
                     ),
                   ],
@@ -2465,17 +2439,16 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
             ),
           ],
         ),
-        SizedBox(height: isPhone ? 20 : 32),
+        SizedBox(height: isPhone ? 14 : 28),
         Expanded(
           child: SingleChildScrollView(
-            child: Padding(
-              padding: EdgeInsets.only(
-                bottom: 24,
-                right: isPhone ? 0 : 8,
-                left: isPhone ? 0 : 4,
-              ),
-              child: child,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: EdgeInsets.only(
+              bottom: 24 + keyboardInset,
+              right: isPhone ? 0 : 8,
+              left: isPhone ? 0 : 4,
             ),
+            child: child,
           ),
         ),
       ],
@@ -2515,6 +2488,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     required DateTime? value,
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -2528,7 +2503,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           value != null
               ? DateFormat('dd/MM/yyyy').format(value)
               : 'Seleccionar fecha',
-          style: TextStyle(color: value != null ? null : Colors.grey[600]),
+          style: TextStyle(
+            color: value != null ? null : theme.colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
     );
@@ -2536,7 +2513,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
   Widget _buildBrandField() {
     if (_loadingBrands) {
-      return const Center(child: BrandedLoading());
+      return _buildReferenceFieldLoading(
+        key: const ValueKey('bike-brand-field-loading'),
+        label: 'Cargando marcas…',
+        semanticsLabel: 'Cargando marcas de bicicleta',
+        icon: Icons.branding_watermark_outlined,
+      );
     }
 
     return Autocomplete<BikeBrand>(
@@ -2573,7 +2555,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                 content: Text(
                   'No se pudieron cargar los modelos. Revisa la conexión e intenta seleccionar la marca nuevamente. $e',
                 ),
-                backgroundColor: Colors.red,
+                backgroundColor: Theme.of(context).colorScheme.error,
               ),
             );
           }
@@ -2627,7 +2609,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
   Widget _buildModelField() {
     if (_loadingModels) {
-      return const Center(child: BrandedLoading());
+      return _buildReferenceFieldLoading(
+        key: const ValueKey('bike-model-field-loading'),
+        label: 'Cargando modelos…',
+        semanticsLabel: 'Cargando modelos de bicicleta',
+        icon: Icons.directions_bike_outlined,
+      );
     }
 
     return Autocomplete<BikeModel>(
@@ -2696,15 +2683,81 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     );
   }
 
+  Widget _buildReferenceFieldLoading({
+    required Key key,
+    required String label,
+    required String semanticsLabel,
+    required IconData icon,
+  }) {
+    final theme = Theme.of(context);
+
+    return Semantics(
+      key: key,
+      container: true,
+      liveRegion: true,
+      label: semanticsLabel,
+      child: ExcludeSemantics(
+        child: SizedBox(
+          height: 56,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 48,
+                  height: 56,
+                  child: Icon(
+                    icon,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14),
+                  child: SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFieldGroupHeader(String title) {
+    final isPhone = ResponsiveViewport.widthOf(context) <
+        ResponsiveViewport.phoneMaxExclusive;
+
     return Padding(
-      padding: const EdgeInsets.only(top: 32, bottom: 20),
+      padding: EdgeInsets.only(
+        top: isPhone ? 22 : 32,
+        bottom: isPhone ? 12 : 20,
+      ),
       child: Text(
         title,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontWeight: FontWeight.w800,
-            ),
+        style: (isPhone
+                ? Theme.of(context).textTheme.titleSmall
+                : Theme.of(context).textTheme.titleMedium)
+            ?.copyWith(
+          color: Theme.of(context).colorScheme.onSurface,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -2719,13 +2772,15 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     String? footerText,
   }) {
     final theme = Theme.of(context);
+    final isPhone = ResponsiveViewport.widthOf(context) <
+        ResponsiveViewport.phoneMaxExclusive;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: EdgeInsets.all(isPhone ? 14 : 18),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(isPhone ? 14 : 18),
         border: Border.all(
           color: theme.dividerColor.withValues(alpha: 0.18),
         ),
@@ -2779,11 +2834,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.08),
+                color:
+                    theme.colorScheme.tertiaryContainer.withValues(alpha: 0.58),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.orange.withValues(alpha: 0.28),
-                ),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2791,14 +2844,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                   Icon(
                     Icons.warning_amber_outlined,
                     size: 18,
-                    color: Colors.orange.shade800,
+                    color: theme.colorScheme.onTertiaryContainer,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       attentionText,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                        color: theme.colorScheme.onTertiaryContainer,
                         fontWeight: FontWeight.w600,
                         height: 1.35,
                       ),
@@ -3141,6 +3194,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   }) {
     final previewBike = _buildTechnicalPreviewBike();
     final activeSpec = bikeSystemControllerSpecFor(activeSystemKey);
+    final summaryParts = <String>[
+      _selectedType.displayName,
+      if (_wheelSizeController.text.trim().isNotEmpty)
+        'Aro ${_wheelSizeController.text.trim()}',
+      if (_brakeType != null && _brakeType!.isNotEmpty)
+        'Freno ${_formatBrakeSystemDetail(_brakeType, _rimBrakeFamily)}',
+      if (activeSpec != null) activeSpec.label,
+    ];
 
     return Container(
       width: double.infinity,
@@ -3156,14 +3217,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Mapa técnico upstream',
+            'Mapa técnico',
             style: theme.textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 6),
           Text(
-            'La misma navegación visual del diagnóstico ahora guía la ficha técnica upstream. Aquí eliges el sistema y completas la verdad duradera de la bici, no un hallazgo de una visita puntual.',
+            'Selecciona una zona de la bicicleta para editar sus especificaciones.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
               height: 1.4,
@@ -3195,121 +3256,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
             ),
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: theme.colorScheme.outlineVariant),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.directions_bike_outlined,
-                      size: 15,
-                      color: theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      _selectedType.displayName,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (_wheelSizeController.text.trim().isNotEmpty)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: theme.colorScheme.outlineVariant),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.circle_outlined,
-                        size: 15,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Aro ${_wheelSizeController.text.trim()}',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              if (_brakeType != null && _brakeType!.isNotEmpty)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: theme.colorScheme.outlineVariant),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.disc_full,
-                        size: 15,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Freno ${_formatBrakeSystemDetail(_brakeType, _rimBrakeFamily)}',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              if (activeSpec != null)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        activeSpec.icon,
-                        size: 15,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Sistema activo: ${activeSpec.label}',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
+          Text(
+            summaryParts.join(' · '),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -3481,7 +3435,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error al cambiar bicicleta: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     } finally {
@@ -3494,16 +3448,19 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   Widget _buildBikePreviewTitleControl(
     ThemeData theme, {
     required bool isEditing,
+    bool compact = false,
   }) {
     final pickerOptions = _bikePickerOptions();
     final canPickBike = widget.onBikePickerSelected != null &&
         widget.bike?.id != null &&
         pickerOptions.length > 1;
 
-    final titleStyle = theme.textTheme.headlineSmall?.copyWith(
+    final titleStyle =
+        (compact ? theme.textTheme.titleLarge : theme.textTheme.headlineSmall)
+            ?.copyWith(
       fontWeight: FontWeight.w800,
       letterSpacing: 0,
-      height: 1.05,
+      height: compact ? 1.1 : 1.05,
     );
 
     if (!canPickBike) {
@@ -3595,7 +3552,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       return 'Vista previa del modelo seleccionado en el catálogo compartido.';
     }
 
-    return 'Vista previa visual. Los controles técnicos aparecen cuando abres Ficha Técnica.';
+    return 'Agrega una foto cuando aporte identificación visual. La ficha técnica se edita en su propia sección.';
   }
 
   Uint8List? _resolvedPreviewImageBytes() {
@@ -3618,6 +3575,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   Widget _buildBikeTypePreviewDropdown() {
     return DropdownButtonFormField<BikeType>(
       initialValue: _selectedType,
+      isExpanded: true,
       decoration: const InputDecoration(
         labelText: 'Tipo de bicicleta',
         border: OutlineInputBorder(),
@@ -3626,7 +3584,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       items: BikeType.values.map((type) {
         return DropdownMenuItem(
           value: type,
-          child: Text(type.displayName),
+          child: Text(
+            type.displayName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         );
       }).toList(),
       onChanged: (value) {
@@ -3638,63 +3600,87 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   }
 
   Widget _buildStaticBikePreviewSurface(ThemeData theme) {
-    final previewBike = _buildTechnicalPreviewBike();
     final previewImageBytes = _resolvedPreviewImageBytes();
     final previewImageUrl = _resolvedPreviewImageUrl();
-    final variant = resolveBikeDiagramVariant(bike: previewBike);
 
-    Widget buildScaledPreview(Widget child, {double scale = 1.18}) {
-      return ClipRect(
-        child: Center(
-          child: Transform.scale(
-            scale: scale,
-            child: child,
+    Widget buildEmptyState() {
+      return Semantics(
+        key: const ValueKey('bike-preview-empty-state'),
+        container: true,
+        label: 'La bicicleta todavía no tiene una foto',
+        child: ExcludeSemantics(
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(
+              minHeight: 148,
+              maxHeight: 176,
+            ),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.add_a_photo_outlined,
+                  size: 30,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Sin foto por ahora',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Puedes agregarla en Notas y fotos.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
     }
 
+    if (previewImageBytes == null &&
+        (previewImageUrl == null || previewImageUrl.isEmpty)) {
+      return buildEmptyState();
+    }
+
     return Container(
+      key: const ValueKey('bike-preview-media'),
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      constraints: const BoxConstraints(maxHeight: 360),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: theme.dividerColor.withValues(alpha: 0.18),
-        ),
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
       ),
       child: AspectRatio(
-        aspectRatio: 1.0,
+        aspectRatio: 4 / 3,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(14),
           child: ColoredBox(
             color: theme.colorScheme.surfaceContainerLowest,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-              child: previewImageBytes != null
-                  ? buildScaledPreview(
-                      Image.memory(
-                        previewImageBytes,
-                        fit: BoxFit.contain,
-                      ),
-                      scale: 1.2,
-                    )
-                  : previewImageUrl != null && previewImageUrl.isNotEmpty
-                      ? buildScaledPreview(
-                          Image.network(
-                            previewImageUrl,
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) =>
-                                BikeDiagramIllustration(variant: variant),
-                          ),
-                          scale: 1.2,
-                        )
-                      : buildScaledPreview(
-                          BikeDiagramIllustration(variant: variant),
-                          scale: 1.18,
-                        ),
-            ),
+            child: previewImageBytes != null
+                ? Image.memory(
+                    previewImageBytes,
+                    fit: BoxFit.contain,
+                  )
+                : Image.network(
+                    previewImageUrl!,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) =>
+                        buildEmptyState(),
+                  ),
           ),
         ),
       ),
@@ -3706,8 +3692,6 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     required bool isEditing,
     required bool showTechnicalControls,
   }) {
-    final activeSpec = bikeSystemControllerSpecFor(_activeTechnicalSystemKey());
-
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLowest,
@@ -3736,50 +3720,376 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           const SizedBox(height: 18),
           _buildBikeTypePreviewDropdown(),
           const SizedBox(height: 18),
-          Expanded(
-            child: showTechnicalControls
-                ? _buildTechnicalSchemaNavigator(
-                    theme,
-                    activeSystemKey: _activeTechnicalSystemKey(),
-                    fitControllerToAvailableHeight: true,
-                  )
-                : _buildStaticBikePreviewSurface(theme),
+          if (showTechnicalControls)
+            Expanded(
+              child: _buildTechnicalSchemaNavigator(
+                theme,
+                activeSystemKey: _activeTechnicalSystemKey(),
+                fitControllerToAvailableHeight: true,
+              ),
+            )
+          else ...[
+            _buildStaticBikePreviewSurface(theme),
+            const Spacer(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showCompactTechnicalSystemPicker() async {
+    final selectedKey = _activeTechnicalSystemKey();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final sheetTheme = Theme.of(sheetContext);
+
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.82,
           ),
-          if (showTechnicalControls && activeSpec != null) ...[
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: Text(
+                  'Sistema de la bicicleta',
+                  style: sheetTheme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.only(bottom: 12),
+                  itemCount: kBikeSystemControllerSpecs.length,
+                  separatorBuilder: (context, index) => Divider(
+                    height: 1,
+                    indent: 20,
+                    endIndent: 20,
+                    color: sheetTheme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.42),
+                  ),
+                  itemBuilder: (context, index) {
+                    final spec = kBikeSystemControllerSpecs[index];
+                    final isSelected = spec.systemKey == selectedKey;
+
+                    return Semantics(
+                      key: ValueKey(
+                        'bike-technical-system-option-${spec.systemKey}',
+                      ),
+                      button: true,
+                      selected: isSelected,
+                      label: spec.label,
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            _selectedTechnicalSystemKey = spec.systemKey;
+                          });
+                          Navigator.of(sheetContext).pop();
+                        },
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 64),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 40,
+                                  height: 48,
+                                  child: Icon(
+                                    spec.icon,
+                                    color: isSelected
+                                        ? sheetTheme.colorScheme.primary
+                                        : sheetTheme
+                                            .colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        spec.label,
+                                        style: sheetTheme.textTheme.bodyLarge
+                                            ?.copyWith(
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w600,
+                                        ),
+                                      ),
+                                      Text(
+                                        spec.diagnosisSubtitle,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: sheetTheme.textTheme.bodySmall
+                                            ?.copyWith(
+                                          color: sheetTheme
+                                              .colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                SizedBox(
+                                  width: 32,
+                                  child: isSelected
+                                      ? Icon(
+                                          Icons.check_rounded,
+                                          color: sheetTheme.colorScheme.primary,
+                                        )
+                                      : const Icon(
+                                          Icons.chevron_right_rounded,
+                                        ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCompactTechnicalSystemSelector(ThemeData theme) {
+    final activeSpec =
+        bikeSystemControllerSpecFor(_activeTechnicalSystemKey()) ??
+            kBikeSystemControllerSpecs.first;
+
+    return Semantics(
+      key: const ValueKey('bike-technical-system-picker'),
+      button: true,
+      label: 'Sistema técnico: ${activeSpec.label}',
+      child: Material(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: _showCompactTechnicalSystemPicker,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 64),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
                 children: [
-                  Icon(
-                    activeSpec.icon,
-                    size: 16,
-                    color: theme.colorScheme.primary,
+                  SizedBox(
+                    width: 40,
+                    height: 48,
+                    child: Icon(
+                      activeSpec.icon,
+                      color: theme.colorScheme.primary,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      'Sistema activo: ${activeSpec.label}',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Sistema',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        Text(
+                          activeSpec.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ],
               ),
             ),
-          ],
-        ],
+          ),
+        ),
       ),
+    );
+  }
+
+  Widget _buildCompactTechnicalRulesDisclosure(ThemeData theme) {
+    return Semantics(
+      key: const ValueKey('bike-technical-rules-disclosure'),
+      button: true,
+      expanded: _showCompactTechnicalRules,
+      label: 'Reglas para ${_selectedType.displayName}',
+      child: Material(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            InkWell(
+              onTap: () {
+                setState(() {
+                  _showCompactTechnicalRules = !_showCompactTechnicalRules;
+                });
+              },
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 56),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.rule_folder_outlined,
+                        size: 20,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Reglas para ${_selectedType.displayName}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        _showCompactTechnicalRules
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (_showCompactTechnicalRules)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _technicalKernelHint(),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                    if (_brakeConstraintHint() != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _brakeConstraintHint()!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactTechnicalMapDisclosure(
+    ThemeData theme, {
+    required String activeSystemKey,
+  }) {
+    return Column(
+      children: [
+        Semantics(
+          key: const ValueKey('bike-technical-map-disclosure'),
+          button: true,
+          expanded: _showCompactTechnicalMap,
+          label: _showCompactTechnicalMap
+              ? 'Ocultar mapa técnico'
+              : 'Ver mapa técnico',
+          child: Material(
+            color: theme.colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(14),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  _showCompactTechnicalMap = !_showCompactTechnicalMap;
+                });
+              },
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 56),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.account_tree_outlined,
+                        size: 20,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _showCompactTechnicalMap
+                              ? 'Ocultar mapa técnico'
+                              : 'Ver mapa técnico',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        _showCompactTechnicalMap
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (_showCompactTechnicalMap) ...[
+          const SizedBox(height: 12),
+          _buildTechnicalSchemaNavigator(
+            theme,
+            activeSystemKey: activeSystemKey,
+          ),
+        ],
+      ],
     );
   }
 
@@ -4042,12 +4352,13 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     );
 
     final activeSystemKey = _activeTechnicalSystemKey();
+    final isCompact = ResponsiveViewport.usesCompactShell(context);
 
     final activeSystemCard = switch (activeSystemKey) {
       'suspension' => _buildTechnicalKernelGroup(
           title: 'Suspensión',
           description:
-              'Base estructural que define qué componentes y diagnósticos tienen sentido downstream.',
+              'Confirma si la bicicleta es rígida, tiene suspensión delantera o doble suspensión.',
           icon: Icons.timeline_outlined,
           fields: [suspensionField],
           minItemWidth: 260,
@@ -4056,7 +4367,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       'front_brake' => _buildTechnicalKernelGroup(
           title: 'Freno delantero',
           description:
-              'La plataforma/familia del freno es verdad upstream compartida. Este panel además fija el rotor delantero cuando aplica.',
+              'Confirma la plataforma del freno y el rotor delantero cuando corresponda.',
           icon: Icons.radio_button_checked,
           fields: [
             brakeTypeField,
@@ -4069,7 +4380,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       'rear_brake' => _buildTechnicalKernelGroup(
           title: 'Freno trasero',
           description:
-              'La plataforma/familia del freno es verdad upstream compartida. Este panel además fija el rotor trasero cuando aplica.',
+              'Confirma la plataforma del freno y el rotor trasero cuando corresponda.',
           icon: Icons.adjust,
           fields: [
             brakeTypeField,
@@ -4082,7 +4393,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       'drivetrain' => _buildTechnicalKernelGroup(
           title: 'Transmisión',
           description:
-              'Núcleo de compatibilidad para servicio de drivetrain, repuestos y futuros wizards guiados. La configuración se deriva desde el desglose delantero/trasero y el pedalier ya no queda escondido aquí.',
+              'Configura platos, piñones y el driver trasero para elegir servicios y repuestos compatibles.',
           icon: Icons.settings_input_component_outlined,
           attentionText: _drivetrainKernelAttentionText(),
           fields: [
@@ -4098,7 +4409,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       'front_wheel' => _buildTechnicalKernelGroup(
           title: 'Rueda delantera',
           description:
-              'Unidad delantera de ruedas y mazas. Aquí viven el ancho de maza, el rayado y el mismo baseline compartido de aro/válvula que downstream reutiliza.',
+              'Aro, ancho de maza, cantidad de rayos y tipo de válvula de la rueda delantera.',
           icon: Icons.tire_repair_outlined,
           fields: [
             _buildWheelSizeField(),
@@ -4108,12 +4419,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           ],
           minItemWidth: 220,
           footerText:
-              'Aro y válvula siguen siendo verdad upstream compartida del wheelset, pero la maza y el rayado delantero ya no deben mezclarse con la unidad trasera.',
+              'Aro y válvula describen el conjunto; ancho de maza y rayos corresponden a esta rueda.',
         ),
       'bottom_bracket' => _buildTechnicalKernelGroup(
           title: 'Pedalier / BB',
           description:
-              'Los rodamientos y el estándar del eje pedalier son una unidad propia del backbone. No deben perderse como un detalle secundario de transmisión.',
+              'Confirma familia, ancho de caja e interfaz del eje cuando estén disponibles.',
           icon: Icons.hub_outlined,
           fields: [
             bottomBracketField,
@@ -4128,7 +4439,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       'rear_wheel' => _buildTechnicalKernelGroup(
           title: 'Rueda trasera',
           description:
-              'Unidad trasera de ruedas y mazas. Aquí viven el ancho de maza, el rayado y el mismo baseline compartido de aro/válvula que downstream reutiliza.',
+              'Aro, ancho de maza, cantidad de rayos y tipo de válvula de la rueda trasera.',
           icon: Icons.tire_repair_outlined,
           fields: [
             _buildWheelSizeField(),
@@ -4138,7 +4449,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           ],
           minItemWidth: 220,
           footerText:
-              'Aro y válvula siguen siendo verdad upstream compartida del wheelset, pero la maza y el rayado trasero ya no deben mezclarse con la unidad delantera.',
+              'Aro y válvula describen el conjunto; ancho de maza y rayos corresponden a esta rueda.',
         ),
       'wheels' => _buildTechnicalKernelGroup(
           title: 'Wheelset agregado',
@@ -4161,137 +4472,139 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           theme,
           title: 'Cockpit / dirección',
           body:
-              'Headset y dirección quedan dentro de cockpit como sistema de steering, no escondidos en notas libres. El shared bike map ya los reserva aquí, pero el kernel upstream todavía no define campos obligatorios para headset, stem, handlebar o controles. Cuando esos specs pasen a ser durables, este mismo panel será el lugar correcto para capturarlos.',
+              'La ficha todavía no tiene campos estructurados para dirección, stem, manillar o controles. Usa Notas y fotos si necesitas conservar un antecedente mientras se completa este sistema.',
         ),
       _ => _buildTechnicalPlaceholderCard(
           theme,
           title: 'Sistema sin panel',
           body:
-              'Este sistema todavía no tiene una ficha técnica upstream específica en el wizard de creación.',
+              'Este sistema todavía no tiene campos estructurados en la ficha técnica.',
         ),
     };
 
     return _buildSectionCard(
       title: 'Línea base técnica',
       description:
-          'Solo los datos que realmente ayudan a servicio, compatibilidad y seguimiento. Agrupados por los mismos sistemas que usan el perfil técnico, el diagnóstico y los wizards.',
+          'Confirma las especificaciones que ayudan a diagnosticar y elegir repuestos.',
       icon: Icons.tune,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest
-                  .withValues(alpha: 0.45),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.rule_folder_outlined,
-                      size: 16,
-                      color: theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Reglas activas del tipo de bicicleta',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _technicalKernelHint(),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    height: 1.35,
-                  ),
-                ),
-                if (_brakeConstraintHint() != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    _brakeConstraintHint()!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          if (showInlineNavigator) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                ),
-              ),
-              child: Text(
-                'En esta vista el mapa técnico queda inline. En pantallas amplias se mueve al panel lateral para que no tengas que bajar cada vez que cambias de sistema.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                  height: 1.4,
-                ),
-              ),
-            ),
+          if (isCompact) ...[
+            _buildCompactTechnicalRulesDisclosure(theme),
+            const SizedBox(height: 12),
+            _buildCompactTechnicalSystemSelector(theme),
             const SizedBox(height: 16),
-            _buildTechnicalSchemaNavigator(
+            activeSystemCard,
+            const SizedBox(height: 12),
+            _buildCompactTechnicalMapDisclosure(
               theme,
               activeSystemKey: activeSystemKey,
             ),
-            const SizedBox(height: 16),
           ] else ...[
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                ),
+                color: theme.colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.west_outlined,
-                    size: 16,
-                    color: theme.colorScheme.primary,
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.rule_folder_outlined,
+                        size: 18,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Reglas para ${_selectedType.displayName}',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'La navegación visual de la bici quedó en el panel izquierdo. Cambia de sistema ahí y este panel se actualiza sin sacarte del contexto.',
+                  const SizedBox(height: 8),
+                  Text(
+                    _technicalKernelHint(),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      height: 1.35,
+                    ),
+                  ),
+                  if (_brakeConstraintHint() != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _brakeConstraintHint()!,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
-                        height: 1.4,
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
+            if (showInlineNavigator)
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth < 720) {
+                    return Column(
+                      children: [
+                        _buildTechnicalSchemaNavigator(
+                          theme,
+                          activeSystemKey: activeSystemKey,
+                        ),
+                        const SizedBox(height: 16),
+                        activeSystemCard,
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 320,
+                        child: _buildTechnicalSchemaNavigator(
+                          theme,
+                          activeSystemKey: activeSystemKey,
+                        ),
+                      ),
+                      const SizedBox(width: 18),
+                      Expanded(child: activeSystemCard),
+                    ],
+                  );
+                },
+              )
+            else ...[
+              Material(
+                color: theme.colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.west_outlined, size: 18),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'El mapa de la izquierda cambia el sistema sin salir de la ficha.',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              activeSystemCard,
+            ],
           ],
-          activeSystemCard,
         ],
       ),
     );
@@ -4402,7 +4715,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                           height: 124,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.grey[300]!),
+                            border: Border.all(
+                              color: theme.colorScheme.outlineVariant,
+                            ),
                             image: DecorationImage(
                               image: NetworkImage(url),
                               fit: BoxFit.cover,
@@ -4410,22 +4725,18 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                           ),
                         ),
                         Positioned(
-                          top: 6,
-                          right: 6,
-                          child: InkWell(
-                            onTap: () => _removeImage(index, false),
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.close,
-                                size: 16,
-                                color: Colors.white,
-                              ),
+                          top: 0,
+                          right: 0,
+                          child: IconButton(
+                            tooltip: 'Quitar foto',
+                            onPressed: () => _removeImage(index, false),
+                            style: IconButton.styleFrom(
+                              minimumSize: const Size(48, 48),
+                              backgroundColor: theme.colorScheme.errorContainer,
+                              foregroundColor:
+                                  theme.colorScheme.onErrorContainer,
                             ),
+                            icon: const Icon(Icons.close, size: 20),
                           ),
                         ),
                       ],
@@ -4441,8 +4752,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                           height: 124,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(14),
-                            border:
-                                Border.all(color: Colors.blue[300]!, width: 2),
+                            border: Border.all(
+                              color: theme.colorScheme.primary,
+                              width: 2,
+                            ),
                             image: DecorationImage(
                               image: MemoryImage(imageData.bytes),
                               fit: BoxFit.cover,
@@ -4450,22 +4763,18 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                           ),
                         ),
                         Positioned(
-                          top: 6,
-                          right: 6,
-                          child: InkWell(
-                            onTap: () => _removeImage(index, true),
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.close,
-                                size: 16,
-                                color: Colors.white,
-                              ),
+                          top: 0,
+                          right: 0,
+                          child: IconButton(
+                            tooltip: 'Quitar foto nueva',
+                            onPressed: () => _removeImage(index, true),
+                            style: IconButton.styleFrom(
+                              minimumSize: const Size(48, 48),
+                              backgroundColor: theme.colorScheme.errorContainer,
+                              foregroundColor:
+                                  theme.colorScheme.onErrorContainer,
                             ),
+                            icon: const Icon(Icons.close, size: 20),
                           ),
                         ),
                         Positioned(
@@ -4477,13 +4786,13 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: theme.colorScheme.primary,
+                              color: theme.colorScheme.primaryContainer,
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
-                              'NUEVA',
+                              'Nueva',
                               style: theme.textTheme.labelSmall?.copyWith(
-                                color: Colors.white,
+                                color: theme.colorScheme.onPrimaryContainer,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -4551,7 +4860,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           .map(
             (entry) => DropdownMenuItem<String>(
               value: entry.key,
-              child: Text(entry.value),
+              child: Text(
+                entry.value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           )
           .toList(),
@@ -4581,7 +4894,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           .map(
             (option) => DropdownMenuItem<String>(
               value: option,
-              child: Text(option),
+              child: Text(
+                option,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           )
           .toList(),
@@ -4613,7 +4930,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           .map(
             (option) => DropdownMenuItem<int>(
               value: option,
-              child: Text(unit == null ? '$option' : '$option $unit'),
+              child: Text(
+                unit == null ? '$option' : '$option $unit',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           )
           .toList(),
@@ -4665,69 +4986,88 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
   Widget _buildCatalogMatchSection() {
     final theme = Theme.of(context);
+    final selectedBike = _selectedCatalogBike;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: theme.colorScheme.primary.withValues(alpha: 0.2),
-        ),
-      ),
-      padding: const EdgeInsets.all(16),
+    return Material(
+      key: const ValueKey('bike-catalog-assistance'),
+      color: theme.colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(Icons.auto_awesome,
-                  color: theme.colorScheme.primary, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Búsqueda en catálogo',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.primary,
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 64),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Icon(
+                      Icons.manage_search_outlined,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
-              ),
-              if (_catalogMatches.isEmpty && _selectedCatalogBike == null)
-                FilledButton.tonalIcon(
-                  onPressed:
-                      _isLoadingCatalogMatches ? null : _searchCatalogMatches,
-                  icon: _isLoadingCatalogMatches
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.search, size: 16),
-                  label: const Text('Buscar'),
-                  style: FilledButton.styleFrom(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                    visualDensity: VisualDensity.compact,
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Completar desde catálogo',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          selectedBike != null
+                              ? 'Referencia vinculada; puedes buscar otra sin perder tus cambios.'
+                              : 'Usa marca, modelo y año para sugerir especificaciones.',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            height: 1.25,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-            ],
-          ),
-          if (_selectedCatalogBike != null) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.4)),
-                boxShadow: [
-                  BoxShadow(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
+                  if (_isLoadingCatalogMatches)
+                    const SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Center(
+                        child: SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    )
+                  else
+                    TextButton(
+                      onPressed: _searchCatalogMatches,
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(64, 48),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                      ),
+                      child: Text(
+                        selectedBike == null ? 'Buscar' : 'Cambiar',
+                        maxLines: 1,
+                      ),
+                    ),
                 ],
               ),
+            ),
+          ),
+          if (selectedBike != null) ...[
+            Divider(height: 1, color: theme.colorScheme.outlineVariant),
+            Padding(
+              key: const ValueKey('bike-catalog-selected-match'),
+              padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
               child: Row(
                 children: [
                   Expanded(
@@ -4735,89 +5075,109 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Coincidencia seleccionada:',
+                          'Referencia seleccionada',
                           style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant),
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
                         Text(
-                          _selectedCatalogBike!.displayName,
-                          style: theme.textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                          selectedBike.displayName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 3),
                         Text(
                           [
-                            if (_selectedCatalogBike!.bikeType != null)
-                              _selectedCatalogBike!.bikeType!,
-                            if (_selectedCatalogBike!.wheelSize != null)
-                              _selectedCatalogBike!.wheelSize!,
-                          ].join(' • '),
+                            if (selectedBike.bikeType != null)
+                              selectedBike.bikeType!,
+                            if (selectedBike.wheelSize != null)
+                              selectedBike.wheelSize!,
+                          ].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant),
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  TextButton.icon(
+                  TextButton(
                     onPressed: () => setState(() {
                       _selectedCatalogBike = null;
                       _catalogLinkExplicitlyCleared = true;
                     }),
-                    icon: const Icon(Icons.clear, size: 16),
-                    label: const Text('Limpiar'),
                     style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact),
+                      minimumSize: const Size(64, 48),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                    ),
+                    child: const Text('Quitar'),
                   ),
                 ],
               ),
             ),
           ] else if (_catalogMatches.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              'Se encontraron opciones. Selecciona una para prellenar los datos:',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            Divider(height: 1, color: theme.colorScheme.outlineVariant),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+              child: Text(
+                'Selecciona la referencia correcta:',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
-            const SizedBox(height: 8),
-            ..._catalogMatches.map(
-              (match) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Material(
-                    color: theme.colorScheme.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: () => _applyCatalogMatch(match),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
-                        child: Row(children: [
-                          Icon(Icons.directions_bike,
-                              size: 18, color: theme.colorScheme.primary),
-                          const SizedBox(width: 12),
-                          Expanded(
-                              child: Text(match.displayName,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600))),
-                          const Icon(Icons.chevron_right, size: 18),
-                        ]),
-                      ),
+            for (final match in _catalogMatches) ...[
+              InkWell(
+                onTap: () => _applyCatalogMatch(match),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 56),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            match.displayName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ],
                     ),
-                  )),
-            ),
-            const SizedBox(height: 4),
-            TextButton(
-              onPressed: () => setState(() => _catalogMatches.clear()),
-              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-              child: const Text('Ocultar'),
-            ),
-          ] else if (!_isLoadingCatalogMatches) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Usa la marca, modelo y año para prellenar datos técnicos.',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+              ),
+              if (match != _catalogMatches.last)
+                Divider(
+                  height: 1,
+                  indent: 16,
+                  endIndent: 16,
+                  color: theme.colorScheme.outlineVariant,
+                ),
+            ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => setState(() => _catalogMatches.clear()),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(72, 48),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                ),
+                child: const Text('Ocultar'),
+              ),
             ),
           ],
         ],
@@ -5117,8 +5477,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   Widget build(BuildContext context) {
     final isEditing = widget.bike != null;
     final theme = Theme.of(context);
-    final useDesktopPreviewShell = MediaQuery.sizeOf(context).width >= 1100;
+    final viewportWidth = ResponsiveViewport.widthOf(context);
     final usesCompactHost = ResponsiveViewport.usesCompactShell(context);
+    final isPhoneHost = viewportWidth < ResponsiveViewport.phoneMaxExclusive;
+    final useDesktopPreviewShell = !usesCompactHost && viewportWidth >= 1100;
     final dialogRadius = usesCompactHost ? 18.0 : 28.0;
 
     final steps = [
@@ -5152,6 +5514,163 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       },
     ];
 
+    void selectStep(int index) {
+      if (index == _currentStep) return;
+      setState(() {
+        _currentStep = index;
+        _pageController.animateToPage(
+          index,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      });
+    }
+
+    Future<void> showPhoneStepPicker() async {
+      final selectedIndex = await showModalBottomSheet<int>(
+        context: context,
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (sheetContext) {
+          final sheetTheme = Theme.of(sheetContext);
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: Text(
+                  'Ir a sección',
+                  style: sheetTheme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              for (var index = 0; index < steps.length; index++)
+                Semantics(
+                  key: ValueKey('bike-form-step-option-$index'),
+                  button: true,
+                  selected: index == _currentStep,
+                  label: steps[index]['title'] as String,
+                  child: InkWell(
+                    onTap: () => Navigator.of(sheetContext).pop(index),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 56),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 8,
+                        ),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: Icon(
+                                steps[index]['icon'] as IconData,
+                                color: index == _currentStep
+                                    ? sheetTheme.colorScheme.primary
+                                    : sheetTheme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                steps[index]['title'] as String,
+                                style: sheetTheme.textTheme.bodyLarge?.copyWith(
+                                  fontWeight: index == _currentStep
+                                      ? FontWeight.w700
+                                      : FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (index == _currentStep)
+                              Icon(
+                                Icons.check_rounded,
+                                color: sheetTheme.colorScheme.primary,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 8),
+            ],
+          );
+        },
+      );
+
+      if (selectedIndex != null && mounted) {
+        selectStep(selectedIndex);
+      }
+    }
+
+    Widget buildPhoneStepPicker() {
+      final activeStep = steps[_currentStep];
+
+      return Semantics(
+        key: const ValueKey('bike-form-step-picker'),
+        button: true,
+        label:
+            'Sección ${_currentStep + 1} de ${steps.length}: ${activeStep['title']}',
+        child: Material(
+          color: theme.colorScheme.surfaceContainerLow,
+          child: InkWell(
+            onTap: showPhoneStepPicker,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 56),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 40,
+                      height: 48,
+                      child: Icon(
+                        activeStep['icon'] as IconData,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${_currentStep + 1} de ${steps.length}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          Text(
+                            activeStep['title'] as String,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     Widget buildStepTabs({bool desktop = false}) {
       return Container(
         height: desktop ? 72 : 64,
@@ -5163,77 +5682,63 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
             ),
           ),
         ),
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          itemCount: steps.length,
-          itemBuilder: (context, index) {
-            final isActive = _currentStep == index;
-            final step = steps[index];
-            return InkWell(
-              onTap: () {
-                setState(() {
-                  _currentStep = index;
-                  _pageController.animateToPage(
-                    index,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOutCubic,
-                  );
-                });
-              },
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: desktop ? 24 : 20),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: isActive
-                          ? theme.colorScheme.primary
-                          : Colors.transparent,
-                      width: 3,
+        child: Row(
+          children: [
+            for (var index = 0; index < steps.length; index++)
+              Expanded(
+                child: Semantics(
+                  key: ValueKey('bike-form-step-tab-$index'),
+                  button: true,
+                  selected: _currentStep == index,
+                  label: steps[index]['title'] as String,
+                  child: InkWell(
+                    onTap: () => selectStep(index),
+                    child: Container(
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: _currentStep == index
+                                ? theme.colorScheme.primary
+                                : Colors.transparent,
+                            width: 3,
+                          ),
+                        ),
+                        color: _currentStep == index
+                            ? theme.colorScheme.primary.withValues(alpha: 0.05)
+                            : Colors.transparent,
+                      ),
+                      child: Text(
+                        steps[index]['title'] as String,
+                        maxLines: 2,
+                        textAlign: TextAlign.center,
+                        style: (desktop
+                                ? theme.textTheme.titleSmall
+                                : theme.textTheme.bodyMedium)
+                            ?.copyWith(
+                          fontWeight: _currentStep == index
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                          color: _currentStep == index
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurfaceVariant,
+                          height: 1.15,
+                        ),
+                      ),
                     ),
                   ),
-                  color: isActive
-                      ? theme.colorScheme.primary.withValues(alpha: 0.04)
-                      : Colors.transparent,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!desktop) ...[
-                      Icon(
-                        step['icon'] as IconData,
-                        size: 18,
-                        color: isActive
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    Text(
-                      step['title'] as String,
-                      style: (desktop
-                              ? theme.textTheme.titleMedium
-                              : theme.textTheme.titleSmall)
-                          ?.copyWith(
-                        fontWeight:
-                            isActive ? FontWeight.w700 : FontWeight.w500,
-                        color: isActive
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
                 ),
               ),
-            );
-          },
+          ],
         ),
       );
     }
 
     Widget content = LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 768;
-        final showDesktopPreviewPane = !isMobile && useDesktopPreviewShell;
+        final showDesktopPreviewPane =
+            !usesCompactHost && useDesktopPreviewShell;
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -5251,7 +5756,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
               flex: showDesktopPreviewPane ? 6 : 1,
               child: Column(
                 children: [
-                  if (!isMobile)
+                  if (!usesCompactHost)
                     Container(
                       padding: EdgeInsets.fromLTRB(
                         showDesktopPreviewPane ? 24 : 32,
@@ -5287,42 +5792,63 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                       ),
                     ),
 
-                  if (isMobile)
-                    Stack(
+                  if (usesCompactHost)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (!widget.isEmbedded)
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: IconButton(
-                              icon: Icon(Icons.close,
-                                  color: theme.colorScheme.onSurfaceVariant),
-                              onPressed: _aggregateLoadState ==
-                                      _BikeAggregateLoadState.outcomeUnknown
-                                  ? null
-                                  : () {
-                                      if (widget.isEmbedded) {
-                                        widget.onCanceled?.call();
-                                      } else {
-                                        Navigator.of(context).pop();
-                                      }
-                                    },
-                            ),
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            isPhoneHost ? 14 : 20,
+                            8,
+                            widget.isEmbedded ? (isPhoneHost ? 14 : 20) : 8,
+                            8,
                           ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(20, 24, 48, 16),
-                              child: _buildBikePreviewTitleControl(
-                                theme,
-                                isEditing: isEditing,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _buildBikePreviewTitleControl(
+                                  theme,
+                                  isEditing: isEditing,
+                                  compact: true,
+                                ),
                               ),
-                            ),
-                            buildStepTabs(desktop: false),
-                          ],
+                              if (!widget.isEmbedded ||
+                                  widget.onCanceled != null) ...[
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  key: const ValueKey(
+                                    'bike-form-compact-exit',
+                                  ),
+                                  tooltip: widget.isEmbedded
+                                      ? 'Volver a trabajos'
+                                      : 'Cerrar editor',
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: 48,
+                                    height: 48,
+                                  ),
+                                  icon: Icon(
+                                    Icons.close,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                  onPressed: _aggregateLoadState ==
+                                          _BikeAggregateLoadState.outcomeUnknown
+                                      ? null
+                                      : () {
+                                          if (widget.isEmbedded) {
+                                            widget.onCanceled?.call();
+                                          } else {
+                                            Navigator.of(context).pop();
+                                          }
+                                        },
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
+                        if (isPhoneHost)
+                          buildPhoneStepPicker()
+                        else
+                          buildStepTabs(desktop: false),
                       ],
                     ),
 
@@ -5332,9 +5858,17 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                   Expanded(
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(
-                        isMobile ? 12 : (showDesktopPreviewPane ? 24 : 40),
-                        isMobile ? 16 : 20,
-                        isMobile ? 12 : 36,
+                        isPhoneHost
+                            ? 12
+                            : (usesCompactHost
+                                ? 20
+                                : (showDesktopPreviewPane ? 24 : 40)),
+                        usesCompactHost ? 12 : 20,
+                        isPhoneHost
+                            ? 12
+                            : (usesCompactHost
+                                ? 20
+                                : (showDesktopPreviewPane ? 24 : 36)),
                         0,
                       ),
                       child: AbsorbPointer(
@@ -5358,7 +5892,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
                   // Bottom Action Bar
                   Container(
-                    padding: isMobile
+                    padding: usesCompactHost
                         ? EdgeInsets.zero
                         : const EdgeInsets.symmetric(
                             horizontal: 32,
@@ -5373,13 +5907,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.02),
+                          color:
+                              theme.colorScheme.shadow.withValues(alpha: 0.04),
                           blurRadius: 16,
                           offset: const Offset(0, -8),
                         ),
                       ],
                     ),
-                    child: isMobile
+                    child: usesCompactHost
                         ? _buildMobileActionRow(theme, steps.length)
                         : Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -5393,143 +5928,164 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                                               _aggregateLoadBlocksEditing
                                           ? null
                                           : _confirmDelete,
-                                      icon: const Icon(Icons.delete,
-                                          color: Colors.red),
-                                      label: const Text('Eliminar',
-                                          style: TextStyle(color: Colors.red)),
+                                      icon: Icon(
+                                        Icons.delete_outline,
+                                        color: theme.colorScheme.error,
+                                      ),
+                                      label: Text(
+                                        'Eliminar',
+                                        style: TextStyle(
+                                          color: theme.colorScheme.error,
+                                        ),
+                                      ),
                                     )
                                   else
                                     const SizedBox.shrink(),
                                 ],
                               ),
-                              // Right side buttons
-                              Row(
-                                children: [
-                                  if (_currentStep > 0)
-                                    TextButton(
-                                      onPressed: _isSaving ||
-                                              _aggregateLoadBlocksEditing
-                                          ? null
-                                          : () {
-                                              setState(() {
-                                                _currentStep--;
-                                                _pageController.previousPage(
-                                                  duration: const Duration(
-                                                      milliseconds: 350),
-                                                  curve: Curves.easeOutCubic,
-                                                );
-                                              });
-                                            },
-                                      child: const Text('Atrás',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w600)),
-                                    )
-                                  else
-                                    TextButton(
-                                      onPressed: _isSaving ||
-                                              _aggregateLoadState ==
-                                                  _BikeAggregateLoadState
-                                                      .outcomeUnknown
-                                          ? null
-                                          : () {
-                                              if (widget.isEmbedded) {
-                                                widget.onCanceled?.call();
-                                              } else {
-                                                Navigator.of(context).pop();
-                                              }
-                                            },
-                                      child: const Text('Cancelar',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w600)),
-                                    ),
-                                  const SizedBox(width: 16),
-                                  if (_currentStep < steps.length - 1) ...[
-                                    FilledButton.tonalIcon(
-                                      onPressed: _isSaving ||
-                                              _aggregateLoadBlocksEditing
-                                          ? null
-                                          : () {
-                                              _saveBike(
-                                                allowIncompleteTechnicalKernel:
-                                                    true,
-                                              );
-                                            },
-                                      icon: const Icon(Icons.flash_on),
-                                      label: const Text('Guardar rápido',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w700)),
-                                      style: FilledButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 20, vertical: 16),
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(12)),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    FilledButton.icon(
-                                      onPressed: _isSaving ||
-                                              _aggregateLoadBlocksEditing
-                                          ? null
-                                          : () {
-                                              // Validate before proceeding from Identidad
-                                              if (_currentStep == 0) {
-                                                if (!_formKey.currentState!
-                                                    .validate()) {
-                                                  return;
-                                                }
-                                              }
-                                              setState(() {
-                                                _currentStep++;
-                                                _pageController.nextPage(
-                                                  duration: const Duration(
-                                                      milliseconds: 350),
-                                                  curve: Curves.easeOutCubic,
-                                                );
-                                              });
-                                            },
-                                      icon: const Icon(Icons.arrow_forward),
-                                      label: const Text('Siguiente',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w700)),
-                                      style: FilledButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 24, vertical: 16),
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(12)),
-                                      ),
-                                    )
-                                  ] else
-                                    FilledButton.icon(
-                                      onPressed: _isSaving ||
-                                              _aggregateLoadBlocksEditing
-                                          ? null
-                                          : _saveBike,
-                                      icon: _isSaving
-                                          ? const SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child: CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  color: Colors.white),
-                                            )
-                                          : const Icon(Icons.save),
-                                      label: Text(
-                                          _isSaving
-                                              ? 'Guardando...'
-                                              : 'Guardar',
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.w700)),
-                                      style: FilledButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 28, vertical: 16),
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(12)),
-                                      ),
-                                    ),
-                                ],
+                              // Right side buttons reflow when desktop text
+                              // scale or the preview pane reduces this column.
+                              Flexible(
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Wrap(
+                                    alignment: WrapAlignment.end,
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
+                                    spacing: 12,
+                                    runSpacing: 8,
+                                    children: [
+                                      if (_currentStep > 0)
+                                        TextButton(
+                                          onPressed: _isSaving ||
+                                                  _aggregateLoadBlocksEditing
+                                              ? null
+                                              : () {
+                                                  setState(() {
+                                                    _currentStep--;
+                                                    _pageController
+                                                        .previousPage(
+                                                      duration: const Duration(
+                                                          milliseconds: 350),
+                                                      curve:
+                                                          Curves.easeOutCubic,
+                                                    );
+                                                  });
+                                                },
+                                          child: const Text('Atrás',
+                                              style: TextStyle(
+                                                  fontWeight: FontWeight.w600)),
+                                        )
+                                      else
+                                        TextButton(
+                                          onPressed: _isSaving ||
+                                                  _aggregateLoadState ==
+                                                      _BikeAggregateLoadState
+                                                          .outcomeUnknown
+                                              ? null
+                                              : () {
+                                                  if (widget.isEmbedded) {
+                                                    widget.onCanceled?.call();
+                                                  } else {
+                                                    Navigator.of(context).pop();
+                                                  }
+                                                },
+                                          child: const Text('Cancelar',
+                                              style: TextStyle(
+                                                  fontWeight: FontWeight.w600)),
+                                        ),
+                                      if (_currentStep < steps.length - 1) ...[
+                                        FilledButton.tonalIcon(
+                                          onPressed: _isSaving ||
+                                                  _aggregateLoadBlocksEditing
+                                              ? null
+                                              : () {
+                                                  _saveBike(
+                                                    allowIncompleteTechnicalKernel:
+                                                        true,
+                                                  );
+                                                },
+                                          icon: const Icon(Icons.flash_on),
+                                          label: const Text('Guardar rápido',
+                                              style: TextStyle(
+                                                  fontWeight: FontWeight.w700)),
+                                          style: FilledButton.styleFrom(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 20, vertical: 16),
+                                            shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12)),
+                                          ),
+                                        ),
+                                        FilledButton.icon(
+                                          onPressed: _isSaving ||
+                                                  _aggregateLoadBlocksEditing
+                                              ? null
+                                              : () {
+                                                  // Validate before proceeding from Identidad
+                                                  if (_currentStep == 0) {
+                                                    if (!_formKey.currentState!
+                                                        .validate()) {
+                                                      return;
+                                                    }
+                                                  }
+                                                  setState(() {
+                                                    _currentStep++;
+                                                    _pageController.nextPage(
+                                                      duration: const Duration(
+                                                          milliseconds: 350),
+                                                      curve:
+                                                          Curves.easeOutCubic,
+                                                    );
+                                                  });
+                                                },
+                                          icon: const Icon(Icons.arrow_forward),
+                                          label: const Text('Siguiente',
+                                              style: TextStyle(
+                                                  fontWeight: FontWeight.w700)),
+                                          style: FilledButton.styleFrom(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 24, vertical: 16),
+                                            shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12)),
+                                          ),
+                                        )
+                                      ] else
+                                        FilledButton.icon(
+                                          onPressed: _isSaving ||
+                                                  _aggregateLoadBlocksEditing
+                                              ? null
+                                              : _saveBike,
+                                          icon: _isSaving
+                                              ? SizedBox(
+                                                  width: 16,
+                                                  height: 16,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                          color: theme
+                                                              .colorScheme
+                                                              .onPrimary),
+                                                )
+                                              : const Icon(Icons.save),
+                                          label: Text(
+                                              _isSaving
+                                                  ? 'Guardando...'
+                                                  : 'Guardar',
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.w700)),
+                                          style: FilledButton.styleFrom(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 28, vertical: 16),
+                                            shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12)),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ],
                           ),
@@ -5544,8 +6100,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
     if (widget.isEmbedded) {
       return Material(
+        key: const ValueKey('bike-form-embedded-surface'),
         color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(usesCompactHost ? 0 : 24),
         clipBehavior: Clip.antiAlias,
         child: content,
       );
@@ -5571,12 +6128,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
               borderRadius: BorderRadius.circular(dialogRadius),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.12),
+                  color: theme.colorScheme.shadow.withValues(alpha: 0.12),
                   blurRadius: 40,
                   offset: const Offset(0, 16),
                 ),
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
+                  color: theme.colorScheme.shadow.withValues(alpha: 0.08),
                   blurRadius: 100,
                   spreadRadius: 20,
                 ),
@@ -5589,6 +6146,195 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _BikeReferenceNameSheet extends StatefulWidget {
+  const _BikeReferenceNameSheet({
+    required this.title,
+    required this.label,
+    required this.hint,
+  });
+
+  final String title;
+  final String label;
+  final String hint;
+
+  @override
+  State<_BikeReferenceNameSheet> createState() =>
+      _BikeReferenceNameSheetState();
+}
+
+class _BikeReferenceNameSheetState extends State<_BikeReferenceNameSheet> {
+  final TextEditingController _controller = TextEditingController();
+
+  bool get _canSubmit => _controller.text.trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_handleTextChanged);
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_handleTextChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleTextChanged() => setState(() {});
+
+  void _submit() {
+    final value = _controller.text.trim();
+    if (value.isNotEmpty) {
+      Navigator.of(context).pop(value);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+
+    return AnimatedPadding(
+      key: const ValueKey('bike-reference-name-sheet'),
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      padding: EdgeInsets.fromLTRB(20, 4, 20, 16 + keyboardInset),
+      child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.title,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              key: const ValueKey('bike-reference-name-field'),
+              controller: _controller,
+              decoration: InputDecoration(
+                labelText: widget.label,
+                hintText: widget.hint,
+                border: const OutlineInputBorder(),
+              ),
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                    ),
+                    child: const Text('Cancelar'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: FilledButton(
+                    onPressed: _canSubmit ? _submit : null,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                    ),
+                    child: const Text('Crear'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BikeReferenceNameDialog extends StatefulWidget {
+  const _BikeReferenceNameDialog({
+    required this.title,
+    required this.label,
+    required this.hint,
+  });
+
+  final String title;
+  final String label;
+  final String hint;
+
+  @override
+  State<_BikeReferenceNameDialog> createState() =>
+      _BikeReferenceNameDialogState();
+}
+
+class _BikeReferenceNameDialogState extends State<_BikeReferenceNameDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  bool get _canSubmit => _controller.text.trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_handleTextChanged);
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_handleTextChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleTextChanged() => setState(() {});
+
+  void _submit() {
+    final value = _controller.text.trim();
+    if (value.isNotEmpty) {
+      Navigator.of(context).pop(value);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SizedBox(
+        width: 420,
+        child: TextField(
+          controller: _controller,
+          decoration: InputDecoration(
+            labelText: widget.label,
+            hintText: widget.hint,
+            border: const OutlineInputBorder(),
+          ),
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _submit(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: _canSubmit ? _submit : null,
+          child: const Text('Crear'),
+        ),
+      ],
     );
   }
 }

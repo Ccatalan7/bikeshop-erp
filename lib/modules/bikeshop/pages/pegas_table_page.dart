@@ -30,6 +30,7 @@ import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../../sales/models/sales_models.dart';
 import '../../sales/services/sales_service.dart';
+import '../../sales/widgets/payment_form.dart';
 import '../../sales/widgets/sales_invoice_editor.dart';
 import '../../settings/services/appearance_service.dart';
 
@@ -51,6 +52,8 @@ import '../widgets/job_time_metrics_widget.dart';
 import '../widgets/smart_job_details_editor.dart';
 import '../widgets/pegas_tasks_widget.dart';
 import '../widgets/workshop_board_compact_view.dart';
+import '../widgets/workshop_mobile_bike_chooser.dart';
+import '../widgets/workshop_mobile_payment_workspace.dart';
 import '../widgets/workshop_status_filter_header.dart';
 import 'bike_form_dialog.dart';
 import 'mechanic_job_form_page.dart';
@@ -66,7 +69,9 @@ class PegasTablePage extends StatefulWidget {
 enum _MobileWorkshopSurface {
   job,
   items,
+  bike,
   invoice,
+  payment,
   proposalPdf,
 }
 
@@ -74,11 +79,15 @@ class _MobileWorkshopWorkspace {
   _MobileWorkshopWorkspace({
     required this.surface,
     required this.job,
+    this.bike,
+    this.invoice,
     this.proposalPdf,
   }) : childKey = GlobalKey();
 
   final _MobileWorkshopSurface surface;
   final MechanicJob job;
+  final Bike? bike;
+  final Invoice? invoice;
   final Future<_WorkshopProposalPdfArtifact>? proposalPdf;
   final GlobalKey childKey;
 }
@@ -378,10 +387,23 @@ class _PegasTablePageState extends State<PegasTablePage>
   final Set<String> _customStatusFilter =
       {}; // Uses status IDs (UUIDs) not legacy enum
   bool _statusFilterExcludeMode =
-      false; // false = "is" (include), true = "is not" (exclude)
+      false; // false = include selected, true = exclude selected
   final Set<JobPriority> _priorityFilter = {};
   bool _showOnlyOverdue = false;
   bool _showOnlyUnpaid = false;
+  final WorkshopBoardCompactSession _compactBoardSession =
+      WorkshopBoardCompactSession();
+  final PegasCalendarSession _calendarSession = PegasCalendarSession();
+  final PegasTasksSession _tasksSession = PegasTasksSession();
+
+  void _toggleCustomStatusFilter(String statusKey) {
+    if (!_customStatusFilter.add(statusKey)) {
+      _customStatusFilter.remove(statusKey);
+    }
+    if (_customStatusFilter.isEmpty) {
+      _statusFilterExcludeMode = false;
+    }
+  }
 
   // Pagination
   int _currentPage = 0;
@@ -422,6 +444,11 @@ class _PegasTablePageState extends State<PegasTablePage>
   String _timelineScale = 'week'; // 'week' or 'month'
   DateTime _timelineViewStart =
       DateTime.now().subtract(const Duration(days: 7));
+  final ScrollController _ganttHorizontalScrollController = ScrollController();
+  final ScrollController _ganttVerticalScrollController = ScrollController();
+  double _ganttHorizontalOffset = 0;
+  double _ganttVerticalOffset = 0;
+  bool _ganttRestoreScheduled = false;
 
   // Calendar view state - moved to PegasCalendarWidget (shared widget)
 
@@ -440,6 +467,8 @@ class _PegasTablePageState extends State<PegasTablePage>
     _salesService = Provider.of<SalesService>(context, listen: false);
     _aiAssistantContextService =
         Provider.of<AIAssistantContextService>(context, listen: false);
+    _ganttHorizontalScrollController.addListener(_rememberGanttScroll);
+    _ganttVerticalScrollController.addListener(_rememberGanttScroll);
     debugPrint(
       '[AI_CTX][PegasTable.init] contextId=${identityHashCode(_aiAssistantContextService)} '
       'bikeshopServiceId=${identityHashCode(_bikeshopService)}',
@@ -824,6 +853,12 @@ class _PegasTablePageState extends State<PegasTablePage>
     _horizontalScrollController.dispose();
     _mobileJobsScrollController.dispose();
     _mobileSearchController.dispose();
+    _ganttHorizontalScrollController
+      ..removeListener(_rememberGanttScroll)
+      ..dispose();
+    _ganttVerticalScrollController
+      ..removeListener(_rememberGanttScroll)
+      ..dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -997,10 +1032,15 @@ class _PegasTablePageState extends State<PegasTablePage>
     await _loadData();
   }
 
+  Future<bool> _openInvoicePayment(String invoiceId) async {
+    final didRegisterPayment =
+        await context.push<bool>('/sales/invoices/$invoiceId/payment') ?? false;
+    return mounted && didRegisterPayment;
+  }
+
   Future<void> _registerInvoicePayment(String invoiceId) async {
-    _markNeedsRefresh();
-    await context.push('/sales/invoices/$invoiceId/payment');
-    if (!mounted) return;
+    final didRegisterPayment = await _openInvoicePayment(invoiceId);
+    if (!didRegisterPayment || !mounted) return;
     await _loadData(forceInvoiceRefresh: true);
   }
 
@@ -1353,8 +1393,9 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   void _openMobileInlineSurface(
     MechanicJob job,
-    _MobileWorkshopSurface surface,
-  ) {
+    _MobileWorkshopSurface surface, {
+    Bike? bike,
+  }) {
     final jobId = job.id?.trim();
     if (jobId == null || jobId.isEmpty) return;
 
@@ -1362,6 +1403,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       _mobileWorkshopWorkspace = _MobileWorkshopWorkspace(
         surface: surface,
         job: job,
+        bike: bike,
         proposalPdf: surface == _MobileWorkshopSurface.proposalPdf
             ? _buildQuotationPdfArtifact(job)
             : null,
@@ -1380,10 +1422,152 @@ class _PegasTablePageState extends State<PegasTablePage>
     unawaited(_loadData(forceInvoiceRefresh: true));
   }
 
+  void _handleMobileBikeSave(Bike bike) {
+    if (!mounted) return;
+    setState(() {
+      final bikeId = bike.id;
+      if (bikeId != null && bikeId.isNotEmpty) {
+        _bikes[bikeId] = bike;
+      }
+      _mobileWorkshopWorkspace = null;
+    });
+    unawaited(_loadData());
+  }
+
+  Future<void> _handleMobileInlinePaymentRequested(Invoice invoice) async {
+    final invoiceId = invoice.id?.trim();
+    if (invoiceId == null || invoiceId.isEmpty) return;
+    final workspace = _mobileWorkshopWorkspace;
+    if (workspace == null || !mounted) return;
+
+    setState(() {
+      _mobileWorkshopWorkspace = _MobileWorkshopWorkspace(
+        surface: _MobileWorkshopSurface.payment,
+        job: _currentMobileWorkspaceJob(workspace),
+        invoice: invoice,
+      );
+    });
+  }
+
+  void _returnMobilePaymentToInvoice() {
+    final workspace = _mobileWorkshopWorkspace;
+    if (workspace == null || !mounted) return;
+
+    setState(() {
+      _mobileWorkshopWorkspace = _MobileWorkshopWorkspace(
+        surface: _MobileWorkshopSurface.invoice,
+        job: _currentMobileWorkspaceJob(workspace),
+      );
+    });
+  }
+
+  void _handleMobilePaymentCompleted() {
+    if (!mounted) return;
+    setState(() => _mobileWorkshopWorkspace = null);
+    unawaited(_loadData(forceInvoiceRefresh: true));
+  }
+
+  List<Bike> _linkedBikesForJob(MechanicJob job) {
+    final bikesById = <String, Bike>{};
+    final jobId = job.id?.trim();
+    final links = jobId == null
+        ? <MechanicJobBike>[]
+        : List<MechanicJobBike>.from(
+            _jobBikesMap[jobId] ?? const <MechanicJobBike>[],
+          );
+    links.sort((a, b) {
+      final order = a.orderIndex.compareTo(b.orderIndex);
+      return order != 0 ? order : a.bikeId.compareTo(b.bikeId);
+    });
+
+    for (final link in links) {
+      final bike = _bikes[link.bikeId] ?? link.bike;
+      final bikeId = bike?.id?.trim();
+      if (bike == null || bikeId == null || bikeId.isEmpty) continue;
+      bikesById[bikeId] = bike;
+    }
+
+    final primaryBikeId = job.bikeId?.trim();
+    if (primaryBikeId != null && primaryBikeId.isNotEmpty) {
+      final primaryBike = _bikes[primaryBikeId];
+      if (primaryBike != null) {
+        bikesById.putIfAbsent(primaryBikeId, () => primaryBike);
+      }
+    }
+
+    return bikesById.values.toList(growable: false);
+  }
+
+  Future<Bike?> _showMobileBikeChooser(
+    MechanicJob job,
+    List<Bike> bikes,
+    int linkedBikeCount,
+  ) {
+    final jobLabel = job.jobNumber?.trim().isNotEmpty == true
+        ? job.jobNumber!.trim()
+        : 'este trabajo';
+
+    return showModalBottomSheet<Bike>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => WorkshopMobileBikeChooser(
+        jobLabel: jobLabel,
+        linkedBikeCount: linkedBikeCount,
+        bikes: bikes,
+        onSelected: (bike) => Navigator.of(sheetContext).pop(bike),
+        onClose: () => Navigator.of(sheetContext).pop(),
+      ),
+    );
+  }
+
+  Future<void> _openMobileJobBike(
+    MechanicJob job,
+    Customer? customer,
+  ) async {
+    final customerId = customer?.id?.trim();
+    if (customerId == null || customerId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cliente no encontrado')),
+      );
+      return;
+    }
+
+    final bikes = _linkedBikesForJob(job);
+    if (bikes.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bicicleta no encontrada')),
+      );
+      return;
+    }
+
+    final linkedBikeCount = _jobBikesMap[job.id]?.length ?? bikes.length;
+    final selectedBike = linkedBikeCount > 1
+        ? await _showMobileBikeChooser(job, bikes, linkedBikeCount)
+        : bikes.first;
+    if (!mounted || selectedBike == null) return;
+
+    _openMobileInlineSurface(
+      job,
+      _MobileWorkshopSurface.bike,
+      bike: selectedBike,
+    );
+  }
+
   MechanicJob _currentMobileWorkspaceJob(_MobileWorkshopWorkspace workspace) {
     final jobId = workspace.job.id;
     if (jobId == null) return workspace.job;
     return _jobs.where((job) => job.id == jobId).firstOrNull ?? workspace.job;
+  }
+
+  Bike? _currentMobileWorkspaceBike(_MobileWorkshopWorkspace workspace) {
+    final bike = workspace.bike;
+    final bikeId = bike?.id?.trim();
+    if (bikeId == null || bikeId.isEmpty) return bike;
+    return _bikes[bikeId] ?? bike;
   }
 
   bool _canRegisterPaymentForJob(MechanicJob job) {
@@ -1847,6 +2031,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             onCanceled: _closeMobileInlineSurface,
           ),
         ),
+      _MobileWorkshopSurface.bike => _buildMobileBikeWorkspace(workspace, job),
       _MobileWorkshopSurface.invoice => KeyedSubtree(
           key: const ValueKey('workshop-mobile-inline-invoice'),
           child: ColoredBox(
@@ -1859,16 +2044,80 @@ class _PegasTablePageState extends State<PegasTablePage>
               isCompact: true,
               allowFullScreenExpansion: false,
               onCloseRequested: _closeMobileInlineSurface,
+              onRegisterPaymentRequested: _handleMobileInlinePaymentRequested,
               onSaved: _handleMobileInlineSave,
             ),
           ),
         ),
+      _MobileWorkshopSurface.payment =>
+        _buildMobilePaymentWorkspace(workspace, job),
       _MobileWorkshopSurface.proposalPdf =>
         _buildMobileProposalPdfWorkspace(workspace, job),
     };
   }
 
-  Widget _buildMobileInlineUnavailable() {
+  Widget _buildMobileBikeWorkspace(
+    _MobileWorkshopWorkspace workspace,
+    MechanicJob job,
+  ) {
+    final bike = _currentMobileWorkspaceBike(workspace);
+    final customerId = job.customerId.trim();
+    if (bike == null || customerId.isEmpty) {
+      return _buildMobileInlineUnavailable(
+        message: 'No fue posible abrir esta bicicleta.',
+      );
+    }
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _closeMobileInlineSurface();
+      },
+      child: ColoredBox(
+        key: const ValueKey('workshop-mobile-inline-bike'),
+        color: Theme.of(context).colorScheme.surface,
+        child: BikeFormDialog(
+          key: ValueKey('workshop-mobile-bike-editor-${bike.id}'),
+          customerId: customerId,
+          bike: bike,
+          isEmbedded: true,
+          onSaved: _handleMobileBikeSave,
+          onCanceled: _closeMobileInlineSurface,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobilePaymentWorkspace(
+    _MobileWorkshopWorkspace workspace,
+    MechanicJob job,
+  ) {
+    final invoiceId = job.invoiceId?.trim();
+    final invoice = workspace.invoice ??
+        (invoiceId == null || invoiceId.isEmpty ? null : _invoices[invoiceId]);
+    if (invoice == null) {
+      return _buildMobileInlineUnavailable(
+        message: 'No fue posible abrir el registro de abono.',
+      );
+    }
+
+    return KeyedSubtree(
+      key: const ValueKey('workshop-mobile-inline-payment'),
+      child: WorkshopMobilePaymentWorkspace(
+        invoice: invoice,
+        onBack: _returnMobilePaymentToInvoice,
+        paymentForm: PaymentForm(
+          invoice: invoice,
+          dismissOnSubmit: false,
+          onCompleted: _handleMobilePaymentCompleted,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileInlineUnavailable({
+    String message = 'Este trabajo ya no está disponible.',
+  }) {
     final theme = Theme.of(context);
     return Center(
       key: const ValueKey('workshop-mobile-inline-error'),
@@ -1883,8 +2132,8 @@ class _PegasTablePageState extends State<PegasTablePage>
               size: 38,
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Este trabajo ya no está disponible.',
+            Text(
+              message,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -2295,6 +2544,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         child: Row(
           children: [
             Expanded(
+              flex: 9,
               child: _buildMobileControlField(
                 key: const ValueKey('workshop-mobile-scope'),
                 eyebrow: 'Ámbito',
@@ -2304,6 +2554,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
             _buildMobileCommandDivider(theme),
             Expanded(
+              flex: 12,
               child: _buildMobileControlField(
                 key: const ValueKey('workshop-mobile-view'),
                 eyebrow: 'Vista',
@@ -2312,9 +2563,15 @@ class _PegasTablePageState extends State<PegasTablePage>
               ),
             ),
             _buildMobileCommandDivider(theme),
-            Expanded(child: _buildMobileWorkloadSummary(theme)),
+            Expanded(
+              flex: 9,
+              child: _buildMobileWorkloadSummary(theme),
+            ),
             _buildMobileCommandDivider(theme),
-            Expanded(child: _buildMobileFiltersButton(theme)),
+            Expanded(
+              flex: 10,
+              child: _buildMobileFiltersButton(theme),
+            ),
           ],
         ),
       ),
@@ -2699,10 +2956,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                               value: _customStatusFilter
                                   .contains(status.name.toUpperCase()),
                               onChanged: (_) => apply(() {
-                                final code = status.name.toUpperCase();
-                                if (!_customStatusFilter.add(code)) {
-                                  _customStatusFilter.remove(code);
-                                }
+                                _toggleCustomStatusFilter(
+                                  status.name.toUpperCase(),
+                                );
                               }),
                             )
                         else
@@ -2746,9 +3002,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                                   value:
                                       _customStatusFilter.contains(status.id),
                                   onChanged: (_) => apply(() {
-                                    if (!_customStatusFilter.add(status.id!)) {
-                                      _customStatusFilter.remove(status.id);
-                                    }
+                                    _toggleCustomStatusFilter(status.id!);
                                   }),
                                 ),
                           ],
@@ -5083,6 +5337,12 @@ class _PegasTablePageState extends State<PegasTablePage>
     required String jobKey,
   }) {
     final theme = Theme.of(context);
+    final linkedBikes = _linkedBikesForJob(job);
+    final persistedBikeCount = _jobBikesMap[job.id]?.length ?? 0;
+    final linkedBikeCount = persistedBikeCount > linkedBikes.length
+        ? persistedBikeCount
+        : linkedBikes.length;
+    final displayedBike = linkedBikes.firstOrNull ?? bike;
     late final String eyebrow;
     late final String label;
     late final IconData icon;
@@ -5100,12 +5360,14 @@ class _PegasTablePageState extends State<PegasTablePage>
       eyebrow = 'Componente';
       label = _componentObjectLabel(job);
       icon = Icons.build_outlined;
-    } else if (bike != null) {
-      eyebrow = 'Bicicleta';
-      label = bike.displayName;
+    } else if (displayedBike != null) {
+      eyebrow = linkedBikeCount > 1 ? 'Bicicletas' : 'Bicicleta';
+      label = linkedBikeCount > 1
+          ? '$linkedBikeCount vinculadas'
+          : displayedBike.displayName;
       icon = Icons.pedal_bike_outlined;
       if (customer != null) {
-        onTap = () => _showBikeProfileDialog(job, customer);
+        onTap = () => unawaited(_openMobileJobBike(job, customer));
       }
     } else {
       eyebrow = 'Recepción';
@@ -6996,7 +7258,11 @@ class _PegasTablePageState extends State<PegasTablePage>
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: _buildInteractiveTableField(
-                        onTap: () => _showBikeProfileDialog(job, customer),
+                        onTap: () => _showBikeProfileDialog(
+                          job,
+                          customer,
+                          initialBike: bike,
+                        ),
                         maxWidth: constraints.maxWidth,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
@@ -8505,7 +8771,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   }) {
     final theme = Theme.of(context);
     // Get the bike for this job-bike entry
-    final bike = jb.bike ?? _bikes[jb.bikeId];
+    final bike = _bikes[jb.bikeId] ?? jb.bike;
     final isSelected = _selectedJob?.id == job.id;
 
     // Use the EXACT same row structure as main row but with distinct background
@@ -8632,8 +8898,8 @@ class _PegasTablePageState extends State<PegasTablePage>
             Text(
               hasFilter
                   ? (_statusFilterExcludeMode
-                      ? 'Estado ≠ ${_customStatusFilter.length}'
-                      : 'Estado (${_customStatusFilter.length})')
+                      ? 'Estado · ${_customStatusFilter.length} excluidos'
+                      : 'Estado · ${_customStatusFilter.length} elegidos')
                   : 'Estado',
               style: TextStyle(
                 fontSize: 13,
@@ -8681,76 +8947,31 @@ class _PegasTablePageState extends State<PegasTablePage>
                     elevation: 8,
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
-                      width: 220,
+                      width: 320,
                       constraints: const BoxConstraints(maxHeight: 400),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Header
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
-                            child: Row(
-                              children: [
-                                const Text(
-                                  'Filtrar por Estado',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13),
-                                ),
-                                const Spacer(),
-                                if (_customStatusFilter.isNotEmpty)
-                                  TextButton(
-                                    onPressed: () {
-                                      setState(
-                                          () => _customStatusFilter.clear());
-                                      setDialogState(() {});
-                                      _applyFiltersAndSort();
-                                    },
-                                    style: TextButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                    child: const Text('Limpiar',
-                                        style: TextStyle(fontSize: 12)),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          // Is / Is Not toggle
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
-                            child: SegmentedButton<bool>(
-                              segments: const [
-                                ButtonSegment<bool>(
-                                  value: false,
-                                  label: Text('Es',
-                                      style: TextStyle(fontSize: 12)),
-                                  icon: Icon(Icons.check_circle_outline,
-                                      size: 16),
-                                ),
-                                ButtonSegment<bool>(
-                                  value: true,
-                                  label: Text('No es',
-                                      style: TextStyle(fontSize: 12)),
-                                  icon: Icon(Icons.cancel_outlined, size: 16),
-                                ),
-                              ],
-                              selected: {_statusFilterExcludeMode},
-                              onSelectionChanged: (Set<bool> newSelection) {
+                            padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+                            child: WorkshopStatusFilterHeader(
+                              excludeMode: _statusFilterExcludeMode,
+                              canClear: _customStatusFilter.isNotEmpty,
+                              onExcludeModeChanged: (value) {
+                                setState(
+                                  () => _statusFilterExcludeMode = value,
+                                );
+                                setDialogState(() {});
+                                _applyFiltersAndSort();
+                              },
+                              onClear: () {
                                 setState(() {
-                                  _statusFilterExcludeMode = newSelection.first;
+                                  _customStatusFilter.clear();
+                                  _statusFilterExcludeMode = false;
                                 });
                                 setDialogState(() {});
                                 _applyFiltersAndSort();
                               },
-                              style: const ButtonStyle(
-                                visualDensity: VisualDensity.compact,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
                             ),
                           ),
                           const Divider(height: 1),
@@ -8777,14 +8998,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                                         return InkWell(
                                           onTap: () {
                                             setState(() {
-                                              if (_customStatusFilter
-                                                  .contains(statusCode)) {
-                                                _customStatusFilter
-                                                    .remove(statusCode);
-                                              } else {
-                                                _customStatusFilter
-                                                    .add(statusCode);
-                                              }
+                                              _toggleCustomStatusFilter(
+                                                statusCode,
+                                              );
                                             });
                                             setDialogState(() {});
                                             _applyFiltersAndSort();
@@ -8883,14 +9099,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                                             return InkWell(
                                               onTap: () {
                                                 setState(() {
-                                                  if (_customStatusFilter
-                                                      .contains(status.id)) {
-                                                    _customStatusFilter
-                                                        .remove(status.id);
-                                                  } else {
-                                                    _customStatusFilter
-                                                        .add(status.id!);
-                                                  }
+                                                  _toggleCustomStatusFilter(
+                                                    status.id!,
+                                                  );
                                                 });
                                                 setDialogState(() {});
                                                 _applyFiltersAndSort();
@@ -11391,7 +11602,11 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
-  void _showBikeProfileDialog(MechanicJob job, Customer? customer) async {
+  void _showBikeProfileDialog(
+    MechanicJob job,
+    Customer? customer, {
+    Bike? initialBike,
+  }) async {
     if (customer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cliente no encontrado')),
@@ -11413,8 +11628,8 @@ class _PegasTablePageState extends State<PegasTablePage>
       (j) => j.id == job.id,
       orElse: () => job,
     );
-    var activeBike =
-        activeJob.bikeId == null ? null : _bikes[activeJob.bikeId!];
+    var activeBike = initialBike ??
+        (activeJob.bikeId == null ? null : _bikes[activeJob.bikeId!]);
 
     if (activeBike == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -12054,7 +12269,10 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   // ========== TASKS VIEW ==========
   Widget _buildTasksView() {
-    return const PegasTasksWidget();
+    return PegasTasksWidget(
+      useCompactLayout: ResponsiveViewport.usesCompactShell(context),
+      session: _tasksSession,
+    );
   }
 
   // ========== BOARD VIEW (Kanban) ==========
@@ -12113,7 +12331,10 @@ class _PegasTablePageState extends State<PegasTablePage>
           }
 
           if (ResponsiveViewport.usesCompactShell(context)) {
-            return WorkshopBoardCompactView(groups: compactGroups);
+            return WorkshopBoardCompactView(
+              groups: compactGroups,
+              session: _compactBoardSession,
+            );
           }
 
           return Align(
@@ -12168,7 +12389,10 @@ class _PegasTablePageState extends State<PegasTablePage>
         }
 
         if (ResponsiveViewport.usesCompactShell(context)) {
-          return WorkshopBoardCompactView(groups: compactGroups);
+          return WorkshopBoardCompactView(
+            groups: compactGroups,
+            session: _compactBoardSession,
+          );
         }
 
         return Align(
@@ -12715,6 +12939,8 @@ class _PegasTablePageState extends State<PegasTablePage>
       customers: customersMap,
       bikes: bikesMap,
       onRefreshNeeded: _loadData,
+      useCompactLayout: ResponsiveViewport.usesCompactShell(context),
+      session: _calendarSession,
     );
   }
 
@@ -12748,8 +12974,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         _timelineScale == 'week' ? 14 : 60; // 2 weeks or 2 months
 
     return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < ResponsiveViewport.desktopMin;
+      builder: (context, _) {
+        final compact = ResponsiveViewport.usesCompactShell(context);
         final dayWidth =
             _timelineScale == 'week' ? (compact ? 76.0 : 120.0) : 40.0;
         return Column(
@@ -12775,8 +13001,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         DateFormat('MMMM yyyy', 'es').format(_timelineViewStart);
 
     return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < ResponsiveViewport.desktopMin;
+      builder: (context, _) {
+        final compact = ResponsiveViewport.usesCompactShell(context);
         return Container(
           key: compact
               ? const ValueKey('workshop-gantt-compact-controls')
@@ -12893,7 +13119,10 @@ class _PegasTablePageState extends State<PegasTablePage>
       showSelectedIcon: false,
       expandedInsets: expanded ? EdgeInsets.zero : null,
       onSelectionChanged: (selected) {
-        setState(() => _timelineScale = selected.first);
+        setState(() {
+          _timelineScale = selected.first;
+          _resetGanttScrollOffsets();
+        });
       },
     );
   }
@@ -12905,6 +13134,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           days: direction * (_timelineScale == 'week' ? 7 : 30),
         ),
       );
+      _resetGanttScrollOffsets();
     });
   }
 
@@ -12913,7 +13143,59 @@ class _PegasTablePageState extends State<PegasTablePage>
       _timelineViewStart = DateTime.now().subtract(
         const Duration(days: 7),
       );
+      _resetGanttScrollOffsets();
     });
+  }
+
+  void _rememberGanttScroll() {
+    if (_ganttHorizontalScrollController.hasClients) {
+      _ganttHorizontalOffset = _ganttHorizontalScrollController.offset;
+    }
+    if (_ganttVerticalScrollController.hasClients) {
+      _ganttVerticalOffset = _ganttVerticalScrollController.offset;
+    }
+  }
+
+  void _resetGanttScrollOffsets() {
+    _ganttHorizontalOffset = 0;
+    _ganttVerticalOffset = 0;
+    if (_ganttHorizontalScrollController.hasClients) {
+      _ganttHorizontalScrollController.jumpTo(0);
+    }
+    if (_ganttVerticalScrollController.hasClients) {
+      _ganttVerticalScrollController.jumpTo(0);
+    }
+  }
+
+  void _scheduleGanttScrollRestore() {
+    if (_ganttRestoreScheduled) return;
+    _ganttRestoreScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ganttRestoreScheduled = false;
+      if (!mounted || _viewMode != 'gantt') return;
+      _restoreGanttController(
+        _ganttHorizontalScrollController,
+        _ganttHorizontalOffset,
+      );
+      _restoreGanttController(
+        _ganttVerticalScrollController,
+        _ganttVerticalOffset,
+      );
+    });
+  }
+
+  void _restoreGanttController(
+    ScrollController controller,
+    double offset,
+  ) {
+    if (!controller.hasClients) return;
+    final target = offset.clamp(
+      controller.position.minScrollExtent,
+      controller.position.maxScrollExtent,
+    );
+    if ((controller.offset - target).abs() > 0.5) {
+      controller.jumpTo(target);
+    }
   }
 
   Widget _buildTimelineContent(
@@ -12923,9 +13205,11 @@ class _PegasTablePageState extends State<PegasTablePage>
     required bool compact,
   }) {
     final totalWidth = dayWidth * visibleDays;
+    _scheduleGanttScrollRestore();
 
     return SingleChildScrollView(
       key: const ValueKey('workshop-gantt-horizontal-scroll'),
+      controller: _ganttHorizontalScrollController,
       scrollDirection: Axis.horizontal,
       child: SizedBox(
         width: totalWidth + 50, // Extra padding
@@ -12936,6 +13220,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             // Jobs rows
             Expanded(
               child: SingleChildScrollView(
+                controller: _ganttVerticalScrollController,
                 child: Column(
                   children: jobs
                       .map(

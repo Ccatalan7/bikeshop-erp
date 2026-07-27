@@ -74,10 +74,17 @@ void main() {
   Future<_FakeAndroidUpdateService> pumpPrompt(
     WidgetTester tester, {
     required AndroidReleaseManifest? release,
+    Size size = const Size(384, 824),
+    double textScale = 1,
+    double bottomInset = 0,
     String? errorMessage,
     int consecutiveCheckFailures = 0,
+    bool isDownloading = false,
+    double? downloadProgress,
+    String? statusMessage,
+    bool installThrows = false,
   }) async {
-    tester.view.physicalSize = const Size(384, 824);
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -86,13 +93,27 @@ void main() {
       release,
       errorMessage: errorMessage,
       consecutiveCheckFailures: consecutiveCheckFailures,
+      isDownloading: isDownloading,
+      downloadProgress: downloadProgress,
+      statusMessage: statusMessage,
+      installThrows: installThrows,
     );
     addTearDown(service.dispose);
     await tester.pumpWidget(
       ChangeNotifierProvider<AndroidUpdateService>.value(
         value: service,
-        child: const MaterialApp(
-          home: Scaffold(
+        child: MaterialApp(
+          builder: (context, child) {
+            final mediaQuery = MediaQuery.of(context);
+            return MediaQuery(
+              data: mediaQuery.copyWith(
+                padding: EdgeInsets.only(bottom: bottomInset),
+                textScaler: TextScaler.linear(textScale),
+              ),
+              child: child!,
+            );
+          },
+          home: const Scaffold(
             body: Stack(
               children: [
                 AndroidUpdatePrompt(),
@@ -107,23 +128,39 @@ void main() {
   }
 
   testWidgets(
-    'shows a 48px Novedades action beside the primary install action at 384px',
+    'idle update stays compact and opens full notes only on request',
     (tester) async {
       await pumpPrompt(tester, release: release(notes: releaseNotes()));
 
+      final prompt = find.byKey(
+        const ValueKey('android-update-ready-prompt'),
+      );
       final whatsNew = find.byKey(
         const ValueKey('android-update-whats-new-button'),
       );
       final install = find.byKey(
         const ValueKey('android-update-primary-button'),
       );
+      final dismiss = find.byKey(
+        const ValueKey('android-update-dismiss-button'),
+      );
+      expect(prompt, findsOneWidget);
       expect(whatsNew, findsOneWidget);
       expect(install, findsOneWidget);
+      expect(dismiss, findsOneWidget);
       expect(tester.widget(whatsNew), isA<TextButton>());
       expect(tester.widget(install), isA<FilledButton>());
-      expect(find.text('Actualizar'), findsOneWidget);
+      expect(find.text('Versión 1.0.2'), findsOneWidget);
+      expect(find.text('Instalar'), findsOneWidget);
+      expect(
+        find.text('Mejoramos tareas cotidianas del sistema.'),
+        findsNothing,
+      );
+      expect(tester.getSize(prompt).height, lessThanOrEqualTo(84));
       expect(tester.getSize(whatsNew).height, greaterThanOrEqualTo(48));
       expect(tester.getSize(install).height, greaterThanOrEqualTo(48));
+      expect(tester.getSize(dismiss).height, greaterThanOrEqualTo(48));
+      expect(tester.getSize(dismiss).width, greaterThanOrEqualTo(48));
       expect(tester.takeException(), isNull);
 
       await tester.tap(whatsNew);
@@ -135,6 +172,10 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Novedades de esta actualización'), findsOneWidget);
+      expect(
+        find.text('Mejoramos tareas cotidianas del sistema.'),
+        findsOneWidget,
+      );
       expect(find.text('Taller'), findsOneWidget);
       expect(
         find.text('Ahora es más fácil revisar y descargar presupuestos.'),
@@ -148,7 +189,7 @@ void main() {
     },
   );
 
-  testWidgets('keeps the generic message when validated notes are absent',
+  testWidgets('keeps the same compact prompt when notes are absent',
       (tester) async {
     await pumpPrompt(
       tester,
@@ -159,8 +200,165 @@ void main() {
       find.byKey(const ValueKey('android-update-whats-new-button')),
       findsNothing,
     );
-    expect(find.text('Hay una nueva versión de Vinabike ERP.'), findsOneWidget);
-    expect(find.text('Actualizar'), findsOneWidget);
+    expect(find.text('Versión 1.0.2'), findsOneWidget);
+    expect(
+      find.text('Hay una nueva versión de Vinabike ERP.'),
+      findsNothing,
+    );
+    expect(find.text('Instalar'), findsOneWidget);
+    expect(
+      tester
+          .getSize(
+            find.byKey(const ValueKey('android-update-ready-prompt')),
+          )
+          .height,
+      lessThanOrEqualTo(84),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('install and dismiss actions keep their canonical callbacks',
+      (tester) async {
+    final service = await pumpPrompt(
+      tester,
+      release: release(notes: releaseNotes()),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('android-update-primary-button')),
+    );
+    await tester.pump();
+    expect(service.installCalls, 1);
+
+    await tester.tap(
+      find.byKey(const ValueKey('android-update-dismiss-button')),
+    );
+    await tester.pump();
+    expect(service.dismissCalls, 1);
+    expect(
+      find.byKey(const ValueKey('android-update-ready-prompt')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('download progress expands only while the action is active',
+      (tester) async {
+    await pumpPrompt(
+      tester,
+      release: release(notes: releaseNotes()),
+      isDownloading: true,
+      downloadProgress: 0.42,
+      statusMessage: 'Descargando actualización…',
+    );
+
+    final install = find.byKey(
+      const ValueKey('android-update-primary-button'),
+    );
+    final progress = tester.widget<LinearProgressIndicator>(
+      find.byType(LinearProgressIndicator),
+    );
+    expect(find.text('Descargando…'), findsOneWidget);
+    expect(tester.widget<FilledButton>(install).onPressed, isNull);
+    expect(
+      find.byKey(const ValueKey('android-update-dismiss-button')),
+      findsNothing,
+    );
+    expect(progress.value, 0.42);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('installation failure stays recoverable in the same prompt',
+      (tester) async {
+    final service = await pumpPrompt(
+      tester,
+      release: release(notes: releaseNotes()),
+      installThrows: true,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('android-update-primary-button')),
+    );
+    await tester.pump();
+
+    expect(
+      find.text('No se pudo preparar la actualización.'),
+      findsOneWidget,
+    );
+    expect(find.text('Reintentar'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey('android-update-primary-button')),
+    );
+    await tester.pump();
+    expect(service.installCalls, 2);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('stays bounded across the responsive width matrix',
+      (tester) async {
+    await pumpPrompt(tester, release: release(notes: releaseNotes()));
+
+    const widths = <double>[384, 599, 600, 899, 900, 1440];
+    for (final width in widths) {
+      tester.view.physicalSize = Size(width, width == 1440 ? 900 : 824);
+      await tester.pump();
+
+      final prompt = find.byKey(
+        const ValueKey('android-update-ready-prompt'),
+      );
+      expect(tester.getSize(prompt).width, lessThanOrEqualTo(440));
+      expect(
+        tester
+            .getSize(
+              find.byKey(
+                const ValueKey('android-update-whats-new-button'),
+              ),
+            )
+            .height,
+        greaterThanOrEqualTo(48),
+      );
+      expect(
+        tester
+            .getSize(
+              find.byKey(
+                const ValueKey('android-update-primary-button'),
+              ),
+            )
+            .height,
+        greaterThanOrEqualTo(48),
+      );
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('adapts to larger text and the bottom safe area', (tester) async {
+    const viewport = Size(384, 824);
+    await pumpPrompt(
+      tester,
+      release: release(notes: releaseNotes()),
+      size: viewport,
+      textScale: 1.5,
+      bottomInset: 24,
+    );
+
+    final prompt = find.byKey(
+      const ValueKey('android-update-ready-prompt'),
+    );
+    expect(tester.getSize(prompt).height, lessThan(160));
+    expect(
+      viewport.height - tester.getBottomRight(prompt).dy,
+      greaterThanOrEqualTo(36),
+    );
+    expect(
+      tester
+          .getSize(
+            find.byKey(const ValueKey('android-update-primary-button')),
+          )
+          .height,
+      greaterThanOrEqualTo(48),
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -230,18 +428,31 @@ void main() {
 }
 
 class _FakeAndroidUpdateService extends AndroidUpdateService {
-  final AndroidReleaseManifest? release;
-  final String? checkError;
+  AndroidReleaseManifest? release;
+  String? checkError;
   final int checkFailureCount;
+  final bool downloadInProgress;
+  final double? currentDownloadProgress;
+  final String? currentStatusMessage;
+  final bool installThrows;
+  bool dismissed = false;
   var installCalls = 0;
+  var dismissCalls = 0;
   final List<bool> checkForces = [];
 
   _FakeAndroidUpdateService(
     this.release, {
     String? errorMessage,
     int consecutiveCheckFailures = 0,
+    bool isDownloading = false,
+    double? downloadProgress,
+    String? statusMessage,
+    this.installThrows = false,
   })  : checkError = errorMessage,
-        checkFailureCount = consecutiveCheckFailures;
+        checkFailureCount = consecutiveCheckFailures,
+        downloadInProgress = isDownloading,
+        currentDownloadProgress = downloadProgress,
+        currentStatusMessage = statusMessage;
 
   @override
   bool get isSupported => true;
@@ -250,10 +461,13 @@ class _FakeAndroidUpdateService extends AndroidUpdateService {
   bool get isChecking => false;
 
   @override
-  bool get isDownloading => false;
+  bool get isDownloading => downloadInProgress;
 
   @override
-  AndroidReleaseManifest? get availableUpdate => release;
+  double? get downloadProgress => currentDownloadProgress;
+
+  @override
+  AndroidReleaseManifest? get availableUpdate => dismissed ? null : release;
 
   @override
   String? get errorMessage => checkError;
@@ -262,7 +476,7 @@ class _FakeAndroidUpdateService extends AndroidUpdateService {
   int get consecutiveCheckFailures => checkFailureCount;
 
   @override
-  String? get statusMessage => null;
+  String? get statusMessage => currentStatusMessage;
 
   @override
   Future<void> checkForUpdate({bool force = false}) async {
@@ -272,8 +486,17 @@ class _FakeAndroidUpdateService extends AndroidUpdateService {
   @override
   Future<void> installAvailableUpdate() async {
     installCalls += 1;
+    if (installThrows) {
+      checkError = 'No se pudo preparar la actualización.';
+      notifyListeners();
+      throw StateError('Synthetic installation failure.');
+    }
   }
 
   @override
-  void dismissAvailableUpdate() {}
+  void dismissAvailableUpdate() {
+    dismissCalls += 1;
+    dismissed = true;
+    notifyListeners();
+  }
 }

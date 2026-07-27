@@ -3,6 +3,7 @@ import '../../../shared/services/database_service.dart';
 import '../models/account.dart';
 import '../models/journal_entry.dart';
 import 'chart_of_accounts_service.dart';
+import 'financial_projection_refresh_coordinator.dart';
 import 'journal_entry_service.dart';
 
 class AccountingService extends ChangeNotifier {
@@ -14,10 +15,16 @@ class AccountingService extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
 
-  AccountingService(this._databaseService) {
+  AccountingService(
+    this._databaseService, {
+    FinancialProjectionRefreshCoordinator? financialProjectionRefresh,
+  }) {
     _chartOfAccountsService = ChartOfAccountsService(_databaseService);
-    _journalEntryService =
-        JournalEntryService(_databaseService, _chartOfAccountsService);
+    _journalEntryService = JournalEntryService(
+      _databaseService,
+      _chartOfAccountsService,
+      financialProjectionRefresh: financialProjectionRefresh,
+    );
 
     // Listen to changes
     _chartOfAccountsService.addListener(_notifyListeners);

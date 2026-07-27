@@ -16,6 +16,21 @@ import '../../sales/widgets/sales_invoice_editor.dart'; // Import Invoice Editor
 import '../widgets/tasks_tab_view.dart'; // Import Tasks Tab
 import 'smart_job_details_editor.dart'; // Import Smart Editor
 
+/// Parent-owned calendar browsing context.
+///
+/// Jobs keeps this object alive while the operator switches modes or opens an
+/// inline workspace, so the selected date and month are not reset to today.
+class PegasCalendarSession {
+  PegasCalendarSession({
+    DateTime? selectedDate,
+    DateTime? focusedMonth,
+  })  : selectedDate = selectedDate ?? DateTime.now(),
+        focusedMonth = focusedMonth ?? selectedDate ?? DateTime.now();
+
+  DateTime selectedDate;
+  DateTime focusedMonth;
+}
+
 /// Shared calendar widget for displaying mechanic jobs
 /// Used by both WorkshopCalendarPage and PegasTablePage calendar tab
 class PegasCalendarWidget extends StatefulWidget {
@@ -26,6 +41,8 @@ class PegasCalendarWidget extends StatefulWidget {
 
   /// Callback when data needs to be refreshed (for external data mode)
   final VoidCallback? onRefreshNeeded;
+  final bool? useCompactLayout;
+  final PegasCalendarSession? session;
 
   const PegasCalendarWidget({
     super.key,
@@ -33,6 +50,8 @@ class PegasCalendarWidget extends StatefulWidget {
     this.customers,
     this.bikes,
     this.onRefreshNeeded,
+    this.useCompactLayout,
+    this.session,
   });
 
   @override
@@ -40,8 +59,11 @@ class PegasCalendarWidget extends StatefulWidget {
 }
 
 class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
-  DateTime _selectedDate = DateTime.now();
-  DateTime _focusedMonth = DateTime.now();
+  late final PegasCalendarSession _localSession;
+  late DateTime _selectedDate;
+  late DateTime _focusedMonth;
+
+  PegasCalendarSession get _session => widget.session ?? _localSession;
 
   // Internal data (used when no external data provided)
   List<MechanicJob> _internalJobs = [];
@@ -83,6 +105,9 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
   @override
   void initState() {
     super.initState();
+    _localSession = PegasCalendarSession();
+    _selectedDate = _session.selectedDate;
+    _focusedMonth = _session.focusedMonth;
     _bikeBrandController = TextEditingController();
     _bikeModelController = TextEditingController();
     _bikeSerialController = TextEditingController();
@@ -456,7 +481,9 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 900) {
+        final useCompactLayout =
+            widget.useCompactLayout ?? constraints.maxWidth < 900;
+        if (useCompactLayout) {
           return _buildCompactCalendar(constraints);
         }
         return _buildDesktopCalendar();
@@ -636,6 +663,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                 setState(() {
                   _focusedMonth =
                       DateTime(_focusedMonth.year, _focusedMonth.month - 1);
+                  _session.focusedMonth = _focusedMonth;
                 });
               },
             ),
@@ -659,6 +687,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                 setState(() {
                   _focusedMonth =
                       DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+                  _session.focusedMonth = _focusedMonth;
                 });
               },
             ),
@@ -684,6 +713,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
               setState(() {
                 _focusedMonth =
                     DateTime(_focusedMonth.year, _focusedMonth.month - 1);
+                _session.focusedMonth = _focusedMonth;
               });
             },
           ),
@@ -700,6 +730,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
               setState(() {
                 _focusedMonth =
                     DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+                _session.focusedMonth = _focusedMonth;
               });
             },
           ),
@@ -771,6 +802,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                         onTap: () {
                           setState(() {
                             _selectedDate = date;
+                            _session.selectedDate = date;
                             _selectedJob = null;
                             _detailLoadGeneration++;
                           });
@@ -843,6 +875,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                                         onTap: () async {
                                           setState(() {
                                             _selectedDate = date;
+                                            _session.selectedDate = date;
                                             _selectedJob = job;
                                             _loadingDetails = true;
                                           });

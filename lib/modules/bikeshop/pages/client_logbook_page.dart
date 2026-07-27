@@ -8,6 +8,8 @@ import 'package:provider/provider.dart';
 
 import '../../../modules/crm/models/crm_models.dart';
 import '../../../shared/models/tax_treatment.dart';
+import '../../../shared/services/current_user_profile_service.dart';
+import '../../../shared/services/user_management_navigation.dart';
 import '../../../shared/utils/responsive_viewport.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -1144,6 +1146,9 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
 
   @override
   Widget build(BuildContext context) {
+    final canManageUsers =
+        context.watch<CurrentUserProfileService>().profile?.canManageUsers ==
+            true;
     return MainLayout(
       title: _customer?.name ?? 'Historial del Cliente',
       onBackPressed: () => context.pop(),
@@ -1169,7 +1174,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
                 )
               : _customer == null
                   ? const Center(child: Text('Cliente no encontrado'))
-                  : _buildContent(),
+                  : _buildContent(canManageUsers: canManageUsers),
     );
   }
 
@@ -1177,10 +1182,11 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   // MAIN LAYOUT
   // ─────────────────────────────────────────────
 
-  Widget _buildContent() {
+  Widget _buildContent({required bool canManageUsers}) {
     return ClientLogbookResponsiveFrame(
-      desktopIdentity: _buildLeftPanel(),
-      compactIdentity: _buildCompactClientSummary(),
+      desktopIdentity: _buildLeftPanel(canManageUsers: canManageUsers),
+      compactIdentity:
+          _buildCompactClientSummary(canManageUsers: canManageUsers),
       content: _buildRightPanel(),
     );
   }
@@ -1189,7 +1195,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   // LEFT PANEL  (compact identity card + stats)
   // ─────────────────────────────────────────────
 
-  Widget _buildLeftPanel() {
+  Widget _buildLeftPanel({required bool canManageUsers}) {
     final theme = Theme.of(context);
     final c = _customer!;
     final totalJobs = _jobs.length;
@@ -1335,13 +1341,32 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
                 label: const Text('Editar Cliente'),
               ),
             ),
+            if (canManageUsers) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
+                  onPressed: () => UserManagementNavigation.open(
+                    context,
+                    audience: UserManagementAudience.customers,
+                    target: UserManagementTarget.customer,
+                    targetId: c.id,
+                  ),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                  ),
+                  icon: const Icon(Icons.manage_accounts_outlined, size: 18),
+                  label: const Text('Gestionar acceso web'),
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildCompactClientSummary() {
+  Widget _buildCompactClientSummary({required bool canManageUsers}) {
     final theme = Theme.of(context);
     final customer = _customer!;
     final activeJobs = _jobs
@@ -1481,6 +1506,25 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
               ),
             ],
           ),
+          if (canManageUsers) ...[
+            const SizedBox(height: 4),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton.icon(
+                onPressed: () => UserManagementNavigation.open(
+                  context,
+                  audience: UserManagementAudience.customers,
+                  target: UserManagementTarget.customer,
+                  targetId: customer.id,
+                ),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 48),
+                ),
+                icon: const Icon(Icons.manage_accounts_outlined, size: 18),
+                label: const Text('Gestionar acceso web'),
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -21,6 +21,13 @@ void main() {
     expect(uri.queryParameters, isNot(contains('openRequest')));
   });
 
+  test('an openRequest-only route collapses to its canonical path', () {
+    expect(
+      workspaceRouteIdentity('/settings/users?openRequest=request-a'),
+      '/settings/users',
+    );
+  });
+
   test('repeated notification requests reuse one workspace identity', () {
     final manager = WorkspaceManager();
 

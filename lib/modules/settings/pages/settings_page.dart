@@ -35,26 +35,27 @@ class _SettingsPageState extends State<SettingsPage> {
         description: 'Datos del negocio, horarios y acceso del entorno.',
         icon: Icons.apartment_rounded,
         color: colorScheme.primary,
-        entries: const [
-          _SettingsEntry(
+        entries: [
+          const _SettingsEntry(
             icon: Icons.business_center_outlined,
             title: 'Datos de empresa',
             subtitle: 'Razon social, RUT, giro, contacto y direccion',
             route: '/settings/company',
           ),
-          _SettingsEntry(
+          const _SettingsEntry(
             icon: Icons.schedule_outlined,
             title: 'Horario de atencion',
             subtitle: 'Semana laboral, tienda y nominas',
             route: '/settings/business-hours',
           ),
-          _SettingsEntry(
-            icon: Icons.people_outline,
-            title: 'Usuarios y roles',
-            subtitle: 'Invitaciones, permisos y estado de acceso',
-            route: '/settings/users',
-          ),
-          _SettingsEntry(
+          if (profile?.canManageUsers == true)
+            const _SettingsEntry(
+              icon: Icons.people_outline,
+              title: 'Usuarios y roles',
+              subtitle: 'Invitaciones, permisos y estado de acceso',
+              route: '/settings/users',
+            ),
+          const _SettingsEntry(
             icon: Icons.palette_outlined,
             title: 'Apariencia',
             subtitle: 'Tema, logo e icono de inicio',

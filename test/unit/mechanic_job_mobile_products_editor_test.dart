@@ -22,15 +22,24 @@ void main() {
       'Widget _buildPartsSection()',
       'Widget _buildMobilePartsSection',
     );
-    expect(responsiveEntry, contains('constraints.maxWidth < 600'));
+    expect(
+      responsiveEntry,
+      contains('MechanicJobResponsivePolicy.usesCompactComposition('),
+    );
+    expect(
+      responsiveEntry,
+      contains('ResponsiveViewport.widthOf(context)'),
+    );
     expect(responsiveEntry, contains('return _buildMobilePartsSection(theme)'));
     expect(
-      responsiveEntry.indexOf('constraints.maxWidth < 600'),
+      responsiveEntry.indexOf(
+        'MechanicJobResponsivePolicy.usesCompactComposition(',
+      ),
       lessThan(responsiveEntry.indexOf('SingleChildScrollView')),
-      reason:
-          'The mobile editor must bypass the horizontally scrolling desktop '
-          'table without freezing one desktop width as the contract.',
+      reason: 'Phone and tablet must bypass the horizontally scrolling desktop '
+          'table using the root viewport class.',
     );
+    expect(responsiveEntry, isNot(contains('constraints.maxWidth < 600')));
 
     final mobileEditor = _section(
       source,
@@ -76,15 +85,13 @@ void main() {
 
     final narrowForm = _section(
       source,
-      'final customerSection = _buildSectionCard(',
+      'final customerSection = KeyedSubtree(',
       "title: 'Adjuntos'",
     );
     expect(
       narrowForm,
-      contains(
-          'final prioritizesRequestedWorkbench = widget.isInlineWorkspace'),
+      contains('widget.isInlineWorkspace && widget.jobId != null'),
     );
-    expect(narrowForm, contains("widget.initialTab == 'products'"));
     expect(narrowForm, contains('if (prioritizesRequestedWorkbench)'));
     expect(
       narrowForm,
@@ -97,7 +104,7 @@ void main() {
       narrowForm.indexOf('workbenchSection,'),
       lessThan(narrowForm.indexOf('customerSection,', 1)),
       reason:
-          'The Ítems entry must land on its requested workbench before context.',
+          'An existing inline job must land on its workbench before context.',
     );
 
     final commercialNotice = _section(

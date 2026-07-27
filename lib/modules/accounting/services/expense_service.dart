@@ -10,11 +10,17 @@ import '../models/expense_link.dart';
 import '../models/expense_line.dart';
 import '../models/expense_payment.dart';
 import '../models/expense_template.dart';
+import 'financial_projection_refresh_coordinator.dart';
 
 class ExpenseService extends ChangeNotifier {
-  ExpenseService(this._databaseService);
+  ExpenseService(
+    this._databaseService, {
+    FinancialProjectionRefreshCoordinator? financialProjectionRefresh,
+  }) : _financialProjectionRefresh = financialProjectionRefresh ??
+            FinancialProjectionRefreshCoordinator.fallback;
 
   final DatabaseService _databaseService;
+  final FinancialProjectionRefreshCoordinator _financialProjectionRefresh;
   final SupabaseClient _client = Supabase.instance.client;
 
   bool _isLoading = false;
@@ -32,6 +38,21 @@ class ExpenseService extends ChangeNotifier {
   List<Expense> get expenses => _expenses;
   List<ExpenseCategory> get categories => _categories;
   List<ExpenseTemplate> get templates => _templates;
+
+  void _recordFinancialChange(
+    FinancialProjectionChangeKind kind, {
+    String? entityId,
+    String? tenantId,
+  }) {
+    _financialProjectionRefresh.recordCommitted(
+      FinancialProjectionChange(
+        kind: kind,
+        origin: FinancialProjectionChangeOrigin.localCommit,
+        entityId: entityId,
+        tenantId: tenantId,
+      ),
+    );
+  }
 
   Future<List<Expense>> fetchExpenses({bool forceRefresh = false}) async {
     if (_expensesLoaded && !forceRefresh) {
@@ -290,6 +311,11 @@ class ExpenseService extends ChangeNotifier {
     try {
       if (expense.id != null && expense.id!.isNotEmpty) {
         final saved = await _saveExistingExpenseAtomically(expense);
+        _recordFinancialChange(
+          FinancialProjectionChangeKind.expense,
+          entityId: saved.id,
+          tenantId: saved.tenantId,
+        );
         await fetchExpenses(forceRefresh: true);
         notifyListeners();
         return await _hydrateExpense(saved);
@@ -310,6 +336,11 @@ class ExpenseService extends ChangeNotifier {
           params: {'p_expense_id': saved.id},
         );
       }
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.expense,
+        entityId: saved.id,
+        tenantId: saved.tenantId,
+      );
 
       // Payments are handled via dedicated endpoints to maintain audit trail.
       // Attachments are managed separately as well.
@@ -515,6 +546,10 @@ class ExpenseService extends ChangeNotifier {
       }
 
       await _databaseService.delete('expenses', id);
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.expense,
+        entityId: id,
+      );
       await fetchExpenses(forceRefresh: true);
       notifyListeners();
     } catch (e) {
@@ -527,6 +562,10 @@ class ExpenseService extends ChangeNotifier {
       final result = await _databaseService.update('expenses', id, {
         'posting_status': 'posted',
       });
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.expense,
+        entityId: id,
+      );
       await fetchExpenses(forceRefresh: true);
       notifyListeners();
       return await _hydrateExpense(Expense.fromJson(result));
@@ -540,6 +579,10 @@ class ExpenseService extends ChangeNotifier {
       final result = await _databaseService.update('expenses', id, {
         'posting_status': 'draft',
       });
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.expense,
+        entityId: id,
+      );
       await fetchExpenses(forceRefresh: true);
       notifyListeners();
       return await _hydrateExpense(Expense.fromJson(result));
@@ -553,6 +596,10 @@ class ExpenseService extends ChangeNotifier {
       final result = await _databaseService.update('expenses', id, {
         'payment_status': 'paid',
       });
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.expense,
+        entityId: id,
+      );
       await fetchExpenses(forceRefresh: true);
       notifyListeners();
       return await _hydrateExpense(Expense.fromJson(result));
@@ -565,6 +612,10 @@ class ExpenseService extends ChangeNotifier {
     try {
       final payload = payment.toJson(includeIdentifier: false);
       final stored = await _databaseService.insert('expense_payments', payload);
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.expensePayment,
+        entityId: stored['id']?.toString() ?? payment.expenseId,
+      );
       await fetchExpenses(forceRefresh: true);
       notifyListeners();
       return ExpensePayment.fromJson(stored);
@@ -576,6 +627,10 @@ class ExpenseService extends ChangeNotifier {
   Future<void> deletePayment(String paymentId) async {
     try {
       await _databaseService.delete('expense_payments', paymentId);
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.expensePayment,
+        entityId: paymentId,
+      );
       await fetchExpenses(forceRefresh: true);
       notifyListeners();
     } catch (e) {

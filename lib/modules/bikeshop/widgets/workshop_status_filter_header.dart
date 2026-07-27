@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Compact presentation for the canonical workshop status-filter mode.
+/// Shared presentation for the canonical workshop status-filter mode.
 ///
 /// The caller remains the owner of the selected statuses and include/exclude
 /// mode. The exclusion toggle appears only when there is a selection to invert.
@@ -14,9 +14,8 @@ class WorkshopStatusFilterHeader extends StatelessWidget {
   });
 
   static const operatorKey =
-      ValueKey<String>('workshop-mobile-status-filter-operator');
-  static const clearKey =
-      ValueKey<String>('workshop-mobile-status-filter-clear');
+      ValueKey<String>('workshop-status-filter-operator');
+  static const clearKey = ValueKey<String>('workshop-status-filter-clear');
 
   final bool excludeMode;
   final bool canClear;

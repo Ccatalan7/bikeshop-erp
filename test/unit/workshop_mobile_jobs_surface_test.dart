@@ -272,6 +272,12 @@ void main() {
     }
     expect(commandDock, contains('_buildMobileWorkloadSummary(theme)'));
     expect(commandDock, contains('_buildMobileFiltersButton(theme)'));
+    expect(
+      commandDock,
+      contains('flex: 12'),
+      reason: 'The view selector needs enough compact width to show Calendario '
+          'without truncating the label.',
+    );
     expect(table, contains('workshop-mobile-workload-summary'));
     expect(table, contains('workshop-mobile-filters'));
   });
@@ -468,6 +474,7 @@ void main() {
       'workshop-mobile-inline-job',
       'workshop-mobile-inline-items',
       'workshop-mobile-inline-invoice',
+      'workshop-mobile-inline-payment',
       'workshop-mobile-inline-pdf',
       'workshop-mobile-inline-back',
       'workshop-mobile-inline-loading',
@@ -493,7 +500,7 @@ void main() {
     expect(inlineWorkspace, contains("initialTab: 'products'"));
     expect(
       RegExp(r'isEmbedded: true').allMatches(inlineWorkspace),
-      hasLength(2),
+      hasLength(3),
     );
     expect(
       RegExp(r'isInlineWorkspace: true').allMatches(inlineWorkspace),
@@ -506,7 +513,7 @@ void main() {
     expect(
       RegExp(r'onCanceled: _closeMobileInlineSurface')
           .allMatches(inlineWorkspace),
-      hasLength(2),
+      hasLength(3),
     );
 
     expect(inlineWorkspace, contains('SalesInvoiceEditor('));
@@ -518,12 +525,18 @@ void main() {
       inlineWorkspace,
       contains('onCloseRequested: _closeMobileInlineSurface'),
     );
+    expect(
+      inlineWorkspace,
+      contains(
+        'onRegisterPaymentRequested: _handleMobileInlinePaymentRequested',
+      ),
+    );
 
     expect(jobForm, contains('final bool isInlineWorkspace;'));
     expect(jobForm, contains("'isInlineWorkspace requires isEmbedded.'"));
     expect(jobForm, contains("ValueKey('mechanic-job-inline-back')"));
     expect(jobForm, contains("ValueKey('mechanic-job-inline-save')"));
-    expect(jobForm, contains('widget.onCanceled!()'));
+    expect(jobForm, contains('widget.onCanceled?.call()'));
     expect(jobForm, contains('widget.onSaved!()'));
     final inlineHeader = _section(
       jobForm,
@@ -576,7 +589,122 @@ void main() {
     expect(saveFlow, contains('_loadData(forceInvoiceRefresh: true)'));
   });
 
-  test('inline job editor confirms only real unsaved draft disposal', () {
+  test(
+      'inline invoice payment keeps cancel in place and refreshes once on success',
+      () {
+    final routeFlow = _section(
+      table,
+      'Future<bool> _openInvoicePayment',
+      'Future<void> _openInvoicePreview',
+    );
+    expect(
+      routeFlow,
+      contains(
+        "context.push<bool>('/sales/invoices/\$invoiceId/payment')",
+      ),
+    );
+    expect(routeFlow, contains('return mounted && didRegisterPayment;'));
+    expect(
+      routeFlow,
+      isNot(contains('_markNeedsRefresh()')),
+      reason: 'The explicit successful return owns the only Jobs refresh.',
+    );
+
+    final moreActionsPaymentFlow = _section(
+      table,
+      'Future<void> _registerInvoicePayment',
+      'Future<void> _openInvoicePreview',
+    );
+    expect(
+      moreActionsPaymentFlow,
+      contains('if (!didRegisterPayment || !mounted) return;'),
+    );
+    expect(
+      RegExp(r'_loadData\(forceInvoiceRefresh: true\)')
+          .allMatches(moreActionsPaymentFlow),
+      hasLength(1),
+    );
+
+    final inlinePaymentFlow = _section(
+      table,
+      'Future<void> _handleMobileInlinePaymentRequested',
+      'List<Bike> _linkedBikesForJob',
+    );
+    expect(
+      inlinePaymentFlow,
+      contains('surface: _MobileWorkshopSurface.payment'),
+    );
+    expect(inlinePaymentFlow, contains('invoice: invoice'));
+    expect(
+      inlinePaymentFlow,
+      isNot(contains('_openInvoicePayment')),
+      reason:
+          'The inline invoice must keep its mounted Jobs owner while paying.',
+    );
+    expect(
+      inlinePaymentFlow,
+      contains('surface: _MobileWorkshopSurface.invoice'),
+      reason: 'Cancel or system Back must restore the inline invoice.',
+    );
+    expect(inlinePaymentFlow, contains('_mobileWorkshopWorkspace = null'));
+    expect(
+      RegExp(r'_loadData\(forceInvoiceRefresh: true\)')
+          .allMatches(inlinePaymentFlow),
+      hasLength(1),
+      reason: 'A completed payment must trigger one authoritative refresh.',
+    );
+
+    final paymentWorkspace = _section(
+      table,
+      'Widget _buildMobilePaymentWorkspace',
+      'Widget _buildMobileInlineUnavailable',
+    );
+    expect(
+      paymentWorkspace,
+      contains('WorkshopMobilePaymentWorkspace('),
+    );
+    expect(paymentWorkspace, contains('PaymentForm('));
+    expect(paymentWorkspace, contains('dismissOnSubmit: false'));
+    expect(
+      paymentWorkspace,
+      contains('onBack: _returnMobilePaymentToInvoice'),
+    );
+    expect(
+      paymentWorkspace,
+      contains('onCompleted: _handleMobilePaymentCompleted'),
+    );
+
+    final eligibility = _section(
+      invoiceEditor,
+      'bool get _canRequestPayment',
+      'Future<void> _requestPayment',
+    );
+    expect(eligibility, contains('onRegisterPaymentRequested != null'));
+    expect(eligibility, contains('_status != InvoiceStatus.paid'));
+    expect(eligibility, contains('_status != InvoiceStatus.cancelled'));
+    expect(eligibility, contains('_outstandingAmount > 0.01'));
+
+    final paymentAction = _section(
+      invoiceEditor,
+      'if (widget.isCompact && _canRequestPayment)',
+      '// 0. DOWNLOAD BUTTON',
+    );
+    expect(
+      paymentAction,
+      contains("ValueKey('invoice-editor-register-payment')"),
+    );
+    expect(paymentAction, contains("Text('Registrar abono')"));
+    expect(paymentAction, contains('minimumSize: const Size(48, 48)'));
+    expect(paymentAction, contains('unawaited(_requestPayment())'));
+    expect(
+      paymentAction.indexOf("ValueKey('invoice-editor-register-payment')"),
+      lessThan(paymentAction.indexOf('widget.allowFullScreenExpansion')),
+      reason:
+          'The primary payment command must be visible before secondary actions.',
+    );
+  });
+
+  test('every job form host confirms only real unsaved draft disposal', () {
     final cancelFlow = _section(
       jobForm,
       'void _handleCancel()',
@@ -584,36 +712,40 @@ void main() {
     );
 
     expect(cancelFlow, contains('if (_isSaving) return;'));
-    expect(cancelFlow, contains('if (widget.isInlineWorkspace)'));
+    expect(cancelFlow, isNot(contains('if (widget.isInlineWorkspace)')));
     expect(cancelFlow, contains('_inlineDraftHasUnsavedChanges'));
     expect(
-      cancelFlow,
+      jobForm,
       contains("'mechanic-job-inline-discard-cancel'"),
     );
     expect(
-      cancelFlow,
+      jobForm,
       contains("'mechanic-job-inline-discard-confirm'"),
     );
+    expect(cancelFlow, contains('const MechanicJobDiscardDialog()'));
     expect(cancelFlow, contains('_buildInlineDraftFingerprint()'));
     expect(cancelFlow, contains("'bike_tabs'"));
     expect(cancelFlow, contains("'standalone_items'"));
     expect(cancelFlow, contains("'wizard_answers'"));
     expect(cancelFlow, contains('widget.onCanceled?.call();'));
+    expect(cancelFlow, contains('await _leaveRoutedForm();'));
+    expect(cancelFlow, contains('_allowRoutePop = true'));
     expect(
       RegExp(r'_captureInlineDraftBaseline\(\);').allMatches(jobForm),
       hasLength(2),
       reason: 'Load and successful save must each establish a clean baseline.',
     );
 
-    final embeddedHost = _section(
+    final guardedHost = _section(
       jobForm,
-      'if (widget.isEmbedded) {',
-      'return MainLayout(child: content);',
+      'final content = Form(',
+      'Widget _buildExistingJobLoadFailure',
     );
-    expect(embeddedHost, contains('if (!widget.isInlineWorkspace)'));
-    expect(embeddedHost, contains('return PopScope('));
-    expect(embeddedHost, contains('canPop: false'));
-    expect(embeddedHost, contains('_handleCancel();'));
+    expect(guardedHost, contains('final surface = widget.isEmbedded'));
+    expect(guardedHost, contains(': MainLayout(child: content)'));
+    expect(guardedHost, contains('return PopScope('));
+    expect(guardedHost, contains('canPop: _allowRoutePop'));
+    expect(guardedHost, contains('_handleCancel();'));
   });
 
   test('inline proposal preview builds a pure artifact and exports explicitly',
@@ -805,6 +937,45 @@ void main() {
     }
   });
 
+  test('desktop status filtering uses the shared exclusion intent', () {
+    final desktopStatusFilter = _section(
+      table,
+      'void _showStatusFilterMenu()',
+      'void _showColumnCustomizer()',
+    );
+
+    expect(desktopStatusFilter, contains('WorkshopStatusFilterHeader('));
+    expect(
+      desktopStatusFilter,
+      contains('excludeMode: _statusFilterExcludeMode'),
+    );
+    expect(
+      desktopStatusFilter,
+      contains('_statusFilterExcludeMode = value'),
+      reason: 'Desktop must retain the canonical include/exclude owner.',
+    );
+    expect(
+      desktopStatusFilter,
+      contains('_statusFilterExcludeMode = false'),
+      reason: 'Clearing selections must also clear the stale exclusion mode.',
+    );
+    expect(desktopStatusFilter, contains('_toggleCustomStatusFilter('));
+    expect(desktopStatusFilter, isNot(contains('SegmentedButton<bool>')));
+    expect(desktopStatusFilter, isNot(contains("Text('Es'")));
+    expect(desktopStatusFilter, isNot(contains("Text('No es'")));
+    expect(table, isNot(contains('Estado ≠')));
+    expect(table, contains('excluidos'));
+
+    final filterPipeline = _section(
+      table,
+      'void _applyFiltersAndSort()',
+      'bool _jobMatchesTestFilter',
+    );
+    expect(filterPipeline, contains('if (_statusFilterExcludeMode)'));
+    expect(filterPipeline, contains('if (isInFilter) return false'));
+    expect(filterPipeline, contains('if (!isInFilter) return false'));
+  });
+
   test('compact Gantt controls stack before the desktop row can overflow', () {
     final controlsStart = table.indexOf('Widget _buildTimelineControls()');
     final controlsEnd = table.indexOf(
@@ -818,7 +989,10 @@ void main() {
     expect(controls, contains('return LayoutBuilder('));
     expect(
       controls,
-      contains('constraints.maxWidth < ResponsiveViewport.desktopMin'),
+      contains('ResponsiveViewport.usesCompactShell(context)'),
+      reason:
+          'Gantt must inherit the root surface class instead of reclassifying '
+          'a desktop split-pane child as compact.',
     );
     expect(controls, contains('child: compact'));
     expect(controls, contains('Column('));
@@ -827,6 +1001,10 @@ void main() {
         table, contains('expandedInsets: expanded ? EdgeInsets.zero : null'));
     expect(table, contains('workshop-gantt-compact-controls'));
     expect(table, contains('workshop-gantt-horizontal-scroll'));
+    expect(table, contains('_ganttHorizontalOffset'));
+    expect(table, contains('_ganttVerticalOffset'));
+    expect(table, contains('_scheduleGanttScrollRestore();'));
+    expect(table, contains('_restoreGanttController('));
     expect(table, contains('minimumSize: const Size(48, 48)'));
     expect(
       table,
@@ -937,7 +1115,9 @@ void main() {
       board,
       contains('ResponsiveViewport.usesCompactShell(context)'),
     );
-    expect(board, contains('WorkshopBoardCompactView(groups: compactGroups)'));
+    expect(board, contains('WorkshopBoardCompactView('));
+    expect(board, contains('groups: compactGroups'));
+    expect(board, contains('session: _compactBoardSession'));
     expect(board, contains('_buildCompactBoardCard('));
     expect(board, contains("const Text('Cambiar estado')"));
     expect(

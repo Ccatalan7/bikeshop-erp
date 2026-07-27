@@ -215,7 +215,10 @@ class _FakeUserManagementService extends UserManagementService {
   final Map<String, dynamic> overview;
 
   @override
-  Future<Map<String, dynamic>> getIdentityOverview({String search = ''}) async {
+  Future<Map<String, dynamic>> getIdentityOverview({
+    String search = '',
+    String? customerId,
+  }) async {
     return overview;
   }
 }

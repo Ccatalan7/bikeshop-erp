@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
@@ -13,7 +14,7 @@ import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../sales/models/sales_models.dart';
 import '../../sales/services/sales_service.dart';
 import '../models/dashboard_metrics.dart';
-import '../services/accounting_service.dart';
+import '../services/financial_projection_refresh_coordinator.dart';
 import '../services/financial_reports_service.dart';
 
 enum _AccountingBasis { cash, accrual }
@@ -61,6 +62,24 @@ class _DashboardDateRange {
     required this.isDaily,
     required this.months,
   });
+}
+
+class _DashboardQuery {
+  const _DashboardQuery({
+    required this.basis,
+    required this.period,
+    required this.breakdownRange,
+    required this.projectionRevision,
+    required this.coordinator,
+    required this.tenantId,
+  });
+
+  final _AccountingBasis basis;
+  final String period;
+  final _ExpenseBreakdownRange breakdownRange;
+  final int projectionRevision;
+  final FinancialProjectionRefreshCoordinator coordinator;
+  final String? tenantId;
 }
 
 enum _IncomeDetailViewMode { transactions, days }
@@ -127,12 +146,21 @@ class _ExpenseBreakdownAggregate {
 }
 
 class AccountingDashboardSection extends StatefulWidget {
-  const AccountingDashboardSection({super.key});
+  const AccountingDashboardSection({
+    super.key,
+    this.refreshCoordinator,
+  });
 
-  /// Call this after making a sale/purchase to ensure dashboard shows fresh data
+  final FinancialProjectionRefreshCoordinator? refreshCoordinator;
+
+  /// Test/manual reset hook. Business writers publish through the financial
+  /// projection coordinator instead of importing this widget.
   static void invalidateCache() {
     _AccountingDashboardSectionState._cachedData = null;
     _AccountingDashboardSectionState._cacheTimestamp = null;
+    _AccountingDashboardSectionState._cachedProjectionRevision = null;
+    _AccountingDashboardSectionState._cachedCoordinator = null;
+    _AccountingDashboardSectionState._cachedTenantId = null;
   }
 
   @override
@@ -151,6 +179,11 @@ class _AccountingDashboardSectionState
   _DashboardPayload? _data;
   bool _isLoading = true;
   String? _error;
+  FinancialProjectionRefreshCoordinator? _refreshCoordinator;
+  StreamSubscription<FinancialProjectionRefreshSignal>? _refreshSubscription;
+  Future<void>? _activeRefresh;
+  bool _refreshPending = false;
+  bool _surfaceActive = true;
 
   // Static cache - persists across widget rebuilds
   static _DashboardPayload? _cachedData;
@@ -158,6 +191,9 @@ class _AccountingDashboardSectionState
   static String? _cachedPeriod;
   static _AccountingBasis? _cachedBasis;
   static _ExpenseBreakdownRange? _cachedBreakdownRange;
+  static int? _cachedProjectionRevision;
+  static FinancialProjectionRefreshCoordinator? _cachedCoordinator;
+  static String? _cachedTenantId;
   static const Duration _cacheDuration = Duration(minutes: 5);
 
   static const Map<String, int> _periodToMonths = {
@@ -190,25 +226,109 @@ class _AccountingDashboardSectionState
   @override
   void initState() {
     super.initState();
-    // Schedule initialization to avoid "setState during build" if service notifies listeners
+    // Keep the first frame lightweight, then start only the two read models
+    // actually rendered by this dashboard surface.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();
     });
   }
 
-  Future<void> _loadInitialData() async {
-    final accountingService = context.read<AccountingService>();
-    await accountingService.initialize();
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
 
+    final nextCoordinator = widget.refreshCoordinator ??
+        FinancialProjectionRefreshCoordinator.fallback;
+    _bindRefreshCoordinator(nextCoordinator);
+
+    final wasActive = _surfaceActive;
+    _surfaceActive = TickerMode.of(context);
+    if (!wasActive && _surfaceActive && _refreshPending) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _requestRefresh();
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AccountingDashboardSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _bindRefreshCoordinator(
+      widget.refreshCoordinator ??
+          FinancialProjectionRefreshCoordinator.fallback,
+    );
+  }
+
+  @override
+  void dispose() {
+    unawaited(_refreshSubscription?.cancel());
+    _refreshSubscription = null;
+    super.dispose();
+  }
+
+  void _bindRefreshCoordinator(
+    FinancialProjectionRefreshCoordinator coordinator,
+  ) {
+    if (identical(coordinator, _refreshCoordinator)) return;
+    final hadCoordinator = _refreshCoordinator != null;
+    unawaited(_refreshSubscription?.cancel());
+    _refreshCoordinator = coordinator;
+    _refreshSubscription = coordinator.signals.listen(
+      _onProjectionChanged,
+    );
+
+    if (!hadCoordinator) return;
+    AccountingDashboardSection.invalidateCache();
+    _refreshPending = true;
+    if (mounted) {
+      setState(() {
+        _data = null;
+        _isLoading = true;
+        _error = null;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _requestRefresh();
+      });
+    }
+  }
+
+  void _onProjectionChanged(FinancialProjectionRefreshSignal signal) {
+    if (signal.changes.contains(FinancialProjectionChangeKind.tenantScope)) {
+      // A prior tenant's projection must never remain visible while the new
+      // tenant is loading.
+      AccountingDashboardSection.invalidateCache();
+      if (mounted) {
+        setState(() {
+          _data = null;
+          _isLoading = true;
+          _error = null;
+        });
+      }
+    }
+    _refreshPending = true;
+    _requestRefresh();
+  }
+
+  void _loadInitialData() {
     if (!mounted) return;
+    if (!_surfaceActive) {
+      _refreshPending = true;
+      return;
+    }
 
+    final coordinator =
+        _refreshCoordinator ?? FinancialProjectionRefreshCoordinator.fallback;
+    final projectionRevision = coordinator.revision;
     // Check if we have valid cached data
     final isCacheValid = _cachedData != null &&
         _cacheTimestamp != null &&
         DateTime.now().difference(_cacheTimestamp!) < _cacheDuration &&
         _cachedPeriod == _selectedPeriod &&
         _cachedBasis == _basis &&
-        _cachedBreakdownRange == _breakdownRange;
+        _cachedBreakdownRange == _breakdownRange &&
+        _cachedProjectionRevision == projectionRevision &&
+        identical(_cachedCoordinator, coordinator) &&
+        _cachedTenantId == coordinator.tenantId;
 
     if (isCacheValid) {
       // Use cached data immediately - no network request!
@@ -219,7 +339,7 @@ class _AccountingDashboardSectionState
       });
     } else {
       // Need to fetch fresh data
-      _refreshData();
+      _requestRefresh();
     }
   }
 
@@ -228,7 +348,8 @@ class _AccountingDashboardSectionState
       setState(() {
         _basis = newValue;
       });
-      _refreshData();
+      _refreshPending = true;
+      _requestRefresh();
     }
   }
 
@@ -237,7 +358,8 @@ class _AccountingDashboardSectionState
       setState(() {
         _selectedPeriod = newValue;
       });
-      _refreshData();
+      _refreshPending = true;
+      _requestRefresh();
     }
   }
 
@@ -246,7 +368,8 @@ class _AccountingDashboardSectionState
       setState(() {
         _breakdownRange = newValue;
       });
-      _refreshData();
+      _refreshPending = true;
+      _requestRefresh();
     }
   }
 
@@ -382,70 +505,114 @@ class _AccountingDashboardSectionState
     ];
   }
 
-  Future<void> _refreshData({int retryCount = 0}) async {
+  void _requestRefresh() {
     if (!mounted) return;
+    if (!_surfaceActive) {
+      _refreshPending = true;
+      return;
+    }
+    if (_activeRefresh != null) {
+      _refreshPending = true;
+      return;
+    }
+
+    _refreshPending = false;
+    final refresh = _runRefresh();
+    _activeRefresh = refresh;
+    unawaited(
+      refresh.whenComplete(() {
+        if (!mounted) return;
+        _activeRefresh = null;
+        if (_refreshPending) {
+          _requestRefresh();
+        }
+      }),
+    );
+  }
+
+  Future<void> _runRefresh() async {
+    if (!mounted) return;
+    final coordinator =
+        _refreshCoordinator ?? FinancialProjectionRefreshCoordinator.fallback;
+    final query = _DashboardQuery(
+      basis: _basis,
+      period: _selectedPeriod,
+      breakdownRange: _breakdownRange,
+      projectionRevision: coordinator.revision,
+      coordinator: coordinator,
+      tenantId: coordinator.tenantId,
+    );
+
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
-    try {
-      final newData = await _fetchData();
-      if (mounted) {
-        // Update static cache
+    Object? finalError;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final newData = await _fetchData(query);
+        if (!mounted) return;
+
+        final queryStillCurrent = query.basis == _basis &&
+            query.period == _selectedPeriod &&
+            query.breakdownRange == _breakdownRange &&
+            identical(query.coordinator, _refreshCoordinator) &&
+            query.tenantId == _refreshCoordinator?.tenantId &&
+            query.projectionRevision == (_refreshCoordinator?.revision ?? 0);
+        if (!queryStillCurrent || !_surfaceActive) {
+          _refreshPending = true;
+          return;
+        }
+
         _cachedData = newData;
         _cacheTimestamp = DateTime.now();
-        _cachedPeriod = _selectedPeriod;
-        _cachedBasis = _basis;
-        _cachedBreakdownRange = _breakdownRange;
+        _cachedPeriod = query.period;
+        _cachedBasis = query.basis;
+        _cachedBreakdownRange = query.breakdownRange;
+        _cachedProjectionRevision = query.projectionRevision;
+        _cachedCoordinator = query.coordinator;
+        _cachedTenantId = query.tenantId;
 
         setState(() {
           _data = newData;
           _isLoading = false;
+          _error = null;
         });
-      }
-    } catch (e) {
-      // Auto-retry on HandshakeException (network not ready yet)
-      final errorStr = e.toString();
-      if (retryCount < 2 &&
-          (errorStr.contains('HandshakeException') ||
-              errorStr.contains('Connection terminated'))) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        if (mounted) {
-          _refreshData(retryCount: retryCount + 1);
-        }
         return;
-      }
-
-      if (mounted) {
-        setState(() {
-          _error = errorStr;
-          _isLoading = false;
-        });
+      } catch (error) {
+        finalError = error;
+        final errorText = error.toString();
+        final transient = errorText.contains('HandshakeException') ||
+            errorText.contains('Connection terminated');
+        if (!transient || attempt == 2) break;
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
       }
     }
+
+    if (!mounted) return;
+    final queryStillCurrent = query.basis == _basis &&
+        query.period == _selectedPeriod &&
+        query.breakdownRange == _breakdownRange &&
+        identical(query.coordinator, _refreshCoordinator) &&
+        query.tenantId == _refreshCoordinator?.tenantId &&
+        query.projectionRevision == (_refreshCoordinator?.revision ?? 0);
+    if (!queryStillCurrent || !_surfaceActive) {
+      _refreshPending = true;
+      return;
+    }
+    setState(() {
+      _error = finalError?.toString() ?? 'Error desconocido';
+      _isLoading = false;
+    });
   }
 
-  Future<_DashboardPayload> _fetchData() async {
+  Future<_DashboardPayload> _fetchData(_DashboardQuery query) async {
     final reportsService = context.read<FinancialReportsService>();
-    final isCashFlow = _basis == _AccountingBasis.cash;
+    final isCashFlow = query.basis == _AccountingBasis.cash;
     final now = DateTime.now();
-    final selectedRange = _dateRangeForPeriod(_selectedPeriod, now);
-
-    List<MonthlyIncomeExpensePoint> series;
-
-    if (selectedRange.isDaily) {
-      series = await reportsService.getIncomeExpenseDailyTimeseries(
-        startDate: selectedRange.start,
-        endDate: selectedRange.end,
-        isCashFlow: isCashFlow,
-      );
-    } else {
-      series = await reportsService.getIncomeExpenseTimeseries(
-        months: selectedRange.months,
-        isCashFlow: isCashFlow,
-      );
-    }
+    final selectedRange = _dateRangeForPeriod(query.period, now);
 
     // Breakdown Logic
     final currentMonthStart = DateTime(now.year, now.month);
@@ -454,7 +621,7 @@ class _AccountingDashboardSectionState
 
     DateTime breakdownStart;
     DateTime breakdownEnd;
-    switch (_breakdownRange) {
+    switch (query.breakdownRange) {
       case _ExpenseBreakdownRange.currentMonth:
         breakdownStart = currentMonthStart;
         breakdownEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
@@ -479,11 +646,30 @@ class _AccountingDashboardSectionState
         break;
     }
 
-    final breakdownDetails = await reportsService.getExpensePeriodDetails(
+    // These projections are independent. Start both before awaiting either so
+    // first paint costs the slower query, rather than the sum of both.
+    final Future<List<MonthlyIncomeExpensePoint>> seriesFuture =
+        selectedRange.isDaily
+            ? reportsService.getIncomeExpenseDailyTimeseries(
+                startDate: selectedRange.start,
+                endDate: selectedRange.end,
+                isCashFlow: isCashFlow,
+              )
+            : reportsService.getIncomeExpenseTimeseries(
+                months: selectedRange.months,
+                isCashFlow: isCashFlow,
+              );
+    final breakdownDetailsFuture = reportsService.getExpensePeriodDetails(
       startDate: breakdownStart,
       endDate: _exclusiveBreakdownEnd(breakdownEnd),
       isCashFlow: isCashFlow,
     );
+    final projections = await Future.wait<Object>([
+      seriesFuture,
+      breakdownDetailsFuture,
+    ]);
+    final series = projections[0] as List<MonthlyIncomeExpensePoint>;
+    final breakdownDetails = projections[1] as List<PeriodDetailItem>;
 
     final breakdown = _buildExpenseBreakdown(breakdownDetails);
 
@@ -504,13 +690,13 @@ class _AccountingDashboardSectionState
     return _DashboardPayload(
       series: series,
       expenseBreakdown: breakdown,
-      trailingLabel: _breakdownRange.label,
+      trailingLabel: query.breakdownRange.label,
       totalIncome: totalIncome,
       totalExpense: totalExpense,
       months: selectedRange.months,
       rangeStart: rangeStart,
       rangeEnd: rangeEnd,
-      breakdownRange: _breakdownRange,
+      breakdownRange: query.breakdownRange,
       breakdownStart: breakdownStart,
       breakdownEnd: breakdownEnd,
       breakdownTotal: breakdownTotal,
@@ -526,7 +712,7 @@ class _AccountingDashboardSectionState
       if (_error != null) {
         return _DashboardError(
           error: _error,
-          onRetry: _refreshData,
+          onRetry: _requestRefresh,
         );
       }
     }
@@ -534,14 +720,14 @@ class _AccountingDashboardSectionState
     // 2. Data loaded but empty series (rare if data exists)
     final data = _data;
     if (data != null && data.series.isEmpty && !_isLoading) {
-      return _DashboardEmpty(onRetry: _refreshData);
+      return _DashboardEmpty(onRetry: _requestRefresh);
     }
 
     // 3. Show content (or loading overlay if refreshing)
     // Safe because if _data is null here, we would have returned above unless error logic failed
     if (data == null) return const SizedBox.shrink();
 
-    return Stack(
+    final dashboard = Stack(
       children: [
         _DashboardContent(
           data: data,
@@ -550,7 +736,7 @@ class _AccountingDashboardSectionState
           selectedPeriod: _selectedPeriod,
           periodOptions: _periodOptions,
           onPeriodChanged: _onPeriodChanged,
-          onRefresh: _refreshData,
+          onRefresh: _requestRefresh,
           selectedBreakdownRange: _breakdownRange,
           breakdownOptions: _breakdownOptions,
           onBreakdownRangeChanged: _onBreakdownRangeChanged,
@@ -567,6 +753,16 @@ class _AccountingDashboardSectionState
                   Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
             ),
           ),
+      ],
+    );
+
+    if (_error == null) return dashboard;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _DashboardRefreshWarning(onRetry: _requestRefresh),
+        const SizedBox(height: 8),
+        dashboard,
       ],
     );
   }
@@ -702,6 +898,62 @@ class _DashboardError extends StatelessWidget {
   }
 }
 
+class _DashboardRefreshWarning extends StatelessWidget {
+  const _DashboardRefreshWarning({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      label:
+          'Los gráficos conservan los últimos datos válidos. No se pudo actualizar.',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.errorContainer.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Padding(
+          padding: const EdgeInsetsDirectional.only(
+            start: 14,
+            end: 4,
+            top: 4,
+            bottom: 4,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.sync_problem_outlined,
+                size: 18,
+                color: colors.onErrorContainer,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Datos sin actualizar. Conservamos la última lectura válida.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colors.onErrorContainer,
+                      ),
+                ),
+              ),
+              TextButton(
+                onPressed: onRetry,
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(48, 48),
+                ),
+                child: const Text('Reintentar'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DashboardEmpty extends StatelessWidget {
   final VoidCallback onRetry;
 
@@ -785,8 +1037,9 @@ class _DashboardContent extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 1080;
-        // Same fixed height for both cards to keep them aligned
-        const chartHeight = 400.0;
+        // The compact composition needs extra vertical room because its
+        // controls and summaries wrap instead of competing for touch width.
+        final chartHeight = constraints.maxWidth < 600 ? 520.0 : 400.0;
 
         final charts = isWide
             ? IntrinsicHeight(
@@ -3890,238 +4143,265 @@ class _ExpenseBreakdownCardState extends State<_ExpenseBreakdownCard> {
     final startLabel = DateFormat('dd MMM', 'es_CL').format(widget.rangeStart);
     final endLabel = DateFormat('dd MMM yyyy', 'es_CL').format(widget.rangeEnd);
     final rangeDescription = '${widget.rangeLabel} · $startLabel – $endLabel';
+    final title = Text(
+      widget.basis == _AccountingBasis.cash
+          ? 'Principales egresos de caja'
+          : 'Gastos principales',
+      style: Theme.of(context).textTheme.titleMedium,
+    );
+    final rangeSelector = SizedBox(
+      width: 180,
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<_ExpenseBreakdownRange>(
+          value: widget.breakdownRange,
+          isExpanded: true,
+          borderRadius: BorderRadius.circular(12),
+          onChanged: (value) {
+            if (value != null) {
+              widget.onRangeChanged(value);
+            }
+          },
+          items: widget.breakdownOptions
+              .map(
+                (option) => DropdownMenuItem<_ExpenseBreakdownRange>(
+                  value: option,
+                  child: Text(
+                    option.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                widget.basis == _AccountingBasis.cash
-                    ? 'Principales egresos de caja'
-                    : 'Gastos principales',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (constraints.maxWidth < 480) ...[
+            title,
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: rangeSelector,
             ),
-            DropdownButtonHideUnderline(
-              child: DropdownButton<_ExpenseBreakdownRange>(
-                value: widget.breakdownRange,
-                borderRadius: BorderRadius.circular(12),
-                onChanged: (value) {
-                  if (value != null) {
-                    widget.onRangeChanged(value);
-                  }
-                },
-                items: widget.breakdownOptions
-                    .map(
-                      (option) => DropdownMenuItem<_ExpenseBreakdownRange>(
-                        value: option,
-                        child: Text(option.label),
-                      ),
-                    )
-                    .toList(),
-              ),
+          ] else
+            Row(
+              children: [
+                Expanded(child: title),
+                rangeSelector,
+              ],
             ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          rangeDescription,
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: Theme.of(context).hintColor),
-        ),
-        const SizedBox(height: 20),
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Pie chart section - LEFT SIDE
-              Expanded(
-                flex: 3,
-                child: Center(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final size = math.min(
-                              constraints.maxWidth, constraints.maxHeight) *
-                          0.85;
-                      return SizedBox(
-                        width: size,
-                        height: size,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            PieChart(
-                              PieChartData(
-                                sectionsSpace: 3,
-                                centerSpaceRadius: size * 0.35,
-                                sections: [
-                                  for (var i = 0; i < widget.items.length; i++)
-                                    PieChartSectionData(
-                                      value: widget.items[i].displayAmount,
-                                      color: palette[i],
-                                      radius: i == _touchedIndex
-                                          ? size * 0.26
-                                          : size * 0.25,
-                                      title: '',
-                                      badgeWidget: i == _touchedIndex
-                                          ? Container(
-                                              constraints: const BoxConstraints(
-                                                  maxWidth: 100),
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 6,
-                                                      vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: Colors.white,
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: Colors.black
-                                                        .withValues(
-                                                            alpha: 0.15),
-                                                    blurRadius: 6,
-                                                    offset: const Offset(0, 2),
-                                                  ),
-                                                ],
-                                              ),
-                                              child: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Text(
-                                                    widget.items[i].accountName,
-                                                    style: const TextStyle(
-                                                      fontSize: 10,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Colors.black87,
+          const SizedBox(height: 4),
+          Text(
+            rangeDescription,
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: Theme.of(context).hintColor),
+          ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Pie chart section - LEFT SIDE
+                Expanded(
+                  flex: 3,
+                  child: Center(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final size = math.min(
+                                constraints.maxWidth, constraints.maxHeight) *
+                            0.85;
+                        return SizedBox(
+                          width: size,
+                          height: size,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              PieChart(
+                                PieChartData(
+                                  sectionsSpace: 3,
+                                  centerSpaceRadius: size * 0.35,
+                                  sections: [
+                                    for (var i = 0;
+                                        i < widget.items.length;
+                                        i++)
+                                      PieChartSectionData(
+                                        value: widget.items[i].displayAmount,
+                                        color: palette[i],
+                                        radius: i == _touchedIndex
+                                            ? size * 0.26
+                                            : size * 0.25,
+                                        title: '',
+                                        badgeWidget: i == _touchedIndex
+                                            ? Container(
+                                                constraints:
+                                                    const BoxConstraints(
+                                                        maxWidth: 100),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black
+                                                          .withValues(
+                                                              alpha: 0.15),
+                                                      blurRadius: 6,
+                                                      offset:
+                                                          const Offset(0, 2),
                                                     ),
-                                                    textAlign: TextAlign.center,
-                                                    maxLines: 2,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                  Text(
-                                                    '${(widget.items[i].displayAmount / total * 100).toStringAsFixed(1)}%',
-                                                    style: const TextStyle(
-                                                      fontSize: 10,
-                                                      color: Colors.black54,
+                                                  ],
+                                                ),
+                                                child: Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      widget
+                                                          .items[i].accountName,
+                                                      style: const TextStyle(
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Colors.black87,
+                                                      ),
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                      maxLines: 2,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
                                                     ),
-                                                  ),
-                                                ],
-                                              ),
-                                            )
-                                          : null,
-                                      badgePositionPercentageOffset: 0.75,
-                                    ),
-                                ],
-                                pieTouchData: PieTouchData(
-                                  touchCallback:
-                                      (FlTouchEvent event, pieTouchResponse) {
-                                    setState(() {
-                                      if (!event.isInterestedForInteractions ||
-                                          pieTouchResponse == null ||
-                                          pieTouchResponse.touchedSection ==
+                                                    Text(
+                                                      '${(widget.items[i].displayAmount / total * 100).toStringAsFixed(1)}%',
+                                                      style: const TextStyle(
+                                                        fontSize: 10,
+                                                        color: Colors.black54,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              )
+                                            : null,
+                                        badgePositionPercentageOffset: 0.75,
+                                      ),
+                                  ],
+                                  pieTouchData: PieTouchData(
+                                    touchCallback:
+                                        (FlTouchEvent event, pieTouchResponse) {
+                                      setState(() {
+                                        if (!event
+                                                .isInterestedForInteractions ||
+                                            pieTouchResponse == null ||
+                                            pieTouchResponse.touchedSection ==
+                                                null) {
+                                          _touchedIndex = -1;
+                                          return;
+                                        }
+                                        _touchedIndex = pieTouchResponse
+                                            .touchedSection!
+                                            .touchedSectionIndex;
+                                      });
+
+                                      if (event is FlTapUpEvent &&
+                                          pieTouchResponse != null &&
+                                          pieTouchResponse.touchedSection !=
                                               null) {
-                                        _touchedIndex = -1;
-                                        return;
+                                        final index = pieTouchResponse
+                                            .touchedSection!
+                                            .touchedSectionIndex;
+                                        if (index >= 0 &&
+                                            index < widget.items.length) {
+                                          _onSliceTapped(widget.items[index]);
+                                        }
                                       }
-                                      _touchedIndex = pieTouchResponse
-                                          .touchedSection!.touchedSectionIndex;
-                                    });
-
-                                    if (event is FlTapUpEvent &&
-                                        pieTouchResponse != null &&
-                                        pieTouchResponse.touchedSection !=
-                                            null) {
-                                      final index = pieTouchResponse
-                                          .touchedSection!.touchedSectionIndex;
-                                      if (index >= 0 &&
-                                          index < widget.items.length) {
-                                        _onSliceTapped(widget.items[index]);
-                                      }
-                                    }
-                                  },
+                                    },
+                                  ),
                                 ),
                               ),
-                            ),
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  widget.basis == _AccountingBasis.cash
-                                      ? 'EGRESOS'
-                                      : 'GASTOS',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 0.5,
-                                      ),
-                                ),
-                                Text(
-                                  widget.basis == _AccountingBasis.cash
-                                      ? 'DE CAJA'
-                                      : 'PRINCIPALES',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: Theme.of(context).hintColor,
-                                        fontSize: 10,
-                                      ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  currency.format(total.round()),
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              // Legend section - RIGHT SIDE
-              Expanded(
-                flex: 2,
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (var i = 0; i < widget.items.length; i++)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _ExpenseLegendRow(
-                            color: palette[i],
-                            accountCode: widget.items[i].accountCode,
-                            accountName: widget.items[i].accountName,
-                            amount: widget.items[i].displayAmount,
-                            total: total,
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    widget.basis == _AccountingBasis.cash
+                                        ? 'EGRESOS'
+                                        : 'GASTOS',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 0.5,
+                                        ),
+                                  ),
+                                  Text(
+                                    widget.basis == _AccountingBasis.cash
+                                        ? 'DE CAJA'
+                                        : 'PRINCIPALES',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(context).hintColor,
+                                          fontSize: 10,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    currency.format(total.round()),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                        ),
-                    ],
+                        );
+                      },
+                    ),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 16),
+                // Legend section - RIGHT SIDE
+                Expanded(
+                  flex: 2,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (var i = 0; i < widget.items.length; i++)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _ExpenseLegendRow(
+                              color: palette[i],
+                              accountCode: widget.items[i].accountCode,
+                              accountName: widget.items[i].accountName,
+                              amount: widget.items[i].displayAmount,
+                              total: total,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

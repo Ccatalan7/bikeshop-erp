@@ -80,11 +80,13 @@ String workspaceRouteIdentity(String route) {
       if (entry.key != 'openRequest')
         entry.key: entry.value.length == 1 ? entry.value.single : entry.value,
   };
-  return uri
-      .replace(
-        queryParameters: durableParameters.isEmpty ? null : durableParameters,
-      )
-      .toString();
+  if (durableParameters.isEmpty) {
+    return uri
+        .replace(query: '')
+        .toString()
+        .replaceFirst(RegExp(r'\?(?=#|$)'), '');
+  }
+  return uri.replace(queryParameters: durableParameters).toString();
 }
 
 String buildBrowserWorkspaceRoute({

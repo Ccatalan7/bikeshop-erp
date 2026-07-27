@@ -49,6 +49,12 @@ work. Phone and tablet are still first-class product surfaces: every route that
 can be opened there must have an intentional, efficient, user-friendly
 composition.
 
+Operational priority does not make the current desktop widget visual or
+navigation authority. Apply the general guide's
+`Legacy consistency is not approval` rule before adapting a workflow: preserve
+canonical business behavior, remove shared or desktop debt that is in scope,
+then compose each viewport from the validated operating loop.
+
 Classify the available content width from real layout constraints, not from the
 operating-system name:
 
@@ -526,12 +532,25 @@ Every record must contain these exact fields:
 
 - **Problem observed:** A phone operator could see only about two ordinary Jobs
   records in the first viewport, record boundaries were weak, and reaching job
-  lines, invoices, or proposal documents replaced the list context.
+  lines, invoices, or proposal documents replaced the list context. Deeper
+  inspection then exposed page-sized branded loaders inside individual
+  bicycle fields, a permanently expanded technical-context block before the
+  operative job fields, payment navigation that discarded the inline invoice,
+  and multi-bicycle actions that could reopen the primary bicycle instead of
+  the one the operator selected. The embedded job editor also inherited
+  desktop-sized section flow: some workbench tabs were difficult to reach,
+  diagnosis led with a large diagram instead of findings, validation could
+  leave the responsible field off-screen, and Back could discard a real draft.
 - **Cause:** Desktop fields and secondary detail were stacked into permanently
   tall cards; visual restraint was interpreted as a flat monochrome wireframe;
   direct actions delegated to routed/desktop inspectors instead of a compact
   host composition; and a responsive branch could otherwise unmount a dirty
-  child when its constraints crossed the desktop threshold.
+  child when its constraints crossed the desktop threshold. Generic page
+  loaders were also reused as field placeholders, desktop context summaries
+  were mounted without a phone disclosure, nested tasks escaped through the
+  router, and a job-level primary relation was treated as if it identified
+  every clicked related row. The editor breakpoint and scroll behavior were
+  owned by inner sections rather than one compact workbench contract.
 - **Approved pattern:** Use one compact tonal record surface with identity,
   interactive state, primary object, date/financial exception, and a labelled
   direct-action rail in the first read. Put narrative, lifecycle timing, and
@@ -544,8 +563,27 @@ Every record must contain these exact fields:
   exists, reveal a clearly labelled contextual toggle beside that choice group
   instead of forcing abstract query vocabulary into a permanent control. Keep
   that inline child mounted across breakpoint changes until save, cancel, or
-  confirmed discard resolves the draft. Within the tablet product class, Jobs
-  uses its documented `720px` content exception:
+  confirmed discard resolves the draft. A related object opens directly when
+  unambiguous; multiple objects use a touch-safe labelled selector and pass the
+  exact selected identity into the same embedded canonical editor. A field
+  awaiting reference data keeps field-sized geometry and announces that local
+  loading state instead of inserting a page loader. On phone, technical
+  context begins as identity plus the first actionable exception and a count;
+  the full context and existing commands expand in place. Its canonical bike
+  editor uses a dedicated phone/tablet section composition and keeps one
+  labelled return control reachable from every section; that control returns
+  to the immediate list host instead of delegating to browser history. A
+  nested canonical task such as invoice payment becomes another inline
+  workspace state: Back
+  returns to its immediate parent editor, while success returns to the list and
+  refreshes once. The embedded job workbench owns one compact composition
+  through `899px`, with complete `General`, `Diagnóstico`, and `Ítems` tabs.
+  Diagnosis begins with the selected system and editable findings; the bicycle
+  diagram is a labelled disclosure. Validation selects and scrolls to the
+  section that owns the error, while Back/cancel guard a dirty draft in routed
+  and embedded hosts. At increased text scale, bounded selections elide safely
+  and peer action groups reflow rather than clip. Within the tablet product
+  class, Jobs uses its documented `720px` content exception:
   `600-719px` keeps one compact column, while `720-899px` pairs the same cards
   in two columns so tablet width improves scanning instead of stretching a
   phone card. Both variants retain the same scroll owner and actions.
@@ -557,10 +595,18 @@ Every record must contain these exact fields:
   semantics; mechanically copying database-style operator labels when a clear
   action phrase communicates the same rule; or stretching a single phone card
   across a wide tablet and leaving its decision content stranded at opposite
-  edges.
+  edges. Do not use a full-page branded loader inside a single field, repeat a
+  desktop chip wall before the actual task, route a nested step so cancel loses
+  its parent editor, infer a clicked related record from the job primary key,
+  hide text-scaled controls behind a horizontal overflow, hide editor sections
+  behind inherited desktop scroll offsets, lead diagnosis with a decorative
+  diagram, or let Back dispose a dirty embedded draft.
 - **Reference implementation:**
   `lib/modules/bikeshop/pages/pegas_table_page.dart`,
   `lib/modules/bikeshop/widgets/workshop_status_filter_header.dart`,
+  `lib/modules/bikeshop/widgets/workshop_mobile_bike_chooser.dart`,
+  `lib/modules/bikeshop/widgets/workshop_mobile_payment_workspace.dart`,
+  `lib/modules/bikeshop/pages/bike_form_dialog.dart`,
   `lib/modules/bikeshop/pages/mechanic_job_form_page.dart`, and
   `lib/modules/sales/widgets/sales_invoice_editor.dart`.
 - **Minimum test:** At `384x824`, prove at least three ordinary collapsed
@@ -573,7 +619,101 @@ Every record must contain these exact fields:
   `719/720`, including an odd record count and an expanded card, cross
   `899/900` with a dirty draft still mounted and guarded, run increased text
   scale/semantics, and verify the `1440x900` desktop regression with no layout
-  or runtime exceptions.
+  or runtime exceptions. Delay bicycle brand/model futures and prove each
+  placeholder retains field height; select the second of multiple linked
+  bicycles and prove that exact aggregate editor opens; navigate that editor to
+  a later technical section and use its visible return control to restore the
+  immediate Jobs host; expand/collapse job context; exercise all three
+  job-workbench tabs, validation focus, diagnosis disclosure, dirty
+  Back/cancel, text scale, keyboard, and SafeArea at the same width matrix; and
+  exercise Factura → abono → Back, proving Back restores the invoice and only
+  successful completion refreshes the Jobs owner.
+
+### Task queues choose their own collection archetype
+
+- **Problem observed:** The compact Tasks view rendered every task as a tall,
+  bordered card with repeated red treatment and form-like metadata. Only about
+  three tasks were scannable in the first phone viewport, even though the
+  operator's dominant loop is to scan, complete, and spot timing exceptions.
+- **Cause:** “Mobile” was treated as synonymous with “cards”, and the existing
+  desktop controls were treated as visual precedent before auditing the task's
+  operating loop. Atomic task rows and secondary edit controls therefore
+  received equal visual weight.
+- **Approved pattern:** Choose list, row, card, pane, or another container only
+  after identifying scan frequency, comparison needs, action frequency, and
+  record complexity. For this task queue, use one grouped task-manager list:
+  completion, title, and the timing exception own the collapsed row; state,
+  priority, date, assignment, attachments, links, and destructive actions open
+  through a labelled inline disclosure. Preserve expanded rows, filters,
+  search, and scroll in the parent session. Desktop and compact presentations
+  reuse the same `TaskService` commands and theme roles, but either composition
+  may remove or redefine legacy visual debt independently.
+- **Anti-pattern:** Assuming every compact collection needs cards; copying a
+  desktop table or its outdated dropdown hierarchy without re-evaluating it;
+  wrapping each atomic task in a bordered block; using a full-record error
+  border for one overdue date; or repeating accent color on every disclosure
+  label.
+- **Reference implementation:**
+  `lib/modules/bikeshop/widgets/pegas_tasks_widget.dart`.
+- **Minimum test:** At `384x824`, prove eight ordinary collapsed task rows are
+  fully visible after real host chrome; exercise completion and the labelled
+  disclosure; edit status, priority, date, assignment, attachments, links, and
+  actions through touch targets of at least 48px; preserve expanded state,
+  search, filters, and scroll across a mode round trip; run increased text
+  scale plus `599/600`, `899/900`, and `1440x900`; and verify that desktop still
+  invokes the same canonical commands without inheriting compact-only layout.
+
+### Identity workspaces expose purpose before completeness
+
+- **Problem observed:** The self-profile rendered identity, employment,
+  access, permissions, and security as one long information dump, while user
+  administration led with a branded banner, dashboard-like metric blocks,
+  repeated chips, and a wall of peer actions. On compact widths, the operator
+  could not quickly distinguish audience, selected identity, current access
+  state, and the next valid action. Contextual links could also open the
+  generic administration route and silently select the first unrelated record.
+- **Cause:** The UI was composed from the response payload and a component
+  catalog instead of the identity decision being made. Decorative containers
+  carried hierarchy that the information architecture did not, desktop
+  selection state was mistaken for navigation identity, and no transient route
+  contract named the exact staff, customer, invitation, or workforce target.
+- **Approved pattern:** Keep one compact identity summary and expose one
+  clearly labelled profile section at a time, preserving drafts and the
+  authoritative read model across section and breakpoint changes. Treat user
+  administration as a searchable audience-and-identity workflow: integrate
+  useful counts into audience navigation, make the current state and next valid
+  action clear, group permissions behind a labelled disclosure, and separate
+  destructive access changes from ordinary maintenance. At `>=900px`, use a
+  master-detail split only because repeated identity comparison and successive
+  administration benefit from keeping the filtered collection visible; below
+  `900px`, use an in-page list → detail transition with a labelled return and
+  preserved search, audience, selection, and scroll. A contextual handoff
+  carries an exact opaque target through a one-use request, keeps personally
+  identifying data out of the URL, fetches a CRM-only customer when needed,
+  and reports an unavailable target instead of falling back to another row.
+  This is a validated identity-workspace composition, not a universal
+  split-pane rule. Tooltips may clarify secondary consequences on pointer
+  surfaces, but visible labels and inline context must carry the decision.
+- **Anti-pattern:** A hero or KPI row before ordinary identity work; one card,
+  chip, icon square, or button per payload field; exposing every profile
+  section simultaneously; squeezing list and detail together on phone;
+  selecting the first record when a deep-link target is missing; putting names
+  or email addresses in navigation state; using tooltips as the only
+  explanation; or copying the desktop split into an unrelated settings page
+  without repeated comparison evidence.
+- **Reference implementation:** `lib/shared/pages/my_profile_page.dart`,
+  `lib/modules/settings/pages/user_management_page.dart`,
+  `lib/shared/services/user_management_navigation.dart`, and
+  `lib/modules/bikeshop/pages/client_logbook_page.dart`.
+- **Minimum test:** Exercise the profile and user-management routes at
+  `384x824`, `599/600`, `899/900`, and `1440x900`. Prove 48px targets,
+  increased text scale, semantics, keyboard/SafeArea behavior, profile-section
+  draft preservation, and explicit dirty Back handling. Verify user-management
+  access denial performs no overview request; audience/search/selection/scroll
+  survive list → detail → list; desktop keeps the filtered master while
+  changing detail; exact staff and CRM-only customer handoffs select only their
+  requested identities; a missing target never selects the first row; and
+  loading, empty, filtered-empty, error, and retry states remain explicit.
 
 ### Compact application chrome and tool workspaces
 
@@ -643,6 +783,106 @@ Every record must contain these exact fields:
   scrolled/expanded Jobs list through `899/900` and back without a transient
   empty reload, preserving route, filters, scroll, disclosure, and dirty inline
   state with no overflow, clipping, layout, or semantics exception.
+
+### Live projections refresh without replacing the workspace
+
+- **Problem observed:** The Dashboard's first financial charts appeared late
+  and could remain stale after a confirmed sale or expense. Once immediate
+  refresh was added, the loaded phone composition overflowed even though an
+  earlier startup test had passed.
+- **Cause:** Independent projections were awaited serially after unrelated
+  accounting initialization, and a time-based cache had no post-commit
+  invalidation owner. Direct Postgres Changes were not a safe substitute:
+  financial publication coverage was partial, `DELETE` cannot be filtered by
+  tenant, and one legacy invoice policy widened SELECT beyond the active
+  tenant. Legacy tenantless source rows also could not map to any private
+  invalidation topic. The compact chart used desktop-height assumptions, while
+  its startup fixture disposed the phone surface before delayed data completed,
+  so it tested the loader rather than the real payload.
+- **Approved pattern:** Start independent visible projections together and
+  publish one coherent snapshot. After a canonical writer receives durable
+  acknowledgement, send a typed invalidation hint to the read-model owner;
+  coalesce transaction-related hints and rebuild only the affected projection
+  surface. Preserve the last valid content under restrained progress, keep it
+  after refresh failure with an explicit retry, defer hidden work, and perform
+  one process-scoped bounded revalidation on foreground resume. For
+  cross-device freshness, publish only minimal event metadata through one
+  private Broadcast topic derived from the durable row's tenant; authorize
+  subscription against the authenticated tenant, cover parent and direct
+  child projection sources, and make stale prior-tenant callbacks inert.
+  Every source row must own an explicit tenant enforced by the database;
+  historical rows may be backfilled only from an authoritative, unambiguous
+  relation, and the migration must fail closed otherwise.
+  Realtime is an additive invalidation path: canonical writers, queries and
+  persisted effects remain shared with desktop. Clear visible data and cache
+  across every related panel before awaiting old-channel teardown or starting
+  a tenant-scope reload. A foreground resume retries a channel that failed
+  before creation while still issuing only one bounded projection
+  revalidation. That transport retry reuses the current scope generation and
+  must never supersede an authoritative tenant resolution already in flight;
+  teardown failures are contained rather than escaping from provider disposal.
+  Size the compact loaded composition from its actual controls and summaries,
+  not from the loader or desktop card.
+- **Anti-pattern:** Reloading the route or full application after a business
+  command; replacing valid charts with a page-sized spinner; polling
+  aggressively; making a projection widget the mutation notifier; assuming
+  cache TTL alone provides freshness; subscribing clients directly to
+  sensitive financial rows when a payload-minimal invalidation is sufficient;
+  trusting a client tenant filter without auditing effective RLS; treating
+  unfilterable deletes or partial source coverage as live parity; querying
+  while the app is paused; allowing a tenantless financial source to bypass
+  topic derivation; or declaring mobile safe from a screenshot/skeleton
+  test that never resolves its data futures.
+- **Reference implementation:**
+  `lib/modules/accounting/services/financial_projection_refresh_coordinator.dart`,
+  `lib/modules/accounting/services/financial_projection_realtime_transport.dart`,
+  `lib/modules/accounting/widgets/accounting_dashboard_section.dart`, and
+  `lib/shared/widgets/strategic_dashboard_deck.dart`, with database ownership
+  in
+  `supabase/migrations/20260726164000_enable_tenant_financial_projection_broadcast.sql`
+  plus its forward authorization correction
+  `supabase/migrations/20260726170500_fix_financial_projection_broadcast_authorization.sql`
+  and tenant-source invariant
+  `supabase/migrations/20260726174500_enforce_sales_invoice_tenant_scope.sql`.
+- **Minimum test:** Resolve representative chart payloads at `384x824`,
+  `599/600`, `899/900`, and `1440x900`, including increased text scale, and
+  assert no overflow, clipping, or layout exception. Prove independent startup
+  reads begin together; one confirmed change and its duplicates produce one
+  background refetch; old content remains during loading and failure; retry
+  recovers; hidden/disposed surfaces do not race; foreground resume is bounded;
+  and a tenant switch removes the prior snapshot before the next one appears,
+  even while old-channel cancellation is deliberately stalled. Exercise
+  private-topic authorization, every registered trigger, a real source-row
+  event, failed-setup resume retry, contained teardown failure, stale-callback
+  rejection, reconnect/resume revalidation, and a pending tenant switch that
+  wins over a foreground retry of the previous tenant. Assert source tenant IDs
+  are non-null and schema-enforced. Verify an in-place remote refresh that
+  preserves route and widget state on phone and desktop.
+
+### Global Android update prompts reveal detail on demand
+
+- **Problem observed:** The first installed Android update prompt covered too
+  much of the phone workspace because the full release summary was rendered
+  inside a global bottom overlay.
+- **Cause:** The passive alert duplicated content already available through
+  `Novedades`, making every release narrative part of the persistent prompt
+  height.
+- **Approved pattern:** Use one compact bottom bar with the version,
+  a text-first `Novedades` target, `Instalar`, and a dismiss target. Open the
+  existing grouped dialog for the full summary. Expand the bar only while
+  download progress, permission guidance, or an actionable error needs room,
+  and preserve SafeArea plus 48px targets throughout.
+- **Anti-pattern:** Rendering the full release narrative in a passive global
+  overlay; hiding install or notes behind an unlabelled icon; stacking a
+  failure SnackBar over the bottom prompt; or adding widget-local dismissal
+  state that competes with the update service.
+- **Reference implementation:**
+  `lib/shared/widgets/android_update_prompt.dart`.
+- **Minimum test:** At `384x824`, keep the idle prompt at or below `84px`,
+  prove the release summary remains absent until `Novedades` is selected, and
+  verify install, dismiss, download progress, and recoverable failure. Repeat
+  layout checks at `599/600`, `899/900`, and `1440x900`, then cover increased
+  text scale and bottom SafeArea without overflow or sub-48px targets.
 
 ## Definition of done
 

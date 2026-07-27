@@ -9,8 +9,8 @@ import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/models/product.dart' show PurchaseTreatment;
 import '../../../shared/models/tax_treatment.dart';
+import '../../accounting/services/financial_projection_refresh_coordinator.dart';
 import '../../accounting/services/accounting_service.dart';
-import '../../accounting/widgets/accounting_dashboard_section.dart';
 import '../models/sales_models.dart';
 
 @immutable
@@ -58,11 +58,17 @@ class SalesService extends ChangeNotifier {
   static const _paymentsCollection = 'sales_payments';
 
   SalesService(
-      this._databaseService, this._accountingService, this._tenantService);
+    this._databaseService,
+    this._accountingService,
+    this._tenantService, {
+    FinancialProjectionRefreshCoordinator? financialProjectionRefresh,
+  }) : _financialProjectionRefresh = financialProjectionRefresh ??
+            FinancialProjectionRefreshCoordinator.fallback;
 
   DatabaseService _databaseService;
   AccountingService _accountingService;
   final TenantService _tenantService;
+  final FinancialProjectionRefreshCoordinator _financialProjectionRefresh;
 
   RealtimeChannel? _invoiceChannel;
   RealtimeChannel? _paymentChannel;
@@ -93,6 +99,21 @@ class SalesService extends ChangeNotifier {
       _payments.isNotEmpty && _paymentsCacheTime != null;
   bool get isInvoicesCacheFresh => _isCacheValid(_invoicesCacheTime);
   bool get isPaymentsCacheFresh => _isCacheValid(_paymentsCacheTime);
+
+  void _recordFinancialChange(
+    FinancialProjectionChangeKind kind, {
+    String? entityId,
+    String? tenantId,
+  }) {
+    _financialProjectionRefresh.recordCommitted(
+      FinancialProjectionChange(
+        kind: kind,
+        origin: FinancialProjectionChangeOrigin.localCommit,
+        entityId: entityId,
+        tenantId: tenantId,
+      ),
+    );
+  }
 
   /// Non-blocking staff-sales warning. Database posting remains authoritative
   /// and records the exact negative balance in the normal movement/trace flow.
@@ -422,12 +443,16 @@ class SalesService extends ChangeNotifier {
         _justSavedInvoiceIds.removeWhere((key, value) =>
             DateTime.now().difference(value) > const Duration(seconds: 10));
       }
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.salesInvoice,
+        entityId: savedInvoice.id,
+        tenantId: savedInvoice.tenantId,
+      );
 
       await _accountingService.initialize();
       await _accountingService.journalEntries.loadJournalEntries();
 
       invalidateInvoicesCache();
-      AccountingDashboardSection.invalidateCache();
       notifyListeners();
       return savedInvoice;
     } catch (e) {
@@ -479,6 +504,11 @@ class SalesService extends ChangeNotifier {
     if (invoiceId == null || invoiceId.isEmpty) {
       throw StateError('El checkout no devolvió una factura válida.');
     }
+    _recordFinancialChange(
+      FinancialProjectionChangeKind.salesInvoice,
+      entityId: invoiceId,
+      tenantId: _tenantService.currentTenantId,
+    );
     invalidateInvoicesCache();
     invalidatePaymentsCache();
     final invoice = await fetchInvoice(invoiceId, refresh: true);
@@ -553,7 +583,11 @@ class SalesService extends ChangeNotifier {
       await _databaseService.delete(_invoicesCollection, invoiceId);
       _invoices.removeWhere((invoice) => invoice.id == invoiceId);
       invalidateInvoicesCache();
-      AccountingDashboardSection.invalidateCache();
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.salesInvoice,
+        entityId: invoiceId,
+        tenantId: _tenantService.currentTenantId,
+      );
       notifyListeners();
     } on PostgrestException catch (error) {
       if (error.code == '23514') {
@@ -684,6 +718,11 @@ class SalesService extends ChangeNotifier {
 
       final savedPayment = Payment.fromJson(result);
       _upsertPayment(savedPayment);
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.salesPayment,
+        entityId: savedPayment.id,
+        tenantId: savedPayment.tenantId,
+      );
 
       await fetchInvoice(savedPayment.invoiceId, refresh: true);
       await loadPayments(forceRefresh: true);
@@ -692,7 +731,6 @@ class SalesService extends ChangeNotifier {
 
       invalidatePaymentsCache();
       invalidateInvoicesCache(); // Invoice balance changes when payment added
-      AccountingDashboardSection.invalidateCache();
       notifyListeners();
       return savedPayment;
     } on PostgrestException catch (e) {
@@ -700,11 +738,15 @@ class SalesService extends ChangeNotifier {
         final existing = await _findPaymentByIdempotencyKey(payment);
         if (existing != null) {
           _upsertPayment(existing);
+          _recordFinancialChange(
+            FinancialProjectionChangeKind.salesPayment,
+            entityId: existing.id,
+            tenantId: existing.tenantId,
+          );
           await fetchInvoice(existing.invoiceId, refresh: true);
           await loadPayments(forceRefresh: true);
           invalidatePaymentsCache();
           invalidateInvoicesCache();
-          AccountingDashboardSection.invalidateCache();
           notifyListeners();
           return existing;
         }
@@ -756,13 +798,17 @@ class SalesService extends ChangeNotifier {
         Map<String, dynamic>.from(rawPayment),
       );
       _upsertPayment(savedPayment);
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.salesPayment,
+        entityId: savedPayment.id,
+        tenantId: savedPayment.tenantId,
+      );
       await fetchInvoice(savedPayment.invoiceId, refresh: true);
       await loadPayments(forceRefresh: true);
       await _accountingService.initialize();
       await _accountingService.journalEntries.loadJournalEntries();
       invalidateInvoicesCache();
       invalidatePaymentsCache();
-      AccountingDashboardSection.invalidateCache();
       notifyListeners();
       return savedPayment;
     } catch (e) {
@@ -827,7 +873,11 @@ class SalesService extends ChangeNotifier {
     _upsertPayment(result.payment);
     invalidateInvoicesCache();
     invalidatePaymentsCache();
-    AccountingDashboardSection.invalidateCache();
+    _recordFinancialChange(
+      FinancialProjectionChangeKind.salesPayment,
+      entityId: result.payment.id,
+      tenantId: result.payment.tenantId,
+    );
     notifyListeners();
 
     // The correction is already committed and acknowledged at this point.
@@ -921,11 +971,15 @@ class SalesService extends ChangeNotifier {
     try {
       await _databaseService.delete(_paymentsCollection, paymentId);
       _payments.removeWhere((payment) => payment.id == paymentId);
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.salesPayment,
+        entityId: paymentId,
+        tenantId: _tenantService.currentTenantId,
+      );
       await _accountingService.initialize();
       await _accountingService.journalEntries.loadJournalEntries();
       invalidatePaymentsCache();
       invalidateInvoicesCache(); // Invoice balance changes when payment deleted
-      AccountingDashboardSection.invalidateCache();
       notifyListeners();
     } catch (e) {
       throw Exception('No se pudo eliminar el pago.');
@@ -1045,6 +1099,11 @@ class SalesService extends ChangeNotifier {
 
       // GUARD: Mark this invoice as "just saved" to ignore stale realtime updates for 5s
       _justSavedInvoiceIds[invoiceId] = DateTime.now();
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.salesInvoice,
+        entityId: invoiceId,
+        tenantId: updated.tenantId,
+      );
 
       await _accountingService.initialize();
       await _accountingService.journalEntries.loadJournalEntries();

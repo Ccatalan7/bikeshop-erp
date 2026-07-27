@@ -2,11 +2,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import '../models/payroll_voucher.dart';
 import '../../../../shared/services/database_service.dart';
+import '../../accounting/services/financial_projection_refresh_coordinator.dart';
 
 class PayrollVoucherService extends ChangeNotifier {
   final DatabaseService _db;
+  final FinancialProjectionRefreshCoordinator _financialProjectionRefresh;
 
-  PayrollVoucherService(this._db);
+  PayrollVoucherService(
+    this._db, {
+    FinancialProjectionRefreshCoordinator? financialProjectionRefresh,
+  }) : _financialProjectionRefresh = financialProjectionRefresh ??
+            FinancialProjectionRefreshCoordinator.fallback;
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -548,7 +554,15 @@ class PayrollVoucherService extends ChangeNotifier {
         'p_notes': notes,
       },
     );
-    return result as String;
+    final advanceId = result as String;
+    _financialProjectionRefresh.recordCommitted(
+      FinancialProjectionChange(
+        kind: FinancialProjectionChangeKind.payroll,
+        origin: FinancialProjectionChangeOrigin.localCommit,
+        entityId: advanceId,
+      ),
+    );
+    return advanceId;
   }
 
   /// Updates a specific line (e.g., changing hours or payment method).
@@ -637,6 +651,13 @@ class PayrollVoucherService extends ChangeNotifier {
       }
 
       await _db.rpc('pay_payroll_voucher', params: params);
+      _financialProjectionRefresh.recordCommitted(
+        FinancialProjectionChange(
+          kind: FinancialProjectionChangeKind.payroll,
+          origin: FinancialProjectionChangeOrigin.localCommit,
+          entityId: voucherId,
+        ),
+      );
       invalidateVouchersCache();
     } catch (e) {
       _setError('Error paying voucher: $e');
@@ -651,6 +672,13 @@ class PayrollVoucherService extends ChangeNotifier {
     try {
       _setLoading(true);
       await _db.rpc('confirm_payroll_voucher', params: {'p_voucher_id': id});
+      _financialProjectionRefresh.recordCommitted(
+        FinancialProjectionChange(
+          kind: FinancialProjectionChangeKind.payroll,
+          origin: FinancialProjectionChangeOrigin.localCommit,
+          entityId: id,
+        ),
+      );
       invalidateVouchersCache();
     } catch (e) {
       _setError('Error confirming voucher: $e');
@@ -665,6 +693,13 @@ class PayrollVoucherService extends ChangeNotifier {
     try {
       _setLoading(true);
       await _db.rpc('revert_payroll_payment', params: {'p_voucher_id': id});
+      _financialProjectionRefresh.recordCommitted(
+        FinancialProjectionChange(
+          kind: FinancialProjectionChangeKind.payroll,
+          origin: FinancialProjectionChangeOrigin.localCommit,
+          entityId: id,
+        ),
+      );
       invalidateVouchersCache();
     } catch (e) {
       _setError('Error reverting payment: $e');
@@ -711,6 +746,13 @@ class PayrollVoucherService extends ChangeNotifier {
 
       // 5. Delete the voucher itself
       await _db.delete('payroll_vouchers', id);
+      _financialProjectionRefresh.recordCommitted(
+        FinancialProjectionChange(
+          kind: FinancialProjectionChangeKind.payroll,
+          origin: FinancialProjectionChangeOrigin.localCommit,
+          entityId: id,
+        ),
+      );
       invalidateVouchersCache();
     } catch (e) {
       _setError('Error deleting voucher: $e');
@@ -725,6 +767,13 @@ class PayrollVoucherService extends ChangeNotifier {
     try {
       _setLoading(true);
       await _db.rpc('revert_payroll_to_draft', params: {'p_voucher_id': id});
+      _financialProjectionRefresh.recordCommitted(
+        FinancialProjectionChange(
+          kind: FinancialProjectionChangeKind.payroll,
+          origin: FinancialProjectionChangeOrigin.localCommit,
+          entityId: id,
+        ),
+      );
       invalidateVouchersCache();
     } catch (e) {
       _setError('Error reverting to draft: $e');

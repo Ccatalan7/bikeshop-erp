@@ -8,6 +8,7 @@ void main() {
   Future<void> pumpBoard(
     WidgetTester tester, {
     required double width,
+    WorkshopBoardCompactSession? session,
   }) async {
     await tester.binding.setSurfaceSize(Size(width, 824));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -19,9 +20,10 @@ void main() {
             size: Size(width, 824),
             textScaler: const TextScaler.linear(1.3),
           ),
-          child: const Scaffold(
+          child: Scaffold(
             body: WorkshopBoardCompactView(
-              groups: [
+              session: session,
+              groups: const [
                 WorkshopBoardCompactGroup(
                   id: 'pending',
                   label: 'Pendiente',
@@ -96,6 +98,29 @@ void main() {
     expect(find.byKey(const ValueKey('pending-job')), findsNothing);
     expect(find.byKey(const ValueKey('active-job')), findsOneWidget);
     expect(find.byType(SingleChildScrollView), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('restores the parent-owned board group after remount',
+      (tester) async {
+    final session = WorkshopBoardCompactSession();
+    await pumpBoard(tester, width: 384, session: session);
+
+    await tester.tap(
+      find.byKey(const ValueKey('workshop-board-status-selector')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('En curso').last);
+    await tester.pumpAndSettle();
+
+    expect(session.selectedGroupId, 'active');
+    expect(find.byKey(const ValueKey('active-job')), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await pumpBoard(tester, width: 384, session: session);
+
+    expect(find.byKey(const ValueKey('active-job')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pending-job')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

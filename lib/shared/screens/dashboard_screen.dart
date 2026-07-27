@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../modules/accounting/services/financial_projection_refresh_coordinator.dart';
 import '../services/current_user_profile_navigation.dart';
 import '../services/current_user_profile_service.dart';
 import '../widgets/main_layout.dart';
@@ -101,7 +102,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             if (_showWelcomeBanner) const SizedBox(height: 32),
 
-            const StrategicDashboardDeck(),
+            StrategicDashboardDeck(
+              financialProjectionRefresh:
+                  context.read<FinancialProjectionRefreshCoordinator>(),
+            ),
 
             const SizedBox(height: 32),
 

@@ -316,10 +316,15 @@ class UserManagementService {
   final SupabaseClient _supabase = Supabase.instance.client;
   final TenantService _tenantService;
 
-  Future<Map<String, dynamic>> getIdentityOverview({String search = ''}) {
+  Future<Map<String, dynamic>> getIdentityOverview({
+    String search = '',
+    String? customerId,
+  }) {
     return _invokeAdmin<Map<String, dynamic>>({
       'action': 'overview',
       'search': search,
+      if (customerId?.trim().isNotEmpty == true)
+        'customerId': customerId!.trim(),
     });
   }
 

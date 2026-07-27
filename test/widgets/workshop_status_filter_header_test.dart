@@ -138,11 +138,35 @@ void main() {
 
     expect(clearRequests, 1);
   });
+
+  testWidgets(
+    'fits the real desktop popover content width at large text scale',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await _pumpHeader(
+        tester,
+        width: 1440,
+        contentWidth: 296,
+        textScale: 2,
+        canClear: true,
+      );
+
+      final operator = find.byKey(WorkshopStatusFilterHeader.operatorKey);
+      final clear = find.byKey(WorkshopStatusFilterHeader.clearKey);
+      expect(tester.getSize(operator).height, greaterThanOrEqualTo(48));
+      expect(tester.getSize(clear).height, greaterThanOrEqualTo(48));
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 Future<void> _pumpHeader(
   WidgetTester tester, {
   required double width,
+  double? contentWidth,
   double textScale = 1.3,
   ValueNotifier<bool>? excludeMode,
   ValueChanged<bool>? onChanged,
@@ -166,19 +190,22 @@ Future<void> _pumpHeader(
           alignment: Alignment.topCenter,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: ValueListenableBuilder<bool>(
-              valueListenable: owner,
-              builder: (context, value, _) {
-                return WorkshopStatusFilterHeader(
-                  excludeMode: value,
-                  canClear: canClear,
-                  onExcludeModeChanged: onChanged ??
-                      (next) {
-                        owner.value = next;
-                      },
-                  onClear: onClear ?? () {},
-                );
-              },
+            child: SizedBox(
+              width: contentWidth,
+              child: ValueListenableBuilder<bool>(
+                valueListenable: owner,
+                builder: (context, value, _) {
+                  return WorkshopStatusFilterHeader(
+                    excludeMode: value,
+                    canClear: canClear,
+                    onExcludeModeChanged: onChanged ??
+                        (next) {
+                          owner.value = next;
+                        },
+                    onClear: onClear ?? () {},
+                  );
+                },
+              ),
             ),
           ),
         ),

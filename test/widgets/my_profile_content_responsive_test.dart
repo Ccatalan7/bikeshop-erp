@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -38,6 +39,7 @@ void main() {
 
         await _pumpProfile(tester, service: service);
 
+        final semantics = tester.ensureSemantics();
         final scroll = find.byKey(const ValueKey('erp-profile-scroll'));
         expect(scroll, findsOneWidget);
         expect(
@@ -45,18 +47,20 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.byKey(const ValueKey('erp-profile-linked-employee')),
+          find.byKey(const ValueKey('erp-profile-identity-header')),
           findsOneWidget,
         );
         expect(
           find.byKey(
-            const ValueKey('erp-profile-permissions-disclosure'),
+            const ValueKey('erp-profile-section-body-personal'),
           ),
           findsOneWidget,
         );
         expect(
-          find.byKey(const ValueKey('erp-profile-change-password')),
-          findsOneWidget,
+          find.byKey(
+            const ValueKey('erp-profile-section-body-employment'),
+          ),
+          findsNothing,
         );
 
         final profileContext = tester.element(
@@ -67,21 +71,99 @@ void main() {
           closeTo(13, 0.001),
         );
 
-        final scrollLeft = tester.getTopLeft(scroll).dx;
+        final sectionContext = find.byKey(
+          const ValueKey('erp-profile-section-context'),
+        );
+        final sectionContent = find.byKey(
+          const ValueKey('erp-profile-section-content'),
+        );
         if (size.width >= 900) {
           expect(
-            scrollLeft,
-            greaterThanOrEqualTo(224),
-            reason: 'Desktop widths reserve space for the section navigator.',
+            tester.getTopLeft(sectionContent).dx,
+            greaterThan(tester.getTopLeft(sectionContext).dx + 250),
+            reason: 'Desktop uses a bounded context-plus-data composition.',
+          );
+          expect(
+            tester.getTopLeft(sectionContent).dy,
+            closeTo(tester.getTopLeft(sectionContext).dy, 0.01),
           );
         } else {
           expect(
-            scrollLeft,
-            closeTo(0, 0.01),
-            reason: 'Compact widths use the full content canvas.',
+            tester.getTopLeft(sectionContent).dy,
+            greaterThan(tester.getBottomLeft(sectionContext).dy),
+            reason: 'Tablet and phone keep one canonical content column.',
           );
         }
-        expect(tester.takeException(), isNull);
+
+        for (final section in const [
+          'personal',
+          'employment',
+          'access',
+          'security',
+        ]) {
+          final target = _sectionNav(section);
+          expect(target, findsOneWidget);
+          final targetSize = tester.getSize(target);
+          expect(targetSize.width, greaterThanOrEqualTo(48));
+          expect(targetSize.height, greaterThanOrEqualTo(48));
+        }
+        expect(
+          tester.getBottomRight(_sectionNav('security')).dy,
+          lessThanOrEqualTo(size.height),
+          reason:
+              'Every labelled profile section must be reachable in the first viewport.',
+        );
+        expect(
+          tester
+              .getSemantics(
+                find.bySemanticsLabel('Sección Datos personales'),
+              )
+              .flagsCollection
+              .isSelected,
+          Tristate.isTrue,
+        );
+        expect(
+          tester
+              .getSemantics(
+                find.byKey(
+                  const ValueKey('erp-profile-section-body-personal'),
+                ),
+              )
+              .label,
+          contains('Sección Datos personales seleccionada'),
+        );
+
+        await _tapProfileSection(tester, 'employment');
+        expect(
+          find.byKey(const ValueKey('erp-profile-linked-employee')),
+          findsOneWidget,
+        );
+        await _tapProfileSection(tester, 'access');
+        expect(
+          find.byKey(
+            const ValueKey('erp-profile-permissions-disclosure'),
+          ),
+          findsOneWidget,
+        );
+        await _tapProfileSection(tester, 'security');
+        expect(
+          find.byKey(const ValueKey('erp-profile-change-password')),
+          findsOneWidget,
+        );
+
+        expect(
+          tester.getTopLeft(scroll).dx,
+          closeTo(0, 0.01),
+          reason: 'No viewport reserves a permanent profile rail.',
+        );
+        try {
+          expect(
+            tester.takeException(),
+            isNull,
+          );
+        } finally {
+          semantics.dispose();
+        }
       },
     );
   }
@@ -93,6 +175,7 @@ void main() {
     addTearDown(service.dispose);
 
     await _pumpProfile(tester, service: service);
+    await _tapProfileSection(tester, 'access');
 
     final disclosure = find.byKey(
       const ValueKey('erp-profile-permissions-disclosure'),
@@ -145,6 +228,13 @@ void main() {
       expect(_textFieldValue(tester, phoneField), draftPhone);
       expect(navigationBlocked.last, isTrue);
 
+      await _tapProfileSection(tester, 'access');
+      expect(phoneField, findsNothing);
+      expect(
+        find.byKey(const ValueKey('erp-profile-section-body-access')),
+        findsOneWidget,
+      );
+
       for (final resized in const [
         Size(600, 824),
         Size(899, 824),
@@ -153,13 +243,16 @@ void main() {
         tester.view.physicalSize = resized;
         await tester.pumpAndSettle();
         expect(
-          _textFieldValue(tester, phoneField),
-          draftPhone,
-          reason: 'Responsive recomposition must not replace editor state.',
+          find.byKey(const ValueKey('erp-profile-section-body-access')),
+          findsOneWidget,
+          reason: 'Responsive recomposition must preserve active section.',
         );
         expect(navigationBlocked.last, isTrue);
         expect(tester.takeException(), isNull);
       }
+
+      await _tapProfileSection(tester, 'personal');
+      expect(_textFieldValue(tester, phoneField), draftPhone);
 
       final cancel = find.byKey(const ValueKey('erp-profile-cancel-contact'));
       await tester.ensureVisible(cancel);
@@ -183,6 +276,78 @@ void main() {
     },
   );
 
+  testWidgets('phone contact edit remains reachable above the virtual keyboard',
+      (tester) async {
+    _configureView(tester, const Size(384, 824));
+    addTearDown(() => tester.view.viewInsets = FakeViewPadding.zero);
+    final service = await _loadedService(_ProfileWidgetGateway());
+    addTearDown(service.dispose);
+
+    await _pumpProfile(tester, service: service);
+    final edit = find.byKey(const ValueKey('erp-profile-edit-contact'));
+    await tester.ensureVisible(edit);
+    await tester.tap(edit);
+    await tester.pumpAndSettle();
+
+    final emergencyPhone =
+        find.byKey(const ValueKey('erp-profile-emergency-phone'));
+    await tester.ensureVisible(emergencyPhone);
+    await tester.tap(emergencyPhone);
+    await tester.enterText(emergencyPhone, '+56 9 8765 4321');
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.pumpAndSettle();
+    final save = find.byKey(const ValueKey('erp-profile-save-contact'));
+    await tester.ensureVisible(save);
+    await tester.pumpAndSettle();
+
+    expect(save.hitTestable(), findsOneWidget);
+    expect(tester.getSize(save).height, greaterThanOrEqualTo(48));
+    expect(
+      tester.getBottomRight(save).dy,
+      lessThanOrEqualTo(524),
+      reason: 'The save action must remain above the 300px keyboard inset.',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('failed contact save keeps the inline draft and error',
+      (tester) async {
+    _configureView(tester, const Size(384, 824));
+    final gateway = _ProfileWidgetGateway()
+      ..contactUpdateError = StateError('network unavailable');
+    final service = await _loadedService(gateway);
+    addTearDown(service.dispose);
+    final navigationBlocked = <bool>[];
+
+    await _pumpProfile(
+      tester,
+      service: service,
+      onNavigationStateChanged: navigationBlocked.add,
+    );
+    final edit = find.byKey(const ValueKey('erp-profile-edit-contact'));
+    await tester.ensureVisible(edit);
+    await tester.tap(edit);
+    await tester.pumpAndSettle();
+
+    const draftPhone = '+56 9 2468 1357';
+    final phoneField = find.byKey(const ValueKey('erp-profile-contact-phone'));
+    await tester.enterText(phoneField, draftPhone);
+    final save = find.byKey(const ValueKey('erp-profile-save-contact'));
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('erp-profile-contact-save-error')),
+      findsOneWidget,
+    );
+    expect(_textFieldValue(tester, phoneField), draftPhone);
+    expect(navigationBlocked.last, isTrue);
+    expect(gateway.contactUpdateCalls, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('unlinked identity edit is protected by the dirty discard guard',
       (tester) async {
     _configureView(tester, const Size(384, 824));
@@ -200,10 +365,12 @@ void main() {
       onNavigationStateChanged: navigationBlocked.add,
     );
 
+    await _tapProfileSection(tester, 'employment');
     expect(
       find.byKey(const ValueKey('erp-profile-unlinked-employee')),
       findsOneWidget,
     );
+    await _tapProfileSection(tester, 'personal');
     final edit = find.byKey(const ValueKey('erp-profile-edit-display-name'));
     await tester.ensureVisible(edit);
     await tester.tap(edit);
@@ -272,6 +439,7 @@ void main() {
         resolveTenantId: () async => 'tenant-a',
       );
       await _pumpProfile(tester, service: service);
+      await _tapProfileSection(tester, 'security');
 
       final passwordAction = find.byKey(
         const ValueKey('erp-profile-change-password'),
@@ -474,6 +642,21 @@ Future<void> _pumpProfile(
   if (settle) await tester.pumpAndSettle();
 }
 
+Finder _sectionNav(String section) {
+  return find.byKey(ValueKey('erp-profile-section-nav-$section'));
+}
+
+Future<void> _tapProfileSection(
+  WidgetTester tester,
+  String section,
+) async {
+  final target = _sectionNav(section);
+  await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
+  await tester.tap(target);
+  await tester.pumpAndSettle();
+}
+
 String _textFieldValue(WidgetTester tester, Finder finder) {
   return tester.widget<TextFormField>(finder).controller!.text;
 }
@@ -494,6 +677,7 @@ class _ProfileWidgetGateway implements CurrentUserProfileGateway {
   final bool linkedEmployee;
   final Completer<Map<String, dynamic>>? pendingProfile;
   Object? profileError;
+  Object? contactUpdateError;
   int contactUpdateCalls = 0;
 
   Map<String, dynamic> get profileResponse => {
@@ -540,6 +724,8 @@ class _ProfileWidgetGateway implements CurrentUserProfileGateway {
     Map<String, dynamic> patch,
   ) async {
     contactUpdateCalls++;
+    final error = contactUpdateError;
+    if (error != null) throw error;
     final employee = _employeeResponse();
     for (final entry in patch.entries) {
       final responseKey = switch (entry.key) {

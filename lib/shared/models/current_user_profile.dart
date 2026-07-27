@@ -184,6 +184,7 @@ class CurrentUserProfile {
       employee?.status == 'active';
 
   bool get canManageUsers =>
+      role == 'owner' ||
       role == 'admin' ||
       role == 'manager' ||
       permissions['manage_users'] == true;

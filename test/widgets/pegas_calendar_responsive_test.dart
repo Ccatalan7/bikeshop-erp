@@ -18,6 +18,8 @@ void main() {
     Size size, {
     List<MechanicJob> jobs = const <MechanicJob>[],
     TextScaler textScaler = TextScaler.noScaling,
+    bool? useCompactLayout,
+    PegasCalendarSession? session,
   }) async {
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -37,6 +39,8 @@ void main() {
               jobs: jobs,
               customers: const <String, Customer>{},
               bikes: const <String, Bike>{},
+              useCompactLayout: useCompactLayout,
+              session: session,
             ),
           ),
         ),
@@ -115,6 +119,48 @@ void main() {
     expect(monthRect.right, lessThan(agendaRect.left));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'inherits the root layout class and restores the browsed month after remount',
+    (tester) async {
+      final session = PegasCalendarSession();
+      await pumpCalendar(
+        tester,
+        const Size(900, 900),
+        useCompactLayout: true,
+        session: session,
+      );
+
+      expect(
+        find.byKey(const ValueKey('workshop-calendar-compact-stack')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byTooltip('Mes siguiente'));
+      await tester.pump();
+      final focusedMonth = session.focusedMonth;
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await pumpCalendar(
+        tester,
+        const Size(384, 824),
+        useCompactLayout: true,
+        session: session,
+      );
+
+      expect(session.focusedMonth, focusedMonth);
+      expect(
+        find.byKey(
+          ValueKey(
+            'workshop-calendar-day-'
+            '${focusedMonth.year.toString().padLeft(4, '0')}-'
+            '${focusedMonth.month.toString().padLeft(2, '0')}-01',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'compact job uses the full workspace and back restores its selected day',

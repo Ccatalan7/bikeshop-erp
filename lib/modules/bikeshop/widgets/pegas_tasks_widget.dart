@@ -11,8 +11,39 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 
+/// Parent-owned compact task browsing context.
+///
+/// The workshop host keeps this session alive while another mode or linked
+/// record is open, so task filters, search, and scroll resume exactly.
+class PegasTasksSession {
+  PegasTasksSession({
+    this.statusFilter = TaskStatus.pending,
+    this.priorityFilter,
+    this.searchQuery = '',
+    this.scrollOffset = 0,
+    Set<String>? expandedTaskKeys,
+  }) : _expandedTaskKeys = {...?expandedTaskKeys};
+
+  TaskStatus? statusFilter;
+  TaskPriority? priorityFilter;
+  String searchQuery;
+  double scrollOffset;
+  Set<String>? _expandedTaskKeys;
+
+  // Null-safe for sessions that survive a development hot reload which added
+  // this field after the object had already been created.
+  Set<String> get expandedTaskKeys => _expandedTaskKeys ??= <String>{};
+}
+
 class PegasTasksWidget extends StatefulWidget {
-  const PegasTasksWidget({super.key});
+  const PegasTasksWidget({
+    super.key,
+    this.useCompactLayout,
+    this.session,
+  });
+
+  final bool? useCompactLayout;
+  final PegasTasksSession? session;
 
   @override
   State<PegasTasksWidget> createState() => _PegasTasksWidgetState();
@@ -27,6 +58,10 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   TaskPriority? _priorityFilter;
   String _searchQuery = '';
   late final TextEditingController _searchController;
+  late final ScrollController _compactScrollController;
+  late final PegasTasksSession _localSession;
+
+  PegasTasksSession get _session => widget.session ?? _localSession;
 
   // Inline editing
   String? _editingTitleTaskId;
@@ -40,16 +75,46 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   @override
   void initState() {
     super.initState();
-    _searchController = TextEditingController();
+    _localSession = PegasTasksSession();
+    _statusFilter = _session.statusFilter;
+    _priorityFilter = _session.priorityFilter;
+    _searchQuery = _session.searchQuery;
+    _searchController = TextEditingController(text: _searchQuery);
+    _compactScrollController = ScrollController(
+      initialScrollOffset: _session.scrollOffset,
+    )..addListener(_rememberCompactScroll);
     _titleController = TextEditingController();
     _loadUsers();
   }
 
   @override
   void dispose() {
+    _persistSession();
+    _compactScrollController
+      ..removeListener(_rememberCompactScroll)
+      ..dispose();
     _searchController.dispose();
     _titleController.dispose();
     super.dispose();
+  }
+
+  void _rememberCompactScroll() {
+    if (_compactScrollController.hasClients) {
+      _session.scrollOffset = _compactScrollController.offset;
+    }
+  }
+
+  void _persistSession() {
+    _session
+      ..statusFilter = _statusFilter
+      ..priorityFilter = _priorityFilter
+      ..searchQuery = _searchQuery;
+    _rememberCompactScroll();
+  }
+
+  void _updateViewState(VoidCallback mutation) {
+    setState(mutation);
+    _persistSession();
   }
 
   Future<void> _loadUsers() async {
@@ -110,7 +175,8 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
 
         return LayoutBuilder(
           builder: (context, constraints) {
-            final isCompact = constraints.maxWidth < _compactBreakpoint;
+            final isCompact = widget.useCompactLayout ??
+                constraints.maxWidth < _compactBreakpoint;
             if (!isCompact) {
               return _buildDesktopWorkspace(
                 constraints: constraints,
@@ -207,9 +273,9 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
           _buildStatChip(
             icon: Icons.pending_actions,
             label: '$pendingCount Pendientes',
-            color: Colors.amber,
+            color: _statusColor(TaskStatus.pending),
             isActive: _statusFilter == TaskStatus.pending,
-            onTap: () => setState(() => _statusFilter =
+            onTap: () => _updateViewState(() => _statusFilter =
                 _statusFilter == TaskStatus.pending
                     ? null
                     : TaskStatus.pending),
@@ -218,9 +284,9 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
           _buildStatChip(
             icon: Icons.play_circle_outline,
             label: '$inProgressCount En Curso',
-            color: Colors.blue,
+            color: _statusColor(TaskStatus.inProgress),
             isActive: _statusFilter == TaskStatus.inProgress,
-            onTap: () => setState(() => _statusFilter =
+            onTap: () => _updateViewState(() => _statusFilter =
                 _statusFilter == TaskStatus.inProgress
                     ? null
                     : TaskStatus.inProgress),
@@ -229,9 +295,9 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
           _buildStatChip(
             icon: Icons.check_circle_outline,
             label: '$completedCount Completadas',
-            color: Colors.green,
+            color: _statusColor(TaskStatus.completed),
             isActive: _statusFilter == TaskStatus.completed,
-            onTap: () => setState(() => _statusFilter =
+            onTap: () => _updateViewState(() => _statusFilter =
                 _statusFilter == TaskStatus.completed
                     ? null
                     : TaskStatus.completed),
@@ -241,7 +307,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
             _buildStatChip(
               icon: Icons.warning_amber_rounded,
               label: '$overdueCount Vencidas',
-              color: Colors.red,
+              color: theme.colorScheme.error,
               isActive: false,
               onTap: null,
             ),
@@ -462,7 +528,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
         fillColor:
             theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
       ),
-      onChanged: (val) => setState(() => _searchQuery = val),
+      onChanged: (val) => _updateViewState(() => _searchQuery = val),
     );
 
     if (!compact) {
@@ -537,7 +603,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   }
 
   void _selectPriorityFilter(String value) {
-    setState(() {
+    _updateViewState(() {
       _priorityFilter = value == 'all'
           ? null
           : TaskPriority.values
@@ -565,7 +631,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
       tooltip: 'Filtrar por estado',
       initialValue: _statusFilter?.name ?? 'all',
       onSelected: (value) {
-        setState(() {
+        _updateViewState(() {
           _statusFilter = value == 'all'
               ? null
               : TaskStatus.values.firstWhere((status) => status.name == value);
@@ -658,34 +724,39 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     required bool isActive,
     VoidCallback? onTap,
   }) {
+    final theme = Theme.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          constraints: const BoxConstraints(minHeight: 36),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
-            color:
-                isActive ? color.withValues(alpha: 0.15) : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isActive
-                  ? color.withValues(alpha: 0.5)
-                  : Colors.grey.shade300,
-            ),
+            color: isActive
+                ? theme.colorScheme.secondaryContainer
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 14, color: color),
-              const SizedBox(width: 4),
+              Icon(
+                icon,
+                size: 15,
+                color: isActive ? color : theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                  color: isActive ? color : Colors.grey.shade700,
+                  color: isActive
+                      ? theme.colorScheme.onSecondaryContainer
+                      : theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -772,7 +843,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
 
   void _clearTaskFilters() {
     _searchController.clear();
-    setState(() {
+    _updateViewState(() {
       _searchQuery = '';
       _statusFilter = null;
       _priorityFilter = null;
@@ -780,16 +851,24 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   }
 
   Widget _buildCompactTasksList(List<TaskModel> tasks) {
-    return ListView.separated(
+    return ListView.builder(
       key: const ValueKey('workshop-tasks-compact-list'),
+      controller: _compactScrollController,
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
       itemCount: tasks.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 8),
-      itemBuilder: (context, index) => _buildCompactTaskCard(tasks[index]),
+      itemBuilder: (context, index) => _buildCompactTaskRow(
+        tasks[index],
+        isFirst: index == 0,
+        isLast: index == tasks.length - 1,
+      ),
     );
   }
 
-  Widget _buildCompactTaskCard(TaskModel task) {
+  Widget _buildCompactTaskRow(
+    TaskModel task, {
+    required bool isFirst,
+    required bool isLast,
+  }) {
     final theme = Theme.of(context);
     final isCompleted = task.status == TaskStatus.completed;
     final isCancelled = task.status == TaskStatus.cancelled;
@@ -799,106 +878,116 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
         !isCompleted &&
         !isCancelled;
     final isEditingTitle = _editingTitleTaskId == task.id;
-    final statusColor = _statusColor(task.status);
+    final taskKey = task.id ?? task.title;
+    final isExpanded = _session.expandedTaskKeys.contains(taskKey);
+    final contextLabel = _compactTaskContext(task);
+    final dueLabel = task.dueDate == null
+        ? null
+        : _compactDueLabel(task.dueDate!, isOverdue: isOverdue);
+    final summaryLabel = [
+      if (dueLabel != null) dueLabel,
+      if (contextLabel.isNotEmpty) contextLabel,
+    ].join(' · ');
+    final radius = BorderRadius.vertical(
+      top: isFirst ? const Radius.circular(14) : Radius.zero,
+      bottom: isLast ? const Radius.circular(14) : Radius.zero,
+    );
 
     return Material(
-      key: ValueKey('workshop-task-compact-${task.id ?? task.title}'),
+      key: ValueKey('workshop-task-compact-$taskKey'),
       color: isDimmed
           ? theme.colorScheme.surfaceContainerLowest
           : theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: radius,
+      clipBehavior: Clip.antiAlias,
       elevation: 0,
-      child: Container(
+      child: DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isOverdue
-                ? theme.colorScheme.error.withValues(alpha: 0.55)
-                : theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+          border: Border(
+            bottom: isLast
+                ? BorderSide.none
+                : BorderSide(
+                    color: theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.38),
+                  ),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: theme.colorScheme.shadow.withValues(alpha: 0.055),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 4, 6),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Semantics(
-                    button: true,
-                    label: isCompleted
-                        ? 'Marcar ${task.title} como pendiente'
-                        : 'Marcar ${task.title} como completada',
-                    child: InkResponse(
-                      key: ValueKey(
-                          'workshop-task-compact-toggle-${task.id ?? task.title}'),
-                      onTap: () => _toggleStatus(task),
-                      radius: 24,
-                      child: SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: Center(
-                          child: Container(
-                            width: 22,
-                            height: 22,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Semantics(
+                  button: true,
+                  checked: isCompleted,
+                  label: isCompleted
+                      ? 'Marcar ${task.title} como pendiente'
+                      : 'Marcar ${task.title} como completada',
+                  child: InkResponse(
+                    key: ValueKey('workshop-task-compact-toggle-$taskKey'),
+                    onTap: () => _toggleStatus(task),
+                    radius: 24,
+                    child: SizedBox(
+                      width: 48,
+                      height: 64,
+                      child: Center(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 140),
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isCompleted
+                                ? theme.colorScheme.primary
+                                : Colors.transparent,
+                            border: Border.all(
                               color: isCompleted
                                   ? theme.colorScheme.primary
-                                  : Colors.transparent,
-                              border: Border.all(
-                                color: isCompleted
-                                    ? theme.colorScheme.primary
-                                    : theme.colorScheme.outline,
-                                width: 2,
-                              ),
+                                  : theme.colorScheme.outline,
+                              width: 2,
                             ),
-                            child: isCompleted
-                                ? Icon(
-                                    Icons.check,
-                                    size: 14,
-                                    color: theme.colorScheme.onPrimary,
-                                  )
-                                : null,
                           ),
+                          child: isCompleted
+                              ? Icon(
+                                  Icons.check,
+                                  size: 14,
+                                  color: theme.colorScheme.onPrimary,
+                                )
+                              : null,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 2),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 5),
-                      child: isEditingTitle
-                          ? _buildCompactTitleEditor(task)
-                          : InkWell(
-                              key: ValueKey(
-                                  'workshop-task-compact-title-${task.id ?? task.title}'),
-                              onTap: () {
-                                setState(() {
-                                  _editingTitleTaskId = task.id;
-                                  _titleController.text = task.title;
-                                });
-                              },
-                              borderRadius: BorderRadius.circular(6),
-                              child: ConstrainedBox(
-                                constraints:
-                                    const BoxConstraints(minHeight: 48),
+                ),
+                Expanded(
+                  child: isEditingTitle
+                      ? Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: _buildCompactTitleEditor(task),
+                        )
+                      : Semantics(
+                          button: true,
+                          expanded: isExpanded,
+                          label: isExpanded
+                              ? 'Ocultar detalles de ${task.title}'
+                              : 'Ver detalles de ${task.title}',
+                          child: InkWell(
+                            key: ValueKey(
+                              'workshop-task-compact-disclosure-$taskKey',
+                            ),
+                            onTap: () => _toggleCompactTaskDisclosure(taskKey),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(minHeight: 64),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(2, 8, 10, 7),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Text(
                                       task.title,
-                                      maxLines: 2,
+                                      maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style:
                                           theme.textTheme.titleSmall?.copyWith(
@@ -911,164 +1000,283 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
                                             : theme.colorScheme.onSurface,
                                       ),
                                     ),
-                                    if (task.description != null &&
-                                        task.description!
-                                            .trim()
-                                            .isNotEmpty) ...[
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        task.description!,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style:
-                                            theme.textTheme.bodySmall?.copyWith(
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            summaryLabel,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.textTheme.labelSmall
+                                                ?.copyWith(
+                                              color: isOverdue
+                                                  ? theme.colorScheme.error
+                                                  : theme.colorScheme
+                                                      .onSurfaceVariant,
+                                              fontWeight: isOverdue
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          isExpanded ? 'Ocultar' : 'Detalles',
+                                          style: theme.textTheme.labelSmall
+                                              ?.copyWith(
+                                            color: theme
+                                                .colorScheme.onSurfaceVariant,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        Icon(
+                                          isExpanded
+                                              ? Icons.keyboard_arrow_up
+                                              : Icons.keyboard_arrow_down,
+                                          size: 18,
                                           color: theme
                                               .colorScheme.onSurfaceVariant,
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ],
                                 ),
                               ),
                             ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 48,
-                    height: 48,
-                    child: PopupMenuButton<String>(
-                      key: ValueKey(
-                          'workshop-task-compact-more-${task.id ?? task.title}'),
-                      tooltip: 'Acciones de tarea',
-                      icon: const Icon(Icons.more_horiz, size: 20),
-                      itemBuilder: _buildTaskActionMenuItems,
-                      onSelected: (value) => _handleMenuAction(value, task),
-                    ),
-                  ),
-                ],
+                          ),
+                        ),
+                ),
+              ],
+            ),
+            if (isExpanded)
+              _buildCompactTaskDetails(
+                task,
+                taskKey: taskKey,
+                isOverdue: isOverdue,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _toggleCompactTaskDisclosure(String taskKey) {
+    setState(() {
+      if (!_session.expandedTaskKeys.remove(taskKey)) {
+        _session.expandedTaskKeys.add(taskKey);
+      }
+    });
+    _persistSession();
+  }
+
+  String _compactDueLabel(
+    DateTime dueDate, {
+    required bool isOverdue,
+  }) {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final due = DateUtils.dateOnly(dueDate);
+    final days = due.difference(today).inDays;
+    if (isOverdue) {
+      return 'Vencida · ${DateFormat('dd/MM').format(due)}';
+    }
+    if (days == 0) return 'Hoy';
+    if (days == 1) return 'Mañana';
+    return DateFormat('dd/MM').format(due);
+  }
+
+  String _compactTaskContext(TaskModel task) {
+    final parts = <String>[];
+    if (_hasLinkedJob(task)) {
+      parts.add('Trabajo ${task.linkedJobNumber}');
+    } else if (task.linkedPurchaseInvoiceNumber != null) {
+      parts.add('Compra ${task.linkedPurchaseInvoiceNumber}');
+    } else if (task.linkedSalesInvoiceNumber != null) {
+      parts.add('Venta ${task.linkedSalesInvoiceNumber}');
+    }
+    if (task.status != TaskStatus.pending) {
+      parts.add(_translateStatus(task.status));
+    }
+    if (task.priority == TaskPriority.high ||
+        task.priority == TaskPriority.urgent) {
+      parts.add(_translatePriority(task.priority));
+    }
+    return parts.join(' · ');
+  }
+
+  Widget _buildCompactTaskDetails(
+    TaskModel task, {
+    required String taskKey,
+    required bool isOverdue,
+  }) {
+    final theme = Theme.of(context);
+    return Container(
+      key: ValueKey('workshop-task-compact-details-$taskKey'),
+      color: theme.colorScheme.surfaceContainerLow.withValues(alpha: 0.58),
+      padding: const EdgeInsets.fromLTRB(48, 8, 8, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (task.description?.trim().isNotEmpty ?? false)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(2, 0, 8, 6),
+              child: Text(
+                task.description!.trim(),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  height: 1.35,
+                ),
               ),
             ),
-            if (_hasLinks(task))
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 6,
+          if (_hasLinks(task))
+            Wrap(
+              spacing: 14,
+              runSpacing: 0,
+              children: [
+                if (_hasLinkedJob(task))
+                  _buildCompactLink(
+                    key: ValueKey('workshop-task-linked-job-$taskKey'),
+                    label: 'Abrir trabajo ${task.linkedJobNumber}',
+                    onTap: () => _openLinkedJob(task),
+                  ),
+                if (task.linkedPurchaseInvoiceNumber != null &&
+                    task.linkedPurchaseInvoiceId != null)
+                  _buildCompactLink(
+                    key: ValueKey('workshop-task-linked-purchase-$taskKey'),
+                    label: 'Abrir compra ${task.linkedPurchaseInvoiceNumber}',
+                    onTap: () => context
+                        .push('/purchases/${task.linkedPurchaseInvoiceId}'),
+                  ),
+                if (task.linkedSalesInvoiceNumber != null &&
+                    task.linkedSalesInvoiceId != null)
+                  _buildCompactLink(
+                    key: ValueKey('workshop-task-linked-sale-$taskKey'),
+                    label: 'Abrir venta ${task.linkedSalesInvoiceNumber}',
+                    onTap: () => context
+                        .push('/sales/invoices/${task.linkedSalesInvoiceId}'),
+                  ),
+              ],
+            ),
+          _buildCompactActionPair(
+            first: Builder(
+              builder: (anchorContext) => _buildCompactInfoAction(
+                key: ValueKey('workshop-task-compact-status-$taskKey'),
+                label: 'Estado',
+                value: _translateStatus(task.status),
+                indicatorColor: _statusColor(task.status),
+                onTap: () => _showStatusMenu(
+                  task,
+                  anchorContext: anchorContext,
+                ),
+              ),
+            ),
+            second: Builder(
+              builder: (anchorContext) => _buildCompactInfoAction(
+                key: ValueKey('workshop-task-compact-priority-$taskKey'),
+                label: 'Prioridad',
+                value: _translatePriority(task.priority),
+                indicatorColor: _priorityColor(task.priority),
+                onTap: () => _showPriorityMenu(
+                  task,
+                  anchorContext: anchorContext,
+                ),
+              ),
+            ),
+          ),
+          _buildCompactActionPair(
+            first: _buildCompactInfoAction(
+              key: ValueKey('workshop-task-compact-date-$taskKey'),
+              label: isOverdue ? 'Vencida' : 'Plazo',
+              value: task.dueDate == null
+                  ? 'Sin fecha'
+                  : DateFormat('dd/MM/yy').format(task.dueDate!),
+              valueColor: isOverdue ? theme.colorScheme.error : null,
+              onTap: () => _showDatePicker(task),
+            ),
+            second: Builder(
+              builder: (anchorContext) => _buildCompactInfoAction(
+                key: ValueKey('workshop-task-compact-assignee-$taskKey'),
+                label: 'Asignación',
+                value: task.assigneeName ?? 'Sin asignar',
+                onTap: () => _showAssigneeMenu(
+                  task,
+                  anchorContext: anchorContext,
+                ),
+              ),
+            ),
+          ),
+          _buildCompactActionPair(
+            first: _buildCompactInfoAction(
+              key: ValueKey('workshop-task-compact-attachments-$taskKey'),
+              label: 'Adjuntos',
+              value: task.attachments.isEmpty
+                  ? 'Agregar archivos'
+                  : '${task.attachments.length} archivo${task.attachments.length == 1 ? '' : 's'}',
+              onTap: () => _pickFilesForTask(task),
+            ),
+            second: _buildCompactTaskMoreAction(task, taskKey),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactActionPair({
+    required Widget first,
+    required Widget second,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: first),
+        const SizedBox(width: 8),
+        Expanded(child: second),
+      ],
+    );
+  }
+
+  Widget _buildCompactTaskMoreAction(TaskModel task, String taskKey) {
+    final theme = Theme.of(context);
+    return PopupMenuButton<String>(
+      key: ValueKey('workshop-task-compact-more-$taskKey'),
+      tooltip: 'Editar o eliminar tarea',
+      itemBuilder: _buildTaskActionMenuItems,
+      onSelected: (value) => _handleMenuAction(value, task),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (_hasLinkedJob(task))
-                      _buildCompactLink(
-                        key: ValueKey(
-                            'workshop-task-linked-job-${task.id ?? task.title}'),
-                        label: 'Trabajo ${task.linkedJobNumber}',
-                        onTap: () => _openLinkedJob(task),
+                    Text(
+                      'Acciones',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
-                    if (task.linkedPurchaseInvoiceNumber != null &&
-                        task.linkedPurchaseInvoiceId != null)
-                      _buildCompactLink(
-                        key: ValueKey(
-                            'workshop-task-linked-purchase-${task.id ?? task.title}'),
-                        label: 'Compra ${task.linkedPurchaseInvoiceNumber}',
-                        onTap: () => context
-                            .push('/purchases/${task.linkedPurchaseInvoiceId}'),
+                    ),
+                    Text(
+                      'Editar o eliminar',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
                       ),
-                    if (task.linkedSalesInvoiceNumber != null &&
-                        task.linkedSalesInvoiceId != null)
-                      _buildCompactLink(
-                        key: ValueKey(
-                            'workshop-task-linked-sale-${task.id ?? task.title}'),
-                        label: 'Venta ${task.linkedSalesInvoiceNumber}',
-                        onTap: () => context.push(
-                            '/sales/invoices/${task.linkedSalesInvoiceId}'),
-                      ),
+                    ),
                   ],
                 ),
               ),
-            Divider(
-              height: 1,
-              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: Builder(
-                    builder: (anchorContext) => _buildCompactInfoAction(
-                      key: ValueKey(
-                          'workshop-task-compact-status-${task.id ?? task.title}'),
-                      label: 'Estado',
-                      value: _translateStatus(task.status),
-                      indicatorColor: statusColor,
-                      onTap: () => _showStatusMenu(
-                        task,
-                        anchorContext: anchorContext,
-                      ),
-                    ),
-                  ),
-                ),
-                _buildCompactVerticalDivider(theme),
-                Expanded(
-                  child: Builder(
-                    builder: (anchorContext) => _buildCompactInfoAction(
-                      key: ValueKey(
-                          'workshop-task-compact-priority-${task.id ?? task.title}'),
-                      label: 'Prioridad',
-                      value: _translatePriority(task.priority),
-                      onTap: () => _showPriorityMenu(
-                        task,
-                        anchorContext: anchorContext,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            Divider(
-              height: 1,
-              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildCompactInfoAction(
-                    key: ValueKey(
-                        'workshop-task-compact-date-${task.id ?? task.title}'),
-                    label: isOverdue ? 'Vencida' : 'Plazo',
-                    value: task.dueDate == null
-                        ? 'Sin fecha'
-                        : DateFormat('dd/MM/yy').format(task.dueDate!),
-                    valueColor: isOverdue ? theme.colorScheme.error : null,
-                    onTap: () => _showDatePicker(task),
-                  ),
-                ),
-                _buildCompactVerticalDivider(theme),
-                Expanded(
-                  child: Builder(
-                    builder: (anchorContext) => _buildCompactInfoAction(
-                      key: ValueKey(
-                          'workshop-task-compact-assignee-${task.id ?? task.title}'),
-                      label: 'Asignado',
-                      value: task.assigneeName ?? 'Sin asignar',
-                      onTap: () => _showAssigneeMenu(
-                        task,
-                        anchorContext: anchorContext,
-                      ),
-                    ),
-                  ),
-                ),
-                _buildCompactVerticalDivider(theme),
-                Expanded(
-                  child: _buildCompactInfoAction(
-                    key: ValueKey(
-                        'workshop-task-compact-attachments-${task.id ?? task.title}'),
-                    label: 'Adjuntos',
-                    value: task.attachments.isEmpty
-                        ? 'Agregar'
-                        : '${task.attachments.length}',
-                    onTap: () => _pickFilesForTask(task),
-                  ),
-                ),
-              ],
-            ),
-          ],
+              Icon(
+                Icons.more_horiz,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1131,14 +1339,6 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     );
   }
 
-  Widget _buildCompactVerticalDivider(ThemeData theme) {
-    return Container(
-      width: 1,
-      height: 38,
-      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
-    );
-  }
-
   Widget _buildCompactInfoAction({
     required Key key,
     required String label,
@@ -1151,10 +1351,11 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     return InkWell(
       key: key,
       onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 52),
+        constraints: const BoxConstraints(minHeight: 48),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1191,6 +1392,11 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                  ),
+                  Icon(
+                    Icons.keyboard_arrow_down,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ],
               ),
@@ -1234,8 +1440,9 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   List<PopupMenuEntry<String>> _buildTaskActionMenuItems(
     BuildContext context,
   ) {
-    return const [
-      PopupMenuItem(
+    final error = Theme.of(context).colorScheme.error;
+    return [
+      const PopupMenuItem(
         value: 'edit',
         child: Row(
           children: [
@@ -1245,14 +1452,14 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
           ],
         ),
       ),
-      PopupMenuDivider(),
+      const PopupMenuDivider(),
       PopupMenuItem(
         value: 'delete',
         child: Row(
           children: [
-            Icon(Icons.delete_outline, size: 16, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Eliminar', style: TextStyle(color: Colors.red)),
+            Icon(Icons.delete_outline, size: 16, color: error),
+            const SizedBox(width: 8),
+            Text('Eliminar', style: TextStyle(color: error)),
           ],
         ),
       ),
@@ -1281,9 +1488,6 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
             color: isDimmed ? theme.colorScheme.surfaceContainerLowest : null,
             border: Border(
               bottom: BorderSide(color: theme.dividerColor),
-              left: isOverdue
-                  ? BorderSide(color: Colors.red.shade400, width: 3)
-                  : BorderSide.none,
             ),
           ),
           child: Row(
@@ -1296,14 +1500,22 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
                   height: 22,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isCompleted ? Colors.green : Colors.transparent,
+                    color: isCompleted
+                        ? theme.colorScheme.primary
+                        : Colors.transparent,
                     border: Border.all(
-                      color: isCompleted ? Colors.green : Colors.grey.shade400,
+                      color: isCompleted
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.outline,
                       width: 2,
                     ),
                   ),
                   child: isCompleted
-                      ? const Icon(Icons.check, size: 14, color: Colors.white)
+                      ? Icon(
+                          Icons.check,
+                          size: 14,
+                          color: theme.colorScheme.onPrimary,
+                        )
                       : null,
                 ),
               ),
@@ -1359,33 +1571,35 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
                 child: PopupMenuButton<String>(
                   tooltip: 'Acciones',
                   icon: Icon(Icons.more_vert,
-                      size: 18, color: Colors.grey.shade500),
+                      size: 18, color: theme.colorScheme.onSurfaceVariant),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'edit',
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit_outlined, size: 16),
-                          SizedBox(width: 8),
-                          Text('Editar'),
-                        ],
+                  itemBuilder: (context) {
+                    final error = Theme.of(context).colorScheme.error;
+                    return [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined, size: 16),
+                            SizedBox(width: 8),
+                            Text('Editar'),
+                          ],
+                        ),
                       ),
-                    ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete_outline,
-                              size: 16, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text('Eliminar', style: TextStyle(color: Colors.red)),
-                        ],
+                      const PopupMenuDivider(),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline, size: 16, color: error),
+                            const SizedBox(width: 8),
+                            Text('Eliminar', style: TextStyle(color: error)),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ];
+                  },
                   onSelected: (value) => _handleMenuAction(value, task),
                 ),
               ),
@@ -1516,17 +1730,9 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
 
     return InkWell(
       onTap: () => _showStatusMenu(task),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: statusColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: statusColor.withValues(alpha: 0.3),
-            width: 1,
-          ),
-        ),
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1550,6 +1756,12 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.keyboard_arrow_down,
+              size: 16,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ],
         ),
       ),
@@ -1562,16 +1774,8 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     return InkWell(
       onTap: () => _showPriorityMenu(task),
       borderRadius: BorderRadius.circular(6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: color.withValues(alpha: 0.3),
-            width: 1,
-          ),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1584,6 +1788,12 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
                 color: color,
                 fontWeight: FontWeight.w600,
               ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.keyboard_arrow_down,
+              size: 16,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ],
         ),
@@ -2271,7 +2481,9 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
               child: const Text('Cancelar'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(ctx).colorScheme.error,
+              ),
               onPressed: () => Navigator.of(ctx).pop(true),
               child: const Text('Eliminar'),
             ),
@@ -2321,28 +2533,30 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   // ══════════════════════════════════════════════════════════════════
 
   Color _statusColor(TaskStatus status) {
+    final scheme = Theme.of(context).colorScheme;
     switch (status) {
       case TaskStatus.pending:
-        return Colors.amber.shade700;
+        return scheme.onSurfaceVariant;
       case TaskStatus.inProgress:
-        return Colors.blue;
+        return scheme.primary;
       case TaskStatus.completed:
-        return Colors.green;
+        return scheme.tertiary;
       case TaskStatus.cancelled:
-        return Colors.grey;
+        return scheme.outline;
     }
   }
 
   Color _priorityColor(TaskPriority priority) {
+    final scheme = Theme.of(context).colorScheme;
     switch (priority) {
       case TaskPriority.urgent:
-        return Colors.red;
+        return scheme.error;
       case TaskPriority.high:
-        return Colors.orange;
+        return scheme.tertiary;
       case TaskPriority.normal:
-        return Colors.blue;
+        return scheme.onSurfaceVariant;
       case TaskPriority.low:
-        return Colors.grey;
+        return scheme.outline;
     }
   }
 

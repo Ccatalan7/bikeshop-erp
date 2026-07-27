@@ -8,15 +8,21 @@ import '../../../shared/models/supplier.dart' as shared_supplier;
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../accounting/services/accounting_service.dart';
-import '../../accounting/widgets/accounting_dashboard_section.dart';
+import '../../accounting/services/financial_projection_refresh_coordinator.dart';
 import '../models/purchase_invoice.dart';
 import '../models/purchase_payment.dart';
 
 class PurchaseService extends ChangeNotifier {
-  PurchaseService(this._db, this._tenantService);
+  PurchaseService(
+    this._db,
+    this._tenantService, {
+    FinancialProjectionRefreshCoordinator? financialProjectionRefresh,
+  }) : _financialProjectionRefresh = financialProjectionRefresh ??
+            FinancialProjectionRefreshCoordinator.fallback;
 
   final DatabaseService _db;
   final TenantService _tenantService;
+  final FinancialProjectionRefreshCoordinator _financialProjectionRefresh;
   static AccountingService? _accountingService;
 
   // Helper to get Supabase client
@@ -55,6 +61,21 @@ class PurchaseService extends ChangeNotifier {
       _listInvoiceCache.isNotEmpty && _listInvoicesCacheTime != null;
   bool get hasPaymentsCache =>
       _paymentCache.isNotEmpty && _paymentsCacheTime != null;
+
+  void _recordFinancialChange(
+    FinancialProjectionChangeKind kind, {
+    String? entityId,
+    String? tenantId,
+  }) {
+    _financialProjectionRefresh.recordCommitted(
+      FinancialProjectionChange(
+        kind: kind,
+        origin: FinancialProjectionChangeOrigin.localCommit,
+        entityId: entityId,
+        tenantId: tenantId,
+      ),
+    );
+  }
 
   /// Check if cache is still valid
   bool _isCacheValid(DateTime? cacheTime) {
@@ -497,8 +518,12 @@ class PurchaseService extends ChangeNotifier {
         saved = refreshed ?? invoice;
       }
 
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.purchaseInvoice,
+        entityId: saved.id,
+        tenantId: saved.tenantId,
+      );
       invalidateInvoicesCache();
-      AccountingDashboardSection.invalidateCache();
       await getPurchaseInvoices(forceRefresh: true);
       // NOTE: Accounting entries are now created automatically by database triggers
       // when invoice status changes to 'received'. No need to call _postAccountingEntry here.
@@ -532,7 +557,11 @@ class PurchaseService extends ChangeNotifier {
       // Clear cache and reload
       debugPrint('🔄 Clearing cache and refreshing invoice list...');
       invalidateInvoicesCache();
-      AccountingDashboardSection.invalidateCache();
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.purchaseInvoice,
+        entityId: id,
+        tenantId: _tenantService.currentTenantId,
+      );
       _invoiceCache = const []; // Clear cache
       _invoicesLoaded = false;
       await getPurchaseInvoices(forceRefresh: true);
@@ -581,6 +610,11 @@ class PurchaseService extends ChangeNotifier {
       final updated = PurchaseInvoice.fromJson(result);
 
       _upsertInvoice(updated);
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.purchaseInvoice,
+        entityId: updated.id,
+        tenantId: updated.tenantId,
+      );
 
       // Refresh accounting if service available
       if (_accountingService != null) {
@@ -735,6 +769,11 @@ class PurchaseService extends ChangeNotifier {
       final payload = payment.toJson()..remove('id');
       final result = await _db.insert('purchase_payments', payload);
       final created = PurchasePayment.fromJson(result);
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.purchasePayment,
+        entityId: created.id,
+        tenantId: created.tenantId,
+      );
 
       await _refreshAfterPayment(payment.invoiceId);
       return created;
@@ -742,6 +781,11 @@ class PurchaseService extends ChangeNotifier {
       if (_isPaymentIdempotencyConflict(e) && payment.idempotencyKey != null) {
         final existing = await _findPaymentByIdempotencyKey(payment);
         if (existing != null) {
+          _recordFinancialChange(
+            FinancialProjectionChangeKind.purchasePayment,
+            entityId: existing.id,
+            tenantId: existing.tenantId,
+          );
           await _refreshAfterPayment(existing.invoiceId);
           return existing;
         }
@@ -809,7 +853,11 @@ class PurchaseService extends ChangeNotifier {
     _upsertPayment(result.payment);
     invalidateInvoicesCache();
     invalidatePaymentsCache();
-    AccountingDashboardSection.invalidateCache();
+    _recordFinancialChange(
+      FinancialProjectionChangeKind.purchasePayment,
+      entityId: result.payment.id,
+      tenantId: result.payment.tenantId,
+    );
     notifyListeners();
 
     // The correction is already durably committed and acknowledged. Refresh
@@ -933,6 +981,11 @@ class PurchaseService extends ChangeNotifier {
   Future<void> deletePayment(String paymentId) async {
     try {
       await _db.delete('purchase_payments', paymentId);
+      _recordFinancialChange(
+        FinancialProjectionChangeKind.purchasePayment,
+        entityId: paymentId,
+        tenantId: _tenantService.currentTenantId,
+      );
 
       // Refresh caches
       await getPurchasePayments(forceRefresh: true);

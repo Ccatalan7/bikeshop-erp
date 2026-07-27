@@ -2604,7 +2604,9 @@ class AppRouter {
             state,
             erp.loadLibrary(),
             () => MainLayout(
-              child: erp.UserManagementPage(),
+              child: erp.UserManagementPage(
+                initialOpenRequest: state.uri.queryParameters['openRequest'],
+              ),
             ),
           ),
         ),

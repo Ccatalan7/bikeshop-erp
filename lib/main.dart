@@ -38,6 +38,8 @@ import 'modules/inventory/services/brand_service.dart';
 import 'modules/inventory/services/stock_movements_service.dart';
 import 'modules/crm/services/customer_service.dart';
 import 'modules/accounting/services/accounting_service.dart';
+import 'modules/accounting/services/financial_projection_refresh_coordinator.dart';
+import 'modules/accounting/services/financial_projection_realtime_transport.dart';
 import 'modules/accounting/services/financial_reports_service.dart';
 import 'modules/accounting/services/expense_service.dart';
 import 'modules/tax_reports/services/f29_service.dart';
@@ -352,6 +354,25 @@ class VinabikeApp extends StatelessWidget {
             return service;
           },
         ),
+        ProxyProvider<TenantService, FinancialProjectionRefreshCoordinator>(
+          create: (_) => FinancialProjectionRefreshCoordinator(
+            realtimeTransport: SupabaseFinancialProjectionRealtimeTransport(
+              Supabase.instance.client,
+            ),
+          ),
+          update: (_, tenantService, coordinator) {
+            final value = coordinator ??
+                FinancialProjectionRefreshCoordinator(
+                  realtimeTransport:
+                      SupabaseFinancialProjectionRealtimeTransport(
+                    Supabase.instance.client,
+                  ),
+                );
+            unawaited(value.synchronizeTenantFrom(tenantService));
+            return value;
+          },
+          dispose: (_, coordinator) => coordinator.dispose(),
+        ),
         ChangeNotifierProvider(create: (_) => PaymentMethodService()),
         ChangeNotifierProvider(create: (_) => AppearanceService()),
         ChangeNotifierProvider(create: (_) => WindowZoomService()),
@@ -431,6 +452,8 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(
             create: (context) => AccountingService(
                   Provider.of<DatabaseService>(context, listen: false),
+                  financialProjectionRefresh:
+                      context.read<FinancialProjectionRefreshCoordinator>(),
                 )),
         ChangeNotifierProvider(
             create: (context) => FinancialReportsService(
@@ -439,12 +462,16 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(
             create: (context) => ExpenseService(
                   Provider.of<DatabaseService>(context, listen: false),
+                  financialProjectionRefresh:
+                      context.read<FinancialProjectionRefreshCoordinator>(),
                 )),
         ChangeNotifierProvider(create: (_) => F29Service()),
         ChangeNotifierProvider(
             create: (context) => PurchaseService(
                   Provider.of<DatabaseService>(context, listen: false),
                   Provider.of<TenantService>(context, listen: false),
+                  financialProjectionRefresh:
+                      context.read<FinancialProjectionRefreshCoordinator>(),
                 )),
         ChangeNotifierProvider.value(
             value:
@@ -461,6 +488,8 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(
             create: (context) => PayrollVoucherService(
                   Provider.of<DatabaseService>(context, listen: false),
+                  financialProjectionRefresh:
+                      context.read<FinancialProjectionRefreshCoordinator>(),
                 )),
         ChangeNotifierProvider(
             create: (context) => JobRoleService(
@@ -513,17 +542,30 @@ class VinabikeApp extends StatelessWidget {
         // Public inventory service (for anonymous users browsing the store)
         ChangeNotifierProvider(create: (_) => PublicInventoryService()),
 
-        ChangeNotifierProxyProvider3<DatabaseService, AccountingService,
-            TenantService, SalesService>(
+        ChangeNotifierProxyProvider4<DatabaseService, AccountingService,
+            TenantService, FinancialProjectionRefreshCoordinator, SalesService>(
           create: (context) => SalesService(
             context.read<DatabaseService>(),
             context.read<AccountingService>(),
             context.read<TenantService>(),
+            financialProjectionRefresh:
+                context.read<FinancialProjectionRefreshCoordinator>(),
           ),
-          update: (context, databaseService, accountingService, tenantService,
-              previous) {
+          update: (
+            context,
+            databaseService,
+            accountingService,
+            tenantService,
+            financialProjectionRefresh,
+            previous,
+          ) {
             final service = previous ??
-                SalesService(databaseService, accountingService, tenantService);
+                SalesService(
+                  databaseService,
+                  accountingService,
+                  tenantService,
+                  financialProjectionRefresh: financialProjectionRefresh,
+                );
             service.updateDependencies(databaseService, accountingService);
             return service;
           },
@@ -932,6 +974,9 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     if (state == AppLifecycleState.resumed) {
       _isWorkspaceForeground = true;
       context.read<ChatProvider>().setApplicationForeground(true);
+      context
+          .read<FinancialProjectionRefreshCoordinator>()
+          .setApplicationActive(true);
       unawaited(MailAccountManager.instance.backgroundRefresh());
     }
     if (state == AppLifecycleState.inactive ||
@@ -940,6 +985,9 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
         state == AppLifecycleState.hidden) {
       _isWorkspaceForeground = false;
       context.read<ChatProvider>().setApplicationForeground(false);
+      context
+          .read<FinancialProjectionRefreshCoordinator>()
+          .setApplicationActive(false);
       unawaited(_workspaceManager.flushBrowserSession());
     }
   }

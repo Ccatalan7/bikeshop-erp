@@ -131,112 +131,139 @@ class _AndroidUpdatePromptState extends State<AndroidUpdatePrompt>
         }
 
         return _UpdatePromptPosition(
-          child: Material(
-            elevation: 3,
-            color: colors.surface,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                border: Border.all(color: colors.outlineVariant),
+          child: Semantics(
+            container: true,
+            label: 'Actualización de Android disponible',
+            child: Material(
+              key: const ValueKey('android-update-ready-prompt'),
+              elevation: 3,
+              color: colors.surface,
+              shape: RoundedRectangleBorder(
+                side: BorderSide(color: colors.outlineVariant),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.system_update_alt_rounded,
-                        color: colors.primary,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Actualización ${release.versionName}',
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              service.errorMessage ??
-                                  service.statusMessage ??
-                                  release.releaseNotes?.summary ??
-                                  'Hay una nueva versión de Vinabike ERP.',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: service.errorMessage == null
+              clipBehavior: Clip.antiAlias,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final textScale =
+                            MediaQuery.textScalerOf(context).scale(16) / 16;
+                        final stackActions = textScale > 1.3;
+                        final title = release.releaseNotes == null
+                            ? _UpdateTitle(
+                                versionName: release.versionName,
+                                detail: service.errorMessage ??
+                                    service.statusMessage,
+                                detailColor: service.errorMessage == null
                                     ? colors.onSurfaceVariant
                                     : colors.error,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (!service.isDownloading)
-                        IconButton(
-                          tooltip: 'Ahora no',
-                          visualDensity: VisualDensity.compact,
-                          onPressed: service.dismissAvailableUpdate,
-                          icon: const Icon(Icons.close, size: 19),
-                        ),
-                    ],
-                  ),
-                  if (service.isDownloading) ...[
-                    const SizedBox(height: 12),
-                    LinearProgressIndicator(
-                      value: service.downloadProgress,
-                      minHeight: 4,
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Wrap(
-                    alignment: WrapAlignment.end,
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      if (release.releaseNotes != null)
-                        TextButton(
+                              )
+                            : TextButton(
+                                key: const ValueKey(
+                                  'android-update-whats-new-button',
+                                ),
+                                style: TextButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(48),
+                                  padding: EdgeInsets.zero,
+                                  alignment: Alignment.centerLeft,
+                                ),
+                                onPressed: () => showDesktopReleaseNotesDialog(
+                                  context,
+                                  release.releaseNotes!,
+                                ),
+                                child: _UpdateTitle(
+                                  versionName: release.versionName,
+                                  detail: service.errorMessage ??
+                                      service.statusMessage,
+                                  detailColor: service.errorMessage == null
+                                      ? colors.onSurfaceVariant
+                                      : colors.error,
+                                  showWhatsNew: true,
+                                ),
+                              );
+                        final installButton = FilledButton(
                           key: const ValueKey(
-                            'android-update-whats-new-button',
+                            'android-update-primary-button',
                           ),
-                          style: TextButton.styleFrom(
+                          style: FilledButton.styleFrom(
                             minimumSize: const Size(0, 48),
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
+                              horizontal: 14,
                             ),
                           ),
-                          onPressed: () => showDesktopReleaseNotesDialog(
-                            context,
-                            release.releaseNotes!,
+                          onPressed: service.isDownloading
+                              ? null
+                              : () => _install(context),
+                          child: Text(
+                            service.isDownloading
+                                ? 'Descargando…'
+                                : service.errorMessage == null
+                                    ? 'Instalar'
+                                    : 'Reintentar',
                           ),
-                          child: const Text('Novedades'),
-                        ),
-                      FilledButton(
-                        key: const ValueKey(
-                          'android-update-primary-button',
-                        ),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(0, 48),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                          ),
-                        ),
-                        onPressed: service.isDownloading
+                        );
+                        final dismissButton = service.isDownloading
                             ? null
-                            : () => _install(context),
-                        child: Text(
-                          service.isDownloading ? 'Descargando…' : 'Actualizar',
-                        ),
+                            : IconButton(
+                                key: const ValueKey(
+                                  'android-update-dismiss-button',
+                                ),
+                                tooltip: 'Ahora no',
+                                constraints: const BoxConstraints.tightFor(
+                                  width: 48,
+                                  height: 48,
+                                ),
+                                onPressed: service.dismissAvailableUpdate,
+                                icon: const Icon(Icons.close, size: 19),
+                              );
+
+                        if (stackActions) {
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(child: title),
+                                  if (dismissButton != null) dismissButton,
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: installButton,
+                              ),
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(child: title),
+                            const SizedBox(width: 8),
+                            installButton,
+                            if (dismissButton != null) dismissButton,
+                          ],
+                        );
+                      },
+                    ),
+                    if (service.isDownloading) ...[
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(
+                        value: service.downloadProgress,
+                        minHeight: 4,
                       ),
                     ],
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -246,18 +273,70 @@ class _AndroidUpdatePromptState extends State<AndroidUpdatePrompt>
   }
 
   Future<void> _install(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
     try {
       await context.read<AndroidUpdateService>().installAvailableUpdate();
     } catch (_) {
-      if (!context.mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('No se pudo descargar la actualización.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // The service keeps the actionable failure in the same update prompt.
+      // Avoid placing a second bottom SnackBar over that prompt.
     }
+  }
+}
+
+class _UpdateTitle extends StatelessWidget {
+  final String versionName;
+  final String? detail;
+  final Color detailColor;
+  final bool showWhatsNew;
+
+  const _UpdateTitle({
+    required this.versionName,
+    required this.detail,
+    required this.detailColor,
+    this.showWhatsNew = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Versión $versionName',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: colors.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (detail != null) ...[
+              const SizedBox(height: 2),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  detail!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: detailColor,
+                  ),
+                ),
+              ),
+            ],
+            if (showWhatsNew)
+              Text(
+                'Novedades',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: colors.primary,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

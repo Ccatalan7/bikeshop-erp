@@ -1035,7 +1035,7 @@ time evidence. Any change to those workflows must update the guide source and
 regenerate its PDF in the same task; the manual must never become a competing
 source of business rules.
 
-### Responsive Jobs workspace (2026-07-25)
+### Responsive Jobs workspace (2026-07-26)
 
 The canonical Jobs workspace now treats desktop and compact layouts as
 different compositions of the same operational surface. At `>=900px` of the
@@ -1068,6 +1068,38 @@ callbacks rather than replacing `/taller/pegas`. Only a host that passes that
 explicit close callback may close its surrounding workspace; compact calendar
 embedding keeps its established local cancel/revert behavior.
 
+An eligible confirmed invoice exposes the canonical `PaymentForm` as a
+text-first `Registrar abono` action inside that compact editor. Payment is a
+second in-page workspace state rather than a routed detour: visible or system
+Back restores the same inline invoice, while successful registration closes
+the workspace and refreshes Jobs exactly once. The payment form keeps one
+scroll owner, reserves virtual-keyboard inset, and posts through the existing
+atomic sales-payment command.
+
+The compact bicycle row resolves all persisted `mechanic_job_bikes` in stable
+order. A single bicycle opens directly; multiple bicycles use a labelled,
+touch-safe bottom-sheet chooser, then embed the exact selected bicycle in the
+canonical `BikeFormDialog`. Save still uses `saveBikeAggregate` and refreshes
+Jobs once; its compact title keeps a labelled 48px return control reachable
+from every section, so cancel returns to the immediate Jobs host instead of
+letting browser Back escape the module. Phone and tablet use one full-width
+composition through `899px`: phone selects its four sections on demand,
+technical systems use a touch-safe sheet, and technical rules/map remain
+labelled disclosures until requested. Desktop retains direct section tabs and
+a persistent technical map only where the available workspace makes it useful.
+Desktop
+per-bike subrows likewise pass the clicked bicycle explicitly instead of
+re-resolving the job primary. Inside `BikeFormDialog`, brand/model reference
+loading retains the 56px field geometry instead of mounting a page-sized
+branded loader, and desktop action groups plus bounded dropdown values reflow
+at increased text scale.
+
+On phone, the job form's bicycle context starts as one disclosure containing
+identity, the first actionable technical exception, and any remaining
+exception count. Full technical highlights and the existing profile commands
+expand in place. Tablet and desktop retain the established expanded
+presentation; no business snapshot or command is forked.
+
 Proposal PDF uses the same `InvoicePdfGenerator`, but preparation now returns a
 side-effect-free bytes/file-name artifact. The inline `PdfPreview` consumes that
 artifact, and only the explicit share/save control invokes the platform export;
@@ -1093,25 +1125,37 @@ workspace stack remain stable across `899/900`; route data, filters, disclosure
 state, scroll, and dirty inline children therefore survive without a transient
 empty reload.
 
-This in-page composition is compact-only. The desktop dense table and optional
-`PegaDetailView` split inspector are unchanged, and routed
-`/taller/pegas/:id` remains the canonical deep-link/external-entry surface.
-Mobile does not detour through `PegaDetailView`.
+This in-page composition is compact-only. The desktop dense table, optional
+`PegaDetailView` split inspector, and routed `/taller/pegas/:id` remain
+registered peer compositions and canonical deep-link/external-entry surfaces.
+Their commands and persistence owners are shared, but their current visual
+hierarchy is not protected precedent: redundant controls or broken contextual
+navigation found during compact work should be repaired in the appropriate
+shared or desktop host. Mobile does not detour through `PegaDetailView`.
 
 Compact mode edits the same canonical scope, view, custom-status, priority,
 overdue, and unpaid owners as desktop. Its workload disclosure preserves linked
 bicycle/component/warranty/proposal counts, bicycle-state breakdown, and the
 shared financial projection without turning the first screen into a KPI wall.
+The grouped status filter uses the same plain-language operator in compact and
+desktop compositions: after at least one status is selected it reveals
+`Excluir los estados elegidos`, persists that canonical mode, and returns to
+inclusive mode when the last selected status is removed.
 Lista, Tablero, Calendario, Gantt, and Tareas remain reachable from one selector.
 Within the tablet class, Lista uses its documented internal `720px` content
 breakpoint: `600-719px` keeps one card column and `720-899px` pairs the same
 cards in two columns, retaining one scroll owner and the same commands.
 Calendar stacks month and day agenda below `900px`; Gantt stacks its navigation
 and scale controls, gives compact bars a touchable height, and preserves
-deliberate horizontal timeline panning; Tasks uses a compact search/create/filter
-dock plus task cards and a stacked narrow create form instead of its desktop
-table. `Tareas` continues to disclose that it owns independent task filters
-instead of pretending the Jobs scope filtered its dataset.
+deliberate horizontal timeline panning; Tasks uses a compact
+search/create/filter dock plus one grouped task-manager list and a stacked
+narrow create form instead of its desktop table. Secondary task metadata and
+commands expand inline instead of making every task a card. Board group,
+Calendar month/focus, Gantt scale/pan, and Tasks search/filter/disclosure/scroll
+live in parent-owned mode sessions, so a Lista → mode → Lista round trip
+restores the exact mode context. `Tareas` continues to disclose that it owns
+independent task filters instead of pretending the Jobs scope filtered its
+dataset.
 
 The visual contract is modern but restrained: a tonal command dock and softly
 elevated record surfaces establish depth, one low-saturation status treatment
@@ -1132,9 +1176,9 @@ profile truth, visit diagnosis, executed-work metadata, or derived bike memory.
 Centralization is strengthened because phone actions reuse the existing
 coordinators, routes, `BikeFormDialog`, invoice/payment surfaces and line-item
 state instead of adding mobile writers. Remaining responsive gaps are explicit:
-multi-bike phone access still needs a dedicated canonical chooser, the native
-Galaxy S23 Ultra landscape canary remains to be proven, and the remaining
-job-form tabs still need the same focused compact audit.
+the native Galaxy S23 Ultra landscape canary remains to be proven; customer
+selection/creation, add-bicycle, the service wizard, and some deep item rows
+still retain legacy dialogs or layouts and need their own touch/keyboard audit.
 
 ### Invoice-linked inventory integrity (current rule)
 

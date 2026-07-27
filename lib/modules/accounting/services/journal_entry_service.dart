@@ -5,15 +5,22 @@ import '../../../shared/services/tenant_service.dart';
 import '../models/account.dart';
 import '../models/journal_entry.dart';
 import 'chart_of_accounts_service.dart';
+import 'financial_projection_refresh_coordinator.dart';
 
 class JournalEntryService extends ChangeNotifier {
   final DatabaseService _databaseService;
   final ChartOfAccountsService _chartOfAccountsService;
+  final FinancialProjectionRefreshCoordinator _financialProjectionRefresh;
   final List<JournalEntry> _journalEntries = [];
   int _nextEntryNumber = 1;
   bool _isLoaded = false;
 
-  JournalEntryService(this._databaseService, this._chartOfAccountsService);
+  JournalEntryService(
+    this._databaseService,
+    this._chartOfAccountsService, {
+    FinancialProjectionRefreshCoordinator? financialProjectionRefresh,
+  }) : _financialProjectionRefresh = financialProjectionRefresh ??
+            FinancialProjectionRefreshCoordinator.fallback;
 
   List<JournalEntry> get journalEntries => List.unmodifiable(_journalEntries);
 
@@ -198,6 +205,7 @@ class JournalEntryService extends ChangeNotifier {
     _journalEntries.add(persistedEntry);
     _journalEntries.sort((a, b) => b.date.compareTo(a.date));
     _syncNextEntryNumber();
+    _recordCommittedJournalEntry(persistedEntry.id);
     notifyListeners();
   }
 
@@ -510,6 +518,7 @@ class JournalEntryService extends ChangeNotifier {
     _journalEntries.add(persistedReverse);
     _journalEntries.sort((a, b) => b.date.compareTo(a.date));
     _syncNextEntryNumber();
+    _recordCommittedJournalEntry(persistedReverse.id);
     notifyListeners();
   }
 
@@ -549,11 +558,22 @@ class JournalEntryService extends ChangeNotifier {
       // Remove from local cache
       _journalEntries.removeAt(entryIndex);
       _syncNextEntryNumber();
+      _recordCommittedJournalEntry(entry.id);
       notifyListeners();
     } catch (e) {
       debugPrint('❌ Error deleting journal entry: $e');
       rethrow;
     }
+  }
+
+  void _recordCommittedJournalEntry(String? entityId) {
+    _financialProjectionRefresh.recordCommitted(
+      FinancialProjectionChange(
+        kind: FinancialProjectionChangeKind.journalEntry,
+        origin: FinancialProjectionChangeOrigin.localCommit,
+        entityId: entityId,
+      ),
+    );
   }
 
   Future<JournalEntry> _persistEntry(JournalEntry entry) async {

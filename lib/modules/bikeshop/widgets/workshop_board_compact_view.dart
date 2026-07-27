@@ -14,6 +14,16 @@ class WorkshopBoardCompactGroup {
   final List<Widget> children;
 }
 
+/// Parent-owned compact board navigation state.
+///
+/// Keeping this object above the mode widget lets Jobs restore the exact board
+/// column after an inline job round trip or a temporary view change.
+class WorkshopBoardCompactSession {
+  WorkshopBoardCompactSession({this.selectedGroupId});
+
+  String? selectedGroupId;
+}
+
 /// Phone/tablet composition for the workshop status board.
 ///
 /// A desktop kanban depends on simultaneously visible columns. On a compact
@@ -25,10 +35,12 @@ class WorkshopBoardCompactView extends StatefulWidget {
     super.key,
     required this.groups,
     this.emptyLabel = 'No hay trabajos que mostrar',
+    this.session,
   });
 
   final List<WorkshopBoardCompactGroup> groups;
   final String emptyLabel;
+  final WorkshopBoardCompactSession? session;
 
   @override
   State<WorkshopBoardCompactView> createState() =>
@@ -36,7 +48,10 @@ class WorkshopBoardCompactView extends StatefulWidget {
 }
 
 class _WorkshopBoardCompactViewState extends State<WorkshopBoardCompactView> {
-  String? _selectedGroupId;
+  final WorkshopBoardCompactSession _localSession =
+      WorkshopBoardCompactSession();
+
+  WorkshopBoardCompactSession get _session => widget.session ?? _localSession;
 
   WorkshopBoardCompactGroup? get _selectedGroup {
     if (widget.groups.isEmpty) {
@@ -44,7 +59,7 @@ class _WorkshopBoardCompactViewState extends State<WorkshopBoardCompactView> {
     }
 
     return widget.groups.cast<WorkshopBoardCompactGroup?>().firstWhere(
-          (group) => group?.id == _selectedGroupId,
+          (group) => group?.id == _session.selectedGroupId,
           orElse: () => widget.groups.first,
         );
   }
@@ -52,8 +67,10 @@ class _WorkshopBoardCompactViewState extends State<WorkshopBoardCompactView> {
   @override
   void didUpdateWidget(covariant WorkshopBoardCompactView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.groups.every((group) => group.id != _selectedGroupId)) {
-      _selectedGroupId = null;
+    if (widget.groups.every(
+      (group) => group.id != _session.selectedGroupId,
+    )) {
+      _session.selectedGroupId = null;
     }
   }
 
@@ -111,7 +128,7 @@ class _WorkshopBoardCompactViewState extends State<WorkshopBoardCompactView> {
               if (value == null || value == selectedGroup.id) {
                 return;
               }
-              setState(() => _selectedGroupId = value);
+              setState(() => _session.selectedGroupId = value);
             },
           ),
         ),
