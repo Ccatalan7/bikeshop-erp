@@ -62,6 +62,34 @@ void main() {
     );
   });
 
+  test('product detail navigation always queues destination scroll reset', () {
+    final layout = File(
+      'lib/public_store/widgets/public_store_layout.dart',
+    ).readAsStringSync();
+    final resetStart = layout.indexOf(
+      'final shouldResetTargetScroll =',
+    );
+    final currentRouteCheck = layout.indexOf(
+      'if (current == target)',
+      resetStart,
+    );
+    final resetContract = layout.substring(resetStart, currentRouteCheck);
+
+    expect(
+      resetContract,
+      contains('_shouldResetScrollForPublicStoreNav(targetPath)'),
+    );
+    expect(resetContract, contains('requestScrollToTop(target)'));
+    expect(
+      resetContract,
+      contains('requestScrollToTopForPath(targetPath)'),
+    );
+    expect(
+      layout,
+      contains("!normalized.startsWith('/productos/categoria/')"),
+    );
+  });
+
   test('active homepage product surfaces use gapless inventory SWR', () {
     final home = File(
       'lib/public_store/pages/public_home_page.dart',

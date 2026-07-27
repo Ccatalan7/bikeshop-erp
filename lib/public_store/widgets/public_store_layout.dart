@@ -5920,6 +5920,18 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         targetPath == '/tienda' ||
         targetPath == '/tienda/';
     final shouldReplace = _shouldReplaceForPublicStoreNav(targetPath);
+    final shouldResetTargetScroll =
+        _shouldResetScrollForPublicStoreNav(targetPath);
+
+    // A product-to-product navigation can reuse the same GoRouter page/state
+    // because only path parameters changed. Queue an explicit reset for the
+    // destination so related-product clicks never inherit the previous
+    // detail's below-the-fold scroll offset.
+    if (shouldResetTargetScroll) {
+      final scrollState = context.read<PublicStoreScrollState>();
+      scrollState.requestScrollToTop(target);
+      scrollState.requestScrollToTopForPath(targetPath);
+    }
 
     // If we're already on the target route, still honor explicit "home"
     // navigations (logo / Inicio) by scrolling to top and revalidating through
@@ -6067,6 +6079,22 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Custom pages
     if (normalized.startsWith('/pagina/')) return true;
 
+    return false;
+  }
+
+  bool _shouldResetScrollForPublicStoreNav(String path) {
+    var normalized = path.trim().toLowerCase();
+    if (normalized.startsWith('/tienda/')) {
+      normalized = normalized.substring('/tienda'.length);
+    }
+
+    if (normalized.startsWith('/producto/')) return true;
+    if (normalized.startsWith('/productos/')) {
+      return !normalized.startsWith('/productos/categoria/');
+    }
+    if (normalized.startsWith('/servicios/')) {
+      return !normalized.startsWith('/servicios/categoria/');
+    }
     return false;
   }
 
