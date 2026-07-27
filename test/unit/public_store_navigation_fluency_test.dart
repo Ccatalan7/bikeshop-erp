@@ -1,43 +1,18 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vinabike_erp/public_store/routes/public_store_shell_policy.dart';
 
 void main() {
-  test('standalone storefront owns one persistent routed layout', () {
+  test('standalone storefront keeps routed layouts outside a nested shell', () {
     final router = File(
       'lib/public_store/routes/public_store_router.dart',
     ).readAsStringSync();
 
-    expect(router, contains('ShellRoute('));
+    expect(router, isNot(contains('ShellRoute(')));
+    expect(router, contains('_buildPageNoScroll'));
     expect(
       RegExp(r'child: PublicStoreLayout\(').allMatches(router),
-      hasLength(1),
-    );
-    expect(router, contains('containsPersistentRouteNavigator: true'));
-    expect(router, isNot(contains('_buildPageNoScroll')));
-  });
-
-  test('only conversation detail routes bypass page scrolling', () {
-    expect(
-      publicStoreRouteUsesPageViewScrolling('/cuenta/mensajes/thread-1'),
-      isFalse,
-    );
-    expect(
-      publicStoreRouteUsesPageViewScrolling('/cuenta/chats/thread-1/'),
-      isFalse,
-    );
-    expect(
-      publicStoreRouteUsesPageViewScrolling('/cuenta/mensajes'),
-      isTrue,
-    );
-    expect(
-      publicStoreRouteUsesPageViewScrolling('/cuenta/chats'),
-      isTrue,
-    );
-    expect(
-      publicStoreRouteUsesPageViewScrolling('/productos/example/SKU-1'),
-      isTrue,
+      hasLength(2),
     );
   });
 

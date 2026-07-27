@@ -83,12 +83,6 @@ class PublicStoreLayout extends StatefulWidget {
   final bool enablePageViewScrolling;
   final String? routePath;
 
-  /// Whether [child] is the persistent Navigator owned by a ShellRoute.
-  ///
-  /// A route-keyed AnimatedSwitcher must not retain an outgoing copy of the
-  /// same Navigator while mounting its incoming copy.
-  final bool containsPersistentRouteNavigator;
-
   /// When true, the editor panel is rendered externally (by PersistentEditorShell)
   /// so this layout should not render it.
   final bool useExternalEditorPanel;
@@ -100,7 +94,6 @@ class PublicStoreLayout extends StatefulWidget {
     this.enablePageViewScrolling = true,
     this.useExternalEditorPanel = true,
     this.routePath,
-    this.containsPersistentRouteNavigator = false,
   });
 
   /// Centralized navigation entry-point for public store UI elements.
@@ -635,11 +628,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           // mounting that same shell for the incoming URI, duplicating every
           // branch Navigator GlobalKey.
           _isErpMountedStore()) {
-        return expand ? SizedBox.expand(child: child) : child;
-      }
-
-      // The standalone ShellRoute now follows the same stable-shell contract.
-      if (widget.containsPersistentRouteNavigator) {
         return expand ? SizedBox.expand(child: child) : child;
       }
 
