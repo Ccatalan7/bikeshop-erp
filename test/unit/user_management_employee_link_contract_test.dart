@@ -195,6 +195,59 @@ void main() {
     );
   });
 
+  test('employee-linking action policy fails closed in unsafe states', () {
+    expect(
+      canChangeEmployeeLink(
+        actionRunning: false,
+        employeeLinkNeedsReview: false,
+        profileActive: true,
+        hasHealthyEmployeeLink: false,
+      ),
+      isTrue,
+      reason: 'An active unlinked profile may choose an employee explicitly.',
+    );
+    expect(
+      canChangeEmployeeLink(
+        actionRunning: false,
+        employeeLinkNeedsReview: false,
+        profileActive: false,
+        hasHealthyEmployeeLink: true,
+      ),
+      isTrue,
+      reason: 'A suspended profile may explicitly unlink its healthy link.',
+    );
+    expect(
+      canChangeEmployeeLink(
+        actionRunning: false,
+        employeeLinkNeedsReview: false,
+        profileActive: false,
+        hasHealthyEmployeeLink: false,
+      ),
+      isFalse,
+      reason: 'A suspended unlinked profile must be restored first.',
+    );
+    expect(
+      canChangeEmployeeLink(
+        actionRunning: false,
+        employeeLinkNeedsReview: true,
+        profileActive: true,
+        hasHealthyEmployeeLink: false,
+      ),
+      isFalse,
+      reason: 'Contradictory employee evidence must block link changes.',
+    );
+    expect(
+      canChangeEmployeeLink(
+        actionRunning: true,
+        employeeLinkNeedsReview: false,
+        profileActive: true,
+        hasHealthyEmployeeLink: false,
+      ),
+      isFalse,
+      reason: 'A running mutation must block a second link action.',
+    );
+  });
+
   test('user console honors the employee-linking action contract', () {
     final page = File(
       'lib/modules/settings/pages/user_management_page.dart',
@@ -220,10 +273,7 @@ void main() {
     expect(page, contains('_confirmLinkEmployee('));
     expect(page, contains('_confirmUnlinkEmployee('));
     expect(page, contains('Confirma que ambas identidades'));
-    expect(
-      page,
-      contains('(!profileActive && !hasHealthyEmployeeLink)'),
-    );
+    expect(page, contains('canChangeEmployeeLink('));
     expect(
       page,
       contains('Otro administrador autorizado debe cambiar tu rol o permisos'),

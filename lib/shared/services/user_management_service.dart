@@ -158,6 +158,17 @@ List<EmployeeAccessState> parseEmployeeAccessStates(dynamic value) {
   return List.unmodifiable(result);
 }
 
+bool canChangeEmployeeLink({
+  required bool actionRunning,
+  required bool employeeLinkNeedsReview,
+  required bool profileActive,
+  required bool hasHealthyEmployeeLink,
+}) {
+  return !actionRunning &&
+      !employeeLinkNeedsReview &&
+      (profileActive || hasHealthyEmployeeLink);
+}
+
 @visibleForTesting
 void validateEmployeeLinkResult(
   Map<String, dynamic> result, {

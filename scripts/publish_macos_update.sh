@@ -160,24 +160,32 @@ show_workflow_failure_diagnostics() {
   local run_id="$1"
   local jobs_json
   local job_id
-  local job_name
   local annotations_json
+  local failed_jobs_summary=''
+  local failed_log=''
+  local flutter_gate_summary=''
 
   if jobs_json="$(
     gh api --method GET \
       "repos/${REPO}/actions/runs/${run_id}/jobs" \
       -f per_page=100
   )"; then
-    while IFS=$'\t' read -r job_id job_name; do
-      printf 'Failed job: %s\n' "$job_name"
-      jq -r --argjson job_id "$job_id" '
+    failed_jobs_summary="$(
+      jq -r '
         .jobs[]
-        | select(.id == $job_id)
-        | .steps[]?
         | select(.conclusion == "failure")
-        | "  Failed step: \(.name)"
+        | "Failed job: \(.name)\n"
+          + (
+              [.steps[]? | select(.conclusion == "failure") | "  Failed step: \(.name)"]
+              | if length == 0
+                then ["  Failed step: unavailable from GitHub jobs API"]
+                else .
+                end
+              | join("\n")
+            )
       ' <<< "$jobs_json"
-
+    )"
+    while IFS= read -r job_id; do
       if annotations_json="$(
         gh api --method GET \
           "repos/${REPO}/check-runs/${job_id}/annotations" \
@@ -191,8 +199,7 @@ show_workflow_failure_diagnostics() {
       jq -r '
         .jobs[]
         | select(.conclusion == "failure")
-        | [.id, .name]
-        | @tsv
+        | .id
       ' <<< "$jobs_json"
     )
   else
@@ -200,9 +207,9 @@ show_workflow_failure_diagnostics() {
   fi
 
   printf '\nFailed step log:\n'
-  if ! gh run view "$run_id" --repo "$REPO" --log-failed \
-    | tail -n 300 \
-    | awk '
+  if failed_log="$(gh run view "$run_id" --repo "$REPO" --log-failed)"; then
+    tail -n 300 <<< "$failed_log" \
+      | awk '
         {
           if (length($0) > 1000) {
             print substr($0, 1, 1000) " ... [line truncated]"
@@ -210,8 +217,39 @@ show_workflow_failure_diagnostics() {
             print
           }
         }
-      '; then
+      '
+    flutter_gate_summary="$(
+      awk -F '\t' '
+        {
+          line = (NF >= 3 ? $3 : $0)
+          sub(/^[0-9-]+T[0-9:.]+Z[[:space:]]*/, "", line)
+          if (line ~ /^\[flutter-test-gate\] Flutter tests failed\./) {
+            capture = 1
+          }
+          if (capture) {
+            print line
+          }
+          if (line ~ /^\[flutter-test-gate\] Nothing was published\./) {
+            exit
+          }
+        }
+      ' <<< "$failed_log"
+    )"
+  else
     echo 'Could not load the failed step log; use the workflow URL above.' >&2
+  fi
+
+  printf '\nFailure summary:\n'
+  if [[ -n "$failed_jobs_summary" ]]; then
+    printf '%s\n' "$failed_jobs_summary"
+  else
+    printf 'Failed job: unavailable from GitHub jobs API\n'
+    printf '  Failed step: unavailable from GitHub jobs API\n'
+  fi
+  if [[ -n "$flutter_gate_summary" ]]; then
+    printf '%s\n' "$flutter_gate_summary"
+  else
+    echo '[macos-update] Nothing was published. Fix the failed step above and run the task again.'
   fi
 }
 
@@ -680,9 +718,9 @@ while true; do
 done
 
 if [[ "$conclusion" != 'success' ]]; then
-  show_workflow_failure_diagnostics "$run_id"
   echo "macOS publication did not complete: $run_url" >&2
   echo "Source commit $head_sha remains pushed; fix the reported failure and run the task again." >&2
+  show_workflow_failure_diagnostics "$run_id"
   exit 1
 fi
 

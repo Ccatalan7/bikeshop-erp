@@ -277,6 +277,79 @@ function parseRuns(text) {
   return parsed;
 }
 
+function cleanGitHubLogLine(value) {
+  const withoutAnsi = String(value ?? "").replace(
+    // GitHub may preserve terminal color codes from the nested workflow.
+    // eslint-disable-next-line no-control-regex
+    /\x1B\[[0-?]*[ -/]*[@-~]/gu,
+    "",
+  );
+  const fields = withoutAnsi.split("\t");
+  const message = fields.length >= 3 ? fields.slice(2).join("\t") : withoutAnsi;
+  return message.replace(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\s?/u,
+    "",
+  );
+}
+
+export function formatWorkflowFailureSummary(jobsText, failedLog) {
+  let jobs = [];
+  try {
+    const parsed = JSON.parse(jobsText || "{}");
+    jobs = Array.isArray(parsed?.jobs) ? parsed.jobs : [];
+  } catch {
+    jobs = [];
+  }
+
+  const lines = ["Failure summary:"];
+  const failedJobs = jobs.filter((job) => job?.conclusion === "failure");
+  if (failedJobs.length === 0) {
+    lines.push("Failed job: unavailable from GitHub jobs API");
+    lines.push("  Failed step: unavailable from GitHub jobs API");
+  } else {
+    for (const job of failedJobs) {
+      lines.push(`Failed job: ${String(job?.name || "Unnamed GitHub job")}`);
+      const failedSteps = Array.isArray(job?.steps)
+        ? job.steps.filter((step) => step?.conclusion === "failure")
+        : [];
+      if (failedSteps.length === 0) {
+        lines.push("  Failed step: unavailable from GitHub jobs API");
+      } else {
+        for (const step of failedSteps) {
+          lines.push(
+            `  Failed step: ${String(step?.name || "Unnamed GitHub step")}`,
+          );
+        }
+      }
+    }
+  }
+
+  const cleanLogLines = String(failedLog ?? "")
+    .split(/\r?\n/u)
+    .map(cleanGitHubLogLine);
+  const gateStart = cleanLogLines.findIndex((line) =>
+    line.startsWith("[flutter-test-gate] Flutter tests failed."),
+  );
+  if (gateStart >= 0) {
+    const gateEnd = cleanLogLines.findIndex(
+      (line, index) =>
+        index >= gateStart &&
+        line.startsWith("[flutter-test-gate] Nothing was published."),
+    );
+    const boundedEnd =
+      gateEnd >= gateStart
+        ? gateEnd + 1
+        : Math.min(cleanLogLines.length, gateStart + 12);
+    lines.push(...cleanLogLines.slice(gateStart, boundedEnd));
+  } else {
+    lines.push(
+      "[android-update] Nothing was published. Fix the failed step above and run the task again.",
+    );
+  }
+
+  return lines.join("\n").trimEnd();
+}
+
 function expectedAndroidRunTitle(state) {
   return [
     "Android publish",
@@ -430,6 +503,23 @@ export async function waitForRun(
     );
     if (view.status === "completed") {
       if (view.conclusion !== "success") {
+        const jobsJson =
+          run(
+            "gh",
+            [
+              "api",
+              "--method",
+              "GET",
+              `repos/${REPOSITORY}/actions/runs/${runId}/jobs`,
+              "-f",
+              "per_page=100",
+            ],
+            {
+              cwd: state.repositoryRoot,
+              allowFailure: true,
+              maxBuffer: 4 * 1024 * 1024,
+            },
+          ) ?? "";
         const failedLog = run(
           "gh",
           [
@@ -455,7 +545,10 @@ export async function waitForRun(
               .join("\n")}\n`,
           );
         }
-        fail(`Android publication failed. Check ${view.url ?? "GitHub Actions"}.`);
+        fail(
+          `Android publication failed. Check ${view.url ?? "GitHub Actions"}.\n` +
+            formatWorkflowFailureSummary(jobsJson, failedLog ?? ""),
+        );
       }
       return runId;
     }

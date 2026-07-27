@@ -1300,9 +1300,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
         ? !hasHealthyEmployeeLink
         : employeeState?.erpUserId == userId;
 
-    final canChangeEmployee = !_isActionRunning &&
-        !employeeLinkNeedsReview &&
-        (profileActive || hasHealthyEmployeeLink);
+    final canChangeEmployee = canChangeEmployeeLink(
+      actionRunning: _isActionRunning,
+      employeeLinkNeedsReview: employeeLinkNeedsReview,
+      profileActive: profileActive,
+      hasHealthyEmployeeLink: hasHealthyEmployeeLink,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -633,6 +633,18 @@ void main() {
     expect(publishHelper, contains('--log-failed'));
     expect(publishHelper, contains('tail -n 300'));
     expect(publishHelper, contains('[line truncated]'));
+    expect(
+      publishHelper,
+      contains(r'/actions/runs/${run_id}/jobs'),
+    );
+    expect(
+      publishHelper,
+      contains('[flutter-test-gate\\] Flutter tests failed'),
+    );
+    expect(
+      publishHelper,
+      contains('[flutter-test-gate\\] Nothing was published'),
+    );
     final jobsApiFallback = publishHelper.indexOf(
       'Could not load job/annotation diagnostics',
     );
@@ -642,6 +654,10 @@ void main() {
     );
     expect(jobsApiFallback, greaterThanOrEqualTo(0));
     expect(failedLogFallback, greaterThan(jobsApiFallback));
+    expect(
+      publishHelper.indexOf('Failure summary:', failedLogFallback),
+      greaterThan(failedLogFallback),
+    );
     expect(
       publishHelper,
       contains('Source commit \$head_sha remains pushed'),

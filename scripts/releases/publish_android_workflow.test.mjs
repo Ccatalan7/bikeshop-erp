@@ -5,6 +5,7 @@ import test from "node:test";
 
 import {
   dispatchWorkflow,
+  formatWorkflowFailureSummary,
   main,
   validateAndroidManifest,
 } from "./publish_android_workflow.mjs";
@@ -144,4 +145,64 @@ test("dispatch JSON uses only string workflow inputs", () => {
   ]);
   assert.equal(payload.release_target, "android");
   assert.equal(payload.publish_release, "true");
+});
+
+test("nested workflow diagnostics end with the exact Flutter gate summary", () => {
+  const jobsJson = JSON.stringify({
+    jobs: [
+      {
+        name:
+          "Route to independently protected Android release / " +
+          "Verify application integrity / Application regression gate",
+        conclusion: "failure",
+        steps: [
+          {
+            name: "Run all Flutter tests",
+            conclusion: "failure",
+          },
+        ],
+      },
+    ],
+  });
+  const prefix =
+    "nested workflow\tUNKNOWN STEP\t2026-07-27T07:17:10.5827557Z ";
+  const failedLog = [
+    `${prefix}[flutter-test-gate] Flutter tests failed. Exact failure summary:`,
+    `${prefix}`,
+    `${prefix}FAILED: user console honors the employee-linking action contract`,
+    `${prefix}  File: test/unit/example_test.dart:198:3`,
+    `${prefix}  Expected: contains 'healthy link'`,
+    `${prefix}  At: test/unit/example_test.dart 223:5 main.<fn>`,
+    `${prefix}`,
+    `${prefix}[flutter-test-gate] Nothing was published. Fix the failure above and run the task again.`,
+    `${prefix}Post job cleanup.`,
+  ].join("\n");
+
+  const summary = formatWorkflowFailureSummary(jobsJson, failedLog);
+
+  assert.match(
+    summary,
+    /Failed job: Route to independently protected Android release/u,
+  );
+  assert.match(summary, /Failed step: Run all Flutter tests/u);
+  assert.doesNotMatch(summary, /UNKNOWN STEP/u);
+  assert.match(summary, /FAILED: user console honors/u);
+  assert.ok(
+    summary.endsWith(
+      "[flutter-test-gate] Nothing was published. " +
+        "Fix the failure above and run the task again.",
+    ),
+  );
+});
+
+test("workflow diagnostics fail safely when GitHub has no gate summary", () => {
+  const summary = formatWorkflowFailureSummary("not-json", "");
+
+  assert.match(summary, /Failed job: unavailable from GitHub jobs API/u);
+  assert.ok(
+    summary.endsWith(
+      "[android-update] Nothing was published. " +
+        "Fix the failed step above and run the task again.",
+    ),
+  );
 });
