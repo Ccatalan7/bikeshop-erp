@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
+import '../services/current_user_profile_navigation.dart';
+import '../services/current_user_profile_service.dart';
 import '../widgets/main_layout.dart';
 import '../widgets/strategic_dashboard_deck.dart';
 
@@ -16,6 +19,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final profile = context.watch<CurrentUserProfileService>().profile;
     return MainLayout(
       title: 'Dashboard',
       child: SingleChildScrollView(
@@ -45,8 +49,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Bienvenido a Vinabike ERP',
-                          style: TextStyle(
+                          profile == null
+                              ? 'Bienvenido a Vinabike ERP'
+                              : 'Bienvenido, ${profile.displayName}',
+                          style: const TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
@@ -58,6 +64,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.white.withValues(alpha: 0.85),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              CurrentUserProfileNavigation.open(context),
+                          icon: const Icon(Icons.person_outline),
+                          label: const Text('Mi perfil'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.72),
+                            ),
+                            minimumSize: const Size(48, 48),
                           ),
                         ),
                       ],

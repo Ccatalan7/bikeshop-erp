@@ -163,58 +163,58 @@ additional_redirect_urls = [
   "http://127.0.0.1:54330/cuenta/login",
   "http://127.0.0.1:54330/cuenta/login?confirmed=true",
   "http://127.0.0.1:54330/cuenta/login?invited=true",
-  "http://127.0.0.1:54330/cuenta/login?type=recovery",
+  "http://127.0.0.1:54330/cuenta/login?recovery=true",
   "http://127.0.0.1:54330/reset-password",
   "http://localhost:54330/auth/callback",
   "http://localhost:54330/cuenta/login",
   "http://localhost:54330/cuenta/login?confirmed=true",
   "http://localhost:54330/cuenta/login?invited=true",
-  "http://localhost:54330/cuenta/login?type=recovery",
+  "http://localhost:54330/cuenta/login?recovery=true",
   "http://localhost:54330/reset-password",
   "http://127.0.0.1:3000/auth/callback",
   "http://127.0.0.1:3000/cuenta/login",
   "http://127.0.0.1:3000/cuenta/login?confirmed=true",
   "http://127.0.0.1:3000/cuenta/login?invited=true",
-  "http://127.0.0.1:3000/cuenta/login?type=recovery",
+  "http://127.0.0.1:3000/cuenta/login?recovery=true",
   "http://127.0.0.1:3000/reset-password",
   "http://localhost:3000/auth/callback",
   "http://localhost:3000/cuenta/login",
   "http://localhost:3000/cuenta/login?confirmed=true",
   "http://localhost:3000/cuenta/login?invited=true",
-  "http://localhost:3000/cuenta/login?type=recovery",
+  "http://localhost:3000/cuenta/login?recovery=true",
   "http://localhost:3000/reset-password",
   "https://project-vinabike.web.app/auth/callback",
   "https://project-vinabike.web.app/cuenta/login",
   "https://project-vinabike.web.app/cuenta/login?confirmed=true",
   "https://project-vinabike.web.app/cuenta/login?invited=true",
-  "https://project-vinabike.web.app/cuenta/login?type=recovery",
+  "https://project-vinabike.web.app/cuenta/login?recovery=true",
   "https://project-vinabike.web.app/reset-password",
   "https://project-vinabike.firebaseapp.com/auth/callback",
   "https://project-vinabike.firebaseapp.com/cuenta/login",
   "https://project-vinabike.firebaseapp.com/cuenta/login?confirmed=true",
   "https://project-vinabike.firebaseapp.com/cuenta/login?invited=true",
-  "https://project-vinabike.firebaseapp.com/cuenta/login?type=recovery",
+  "https://project-vinabike.firebaseapp.com/cuenta/login?recovery=true",
   "https://project-vinabike.firebaseapp.com/reset-password",
   "https://vinabike.cl/auth/callback",
   "https://vinabike.cl/cuenta/login",
   "https://vinabike.cl/cuenta/login?confirmed=true",
   "https://vinabike.cl/cuenta/login?invited=true",
-  "https://vinabike.cl/cuenta/login?type=recovery",
+  "https://vinabike.cl/cuenta/login?recovery=true",
   "https://www.vinabike.cl/auth/callback",
   "https://www.vinabike.cl/cuenta/login",
   "https://www.vinabike.cl/cuenta/login?confirmed=true",
   "https://www.vinabike.cl/cuenta/login?invited=true",
-  "https://www.vinabike.cl/cuenta/login?type=recovery",
+  "https://www.vinabike.cl/cuenta/login?recovery=true",
   "https://vinabike-store.web.app/auth/callback",
   "https://vinabike-store.web.app/cuenta/login",
   "https://vinabike-store.web.app/cuenta/login?confirmed=true",
   "https://vinabike-store.web.app/cuenta/login?invited=true",
-  "https://vinabike-store.web.app/cuenta/login?type=recovery",
+  "https://vinabike-store.web.app/cuenta/login?recovery=true",
   "https://vinabike-store.firebaseapp.com/auth/callback",
   "https://vinabike-store.firebaseapp.com/cuenta/login",
   "https://vinabike-store.firebaseapp.com/cuenta/login?confirmed=true",
   "https://vinabike-store.firebaseapp.com/cuenta/login?invited=true",
-  "https://vinabike-store.firebaseapp.com/cuenta/login?type=recovery",
+  "https://vinabike-store.firebaseapp.com/cuenta/login?recovery=true",
   "vinabike://app/auth/callback",
   "vinabike://app/reset-password",
 ]
@@ -250,7 +250,7 @@ password_requirements = "letters_digits"
 
 [auth.rate_limit]
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
-email_sent = 2
+email_sent = 30
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
 sms_sent = 30
 # Number of anonymous sign-ins that can be made per hour per IP address. Requires enable_anonymous_sign_ins = true.
@@ -298,48 +298,63 @@ otp_expiry = 3600
 # sender_name = "Admin"
 
 [auth.email.template.invite]
-subject = "Tu acceso a Viñabike está listo"
+subject = "Te invitaron a Viñabike: configura tu acceso"
 content_path = "./supabase/templates/auth_invite.html"
 
 [auth.email.template.confirmation]
-subject = "Confirma tu correo para ingresar a Viñabike"
+subject = "Confirma tu correo y termina de crear tu cuenta"
 content_path = "./supabase/templates/auth_confirmation.html"
 
 [auth.email.template.recovery]
-subject = "Restablece tu contraseña de Viñabike"
+subject = "Crea una nueva contraseña para tu cuenta Viñabike"
 content_path = "./supabase/templates/auth_recovery.html"
 
 [auth.email.template.magic_link]
-subject = "Tu enlace seguro de acceso a Viñabike"
+subject = "Tu enlace de acceso seguro a Viñabike"
 content_path = "./supabase/templates/auth_magic_link.html"
 
 [auth.email.template.email_change]
-subject = "Confirma tu nuevo correo de Viñabike"
+subject = "Confirma tu nuevo correo de acceso a Viñabike"
 content_path = "./supabase/templates/auth_email_change.html"
 
 [auth.email.template.reauthentication]
-subject = "{{ .Token }} es tu código de verificación de Viñabike"
+subject = "Tu código de verificación de Viñabike"
 content_path = "./supabase/templates/auth_reauthentication.html"
 
 [auth.email.notification.password_changed]
 enabled = true
-subject = "La contraseña de tu cuenta Viñabike cambió"
-content_path = "./supabase/templates/auth_password_changed.html"
+subject = "Aviso de seguridad: tu contraseña cambió"
+content_path = "./templates/auth_password_changed.html"
 
 [auth.email.notification.email_changed]
 enabled = true
-subject = "El correo de tu cuenta Viñabike cambió"
-content_path = "./supabase/templates/auth_email_changed.html"
+subject = "Aviso de seguridad: tu correo de acceso cambió"
+content_path = "./templates/auth_email_changed.html"
+
+[auth.email.notification.phone_changed]
+enabled = true
+subject = "Aviso de seguridad: tu teléfono cambió"
+content_path = "./templates/auth_phone_changed.html"
 
 [auth.email.notification.identity_linked]
 enabled = true
-subject = "Se vinculó un método de acceso a tu cuenta Viñabike"
-content_path = "./supabase/templates/auth_identity_linked.html"
+subject = "Aviso de seguridad: vinculaste un método de acceso"
+content_path = "./templates/auth_identity_linked.html"
 
 [auth.email.notification.identity_unlinked]
 enabled = true
-subject = "Se desvinculó un método de acceso de tu cuenta Viñabike"
-content_path = "./supabase/templates/auth_identity_unlinked.html"
+subject = "Aviso de seguridad: desvinculaste un método de acceso"
+content_path = "./templates/auth_identity_unlinked.html"
+
+[auth.email.notification.mfa_factor_enrolled]
+enabled = true
+subject = "Aviso de seguridad: agregaste una verificación adicional"
+content_path = "./templates/auth_mfa_factor_enrolled.html"
+
+[auth.email.notification.mfa_factor_unenrolled]
+enabled = true
+subject = "Aviso de seguridad: eliminaste una verificación adicional"
+content_path = "./templates/auth_mfa_factor_unenrolled.html"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.

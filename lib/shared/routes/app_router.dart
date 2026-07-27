@@ -64,6 +64,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         LoginScreen,
         MechanicJobFormPage,
         MedicalLeavesPage,
+        MyProfilePage,
         NavigationManagementPage,
         NiimbotSettingsPage,
         NotificationSettingsPage,
@@ -2523,6 +2524,15 @@ class AppRouter {
         ),
 
         // Settings routes
+        GoRoute(
+          path: '/profile',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => erp.MyProfilePage(),
+          ),
+        ),
         GoRoute(
           path: '/settings',
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../services/auth_service.dart';
+import '../services/current_user_profile_navigation.dart';
 import '../services/navigation_service.dart';
 import '../services/query_performance_service.dart';
 import '../services/right_toolbar_service.dart';
@@ -16,6 +17,7 @@ import '../../modules/messaging/providers/chat_provider.dart';
 import '../../modules/mail/providers/mail_account_manager.dart';
 import 'expandable_menu_item.dart';
 import 'toolbar_tool_presentation.dart';
+import 'current_user_profile_tile.dart';
 
 const List<MenuSubItem> _accountingMenuItems = [
   MenuSubItem(
@@ -341,6 +343,7 @@ String _getTitleFromRoute(String route) {
     '/tienda?edit=true': 'Editor Web',
     '/storage': 'Archivos',
     '/settings': 'Configuración',
+    '/profile': 'Mi perfil',
     '/settings/business-hours': 'Horario de atención',
     '/debug': 'Debug',
   };
@@ -1883,6 +1886,11 @@ class _AppSidebarState extends State<AppSidebar> {
             ),
             child: Column(
               children: [
+                CurrentUserProfileTile(
+                  selected: currentLocation == '/profile',
+                  onTap: () => CurrentUserProfileNavigation.open(context),
+                ),
+
                 // Settings
                 _buildSidebarItem(
                   context,
@@ -2563,8 +2571,9 @@ class _AppDrawerState extends State<AppDrawer> {
                 trailing: workspaces.length <= 1
                     ? null
                     : IconButton(
-                        onPressed: () =>
-                            manager.closeWorkspaceById(workspace.id),
+                        onPressed: () async {
+                          await manager.requestCloseWorkspaceById(workspace.id);
+                        },
                         icon: const Icon(Icons.close_rounded, size: 18),
                         tooltip: 'Cerrar ${workspace.title}',
                       ),
@@ -3137,6 +3146,15 @@ class _AppDrawerState extends State<AppDrawer> {
             ),
 
             const Divider(),
+
+            CurrentUserProfileTile(
+              compact: true,
+              selected: currentLocation == '/profile',
+              onTap: () {
+                Navigator.pop(context);
+                CurrentUserProfileNavigation.open(context);
+              },
+            ),
 
             // Settings
             ExpandableMenuItem(

@@ -3,7 +3,7 @@ begin;
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
 
-select plan(314);
+select plan(364);
 
 select has_column(
   'public',
@@ -62,6 +62,273 @@ select has_column(
   'employee_portal_accounts',
   'password_reset_challenge_started_at',
   'worker reset completion is bound to a post-login server challenge'
+);
+select has_function(
+  'public',
+  'is_authoritative_worker_portal_identity',
+  array['uuid', 'uuid', 'uuid'],
+  'worker authority is verified against Auth metadata and DB links'
+);
+select has_function(
+  'public',
+  'lock_auth_membership_identities',
+  array['uuid', 'uuid'],
+  'cross-table Auth membership checks share one transaction lock'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.lock_auth_membership_identities(uuid,uuid)',
+    'EXECUTE'
+  ),
+  'membership serialization is an internal trigger primitive'
+);
+select has_function(
+  'public',
+  'revoke_worker_portal_sessions',
+  array['uuid', 'uuid'],
+  'worker suspension and admin reset have a canonical session revoker'
+);
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.revoke_worker_portal_sessions(uuid,uuid)',
+    'EXECUTE'
+  ),
+  'trusted worker lifecycle workflows can revoke worker sessions'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.revoke_worker_portal_sessions(uuid,uuid)',
+    'EXECUTE'
+  ),
+  'browser clients cannot invoke worker session revocation'
+);
+select has_trigger(
+  'public',
+  'employee_portal_accounts',
+  'trg_guard_worker_portal_identity',
+  'worker portal links require one dedicated authoritative identity'
+);
+select has_trigger(
+  'public',
+  'user_profiles',
+  'trg_guard_worker_profile_overlap',
+  'active ERP profiles cannot overlap worker portal identities'
+);
+select has_trigger(
+  'public',
+  'employees',
+  'trg_guard_worker_staff_employee_overlap',
+  'ERP employee user links cannot overlap worker portal identities'
+);
+select has_function(
+  'public',
+  'deactivate_worker_portal_on_employee_exit',
+  array[]::text[],
+  'employee exit has one canonical worker credential shutdown'
+);
+select has_trigger(
+  'public',
+  'employees',
+  'trg_deactivate_worker_portal_on_employee_exit',
+  'employee exit atomically closes linked worker access'
+);
+select has_function(
+  'public',
+  'guard_linked_worker_employee_delete',
+  array[]::text[],
+  'linked employees are preserved until Auth cleanup is explicit'
+);
+select has_trigger(
+  'public',
+  'employees',
+  'trg_guard_linked_worker_employee_delete',
+  'physical employee deletion cannot orphan a worker Auth identity'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.deactivate_worker_portal_on_employee_exit()',
+    'EXECUTE'
+  ),
+  'clients cannot invoke the employee-exit credential trigger directly'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.guard_linked_worker_employee_delete()',
+    'EXECUTE'
+  ),
+  'clients cannot bypass the linked-employee deletion guard'
+);
+select ok(
+  not has_table_privilege(
+    'anon',
+    'public.employee_portal_accounts',
+    'SELECT'
+  ),
+  'anonymous callers cannot enumerate worker login identities'
+);
+select ok(
+  not has_table_privilege(
+    'anon',
+    'public.employee_portal_accounts',
+    'INSERT'
+  ),
+  'anonymous callers cannot create worker portal links'
+);
+select ok(
+  not has_table_privilege(
+    'anon',
+    'public.employee_portal_accounts',
+    'UPDATE'
+  ),
+  'anonymous callers cannot mutate worker portal links'
+);
+select ok(
+  not has_table_privilege(
+    'anon',
+    'public.employee_portal_accounts',
+    'DELETE'
+  ),
+  'anonymous callers cannot delete worker portal links'
+);
+select ok(
+  not has_table_privilege(
+    'authenticated',
+    'public.employee_portal_accounts',
+    'SELECT'
+  ),
+  'signed-in clients cannot enumerate worker login identities'
+);
+select ok(
+  not has_table_privilege(
+    'authenticated',
+    'public.employee_portal_accounts',
+    'INSERT'
+  ),
+  'signed-in clients cannot bypass the admin worker creation workflow'
+);
+select ok(
+  not has_table_privilege(
+    'authenticated',
+    'public.employee_portal_accounts',
+    'UPDATE'
+  ),
+  'signed-in clients cannot relink or reactivate worker identities'
+);
+select ok(
+  not has_table_privilege(
+    'authenticated',
+    'public.employee_portal_accounts',
+    'DELETE'
+  ),
+  'signed-in clients cannot delete worker portal identities'
+);
+select ok(
+  has_table_privilege(
+    'service_role',
+    'public.employee_portal_accounts',
+    'SELECT'
+  ),
+  'trusted server workflows can read worker portal links'
+);
+select ok(
+  has_table_privilege(
+    'service_role',
+    'public.employee_portal_accounts',
+    'INSERT'
+  ),
+  'trusted server workflows can create worker portal links'
+);
+select ok(
+  has_table_privilege(
+    'service_role',
+    'public.employee_portal_accounts',
+    'UPDATE'
+  ),
+  'trusted server workflows can update worker portal links'
+);
+select ok(
+  has_table_privilege(
+    'service_role',
+    'public.employee_portal_accounts',
+    'DELETE'
+  ),
+  'trusted server workflows can delete worker portal links'
+);
+select is(
+  (
+    select count(*)::integer
+    from pg_policies policy
+    where policy.schemaname = 'public'
+      and policy.tablename = 'employee_portal_accounts'
+  ),
+  0,
+  'worker portal table has no browser-facing RLS policy'
+);
+select is(
+  (
+    select string_agg(
+      policy.policyname || ':' || policy.cmd || ':' || policy.roles::text,
+      ','
+      order by policy.policyname
+    )
+    from pg_policies policy
+    where policy.schemaname = 'public'
+      and policy.tablename = 'employees'
+  ),
+  'employees_delete_managers:DELETE:{authenticated},'
+    || 'employees_insert_managers:INSERT:{authenticated},'
+    || 'employees_read_tenant:SELECT:{authenticated},'
+    || 'employees_update_managers:UPDATE:{authenticated}',
+  'employee RLS separates tenant reads from manager-only lifecycle writes'
+);
+select ok(
+  not has_table_privilege('anon', 'public.employees', 'SELECT'),
+  'anonymous callers cannot enumerate employees'
+);
+select ok(
+  not has_table_privilege('anon', 'public.employees', 'UPDATE'),
+  'anonymous callers cannot mutate employees'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.employees', 'TRUNCATE'),
+  'signed-in users never receive destructive employee table privileges'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.resolve_worker_login_internal(text,text)',
+    'EXECUTE'
+  ),
+  'the unguarded worker resolver body is server-internal'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.get_my_worker_portal_context_internal()',
+    'EXECUTE'
+  ),
+  'the unguarded worker context body is internal'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.begin_my_worker_password_reset_internal()',
+    'EXECUTE'
+  ),
+  'the unguarded worker reset start body is internal'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.complete_my_worker_password_reset_internal()',
+    'EXECUTE'
+  ),
+  'the unguarded worker reset completion body is internal'
 );
 
 select ok(
@@ -1416,6 +1683,65 @@ values
     'active'
   );
 
+update public.user_profiles
+set role = 'cashier',
+    permissions = '{}'::jsonb
+where user_id = '9f260000-0000-4000-8000-000000000081';
+
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '9f260000-0000-4000-8000-000000000081',
+    'role', 'authenticated'
+  )::text,
+  true
+);
+select set_config(
+  'request.jwt.claim.sub',
+  '9f260000-0000-4000-8000-000000000081',
+  true
+);
+
+set local role authenticated;
+
+update public.employees
+set job_title = 'Unauthorized cashier mutation'
+where id = '9f260000-0000-4000-8000-000000000011';
+
+reset role;
+
+select is(
+  (
+    select job_title
+    from public.employees
+    where id = '9f260000-0000-4000-8000-000000000011'
+  ),
+  'Mechanic',
+  'cashier cannot mutate employee lifecycle data through direct REST'
+);
+
+update public.user_profiles
+set role = 'admin'
+where user_id = '9f260000-0000-4000-8000-000000000081';
+
+set local role authenticated;
+
+update public.employees
+set job_title = 'Authorized manager mutation'
+where id = '9f260000-0000-4000-8000-000000000011';
+
+reset role;
+
+select is(
+  (
+    select job_title
+    from public.employees
+    where id = '9f260000-0000-4000-8000-000000000011'
+  ),
+  'Authorized manager mutation',
+  'DB-backed tenant admin retains employee lifecycle authority'
+);
+
 select throws_ok(
   $$
     insert into auth.users (
@@ -1556,6 +1882,57 @@ values (
   now() - interval '1 minute'
 );
 
+select ok(
+  public.is_authoritative_worker_portal_identity(
+    '9f260000-0000-4000-8000-000000000091',
+    '9f260000-0000-4000-8000-000000000001',
+    '9f260000-0000-4000-8000-000000000011'
+  ),
+  'dedicated worker Auth metadata and DB links form one authority'
+);
+select throws_ok(
+  $$
+    insert into public.user_profiles (
+      user_id,
+      tenant_id,
+      role,
+      permissions,
+      is_active
+    )
+    values (
+      '9f260000-0000-4000-8000-000000000091',
+      '9f260000-0000-4000-8000-000000000002',
+      'admin',
+      '{}'::jsonb,
+      true
+    )
+  $$,
+  '42501',
+  'Worker portal identity cannot be linked to an active ERP profile',
+  'worker Auth cannot acquire a second ERP tenant through user_profiles'
+);
+select throws_ok(
+  $$
+    update public.employees
+    set user_id = '9f260000-0000-4000-8000-000000000091'
+    where id = '9f260000-0000-4000-8000-000000000011'
+  $$,
+  '42501',
+  'Worker portal identity cannot be linked as ERP staff',
+  'worker Auth cannot also become an ERP employee login'
+);
+
+set local role authenticated;
+
+select throws_ok(
+  $$ select count(*) from public.employee_portal_accounts $$,
+  '42501',
+  'permission denied for table employee_portal_accounts',
+  'PostgREST-equivalent clients cannot enumerate worker login rows'
+);
+
+reset role;
+
 update public.tenants
 set shop_name = 'Shared Worker Shop',
     custom_domain = 'https://workers.example.invalid/'
@@ -1652,6 +2029,54 @@ select is(
   'worker-login-auth-boundary@example.invalid',
   'worker resolver accepts an exact active tenant UUID'
 );
+
+update auth.users
+set raw_app_meta_data = jsonb_build_object(
+      'account_type', 'erp_staff',
+      'tenant_id', '9f260000-0000-4000-8000-000000000002',
+      'role', 'admin'
+    )
+where id = '9f260000-0000-4000-8000-000000000091';
+
+select ok(
+  not public.is_authoritative_worker_portal_identity(
+    '9f260000-0000-4000-8000-000000000091',
+    '9f260000-0000-4000-8000-000000000001',
+    '9f260000-0000-4000-8000-000000000011'
+  ),
+  'worker authority fails closed when Admin metadata drifts'
+);
+select is(
+  (
+    select count(*)::integer
+    from public.resolve_worker_login(
+      '9f260000-0000-4000-8000-000000000001',
+      'worker.fixture'
+    )
+  ),
+  0,
+  'worker login resolver rejects a mixed ERP/worker identity'
+);
+select is(
+  public.get_my_worker_portal_context(),
+  null,
+  'worker context rejects a mixed ERP/worker identity'
+);
+select throws_ok(
+  $$ select public.begin_my_worker_password_reset() $$,
+  '42501',
+  'Authoritative worker identity required',
+  'mixed ERP/worker identity cannot use the worker reset gate'
+);
+
+update auth.users
+set raw_app_meta_data = jsonb_build_object(
+      'account_type', 'worker_portal',
+      'tenant_id', '9f260000-0000-4000-8000-000000000001',
+      'employee_id', '9f260000-0000-4000-8000-000000000011',
+      'role', 'worker'
+    )
+where id = '9f260000-0000-4000-8000-000000000091';
 
 update public.tenants
 set shop_name = case id
@@ -1842,6 +2267,61 @@ select is(
   public.worker_portal_tenant_id(),
   '9f260000-0000-4000-8000-000000000001'::uuid,
   'worker tenant authority becomes available after verified reset'
+);
+
+insert into auth.sessions (id, user_id, created_at, updated_at)
+values (
+  '9f260000-0000-4000-8000-000000000064',
+  '9f260000-0000-4000-8000-000000000091',
+  now(),
+  now()
+);
+
+update public.employees
+set status = 'inactive'
+where id = '9f260000-0000-4000-8000-000000000011';
+
+select ok(
+  (
+    select is_active is false
+      and must_reset_password is true
+      and password_credential_issued_at is null
+    from public.employee_portal_accounts
+    where auth_user_id = '9f260000-0000-4000-8000-000000000091'
+  ),
+  'employee exit closes the portal and restores the reset-required gate'
+);
+select is(
+  (
+    select count(*)::integer
+    from auth.sessions
+    where user_id = '9f260000-0000-4000-8000-000000000091'
+  ),
+  0,
+  'employee exit revokes every live worker Auth session'
+);
+
+update public.employees
+set status = 'active'
+where id = '9f260000-0000-4000-8000-000000000011';
+
+select is(
+  (
+    select is_active
+    from public.employee_portal_accounts
+    where auth_user_id = '9f260000-0000-4000-8000-000000000091'
+  ),
+  false,
+  'reactivating employment alone never revives an old worker credential'
+);
+select throws_ok(
+  $$
+    delete from public.employees
+    where id = '9f260000-0000-4000-8000-000000000011'
+  $$,
+  '42501',
+  'Linked worker access must be removed before deleting the employee',
+  'physical employee deletion cannot leave Auth and sessions orphaned'
 );
 
 insert into auth.users (

@@ -9,6 +9,25 @@ String? getInitialBrowserUrl() {
   return web.window.location.href;
 }
 
+/// Removes an Auth credential fragment after it has been captured in memory.
+///
+/// Query parameters are preserved because PKCE callbacks still need them
+/// during Supabase initialization. This prevents token hashes and legacy
+/// fragment sessions from remaining in browser history or copied URLs.
+void clearSensitiveAuthFragment() {
+  try {
+    final uri = Uri.parse(web.window.location.href);
+    if (uri.fragment.isEmpty) return;
+    web.window.history.replaceState(
+      null,
+      '',
+      uri.replace(fragment: '').toString(),
+    );
+  } catch (_) {
+    // URL cleanup must never prevent Auth initialization.
+  }
+}
+
 /// Hide the HTML loading screen after Flutter has loaded
 void hideHtmlLoadingScreen() {
   final loadingScreen = web.document.getElementById('app-shell');

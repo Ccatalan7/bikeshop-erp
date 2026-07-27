@@ -2,6 +2,7 @@
 export '../screens/login_screen.dart';
 export '../screens/reset_password_screen.dart';
 export '../screens/dashboard_screen.dart';
+export '../pages/my_profile_page.dart';
 export '../../modules/worker_portal/pages/worker_login_page.dart';
 export '../../modules/worker_portal/pages/worker_password_reset_page.dart';
 export '../../modules/worker_portal/pages/worker_home_page.dart';

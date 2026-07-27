@@ -8,7 +8,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ] as const;
 
 const FIREBASE_PREVIEW_ORIGIN = /^https:\/\/project-vinabike--[a-z0-9-]+\.web\.app$/;
-const WORKER_LOGIN_EMAIL = /^[^@\s]+@worker-login\.vinabike\.app$/i;
+const WORKER_LOGIN_EMAIL = /^[^@\s]+@worker-login\.invalid$/i;
 const WORKER_USERNAME = /^[a-z0-9][a-z0-9._-]{2,31}$/;
 const DUMMY_LOGIN_EMAIL = "no-account@worker.invalid";
 const MAX_REQUEST_BYTES = 2048;

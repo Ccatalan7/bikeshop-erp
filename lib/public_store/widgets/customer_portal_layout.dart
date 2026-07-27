@@ -32,11 +32,15 @@ class CustomerPortalLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accountService = context.watch<CustomerAccountService>();
+    if (!accountService.isAuthenticated) {
+      return _CustomerPortalAuthBoundary(accountService: accountService);
+    }
+
     if (overrideLayout) {
       return child;
     }
 
-    final accountService = context.watch<CustomerAccountService>();
     final profile = accountService.customerProfile;
     final fullName = (profile?['name'] ?? 'Mi cuenta').toString();
     final firstName = fullName.trim().isEmpty
@@ -126,6 +130,85 @@ class CustomerPortalLayout extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _CustomerPortalAuthBoundary extends StatelessWidget {
+  const _CustomerPortalAuthBoundary({
+    required this.accountService,
+  });
+
+  final CustomerAccountService accountService;
+
+  @override
+  Widget build(BuildContext context) {
+    final isLoading = accountService.isCustomerMembershipLoading;
+    final hasSession = accountService.hasAuthSession;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440, minHeight: 360),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (isLoading)
+                const CircularProgressIndicator()
+              else
+                Icon(
+                  hasSession
+                      ? Icons.verified_user_outlined
+                      : Icons.lock_outline,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              const SizedBox(height: 18),
+              Text(
+                isLoading
+                    ? 'Preparando tu cuenta…'
+                    : hasSession
+                        ? 'No pudimos abrir esta cuenta'
+                        : 'Inicia sesión para continuar',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                isLoading
+                    ? 'Estamos verificando tu acceso para esta tienda.'
+                    : hasSession
+                        ? 'Tu sesión existe, pero no tiene una membresía válida para esta tienda.'
+                        : 'Tu información se mostrará sólo después de verificar la membresía de esta tienda.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              if (!isLoading) ...[
+                const SizedBox(height: 22),
+                FilledButton(
+                  onPressed: hasSession
+                      ? () => accountService.reloadCustomerMembership()
+                      : () => context.go('/cuenta/login'),
+                  child: Text(hasSession ? 'REINTENTAR' : 'INICIAR SESIÓN'),
+                ),
+                if (hasSession) ...[
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () async {
+                      await accountService.signOut();
+                      if (context.mounted) {
+                        context.go('/cuenta/login');
+                      }
+                    },
+                    child: const Text('CERRAR ESTA SESIÓN'),
+                  ),
+                ],
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

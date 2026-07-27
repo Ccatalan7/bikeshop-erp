@@ -216,9 +216,12 @@ class _WorkspaceTabBarState extends State<WorkspaceTabBar> {
                               _startDrag(placements[index].workspace.id),
                           onDragEnded: _finishDrag,
                           onClose: workspaceManager.workspaces.length > 1
-                              ? () => workspaceManager.closeWorkspaceById(
+                              ? () async {
+                                  await workspaceManager
+                                      .requestCloseWorkspaceById(
                                     placements[index].workspace.id,
-                                  )
+                                  );
+                                }
                               : null,
                         ),
                       ),

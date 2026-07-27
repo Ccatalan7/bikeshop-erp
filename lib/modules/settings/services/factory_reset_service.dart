@@ -14,7 +14,16 @@ class FactoryResetService {
     required bool deleteInventory,
     required bool deleteStockMovements,
     bool deleteAccounting = false,
+    bool deleteEmployees = false,
   }) {
+    if (deleteEmployees) {
+      throw StateError(
+        'El borrado masivo de trabajadores está deshabilitado. '
+        'Desvincúlelos individualmente para cerrar accesos y conservar '
+        'su historial laboral y de auditoría.',
+      );
+    }
+
     if (deleteSales ||
         deletePurchases ||
         deleteInventory ||
@@ -32,6 +41,15 @@ class FactoryResetService {
         'No se puede eliminar el historial de movimientos sin eliminar '
         'también el inventario. El libro de stock es evidencia contable e '
         'inmutable; use un ajuste trazable para corregir existencias.',
+      );
+    }
+  }
+
+  static void validateModuleResetSelection(String moduleName) {
+    if (moduleName.trim().toLowerCase() == 'hr') {
+      throw StateError(
+        'El módulo de RR.HH. no admite borrado masivo desde el cliente. '
+        'La desvinculación de trabajadores debe conservar su historial.',
       );
     }
   }
@@ -232,6 +250,8 @@ class FactoryResetService {
 
   /// Alternative: Reset specific module data only (TENANT-SAFE)
   Future<void> resetModule(String moduleName) async {
+    validateModuleResetSelection(moduleName);
+
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) {
       throw Exception('User not authenticated');
@@ -370,6 +390,7 @@ class FactoryResetService {
         deleteInventory: deleteInventory,
         deleteStockMovements: deleteStockMovements,
         deleteAccounting: deleteAccounting,
+        deleteEmployees: deleteEmployees,
       );
 
       // Get current user's tenant_id

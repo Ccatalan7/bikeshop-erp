@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../shared/models/customer_address.dart';
 import '../../shared/services/auth_redirect_urls.dart';
+import '../../shared/services/self_password_service.dart';
 import '../../shared/services/tenant_detection_service.dart';
 import '../../shared/utils/auth_input_validation.dart';
+import '../../shared/utils/web_url.dart';
 import '../../modules/website/models/website_models.dart';
 
 /// Service for managing customer accounts on the public store
@@ -28,8 +30,18 @@ enum FirstPasswordInvitationTenantState {
   unavailable,
 }
 
+enum CustomerPasswordUpdateIssue {
+  reauthenticationRequired,
+  invalidVerificationCode,
+  expiredVerificationCode,
+  samePassword,
+  unknown,
+}
+
 class CustomerAccountService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
+  late final SelfPasswordService _passwordService =
+      SelfPasswordService(_supabase);
 
   // Captured from the initial browser URL BEFORE Supabase.initialize() clears
   // the fragment. This is the only reliable way to detect a recovery session
@@ -39,6 +51,7 @@ class CustomerAccountService extends ChangeNotifier {
   static String? _initialRecoveryAccessToken;
   static String? _initialRecoveryRefreshToken;
   static String? _initialRecoveryCode;
+  static String? _initialRecoveryTokenHash;
   static String? _initialInvitationTokenHash;
 
   static bool isPasswordRecoveryUri(Uri uri) {
@@ -50,7 +63,10 @@ class CustomerAccountService extends ChangeNotifier {
     final hasAccessToken =
         uri.queryParameters['access_token']?.isNotEmpty == true ||
             fragmentParams['access_token']?.isNotEmpty == true;
-    return hasRecoveryType && (hasCode || hasAccessToken);
+    final tokenHash = fragmentParams['token_hash'];
+    final hasTokenHash = tokenHash != null &&
+        RegExp(r'^[A-Za-z0-9._~-]{20,512}$').hasMatch(tokenHash);
+    return hasRecoveryType && (hasCode || hasAccessToken || hasTokenHash);
   }
 
   static bool isFirstPasswordInvitationUri(Uri uri) {
@@ -94,6 +110,7 @@ class CustomerAccountService extends ChangeNotifier {
     _initialRecoveryAccessToken = null;
     _initialRecoveryRefreshToken = null;
     _initialRecoveryCode = null;
+    _initialRecoveryTokenHash = null;
     _initialInvitationTokenHash = null;
     if (url == null || url.isEmpty) return;
     try {
@@ -113,8 +130,14 @@ class CustomerAccountService extends ChangeNotifier {
           : null;
       _initialRecoveryCode =
           isRecovery ? parsedUrl.queryParameters['code'] : null;
+      _initialRecoveryTokenHash =
+          isRecovery ? fragmentParams['token_hash'] : null;
       _initialInvitationTokenHash =
           isFirstPasswordInvitation ? fragmentParams['token_hash'] : null;
+      if ((isRecovery || isFirstPasswordInvitation) &&
+          parsedUrl.fragment.isNotEmpty) {
+        clearSensitiveAuthFragment();
+      }
     } on FormatException {
       // Malformed input is not Auth action evidence.
     }
@@ -128,10 +151,13 @@ class CustomerAccountService extends ChangeNotifier {
   void setTenantId(String? tenantId) {
     if (_tenantId == tenantId) return;
     _tenantId = tenantId;
+    _customerProfile = null;
     if (_currentUser != null &&
-        !_isFirstPasswordInvitationVerificationPending) {
-      _loadCustomerData();
+        !_isFirstPasswordInvitationVerificationPending &&
+        !_isPasswordRecoveryVerificationPending) {
+      unawaited(_loadCustomerData());
     }
+    notifyListeners();
   }
 
   String? get tenantId => _tenantId;
@@ -143,14 +169,20 @@ class CustomerAccountService extends ChangeNotifier {
   String? _error;
   String? _pendingVerificationEmail;
   bool _isPasswordRecoverySession = false;
+  bool _isPasswordRecoveryVerificationPending = false;
+  bool _isCustomerMembershipLoading = false;
   bool _hasFirstPasswordInvitationIntent = false;
   bool _isRestoringInitialRecovery = false;
   bool _isFirstPasswordInvitationVerificationPending = false;
+  String? _verifiedPasswordRecoveryUserId;
   String? _verifiedFirstPasswordInvitationUserId;
+  String? _pendingOtherSessionsRevocationUserId;
 
   /// Expose so the ERP or test code can clear the flag after use.
   void clearPasswordRecoverySession() {
     _isPasswordRecoverySession = false;
+    _isPasswordRecoveryVerificationPending = false;
+    _verifiedPasswordRecoveryUserId = null;
     _wasInitiallyRecoveryUrl = false;
     _clearInitialRecoveryEvidence();
     notifyListeners();
@@ -164,69 +196,105 @@ class CustomerAccountService extends ChangeNotifier {
   List<Map<String, dynamic>> get serviceHistory => _serviceHistory;
   bool get isLoading => _isLoading;
   String? get error => _error;
-  bool get isAuthenticated => _currentUser != null;
+  bool get hasAuthSession => _currentUser != null;
+  bool get isAuthenticated =>
+      _currentUser != null &&
+      _customerProfile?['auth_user_id']?.toString() == _currentUser!.id &&
+      _customerProfile?['tenant_id']?.toString() == _tenantId;
+  bool get isCustomerMembershipLoading => _isCustomerMembershipLoading;
   bool get requiresEmailVerification => _pendingVerificationEmail != null;
   String? get pendingVerificationEmail => _pendingVerificationEmail;
   bool get isPasswordRecoverySession => _isPasswordRecoverySession;
+  bool get isPasswordRecoveryVerificationPending =>
+      _isPasswordRecoveryVerificationPending;
   bool get hasFirstPasswordInvitationIntent =>
       _hasFirstPasswordInvitationIntent;
   bool get isFirstPasswordInvitationVerificationPending =>
       _isFirstPasswordInvitationVerificationPending;
+  bool get hasPendingOtherSessionsRevocation =>
+      _currentUser != null &&
+      _pendingOtherSessionsRevocationUserId == _currentUser!.id;
+
+  Future<bool> reloadCustomerMembership() => _loadCustomerData();
 
   CustomerAccountService() {
     final hasCapturedRecoveryIntent = _wasInitiallyRecoveryUrl;
+    final recoveryTokenHash = _initialRecoveryTokenHash;
     final invitationTokenHash = _initialInvitationTokenHash;
     _wasInitiallyRecoveryUrl = false;
+    _initialRecoveryTokenHash = null;
     _initialInvitationTokenHash = null;
     _isFirstPasswordInvitationVerificationPending = invitationTokenHash != null;
 
     final currentSession = _supabase.auth.currentSession;
     _currentUser = _supabase.auth.currentUser;
-    _isPasswordRecoverySession = hasCapturedRecoveryIntent &&
+    _isPasswordRecoverySession = recoveryTokenHash == null &&
+        hasCapturedRecoveryIntent &&
         _sessionMatchesInitialRecoveryEvidence(currentSession);
+    _isPasswordRecoveryVerificationPending =
+        hasCapturedRecoveryIntent && !_isPasswordRecoverySession;
 
     if (invitationTokenHash != null) {
       unawaited(_verifyInitialFirstPasswordInvitation(invitationTokenHash));
+    } else if (recoveryTokenHash != null) {
+      unawaited(_verifyInitialPasswordRecovery(recoveryTokenHash));
     } else if (_isPasswordRecoverySession) {
       _clearInitialRecoveryEvidence();
     } else if (hasCapturedRecoveryIntent) {
       unawaited(_restoreRecoverySessionFromInitialUrl());
     } else if (_currentUser != null) {
-      _loadCustomerData();
+      unawaited(_loadCustomerData());
     }
 
     // Listen to auth state changes
     _supabase.auth.onAuthStateChange.listen((data) {
       final event = data.event;
       if (event == AuthChangeEvent.passwordRecovery) {
-        _currentUser = data.session?.user;
-        _isPasswordRecoverySession = true;
-        if (!_isFirstPasswordInvitationVerificationPending) {
-          _loadCustomerData();
+        final nextUser = data.session?.user;
+        if (_pendingOtherSessionsRevocationUserId != null &&
+            _pendingOtherSessionsRevocationUserId != nextUser?.id) {
+          _pendingOtherSessionsRevocationUserId = null;
+        }
+        _currentUser = nextUser;
+        _verifiedPasswordRecoveryUserId = data.session?.user.id;
+        _isPasswordRecoverySession = data.session != null;
+        if (!_isFirstPasswordInvitationVerificationPending &&
+            !_isPasswordRecoveryVerificationPending) {
+          unawaited(_loadCustomerData());
         }
         notifyListeners();
       } else if (event == AuthChangeEvent.signedIn ||
           event == AuthChangeEvent.initialSession) {
         // Don't override recovery mode if we just established it from the URL.
-        _currentUser = data.session?.user;
+        final nextUser = data.session?.user;
+        if (_pendingOtherSessionsRevocationUserId != null &&
+            _pendingOtherSessionsRevocationUserId != nextUser?.id) {
+          _pendingOtherSessionsRevocationUserId = null;
+        }
+        _currentUser = nextUser;
         if (_hasFirstPasswordInvitationIntent &&
             data.session?.user.id != _verifiedFirstPasswordInvitationUserId) {
           _clearFirstPasswordInvitationEvidence();
         }
         if (!_isPasswordRecoverySession &&
-            !_isFirstPasswordInvitationVerificationPending) {
-          _loadCustomerData();
+            !_isFirstPasswordInvitationVerificationPending &&
+            !_isPasswordRecoveryVerificationPending) {
+          unawaited(_loadCustomerData());
         }
         notifyListeners();
       } else if (event == AuthChangeEvent.userUpdated) {
         // Password was changed — clear recovery state and treat as normal sign-in.
         _isPasswordRecoverySession = false;
+        _verifiedPasswordRecoveryUserId = null;
         _currentUser = data.session?.user;
-        _loadCustomerData();
+        unawaited(_loadCustomerData());
         notifyListeners();
       } else if (event == AuthChangeEvent.signedOut) {
         _currentUser = null;
+        _pendingOtherSessionsRevocationUserId = null;
         _isPasswordRecoverySession = false;
+        _verifiedPasswordRecoveryUserId = null;
+        _isCustomerMembershipLoading = false;
         _clearFirstPasswordInvitationEvidence();
         _customerProfile = null;
         _addresses = [];
@@ -236,6 +304,34 @@ class CustomerAccountService extends ChangeNotifier {
         notifyListeners();
       }
     });
+  }
+
+  Future<void> _verifyInitialPasswordRecovery(String tokenHash) async {
+    try {
+      final response = await _supabase.auth.verifyOTP(
+        tokenHash: tokenHash,
+        type: OtpType.recovery,
+      );
+      final recoverySession = response.session;
+      if (recoverySession == null) {
+        throw const AuthException(
+          'No pudimos validar el enlace de recuperación.',
+        );
+      }
+
+      _currentUser = recoverySession.user;
+      _verifiedPasswordRecoveryUserId = recoverySession.user.id;
+      _isPasswordRecoverySession = true;
+    } catch (_) {
+      _isPasswordRecoverySession = false;
+      _verifiedPasswordRecoveryUserId = null;
+      _currentUser = _supabase.auth.currentUser;
+      debugPrint('⚠️ [CustomerAuth] Recovery verification failed');
+    } finally {
+      _clearInitialRecoveryEvidence();
+      _isPasswordRecoveryVerificationPending = false;
+      notifyListeners();
+    }
   }
 
   Future<void> _verifyInitialFirstPasswordInvitation(String tokenHash) async {
@@ -256,7 +352,7 @@ class CustomerAccountService extends ChangeNotifier {
       _hasFirstPasswordInvitationIntent = true;
 
       if (_tenantId?.isNotEmpty == true) {
-        await _loadCustomerData();
+        await _loadCustomerData(rethrowOnFailure: true);
       }
     } catch (_) {
       _hasFirstPasswordInvitationIntent = false;
@@ -277,6 +373,7 @@ class CustomerAccountService extends ChangeNotifier {
       if (_sessionMatchesInitialRecoveryEvidence(existingSession)) {
         _currentUser = existingSession?.user;
         _isPasswordRecoverySession = true;
+        _verifiedPasswordRecoveryUserId = existingSession?.user.id;
         notifyListeners();
         return;
       }
@@ -297,11 +394,15 @@ class CustomerAccountService extends ChangeNotifier {
       _isPasswordRecoverySession =
           restoredFromCapturedCredential && session != null;
       _currentUser = session?.user;
+      _verifiedPasswordRecoveryUserId =
+          _isPasswordRecoverySession ? session?.user.id : null;
     } catch (_) {
       _isPasswordRecoverySession = false;
+      _verifiedPasswordRecoveryUserId = null;
       debugPrint('⚠️ [CustomerAuth] Recovery session restoration failed');
     } finally {
       _clearInitialRecoveryEvidence();
+      _isPasswordRecoveryVerificationPending = false;
       _isRestoringInitialRecovery = false;
       notifyListeners();
     }
@@ -324,19 +425,17 @@ class CustomerAccountService extends ChangeNotifier {
       return true;
     }
 
-    final code = _initialRecoveryCode;
-    if (code == null || code.isEmpty) return false;
-    final sentAt = DateTime.tryParse(session.user.recoverySentAt ?? '');
-    if (sentAt == null) return false;
-    final age = DateTime.now().toUtc().difference(sentAt.toUtc());
-    return age >= const Duration(minutes: -5) &&
-        age <= const Duration(minutes: 65);
+    // A PKCE code cannot be correlated to an already-present session without
+    // consuming it. Never infer recovery authority from recoverySentAt: that
+    // could bind a link for user B to a recent session for user A.
+    return false;
   }
 
   static void _clearInitialRecoveryEvidence() {
     _initialRecoveryAccessToken = null;
     _initialRecoveryRefreshToken = null;
     _initialRecoveryCode = null;
+    _initialRecoveryTokenHash = null;
   }
 
   // ============================================================================
@@ -385,7 +484,7 @@ class CustomerAccountService extends ChangeNotifier {
       _currentUser = user;
       // Tenant authority comes from the current storefront URL. This invokes
       // the tenant-scoped provisioning RPC before reading the customer profile.
-      await _loadCustomerData();
+      await _loadCustomerData(rethrowOnFailure: true);
 
       // Update phone if provided
       if (phone != null && phone.isNotEmpty) {
@@ -394,6 +493,10 @@ class CustomerAccountService extends ChangeNotifier {
 
       return CustomerAuthResult.success;
     } catch (_) {
+      if (_currentUser != null && _customerProfile == null) {
+        await _supabase.auth.signOut(scope: SignOutScope.local);
+        _currentUser = null;
+      }
       _error = 'No pudimos crear la cuenta.';
       debugPrint('⚠️ [CustomerAuth] Account signup failed');
       rethrow;
@@ -420,8 +523,12 @@ class CustomerAccountService extends ChangeNotifier {
 
       _pendingVerificationEmail = null;
       _currentUser = response.user;
-      await _loadCustomerData();
+      await _loadCustomerData(rethrowOnFailure: true);
     } on AuthException catch (e) {
+      if (_currentUser != null && _customerProfile == null) {
+        await _supabase.auth.signOut(scope: SignOutScope.local);
+        _currentUser = null;
+      }
       if (e.message.toLowerCase().contains('email') &&
           e.message.toLowerCase().contains('confirm')) {
         _pendingVerificationEmail = email;
@@ -433,6 +540,10 @@ class CustomerAccountService extends ChangeNotifier {
       debugPrint('⚠️ [CustomerAuth] Email sign-in failed');
       rethrow;
     } catch (_) {
+      if (_currentUser != null && _customerProfile == null) {
+        await _supabase.auth.signOut(scope: SignOutScope.local);
+        _currentUser = null;
+      }
       _error = 'No pudimos iniciar sesión.';
       debugPrint('⚠️ [CustomerAuth] Email sign-in failed');
       rethrow;
@@ -508,6 +619,10 @@ class CustomerAccountService extends ChangeNotifier {
       _bikes = [];
       _serviceHistory = [];
       _isPasswordRecoverySession = false;
+      _isPasswordRecoveryVerificationPending = false;
+      _verifiedPasswordRecoveryUserId = null;
+      _isCustomerMembershipLoading = false;
+      _pendingOtherSessionsRevocationUserId = null;
       _clearFirstPasswordInvitationEvidence();
       _clearInitialRecoveryEvidence();
       notifyListeners();
@@ -524,7 +639,7 @@ class CustomerAccountService extends ChangeNotifier {
       await _supabase.auth.resetPasswordForEmail(
         email,
         redirectTo:
-            kIsWeb ? '${Uri.base.origin}/cuenta/login?type=recovery' : null,
+            kIsWeb ? '${Uri.base.origin}/cuenta/login?recovery=true' : null,
       );
     } catch (_) {
       _error = 'No pudimos procesar la recuperación.';
@@ -534,25 +649,104 @@ class CustomerAccountService extends ChangeNotifier {
   }
 
   /// Update password for the currently signed-in customer.
-  Future<void> updatePassword(String newPassword) async {
+  Future<SelfPasswordUpdateResult> updatePassword(
+    String newPassword, {
+    String? reauthenticationNonce,
+  }) async {
     try {
       _requireStrongNewPassword(newPassword);
       if (_supabase.auth.currentSession == null && _isPasswordRecoverySession) {
         await _restoreRecoverySessionFromInitialUrl();
       }
 
-      await _supabase.auth.updateUser(
-        UserAttributes(password: newPassword),
+      final session = _supabase.auth.currentSession;
+      if (_isPasswordRecoveryVerificationPending ||
+          (_isPasswordRecoverySession &&
+              (_verifiedPasswordRecoveryUserId == null ||
+                  session?.user.id != _verifiedPasswordRecoveryUserId))) {
+        throw const AuthException(
+          'No pudimos confirmar la sesión de recuperación.',
+        );
+      }
+
+      final passwordUserId = session?.user.id ??
+          _supabase.auth.currentUser?.id ??
+          _currentUser?.id;
+      final result = await _passwordService.updatePassword(
+        newPassword,
+        reauthenticationNonce: reauthenticationNonce,
       );
-      await _supabase.auth.signOut(scope: SignOutScope.others);
+      _pendingOtherSessionsRevocationUserId =
+          result.needsOtherSessionsRevocationRetry ? passwordUserId : null;
       _isPasswordRecoverySession = false;
+      _verifiedPasswordRecoveryUserId = null;
       _clearInitialRecoveryEvidence();
       notifyListeners();
+      return result;
     } catch (_) {
       _error = 'No pudimos actualizar la contraseña.';
       debugPrint('⚠️ [CustomerAuth] Password update failed');
       rethrow;
     }
+  }
+
+  Future<SelfPasswordOtherSessionsRevocationOutcome>
+      retryOtherSessionRevocation() async {
+    if (!hasPendingOtherSessionsRevocation) {
+      throw StateError('No other-session revocation retry is pending');
+    }
+
+    final outcome = await _passwordService.retryOtherSessionRevocation();
+    if (outcome == SelfPasswordOtherSessionsRevocationOutcome.revoked) {
+      _pendingOtherSessionsRevocationUserId = null;
+    }
+    notifyListeners();
+    return outcome;
+  }
+
+  /// Sends the signed-in customer a one-time code for a sensitive password
+  /// change. Supabase decides whether the code is delivered by email or phone.
+  Future<void> requestPasswordReauthentication() async {
+    try {
+      _error = null;
+      await _passwordService.requestReauthentication();
+    } catch (_) {
+      _error = 'No pudimos enviar el código de verificación.';
+      debugPrint('⚠️ [CustomerAuth] Password reauthentication request failed');
+      rethrow;
+    }
+  }
+
+  static CustomerPasswordUpdateIssue classifyPasswordUpdateError(
+    Object error,
+  ) {
+    return switch (SelfPasswordService.classifyUpdateError(error)) {
+      SelfPasswordUpdateIssue.reauthenticationRequired =>
+        CustomerPasswordUpdateIssue.reauthenticationRequired,
+      SelfPasswordUpdateIssue.invalidVerificationCode =>
+        CustomerPasswordUpdateIssue.invalidVerificationCode,
+      SelfPasswordUpdateIssue.expiredVerificationCode =>
+        CustomerPasswordUpdateIssue.expiredVerificationCode,
+      SelfPasswordUpdateIssue.samePassword =>
+        CustomerPasswordUpdateIssue.samePassword,
+      SelfPasswordUpdateIssue.unknown => CustomerPasswordUpdateIssue.unknown,
+    };
+  }
+
+  /// Completes a password reset only for the user verified by the recovery
+  /// credential captured from the current Auth link.
+  Future<void> completePasswordRecovery(String newPassword) async {
+    final session = _supabase.auth.currentSession;
+    if (_isPasswordRecoveryVerificationPending ||
+        !_isPasswordRecoverySession ||
+        _verifiedPasswordRecoveryUserId == null ||
+        session?.user.id != _verifiedPasswordRecoveryUserId) {
+      throw const AuthException(
+        'No pudimos confirmar la sesión de recuperación.',
+      );
+    }
+
+    await updatePassword(newPassword);
   }
 
   /// Completes the first-password flow opened from an Auth invitation.
@@ -572,7 +766,7 @@ class CustomerAccountService extends ChangeNotifier {
       );
     }
 
-    await _loadCustomerData();
+    await _loadCustomerData(rethrowOnFailure: true);
     if (_customerProfile?['tenant_id']?.toString() != tenantId) {
       throw const AuthException(
         'No pudimos preparar la cuenta para esta tienda.',
@@ -608,8 +802,19 @@ class CustomerAccountService extends ChangeNotifier {
   // PROFILE MANAGEMENT
   // ============================================================================
 
-  Future<void> _loadCustomerData() async {
-    if (_currentUser == null) return;
+  Future<bool> _loadCustomerData({
+    bool rethrowOnFailure = false,
+  }) async {
+    if (_currentUser == null) {
+      _customerProfile = null;
+      _isCustomerMembershipLoading = false;
+      return false;
+    }
+
+    _isCustomerMembershipLoading = true;
+    _customerProfile = null;
+    _error = null;
+    notifyListeners();
 
     try {
       // AUTO-DETECT tenant from URL if not already set
@@ -625,8 +830,9 @@ class CustomerAccountService extends ChangeNotifier {
 
       final tenantId = _tenantId;
       if (tenantId == null || tenantId.isEmpty) {
-        debugPrint('⚠️ Cannot load customer: tenant_id not set');
-        return;
+        throw const AuthException(
+          'No pudimos identificar la tienda para esta cuenta.',
+        );
       }
 
       // This RPC is idempotent and tenant-scoped. It is the only customer
@@ -643,25 +849,36 @@ class CustomerAccountService extends ChangeNotifier {
           .eq('tenant_id', tenantId)
           .maybeSingle();
 
-      if (profileResponse != null) {
-        _customerProfile = profileResponse;
-
-        // Load addresses, orders, bikes, and service history in parallel
-        await Future.wait([
-          loadAddresses(),
-          loadOrders(),
-          loadBikes(),
-          loadServiceHistory(),
-        ]);
-      } else {
-        _customerProfile = null;
-        _error =
-            'No pudimos vincular tu cuenta de Google con esta tienda. Inténtalo nuevamente.';
-        debugPrint('⚠️ Customer provisioning returned no profile');
+      if (profileResponse == null) {
+        throw const AuthException(
+          'No pudimos preparar la cuenta para esta tienda.',
+        );
       }
-    } catch (_) {
+
+      _customerProfile = profileResponse;
+
+      // Load addresses, orders, bikes, and service history in parallel
+      await Future.wait([
+        loadAddresses(),
+        loadOrders(),
+        loadBikes(),
+        loadServiceHistory(),
+      ]);
+      _error = null;
+      return true;
+    } catch (error) {
+      _customerProfile = null;
+      _addresses = [];
+      _orders = [];
+      _bikes = [];
+      _serviceHistory = [];
       _error = 'No pudimos cargar la cuenta de esta tienda.';
       debugPrint('⚠️ [CustomerAuth] Tenant customer load failed');
+      if (rethrowOnFailure) rethrow;
+      return false;
+    } finally {
+      _isCustomerMembershipLoading = false;
+      notifyListeners();
     }
   }
 

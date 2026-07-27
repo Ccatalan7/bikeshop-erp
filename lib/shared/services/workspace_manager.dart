@@ -159,6 +159,7 @@ String getRouteTitle(String path) {
   final Map<String, String> routeTitles = {
     // Dashboard
     '/dashboard': 'Dashboard',
+    '/profile': 'Mi perfil',
 
     // Accounting
     '/accounting/accounts': 'Plan de Cuentas',
@@ -422,10 +423,30 @@ class Workspace {
   int get hashCode => id.hashCode;
 }
 
+typedef WorkspaceCloseGuard = Future<bool> Function();
+
+class _WorkspaceCloseGuardRegistration {
+  const _WorkspaceCloseGuardRegistration({
+    required this.owner,
+    required this.guard,
+  });
+
+  final Object owner;
+  final WorkspaceCloseGuard guard;
+}
+
+class _WorkspaceCloseRequestToken {
+  const _WorkspaceCloseRequestToken(this.manager, this.workspaceId);
+
+  final WorkspaceManager manager;
+  final String workspaceId;
+}
+
 /// Manages multiple independent workspace tabs
 /// Each workspace has its own GoRouter instance and navigation state
 class WorkspaceManager extends ChangeNotifier {
   static const int maxWorkspaces = 10;
+  static final Object _closeGuardZoneKey = Object();
 
   final List<Workspace> _workspaces = [];
   final List<String> _workspaceStackOrderIds = [];
@@ -440,6 +461,9 @@ class WorkspaceManager extends ChangeNotifier {
   bool _isRestoringBrowserSession = true;
   int _sessionGeneration = 0;
   int _workspaceIdSequence = 0;
+  final Map<String, _WorkspaceCloseGuardRegistration> _workspaceCloseGuards =
+      {};
+  final Map<String, Future<bool>> _pendingCloseRequests = {};
 
   List<Workspace> get workspaces => List.unmodifiable(_workspaces);
   List<Workspace> get workspaceStackOrder => List.unmodifiable(
@@ -746,6 +770,7 @@ class WorkspaceManager extends ChangeNotifier {
     _sessionGeneration += 1;
     _sessionIdentity = nextIdentity;
     _isRestoringBrowserSession = true;
+    _clearWorkspaceCloseState();
     _workspaces.clear();
     _workspaceStackOrderIds.clear();
     _activeIndex = 0;
@@ -769,6 +794,7 @@ class WorkspaceManager extends ChangeNotifier {
   @override
   void dispose() {
     _browserSessionPersistTimer?.cancel();
+    _clearWorkspaceCloseState();
     unawaited(flushBrowserSession());
     super.dispose();
   }
@@ -925,34 +951,165 @@ class WorkspaceManager extends ChangeNotifier {
     return targetIndex.clamp(minIndex, maxIndex).toInt();
   }
 
-  /// Close a workspace tab
-  void closeWorkspace(int index) {
-    if (_workspaces.length <= 1) {
-      // Don't allow closing the last workspace
-      return;
-    }
-
-    if (index >= 0 && index < _workspaces.length) {
-      final closedWorkspace = _workspaces.removeAt(index);
-      _workspaceStackOrderIds.remove(closedWorkspace.id);
-
-      // Adjust active index if needed
-      if (_activeIndex >= _workspaces.length) {
-        _activeIndex = _workspaces.length - 1;
-      } else if (_activeIndex > index) {
-        _activeIndex--;
-      }
-
-      notifyListeners();
-    }
+  /// Registers the current close guard for [workspaceId].
+  ///
+  /// [owner] is compared by identity. A later page can replace an earlier
+  /// registration safely, and disposal of the earlier page cannot unregister
+  /// the replacement.
+  bool registerWorkspaceCloseGuard({
+    required String workspaceId,
+    required Object owner,
+    required WorkspaceCloseGuard guard,
+  }) {
+    if (workspaceById(workspaceId) == null) return false;
+    _workspaceCloseGuards[workspaceId] = _WorkspaceCloseGuardRegistration(
+      owner: owner,
+      guard: guard,
+    );
+    return true;
   }
 
-  /// Close a workspace by ID
-  void closeWorkspaceById(String id) {
-    final index = _workspaces.indexWhere((w) => w.id == id);
-    if (index != -1) {
-      closeWorkspace(index);
+  /// Removes [owner]'s guard without disturbing a newer registration.
+  bool unregisterWorkspaceCloseGuard({
+    required String workspaceId,
+    required Object owner,
+  }) {
+    final registration = _workspaceCloseGuards[workspaceId];
+    if (registration == null || !identical(registration.owner, owner)) {
+      return false;
     }
+    _workspaceCloseGuards.remove(workspaceId);
+    return true;
+  }
+
+  /// Requests a user-initiated close and honors the workspace's opt-in guard.
+  ///
+  /// Concurrent requests for the same workspace share one in-flight decision,
+  /// so a guard is never invoked twice for one close attempt.
+  Future<bool> requestCloseWorkspace(int index) {
+    if (index < 0 || index >= _workspaces.length) {
+      return Future<bool>.value(false);
+    }
+    return requestCloseWorkspaceById(_workspaces[index].id);
+  }
+
+  /// Requests a user-initiated close by stable workspace ID.
+  Future<bool> requestCloseWorkspaceById(String id) {
+    final activeGuardRequest = Zone.current[_closeGuardZoneKey];
+    if (activeGuardRequest is _WorkspaceCloseRequestToken &&
+        identical(activeGuardRequest.manager, this) &&
+        activeGuardRequest.workspaceId == id) {
+      return Future<bool>.value(false);
+    }
+
+    if (_workspaces.length <= 1 || workspaceById(id) == null) {
+      return Future<bool>.value(false);
+    }
+
+    final pending = _pendingCloseRequests[id];
+    if (pending != null) return pending;
+
+    late final Future<bool> trackedRequest;
+    trackedRequest = _requestCloseWorkspaceById(id).whenComplete(() {
+      if (identical(_pendingCloseRequests[id], trackedRequest)) {
+        _pendingCloseRequests.remove(id);
+      }
+    });
+    _pendingCloseRequests[id] = trackedRequest;
+    return trackedRequest;
+  }
+
+  Future<bool> _requestCloseWorkspaceById(String id) async {
+    while (true) {
+      if (_workspaces.length <= 1 || workspaceById(id) == null) return false;
+
+      final registration = _workspaceCloseGuards[id];
+      if (registration == null) break;
+
+      bool? allowed;
+      Object? guardError;
+      try {
+        allowed = await runZoned(
+          registration.guard,
+          zoneValues: {
+            _closeGuardZoneKey: _WorkspaceCloseRequestToken(this, id),
+          },
+        );
+      } catch (error) {
+        guardError = error;
+      }
+
+      if (workspaceById(id) == null) return false;
+
+      // If route disposal or replacement changed the active guard while the
+      // decision was pending, evaluate the current guard instead of using a
+      // stale answer.
+      if (!identical(_workspaceCloseGuards[id], registration)) {
+        continue;
+      }
+
+      if (guardError != null) {
+        if (kDebugMode) {
+          debugPrint(
+            '⚠️ [WorkspaceManager] Close guard failed for "$id": $guardError',
+          );
+        }
+        return false;
+      }
+      if (allowed != true) return false;
+      break;
+    }
+
+    return _closeWorkspaceByIdUnchecked(id);
+  }
+
+  /// Force-closes a workspace.
+  ///
+  /// This compatibility API intentionally bypasses opt-in guards for trusted
+  /// internal lifecycle commands. User-facing close controls must call
+  /// [requestCloseWorkspace] or [requestCloseWorkspaceById].
+  void closeWorkspace(int index) {
+    _closeWorkspaceAtIndexUnchecked(index);
+  }
+
+  bool _closeWorkspaceAtIndexUnchecked(int index) {
+    if (_workspaces.length <= 1) {
+      // Don't allow closing the last workspace
+      return false;
+    }
+
+    if (index < 0 || index >= _workspaces.length) return false;
+
+    final closedWorkspace = _workspaces.removeAt(index);
+    _workspaceStackOrderIds.remove(closedWorkspace.id);
+    _workspaceCloseGuards.remove(closedWorkspace.id);
+    _pendingCloseRequests.remove(closedWorkspace.id);
+
+    // Adjust active index if needed
+    if (_activeIndex >= _workspaces.length) {
+      _activeIndex = _workspaces.length - 1;
+    } else if (_activeIndex > index) {
+      _activeIndex--;
+    }
+
+    notifyListeners();
+    return true;
+  }
+
+  /// Force-closes a workspace by ID; see [closeWorkspace].
+  void closeWorkspaceById(String id) {
+    _closeWorkspaceByIdUnchecked(id);
+  }
+
+  bool _closeWorkspaceByIdUnchecked(String id) {
+    final index = _workspaces.indexWhere((w) => w.id == id);
+    if (index == -1) return false;
+    return _closeWorkspaceAtIndexUnchecked(index);
+  }
+
+  void _clearWorkspaceCloseState() {
+    _workspaceCloseGuards.clear();
+    _pendingCloseRequests.clear();
   }
 
   /// Update workspace title
@@ -1272,6 +1429,7 @@ class WorkspaceManager extends ChangeNotifier {
 
   /// Clear all workspaces and reset to initial state
   void reset() {
+    _clearWorkspaceCloseState();
     _workspaces.clear();
     _workspaceStackOrderIds.clear();
     _activeIndex = 0;

@@ -43,5 +43,23 @@ void main() {
         throwsStateError,
       );
     });
+
+    test('rejects HR purges before any delete begins', () {
+      expect(
+        () => FactoryResetService.validateSelectiveResetSelection(
+          deleteInventory: false,
+          deleteStockMovements: false,
+          deleteEmployees: true,
+        ),
+        throwsStateError,
+      );
+    });
+
+    test('rejects the legacy HR module reset before any delete begins', () {
+      expect(
+        () => FactoryResetService.validateModuleResetSelection('hr'),
+        throwsStateError,
+      );
+    });
   });
 }

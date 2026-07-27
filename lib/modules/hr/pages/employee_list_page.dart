@@ -11,6 +11,7 @@ import '../../../shared/services/job_role_service.dart';
 import '../../../shared/models/job_role.dart';
 import '../models/hr_models.dart';
 import '../services/hr_service.dart';
+import '../widgets/employee_retirement_dialog.dart';
 
 class EmployeeListPage extends StatefulWidget {
   const EmployeeListPage({super.key});
@@ -116,53 +117,45 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
     }
   }
 
-  Future<void> _deleteEmployee(Employee employee) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmar eliminación'),
-        content: Text(
-          '¿Está seguro de eliminar al trabajador ${employee.fullName}? Esta acción no se puede deshacer.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
+  Future<void> _retireEmployee(Employee employee) async {
+    final confirmed = await showEmployeeRetirementDialog(
+      context,
+      workerName: employee.fullName,
     );
 
-    if (confirmed == true && mounted) {
+    if (confirmed && mounted) {
       try {
         final hrService = context.read<HRService>();
-        await hrService.deleteEmployee(employee.id!);
+        final result = await hrService.retireEmployee(employee.id!);
 
         if (!mounted) return;
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('✅ Trabajador ${employee.fullName} eliminado'),
-            backgroundColor: Colors.green,
+            content: Text(
+              result.alreadyRetired
+                  ? '${employee.fullName} ya estaba desvinculado.'
+                  : '${employee.fullName} fue desvinculado. Su historial se conservó.',
+            ),
           ),
         );
 
         _loadData();
-      } catch (e) {
+      } on EmployeeRetirementException catch (error) {
         if (!mounted) return;
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
+            content: Text(error.message),
+          ),
+        );
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No se pudo desvincular al trabajador. Inténtalo nuevamente.',
+            ),
           ),
         );
       }
@@ -405,7 +398,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                             employee: employee,
                             departments: _departments,
                             onEdit: () => _showEmployeeForm(employee),
-                            onDelete: () => _deleteEmployee(employee),
+                            onRetire: () => _retireEmployee(employee),
                           );
                         },
                       ),
@@ -420,13 +413,13 @@ class _EmployeeCard extends StatelessWidget {
   final Employee employee;
   final List<Department> departments;
   final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final VoidCallback onRetire;
 
   const _EmployeeCard({
     required this.employee,
     required this.departments,
     required this.onEdit,
-    required this.onDelete,
+    required this.onRetire,
   });
 
   Color _getStatusColor() {
@@ -601,12 +594,13 @@ class _EmployeeCard extends StatelessWidget {
                     onPressed: onEdit,
                     tooltip: 'Editar',
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.delete, size: 20),
-                    color: Colors.red,
-                    onPressed: onDelete,
-                    tooltip: 'Eliminar',
-                  ),
+                  if (employee.status != EmployeeStatus.terminated)
+                    IconButton(
+                      icon: const Icon(Icons.person_remove_outlined, size: 20),
+                      color: Theme.of(context).colorScheme.error,
+                      onPressed: onRetire,
+                      tooltip: 'Desvincular trabajador',
+                    ),
                 ],
               ),
             ],
@@ -1129,7 +1123,13 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                                 labelText: 'Estado',
                                 border: OutlineInputBorder(),
                               ),
-                              items: EmployeeStatus.values.map((status) {
+                              items: EmployeeStatus.values
+                                  .where(
+                                (status) =>
+                                    status != EmployeeStatus.terminated ||
+                                    _status == EmployeeStatus.terminated,
+                              )
+                                  .map((status) {
                                 String label = '';
                                 switch (status) {
                                   case EmployeeStatus.active:
@@ -1146,10 +1146,14 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                                     break;
                                 }
                                 return DropdownMenuItem(
-                                    value: status, child: Text(label));
+                                  value: status,
+                                  enabled: status != EmployeeStatus.terminated,
+                                  child: Text(label),
+                                );
                               }).toList(),
-                              onChanged: (value) =>
-                                  setState(() => _status = value!),
+                              onChanged: _status == EmployeeStatus.terminated
+                                  ? null
+                                  : (value) => setState(() => _status = value!),
                             ),
                           ),
                         ],

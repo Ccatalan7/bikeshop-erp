@@ -6,6 +6,11 @@ String? getInitialBrowserUrl() {
   return null;
 }
 
+/// Stub - native platforms do not expose a browser fragment.
+void clearSensitiveAuthFragment() {
+  // No-op on non-web platforms.
+}
+
 /// Stub - no loading screen on non-web platforms
 void hideHtmlLoadingScreen() {
   // No-op on non-web platforms

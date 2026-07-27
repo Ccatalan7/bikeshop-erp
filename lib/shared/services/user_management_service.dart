@@ -4,6 +4,307 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'tenant_service.dart';
 import '../utils/auth_input_validation.dart';
 
+enum EmployeeErpLinkState {
+  available,
+  pendingInvitation,
+  erpLinked,
+  workerActive,
+  workerSuspended,
+  inconsistent,
+}
+
+class EmployeeAccessState {
+  const EmployeeAccessState({
+    required this.employeeId,
+    required this.employeeName,
+    required this.email,
+    required this.status,
+    required this.erpUserId,
+    required this.erpProfileActive,
+    required this.pendingInvitation,
+    required this.workerAccessExists,
+    required this.workerAccessActive,
+    required this.workerUsername,
+    required this.linkState,
+  });
+
+  factory EmployeeAccessState.fromJson(Map<String, dynamic> json) {
+    final employeeId = json['employeeId'];
+    final employeeName = json['employeeName'];
+    final email = json['email'];
+    final status = json['status'];
+    final erpUserId = json['erpUserId'];
+    final erpProfileActive = json['erpProfileActive'];
+    final pendingInvitation = json['pendingInvitation'];
+    final workerAccessExists = json['workerAccessExists'];
+    final workerAccessActive = json['workerAccessActive'];
+    final workerUsername = json['workerUsername'];
+    final rawLinkState = json['linkState'];
+
+    if (employeeId is! String ||
+        employeeId.trim().isEmpty ||
+        employeeName is! String ||
+        employeeName.trim().isEmpty ||
+        status is! String ||
+        status.trim().isEmpty ||
+        erpProfileActive is! bool ||
+        pendingInvitation is! bool ||
+        workerAccessExists is! bool ||
+        workerAccessActive is! bool ||
+        (email != null && email is! String) ||
+        (erpUserId != null && erpUserId is! String) ||
+        (workerUsername != null && workerUsername is! String) ||
+        rawLinkState is! String) {
+      throw const FormatException(
+        'Respuesta inválida al consultar los vínculos de trabajadores.',
+      );
+    }
+
+    final parsedLinkState = switch (rawLinkState) {
+      'available' => EmployeeErpLinkState.available,
+      'pending_invitation' => EmployeeErpLinkState.pendingInvitation,
+      'erp_linked' => EmployeeErpLinkState.erpLinked,
+      'worker_active' => EmployeeErpLinkState.workerActive,
+      'worker_suspended' => EmployeeErpLinkState.workerSuspended,
+      'inconsistent' => EmployeeErpLinkState.inconsistent,
+      _ => EmployeeErpLinkState.inconsistent,
+    };
+    final normalizedErpUserId =
+        erpUserId is String && erpUserId.trim().isNotEmpty
+            ? erpUserId.trim()
+            : null;
+    final normalizedWorkerUsername =
+        workerUsername is String && workerUsername.trim().isNotEmpty
+            ? workerUsername.trim()
+            : null;
+
+    final evidenceMatchesState = switch (parsedLinkState) {
+      EmployeeErpLinkState.available => normalizedErpUserId == null &&
+          !pendingInvitation &&
+          !workerAccessExists &&
+          !workerAccessActive,
+      EmployeeErpLinkState.pendingInvitation =>
+        normalizedErpUserId == null && pendingInvitation && !workerAccessActive,
+      EmployeeErpLinkState.erpLinked => normalizedErpUserId != null &&
+          !pendingInvitation &&
+          !workerAccessActive,
+      EmployeeErpLinkState.workerActive => normalizedErpUserId == null &&
+          !pendingInvitation &&
+          workerAccessExists &&
+          workerAccessActive &&
+          normalizedWorkerUsername != null,
+      EmployeeErpLinkState.workerSuspended => normalizedErpUserId == null &&
+          !pendingInvitation &&
+          workerAccessExists &&
+          !workerAccessActive &&
+          normalizedWorkerUsername != null,
+      EmployeeErpLinkState.inconsistent => true,
+    };
+
+    return EmployeeAccessState(
+      employeeId: employeeId.trim(),
+      employeeName: employeeName.trim(),
+      email: email is String && email.trim().isNotEmpty ? email.trim() : null,
+      status: status.trim(),
+      erpUserId: normalizedErpUserId,
+      erpProfileActive: erpProfileActive,
+      pendingInvitation: pendingInvitation,
+      workerAccessExists: workerAccessExists,
+      workerAccessActive: workerAccessActive,
+      workerUsername: normalizedWorkerUsername,
+      linkState: evidenceMatchesState
+          ? parsedLinkState
+          : EmployeeErpLinkState.inconsistent,
+    );
+  }
+
+  final String employeeId;
+  final String employeeName;
+  final String? email;
+  final String status;
+  final String? erpUserId;
+  final bool erpProfileActive;
+  final bool pendingInvitation;
+  final bool workerAccessExists;
+  final bool workerAccessActive;
+  final String? workerUsername;
+  final EmployeeErpLinkState linkState;
+
+  bool get isActiveEmployee => status == 'active';
+
+  bool get canReceiveErpLink =>
+      isActiveEmployee &&
+      (linkState == EmployeeErpLinkState.available ||
+          linkState == EmployeeErpLinkState.workerSuspended);
+}
+
+List<EmployeeAccessState> parseEmployeeAccessStates(dynamic value) {
+  if (value is! List) {
+    throw const FormatException(
+      'La respuesta no incluye los vínculos de trabajadores.',
+    );
+  }
+  final result = <EmployeeAccessState>[];
+  for (final item in value) {
+    if (item is! Map) {
+      throw const FormatException(
+        'La respuesta incluye un vínculo de trabajador inválido.',
+      );
+    }
+    result.add(
+      EmployeeAccessState.fromJson(Map<String, dynamic>.from(item)),
+    );
+  }
+  return List.unmodifiable(result);
+}
+
+@visibleForTesting
+void validateEmployeeLinkResult(
+  Map<String, dynamic> result, {
+  required String userId,
+  required String employeeId,
+  required bool linked,
+}) {
+  if (result['success'] != true ||
+      result['linked'] != linked ||
+      result['userId'] != userId ||
+      result['employeeId'] != employeeId) {
+    throw const FormatException(
+      'La respuesta no confirmó el vínculo solicitado.',
+    );
+  }
+}
+
+class UserManagementException implements Exception {
+  const UserManagementException({
+    required this.code,
+    required this.message,
+    required this.status,
+  });
+
+  final String code;
+  final String message;
+  final int status;
+
+  @override
+  String toString() => message;
+}
+
+@visibleForTesting
+String localizedUserManagementError(String? code) {
+  return switch (code) {
+    'worker_access_conflict' =>
+      'Este trabajador tiene un acceso activo en la app de trabajadores. Suspéndelo antes de vincular o invitar una cuenta ERP.',
+    'worker_identity_conflict' =>
+      'Ese correo pertenece a una identidad de Worker Space. Retira primero ese acceso antes de usarlo como cuenta ERP.',
+    'employee_erp_link_conflict' =>
+      'El trabajador o el usuario ya está vinculado a otra cuenta ERP. Revisa el vínculo actual antes de continuar.',
+    'employee_erp_link_state_changed' =>
+      'El vínculo cambió mientras trabajabas. La consola se actualizará para que revises el estado antes de intentarlo nuevamente.',
+    'pending_invitation_exists' =>
+      'Ya existe una invitación pendiente para ese correo o trabajador. Reenvíala o cancélala desde Invitaciones.',
+    'staff_membership_inactive' =>
+      'Ese correo pertenece a un usuario interno suspendido. Reactívalo desde Equipo en vez de crear otra invitación.',
+    'active_staff_email_requires_direct_link' =>
+      'Ese correo ya tiene acceso ERP activo. Vincula directamente ese usuario con el trabajador en vez de invitarlo otra vez.',
+    'staff_identity_tenant_conflict' =>
+      'Ese correo no está disponible para esta invitación. Revisa si ya tiene otro acceso o utiliza una cuenta distinta.',
+    'identity_unavailable' =>
+      'Ese correo no está disponible para esta invitación. Revisa si ya tiene otro acceso o utiliza una cuenta distinta.',
+    'staff_membership_exists' =>
+      'Ese correo ya pertenece a un usuario interno de esta empresa.',
+    'employee_not_found' =>
+      'El trabajador ya no está disponible o no pertenece a esta empresa.',
+    'staff_user_not_found' =>
+      'El usuario interno ya no está disponible en esta empresa.',
+    'invitation_rate_limited' =>
+      'La invitación se envió hace poco. Espera un minuto antes de reenviarla.',
+    'self_role_change_forbidden' =>
+      'No puedes cambiar tu propio rol o permisos. Pídeselo a otro administrador autorizado.',
+    'principal_owner_protected' =>
+      'La cuenta principal de la empresa está protegida y no puede modificarse desde esta acción.',
+    'staff_hierarchy_forbidden' =>
+      'Tu nivel de acceso no permite modificar esa cuenta interna.',
+    'role_assignment_forbidden' ||
+    'permission_grant_forbidden' =>
+      'No puedes conceder un rol o permisos superiores a los que administras.',
+    'staff_state_changed' =>
+      'La cuenta cambió mientras trabajabas. La consola se actualizará antes de otro intento.',
+    'invitation_not_found' =>
+      'La invitación ya no está disponible. Actualiza la consola.',
+    'invitation_delivery_failed' =>
+      'No se pudo entregar el correo de invitación. No se marcó como enviado; inténtalo nuevamente.',
+    'employee_lookup_failed' =>
+      'No pudimos verificar al trabajador en este momento. Inténtalo nuevamente.',
+    _ => 'No pudimos completar la gestión de acceso. Inténtalo nuevamente.',
+  };
+}
+
+class WorkerPortalAccessState {
+  const WorkerPortalAccessState({
+    required this.employeeId,
+    required this.hasAccess,
+    required this.username,
+    required this.isActive,
+    required this.mustResetPassword,
+    required this.lastLoginAt,
+    required this.identityHealthy,
+  });
+
+  factory WorkerPortalAccessState.fromJson(Map<String, dynamic> json) {
+    final employeeId = json['employeeId'];
+    final hasAccess = json['hasAccess'];
+    final username = json['username'];
+    final isActive = json['isActive'];
+    final mustResetPassword = json['mustResetPassword'];
+    final lastLoginAt = json['lastLoginAt'];
+    final identityHealthy = json['identityHealthy'];
+
+    if (employeeId is! String ||
+        employeeId.trim().isEmpty ||
+        hasAccess is! bool ||
+        isActive is! bool ||
+        mustResetPassword is! bool ||
+        identityHealthy is! bool ||
+        (username != null && username is! String) ||
+        (lastLoginAt != null && lastLoginAt is! String)) {
+      throw const FormatException(
+        'Respuesta inválida al consultar el acceso trabajador.',
+      );
+    }
+    if (hasAccess && (username is! String || username.trim().isEmpty)) {
+      throw const FormatException(
+        'El acceso trabajador no tiene un usuario válido.',
+      );
+    }
+    final parsedLastLoginAt =
+        lastLoginAt == null ? null : DateTime.tryParse(lastLoginAt);
+    if (lastLoginAt != null && parsedLastLoginAt == null) {
+      throw const FormatException(
+        'El acceso trabajador tiene una fecha de ingreso inválida.',
+      );
+    }
+
+    return WorkerPortalAccessState(
+      employeeId: employeeId,
+      hasAccess: hasAccess,
+      username: username as String?,
+      isActive: isActive,
+      mustResetPassword: mustResetPassword,
+      lastLoginAt: parsedLastLoginAt,
+      identityHealthy: identityHealthy,
+    );
+  }
+
+  final String employeeId;
+  final bool hasAccess;
+  final String? username;
+  final bool isActive;
+  final bool mustResetPassword;
+  final DateTime? lastLoginAt;
+  final bool identityHealthy;
+}
+
 /// Tenant-scoped user administration service.
 ///
 /// Regular tenant reads still use RLS/RPCs, but privileged auth operations run
@@ -134,6 +435,40 @@ class UserManagementService {
     return result;
   }
 
+  Future<void> linkInternalUserEmployee({
+    required String userId,
+    required String employeeId,
+  }) async {
+    final result = await _invokeAdmin<Map<String, dynamic>>({
+      'action': 'link_internal_user_employee',
+      'userId': userId,
+      'employeeId': employeeId,
+    });
+    validateEmployeeLinkResult(
+      result,
+      userId: userId,
+      employeeId: employeeId,
+      linked: true,
+    );
+  }
+
+  Future<void> unlinkInternalUserEmployee({
+    required String userId,
+    required String employeeId,
+  }) async {
+    final result = await _invokeAdmin<Map<String, dynamic>>({
+      'action': 'unlink_internal_user_employee',
+      'userId': userId,
+      'employeeId': employeeId,
+    });
+    validateEmployeeLinkResult(
+      result,
+      userId: userId,
+      employeeId: employeeId,
+      linked: false,
+    );
+  }
+
   Future<void> resendInternalInvitation(String invitationId) async {
     final result = await _invokeAdmin<Map<String, dynamic>>({
       'action': 'resend_internal_invitation',
@@ -204,6 +539,22 @@ class UserManagementService {
     });
   }
 
+  Future<WorkerPortalAccessState> getWorkerPortalAccess({
+    required String employeeId,
+  }) async {
+    final result = await _invokeAdmin<Map<String, dynamic>>({
+      'action': 'get_worker_portal_access',
+      'employeeId': employeeId,
+    });
+    final access = WorkerPortalAccessState.fromJson(result);
+    if (access.employeeId != employeeId) {
+      throw const FormatException(
+        'La respuesta de acceso no corresponde al trabajador solicitado.',
+      );
+    }
+    return access;
+  }
+
   Future<Map<String, dynamic>> resetWorkerPortalPassword({
     required String employeeId,
     required String password,
@@ -255,44 +606,52 @@ class UserManagementService {
 
       if (response.status >= 400) {
         final data = response.data;
-        final message = data is Map && data['error'] != null
-            ? data['error'].toString()
-            : 'Error ${response.status} en admin-user-management';
-        throw Exception(message);
+        final code = _extractAdminCode(data);
+        throw UserManagementException(
+          code: code ?? 'admin_operation_failed',
+          message: localizedUserManagementError(code),
+          status: response.status,
+        );
       }
 
       final data = response.data;
       if (data is T) return data;
       return Map<String, dynamic>.from(data as Map) as T;
     } on FunctionException catch (e) {
-      final message = _extractAdminError(e.details);
-      debugPrint('User admin operation failed: $message');
-      throw Exception(message);
+      final code = _extractAdminCode(e.details);
+      final message = localizedUserManagementError(code);
+      debugPrint(
+        'User admin operation failed: ${code ?? 'function_error'}',
+      );
+      throw UserManagementException(
+        code: code ?? 'function_error',
+        message: message,
+        status: e.status,
+      );
+    } on UserManagementException {
+      rethrow;
     } catch (e) {
-      debugPrint('User admin operation failed: $e');
+      debugPrint('User admin operation failed');
       rethrow;
     }
   }
 
-  String _extractAdminError(dynamic value) {
-    if (value == null) return 'Error en admin-user-management';
-    if (value is String) return value;
-    if (value is List) {
-      final messages = value.map(_extractAdminError).where((m) => m.isNotEmpty);
-      return messages.join(' · ');
-    }
+  String? _extractAdminCode(dynamic value) {
     if (value is Map) {
-      for (final key in const ['error', 'message', 'details', 'msg']) {
-        if (value.containsKey(key)) {
-          final message = _extractAdminError(value[key]);
-          if (message.isNotEmpty &&
-              message != 'Error en admin-user-management') {
-            return message;
-          }
-        }
+      final code = value['code'];
+      if (code is String && code.trim().isNotEmpty) return code.trim();
+      for (final key in const ['details', 'error']) {
+        final nested = _extractAdminCode(value[key]);
+        if (nested != null) return nested;
       }
     }
-    return value.toString();
+    if (value is List) {
+      for (final item in value) {
+        final nested = _extractAdminCode(item);
+        if (nested != null) return nested;
+      }
+    }
+    return null;
   }
 
   Future<void> _invokeAdminVoid(Map<String, dynamic> body) async {

@@ -1,6 +1,8 @@
 import {
   accessEmailRedirect,
   assertActiveEmployeeForInvitation,
+  assertEmployeeLinkTargetAllowed,
+  assertInvitationEmailNotActiveStaff,
   assertPendingInvitationInTenant,
   assertPermissionGrantAllowed,
   assertReusableWorkerOrphan,
@@ -13,29 +15,38 @@ import {
   beginWorkerPasswordCredentialIssue,
   buildCustomerAuthMetadata,
   buildWorkerAuthMetadata,
+  buildWorkerLoginEmail,
   buildWorkerPasswordResetMarker,
   canonicalizeRequestedPermissions,
   createCustomerAccount,
   createInternalInvitation,
   deactivateAccountPreservingMessagingHistory,
+  deleteInternalAccount,
   derivePrincipalOwnerIdentity,
   detachedAccountResult,
   finishWorkerPasswordCredentialIssue,
   getCallerContext,
+  getEmployeeAccessStates,
   getMessagingDeletionEvidence,
+  getWorkerPortalAccess,
   hasAuthoritativeWorkerIdentity,
   isAllowedCorsOrigin,
   isPublicStoreCustomerForTenant,
   isStrongAdminPassword,
+  linkInternalUserEmployee,
+  mapEmployeeAccessError,
   mergeWorkerAppMetadata,
   persistNewWorkerPortalAccount,
   preservedMessagingHistoryResult,
   resendCustomerVerification,
   resolveCustomerProvisioningEmail,
   resolveTrustedStoreOrigin,
+  revokeWorkerPortalSessions,
   sanitizeWorkerDisplayMetadata,
   selectAccessEmailDelivery,
   sendInvitationEmail,
+  setWorkerPortalAccess,
+  unlinkInternalUserEmployee,
   updateInternalUser,
 } from "./index.ts";
 
@@ -105,11 +116,13 @@ function callerContextClients(input: {
   appMetadata?: Record<string, unknown>;
 }) {
   const evidence: {
+    accessToken: string | undefined;
     table: string | null;
     select: string | null;
     filters: Array<[string, unknown]>;
     limit: number | null;
   } = {
+    accessToken: undefined,
     table: null,
     select: null,
     filters: [],
@@ -117,8 +130,9 @@ function callerContextClients(input: {
   };
   const userClient = {
     auth: {
-      getUser: () =>
-        Promise.resolve({
+      getUser: (accessToken?: string) => {
+        evidence.accessToken = accessToken;
+        return Promise.resolve({
           data: {
             user: {
               id: "11111111-1111-4111-8111-111111111111",
@@ -127,7 +141,8 @@ function callerContextClients(input: {
             },
           },
           error: null,
-        }),
+        });
+      },
     },
   };
   const serviceClient = {
@@ -179,6 +194,16 @@ class FakeQuery {
     return this;
   }
 
+  not(column: string, operator: string, value: unknown) {
+    this.filters.push([`${column}.${operator}`, value]);
+    return this;
+  }
+
+  order(column: string) {
+    this.filters.push(["order", column]);
+    return this;
+  }
+
   update(payload: Record<string, unknown>) {
     this.payload = payload;
     return this;
@@ -190,9 +215,8 @@ class FakeQuery {
       filters: [...this.filters],
     });
     const error = this.client.queryErrors.get(this.table) ?? null;
-    const data = this.client.evidenceTables.has(this.table)
-      ? [{ id: `${this.table}-evidence` }]
-      : [];
+    const data = this.client.rows.get(this.table) ??
+      (this.client.evidenceTables.has(this.table) ? [{ id: `${this.table}-evidence` }] : []);
     return Promise.resolve({ data, error });
   }
 
@@ -225,7 +249,11 @@ class FakeQuery {
   }
 
   then<TResult1 = unknown, TResult2 = never>(
-    onfulfilled?: ((value: { data: null; error: null }) => TResult1 | PromiseLike<TResult1>) | null,
+    onfulfilled?:
+      | ((
+        value: { data: unknown[] | null; error: unknown },
+      ) => TResult1 | PromiseLike<TResult1>)
+      | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ): Promise<TResult1 | TResult2> {
     if (this.payload != null) {
@@ -235,7 +263,14 @@ class FakeQuery {
         filters: [...this.filters],
       });
     }
-    return Promise.resolve({ data: null, error: null }).then(
+    this.client.reads.push({
+      table: this.table,
+      filters: [...this.filters],
+    });
+    return Promise.resolve({
+      data: this.client.rows.get(this.table) ?? null,
+      error: this.client.queryErrors.get(this.table) ?? null,
+    }).then(
       onfulfilled,
       onrejected,
     );
@@ -244,6 +279,7 @@ class FakeQuery {
 
 class FakeServiceClient {
   readonly evidenceTables = new Set<string>();
+  readonly rows = new Map<string, Record<string, unknown>[]>();
   readonly singleRows = new Map<string, Record<string, unknown>>();
   readonly authUsers = new Map<string, Record<string, unknown>>();
   readonly queryErrors = new Map<string, { message: string }>();
@@ -253,12 +289,27 @@ class FakeServiceClient {
     userId: string;
     payload: Record<string, unknown>;
   }> = [];
+  readonly rpcCalls: Array<{
+    name: string;
+    args: Record<string, unknown>;
+  }> = [];
+  readonly rpcResults = new Map<
+    string,
+    { data: unknown; error: unknown }
+  >();
 
   readonly auth = {
     admin: {
       getUserById: (userId: string) =>
         Promise.resolve({
           data: { user: this.authUsers.get(userId) ?? null },
+          error: null,
+        }),
+      listUsers: ({ page }: { page: number; perPage: number }) =>
+        Promise.resolve({
+          data: {
+            users: page === 1 ? [...this.authUsers.values()] : [],
+          },
           error: null,
         }),
       updateUserById: (
@@ -273,6 +324,16 @@ class FakeServiceClient {
 
   from(table: string) {
     return new FakeQuery(this, table);
+  }
+
+  rpc(name: string, args: Record<string, unknown>) {
+    this.rpcCalls.push({ name, args });
+    return Promise.resolve(
+      this.rpcResults.get(name) ?? {
+        data: null,
+        error: { message: `Unexpected RPC: ${name}` },
+      },
+    );
   }
 }
 
@@ -459,7 +520,11 @@ Deno.test("caller authorization joins one matching active tenant", async () => {
   });
 
   assertEquals(
-    await getCallerContext(userClient, serviceClient),
+    await getCallerContext(
+      userClient,
+      serviceClient,
+      "freshly-issued-access-token",
+    ),
     {
       userId: "11111111-1111-4111-8111-111111111111",
       tenantId,
@@ -473,6 +538,7 @@ Deno.test("caller authorization joins one matching active tenant", async () => {
   assertEquals(
     evidence,
     {
+      accessToken: "freshly-issued-access-token",
       table: "user_profiles",
       select: "tenant_id, role, permissions, tenants!inner(id, is_active, owner_email)",
       filters: [
@@ -796,6 +862,531 @@ Deno.test("principal owner can legitimately manage an admin and canonical permis
     updatedAt: "2026-07-26T12:00:00.000Z",
     isPrincipalOwner: false,
   });
+});
+
+Deno.test("employee link target policy permits owner self-link but protects another principal", () => {
+  const tenantId = "22222222-2222-4222-8222-222222222222";
+  const owner = {
+    userId: "11111111-1111-4111-8111-111111111111",
+    tenantId,
+    role: "admin",
+    permissions: {},
+    isPrincipalOwner: true,
+  };
+  assertEmployeeLinkTargetAllowed(owner, {
+    userId: owner.userId,
+    role: "admin",
+    permissions: {},
+    isActive: true,
+    updatedAt: "2026-07-26T12:00:00.000Z",
+    isPrincipalOwner: true,
+  });
+  assertThrowsCode(
+    () =>
+      assertEmployeeLinkTargetAllowed(
+        { ...owner, userId: "99999999-9999-4999-8999-999999999999" },
+        {
+          userId: "33333333-3333-4333-8333-333333333333",
+          role: "admin",
+          permissions: {},
+          isActive: true,
+          updatedAt: "2026-07-26T12:00:00.000Z",
+          isPrincipalOwner: true,
+        },
+      ),
+    "principal_owner_protected",
+    "a different administrator cannot attach the tenant principal to HR data",
+  );
+});
+
+Deno.test("explicit employee link actions use caller JWT RPCs and verify exact receipts", async () => {
+  const tenantId = "22222222-2222-4222-8222-222222222222";
+  const userId = "33333333-3333-4333-8333-333333333333";
+  const employeeId = "44444444-4444-4444-8444-444444444444";
+  const caller = {
+    userId: "11111111-1111-4111-8111-111111111111",
+    tenantId,
+    role: "admin",
+    permissions: {},
+    isPrincipalOwner: true,
+    tenantOwnerEmail: "owner@example.invalid",
+  };
+  const serviceClient = new FakeServiceClient();
+  serviceClient.singleRows.set("user_profiles", {
+    user_id: userId,
+    role: "cashier",
+    permissions: {},
+    is_active: true,
+    updated_at: "2026-07-26T12:00:00.000Z",
+  });
+  serviceClient.authUsers.set(userId, {
+    id: userId,
+    email: "staff@example.invalid",
+    app_metadata: {
+      account_type: "erp_staff",
+      tenant_id: tenantId,
+    },
+  });
+
+  const userClient = new FakeServiceClient();
+  userClient.rpcResults.set("link_erp_user_to_employee", {
+    data: {
+      success: true,
+      linked: true,
+      userId,
+      employeeId,
+    },
+    error: null,
+  });
+  assertEquals(
+    await linkInternalUserEmployee(
+      userClient,
+      serviceClient,
+      caller,
+      { userId, employeeId },
+    ),
+    {
+      success: true,
+      linked: true,
+      userId,
+      employeeId,
+    },
+    "link action verifies the exact database receipt",
+  );
+  assertEquals(
+    userClient.rpcCalls[0],
+    {
+      name: "link_erp_user_to_employee",
+      args: {
+        p_user_id: userId,
+        p_employee_id: employeeId,
+      },
+    },
+    "link action uses only the authenticated canonical RPC",
+  );
+
+  serviceClient.singleRows.set("user_profiles", {
+    user_id: userId,
+    role: "cashier",
+    permissions: {},
+    is_active: false,
+    updated_at: "2026-07-26T12:05:00.000Z",
+  });
+  userClient.rpcResults.set("unlink_erp_user_from_employee", {
+    data: {
+      success: true,
+      linked: false,
+      userId,
+      employeeId,
+    },
+    error: null,
+  });
+  assertEquals(
+    await unlinkInternalUserEmployee(
+      userClient,
+      serviceClient,
+      caller,
+      { userId, employeeId },
+    ),
+    {
+      success: true,
+      linked: false,
+      userId,
+      employeeId,
+    },
+    "unlink action verifies the exact database receipt",
+  );
+  assertEquals(
+    userClient.rpcCalls[1],
+    {
+      name: "unlink_erp_user_from_employee",
+      args: {
+        p_user_id: userId,
+        p_employee_id: employeeId,
+      },
+    },
+    "unlink action cannot select or detach a different employee",
+  );
+});
+
+Deno.test("deleting linked ERP staff unlinks through the caller JWT before suspension", async () => {
+  const tenantId = "22222222-2222-4222-8222-222222222222";
+  const userId = "33333333-3333-4333-8333-333333333333";
+  const employeeId = "44444444-4444-4444-8444-444444444444";
+  const caller = {
+    userId: "11111111-1111-4111-8111-111111111111",
+    tenantId,
+    role: "admin",
+    permissions: {},
+    isPrincipalOwner: true,
+    tenantOwnerEmail: "owner@example.invalid",
+  };
+  const serviceClient = new FakeServiceClient();
+  serviceClient.singleRows.set("user_profiles", {
+    user_id: userId,
+    role: "cashier",
+    permissions: {},
+    is_active: true,
+    updated_at: "2026-07-26T12:00:00.000Z",
+  });
+  serviceClient.authUsers.set(userId, {
+    id: userId,
+    email: "staff@example.invalid",
+    app_metadata: {
+      account_type: "erp_staff",
+      tenant_id: tenantId,
+    },
+  });
+  const userClient = new FakeServiceClient();
+  userClient.rpcResults.set("deactivate_and_unlink_erp_user", {
+    data: {
+      success: true,
+      deactivated: true,
+      unlinked: true,
+      userId,
+      employeeId,
+    },
+    error: null,
+  });
+
+  assertEquals(
+    await deleteInternalAccount(
+      userClient,
+      serviceClient,
+      caller,
+      { userId },
+    ),
+    {
+      success: true,
+      authDeleted: false,
+      authBanned: false,
+      authDetachedOnly: true,
+      accountDeactivated: true,
+      preservedForMessagingHistory: false,
+      outcome: "tenant_access_detached",
+      messagingEvidence: [],
+    },
+    "linked staff deletion returns the canonical detached receipt",
+  );
+  assertEquals(
+    userClient.rpcCalls,
+    [{
+      name: "deactivate_and_unlink_erp_user",
+      args: {
+        p_user_id: userId,
+        p_tenant_id: tenantId,
+      },
+    }],
+    "delete atomically unlinks and deactivates through the authenticated RPC",
+  );
+  assert(
+    serviceClient.updates.every((update) =>
+      update.table !== "employees" || !("user_id" in update.payload)
+    ),
+    "delete never bypasses the canonical RPC with a service-role link write",
+  );
+});
+
+Deno.test("employee access overview exposes inactive exact links and every access mode", async () => {
+  const tenantId = "22222222-2222-4222-8222-222222222222";
+  const client = new FakeServiceClient();
+  client.rows.set("employees", [
+    {
+      id: "employee-erp",
+      first_name: "Erp",
+      last_name: "Linked",
+      email: "erp@example.invalid",
+      status: "inactive",
+      user_id: "user-erp",
+    },
+    {
+      id: "employee-worker",
+      first_name: "Worker",
+      last_name: "Active",
+      email: null,
+      status: "active",
+      user_id: null,
+    },
+    {
+      id: "employee-pending",
+      first_name: "Invite",
+      last_name: "Pending",
+      email: "pending@example.invalid",
+      status: "active",
+      user_id: null,
+    },
+    {
+      id: "employee-suspended-worker",
+      first_name: "Worker",
+      last_name: "Suspended",
+      email: null,
+      status: "active",
+      user_id: null,
+    },
+  ]);
+  client.rows.set("user_profiles", [
+    {
+      user_id: "user-erp",
+      employee_id: "employee-erp",
+      is_active: false,
+    },
+  ]);
+  client.rows.set("employee_portal_accounts", [
+    {
+      employee_id: "employee-worker",
+      username: "worker",
+      is_active: true,
+    },
+    {
+      employee_id: "employee-suspended-worker",
+      username: "suspended",
+      is_active: false,
+    },
+  ]);
+  client.rows.set("user_invitations", [
+    { employee_id: "employee-pending" },
+  ]);
+
+  const states = await getEmployeeAccessStates(client, tenantId);
+  assertEquals(
+    states.map((state: any) => ({
+      employeeId: state.employeeId,
+      status: state.status,
+      linkState: state.linkState,
+      erpProfileActive: state.erpProfileActive,
+    })),
+    [
+      {
+        employeeId: "employee-erp",
+        status: "inactive",
+        linkState: "erp_linked",
+        erpProfileActive: false,
+      },
+      {
+        employeeId: "employee-worker",
+        status: "active",
+        linkState: "worker_active",
+        erpProfileActive: false,
+      },
+      {
+        employeeId: "employee-pending",
+        status: "active",
+        linkState: "pending_invitation",
+        erpProfileActive: false,
+      },
+      {
+        employeeId: "employee-suspended-worker",
+        status: "active",
+        linkState: "worker_suspended",
+        erpProfileActive: false,
+      },
+    ],
+    "overview preserves inactive ERP links so administrators can explicitly unlink them",
+  );
+});
+
+Deno.test("employee access database conflicts map to stable tenant-safe API codes", () => {
+  for (
+    const [databaseError, expectedCode] of [
+      [{ code: "P0001", message: "worker_access_conflict" }, "worker_access_conflict"],
+      [{ code: "P0001", message: "worker_identity_conflict" }, "worker_identity_conflict"],
+      [
+        {
+          code: "23505",
+          message: "duplicate",
+          constraint: "employees_one_erp_user_uidx",
+        },
+        "employee_erp_link_conflict",
+      ],
+      [
+        { code: "P0001", message: "employee_erp_link_inconsistent" },
+        "employee_erp_link_state_changed",
+      ],
+      [
+        {
+          code: "23505",
+          message: "duplicate",
+          constraint: "user_profiles_one_erp_employee_uidx",
+        },
+        "employee_erp_link_conflict",
+      ],
+      [{ code: "P0001", message: "employee_not_found" }, "employee_not_found"],
+      [{ code: "42501", message: "principal_owner_protected" }, "principal_owner_protected"],
+      [{ code: "42501", message: "staff_hierarchy_forbidden" }, "staff_hierarchy_forbidden"],
+    ] as const
+  ) {
+    assertThrowsCode(
+      () => {
+        throw mapEmployeeAccessError(databaseError);
+      },
+      expectedCode,
+      `database conflict maps to ${expectedCode}`,
+    );
+  }
+});
+
+Deno.test("an active tenant staff email must use direct employee linking, never another invitation", async () => {
+  const tenantId = "22222222-2222-4222-8222-222222222222";
+  const email = "staff@example.invalid";
+  const userId = "33333333-3333-4333-8333-333333333333";
+  const client = new FakeServiceClient();
+  client.authUsers.set(userId, {
+    id: userId,
+    email,
+    app_metadata: {
+      account_type: "erp_staff",
+      tenant_id: tenantId,
+    },
+  });
+  client.rows.set("user_profiles", [{
+    user_id: userId,
+    tenant_id: tenantId,
+    is_active: true,
+  }]);
+
+  await assertRejectsCode(
+    () => assertInvitationEmailNotActiveStaff(client, tenantId, email),
+    "active_staff_email_requires_direct_link",
+    "active staff email preflight returns the direct-link conflict",
+  );
+  await assertRejectsCode(
+    () =>
+      createInternalInvitation(
+        client,
+        {
+          userId: "11111111-1111-4111-8111-111111111111",
+          tenantId,
+          role: "admin",
+          permissions: {},
+          isPrincipalOwner: true,
+          tenantOwnerEmail: "owner@example.invalid",
+        },
+        {
+          email,
+          role: "cashier",
+          permissions: {},
+          employeeId: "44444444-4444-4444-8444-444444444444",
+        },
+        "Bearer caller-user-jwt",
+        new Request(
+          "https://example.supabase.co/functions/v1/admin-user-management",
+        ),
+      ),
+    "active_staff_email_requires_direct_link",
+    "invitation creation cannot silently target an existing active member",
+  );
+  assertEquals(
+    client.updates.length,
+    0,
+    "denied active-staff invitations do not mutate state",
+  );
+
+  const inactiveClient = new FakeServiceClient();
+  inactiveClient.authUsers.set(userId, {
+    id: userId,
+    email,
+  });
+  inactiveClient.rows.set("user_profiles", [{
+    user_id: userId,
+    tenant_id: tenantId,
+    is_active: false,
+  }]);
+  await assertRejectsCode(
+    () =>
+      assertInvitationEmailNotActiveStaff(
+        inactiveClient,
+        tenantId,
+        email,
+      ),
+    "staff_membership_inactive",
+    "a suspended same-tenant membership must be reactivated or detached",
+  );
+
+  const foreignActiveClient = new FakeServiceClient();
+  foreignActiveClient.authUsers.set(userId, {
+    id: userId,
+    email,
+  });
+  foreignActiveClient.rows.set("user_profiles", [{
+    user_id: userId,
+    tenant_id: "99999999-9999-4999-8999-999999999999",
+    is_active: true,
+  }]);
+  await assertRejectsCode(
+    () =>
+      assertInvitationEmailNotActiveStaff(
+        foreignActiveClient,
+        tenantId,
+        email,
+      ),
+    "identity_unavailable",
+    "an Auth identity with another active ERP tenant cannot receive an impossible invitation",
+  );
+
+  const workerIdentityClient = new FakeServiceClient();
+  workerIdentityClient.authUsers.set(userId, {
+    id: userId,
+    email,
+  });
+  workerIdentityClient.rows.set("employee_portal_accounts", [{
+    tenant_id: tenantId,
+    is_active: false,
+  }]);
+  await assertRejectsCode(
+    () =>
+      assertInvitationEmailNotActiveStaff(
+        workerIdentityClient,
+        tenantId,
+        email,
+      ),
+    "identity_unavailable",
+    "even a suspended Worker identity cannot receive an unusable ERP invitation",
+  );
+
+  const historicalEmployeeClient = new FakeServiceClient();
+  historicalEmployeeClient.authUsers.set(userId, {
+    id: userId,
+    email,
+  });
+  historicalEmployeeClient.rows.set("employees", [{
+    id: "historical-employee",
+    tenant_id: "99999999-9999-4999-8999-999999999999",
+  }]);
+  await assertRejectsCode(
+    () =>
+      assertInvitationEmailNotActiveStaff(
+        historicalEmployeeClient,
+        tenantId,
+        email,
+      ),
+    "identity_unavailable",
+    "an Auth identity already reserved by any employee cannot receive even an unbound invitation",
+  );
+  await assertRejectsCode(
+    () =>
+      createInternalInvitation(
+        historicalEmployeeClient,
+        {
+          userId: "11111111-1111-4111-8111-111111111111",
+          tenantId,
+          role: "admin",
+          permissions: {},
+          isPrincipalOwner: true,
+          tenantOwnerEmail: "owner@example.invalid",
+        },
+        {
+          email,
+          role: "cashier",
+          permissions: {},
+        },
+        "Bearer caller-user-jwt",
+        new Request(
+          "https://example.supabase.co/functions/v1/admin-user-management",
+        ),
+      ),
+    "identity_unavailable",
+    "the unbound invitation route rejects a globally reserved employee identity before email",
+  );
 });
 
 Deno.test("all internal invitation and staff mutation routes enforce hierarchy", async () => {
@@ -1385,6 +1976,38 @@ Deno.test("internal invitation employee must be active in the caller tenant", as
     tenantId,
     employeeId,
   );
+
+  const workerClient = new FakeServiceClient();
+  workerClient.evidenceTables.add("employees");
+  workerClient.singleRows.set("employee_portal_accounts", {
+    id: "55555555-5555-4555-8555-555555555555",
+  });
+  await assertRejectsCode(
+    () =>
+      assertActiveEmployeeForInvitation(
+        workerClient,
+        tenantId,
+        employeeId,
+      ),
+    "worker_access_conflict",
+    "an employee with active worker access cannot receive ERP access",
+  );
+
+  const linkedClient = new FakeServiceClient();
+  linkedClient.singleRows.set("employees", {
+    id: employeeId,
+    user_id: "66666666-6666-4666-8666-666666666666",
+  });
+  await assertRejectsCode(
+    () =>
+      assertActiveEmployeeForInvitation(
+        linkedClient,
+        tenantId,
+        employeeId,
+      ),
+    "employee_erp_link_conflict",
+    "an employee already linked to ERP cannot receive another invitation",
+  );
 });
 
 Deno.test("tenant-scoped staff update returns 404 when no profile changes", async () => {
@@ -1521,6 +2144,43 @@ Deno.test("worker password policy requires an explicit strong unmodified secret"
   }
 });
 
+Deno.test("worker synthetic email keeps full tenant entropy within RFC limits", async () => {
+  const tenantId = "22222222-2222-4222-8222-222222222222";
+  const samePrefixTenantId = "22222222-2222-4222-8222-333333333333";
+  const maximumUsername = "a".repeat(32);
+
+  const email = await buildWorkerLoginEmail(tenantId, maximumUsername);
+  const repeatedEmail = await buildWorkerLoginEmail(
+    tenantId,
+    maximumUsername,
+  );
+  const otherTenantEmail = await buildWorkerLoginEmail(
+    samePrefixTenantId,
+    maximumUsername,
+  );
+  const [localPart, domain] = email.split("@");
+
+  assertEquals(email, repeatedEmail, "synthetic identity must be deterministic");
+  assertEquals(
+    domain,
+    "worker-login.invalid",
+    "worker identities remain in the dedicated synthetic domain",
+  );
+  assert(
+    localPart.startsWith(`wp-${tenantId.replaceAll("-", "")}-`),
+    "the local part must retain all 128 tenant UUID bits",
+  );
+  assertEquals(
+    localPart.length,
+    63,
+    "the longest accepted username must remain below the 64-byte local-part limit",
+  );
+  assert(
+    email !== otherTenantEmail,
+    "tenants sharing the old short prefix cannot collide",
+  );
+});
+
 Deno.test("worker password reset marker records the complete issuance evidence", () => {
   const requiredAt = "2026-07-26T09:15:30.000Z";
   const issuedAt = "2026-07-26T09:15:31.000Z";
@@ -1596,6 +2256,70 @@ Deno.test("worker credential RPC helpers use exact tenant-scoped CAS arguments",
     ],
     "both service-role RPC calls remain tenant and version scoped",
   );
+
+  const conflictClient = new FakeServiceClient();
+  conflictClient.rpcResults.set("begin_worker_password_credential_issue", {
+    data: null,
+    error: { code: "P0001", message: "worker_access_conflict" },
+  });
+  await assertRejectsCode(
+    () =>
+      beginWorkerPasswordCredentialIssue(
+        conflictClient,
+        "portal-1",
+        "tenant-1",
+      ),
+    "worker_access_conflict",
+    "worker reactivation preserves the database ERP-access conflict",
+  );
+});
+
+Deno.test("worker session revocation is exact, tenant-scoped and fail-closed", async () => {
+  const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+  const client = {
+    rpc(name: string, args: Record<string, unknown>) {
+      calls.push({ name, args });
+      return Promise.resolve({ data: 11, error: null });
+    },
+  };
+
+  assertEquals(
+    await revokeWorkerPortalSessions(client, "portal-1", "tenant-1"),
+    11,
+    "the helper returns the authoritative deleted-session count",
+  );
+  assertEquals(
+    calls,
+    [{
+      name: "revoke_worker_portal_sessions",
+      args: {
+        p_portal_account_id: "portal-1",
+        p_tenant_id: "tenant-1",
+      },
+    }],
+    "session revocation must identify both portal account and tenant",
+  );
+
+  for (
+    const result of [
+      { data: null, error: null },
+      { data: "11", error: null },
+      { data: -1, error: null },
+      { data: 1.5, error: null },
+      { data: 0, error: { message: "database unavailable" } },
+    ]
+  ) {
+    await assertRejectsCode(
+      () =>
+        revokeWorkerPortalSessions(
+          { rpc: () => Promise.resolve(result) },
+          "portal-1",
+          "tenant-1",
+        ),
+      "worker_session_revocation_failed",
+      "ambiguous or failed revocation cannot be reported as success",
+    );
+  }
 });
 
 Deno.test("worker reset brackets Auth password mutation with begin and finish", async () => {
@@ -1622,15 +2346,19 @@ Deno.test("worker reset brackets Auth password mutation with begin and finish", 
   const existingCreateAuthIndex = existingCreateFlow.indexOf(
     "auth.admin.updateUserById",
   );
+  const existingCreateRevocationIndex = existingCreateFlow.indexOf(
+    "revokeWorkerPortalSessions",
+  );
   const existingCreateFinishIndex = existingCreateFlow.indexOf(
     "finishWorkerPasswordCredentialIssue",
   );
   assert(
     existingCreateMarkerIndex >= 0 && existingCreateAuthIndex >= 0 &&
-      existingCreateFinishIndex >= 0 &&
+      existingCreateRevocationIndex >= 0 && existingCreateFinishIndex >= 0 &&
       existingCreateMarkerIndex < existingCreateAuthIndex &&
-      existingCreateAuthIndex < existingCreateFinishIndex,
-    "recreating a worker must begin DB state, change Auth, then CAS-finish DB state",
+      existingCreateAuthIndex < existingCreateRevocationIndex &&
+      existingCreateRevocationIndex < existingCreateFinishIndex,
+    "recreating a worker must begin DB state, change Auth, revoke old sessions, then CAS-finish DB state",
   );
 
   const resetFlow = source.slice(
@@ -1643,28 +2371,225 @@ Deno.test("worker reset brackets Auth password mutation with begin and finish", 
   const authPasswordIndex = resetFlow.indexOf(
     "auth.admin.updateUserById",
   );
+  const sessionRevocationIndex = resetFlow.indexOf(
+    "revokeWorkerPortalSessions",
+  );
   const databaseFinishIndex = resetFlow.indexOf(
     "finishWorkerPasswordCredentialIssue",
   );
   assert(
     databaseMarkerIndex >= 0 && authPasswordIndex >= 0 &&
-      databaseFinishIndex >= 0 &&
+      sessionRevocationIndex >= 0 && databaseFinishIndex >= 0 &&
       databaseMarkerIndex < authPasswordIndex &&
-      authPasswordIndex < databaseFinishIndex,
-    "reset must begin DB state, change Auth, then CAS-finish DB state",
+      authPasswordIndex < sessionRevocationIndex &&
+      sessionRevocationIndex < databaseFinishIndex,
+    "reset must begin DB state, change Auth, revoke old sessions, then CAS-finish DB state",
   );
   assert(
-    resetFlow.includes(".eq('tenant_id', caller.tenantId)"),
+    resetFlow.includes('.eq("tenant_id", caller.tenantId)'),
     "the reset marker update must remain tenant scoped",
   );
   assert(
-    resetFlow.includes(".select('id')") &&
+    resetFlow.includes('.select("id")') &&
       resetFlow.includes(".maybeSingle()"),
     "the reset must fail closed if the tenant account disappeared",
   );
   assert(
     !source.includes("must_reset_password: false"),
     "only the authenticated completion RPC may clear the reset requirement",
+  );
+});
+
+Deno.test("worker suspension revokes sessions and reactivation requires a password", async () => {
+  const tenantId = "22222222-2222-4222-8222-222222222222";
+  const employeeId = "44444444-4444-4444-8444-444444444444";
+  const account = {
+    id: "55555555-5555-4555-8555-555555555555",
+    employee_id: employeeId,
+    auth_user_id: "66666666-6666-4666-8666-666666666666",
+    username: "mecanico",
+    login_email: "worker@example.invalid",
+    is_active: true,
+  };
+  const caller = {
+    userId: "33333333-3333-4333-8333-333333333333",
+    tenantId,
+    role: "admin",
+    permissions: { manage_users: true },
+  };
+  const suspendedClient = new FakeServiceClient();
+  suspendedClient.singleRows.set("employee_portal_accounts", account);
+  suspendedClient.rpcResults.set("revoke_worker_portal_sessions", {
+    data: 4,
+    error: null,
+  });
+
+  assertEquals(
+    await setWorkerPortalAccess(
+      suspendedClient,
+      caller,
+      { employeeId, isActive: false },
+    ),
+    { success: true, authBanned: false, revokedSessions: 4 },
+    "suspension reports the exact session revocation result",
+  );
+  assertEquals(
+    suspendedClient.updates.map((update) => ({
+      table: update.table,
+      isActive: update.payload.is_active,
+      filters: update.filters,
+    })),
+    [{
+      table: "employee_portal_accounts",
+      isActive: false,
+      filters: [
+        ["id", account.id],
+        ["tenant_id", tenantId],
+      ],
+    }],
+    "the portal is disabled in the caller tenant before revocation",
+  );
+  assertEquals(
+    suspendedClient.rpcCalls,
+    [{
+      name: "revoke_worker_portal_sessions",
+      args: {
+        p_portal_account_id: account.id,
+        p_tenant_id: tenantId,
+      },
+    }],
+    "suspension revokes every Auth session through the scoped RPC",
+  );
+
+  const reactivationClient = new FakeServiceClient();
+  reactivationClient.singleRows.set("employee_portal_accounts", {
+    ...account,
+    is_active: false,
+  });
+  await assertRejectsCode(
+    () =>
+      setWorkerPortalAccess(
+        reactivationClient,
+        caller,
+        { employeeId, isActive: true },
+      ),
+    "worker_reactivation_requires_password",
+    "a boolean toggle cannot reactivate a worker with an old credential",
+  );
+  assertEquals(
+    reactivationClient.updates,
+    [],
+    "rejected reactivation cannot mutate the portal",
+  );
+  assertEquals(
+    reactivationClient.rpcCalls,
+    [],
+    "rejected reactivation does not perform a misleading session operation",
+  );
+});
+
+Deno.test("worker access status is tenant-scoped, redacted and identity-aware", async () => {
+  const tenantId = "22222222-2222-4222-8222-222222222222";
+  const employeeId = "44444444-4444-4444-8444-444444444444";
+  const authUserId = "66666666-6666-4666-8666-666666666666";
+  const client = new FakeServiceClient();
+  client.singleRows.set("employees", { id: employeeId });
+  client.singleRows.set("employee_portal_accounts", {
+    employee_id: employeeId,
+    auth_user_id: authUserId,
+    username: "mecanico",
+    login_email: "must-not-leak@example.invalid",
+    is_active: true,
+    must_reset_password: true,
+    last_login_at: "2026-07-26T12:00:00.000Z",
+  });
+  client.authUsers.set(authUserId, {
+    id: authUserId,
+    app_metadata: {
+      account_type: "worker_portal",
+      tenant_id: tenantId,
+      employee_id: employeeId,
+      role: "worker",
+    },
+  });
+
+  const result = await getWorkerPortalAccess(
+    client,
+    {
+      userId: "33333333-3333-4333-8333-333333333333",
+      tenantId,
+      role: "admin",
+      permissions: { manage_users: true },
+    },
+    { employeeId },
+  );
+
+  assertEquals(
+    result,
+    {
+      employeeId,
+      hasAccess: true,
+      username: "mecanico",
+      isActive: true,
+      mustResetPassword: true,
+      lastLoginAt: "2026-07-26T12:00:00.000Z",
+      identityHealthy: true,
+    },
+    "the client receives only the operational worker access projection",
+  );
+  assert(
+    !("authUserId" in result) &&
+      !("loginEmail" in result) &&
+      !JSON.stringify(result).includes("must-not-leak"),
+    "Auth identity and synthetic email remain server-only",
+  );
+  assertEquals(
+    client.reads.map((read) => ({
+      table: read.table,
+      filters: read.filters,
+    })),
+    [
+      {
+        table: "employees",
+        filters: [
+          ["id", employeeId],
+          ["tenant_id", tenantId],
+        ],
+      },
+      {
+        table: "employee_portal_accounts",
+        filters: [
+          ["tenant_id", tenantId],
+          ["employee_id", employeeId],
+        ],
+      },
+    ],
+    "both the employee and worker account reads stay in the caller tenant",
+  );
+
+  client.authUsers.set(authUserId, {
+    id: authUserId,
+    app_metadata: {
+      account_type: "worker_portal",
+      tenant_id: "77777777-7777-4777-8777-777777777777",
+      employee_id: employeeId,
+      role: "worker",
+    },
+  });
+  const drifted = await getWorkerPortalAccess(
+    client,
+    {
+      userId: "33333333-3333-4333-8333-333333333333",
+      tenantId,
+      role: "admin",
+      permissions: { manage_users: true },
+    },
+    { employeeId },
+  );
+  assertEquals(
+    drifted.identityHealthy,
+    false,
+    "metadata drift must disable credential-management actions",
   );
 });
 
@@ -1811,7 +2736,7 @@ Deno.test("worker identity cannot be adopted from a squatted synthetic email", a
 
   const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
   assert(
-    source.includes("'worker_login_email_conflict'"),
+    source.includes('"worker_login_email_conflict"'),
     "pre-existing synthetic emails must become explicit conflicts",
   );
   assert(
@@ -1824,7 +2749,7 @@ Deno.test("worker creation compensates only the exact newly-created Auth identit
   const tenantId = "22222222-2222-4222-8222-222222222222";
   const employeeId = "44444444-4444-4444-8444-444444444444";
   const authUserId = "66666666-6666-4666-8666-666666666666";
-  const loginEmail = "wp-tenant-worker@worker-login.vinabike.app";
+  const loginEmail = "wp-tenant-worker@worker-login.invalid";
   const harness = workerSagaClient({
     insertError: { message: "insert failed" },
     authUser: {
@@ -1863,6 +2788,49 @@ Deno.test("worker creation compensates only the exact newly-created Auth identit
   );
 });
 
+Deno.test("worker create race preserves ERP conflict after exact Auth compensation", async () => {
+  const tenantId = "22222222-2222-4222-8222-222222222222";
+  const employeeId = "44444444-4444-4444-8444-444444444444";
+  const authUserId = "66666666-6666-4666-8666-666666666666";
+  const loginEmail = "wp-tenant-worker@worker-login.invalid";
+  const harness = workerSagaClient({
+    insertError: { code: "P0001", message: "worker_access_conflict" },
+    authUser: {
+      id: authUserId,
+      email: loginEmail,
+      app_metadata: {
+        account_type: "worker_portal",
+        tenant_id: tenantId,
+        employee_id: employeeId,
+        role: "worker",
+      },
+    },
+  });
+
+  await assertRejectsCode(
+    () =>
+      persistNewWorkerPortalAccount(
+        harness.client,
+        {
+          payload: { tenant_id: tenantId },
+          tenantId,
+          employeeId,
+          username: "mecanico",
+          loginEmail,
+          authUserId,
+          createdAuthUserId: authUserId,
+        },
+      ),
+    "worker_access_conflict",
+    "a concurrent ERP reservation remains a stable worker conflict",
+  );
+  assertEquals(
+    harness.deletedUserIds,
+    [authUserId],
+    "a rejected worker race compensates only its newly-created Auth identity",
+  );
+});
+
 Deno.test("worker insert acknowledgement loss reconciles the exact link without deletion", async () => {
   const authUserId = "66666666-6666-4666-8666-666666666666";
   const harness = workerSagaClient({
@@ -1878,7 +2846,7 @@ Deno.test("worker insert acknowledgement loss reconciles the exact link without 
         tenantId: "22222222-2222-4222-8222-222222222222",
         employeeId: "44444444-4444-4444-8444-444444444444",
         username: "mecanico",
-        loginEmail: "wp-tenant-worker@worker-login.vinabike.app",
+        loginEmail: "wp-tenant-worker@worker-login.invalid",
         authUserId,
         createdAuthUserId: authUserId,
       },
@@ -1904,7 +2872,7 @@ Deno.test("worker compensation never deletes a pre-existing or mismatched identi
     tenantId: "22222222-2222-4222-8222-222222222222",
     employeeId: "44444444-4444-4444-8444-444444444444",
     username: "mecanico",
-    loginEmail: "wp-tenant-worker@worker-login.vinabike.app",
+    loginEmail: "wp-tenant-worker@worker-login.invalid",
     authUserId: "66666666-6666-4666-8666-666666666666",
   };
   const preExisting = workerSagaClient({
@@ -1960,7 +2928,7 @@ Deno.test("worker compensation never deletes a pre-existing or mismatched identi
 Deno.test("worker retry adopts only an exact orphan with zero memberships", async () => {
   const tenantId = "22222222-2222-4222-8222-222222222222";
   const employeeId = "44444444-4444-4444-8444-444444444444";
-  const loginEmail = "wp-tenant-worker@worker-login.vinabike.app";
+  const loginEmail = "wp-tenant-worker@worker-login.invalid";
   const orphan = {
     id: "66666666-6666-4666-8666-666666666666",
     email: loginEmail,
@@ -2304,6 +3272,16 @@ Deno.test("customer link and email delivery wait for confirmation", async () => 
   assertEquals(
     accessEmailRedirect({
       delivery: "recovery",
+      isCustomer: true,
+      erpOrigin: "https://erp.example",
+      storeOrigin: "https://store.example",
+    }),
+    "https://store.example/cuenta/login?recovery=true",
+    "confirmed customer recovery returns to the exact verified recovery route",
+  );
+  assertEquals(
+    accessEmailRedirect({
+      delivery: "recovery",
       isCustomer: false,
       erpOrigin: "https://erp.example",
       storeOrigin: "https://store.example",
@@ -2336,14 +3314,14 @@ Deno.test("customer link and email delivery wait for confirmation", async () => 
     "new and unconfirmed identities cannot be linked prematurely",
   );
   assert(
-    customerFlow.includes(".select('id, auth_user_id')") &&
+    customerFlow.includes('.select("id, auth_user_id")') &&
       customerFlow.includes(".maybeSingle()") &&
-      customerFlow.includes("customer_link_state_mismatch"),
+      customerFlow.includes('"customer_link_state_mismatch"'),
     "the tenant row and exact Auth link state must be read back",
   );
   assert(
     customerFlow.includes("sendSignupVerificationEmail") &&
-      customerFlow.includes("delivery === 'recovery'"),
+      customerFlow.includes('delivery === "recovery"'),
     "unconfirmed identities cannot receive a recovery email",
   );
 });
@@ -2356,7 +3334,7 @@ Deno.test("generic access email never sends recovery to an unconfirmed identity"
   );
   assert(
     resetFlow.includes("emailConfirmedAt: user.email_confirmed_at") &&
-      resetFlow.includes("delivery === 'verification'") &&
+      resetFlow.includes('delivery === "verification"') &&
       resetFlow.includes("sendSignupVerificationEmail"),
     "the provider action must branch on authoritative confirmation state",
   );

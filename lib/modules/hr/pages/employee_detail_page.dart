@@ -11,6 +11,7 @@ import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../models/hr_models.dart';
 import '../services/hr_service.dart';
+import '../widgets/employee_retirement_dialog.dart';
 
 /// Employee Detail Page - Modern Profile Layout
 class EmployeeDetailPage extends StatefulWidget {
@@ -59,7 +60,12 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isRetiring = false;
   bool _isWorkerPortalBusy = false;
+  bool _isWorkerPortalLoading = true;
+  WorkerPortalAccessState? _workerPortalAccess;
+  String? _workerPortalError;
+  int _workerPortalLoadEpoch = 0;
   String? _error;
   // Salary/Hours state
   PaymentMethod _paymentMethod = PaymentMethod.transfer; // Keep for fallback
@@ -206,6 +212,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
     _loadHoursSummary();
     _loadDefaultShiftBlocks();
     _loadReferences(); // Renamed from _loadSalaryAccounts
+    _loadWorkerPortalAccess();
   }
 
   // Basic Date Calculations
@@ -473,6 +480,56 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
     }
   }
 
+  Future<void> _retireEmployee() async {
+    final employee = _employee;
+    final employeeId = employee?.id;
+    if (employee == null ||
+        employeeId == null ||
+        _status == EmployeeStatus.terminated) {
+      return;
+    }
+
+    final confirmed = await showEmployeeRetirementDialog(
+      context,
+      workerName: employee.fullName,
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _isRetiring = true);
+    try {
+      final result = await context.read<HRService>().retireEmployee(employeeId);
+      await _loadEmployee();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.alreadyRetired
+                ? '${employee.fullName} ya estaba desvinculado.'
+                : '${employee.fullName} fue desvinculado. Su historial se conservó.',
+          ),
+        ),
+      );
+    } on EmployeeRetirementException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudo desvincular al trabajador. Inténtalo nuevamente.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isRetiring = false);
+    }
+  }
+
   Future<void> _createWorkerPortalAccess() async {
     final employee = _employee;
     final employeeId = employee?.id;
@@ -497,6 +554,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
       if (!mounted) return;
       await _showWorkerPortalResult(result);
+      await _loadWorkerPortalAccess();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -505,6 +563,197 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
             'No se pudo crear el acceso trabajador. Revisa los datos e inténtalo nuevamente.',
           ),
           backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isWorkerPortalBusy = false);
+    }
+  }
+
+  Future<void> _loadWorkerPortalAccess() async {
+    final employeeId = _employee?.id;
+    if (employeeId == null) return;
+
+    final epoch = ++_workerPortalLoadEpoch;
+    if (mounted) {
+      setState(() {
+        _isWorkerPortalLoading = true;
+        _workerPortalError = null;
+      });
+    }
+
+    try {
+      final access = await context
+          .read<UserManagementService>()
+          .getWorkerPortalAccess(employeeId: employeeId);
+      if (!mounted || epoch != _workerPortalLoadEpoch) return;
+      setState(() {
+        _workerPortalAccess = access;
+        _isWorkerPortalLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || epoch != _workerPortalLoadEpoch) return;
+      setState(() {
+        _workerPortalError =
+            'No se pudo verificar el estado del acceso trabajador.';
+        _isWorkerPortalLoading = false;
+      });
+    }
+  }
+
+  Future<void> _resetWorkerPortalPassword({
+    required bool reactivating,
+  }) async {
+    final employeeId = _employee?.id;
+    if (employeeId == null) return;
+
+    final password = await _showWorkerPasswordDialog(
+      title: reactivating ? 'Reactivar acceso' : 'Restablecer contraseña',
+      actionLabel: reactivating ? 'Reactivar acceso' : 'Restablecer',
+      explanation: reactivating
+          ? 'Define una contraseña temporal nueva. El acceso quedará activo '
+              'y el trabajador deberá cambiarla al ingresar.'
+          : 'La contraseña anterior dejará de funcionar y se cerrarán las '
+              'demás sesiones del trabajador.',
+    );
+    if (password == null || !mounted) return;
+
+    setState(() => _isWorkerPortalBusy = true);
+    try {
+      await context.read<UserManagementService>().resetWorkerPortalPassword(
+            employeeId: employeeId,
+            password: password,
+          );
+      await _loadWorkerPortalAccess();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            reactivating
+                ? 'Acceso reactivado. El trabajador deberá cambiar su contraseña.'
+                : 'Contraseña restablecida y demás sesiones cerradas.',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            reactivating
+                ? 'No se pudo reactivar el acceso trabajador.'
+                : 'No se pudo restablecer la contraseña.',
+          ),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isWorkerPortalBusy = false);
+    }
+  }
+
+  Future<String?> _showWorkerPasswordDialog({
+    required String title,
+    required String actionLabel,
+    required String explanation,
+  }) async {
+    final formKey = GlobalKey<FormState>();
+    final passwordController = TextEditingController();
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(title),
+          content: Form(
+            key: formKey,
+            child: SizedBox(
+              width: 360,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(explanation),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: passwordController,
+                    autofocus: true,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Contraseña temporal nueva',
+                      helperText:
+                          AuthInputValidation.adminManagedPasswordHelper,
+                      prefixIcon: Icon(Icons.lock_reset_outlined),
+                    ),
+                    validator: AuthInputValidation.validateAdminManagedPassword,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (!formKey.currentState!.validate()) return;
+                Navigator.of(dialogContext).pop(passwordController.text);
+              },
+              child: Text(actionLabel),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      passwordController.dispose();
+    }
+  }
+
+  Future<void> _suspendWorkerPortalAccess() async {
+    final employeeId = _employee?.id;
+    if (employeeId == null) return;
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Suspender acceso trabajador'),
+            content: const Text(
+              'El trabajador dejará de ingresar y sus sesiones activas se '
+              'cerrarán. Podrás reactivarlo sólo con una contraseña temporal nueva.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Suspender acceso'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) return;
+
+    setState(() => _isWorkerPortalBusy = true);
+    try {
+      await context.read<UserManagementService>().setWorkerPortalAccess(
+            employeeId: employeeId,
+            isActive: false,
+          );
+      await _loadWorkerPortalAccess();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Acceso trabajador suspendido.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('No se pudo suspender el acceso trabajador.'),
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     } finally {
@@ -965,7 +1214,58 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           ),
         ),
 
-        const SizedBox(height: 32),
+        const SizedBox(height: 16),
+        if (_status == EmployeeStatus.terminated)
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.inventory_2_outlined,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Registro laboral conservado',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'La desvinculación cerró sus accesos y mantuvo este '
+                    'historial para consulta y auditoría.'
+                    '${_employee?.terminationDate == null ? '' : ' Fecha: ${_formatDate(_employee!.terminationDate)}.'}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          TextButton.icon(
+            key: const Key('retire-employee-action'),
+            onPressed: _isSaving || _isRetiring ? null : _retireEmployee,
+            style: const ButtonStyle(
+              minimumSize: WidgetStatePropertyAll(Size(0, 48)),
+              tapTargetSize: MaterialTapTargetSize.padded,
+            ),
+            icon: const Icon(Icons.person_remove_outlined),
+            label: Text(
+              _isRetiring ? 'Desvinculando…' : 'Desvincular trabajador',
+            ),
+          ),
+
+        const SizedBox(height: 16),
         const Divider(),
         const SizedBox(height: 16),
 
@@ -979,26 +1279,249 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           ],
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _isWorkerPortalBusy ? null : _createWorkerPortalAccess,
-            icon: _isWorkerPortalBusy
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.phone_iphone_outlined),
-            label: Text(
-              _isWorkerPortalBusy
-                  ? 'Creando acceso...'
-                  : 'Acceso app trabajador',
-            ),
-          ),
-        ),
+        _buildWorkerPortalAccessPanel(theme),
       ],
     );
+  }
+
+  Widget _buildWorkerPortalAccessPanel(ThemeData theme) {
+    final access = _workerPortalAccess;
+    final employeeIsActive = _status == EmployeeStatus.active;
+    const actionStyle = ButtonStyle(
+      minimumSize: WidgetStatePropertyAll(Size(0, 48)),
+      tapTargetSize: MaterialTapTargetSize.padded,
+    );
+
+    Widget body;
+    if (_isWorkerPortalLoading) {
+      body = const Row(
+        children: [
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: 12),
+          Expanded(child: Text('Verificando estado del acceso…')),
+        ],
+      );
+    } else if (_workerPortalError != null) {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(_workerPortalError!),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            key: const Key('worker-access-retry'),
+            onPressed: _loadWorkerPortalAccess,
+            style: actionStyle,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Reintentar verificación'),
+          ),
+        ],
+      );
+    } else if (access == null || !access.hasAccess) {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Sin acceso configurado',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            employeeIsActive
+                ? 'Crea un usuario independiente para la app trabajador.'
+                : 'Sólo un trabajador activo puede recibir acceso.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            key: const Key('worker-access-create'),
+            onPressed: !_isWorkerPortalBusy && employeeIsActive
+                ? _createWorkerPortalAccess
+                : null,
+            style: actionStyle,
+            icon: const Icon(Icons.person_add_alt_1_outlined),
+            label: const Text('Crear acceso'),
+          ),
+        ],
+      );
+    } else {
+      final active = access.isActive;
+      final identityHealthy = access.identityHealthy;
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                !identityHealthy
+                    ? Icons.warning_amber_rounded
+                    : active
+                        ? Icons.check_circle_outline
+                        : Icons.pause_circle_outline,
+                size: 18,
+                color: !identityHealthy
+                    ? theme.colorScheme.error
+                    : active
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                !identityHealthy
+                    ? 'Acceso requiere reparación'
+                    : active
+                        ? 'Acceso activo'
+                        : 'Acceso suspendido',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('Usuario: ${access.username}'),
+          const SizedBox(height: 4),
+          Text(
+            'Último ingreso: ${_formatWorkerLastLogin(access.lastLoginAt)}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (access.mustResetPassword) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Debe cambiar la contraseña en su próximo ingreso.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          if (!identityHealthy) ...[
+            Text(
+              'El vínculo con la identidad de acceso no coincide. No se '
+              'cambiarán credenciales hasta repararlo de forma administrativa.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+            if (active) ...[
+              const SizedBox(height: 12),
+              TextButton.icon(
+                key: const Key('worker-access-suspend'),
+                onPressed:
+                    _isWorkerPortalBusy ? null : _suspendWorkerPortalAccess,
+                style: actionStyle,
+                icon: const Icon(Icons.pause_circle_outline),
+                label: const Text('Suspender acceso'),
+              ),
+            ],
+          ] else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: active
+                  ? [
+                      OutlinedButton.icon(
+                        key: const Key('worker-access-reset-password'),
+                        onPressed: !_isWorkerPortalBusy && employeeIsActive
+                            ? () => _resetWorkerPortalPassword(
+                                  reactivating: false,
+                                )
+                            : null,
+                        style: actionStyle,
+                        icon: const Icon(Icons.lock_reset_outlined),
+                        label: const Text('Restablecer contraseña'),
+                      ),
+                      TextButton.icon(
+                        key: const Key('worker-access-suspend'),
+                        onPressed: _isWorkerPortalBusy
+                            ? null
+                            : _suspendWorkerPortalAccess,
+                        style: actionStyle,
+                        icon: const Icon(Icons.pause_circle_outline),
+                        label: const Text('Suspender acceso'),
+                      ),
+                    ]
+                  : [
+                      FilledButton.icon(
+                        key: const Key('worker-access-reactivate'),
+                        onPressed: !_isWorkerPortalBusy && employeeIsActive
+                            ? () => _resetWorkerPortalPassword(
+                                  reactivating: true,
+                                )
+                            : null,
+                        style: actionStyle,
+                        icon: const Icon(Icons.restart_alt),
+                        label: const Text('Reactivar acceso'),
+                      ),
+                    ],
+            ),
+          if (!employeeIsActive) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Activa primero al trabajador para cambiar sus credenciales.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.phone_iphone_outlined,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Acceso app trabajador',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_isWorkerPortalBusy) ...[
+              const LinearProgressIndicator(),
+              const SizedBox(height: 12),
+            ],
+            body,
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatWorkerLastLogin(DateTime? value) {
+    if (value == null) return 'nunca';
+    final local = value.toLocal();
+    String twoDigits(int number) => number.toString().padLeft(2, '0');
+    return '${twoDigits(local.day)}/${twoDigits(local.month)}/${local.year} '
+        '${twoDigits(local.hour)}:${twoDigits(local.minute)}';
   }
 
   Widget _buildQuickAction(
@@ -1334,9 +1857,14 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
         DropdownMenuItem(
             value: EmployeeStatus.onLeave, child: Text('Licencia')),
         DropdownMenuItem(
-            value: EmployeeStatus.terminated, child: Text('Desvinculado')),
+          value: EmployeeStatus.terminated,
+          enabled: false,
+          child: Text('Desvinculado'),
+        ),
       ],
-      onChanged: (value) => setState(() => _status = value!),
+      onChanged: _status == EmployeeStatus.terminated
+          ? null
+          : (value) => setState(() => _status = value!),
     );
   }
 

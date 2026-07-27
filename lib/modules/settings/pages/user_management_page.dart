@@ -20,6 +20,8 @@ class UserManagementPage extends StatefulWidget {
 }
 
 class _UserManagementPageState extends State<UserManagementPage> {
+  static const _noEmployeeSelection = '__no_employee__';
+
   late final UserManagementService _userService;
   late final TenantService _tenantService;
   final _searchController = TextEditingController();
@@ -28,6 +30,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
   List<Map<String, dynamic>> _staffUsers = [];
   List<Map<String, dynamic>> _customerAccounts = [];
   List<Map<String, dynamic>> _invitations = [];
+  List<EmployeeAccessState> _employeeAccessStates = [];
   Map<String, dynamic> _summary = {};
   Map<String, dynamic>? _selectedItem;
   _IdentityAudience _audience = _IdentityAudience.staff;
@@ -100,6 +103,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
         _staffUsers = _listFrom(overview['staffUsers']);
         _customerAccounts = _listFrom(overview['customerAccounts']);
         _invitations = _listFrom(overview['invitations']);
+        _employeeAccessStates =
+            parseEmployeeAccessStates(overview['employeeAccessStates']);
         _summary = Map<String, dynamic>.from(overview['summary'] as Map? ?? {});
         _currentTenant = tenant;
         _selectedItem = _resolveSelection();
@@ -145,6 +150,158 @@ class _UserManagementPageState extends State<UserManagementPage> {
   String _identityId(Map<String, dynamic> item) {
     return (item['id'] ?? item['customerId'] ?? item['invitationId'] ?? '')
         .toString();
+  }
+
+  String? _normalizedId(dynamic value) {
+    final normalized = value?.toString().trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  String? _invitationEmployeeId(Map<String, dynamic> invitation) {
+    return _normalizedId(
+      invitation['employee_id'] ?? invitation['employeeId'],
+    );
+  }
+
+  EmployeeAccessState? _employeeAccessById(String? employeeId) {
+    if (employeeId == null) return null;
+    for (final employee in _employeeAccessStates) {
+      if (employee.employeeId == employeeId) return employee;
+    }
+    return null;
+  }
+
+  EmployeeAccessState? _employeeStateForStaff(Map<String, dynamic> user) {
+    final declaredEmployee =
+        _employeeAccessById(_normalizedId(user['employeeId']));
+    if (declaredEmployee != null) return declaredEmployee;
+
+    final userId = _normalizedId(user['id']);
+    if (userId == null) return null;
+    for (final employee in _employeeAccessStates) {
+      if (employee.erpUserId == userId) return employee;
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _pendingInvitationForEmployee(String employeeId) {
+    for (final invitation in _invitations) {
+      if (_invitationEmployeeId(invitation) == employeeId) return invitation;
+    }
+    return null;
+  }
+
+  String _staffIdentityLabel(String? userId) {
+    if (userId == null) return 'otra cuenta ERP';
+    for (final user in _staffUsers) {
+      if (_normalizedId(user['id']) != userId) continue;
+      return _normalizedId(user['displayName']) ??
+          _normalizedId(user['email']) ??
+          'otra cuenta ERP';
+    }
+    return 'otra cuenta ERP';
+  }
+
+  bool _canSelectEmployee(EmployeeAccessState employee) {
+    return employee.canReceiveErpLink &&
+        !employee.pendingInvitation &&
+        _pendingInvitationForEmployee(employee.employeeId) == null;
+  }
+
+  String _employeeStateLabel(EmployeeAccessState employee) {
+    if (!employee.isActiveEmployee) return 'Trabajador inactivo';
+    if (employee.pendingInvitation ||
+        _pendingInvitationForEmployee(employee.employeeId) != null) {
+      return 'Invitación pendiente';
+    }
+    return switch (employee.linkState) {
+      EmployeeErpLinkState.available => 'Disponible para vincular',
+      EmployeeErpLinkState.pendingInvitation => 'Invitación pendiente',
+      EmployeeErpLinkState.erpLinked =>
+        'Vinculado a ${_staffIdentityLabel(employee.erpUserId)}',
+      EmployeeErpLinkState.workerActive => 'App de trabajadores activa',
+      EmployeeErpLinkState.workerSuspended =>
+        'App de trabajadores suspendida · puede migrarse',
+      EmployeeErpLinkState.inconsistent => 'Requiere revisión',
+    };
+  }
+
+  String _employeeStateGuidance(EmployeeAccessState? employee) {
+    if (employee == null) {
+      return 'El vínculo es opcional. Si seleccionas un trabajador, la invitación quedará reservada para esa ficha y no se escogerá ninguna automáticamente.';
+    }
+    if (!employee.isActiveEmployee) {
+      return 'Este trabajador está inactivo y no puede recibir un nuevo acceso ERP.';
+    }
+    final pending = _pendingInvitationForEmployee(employee.employeeId);
+    if (employee.pendingInvitation || pending != null) {
+      return 'Ya hay una invitación pendiente para este trabajador (${pending?['email'] ?? 'sin email visible'}). Reenvíala o cancélala desde Invitaciones.';
+    }
+    return switch (employee.linkState) {
+      EmployeeErpLinkState.available =>
+        'Disponible. Al aceptar la invitación, esta cuenta ERP quedará vinculada a ${employee.employeeName}.',
+      EmployeeErpLinkState.pendingInvitation =>
+        'Ya existe una invitación pendiente para este trabajador.',
+      EmployeeErpLinkState.erpLinked =>
+        'Ya está vinculado a ${_staffIdentityLabel(employee.erpUserId)}. Desvincula esa cuenta antes de reasignarlo.',
+      EmployeeErpLinkState.workerActive =>
+        'Tiene acceso activo en la app de trabajadores${employee.workerUsername == null ? '' : ' como ${employee.workerUsername}'}. Suspéndelo antes de migrarlo a una cuenta ERP.',
+      EmployeeErpLinkState.workerSuspended =>
+        'Su acceso independiente a la app de trabajadores está suspendido. Puedes migrarlo explícitamente a una cuenta ERP; el acceso anterior seguirá suspendido.',
+      EmployeeErpLinkState.inconsistent =>
+        'Los datos de acceso no coinciden. Revisa la ficha antes de crear o cambiar vínculos.',
+    };
+  }
+
+  String _directEmployeeLinkGuidance(EmployeeAccessState? employee) {
+    if (employee == null) {
+      return 'Selecciona explícitamente la ficha correcta. El sistema no elegirá un trabajador por nombre o email.';
+    }
+    if (!employee.isActiveEmployee) {
+      return 'Este trabajador está inactivo y no puede recibir un nuevo acceso ERP.';
+    }
+    final pending = _pendingInvitationForEmployee(employee.employeeId);
+    if (employee.pendingInvitation || pending != null) {
+      return 'Ya existe una invitación pendiente para este trabajador. Reenvíala o cancélala antes de vincular otra cuenta.';
+    }
+    return switch (employee.linkState) {
+      EmployeeErpLinkState.available =>
+        'Disponible. Esta cuenta ERP quedará vinculada inmediatamente a ${employee.employeeName}.',
+      EmployeeErpLinkState.pendingInvitation =>
+        'Ya existe una invitación pendiente para este trabajador.',
+      EmployeeErpLinkState.erpLinked =>
+        'Ya está vinculado a ${_staffIdentityLabel(employee.erpUserId)}.',
+      EmployeeErpLinkState.workerActive =>
+        'Tiene acceso activo en la app de trabajadores. Suspéndelo antes de migrarlo a una cuenta ERP.',
+      EmployeeErpLinkState.workerSuspended =>
+        'El acceso independiente de la app está suspendido. Puedes migrarlo explícitamente; ese acceso anterior seguirá suspendido.',
+      EmployeeErpLinkState.inconsistent =>
+        'Los datos de acceso no coinciden y deben revisarse antes de vincular.',
+    };
+  }
+
+  void _applyEmployeePrefill({
+    required EmployeeAccessState? employee,
+    required TextEditingController emailController,
+    required TextEditingController nameController,
+    required String? previousEmailPrefill,
+    required String? previousNamePrefill,
+  }) {
+    final currentEmail = emailController.text.trim();
+    final currentName = nameController.text.trim();
+    final canReplaceEmail = currentEmail.isEmpty ||
+        (previousEmailPrefill != null &&
+            currentEmail == previousEmailPrefill.trim());
+    final canReplaceName = currentName.isEmpty ||
+        (previousNamePrefill != null &&
+            currentName == previousNamePrefill.trim());
+
+    if (canReplaceEmail) {
+      emailController.text = employee?.email ?? '';
+    }
+    if (canReplaceName) {
+      nameController.text = employee?.employeeName ?? '';
+    }
   }
 
   @override
@@ -598,8 +755,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
         : item['displayName']?.toString() ??
             item['email']?.toString() ??
             'Usuario';
+    final invitationEmployee =
+        isInvitation ? _employeeAccessById(_invitationEmployeeId(item)) : null;
     final subtitle = isInvitation
-        ? 'Rol: ${_roleLabel(item['role'])} · expira ${_formatDate(item['expires_at'])}'
+        ? invitationEmployee == null
+            ? 'Rol: ${_roleLabel(item['role'])} · expira ${_formatDate(item['expires_at'])}'
+            : 'Rol: ${_roleLabel(item['role'])} · ${invitationEmployee.employeeName}'
         : item['email']?.toString() ?? 'Sin email';
     final isActive = item['isActive'] != false;
 
@@ -754,8 +915,21 @@ class _UserManagementPageState extends State<UserManagementPage> {
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
     final isSelf = user['id'] == currentUserId;
     final isActive = user['isActive'] != false;
+    final profileActive = user['profileActive'] == true;
     final email = user['email']?.toString() ?? '';
     final displayName = user['displayName']?.toString() ?? email;
+    final userId = user['id']?.toString() ?? '';
+    final declaredEmployeeId = user['employeeId']?.toString();
+    final employeeState = _employeeStateForStaff(user);
+    final hasHealthyEmployeeLink = employeeState != null &&
+        employeeState.linkState == EmployeeErpLinkState.erpLinked &&
+        employeeState.erpUserId == userId &&
+        declaredEmployeeId == employeeState.employeeId;
+    final hasDeclaredEmployeeLink =
+        declaredEmployeeId != null && declaredEmployeeId.isNotEmpty;
+    final employeeLinkNeedsReview = hasDeclaredEmployeeLink
+        ? !hasHealthyEmployeeLink
+        : employeeState?.erpUserId == userId;
 
     return _panel(
       context,
@@ -776,18 +950,48 @@ class _UserManagementPageState extends State<UserManagementPage> {
           _detailLine(
               'Email verificado', user['emailConfirmed'] == true ? 'Sí' : 'No'),
           _detailLine('Último acceso', _formatDate(user['lastSignInAt'])),
-          _detailLine('Trabajador vinculado',
-              user['employeeName']?.toString() ?? 'No vinculado'),
+          _detailLine(
+            'Trabajador vinculado',
+            employeeLinkNeedsReview
+                ? 'Requiere revisión'
+                : hasHealthyEmployeeLink
+                    ? employeeState.employeeName
+                    : 'No vinculado',
+          ),
           const SizedBox(height: 18),
           Wrap(
             spacing: 10,
             runSpacing: 10,
             children: [
               FilledButton.icon(
-                onPressed:
-                    _isActionRunning ? null : () => _showEditStaffDialog(user),
+                onPressed: _isActionRunning || isSelf
+                    ? null
+                    : () => _showEditStaffDialog(user),
                 icon: const Icon(Icons.tune, size: 18),
                 label: const Text('Rol y permisos'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _isActionRunning ||
+                        employeeLinkNeedsReview ||
+                        (!profileActive && !hasHealthyEmployeeLink)
+                    ? null
+                    : hasHealthyEmployeeLink
+                        ? () => _confirmUnlinkEmployee(
+                              user: user,
+                              employee: employeeState,
+                            )
+                        : () => _showLinkEmployeeDialog(user),
+                icon: Icon(
+                  hasHealthyEmployeeLink
+                      ? Icons.link_off_outlined
+                      : Icons.add_link_outlined,
+                  size: 18,
+                ),
+                label: Text(
+                  hasHealthyEmployeeLink
+                      ? 'Desvincular trabajador'
+                      : 'Vincular trabajador',
+                ),
               ),
               OutlinedButton.icon(
                 onPressed: _isActionRunning
@@ -842,6 +1046,34 @@ class _UserManagementPageState extends State<UserManagementPage> {
               ),
             ],
           ),
+          if (isSelf) ...[
+            const SizedBox(height: 12),
+            _noteBox(
+              context,
+              icon: Icons.shield_outlined,
+              text:
+                  'Tu propio rol y tus permisos se muestran como referencia. Otro administrador autorizado debe cambiarlos.',
+            ),
+          ],
+          if (employeeLinkNeedsReview) ...[
+            const SizedBox(height: 12),
+            _noteBox(
+              context,
+              icon: Icons.warning_amber_rounded,
+              text:
+                  'El perfil ERP y el registro del trabajador no describen el mismo vínculo. Se bloquearon los cambios para evitar asignar acceso a la persona incorrecta.',
+            ),
+          ],
+          if (!profileActive) ...[
+            const SizedBox(height: 12),
+            _noteBox(
+              context,
+              icon: Icons.link_off_outlined,
+              text: hasHealthyEmployeeLink
+                  ? 'La cuenta interna está suspendida, pero su vínculo exacto se conserva para auditoría. Puedes desvincularla explícitamente si necesitas reasignar la ficha del trabajador.'
+                  : 'Restaura primero el acceso de esta cuenta interna si necesitas vincularla a un trabajador.',
+            ),
+          ],
           const SizedBox(height: 18),
           _permissionsPreview(context, user['permissions']),
         ],
@@ -1001,6 +1233,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
       BuildContext context, Map<String, dynamic> invitation) {
     final email = invitation['email']?.toString() ?? '';
     final invitationId = invitation['id']?.toString() ?? '';
+    final invitationEmployeeId = _invitationEmployeeId(invitation);
+    final invitationEmployee = _employeeAccessById(invitationEmployeeId);
     return _panel(
       context,
       child: Column(
@@ -1016,6 +1250,13 @@ class _UserManagementPageState extends State<UserManagementPage> {
           ),
           const SizedBox(height: 18),
           _detailLine('Estado', invitation['status']?.toString() ?? 'pending'),
+          _detailLine(
+            'Trabajador',
+            invitationEmployee?.employeeName ??
+                (invitationEmployeeId == null
+                    ? 'Sin vínculo'
+                    : 'Vínculo requiere revisión'),
+          ),
           _detailLine('Expira', _formatDate(invitation['expires_at'])),
           _detailLine('Creada', _formatDate(invitation['created_at'])),
           const SizedBox(height: 18),
@@ -1326,10 +1567,18 @@ class _UserManagementPageState extends State<UserManagementPage> {
   }
 
   Future<void> _showInviteStaffDialog() async {
+    final formKey = GlobalKey<FormState>();
     final emailController = TextEditingController();
     final nameController = TextEditingController();
     var selectedRole = 'cashier';
     var permissions = _permissionsForRole(selectedRole);
+    var selectedEmployeeKey = _noEmployeeSelection;
+    EmployeeAccessState? selectedEmployee;
+    String? previousEmailPrefill;
+    String? previousNamePrefill;
+    final activeEmployees = _employeeAccessStates
+        .where((employee) => employee.isActiveEmployee)
+        .toList(growable: false);
 
     try {
       await showDialog<void>(
@@ -1340,45 +1589,123 @@ class _UserManagementPageState extends State<UserManagementPage> {
               title: const Text('Invitar usuario interno'),
               content: SizedBox(
                 width: 560,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: emailController,
-                        decoration: const InputDecoration(
+                child: Form(
+                  key: formKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        DropdownButtonFormField<String>(
+                          key: const ValueKey('user-invite-employee-field'),
+                          initialValue: selectedEmployeeKey,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Trabajador opcional',
+                            prefixIcon: Icon(Icons.badge_outlined),
+                          ),
+                          items: [
+                            const DropdownMenuItem(
+                              value: _noEmployeeSelection,
+                              child: Text('Sin vincular a trabajador'),
+                            ),
+                            for (final employee in activeEmployees)
+                              DropdownMenuItem(
+                                value: employee.employeeId,
+                                enabled: _canSelectEmployee(employee),
+                                child: Text(
+                                  '${employee.employeeName} — ${_employeeStateLabel(employee)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          ],
+                          onChanged: (value) {
+                            if (value == null) return;
+                            final nextEmployee = value == _noEmployeeSelection
+                                ? null
+                                : _employeeAccessById(value);
+                            _applyEmployeePrefill(
+                              employee: nextEmployee,
+                              emailController: emailController,
+                              nameController: nameController,
+                              previousEmailPrefill: previousEmailPrefill,
+                              previousNamePrefill: previousNamePrefill,
+                            );
+                            setDialogState(() {
+                              selectedEmployeeKey = value;
+                              selectedEmployee = nextEmployee;
+                              previousEmailPrefill = nextEmployee?.email;
+                              previousNamePrefill = nextEmployee?.employeeName;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        _noteBox(
+                          dialogContext,
+                          icon: selectedEmployee == null
+                              ? Icons.info_outline
+                              : selectedEmployee!.linkState ==
+                                      EmployeeErpLinkState.workerSuspended
+                                  ? Icons.swap_horiz
+                                  : Icons.link_outlined,
+                          text: _employeeStateGuidance(selectedEmployee),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          key: const ValueKey('user-invite-email-field'),
+                          controller: emailController,
+                          decoration: const InputDecoration(
                             labelText: 'Email',
-                            prefixIcon: Icon(Icons.email_outlined)),
-                        keyboardType: TextInputType.emailAddress,
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.email_outlined),
+                          ),
+                          keyboardType: TextInputType.emailAddress,
+                          validator: AuthInputValidation.validateEmail,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          key: const ValueKey('user-invite-name-field'),
+                          controller: nameController,
+                          decoration: const InputDecoration(
                             labelText: 'Nombre opcional',
-                            prefixIcon: Icon(Icons.person_outline)),
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        initialValue: selectedRole,
-                        decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.person_outline),
+                          ),
+                          textCapitalization: TextCapitalization.words,
+                          validator: (value) {
+                            if ((value?.trim().length ?? 0) > 120) {
+                              return 'El nombre no puede superar 120 caracteres';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          isExpanded: true,
+                          initialValue: selectedRole,
+                          decoration: const InputDecoration(
                             labelText: 'Rol',
-                            prefixIcon: Icon(Icons.badge_outlined)),
-                        items: _roleOptions.entries
-                            .map((entry) => DropdownMenuItem(
-                                value: entry.key, child: Text(entry.value)))
-                            .toList(),
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setDialogState(() {
-                            selectedRole = value;
-                            permissions = _permissionsForRole(value);
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 18),
-                      _permissionEditor(permissions, setDialogState),
-                    ],
+                            prefixIcon:
+                                Icon(Icons.admin_panel_settings_outlined),
+                          ),
+                          items: _roleOptions.entries
+                              .map(
+                                (entry) => DropdownMenuItem(
+                                  value: entry.key,
+                                  child: Text(entry.value),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setDialogState(() {
+                              selectedRole = value;
+                              permissions = _permissionsForRole(value);
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 18),
+                        _permissionEditor(permissions, setDialogState),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1390,6 +1717,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   onPressed: _isActionRunning
                       ? null
                       : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          final employeeId = selectedEmployee?.employeeId;
                           Navigator.pop(dialogContext);
                           await _runAction(
                             'Invitación enviada por correo',
@@ -1401,6 +1730,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                                 name: nameController.text.trim().isEmpty
                                     ? null
                                     : nameController.text.trim(),
+                                employeeId: employeeId,
                               );
                             },
                           );
@@ -1419,7 +1749,216 @@ class _UserManagementPageState extends State<UserManagementPage> {
     }
   }
 
+  Future<void> _showLinkEmployeeDialog(Map<String, dynamic> user) async {
+    final formKey = GlobalKey<FormState>();
+    String? selectedEmployeeId;
+    EmployeeAccessState? selectedEmployee;
+    final activeEmployees = _employeeAccessStates
+        .where((employee) => employee.isActiveEmployee)
+        .toList(growable: false);
+
+    final employee = await showDialog<EmployeeAccessState>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Vincular trabajador'),
+          content: SizedBox(
+            width: 560,
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Cuenta ERP: ${user['email'] ?? user['displayName'] ?? 'usuario'}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedEmployeeId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Trabajador',
+                      prefixIcon: Icon(Icons.badge_outlined),
+                    ),
+                    hint: const Text('Selecciona una ficha'),
+                    items: [
+                      for (final option in activeEmployees)
+                        DropdownMenuItem(
+                          value: option.employeeId,
+                          enabled: _canSelectEmployee(option),
+                          child: Text(
+                            '${option.employeeName} — ${_employeeStateLabel(option)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    validator: (value) =>
+                        value == null ? 'Selecciona un trabajador' : null,
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setDialogState(() {
+                        selectedEmployeeId = value;
+                        selectedEmployee = _employeeAccessById(value);
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _noteBox(
+                    dialogContext,
+                    icon: selectedEmployee?.linkState ==
+                            EmployeeErpLinkState.workerSuspended
+                        ? Icons.swap_horiz
+                        : Icons.info_outline,
+                    text: _directEmployeeLinkGuidance(selectedEmployee),
+                  ),
+                  if (activeEmployees.isEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'No hay trabajadores activos disponibles.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton.icon(
+              onPressed: _isActionRunning
+                  ? null
+                  : () {
+                      if (!formKey.currentState!.validate()) return;
+                      final chosen = selectedEmployee;
+                      if (chosen == null || !_canSelectEmployee(chosen)) {
+                        setDialogState(() {
+                          selectedEmployeeId = null;
+                          selectedEmployee = null;
+                        });
+                        return;
+                      }
+                      Navigator.pop(dialogContext, chosen);
+                    },
+              icon: const Icon(Icons.add_link_outlined, size: 18),
+              label: const Text('Continuar'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (employee == null || !mounted) return;
+    await _confirmLinkEmployee(user: user, employee: employee);
+  }
+
+  Future<void> _confirmLinkEmployee({
+    required Map<String, dynamic> user,
+    required EmployeeAccessState employee,
+  }) async {
+    final userId = _normalizedId(user['id']);
+    if (userId == null) return;
+    final accountLabel = _normalizedId(user['email']) ??
+        _normalizedId(user['displayName']) ??
+        'esta cuenta ERP';
+    final migrationNote = employee.linkState ==
+            EmployeeErpLinkState.workerSuspended
+        ? '\n\nEl acceso independiente de la app de trabajadores permanecerá suspendido.'
+        : '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Confirmar vínculo'),
+        content: Text(
+          'Vincularás la cuenta ERP $accountLabel con la ficha de ${employee.employeeName}.'
+          '$migrationNote\n\nConfirma que ambas identidades pertenecen a la misma persona.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Volver'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.verified_user_outlined, size: 18),
+            label: const Text('Confirmar vínculo'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await _runAction(
+      'Trabajador vinculado a la cuenta ERP',
+      () => _userService.linkInternalUserEmployee(
+        userId: userId,
+        employeeId: employee.employeeId,
+      ),
+    );
+  }
+
+  Future<void> _confirmUnlinkEmployee({
+    required Map<String, dynamic> user,
+    required EmployeeAccessState employee,
+  }) async {
+    final userId = _normalizedId(user['id']);
+    if (userId == null) return;
+    final accountLabel = _normalizedId(user['email']) ??
+        _normalizedId(user['displayName']) ??
+        'esta cuenta ERP';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Desvincular trabajador'),
+        content: Text(
+          'Quitarás el vínculo entre $accountLabel y ${employee.employeeName}. '
+          'La cuenta ERP conservará su acceso y la ficha del trabajador conservará su historial; solo se elimina esta relación.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton.tonalIcon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.link_off_outlined, size: 18),
+            label: const Text('Desvincular'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await _runAction(
+      'Trabajador desvinculado de la cuenta ERP',
+      () => _userService.unlinkInternalUserEmployee(
+        userId: userId,
+        employeeId: employee.employeeId,
+      ),
+    );
+  }
+
   Future<void> _showEditStaffDialog(Map<String, dynamic> user) async {
+    if (_normalizedId(user['id']) ==
+        Supabase.instance.client.auth.currentUser?.id) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Otro administrador autorizado debe cambiar tu rol o permisos.',
+          ),
+        ),
+      );
+      return;
+    }
     var selectedRole = user['role']?.toString() ?? 'cashier';
     var permissions = Map<String, bool>.from(
         user['permissions'] as Map? ?? _permissionsForRole(selectedRole));
@@ -1726,7 +2265,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
               children: [
                 Icon(option.icon, size: 18),
                 const SizedBox(width: 8),
-                Text(option.label),
+                Expanded(child: Text(option.label)),
               ],
             ),
           ),
@@ -1835,19 +2374,26 @@ class _UserManagementPageState extends State<UserManagementPage> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(successMessage)));
       await _loadData(silent: true);
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text(
-            'No pudimos completar la acción. Inténtalo nuevamente.',
-          ),
+          content: Text(_actionErrorMessage(error)),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
+      if (error is UserManagementException &&
+          (error.status == 404 || error.status == 409)) {
+        await _loadData(silent: true);
+      }
     } finally {
       if (mounted) setState(() => _isActionRunning = false);
     }
+  }
+
+  String _actionErrorMessage(Object error) {
+    if (error is UserManagementException) return error.message;
+    return 'No pudimos completar la acción. Inténtalo nuevamente.';
   }
 
   Future<void> _sendPasswordReset(String email) async {

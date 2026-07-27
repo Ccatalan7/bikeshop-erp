@@ -3,31 +3,98 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no">
     <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
     <title>Confirma tu nuevo correo</title>
+    <style>
+      html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+      body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+      table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+      table { border-collapse: collapse; table-layout: fixed; }
+      .breakable, .content-cell { overflow-wrap: anywhere; word-break: break-word; }
+      a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; }
+      @media only screen and (max-width: 600px) {
+        .outer-cell { padding: 16px 10px !important; }
+        .header-cell { padding: 22px 20px 18px !important; }
+        .content-cell { padding: 28px 20px !important; }
+        .footer-cell { padding: 18px 20px 22px !important; }
+        .security-badge { display: none !important; }
+        .action-table, .button-cell, .button-link { width: 100% !important; }
+        .button-link { display: block !important; }
+        h1 { font-size: 25px !important; line-height: 32px !important; }
+      }
+    </style>
   </head>
-  <body style="margin:0;background:#f4f6f8;color:#1f2937;font-family:Arial,sans-serif">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+  <body style="margin:0;padding:0;background:#EDF3F7;color:#263842;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;line-height:1px;">
+      Confirma la nueva dirección antes de usarla para iniciar sesión.
+    </div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;background:#EDF3F7;border-collapse:collapse;table-layout:fixed;">
       <tr>
-        <td align="center" style="padding:32px 16px">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
-                 style="max-width:560px;background:#fff;border:1px solid #e5e7eb;border-radius:16px">
-            <tr><td style="padding:28px 32px 12px;color:#1677d2;font-size:22px;font-weight:700">Viñabike</td></tr>
+        <td class="outer-cell" align="center" style="padding:34px 16px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;max-width:600px;background:#FFFFFF;border:1px solid #DCE6EC;border-collapse:separate;border-radius:18px;box-shadow:0 10px 28px rgba(16,42,58,.08);table-layout:fixed;">
             <tr>
-              <td style="padding:8px 32px 32px">
-                <h1 style="margin:0 0 16px;font-size:24px;color:#111827">Confirma tu nuevo correo</h1>
-                <p style="margin:0 0 24px;line-height:1.6">
-                  Confirma que deseas usar <strong>{{ .NewEmail }}</strong> en tu cuenta.
+              <td style="height:6px;background:#0B6FCB;border-radius:18px 18px 0 0;font-size:0;line-height:0;">&nbsp;</td>
+            </tr>
+            <tr>
+              <td class="header-cell" style="padding:24px 32px 20px;border-bottom:1px solid #E7EDF1;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;table-layout:fixed;">
+                  <tr>
+                    <td width="48" valign="middle" style="width:48px;">
+                      <div style="width:40px;height:40px;border-radius:12px;background:#0B6FCB;color:#FFFFFF;font-size:20px;font-weight:800;line-height:40px;text-align:center;">V</div>
+                    </td>
+                    <td valign="middle" style="min-width:0;padding-left:2px;">
+                      <div style="color:#102A3A;font-size:18px;font-weight:800;letter-spacing:.1px;line-height:22px;">Viñabike</div>
+                      <div style="margin-top:2px;color:#71818B;font-size:12px;line-height:16px;">Cuenta y seguridad</div>
+                    </td>
+                    <td class="security-badge" width="116" align="right" valign="middle" style="width:116px;">
+                      <span style="display:inline-block;padding:6px 9px;border:1px solid #D8E5EF;border-radius:999px;color:#315C76;font-size:10px;font-weight:700;letter-spacing:.5px;line-height:14px;text-transform:uppercase;">Mensaje seguro</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td class="content-cell" style="padding:36px 38px 34px;overflow-wrap:anywhere;word-break:break-word;">
+                <div style="margin:0 0 10px;color:#0B6FCB;font-size:11px;font-weight:800;letter-spacing:1.2px;line-height:16px;">CAMBIO DE CORREO</div>
+                <h1 style="margin:0 0 17px;color:#102A3A;font-size:28px;font-weight:760;line-height:35px;">Confirma tu nuevo correo</h1>
+                <p style="margin:0;color:#3C4D57;font-size:15px;line-height:24px;">Confirma que deseas usar <strong class="breakable">{{ .NewEmail }}</strong> como correo de acceso a tu cuenta.</p>
+
+
+                <table role="presentation" cellspacing="0" cellpadding="0" class="action-table" style="border-collapse:separate;margin:28px 0 18px;">
+                  <tr>
+                    <td class="button-cell" bgcolor="#0B6FCB" style="border-radius:9px;text-align:center;">
+                      <a class="button-link" href="{{ .SiteURL }}/auth-action.html#confirmation_url={{ .ConfirmationURL }}" style="box-sizing:border-box;display:inline-block;min-height:48px;padding:14px 24px;color:#FFFFFF;font-size:15px;font-weight:700;line-height:20px;text-align:center;text-decoration:none;">
+                        Confirmar nuevo correo
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:0 0 26px;color:#657783;font-size:12px;line-height:19px;">
+                  Si el botón no responde, <a class="breakable" href="{{ .SiteURL }}/auth-action.html#confirmation_url={{ .ConfirmationURL }}" style="color:#0B6FCB;font-weight:700;text-decoration:underline;">abre este enlace seguro</a>.
                 </p>
-                <p style="margin:0 0 24px">
-                  <a href="{{ .SiteURL }}/auth-action.html#confirmation_url={{ .ConfirmationURL }}"
-                     style="display:inline-block;padding:13px 22px;border-radius:8px;background:#1677d2;color:#fff;text-decoration:none;font-weight:700">
-                    Confirmar nuevo correo
-                  </a>
-                </p>
-                <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.5">
-                  Si no solicitaste este cambio, no uses el enlace y avisa al administrador de tu cuenta.
-                </p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin-top:0;background:#F6F9FB;border-collapse:separate;border-radius:12px;table-layout:fixed;">
+                  <tr>
+                    <td style="padding:16px 18px;overflow-wrap:anywhere;word-break:break-word;">
+                      <div style="margin:0 0 5px;color:#102A3A;font-size:13px;font-weight:750;line-height:18px;">Protección adicional</div>
+                      <div style="color:#586A75;font-size:13px;line-height:20px;">Viñabike utiliza confirmación segura del cambio. Según el estado de tu cuenta, también podrías recibir un aviso en la dirección anterior.</div>
+                    </td>
+                  </tr>
+                </table>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin-top:16px;background:#F4F8FB;border:1px solid #D8E5EF;border-collapse:separate;border-radius:12px;table-layout:fixed;">
+                  <tr>
+                    <td width="38" valign="top" style="width:38px;padding:16px 0 16px 16px;color:#315C76;font-size:18px;font-weight:800;line-height:20px;">!</td>
+                    <td valign="top" style="padding:16px 16px 16px 4px;color:#315C76;font-size:12px;line-height:19px;overflow-wrap:anywhere;word-break:break-word;">
+                      El enlace vence en 60 minutos. Si no solicitaste este cambio, no lo abras y revisa la seguridad de tu cuenta.
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td class="footer-cell" style="padding:19px 38px 24px;border-top:1px solid #E7EDF1;color:#7A8992;font-size:11px;line-height:17px;overflow-wrap:anywhere;word-break:break-word;">
+                Este es un mensaje automático de seguridad de Viñabike. Nunca te pediremos tu contraseña ni este código por correo, teléfono, chat o redes sociales. Si necesitas ayuda, escribe a <a href="mailto:contacto@vinabike.cl" style="color:#315C76;text-decoration:underline;">contacto@vinabike.cl</a>.
               </td>
             </tr>
           </table>

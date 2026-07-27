@@ -49,12 +49,24 @@ void main() {
     expect(
       files,
       {
-        'lib/modules/settings/pages/settings_page.dart',
         'lib/modules/settings/services/company_profile_service.dart',
         'lib/public_store/widgets/public_store_layout.dart',
+        'lib/shared/services/current_user_profile_service.dart',
         'lib/shared/services/tenant_detection_service.dart',
         'lib/shared/services/tenant_service.dart',
       },
     );
+  });
+
+  test('current-user profile tenant lookup is scoped to its RPC authority', () {
+    final source = File(
+      'lib/shared/services/current_user_profile_service.dart',
+    ).readAsStringSync();
+
+    expect(source, contains("rpc('get_my_erp_profile')"));
+    expect(source, contains(".from('tenants')"));
+    expect(source, contains(".eq('id', tenantId)"));
+    expect(source, contains(".eq('is_active', true)"));
+    expect(source, contains('resolvedTenantId != tenantId'));
   });
 }

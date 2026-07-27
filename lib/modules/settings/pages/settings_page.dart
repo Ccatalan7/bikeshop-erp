@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
 
+import '../../../shared/models/current_user_profile.dart';
+import '../../../shared/services/current_user_profile_navigation.dart';
+import '../../../shared/services/current_user_profile_service.dart';
 import '../../../shared/widgets/branded_loading.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -13,56 +16,6 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  String? _userEmail;
-  String? _tenantId;
-  String? _subdomain;
-  String? _role;
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadUserInfo();
-  }
-
-  Future<void> _loadUserInfo() async {
-    try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      _userEmail = user.email;
-
-      final profileData = await Supabase.instance.client
-          .from('user_profiles')
-          .select('tenant_id, role')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-      if (profileData != null) {
-        _tenantId = profileData['tenant_id'];
-        _role = profileData['role'];
-
-        final tenantData = await Supabase.instance.client
-            .from('tenants')
-            .select('subdomain')
-            .eq('id', _tenantId!)
-            .maybeSingle();
-
-        if (tenantData != null) {
-          _subdomain = tenantData['subdomain'];
-        }
-      }
-
-      setState(() => _isLoading = false);
-    } catch (e) {
-      debugPrint('Error loading user info: $e');
-      setState(() => _isLoading = false);
-    }
-  }
-
   void _copyToClipboard(String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
@@ -73,6 +26,9 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final profileService = context.watch<CurrentUserProfileService>();
+    final profile = profileService.profile;
+    final isLoading = profileService.isLoading && profile == null;
     final sections = <_SettingsSectionData>[
       _SettingsSectionData(
         title: 'Empresa y acceso',
@@ -230,7 +186,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
         child: SafeArea(
-          child: _isLoading
+          child: isLoading
               ? const Center(child: BrandedLoading())
               : LayoutBuilder(
                   builder: (context, constraints) {
@@ -250,6 +206,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             context,
                             sectionCount: sections.length,
                             totalEntries: totalEntries,
+                            role: profile?.role,
                           ),
                           const SizedBox(height: 24),
                           if (isWide)
@@ -264,7 +221,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                       width: leftW,
                                       child: Column(
                                         children: [
-                                          _buildAccountPanel(context),
+                                          _buildAccountPanel(context, profile),
                                           const SizedBox(height: 18),
                                           _buildAboutFooter(context),
                                         ],
@@ -283,7 +240,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               },
                             )
                           else ...[
-                            _buildAccountPanel(context),
+                            _buildAccountPanel(context, profile),
                             const SizedBox(height: 20),
                             _buildSettingsGrid(
                               context,
@@ -307,12 +264,13 @@ class _SettingsPageState extends State<SettingsPage> {
     BuildContext context, {
     required int sectionCount,
     required int totalEntries,
+    required String? role,
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final supportColor =
         Color.lerp(colorScheme.primary, const Color(0xFF0F766E), 0.55)!;
-    final roleLabel = _formatRole(_role);
+    final roleLabel = _formatRole(role);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -549,10 +507,13 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildAccountPanel(BuildContext context) {
+  Widget _buildAccountPanel(
+    BuildContext context,
+    CurrentUserProfile? profile,
+  ) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final roleLabel = _formatRole(_role);
+    final roleLabel = _formatRole(profile?.role);
     final primaryAccent =
         Color.lerp(colorScheme.primary, const Color(0xFF0F766E), 0.35)!;
 
@@ -605,10 +566,11 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     ),
                     const Spacer(),
-                    if ((_userEmail ?? '').isNotEmpty)
+                    if ((profile?.email ?? '').isNotEmpty)
                       IconButton(
                         tooltip: 'Copiar Email',
-                        onPressed: () => _copyToClipboard(_userEmail!, 'Email'),
+                        onPressed: () =>
+                            _copyToClipboard(profile!.email, 'Email'),
                         style: IconButton.styleFrom(
                           backgroundColor: Colors.white.withValues(alpha: 0.14),
                           foregroundColor: Colors.white,
@@ -627,7 +589,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _userEmail ?? 'No disponible',
+                  profile?.email ?? 'No disponible',
                   style: theme.textTheme.headlineSmall?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -645,11 +607,11 @@ class _SettingsPageState extends State<SettingsPage> {
                         icon: Icons.verified_user_outlined,
                         label: roleLabel,
                       ),
-                    if ((_subdomain ?? '').isNotEmpty)
+                    if ((profile?.tenantSubdomain ?? '').isNotEmpty)
                       _buildAccountChip(
                         context,
                         icon: Icons.public_outlined,
-                        label: _subdomain!,
+                        label: profile!.tenantSubdomain!,
                       ),
                   ],
                 ),
@@ -672,8 +634,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 _buildInfoItem(
                   context,
                   label: 'Subdominio',
-                  value: _subdomain ?? 'No disponible',
-                  copyValue: _subdomain,
+                  value: profile?.tenantSubdomain ?? 'No disponible',
+                  copyValue: profile?.tenantSubdomain,
                 ),
                 Divider(
                   height: 1,
@@ -682,8 +644,20 @@ class _SettingsPageState extends State<SettingsPage> {
                 _buildInfoItem(
                   context,
                   label: 'Tenant ID',
-                  value: _compactUuid(_tenantId),
-                  copyValue: _tenantId,
+                  value: _compactUuid(profile?.tenantId),
+                  copyValue: profile?.tenantId,
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () => CurrentUserProfileNavigation.open(context),
+                    icon: const Icon(Icons.manage_accounts_outlined),
+                    label: const Text('Abrir mi perfil'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                    ),
+                  ),
                 ),
               ],
             ),

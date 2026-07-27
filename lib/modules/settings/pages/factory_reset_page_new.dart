@@ -88,7 +88,9 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
       _deleteCustomers = config.deleteCustomers;
       _deleteSuppliers = config.deleteSuppliers;
       _deleteAccounting = config.deleteAccounting;
-      _deleteEmployees = config.deleteEmployees;
+      // Historical presets may still request an HR purge. The current
+      // workflow always fails closed and keeps retirement individual/audited.
+      _deleteEmployees = false;
       _deleteMechanic = config.deleteMechanic;
       _deleteEcommerce = config.deleteEcommerce;
     });
@@ -165,7 +167,7 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
         deleteCustomers: _deleteCustomers,
         deleteSuppliers: _deleteSuppliers,
         deleteAccounting: _deleteAccounting,
-        deleteEmployees: _deleteEmployees,
+        deleteEmployees: false,
         deleteMechanic: _deleteMechanic,
         deleteEcommerce: _deleteEcommerce,
       );
@@ -263,7 +265,7 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
         deleteCustomers: _deleteCustomers,
         deleteSuppliers: _deleteSuppliers,
         deleteAccounting: _deleteAccounting,
-        deleteEmployees: _deleteEmployees,
+        deleteEmployees: false,
         deleteMechanic: _deleteMechanic,
         deleteEcommerce: _deleteEcommerce,
       );
@@ -614,7 +616,7 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
                             _deleteCustomers = true;
                             _deleteSuppliers = true;
                             _deleteAccounting = true;
-                            _deleteEmployees = true;
+                            _deleteEmployees = false;
                             _deleteMechanic = true;
                             _deleteEcommerce = true;
                           });
@@ -727,13 +729,11 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
                   _buildCheckboxItem(
                     Icons.badge,
                     'Trabajadores y contratos',
-                    _deleteEmployees,
-                    (value) {
-                      setState(() {
-                        _selectedConfig = null;
-                        _deleteEmployees = value ?? false;
-                      });
-                    },
+                    false,
+                    null,
+                    explanation:
+                        'Se desvinculan individualmente desde RR.HH. para '
+                        'cerrar accesos y conservar el historial.',
                   ),
                   _buildCheckboxItem(
                     Icons.build,
@@ -886,8 +886,9 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
     IconData icon,
     String text,
     bool value,
-    Function(bool?) onChanged,
-  ) {
+    ValueChanged<bool?>? onChanged, {
+    String? explanation,
+  }) {
     return CheckboxListTile(
       value: value,
       onChanged: onChanged,
@@ -898,6 +899,12 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
           Expanded(child: Text(text)),
         ],
       ),
+      subtitle: explanation == null
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(left: 32),
+              child: Text(explanation),
+            ),
       controlAffinity: ListTileControlAffinity.leading,
       dense: true,
       contentPadding: EdgeInsets.zero,

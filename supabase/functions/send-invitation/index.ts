@@ -9,8 +9,32 @@ const DEFAULT_ALLOWED_ORIGINS = [
 
 const FIREBASE_PREVIEW_ORIGIN = /^https:\/\/project-vinabike--[a-z0-9-]+\.web\.app$/;
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const RESEND_TIMEOUT_MS = 15_000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+const SAFE_RESEND_ERROR_CODES = new Set([
+  "application_error",
+  "concurrent_idempotent_requests",
+  "daily_quota_exceeded",
+  "internal_server_error",
+  "invalid_access",
+  "invalid_api_key",
+  "invalid_attachment",
+  "invalid_from_address",
+  "invalid_idempotency_key",
+  "invalid_idempotent_request",
+  "invalid_parameter",
+  "invalid_region",
+  "method_not_allowed",
+  "missing_api_key",
+  "missing_required_field",
+  "monthly_quota_exceeded",
+  "not_found",
+  "rate_limit_exceeded",
+  "restricted_api_key",
+  "security_error",
+  "validation_error",
+]);
 
 // The project does not generate database types for Edge Functions yet.
 // deno-lint-ignore no-explicit-any
@@ -35,12 +59,23 @@ interface InvitationData {
   tenants: { shop_name?: string | null } | Array<{ shop_name?: string | null }> | null;
 }
 
-interface InvitationEmail {
+export interface InvitationEmail {
   to: string;
   subject: string;
   html: string;
   text: string;
 }
+
+interface ProviderFailureDetails {
+  provider: "resend";
+  status: number | null;
+  providerCode: string;
+}
+
+type ProviderFailureLogger = (
+  event: string,
+  details: ProviderFailureDetails,
+) => void;
 
 export interface SendInvitationRuntime {
   authenticate(): Promise<CallerContext>;
@@ -106,9 +141,11 @@ export async function handler(
 
   try {
     const authHeader = req.headers.get("authorization") ?? "";
-    if (!/^Bearer\s+\S+$/i.test(authHeader)) {
+    const bearerMatch = /^Bearer\s+(\S+)$/i.exec(authHeader);
+    if (!bearerMatch) {
       throw new HttpError(401, "invalid_session", "Authentication required");
     }
+    const accessToken = bearerMatch[1];
 
     const body = await readRequestBody(req);
     const invitationId = body.invitationId?.trim() ?? "";
@@ -116,7 +153,7 @@ export async function handler(
       throw new HttpError(400, "invalid_invitation", "A valid invitation is required");
     }
 
-    const runtime = options.runtime ?? createProductionRuntime(authHeader);
+    const runtime = options.runtime ?? createProductionRuntime(authHeader, accessToken);
     const caller = await runtime.authenticate();
     const invitation = await runtime.loadInvitation(invitationId, caller.tenantId);
     if (
@@ -201,7 +238,10 @@ if (import.meta.main) {
   Deno.serve((req) => handler(req));
 }
 
-function createProductionRuntime(authHeader: string): SendInvitationRuntime {
+function createProductionRuntime(
+  authHeader: string,
+  accessToken: string,
+): SendInvitationRuntime {
   const getEnv: EnvReader = (name) => Deno.env.get(name);
   const supabaseUrl = requiredEnv(getEnv, "SUPABASE_URL");
   const serviceRoleKey = requiredEnv(getEnv, "SUPABASE_SERVICE_ROLE_KEY");
@@ -212,7 +252,7 @@ function createProductionRuntime(authHeader: string): SendInvitationRuntime {
   });
 
   return {
-    authenticate: () => authenticateCaller(userClient, serviceClient),
+    authenticate: () => authenticateCaller(userClient, serviceClient, accessToken),
     loadInvitation: (invitationId, tenantId) =>
       loadInvitation(serviceClient, invitationId, tenantId),
     rotateInvitationToken: (input) => rotateInvitationToken(serviceClient, input),
@@ -226,8 +266,9 @@ function createProductionRuntime(authHeader: string): SendInvitationRuntime {
 export async function authenticateCaller(
   userClient: SupabaseClient,
   serviceClient: SupabaseClient,
+  accessToken: string,
 ): Promise<CallerContext> {
-  const { data: userData, error: userError } = await userClient.auth.getUser();
+  const { data: userData, error: userError } = await userClient.auth.getUser(accessToken);
   const user = userData?.user;
   if (userError || !user) {
     throw new HttpError(401, "invalid_session", "Authentication required");
@@ -347,32 +388,94 @@ export function isInvitationRotationRateLimit(error: unknown): boolean {
     message.toLowerCase().includes("invitation token rotation is rate limited");
 }
 
-async function sendInvitationEmail(
+export async function sendInvitationEmail(
   email: InvitationEmail,
   getEnv: EnvReader,
+  fetchImpl: typeof fetch = fetch,
+  logFailure: ProviderFailureLogger = logProviderFailure,
 ): Promise<boolean> {
   const resendApiKey = requiredEnv(getEnv, "RESEND_API_KEY");
   const from = getEnv("INVITATION_FROM_EMAIL")?.trim() ||
     "Ventas Viñabike <ventas@vinabike.cl>";
   const replyTo = getEnv("INVITATION_REPLY_TO")?.trim() || "ventas@vinabike.cl";
 
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${resendApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from,
-      reply_to: replyTo,
-      to: [email.to],
-      subject: email.subject,
-      html: email.html,
-      text: email.text,
-    }),
-  });
+  try {
+    const response = await fetchImpl("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
+        "User-Agent": "vinabike-erp-send-invitation/1.0",
+      },
+      body: JSON.stringify({
+        from,
+        reply_to: replyTo,
+        to: [email.to],
+        subject: email.subject,
+        html: email.html,
+        text: email.text,
+      }),
+      signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
+    });
 
-  return response.ok;
+    if (response.ok) return true;
+
+    logFailure("send-invitation provider rejected request", {
+      provider: "resend",
+      status: response.status,
+      providerCode: await classifyResendFailure(response),
+    });
+    return false;
+  } catch (_) {
+    logFailure("send-invitation provider request failed", {
+      provider: "resend",
+      status: null,
+      providerCode: "network_error",
+    });
+    return false;
+  }
+}
+
+function logProviderFailure(
+  event: string,
+  details: ProviderFailureDetails,
+): void {
+  console.error(event, details);
+}
+
+async function classifyResendFailure(response: Response): Promise<string> {
+  try {
+    const raw = await response.text();
+    if (!raw || raw.length > 16_384) return `http_${response.status}`;
+
+    const parsed = JSON.parse(raw);
+    if (!isRecord(parsed)) return `http_${response.status}`;
+
+    const message = typeof parsed.message === "string" ? parsed.message.toLowerCase() : "";
+    if (
+      message.includes("only send testing emails to your own email address")
+    ) {
+      return "testing_recipient_restriction";
+    }
+    if (message.includes("domain") && message.includes("not verified")) {
+      return "unverified_sender_domain";
+    }
+    if (
+      message.includes("invalid from address") ||
+      message.includes("invalid `from` field")
+    ) {
+      return "invalid_from_address";
+    }
+
+    const providerCode = typeof parsed.name === "string"
+      ? parsed.name
+      : typeof parsed.code === "string"
+      ? parsed.code
+      : "";
+    return SAFE_RESEND_ERROR_CODES.has(providerCode) ? providerCode : `http_${response.status}`;
+  } catch (_) {
+    return `http_${response.status}`;
+  }
 }
 
 export function generateInvitationToken(): string {
@@ -417,40 +520,124 @@ function buildInvitationEmail(
 
   return {
     to: invitation.email,
-    subject: `Invitación al Sistema - ${shopName}`,
-    html: `<!DOCTYPE html>
+    subject: `Te invitaron a ${shopName}: configura tu acceso`,
+    html: `<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Invitación al sistema</title>
+  <meta name="format-detection" content="telephone=no,date=no,address=no,email=no">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>Configura tu acceso a ${safeShopName}</title>
+  <style>
+    html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    table { border-collapse: collapse; table-layout: fixed; }
+    .breakable, .content-cell { overflow-wrap: anywhere; word-break: break-word; }
+    a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; }
+    @media only screen and (max-width: 600px) {
+      .outer-cell { padding: 16px 10px !important; }
+      .header-cell { padding: 22px 20px 18px !important; }
+      .content-cell { padding: 28px 20px !important; }
+      .footer-cell { padding: 18px 20px 22px !important; }
+      .security-badge { display: none !important; }
+      .action-table, .button-cell, .button-link { width: 100% !important; }
+      .button-link { display: block !important; }
+      h1 { font-size: 25px !important; line-height: 32px !important; }
+    }
+  </style>
 </head>
-<body style="font-family:Arial,sans-serif;line-height:1.6;color:#262626">
-  <main style="max-width:600px;margin:0 auto;padding:24px">
-    <div style="background:#1976d2;color:#fff;padding:20px;text-align:center">
-      <h1 style="margin:0;font-size:24px">Invitación al sistema</h1>
-    </div>
-    <div style="padding:28px 20px;background:#f7f7f7">
-      <p>${safeGreeting}</p>
-      <p>Has sido invitado a unirte a <strong>${safeShopName}</strong> con el rol de <strong>${safeRole}</strong>.</p>
-      <p style="text-align:center;margin:28px 0">
-        <a href="${safeLink}" style="display:inline-block;padding:12px 28px;background:#1976d2;color:#fff;text-decoration:none;border-radius:5px">Aceptar invitación</a>
-      </p>
-      <p style="font-size:13px;color:#555">Este enlace es personal, puede utilizarse una sola vez y expira el ${expiryLabel}. No lo compartas.</p>
-    </div>
-    <footer style="padding:20px;text-align:center;font-size:12px;color:#666">
-      © ${expiresAt.getUTCFullYear()} ${safeShopName}
-    </footer>
-  </main>
+<body style="margin:0;padding:0;background:#EDF3F7;color:#263842;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;line-height:1px;">
+    Acepta la invitación y configura tu acceso a ${safeShopName}.
+  </div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;background:#EDF3F7;border-collapse:collapse;table-layout:fixed;">
+    <tr>
+      <td class="outer-cell" align="center" style="padding:34px 16px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;max-width:600px;background:#FFFFFF;border:1px solid #DCE6EC;border-collapse:separate;border-radius:18px;box-shadow:0 10px 28px rgba(16,42,58,.08);table-layout:fixed;">
+          <tr>
+            <td style="height:6px;background:#0B6FCB;border-radius:18px 18px 0 0;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="header-cell" style="padding:24px 32px 20px;border-bottom:1px solid #E7EDF1;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;table-layout:fixed;">
+                <tr>
+                  <td width="48" valign="middle" style="width:48px;">
+                    <div style="width:40px;height:40px;border-radius:12px;background:#0B6FCB;color:#FFFFFF;font-size:20px;font-weight:800;line-height:40px;text-align:center;">V</div>
+                  </td>
+                  <td valign="middle" style="min-width:0;padding-left:2px;">
+                    <div class="breakable" style="color:#102A3A;font-size:18px;font-weight:800;letter-spacing:.1px;line-height:22px;">${safeShopName}</div>
+                    <div style="margin-top:2px;color:#71818B;font-size:12px;line-height:16px;">Cuenta y seguridad</div>
+                  </td>
+                  <td class="security-badge" width="116" align="right" valign="middle" style="width:116px;">
+                    <span style="display:inline-block;padding:6px 9px;border:1px solid #D8E5EF;border-radius:999px;color:#315C76;font-size:10px;font-weight:700;letter-spacing:.5px;line-height:14px;text-transform:uppercase;">Mensaje seguro</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td class="content-cell" style="padding:36px 38px 34px;overflow-wrap:anywhere;word-break:break-word;">
+              <div style="margin:0 0 10px;color:#0B6FCB;font-size:11px;font-weight:800;letter-spacing:1.2px;line-height:16px;">INVITACIÓN AL EQUIPO</div>
+              <h1 style="margin:0 0 17px;color:#102A3A;font-size:28px;font-weight:760;line-height:35px;">Configura tu acceso</h1>
+              <p style="margin:0 0 10px;color:#3C4D57;font-size:15px;line-height:24px;">${safeGreeting}</p>
+              <p style="margin:0;color:#3C4D57;font-size:15px;line-height:24px;">Te invitaron a unirte a <strong class="breakable">${safeShopName}</strong>.</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin-top:22px;background:#F6F9FB;border-collapse:separate;border-radius:12px;table-layout:fixed;">
+                <tr>
+                  <td width="34%" style="width:34%;padding:14px 8px 14px 18px;color:#71818B;font-size:12px;line-height:18px;">Perfil asignado</td>
+                  <td class="breakable" style="padding:14px 18px 14px 8px;color:#102A3A;font-size:13px;font-weight:750;line-height:18px;text-align:right;">${safeRole}</td>
+                </tr>
+              </table>
+              <table role="presentation" cellspacing="0" cellpadding="0" class="action-table" style="border-collapse:separate;margin:28px 0 18px;">
+                <tr>
+                  <td class="button-cell" bgcolor="#0B6FCB" style="border-radius:9px;text-align:center;">
+                    <a class="button-link" href="${safeLink}" style="box-sizing:border-box;display:inline-block;min-height:48px;padding:14px 24px;color:#FFFFFF;font-size:15px;font-weight:700;line-height:20px;text-align:center;text-decoration:none;">Aceptar invitación</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 26px;color:#657783;font-size:12px;line-height:19px;">
+                Si el botón no responde, <a class="breakable" href="${safeLink}" style="color:#0B6FCB;font-weight:700;text-decoration:underline;">abre este enlace seguro</a>.
+              </p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;background:#F6F9FB;border-collapse:separate;border-radius:12px;table-layout:fixed;">
+                <tr>
+                  <td style="padding:16px 18px;overflow-wrap:anywhere;word-break:break-word;">
+                    <div style="margin:0 0 5px;color:#102A3A;font-size:13px;font-weight:750;line-height:18px;">Qué ocurrirá</div>
+                    <div style="color:#586A75;font-size:13px;line-height:20px;">Primero aceptarás la invitación. Si tu correo todavía no tiene una cuenta, después recibirás un segundo mensaje para verificar la dirección y terminar el alta.</div>
+                  </td>
+                </tr>
+              </table>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin-top:16px;background:#F4F8FB;border:1px solid #D8E5EF;border-collapse:separate;border-radius:12px;table-layout:fixed;">
+                <tr>
+                  <td width="38" valign="top" style="width:38px;padding:16px 0 16px 16px;color:#315C76;font-size:18px;font-weight:800;line-height:20px;">!</td>
+                  <td valign="top" style="padding:16px 16px 16px 4px;color:#315C76;font-size:12px;line-height:19px;overflow-wrap:anywhere;word-break:break-word;">Este enlace es personal, puede utilizarse una sola vez y expira el ${expiryLabel}. Si no esperabas la invitación, ignora el mensaje y no compartas el enlace.</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td class="footer-cell" style="padding:19px 38px 24px;border-top:1px solid #E7EDF1;color:#7A8992;font-size:11px;line-height:17px;overflow-wrap:anywhere;word-break:break-word;">
+              Este es un mensaje automático de seguridad de ${safeShopName}. Nunca te pediremos tu contraseña por correo, teléfono, chat o redes sociales. Si necesitas ayuda, escribe a <a href="mailto:contacto@vinabike.cl" style="color:#315C76;text-decoration:underline;">contacto@vinabike.cl</a>.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`,
     text: [
       firstName ? `Hola ${firstName},` : "Hola,",
       "",
-      `Has sido invitado a unirte a ${shopName} con el rol de ${roleDisplay}.`,
+      `Te invitaron a unirte a ${shopName}.`,
+      `Perfil asignado: ${roleDisplay}.`,
       `Acepta la invitación: ${link}`,
       "",
-      `Este enlace es personal, puede utilizarse una sola vez y expira el ${expiryLabel}.`,
+      "Si tu correo todavía no tiene una cuenta, después recibirás un segundo mensaje para verificar la dirección y terminar el alta.",
+      "",
+      `El enlace es personal, puede utilizarse una sola vez y expira el ${expiryLabel}. No lo compartas.`,
+      "Si necesitas ayuda, escribe a contacto@vinabike.cl.",
     ].join("\n"),
   };
 }

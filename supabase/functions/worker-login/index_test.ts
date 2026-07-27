@@ -5,7 +5,7 @@ import {
   type WorkerLoginRuntime,
 } from "./index.ts";
 
-const workerEmail = "wp-2222222222-bWVjYW5pY28@worker-login.vinabike.app";
+const workerEmail = "wp-2222222222-bWVjYW5pY28@worker-login.invalid";
 const validPassword = "CorrectHorse!9";
 const invalidResponse = {
   success: false,
@@ -106,6 +106,30 @@ Deno.test("valid worker credentials return only a refresh session capability", a
   );
   assert(!responseText.includes(workerEmail), "worker email cannot reach the response");
   assert(!responseText.includes(validPassword), "password cannot reach the response");
+});
+
+Deno.test("legacy registrable worker-login domains fail closed", async () => {
+  const evidence: Evidence = { resolutions: [], signIns: [] };
+  const response = await handler(
+    loginRequest({
+      tenant: "vinabike",
+      username: "mecanico",
+      password: validPassword,
+    }),
+    {
+      runtime: createRuntime(evidence, {
+        resolvedEmail: "wp-2222222222-bWVjYW5pY28@worker-login.vinabike.app",
+      }),
+      allowedOrigins: [],
+    },
+  );
+
+  assertEquals(response.status, 401, "legacy worker login is rejected");
+  assertEquals(
+    evidence.signIns[0]?.email,
+    "no-account@worker.invalid",
+    "a legacy registrable domain must never reach the real password grant",
+  );
 });
 
 Deno.test("unknown worker and wrong password are response-identical", async () => {

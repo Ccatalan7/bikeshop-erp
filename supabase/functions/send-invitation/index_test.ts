@@ -4,6 +4,7 @@ import {
   handler,
   hashInvitationToken,
   isAllowedCorsOrigin,
+  sendInvitationEmail,
   type SendInvitationRuntime,
 } from "./index.ts";
 
@@ -11,6 +12,7 @@ const invitationId = "11111111-1111-4111-8111-111111111111";
 const tenantId = "22222222-2222-4222-8222-222222222222";
 const callerId = "33333333-3333-4333-8333-333333333333";
 const fixedToken = "abcdefghijklmnopqrstuvwxyzABCDEFGH012345678";
+const callerAccessToken = "user-jwt-fixture";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -48,16 +50,19 @@ function callerAuthClients(input: {
   profileError?: unknown;
 }) {
   const evidence: {
+    accessTokens: Array<string | undefined>;
     select: string | null;
     filters: Array<[string, unknown]>;
-  } = { select: null, filters: [] };
+  } = { accessTokens: [], select: null, filters: [] };
   const userClient = {
     auth: {
-      getUser: () =>
-        Promise.resolve({
+      getUser: (accessToken?: string) => {
+        evidence.accessTokens.push(accessToken);
+        return Promise.resolve({
           data: { user: { id: callerId } },
           error: null,
-        }),
+        });
+      },
     },
   };
   const serviceClient = {
@@ -150,13 +155,14 @@ Deno.test("invitation caller authorization joins one matching active tenant", as
   });
 
   assertEquals(
-    await authenticateCaller(userClient, serviceClient),
+    await authenticateCaller(userClient, serviceClient, callerAccessToken),
     { userId: callerId, tenantId },
     "active manager requires its matching active tenant",
   );
   assertEquals(
     evidence,
     {
+      accessTokens: [callerAccessToken],
       select: "tenant_id, role, permissions, tenants!inner(id, is_active)",
       filters: [
         ["user_id", callerId],
@@ -164,7 +170,7 @@ Deno.test("invitation caller authorization joins one matching active tenant", as
         ["tenants.is_active", true],
       ],
     },
-    "profile and tenant activity are checked in one joined authorization query",
+    "the explicit bearer and active tenant are checked without relying on local session state",
   );
 });
 
@@ -179,7 +185,7 @@ Deno.test("invitation caller rejects an inactive tenant", async () => {
   });
 
   await assertRejectsCode(
-    () => authenticateCaller(userClient, serviceClient),
+    () => authenticateCaller(userClient, serviceClient, callerAccessToken),
     "tenant_context_invalid",
     "a suspended tenant cannot rotate or email invitation capabilities",
   );
@@ -196,7 +202,7 @@ Deno.test("invitation caller rejects a missing joined tenant row", async () => {
   });
 
   await assertRejectsCode(
-    () => authenticateCaller(userClient, serviceClient),
+    () => authenticateCaller(userClient, serviceClient, callerAccessToken),
     "tenant_context_invalid",
     "an orphaned profile cannot deliver invitations",
   );
@@ -208,7 +214,7 @@ Deno.test("invitation caller fails closed when active tenant lookup errors", asy
   });
 
   await assertRejectsCode(
-    () => authenticateCaller(userClient, serviceClient),
+    () => authenticateCaller(userClient, serviceClient, callerAccessToken),
     "authorization_unavailable",
     "tenant lookup errors cannot reach invitation service-role operations",
   );
@@ -256,6 +262,11 @@ Deno.test("authorized delivery rotates only the hash and never returns the capab
   assert(evidence.rotations[0].tokenHash !== fixedToken, "plain token cannot reach storage");
   assertEquals(evidence.emails.length, 1, "one email must be attempted");
   assert(evidence.emails[0].html.includes(fixedToken), "only email CTA receives plain token");
+  assertEquals(
+    evidence.emails[0].subject,
+    "Te invitaron a Tienda Segura: configura tu acceso",
+    "subject must explain the invitation action and tenant",
+  );
   assert(
     evidence.emails[0].html.includes(
       `/accept-invitation.html#token=${fixedToken}`,
@@ -266,6 +277,30 @@ Deno.test("authorized delivery rotates only the hash and never returns the capab
     !evidence.emails[0].html.includes("?token=") &&
       !evidence.emails[0].text.includes("?token="),
     "capability token cannot appear in a query string",
+  );
+  assert(
+    evidence.emails[0].html.includes("display:none;max-height:0") &&
+      evidence.emails[0].html.includes(
+        "@media only screen and (max-width: 600px)",
+      ) &&
+      evidence.emails[0].html.includes("overflow-wrap:anywhere") &&
+      evidence.emails[0].html.includes("min-height:48px"),
+    "invitation email must use the responsive accessible Auth visual contract",
+  );
+  assert(
+    evidence.emails[0].html.includes("Perfil asignado") &&
+      evidence.emails[0].html.includes("recibirás un segundo mensaje"),
+    "invitation must explain the assigned role and two-step new-user flow",
+  );
+  assert(
+    evidence.emails[0].text.includes("Perfil asignado: Gerente") &&
+      evidence.emails[0].text.includes("recibirás un segundo mensaje"),
+    "plain text fallback must preserve the complete onboarding explanation",
+  );
+  assert(
+    !/(?:src|href)\s*=\s*["']https?:\/\/(?!project-vinabike\.web\.app\/accept-invitation\.html)/i
+      .test(evidence.emails[0].html),
+    "invitation cannot load remote images or tracking resources",
   );
   assertEquals(payload.emailSent, true, "response must report delivery");
   assert(!responseText.includes(fixedToken), "response cannot expose the token");
@@ -361,6 +396,128 @@ Deno.test("provider failures expose no provider body, token, email or link", asy
   assert(!responseText.includes(fixedToken), "failure response cannot expose token");
   assert(!responseText.includes("invitee@example.invalid"), "failure response cannot expose email");
   assert(!responseText.includes("http"), "failure response cannot expose a link");
+});
+
+Deno.test("Resend delivery uses the verified sender and logs only safe failure metadata", async () => {
+  const apiKey = "re_secret_fixture_never_log";
+  const recipient = "invitee+private@example.invalid";
+  const providerMessage =
+    `The vinabike.cl domain is not verified for ${recipient}; token=${fixedToken}`;
+  let requestHeaders = new Headers();
+  let requestPayload: Record<string, unknown> = {};
+  const diagnostics: Array<{
+    event: string;
+    details: unknown;
+  }> = [];
+  const fetchMock = ((
+    _input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    requestHeaders = new Headers(init?.headers);
+    requestPayload = JSON.parse(String(init?.body));
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          name: "validation_error",
+          message: providerMessage,
+        }),
+        {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+  }) as typeof fetch;
+
+  const delivered = await sendInvitationEmail(
+    {
+      to: recipient,
+      subject: "Invitación privada",
+      html: `<a href="https://example.invalid/#token=${fixedToken}">Aceptar</a>`,
+      text: `Token ${fixedToken}`,
+    },
+    (name) => name === "RESEND_API_KEY" ? apiKey : undefined,
+    fetchMock,
+    (event, details) => diagnostics.push({ event, details }),
+  );
+
+  assertEquals(delivered, false, "provider rejection cannot be reported as delivered");
+  assertEquals(
+    requestPayload.from,
+    "Ventas Viñabike <ventas@vinabike.cl>",
+    "staff invitations must reuse the verified transactional sender",
+  );
+  assertEquals(
+    requestPayload.reply_to,
+    "ventas@vinabike.cl",
+    "staff invitation replies must use the canonical mailbox",
+  );
+  assertEquals(
+    requestHeaders.get("user-agent"),
+    "vinabike-erp-send-invitation/1.0",
+    "direct Resend requests must identify the application",
+  );
+  assertEquals(
+    diagnostics,
+    [{
+      event: "send-invitation provider rejected request",
+      details: {
+        provider: "resend",
+        status: 403,
+        providerCode: "unverified_sender_domain",
+      },
+    }],
+    "diagnostics must classify the provider response without preserving its message",
+  );
+  const serializedDiagnostics = JSON.stringify(diagnostics);
+  assert(!serializedDiagnostics.includes(apiKey), "diagnostics cannot expose the API key");
+  assert(!serializedDiagnostics.includes(recipient), "diagnostics cannot expose the recipient");
+  assert(!serializedDiagnostics.includes(fixedToken), "diagnostics cannot expose the token");
+  assert(
+    !serializedDiagnostics.includes("vinabike.cl domain"),
+    "diagnostics cannot expose provider response text",
+  );
+});
+
+Deno.test("Resend network failures remain generic and leak no exception detail", async () => {
+  const recipient = "invitee+private@example.invalid";
+  const diagnostics: Array<{
+    event: string;
+    details: unknown;
+  }> = [];
+  const fetchMock = (() =>
+    Promise.reject(
+      new TypeError(`connection reset for ${recipient} token=${fixedToken}`),
+    )) as typeof fetch;
+
+  const delivered = await sendInvitationEmail(
+    {
+      to: recipient,
+      subject: "Invitación privada",
+      html: `<p>${fixedToken}</p>`,
+      text: fixedToken,
+    },
+    (name) => name === "RESEND_API_KEY" ? "re_secret_fixture_never_log" : undefined,
+    fetchMock,
+    (event, details) => diagnostics.push({ event, details }),
+  );
+
+  assertEquals(delivered, false, "network failure cannot be reported as delivered");
+  assertEquals(
+    diagnostics,
+    [{
+      event: "send-invitation provider request failed",
+      details: {
+        provider: "resend",
+        status: null,
+        providerCode: "network_error",
+      },
+    }],
+    "network diagnostics must remain generic",
+  );
+  const serializedDiagnostics = JSON.stringify(diagnostics);
+  assert(!serializedDiagnostics.includes(recipient), "diagnostics cannot expose the recipient");
+  assert(!serializedDiagnostics.includes(fixedToken), "diagnostics cannot expose the token");
 });
 
 Deno.test("rotation cooldown returns 429 and discards the unsaved token", async () => {

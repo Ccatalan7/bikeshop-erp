@@ -114,7 +114,22 @@ void main() {
     );
     expect(
       CustomerAccountService.isPasswordRecoveryUri(
+        Uri.parse(
+          'https://store.example.cl/cuenta/login?recovery=true'
+          '#token_hash=0123456789abcdef0123456789abcdef&type=recovery',
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      CustomerAccountService.isPasswordRecoveryUri(
         Uri.parse('https://store.example.cl/cuenta/login?type=recovery'),
+      ),
+      isFalse,
+    );
+    expect(
+      CustomerAccountService.isPasswordRecoveryUri(
+        Uri.parse('https://store.example.cl/cuenta/login?recovery=true'),
       ),
       isFalse,
     );

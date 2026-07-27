@@ -23,6 +23,8 @@ import 'shared/services/inventory_service.dart';
 import 'shared/services/payment_method_service.dart';
 import 'shared/services/navigation_service.dart';
 import 'shared/services/tenant_service.dart';
+import 'shared/models/current_user_profile.dart';
+import 'shared/services/current_user_profile_service.dart';
 import 'shared/services/user_management_service.dart';
 import 'shared/services/workspace_manager.dart';
 import 'shared/config/supabase_config.dart';
@@ -334,6 +336,22 @@ class VinabikeApp extends StatelessWidget {
           tenantService.initialize();
           return tenantService;
         }),
+        ChangeNotifierProxyProvider2<AuthService, TenantService,
+            CurrentUserProfileService>(
+          create: (_) => CurrentUserProfileService(),
+          update: (_, authService, tenantService, currentUserProfile) {
+            final service = currentUserProfile ?? CurrentUserProfileService();
+            final user = authService.currentUser;
+            unawaited(
+              service.synchronize(
+                identity:
+                    user == null ? null : CurrentUserIdentity.fromUser(user),
+                resolveTenantId: tenantService.getTenantId,
+              ),
+            );
+            return service;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => PaymentMethodService()),
         ChangeNotifierProvider(create: (_) => AppearanceService()),
         ChangeNotifierProvider(create: (_) => WindowZoomService()),

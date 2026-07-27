@@ -7,6 +7,68 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/hr_models.dart';
 
+class EmployeeRetirementResult {
+  const EmployeeRetirementResult({
+    required this.employeeId,
+    required this.alreadyRetired,
+  });
+
+  final String employeeId;
+  final bool alreadyRetired;
+
+  factory EmployeeRetirementResult.fromJson(Object? value) {
+    if (value is! Map) {
+      throw const FormatException('Invalid employee retirement response');
+    }
+
+    final data = Map<String, dynamic>.from(value);
+    final employeeId = data['employeeId'];
+    final alreadyRetired = data['alreadyRetired'];
+    if (data['success'] != true ||
+        data['retired'] != true ||
+        employeeId is! String ||
+        employeeId.isEmpty ||
+        alreadyRetired is! bool) {
+      throw const FormatException('Invalid employee retirement response');
+    }
+
+    return EmployeeRetirementResult(
+      employeeId: employeeId,
+      alreadyRetired: alreadyRetired,
+    );
+  }
+}
+
+class EmployeeRetirementException implements Exception {
+  const EmployeeRetirementException(this.message);
+
+  final String message;
+
+  factory EmployeeRetirementException.fromBackendEvidence(String evidence) {
+    final normalized = evidence.toLowerCase();
+    if (normalized.contains('employee_not_found')) {
+      return const EmployeeRetirementException(
+        'El trabajador ya no está disponible en este negocio.',
+      );
+    }
+    if (normalized.contains('self_detach_forbidden')) {
+      return const EmployeeRetirementException(
+        'No puedes desvincular tu propio registro laboral.',
+      );
+    }
+    if (normalized.contains('staff_hierarchy_forbidden') ||
+        normalized.contains('principal_owner_protected') ||
+        normalized.contains('employee_retirement_denied')) {
+      return const EmployeeRetirementException(
+        'No tienes permisos para desvincular a este trabajador.',
+      );
+    }
+    return const EmployeeRetirementException(
+      'No se pudo desvincular al trabajador. Inténtalo nuevamente.',
+    );
+  }
+}
+
 class HRService extends ChangeNotifier {
   final SupabaseClient _client = Supabase.instance.client;
   final TenantService _tenantService;
@@ -290,14 +352,32 @@ class HRService extends ChangeNotifier {
     }
   }
 
-  Future<void> deleteEmployee(String id) async {
+  Future<EmployeeRetirementResult> retireEmployee(String id) async {
     try {
-      await _client.from('employees').delete().eq('id', id);
+      final response = await _client.rpc(
+        'retire_employee',
+        params: {'p_employee_id': id},
+      );
+      final result = EmployeeRetirementResult.fromJson(response);
+      if (result.employeeId != id) {
+        throw const FormatException('Employee retirement identity mismatch');
+      }
       invalidateEmployeesCache();
       notifyListeners();
+      return result;
+    } on PostgrestException catch (error) {
+      debugPrint(
+        'Employee retirement rejected (${error.code ?? 'unknown code'})',
+      );
+      throw EmployeeRetirementException.fromBackendEvidence(
+        '${error.code} ${error.message} ${error.details} ${error.hint}',
+      );
     } catch (e) {
-      debugPrint('Error deleting employee: $e');
-      rethrow;
+      debugPrint('Error retiring employee: $e');
+      if (e is EmployeeRetirementException) rethrow;
+      throw const EmployeeRetirementException(
+        'No se pudo desvincular al trabajador. Inténtalo nuevamente.',
+      );
     }
   }
 

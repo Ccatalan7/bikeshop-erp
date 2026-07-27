@@ -14,9 +14,24 @@ class TenantService extends ChangeNotifier {
   // Singleton pattern
   static final TenantService _instance = TenantService._internal();
   factory TenantService() => _instance;
-  TenantService._internal();
+  TenantService._internal()
+      : _supabase = Supabase.instance.client,
+        _currentUserIdOverride = null,
+        _profileLookupOverride = null;
 
-  final _supabase = Supabase.instance.client;
+  @visibleForTesting
+  TenantService.testing({
+    required String? Function() currentUserId,
+    required Future<List<Map<String, dynamic>>> Function(String userId)
+        profileLookup,
+  })  : _supabase = null,
+        _currentUserIdOverride = currentUserId,
+        _profileLookupOverride = profileLookup;
+
+  final SupabaseClient? _supabase;
+  final String? Function()? _currentUserIdOverride;
+  final Future<List<Map<String, dynamic>>> Function(String userId)?
+      _profileLookupOverride;
 
   // Public Store mobile optimization: when enabled (via dart-define), skip any
   // auth-based tenant lookup. Store mode should use TenantDetectionService.
@@ -29,11 +44,16 @@ class TenantService extends ChangeNotifier {
   String? _cachedUserRole;
   Map<String, dynamic>? _cachedUserPermissions;
 
-  // Track if a query is in progress to prevent duplicate concurrent queries
-  bool _isQuerying = false;
-
-  // Completer for pending requests to wait on
+  // Pending requests are owned by one user/session generation. A lookup from a
+  // prior auth scope can finish, but it cannot be reused by or write into the
+  // next scope.
   Future<String?>? _pendingQuery;
+  String? _pendingQueryUserId;
+  int? _pendingQueryGeneration;
+  int _resolutionGeneration = 0;
+
+  String? get _currentUserId =>
+      _currentUserIdOverride?.call() ?? _supabase?.auth.currentUser?.id;
 
   /// Get the current user's tenant_id from user_profiles table
   /// This is the single source of truth for tenant_id
@@ -48,48 +68,64 @@ class TenantService extends ChangeNotifier {
       return null;
     }
 
-    final user = _supabase.auth.currentUser;
-    if (user == null) {
+    final userId = _currentUserId;
+    if (userId == null) {
+      if (_pendingQuery != null) {
+        _invalidatePendingResolution();
+      }
       return null;
     }
 
     // FAST PATH: Return cached value immediately if same user
     // We check _cachedUserId to ensure we have a result (even if null) for this user
-    if (_cachedUserId == user.id) {
+    if (_cachedUserId == userId) {
       return _cachedTenantId;
     }
 
-    // Prevent duplicate concurrent queries - wait for existing query
-    if (_isQuerying && _pendingQuery != null) {
-      return _pendingQuery;
+    // Only callers from the exact same user and generation may share work.
+    final pending = _pendingQuery;
+    if (pending != null &&
+        _pendingQueryUserId == userId &&
+        _pendingQueryGeneration == _resolutionGeneration) {
+      return pending;
     }
 
-    // Start new query
-    _isQuerying = true;
-    _pendingQuery = _fetchTenantId(user.id);
+    final generation = ++_resolutionGeneration;
+    final query = _fetchTenantId(userId, generation);
+    _pendingQuery = query;
+    _pendingQueryUserId = userId;
+    _pendingQueryGeneration = generation;
 
     try {
-      return await _pendingQuery;
+      return await query;
     } finally {
-      _isQuerying = false;
-      _pendingQuery = null;
+      if (_pendingQueryGeneration == generation) {
+        _pendingQuery = null;
+        _pendingQueryUserId = null;
+        _pendingQueryGeneration = null;
+      }
     }
   }
 
   /// Internal method to fetch tenant_id from database
-  Future<String?> _fetchTenantId(String userId) async {
+  Future<String?> _fetchTenantId(String userId, int generation) async {
     try {
       if (!kReleaseMode) {
         debugPrint('[TenantService] Querying user_profiles...');
       }
-      final response = await _supabase
-          .from('user_profiles')
-          .select('tenant_id, role, permissions')
-          .eq('user_id', userId)
-          .eq('is_active', true)
-          .limit(2);
+      final profileLookup = _profileLookupOverride;
+      final profiles = profileLookup != null
+          ? await profileLookup(userId)
+          : List<Map<String, dynamic>>.from(
+              await _supabase!
+                  .from('user_profiles')
+                  .select('tenant_id, role, permissions')
+                  .eq('user_id', userId)
+                  .eq('is_active', true)
+                  .limit(2),
+            );
 
-      final profiles = List<Map<String, dynamic>>.from(response);
+      if (!_canApplyResolution(userId, generation)) return null;
       if (profiles.length != 1) {
         if (!kReleaseMode) {
           debugPrint(
@@ -128,8 +164,20 @@ class TenantService extends ChangeNotifier {
     }
   }
 
+  bool _canApplyResolution(String userId, int generation) {
+    return generation == _resolutionGeneration && _currentUserId == userId;
+  }
+
+  void _invalidatePendingResolution() {
+    _resolutionGeneration++;
+    _pendingQuery = null;
+    _pendingQueryUserId = null;
+    _pendingQueryGeneration = null;
+  }
+
   /// Clear the cached tenant_id (call on logout)
   void clearCache() {
+    _invalidatePendingResolution();
     _cachedTenantId = null;
     _cachedUserId = null;
     _cachedUserRole = null;
@@ -140,25 +188,25 @@ class TenantService extends ChangeNotifier {
   /// For immediate use, but may be null if not cached
   /// Prefer using getTenantId() for reliable results
   String? get currentTenantId {
-    final user = _supabase.auth.currentUser;
-    if (user == null) return null;
-    if (_cachedUserId != user.id) return null;
+    final userId = _currentUserId;
+    if (userId == null) return null;
+    if (_cachedUserId != userId) return null;
     return _cachedTenantId;
   }
 
   /// Get the current user's role
   String? get currentUserRole {
-    final user = _supabase.auth.currentUser;
-    if (user == null) return null;
-    if (_cachedUserId != user.id) return null;
+    final userId = _currentUserId;
+    if (userId == null) return null;
+    if (_cachedUserId != userId) return null;
     return _cachedUserRole;
   }
 
   /// Get the current user's permissions
   Map<String, dynamic>? get currentUserPermissions {
-    final user = _supabase.auth.currentUser;
-    if (user == null) return null;
-    if (_cachedUserId != user.id) return null;
+    final userId = _currentUserId;
+    if (userId == null) return null;
+    if (_cachedUserId != userId) return null;
     return _cachedUserPermissions;
   }
 
@@ -203,7 +251,7 @@ class TenantService extends ChangeNotifier {
 
     try {
       debugPrint('🔍 Fetching tenant with id: $tenantId');
-      final response = await _supabase
+      final response = await _supabase!
           .from('tenants')
           .select()
           .eq('id', tenantId)
@@ -249,7 +297,9 @@ class TenantService extends ChangeNotifier {
     if (_isInitialized) return; // Prevent duplicate subscriptions
     _isInitialized = true;
 
-    _authSubscription = _supabase.auth.onAuthStateChange.listen((event) {
+    final supabase = _supabase;
+    if (supabase == null) return;
+    _authSubscription = supabase.auth.onAuthStateChange.listen((event) {
       if (event.event == AuthChangeEvent.signedIn ||
           event.event == AuthChangeEvent.signedOut ||
           event.event == AuthChangeEvent.userUpdated) {
@@ -262,6 +312,7 @@ class TenantService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _invalidatePendingResolution();
     _authSubscription?.cancel();
     super.dispose();
   }

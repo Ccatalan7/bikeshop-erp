@@ -13,6 +13,7 @@ void main() {
   late String userManagementServiceSource;
   late String customerAuthPageSource;
   late String customerAccountServiceSource;
+  late String selfPasswordServiceSource;
   late String publicStoreRouterSource;
   late String routerSource;
   late String tenantServiceSource;
@@ -45,6 +46,9 @@ void main() {
     ).readAsStringSync();
     customerAccountServiceSource = File(
       'lib/public_store/services/customer_account_service.dart',
+    ).readAsStringSync();
+    selfPasswordServiceSource = File(
+      'lib/shared/services/self_password_service.dart',
     ).readAsStringSync();
     publicStoreRouterSource = File(
       'lib/public_store/routes/public_store_router.dart',
@@ -295,7 +299,7 @@ void main() {
     );
     expect(
       customerAccountServiceSource,
-      contains('/cuenta/login?type=recovery'),
+      contains('/cuenta/login?recovery=true'),
     );
     for (final origin in storeOrigins) {
       expect(
@@ -305,7 +309,7 @@ void main() {
       );
       expect(
         authConfig,
-        contains('"$origin/cuenta/login?type=recovery"'),
+        contains('"$origin/cuenta/login?recovery=true"'),
         reason: 'Missing exact recovery redirect for $origin',
       );
       expect(
@@ -385,8 +389,11 @@ void main() {
       completionStart,
       completionEnd,
     );
+    final membershipLoadIndex =
+        completionSource.indexOf('await _loadCustomerData(');
+    expect(membershipLoadIndex, greaterThanOrEqualTo(0));
     expect(
-      completionSource.indexOf('await _loadCustomerData()'),
+      membershipLoadIndex,
       lessThan(completionSource.indexOf('await updatePassword(newPassword)')),
     );
     expect(completionSource, contains("_customerProfile?['tenant_id']"));
@@ -508,7 +515,7 @@ void main() {
     expect(customerAuthSource, isNot(contains(r'$error')));
     expect(
       customerAuthSource,
-      contains('CustomerAccountService.isPasswordRecoveryUri(Uri.base)'),
+      contains('accountService.completePasswordRecovery('),
     );
     expect(
       customerAccountServiceSource,
@@ -516,12 +523,79 @@ void main() {
     );
     expect(
       customerAccountServiceSource,
-      contains('/cuenta/login?type=recovery'),
+      contains('/cuenta/login?recovery=true'),
     );
     expect(loginSource, isNot(contains('e.toString()')));
     expect(loginSource, isNot(contains(r'${e.message}')));
     expect(resetPasswordSource, isNot(contains('e.toString()')));
     expect(resetPasswordSource, isNot(contains(r'${e.message}')));
+  });
+
+  test('store Auth links and customer membership fail closed', () {
+    final customerAuthSource =
+        File('lib/public_store/pages/customer_auth_page.dart')
+            .readAsStringSync();
+    final portalLayoutSource =
+        File('lib/public_store/widgets/customer_portal_layout.dart')
+            .readAsStringSync();
+    final webUrlSource =
+        File('lib/shared/utils/web_url_web.dart').readAsStringSync();
+
+    expect(customerAccountServiceSource, contains('type: OtpType.recovery'));
+    expect(
+      customerAccountServiceSource,
+      contains('Future<void> completePasswordRecovery'),
+    );
+    expect(
+      customerAccountServiceSource,
+      contains('!_isPasswordRecoverySession'),
+    );
+    expect(
+      customerAccountServiceSource,
+      contains('_verifiedPasswordRecoveryUserId'),
+    );
+    expect(
+      customerAccountServiceSource,
+      isNot(contains('session.user.recoverySentAt')),
+    );
+    expect(
+      customerAccountServiceSource,
+      contains('clearSensitiveAuthFragment()'),
+    );
+    expect(
+      webUrlSource,
+      contains('web.window.history.replaceState'),
+    );
+    expect(
+      customerAccountServiceSource,
+      contains('bool get hasAuthSession => _currentUser != null'),
+    );
+    expect(
+      customerAccountServiceSource,
+      contains("_customerProfile?['tenant_id']?.toString() == _tenantId"),
+    );
+    expect(
+      customerAccountServiceSource,
+      contains(
+        "_customerProfile?['auth_user_id']?.toString() == _currentUser!.id",
+      ),
+    );
+    expect(
+      customerAccountServiceSource,
+      contains('_isCustomerMembershipLoading'),
+    );
+    expect(
+      portalLayoutSource,
+      contains('_CustomerPortalAuthBoundary'),
+    );
+    expect(
+      customerAuthSource,
+      isNot(contains('_didHandleAccountConfirmation')),
+    );
+    expect(
+      customerAuthSource,
+      contains('`confirmed=true` is display-only'),
+    );
   });
 
   test('self-service password changes revoke other refresh sessions only', () {
@@ -533,9 +607,13 @@ void main() {
     );
     expect(
       RegExp(r'signOut\(scope: SignOutScope\.others\)')
-          .allMatches(customerAccountServiceSource)
+          .allMatches(selfPasswordServiceSource)
           .length,
       1,
+    );
+    expect(
+      customerAccountServiceSource,
+      contains('SelfPasswordService(_supabase)'),
     );
     expect(authServiceSource, contains('await _client.auth.signOut();'));
     expect(

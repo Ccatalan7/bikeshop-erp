@@ -25,13 +25,11 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
   final _phoneController = TextEditingController();
 
   bool _isLogin = true;
-  bool _isRecoveryMode = false;
   bool _isInvitationMode = false;
   bool _invitationTenantPending = false;
   bool _invitationSessionInvalid = false;
   bool _didInitializeAuthLinkMode = false;
   bool _invitationReconciliationScheduled = false;
-  bool _didHandleAccountConfirmation = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _showVerificationNotice = false;
@@ -45,7 +43,6 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
   @override
   void initState() {
     super.initState();
-    _isRecoveryMode = _isPasswordRecoveryUrl();
     _isInvitationMode =
         CustomerAccountService.isFirstPasswordInvitationUri(Uri.base);
     _invitationTenantPending = _isInvitationMode;
@@ -77,15 +74,9 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
       return;
     }
 
-    if (_showAccountConfirmedNotice &&
-        !_didHandleAccountConfirmation &&
-        accountService.isAuthenticated) {
-      _didHandleAccountConfirmation = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        await accountService.signOut();
-      });
-    }
+    // `confirmed=true` is display-only. Session mutations require the Auth
+    // token/event itself; a bare query parameter must never log out whichever
+    // user happens to have this browser open.
   }
 
   void _scheduleInvitationReconciliation(
@@ -138,7 +129,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
           (!accountService.hasFirstPasswordInvitationIntent ||
               tenantState == FirstPasswordInvitationTenantState.unavailable ||
               (tenantState == FirstPasswordInvitationTenantState.ready &&
-                  !accountService.isAuthenticated));
+                  !accountService.hasAuthSession));
       if (_invitationTenantPending != tenantPending ||
           _invitationSessionInvalid != invitationInvalid) {
         setState(() {
@@ -157,10 +148,6 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
     _confirmPasswordController.dispose();
     _phoneController.dispose();
     super.dispose();
-  }
-
-  bool _isPasswordRecoveryUrl() {
-    return CustomerAccountService.isPasswordRecoveryUri(Uri.base);
   }
 
   Future<void> _submit() async {
@@ -216,6 +203,11 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
       }
 
       if (!mounted) return;
+      if (!accountService.isAuthenticated) {
+        throw const AuthException(
+          'No pudimos preparar la cuenta para esta tienda.',
+        );
+      }
 
       context.go('/cuenta');
     } catch (_) {
@@ -243,12 +235,13 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
 
     try {
       final accountService = context.read<CustomerAccountService>();
-      await accountService.updatePassword(_passwordController.text);
+      await accountService.completePasswordRecovery(
+        _passwordController.text,
+      );
       await accountService.signOut();
 
       if (!mounted) return;
       setState(() {
-        _isRecoveryMode = false;
         _isLogin = true;
         _passwordController.clear();
         _confirmPasswordController.clear();
@@ -292,7 +285,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
       );
       final tenantId = tenantProvider.tenantId?.trim();
 
-      if (!accountService.isAuthenticated ||
+      if (!accountService.hasAuthSession ||
           !accountService.hasFirstPasswordInvitationIntent ||
           tenantState != FirstPasswordInvitationTenantState.ready ||
           tenantId == null ||
@@ -353,7 +346,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
     setState(() => _isLoading = true);
     try {
       if (accountService.hasFirstPasswordInvitationIntent &&
-          accountService.isAuthenticated) {
+          accountService.hasAuthSession) {
         await accountService.signOut();
       } else {
         accountService.clearFirstPasswordInvitationIntent();
@@ -384,6 +377,36 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
     context.go('/cuenta/login');
   }
 
+  Future<void> _leaveRecoveryMode() async {
+    final accountService = context.read<CustomerAccountService>();
+    setState(() => _isLoading = true);
+    try {
+      if (accountService.hasAuthSession) {
+        await accountService.signOut();
+      } else {
+        accountService.clearPasswordRecoverySession();
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No pudimos cerrar esta sesión. Recarga la página e inténtalo nuevamente.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+
+    if (!mounted) return;
+    _passwordController.clear();
+    _confirmPasswordController.clear();
+    context.go('/cuenta/login');
+  }
+
   String _recoveryPasswordErrorMessage(Object error) {
     final normalized =
         error is AuthException ? error.message.toLowerCase() : '';
@@ -409,9 +432,6 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
       final tenantProvider = context.read<PublicStoreTenantProvider>();
       accountService.setTenantId(tenantProvider.tenantId);
       await accountService.signInWithGoogle();
-
-      if (!mounted) return;
-      context.go('/cuenta');
     } catch (_) {
       if (!mounted) return;
 
@@ -430,8 +450,10 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
     final accountService = context.watch<CustomerAccountService>();
+    final isRecoveryPending =
+        accountService.isPasswordRecoveryVerificationPending;
     final isRecoveryMode =
-        _isRecoveryMode || accountService.isPasswordRecoverySession;
+        accountService.isPasswordRecoverySession || isRecoveryPending;
     final isInvitationMode = _isInvitationMode ||
         accountService.isFirstPasswordInvitationVerificationPending ||
         accountService.hasFirstPasswordInvitationIntent;
@@ -474,7 +496,8 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                             Expanded(
                                 child: _buildFormPanel(context,
                                     isRecoveryMode: isRecoveryMode,
-                                    isInvitationMode: isInvitationMode)),
+                                    isInvitationMode: isInvitationMode,
+                                    isRecoveryPending: isRecoveryPending)),
                           ],
                         )
                       : Column(
@@ -486,7 +509,8 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                                 isInvitationMode: isInvitationMode),
                             _buildFormPanel(context,
                                 isRecoveryMode: isRecoveryMode,
-                                isInvitationMode: isInvitationMode),
+                                isInvitationMode: isInvitationMode,
+                                isRecoveryPending: isRecoveryPending),
                           ],
                         ),
                 ),
@@ -667,13 +691,16 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
     BuildContext context, {
     bool isRecoveryMode = false,
     bool isInvitationMode = false,
+    bool isRecoveryPending = false,
   }) {
     final theme = Theme.of(context);
     final isPasswordSetupMode = isRecoveryMode || isInvitationMode;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 30, 28, 30),
-      child: isInvitationMode && _invitationTenantPending
+      child: isRecoveryPending
+          ? _buildRecoveryVerificationLoadingView(context)
+          : isInvitationMode && _invitationTenantPending
           ? _buildInvitationTenantLoadingView(context)
           : isInvitationMode && _invitationSessionInvalid
               ? _buildInvalidInvitationView(context)
@@ -801,17 +828,13 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                           onPressed: _isLoading
                               ? null
                               : () {
-                                  if (isInvitationMode) {
-                                    _leaveInvitationMode();
-                                    return;
-                                  }
-                                  setState(() {
-                                    _isRecoveryMode = false;
-                                    _passwordController.clear();
-                                    _confirmPasswordController.clear();
-                                  });
-                                },
-                          child: const Text('Volver al inicio de sesión'),
+                                      if (isInvitationMode) {
+                                        _leaveInvitationMode();
+                                        return;
+                                      }
+                                      _leaveRecoveryMode();
+                                    },
+                              child: const Text('Volver al inicio de sesión'),
                         ),
                       ] else ...[
                         if (_showAccountConfirmedNotice) ...[
@@ -1222,6 +1245,26 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
         const SizedBox(height: 18),
         Text(
           'Validando la tienda de esta invitación…',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: PublicStoreTheme.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecoveryVerificationLoadingView(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      key: const ValueKey('customer-recovery-verification-loading'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const CircularProgressIndicator(),
+        const SizedBox(height: 18),
+        Text(
+          'Validando tu enlace de recuperación…',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyLarge?.copyWith(
             color: PublicStoreTheme.textSecondary,

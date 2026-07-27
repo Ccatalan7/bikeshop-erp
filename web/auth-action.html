@@ -97,8 +97,9 @@
         'use strict';
 
         const confirmationFragmentPrefix = '#confirmation_url=';
-        const inviteFragmentPrefix = '#token_hash=';
+        const tokenFragmentPrefix = '#token_hash=';
         const inviteFragmentSeparator = '&type=invite&redirect_to=';
+        const recoveryFragmentSeparator = '&type=recovery&redirect_to=';
         const button = document.getElementById('continue');
         const error = document.getElementById('error');
         const allowedAuthHosts = new Set([
@@ -155,14 +156,32 @@
               destination = null;
             }
           }
-        } else if (window.location.hash.startsWith(inviteFragmentPrefix)) {
-          const invitePayload =
-            window.location.hash.slice(inviteFragmentPrefix.length);
-          const separatorIndex = invitePayload.indexOf(inviteFragmentSeparator);
-          if (separatorIndex > 0) {
-            const tokenHash = invitePayload.slice(0, separatorIndex);
-            const rawRedirect = invitePayload.slice(
-              separatorIndex + inviteFragmentSeparator.length,
+        } else if (window.location.hash.startsWith(tokenFragmentPrefix)) {
+          const tokenPayload =
+            window.location.hash.slice(tokenFragmentPrefix.length);
+          const flows = [
+            {
+              separator: inviteFragmentSeparator,
+              type: 'invite',
+              queryKey: 'invited',
+            },
+            {
+              separator: recoveryFragmentSeparator,
+              type: 'recovery',
+              queryKey: 'recovery',
+            },
+          ];
+
+          flowLoop:
+          for (const flow of flows) {
+            const separatorIndex = tokenPayload.indexOf(flow.separator);
+            if (separatorIndex <= 0) {
+              continue;
+            }
+
+            const tokenHash = tokenPayload.slice(0, separatorIndex);
+            const rawRedirect = tokenPayload.slice(
+              separatorIndex + flow.separator.length,
             );
             const isValidTokenHash =
               /^[A-Za-z0-9._~-]{20,512}$/.test(tokenHash);
@@ -185,17 +204,17 @@
                     (candidate.protocol === 'http:' &&
                       (candidate.hostname === '127.0.0.1' ||
                         candidate.hostname === 'localhost'));
-                  const hasExactInvitationRoute =
+                  const hasExactStoreAuthRoute =
                     candidate.pathname === '/cuenta/login' &&
                     candidate.searchParams.size === 1 &&
-                    candidate.searchParams.get('invited') === 'true' &&
+                    candidate.searchParams.get(flow.queryKey) === 'true' &&
                     candidate.hash === '';
                   if (
                     isAllowedProtocol &&
                     !candidate.username &&
                     !candidate.password &&
                     allowedStoreHosts.has(candidate.host) &&
-                    hasExactInvitationRoute
+                    hasExactStoreAuthRoute
                   ) {
                     destination = new URL(
                       '/cuenta/login',
@@ -203,9 +222,9 @@
                     );
                     destination.hash = new URLSearchParams({
                       token_hash: tokenHash,
-                      type: 'invite',
+                      type: flow.type,
                     }).toString();
-                    break;
+                    break flowLoop;
                   }
                 } catch (_) {
                   destination = null;
