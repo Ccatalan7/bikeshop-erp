@@ -36,9 +36,9 @@ class _BusinessHoursSettingsPageState extends State<BusinessHoursSettingsPage> {
   Future<void> _loadSettings() async {
     try {
       final service = context.read<WebsiteService>();
-      if (service.settings.isEmpty) {
-        await service.loadSettings();
-      }
+      // WebsiteService is app-scoped. Always bind/revalidate the active tenant
+      // before reading its projection; a non-empty map alone has no provenance.
+      await service.loadSettings();
 
       final manualRaw = service.getSetting('business_hours_json').trim();
       final googleRaw =

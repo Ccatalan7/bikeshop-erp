@@ -2,8 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:vinabike_erp/shared/services/tenant_service.dart';
 import 'package:vinabike_erp/modules/tasks/models/task_model.dart';
+import 'package:vinabike_erp/shared/services/authority_scoped_cache.dart';
+import 'package:vinabike_erp/shared/services/tenant_service.dart';
 
 class TaskService extends ChangeNotifier {
   final SupabaseClient _supabase;
@@ -13,22 +14,26 @@ class TaskService extends ChangeNotifier {
   List<TaskModel> _tasks = [];
   bool _isInit = false;
   bool _isDisposed = false;
-  bool _realtimeSetupInFlight = false;
+  final AuthorityCacheScope _cacheScope = AuthorityCacheScope();
+  late final AuthorityScopedLoad<List<TaskModel>> _tasksLoad =
+      AuthorityScopedLoad<List<TaskModel>>(_cacheScope);
   String? _realtimeTenantId;
   RealtimeChannel? _tasksChannel;
+  int _realtimeChannelSerial = 0;
   StreamSubscription<AuthState>? _authSubscription;
   Timer? _fallbackRefreshTimer;
   Timer? _realtimeRetryTimer;
   int _realtimeRetryAttempt = 0;
 
   List<TaskModel> get tasks => _tasks;
+  ErpAuthorityScopeKey? get authorityScope => _cacheScope.key;
 
   TaskService(this._supabase, this._tenantService) {
     _authSubscription = _supabase.auth.onAuthStateChange.listen((data) {
       if (_isDisposed) return;
 
       if (data.event == AuthChangeEvent.signedOut || data.session == null) {
-        unawaited(_handleSignedOut());
+        bindAuthorityScope(userId: null, tenantId: null);
         return;
       }
 
@@ -42,10 +47,55 @@ class TaskService extends ChangeNotifier {
     unawaited(init());
   }
 
+  void bindAuthorityScope({
+    required String? userId,
+    required String? tenantId,
+  }) {
+    if (!_cacheScope.bind(userId: userId, tenantId: tenantId)) return;
+    _clearAuthorityOwnedState();
+  }
+
+  AuthorityScopeResolution _resolveAuthorityScope({
+    required String? userId,
+    required String? tenantId,
+  }) {
+    final resolution = _cacheScope.resolve(
+      userId: userId,
+      tenantId: tenantId,
+    );
+    if (resolution.didChange) _clearAuthorityOwnedState();
+    return resolution;
+  }
+
+  void _clearAuthorityOwnedState() {
+    final hadTasks = _tasks.isNotEmpty;
+    _tasksLoad.detach();
+    _isInit = false;
+    _fallbackRefreshTimer?.cancel();
+    _fallbackRefreshTimer = null;
+    final oldChannel = _detachTasksRealtime();
+    _tasks = [];
+    if (oldChannel != null) {
+      unawaited(oldChannel.unsubscribe());
+    }
+    if (hadTasks) _safeNotify();
+  }
+
   Future<void> init({bool forceRefresh = false}) async {
     if (_isDisposed) return;
     if (!_isInit || forceRefresh) {
-      await fetchTasks();
+      AuthorityCacheLease? loadedLease;
+      try {
+        loadedLease = await _fetchTasksForCurrentAuthority();
+      } on AuthorityScopeChangedException {
+        return;
+      }
+      if (_isDisposed ||
+          loadedLease == null ||
+          !_cacheScope.owns(loadedLease) ||
+          _supabase.auth.currentUser?.id != loadedLease.scope.userId) {
+        return;
+      }
       _isInit = true;
     }
     await _setupTasksRealtime();
@@ -53,50 +103,94 @@ class TaskService extends ChangeNotifier {
   }
 
   Future<void> fetchTasks() async {
+    await _fetchTasksForCurrentAuthority();
+  }
+
+  /// Returns truthful completion evidence for the login preload coordinator.
+  ///
+  /// Interactive refresh callers keep using [fetchTasks], while preloading
+  /// needs to distinguish a successful empty result from an internal failure.
+  Future<ErpAuthorityScopeKey?> fetchTasksForPreload() async {
+    return (await _fetchTasksForCurrentAuthority())?.scope;
+  }
+
+  Future<AuthorityCacheLease?> _fetchTasksForCurrentAuthority() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) {
+      _resolveAuthorityScope(userId: null, tenantId: null);
+      return null;
+    }
+
     final tenantId = await _tenantService.getTenantId();
-    if (tenantId == null) {
-      if (_tasks.isNotEmpty) {
-        _tasks = [];
-        _safeNotify();
-      }
+    if (_supabase.auth.currentUser?.id != userId) return null;
+    if (tenantId == null || tenantId.isEmpty) {
+      _resolveAuthorityScope(userId: null, tenantId: null);
       if (kDebugMode) {
         debugPrint('⚠️ [TaskService] No tenant ID, skipping fetchTasks');
       }
-      return;
+      return null;
     }
 
+    final resolution = _resolveAuthorityScope(
+      userId: userId,
+      tenantId: tenantId,
+    );
+    if (resolution == AuthorityScopeResolution.rejectedTenantChange) {
+      throw const AuthorityScopeChangedException();
+    }
+    final requestedLease = _cacheScope.capture();
+    if (requestedLease == null) return null;
+
     try {
-      // Simple query with NO joins — ensures tasks always load
-      // even if FK relationships or RLS policies have issues.
-      final response = await _supabase
-          .from('smart_tasks')
-          .select()
-          .eq('tenant_id', tenantId)
-          .order('created_at', ascending: false);
+      await _tasksLoad.run(
+        load: (lease) async {
+          // Simple query with NO joins — ensures tasks always load
+          // even if FK relationships or RLS policies have issues.
+          final response = await _supabase
+              .from('smart_tasks')
+              .select()
+              .eq('tenant_id', lease.scope.tenantId)
+              .order('created_at', ascending: false);
 
-      final List<TaskModel> loadedTasks = [];
-      for (final row in (response as List<dynamic>)) {
-        final map = row as Map<String, dynamic>;
-        loadedTasks.add(TaskModel.fromJson(map));
-      }
-
-      _tasks = loadedTasks;
-      _sortTasks();
-      _safeNotify();
+          final loadedTasks = <TaskModel>[];
+          for (final row in (response as List<dynamic>)) {
+            final map = row as Map<String, dynamic>;
+            if (map['tenant_id']?.toString() != lease.scope.tenantId) {
+              throw StateError(
+                'Task query returned data outside the authority tenant',
+              );
+            }
+            loadedTasks.add(TaskModel.fromJson(map));
+          }
+          loadedTasks.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return loadedTasks;
+        },
+        publish: (loadedTasks, _) {
+          _tasks = loadedTasks;
+          _safeNotify();
+        },
+      );
       if (kDebugMode) {
         debugPrint('✅ [TaskService] Loaded ${_tasks.length} tasks');
       }
+      unawaited(_setupTasksRealtime());
+      _startFallbackRefresh();
+      return _cacheScope.owns(requestedLease) ? requestedLease : null;
+    } on AuthorityScopeChangedException {
+      // A newer sign-in/tenant generation owns the cache now.
+      return null;
     } catch (e, stackTrace) {
       if (kDebugMode) {
         debugPrint('❌ [TaskService] Error fetching tasks: $e');
         debugPrint('❌ [TaskService] Stack: $stackTrace');
       }
+      return null;
     }
   }
 
   Future<TaskModel> createTask(TaskModel task) async {
-    final tenantId = await _tenantService.getTenantId();
-    if (tenantId == null) throw Exception('No tenant ID');
+    final lease = await _requireAuthorityLease();
+    final tenantId = lease.scope.tenantId;
 
     try {
       final data = task.toJson();
@@ -109,7 +203,14 @@ class TaskService extends ChangeNotifier {
           await _supabase.from('smart_tasks').insert(data).select().single();
 
       final newTask = TaskModel.fromJson(response);
-      _upsertTask(newTask);
+      if (newTask.tenantId != tenantId) {
+        throw StateError(
+          'Task insert returned data outside the authority tenant',
+        );
+      }
+      if (_cacheScope.owns(lease)) {
+        _upsertTask(newTask);
+      }
       return newTask;
     } catch (e) {
       if (kDebugMode) debugPrint('❌ [TaskService] Error creating task: $e');
@@ -118,8 +219,8 @@ class TaskService extends ChangeNotifier {
   }
 
   Future<void> updateTask(TaskModel task) async {
-    final tenantId = await _tenantService.getTenantId();
-    if (tenantId == null) throw Exception('No tenant ID');
+    final lease = await _requireAuthorityLease();
+    final tenantId = lease.scope.tenantId;
     if (task.id == null) throw Exception('Task ID cannot be null for update');
 
     try {
@@ -136,10 +237,14 @@ class TaskService extends ChangeNotifier {
           .eq('id', task.id!)
           .eq('tenant_id', tenantId);
 
+      if (!_cacheScope.owns(lease)) return;
+
       // Update local cache
       final index = _tasks.indexWhere((t) => t.id == task.id);
       if (index != -1) {
-        _tasks[index] = task;
+        _tasks[index] = task.tenantId == tenantId
+            ? task
+            : task.copyWith(tenantId: tenantId);
         _sortTasks();
         _safeNotify();
       } else {
@@ -152,8 +257,8 @@ class TaskService extends ChangeNotifier {
   }
 
   Future<void> deleteTask(String taskId) async {
-    final tenantId = await _tenantService.getTenantId();
-    if (tenantId == null) throw Exception('No tenant ID');
+    final lease = await _requireAuthorityLease();
+    final tenantId = lease.scope.tenantId;
 
     try {
       await _supabase
@@ -162,6 +267,7 @@ class TaskService extends ChangeNotifier {
           .eq('id', taskId)
           .eq('tenant_id', tenantId);
 
+      if (!_cacheScope.owns(lease)) return;
       _tasks.removeWhere((t) => t.id == taskId);
       _safeNotify();
     } catch (e) {
@@ -170,29 +276,59 @@ class TaskService extends ChangeNotifier {
     }
   }
 
-  Future<void> _setupTasksRealtime({bool force = false}) async {
-    if (_isDisposed || _realtimeSetupInFlight) return;
-
+  Future<AuthorityCacheLease> _requireAuthorityLease() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) {
+      _resolveAuthorityScope(userId: null, tenantId: null);
+      throw const AuthorityScopeChangedException();
+    }
     final tenantId = await _tenantService.getTenantId();
+    if (_supabase.auth.currentUser?.id != userId) {
+      throw const AuthorityScopeChangedException();
+    }
     if (tenantId == null || tenantId.isEmpty) {
+      _resolveAuthorityScope(userId: null, tenantId: null);
+      throw const AuthorityScopeChangedException();
+    }
+    final resolution = _resolveAuthorityScope(
+      userId: userId,
+      tenantId: tenantId,
+    );
+    if (resolution == AuthorityScopeResolution.rejectedTenantChange) {
+      throw const AuthorityScopeChangedException();
+    }
+    final lease = _cacheScope.capture();
+    if (lease == null) throw const AuthorityScopeChangedException();
+    return lease;
+  }
+
+  Future<void> _setupTasksRealtime({bool force = false}) async {
+    if (_isDisposed) return;
+    final lease = _cacheScope.capture();
+    if (lease == null) {
       _scheduleRealtimeReconnect('tenant context unavailable');
       return;
     }
+    final tenantId = lease.scope.tenantId;
 
     if (!force && _tasksChannel != null && _realtimeTenantId == tenantId) {
       return;
     }
 
-    _realtimeSetupInFlight = true;
     try {
       _realtimeRetryTimer?.cancel();
       _realtimeRetryTimer = null;
 
-      await _teardownTasksRealtime(cancelRetry: false);
+      final oldChannel = _detachTasksRealtime(cancelRetry: false);
+      if (oldChannel != null) {
+        unawaited(oldChannel.unsubscribe());
+      }
 
       late final RealtimeChannel channel;
       channel = _supabase
-          .channel('smart-tasks-$tenantId')
+          .channel(
+            'smart-tasks-$tenantId-${lease.generation}-${++_realtimeChannelSerial}',
+          )
           .onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
@@ -202,12 +338,17 @@ class TaskService extends ChangeNotifier {
               column: 'tenant_id',
               value: tenantId,
             ),
-            callback: _handleTaskRealtimeChange,
+            callback: (payload) =>
+                _handleTaskRealtimeChange(channel, lease, payload),
           )
           .subscribe((status, error) {
-        _handleTasksRealtimeStatus(channel, status, error);
+        _handleTasksRealtimeStatus(channel, lease, status, error);
       });
 
+      if (!_cacheScope.owns(lease) || _isDisposed) {
+        await channel.unsubscribe();
+        return;
+      }
       _tasksChannel = channel;
       _realtimeTenantId = tenantId;
     } catch (e) {
@@ -215,17 +356,20 @@ class TaskService extends ChangeNotifier {
         debugPrint('❌ [TaskService] Realtime setup failed: $e');
       }
       _scheduleRealtimeReconnect('setup failed');
-    } finally {
-      _realtimeSetupInFlight = false;
     }
   }
 
   void _handleTasksRealtimeStatus(
     RealtimeChannel channel,
+    AuthorityCacheLease lease,
     RealtimeSubscribeStatus status,
     Object? error,
   ) {
-    if (!identical(channel, _tasksChannel) || _isDisposed) return;
+    if (!identical(channel, _tasksChannel) ||
+        !_cacheScope.owns(lease) ||
+        _isDisposed) {
+      return;
+    }
 
     switch (status) {
       case RealtimeSubscribeStatus.subscribed:
@@ -259,22 +403,38 @@ class TaskService extends ChangeNotifier {
     }
   }
 
-  void _handleTaskRealtimeChange(PostgresChangePayload payload) {
-    if (_isDisposed) return;
+  void _handleTaskRealtimeChange(
+    RealtimeChannel channel,
+    AuthorityCacheLease lease,
+    PostgresChangePayload payload,
+  ) {
+    if (_isDisposed ||
+        !_cacheScope.owns(lease) ||
+        !identical(channel, _tasksChannel)) {
+      return;
+    }
 
     try {
       switch (payload.eventType) {
         case PostgresChangeEvent.insert:
         case PostgresChangeEvent.update:
           final record = payload.newRecord;
-          if (record.isEmpty) {
+          if (record.isEmpty ||
+              record['tenant_id']?.toString() != lease.scope.tenantId) {
             unawaited(fetchTasks());
             return;
           }
           _upsertTask(TaskModel.fromJson(record));
           break;
         case PostgresChangeEvent.delete:
-          final id = payload.oldRecord['id']?.toString();
+          final oldRecord = payload.oldRecord;
+          final recordTenantId = oldRecord['tenant_id']?.toString();
+          if (recordTenantId != null &&
+              recordTenantId.isNotEmpty &&
+              recordTenantId != lease.scope.tenantId) {
+            return;
+          }
+          final id = oldRecord['id']?.toString();
           if (id == null || id.isEmpty) {
             unawaited(fetchTasks());
             return;
@@ -357,7 +517,7 @@ class TaskService extends ChangeNotifier {
     });
   }
 
-  Future<void> _teardownTasksRealtime({bool cancelRetry = true}) async {
+  RealtimeChannel? _detachTasksRealtime({bool cancelRetry = true}) {
     if (cancelRetry) {
       _realtimeRetryTimer?.cancel();
       _realtimeRetryTimer = null;
@@ -367,20 +527,7 @@ class TaskService extends ChangeNotifier {
     final channel = _tasksChannel;
     _tasksChannel = null;
     _realtimeTenantId = null;
-    if (channel != null) {
-      await channel.unsubscribe();
-    }
-  }
-
-  Future<void> _handleSignedOut() async {
-    _isInit = false;
-    _fallbackRefreshTimer?.cancel();
-    _fallbackRefreshTimer = null;
-    await _teardownTasksRealtime();
-    if (_tasks.isNotEmpty) {
-      _tasks = [];
-      _safeNotify();
-    }
+    return channel;
   }
 
   void _safeNotify() {
@@ -522,8 +669,10 @@ class TaskService extends ChangeNotifier {
     _isDisposed = true;
     _authSubscription?.cancel();
     _fallbackRefreshTimer?.cancel();
-    _realtimeRetryTimer?.cancel();
-    unawaited(_tasksChannel?.unsubscribe() ?? Future.value());
+    final oldChannel = _detachTasksRealtime();
+    if (oldChannel != null) {
+      unawaited(oldChannel.unsubscribe());
+    }
     super.dispose();
   }
 }

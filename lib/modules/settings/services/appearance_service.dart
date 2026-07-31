@@ -1,11 +1,23 @@
 import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../shared/services/authority_scoped_cache.dart';
 import '../../../shared/services/image_service.dart';
-import '../../../shared/services/tenant_service.dart';
 import '../../../shared/constants/storage_constants.dart';
+import '../../../shared/themes/appearance_preset.dart';
+import '../../../shared/themes/sidebar_palette_option.dart';
+import '../../../shared/themes/workspace_chrome_theme.dart';
+import '../../../shared/widgets/workspace_shell_scope.dart';
+
+export '../../../shared/themes/sidebar_palette_option.dart';
+
+typedef AppearanceCompanySettingsLoader = Future<List<Map<String, dynamic>>>
+    Function(String tenantId);
 
 class AppearanceService extends ChangeNotifier {
   static const String _homeIconKey = 'home_icon';
@@ -18,46 +30,52 @@ class AppearanceService extends ChangeNotifier {
       'right_toolbar_over_content';
   static const String _rightToolbarBlurEnabledKey =
       'right_toolbar_blur_enabled';
+  static const String _scopedPreferencesPrefix = 'vinabike_appearance_v2';
+  static const String _legacyMigrationClaimKey =
+      'vinabike_appearance_legacy_claim_v1';
 
   IconData _homeIcon = Icons.pedal_bike;
   String? _companyLogoUrl;
   bool _isInitialized = false;
   bool _isLoading = false;
-  bool _hasLoadedWithTenant =
-      false; // True only if settings were loaded with valid tenant
+  bool _hasLoadedWithTenant = false;
   int _cacheBuster = DateTime.now().millisecondsSinceEpoch;
   ThemeMode _themeMode = ThemeMode.light;
   String _sidebarPaletteCode = 'vinabike';
   bool _messagingUsesSidebarPalette = false;
   bool _rightToolbarOverContent = true;
   bool _rightToolbarBlurEnabled = true;
-  StreamSubscription<AuthState>? _authSubscription;
+  final SupabaseClient? _supabaseOverride;
+  final Future<SharedPreferences> Function() _preferencesLoader;
+  final AppearanceCompanySettingsLoader? _companySettingsLoader;
+  final AuthorityCacheScope _authorityScope = AuthorityCacheScope();
+  Future<void> _preferencesTail = Future<void>.value();
+  String? _requestedUserId;
+  Future<String?> Function()? _tenantResolver;
+  int _synchronizationGeneration = 0;
+  ErpAuthorityScopeKey? _lastResolvedScope;
+  final Map<_AppearancePreferenceField, int> _preferenceRevisions = {
+    for (final field in _AppearancePreferenceField.values) field: 0,
+  };
+  bool _authorityResolutionPending = false;
+  bool _disposed = false;
 
-  final _supabase = Supabase.instance.client;
+  AppearanceService({
+    SupabaseClient? supabase,
+    Future<SharedPreferences> Function()? preferencesLoader,
+    AppearanceCompanySettingsLoader? companySettingsLoader,
+  })  : _supabaseOverride = supabase,
+        _preferencesLoader = preferencesLoader ?? SharedPreferences.getInstance,
+        _companySettingsLoader = companySettingsLoader;
 
-  AppearanceService() {
-    _loadSettings();
-    _listenToAuthChanges();
-  }
-
-  /// Listen to auth state changes and reload settings when user logs in
-  void _listenToAuthChanges() {
-    _authSubscription = _supabase.auth.onAuthStateChange.listen((data) {
-      if (data.event == AuthChangeEvent.signedIn && !_hasLoadedWithTenant) {
-        _loadSettings();
-      } else if (data.event == AuthChangeEvent.signedOut) {
-        // Reset state on logout
-        _companyLogoUrl = null;
-        _homeIcon = Icons.pedal_bike;
-        _hasLoadedWithTenant = false;
-        notifyListeners();
-      }
-    });
-  }
+  SupabaseClient get _supabase => _supabaseOverride ?? Supabase.instance.client;
 
   @override
   void dispose() {
-    _authSubscription?.cancel();
+    _disposed = true;
+    _synchronizationGeneration++;
+    _authorityResolutionPending = false;
+    _authorityScope.bind(userId: null, tenantId: null);
     super.dispose();
   }
 
@@ -70,6 +88,7 @@ class AppearanceService extends ChangeNotifier {
   }
 
   bool get isInitialized => _isInitialized;
+  bool get isLoading => _isLoading;
   bool get hasLoadedWithTenant => _hasLoadedWithTenant;
   bool get hasCustomLogo =>
       _companyLogoUrl != null && _companyLogoUrl!.isNotEmpty;
@@ -83,81 +102,11 @@ class AppearanceService extends ChangeNotifier {
         (palette) => palette.code == _sidebarPaletteCode,
         orElse: () => sidebarPalettes.first,
       );
+  AppearancePreset get appearancePreset =>
+      AppearancePresets.byCode(_sidebarPaletteCode);
 
-  static const List<SidebarPaletteOption> sidebarPalettes = [
-    SidebarPaletteOption(
-      code: 'vinabike',
-      name: 'Vinabike',
-      description: 'Limpia y luminosa',
-      background: Color(0xFFFFFFFF),
-      backgroundAlt: Color(0xFFF7FAFC),
-      foreground: Color(0xFF111827),
-      mutedForeground: Color(0xFF64748B),
-      accent: Color(0xFF1976D2),
-      onAccent: Color(0xFFFFFFFF),
-      border: Color(0xFFE2E8F0),
-    ),
-    SidebarPaletteOption(
-      code: 'midnight',
-      name: 'Midnight',
-      description: 'Azul negro ejecutivo',
-      background: Color(0xFF0E1726),
-      backgroundAlt: Color(0xFF14243A),
-      foreground: Color(0xFFF8FAFC),
-      mutedForeground: Color(0xFFA8B3C7),
-      accent: Color(0xFF7DD3FC),
-      onAccent: Color(0xFF082F49),
-      border: Color(0xFF25344D),
-    ),
-    SidebarPaletteOption(
-      code: 'aubergine',
-      name: 'Aubergine',
-      description: 'Morado Slack premium',
-      background: Color(0xFF2B1836),
-      backgroundAlt: Color(0xFF432453),
-      foreground: Color(0xFFFDF7FF),
-      mutedForeground: Color(0xFFD6BFE5),
-      accent: Color(0xFFF0ABFC),
-      onAccent: Color(0xFF3B0A45),
-      border: Color(0xFF573166),
-    ),
-    SidebarPaletteOption(
-      code: 'graphite_copper',
-      name: 'Graphite',
-      description: 'Grafito y cobre',
-      background: Color(0xFF1C1917),
-      backgroundAlt: Color(0xFF2E241E),
-      foreground: Color(0xFFFFF7ED),
-      mutedForeground: Color(0xFFD6B69F),
-      accent: Color(0xFFF59E0B),
-      onAccent: Color(0xFF271703),
-      border: Color(0xFF4A372A),
-    ),
-    SidebarPaletteOption(
-      code: 'evergreen',
-      name: 'Evergreen',
-      description: 'Bosque técnico',
-      background: Color(0xFF0D241C),
-      backgroundAlt: Color(0xFF12382D),
-      foreground: Color(0xFFECFDF5),
-      mutedForeground: Color(0xFFA7D8C5),
-      accent: Color(0xFF5EEAD4),
-      onAccent: Color(0xFF042F2E),
-      border: Color(0xFF205344),
-    ),
-    SidebarPaletteOption(
-      code: 'pacific',
-      name: 'Pacific',
-      description: 'Océano profundo',
-      background: Color(0xFF0B2233),
-      backgroundAlt: Color(0xFF123A54),
-      foreground: Color(0xFFF0F9FF),
-      mutedForeground: Color(0xFF9CCBE0),
-      accent: Color(0xFF38BDF8),
-      onAccent: Color(0xFF082F49),
-      border: Color(0xFF1F536E),
-    ),
-  ];
+  static const List<SidebarPaletteOption> sidebarPalettes =
+      AppearancePresets.sidebarPalettes;
 
   // Available home icons for selection
   static const List<HomeIconOption> availableIcons = [
@@ -198,103 +147,472 @@ class AppearanceService extends ChangeNotifier {
     HomeIconOption(icon: Icons.favorite, name: 'Corazón', code: 'favorite'),
   ];
 
-  Future<void> _loadSettings() async {
-    // Prevent concurrent loading
-    if (_isLoading) return;
-    _isLoading = true;
+  /// Binds local appearance and tenant branding to one exact ERP authority.
+  ///
+  /// The provider owns when this is called. Each invocation supersedes every
+  /// prior async load, so a late result from a signed-out user or old tenant
+  /// can never repaint the current application.
+  Future<void> synchronize({
+    required String? userId,
+    required Future<String?> Function() resolveTenantId,
+  }) async {
+    final normalizedUserId = _normalized(userId);
+    final identityChanged = normalizedUserId != _requestedUserId;
+    final previousResolvedScope = identityChanged ? null : _lastResolvedScope;
+    _requestedUserId = normalizedUserId;
+    _tenantResolver = resolveTenantId;
+    final generation = ++_synchronizationGeneration;
 
+    if (identityChanged) {
+      _lastResolvedScope = null;
+      _resetState(resetPreferences: true);
+    }
+
+    if (normalizedUserId == null) {
+      _authorityScope.bind(userId: null, tenantId: null);
+      _lastResolvedScope = null;
+      _authorityResolutionPending = false;
+      if (!identityChanged) {
+        _resetState(resetPreferences: true);
+      }
+      _isInitialized = true;
+      _isLoading = false;
+      _notify();
+      return;
+    }
+
+    // Tenant resolution is asynchronous and can return a different tenant for
+    // the same authenticated user. Invalidate the previous authority before
+    // awaiting it so no setter or captured lease can operate on the old tenant
+    // during that unresolved window.
+    _authorityScope.bind(userId: null, tenantId: null);
+    _authorityResolutionPending = true;
+    _isLoading = true;
+    _isInitialized = false;
+    final revisionsAtStart = _preferenceRevisionSnapshot;
+    _notify();
+
+    String? tenantId;
     try {
-      // Load theme mode from SharedPreferences (local, per-device)
-      final prefs = await SharedPreferences.getInstance();
-      final themeModeString = prefs.getString(_themeModeKey);
-      if (themeModeString != null) {
-        _themeMode = ThemeMode.values.firstWhere(
-          (mode) => mode.name == themeModeString,
-          orElse: () => ThemeMode.light,
+      tenantId = _normalized(await resolveTenantId());
+    } catch (error) {
+      if (!kReleaseMode) {
+        debugPrint(
+          '[AppearanceService] Tenant resolution failed: $error',
         );
       }
-      final sidebarPaletteString = prefs.getString(_sidebarPaletteKey);
-      if (sidebarPaletteString != null &&
-          sidebarPalettes
-              .any((palette) => palette.code == sidebarPaletteString)) {
-        _sidebarPaletteCode = sidebarPaletteString;
-      }
-      _messagingUsesSidebarPalette =
-          prefs.getBool(_messagingSidebarPaletteKey) ?? false;
-      _rightToolbarOverContent =
-          prefs.getBool(_rightToolbarOverContentKey) ?? true;
-      _rightToolbarBlurEnabled =
-          prefs.getBool(_rightToolbarBlurEnabledKey) ?? true;
+    }
+    if (!_ownsRequest(generation, normalizedUserId)) return;
 
-      // Get tenant_id for loading settings
-      final tenantId = await TenantService().getTenantId();
-      if (tenantId == null) {
-        _isInitialized = true;
-        _hasLoadedWithTenant = false; // Mark that we didn't load with tenant
-        notifyListeners();
+    final nextScope = ErpAuthorityScopeKey.from(
+      userId: normalizedUserId,
+      tenantId: tenantId,
+    );
+    if (nextScope == null) {
+      _authorityScope.bind(userId: null, tenantId: null);
+      _lastResolvedScope = null;
+      _authorityResolutionPending = false;
+      _resetState(resetPreferences: true);
+      _isInitialized = true;
+      _isLoading = false;
+      _notify();
+      return;
+    }
+
+    final scopeChanged = previousResolvedScope != nextScope;
+    _authorityScope.bind(
+      userId: nextScope.userId,
+      tenantId: nextScope.tenantId,
+    );
+    _authorityResolutionPending = false;
+    _lastResolvedScope = nextScope;
+    if (scopeChanged) {
+      _homeIcon = Icons.pedal_bike;
+      _companyLogoUrl = null;
+      _hasLoadedWithTenant = false;
+      _resetPreferences();
+      _notify();
+    }
+
+    try {
+      final loadedPreferences = await _loadScopedPreferences(
+        nextScope,
+        isCurrent: () => _ownsRequest(
+          generation,
+          normalizedUserId,
+          scope: nextScope,
+        ),
+      );
+      if (!_ownsRequest(
+        generation,
+        normalizedUserId,
+        scope: nextScope,
+      )) {
         return;
       }
 
-      // Load settings from Supabase database (global, synced across devices)
-      final response = await _supabase
-          .from('company_settings')
-          .select('key, value')
-          .eq('tenant_id', tenantId)
-          .inFilter('key', [_homeIconKey, _companyLogoKey]);
-
-      for (final row in response) {
-        final key = row['key'] as String;
-        final value = row['value'] as String?;
-
-        if (key == _homeIconKey && value != null) {
-          final option = availableIcons.firstWhere(
-            (opt) => opt.code == value,
-            orElse: () => availableIcons.first,
+      if (loadedPreferences != null) {
+        final mergedPreferences = _mergeLoadedPreferences(
+          loadedPreferences,
+          revisionsAtStart: revisionsAtStart,
+        );
+        final preferencesChangedDuringLoad =
+            _preferencesChangedSince(revisionsAtStart);
+        _applyPreferences(mergedPreferences);
+        if (preferencesChangedDuringLoad) {
+          await _persistPreferences(
+            nextScope,
+            mergedPreferences,
           );
-          _homeIcon = option.icon;
-        } else if (key == _companyLogoKey && value != null) {
-          // Strip any existing cache-buster from stored URL
-          _companyLogoUrl = value.split('?').first;
         }
+        _notify();
       }
-
-      _isInitialized = true;
-      _hasLoadedWithTenant = true; // Successfully loaded with tenant
+    } catch (error) {
+      if (!_ownsRequest(
+        generation,
+        normalizedUserId,
+        scope: nextScope,
+      )) {
+        return;
+      }
       if (!kReleaseMode) {
         debugPrint(
-            '[AppearanceService] Settings loaded. hasCustomLogo=$hasCustomLogo, logoUrl=$_companyLogoUrl');
+          '[AppearanceService] Local preference load failed: $error',
+        );
       }
-      notifyListeners();
-    } catch (e) {
+      _applyPreferences(
+        _mergeLoadedPreferences(
+          const _AppearancePreferences.defaults(),
+          revisionsAtStart: revisionsAtStart,
+        ),
+      );
+      _notify();
+    }
+
+    try {
+      final companySettings = await _fetchCompanySettings(nextScope.tenantId);
+      if (!_ownsRequest(
+        generation,
+        normalizedUserId,
+        scope: nextScope,
+      )) {
+        return;
+      }
+      _applyCompanySettings(companySettings);
+      _isInitialized = true;
+      _hasLoadedWithTenant = true;
+      _isLoading = false;
       if (!kReleaseMode) {
-        debugPrint('[AppearanceService] Error loading settings: $e');
+        debugPrint(
+          '[AppearanceService] Scoped settings loaded. '
+          'hasCustomLogo=$hasCustomLogo',
+        );
+      }
+      _notify();
+    } catch (error) {
+      if (!_ownsRequest(
+        generation,
+        normalizedUserId,
+        scope: nextScope,
+      )) {
+        return;
+      }
+      if (!kReleaseMode) {
+        debugPrint(
+          '[AppearanceService] Company settings load failed: $error',
+        );
       }
       _isInitialized = true;
       _hasLoadedWithTenant = false;
-      notifyListeners();
-    } finally {
       _isLoading = false;
+      _notify();
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchCompanySettings(
+    String tenantId,
+  ) async {
+    final loader = _companySettingsLoader;
+    if (loader != null) return loader(tenantId);
+    final response = await _supabase
+        .from('company_settings')
+        .select('key, value')
+        .eq('tenant_id', tenantId)
+        .inFilter('key', [_homeIconKey, _companyLogoKey]);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  Future<_AppearancePreferences?> _loadScopedPreferences(
+    ErpAuthorityScopeKey scope, {
+    required bool Function() isCurrent,
+  }) {
+    return _withPreferencesLock((preferences) async {
+      if (!isCurrent()) return null;
+
+      final storageKey = _scopedPreferencesKey(scope);
+      final existingRaw = preferences.getString(storageKey);
+      if (existingRaw != null) {
+        final existing = _AppearancePreferences.tryDecode(
+              existingRaw,
+              expectedScope: scope,
+              supportedPalettes: sidebarPalettes,
+            ) ??
+            const _AppearancePreferences.defaults();
+        if (!isCurrent()) return null;
+        await preferences.setString(storageKey, existing.encode(scope));
+        return existing;
+      }
+
+      final scopeToken = _scopeToken(scope);
+      var migrationClaim = preferences.getString(_legacyMigrationClaimKey);
+      if (migrationClaim == null) {
+        await preferences.setString(_legacyMigrationClaimKey, scopeToken);
+        migrationClaim = scopeToken;
+      }
+      if (!isCurrent()) return null;
+
+      final migrated = migrationClaim == scopeToken
+          ? _legacyPreferences(preferences)
+          : const _AppearancePreferences.defaults();
+      await preferences.setString(storageKey, migrated.encode(scope));
+
+      if (migrationClaim == scopeToken) {
+        for (final key in _legacyPreferenceKeys) {
+          await preferences.remove(key);
+        }
+      }
+      return isCurrent() ? migrated : null;
+    });
+  }
+
+  _AppearancePreferences _legacyPreferences(SharedPreferences preferences) {
+    final themeModeValue = preferences.get(_themeModeKey);
+    final paletteValue = preferences.get(_sidebarPaletteKey);
+    final messagingValue = preferences.get(_messagingSidebarPaletteKey);
+    final toolbarValue = preferences.get(_rightToolbarOverContentKey);
+    final blurValue = preferences.get(_rightToolbarBlurEnabledKey);
+    return _AppearancePreferences(
+      themeMode: _parseThemeMode(themeModeValue),
+      sidebarPaletteCode: _parsePaletteCode(paletteValue),
+      messagingUsesSidebarPalette:
+          messagingValue is bool ? messagingValue : false,
+      rightToolbarOverContent: toolbarValue is bool ? toolbarValue : true,
+      rightToolbarBlurEnabled: blurValue is bool ? blurValue : true,
+    );
+  }
+
+  Future<void> _persistPreferences(
+    ErpAuthorityScopeKey scope,
+    _AppearancePreferences preferences,
+  ) {
+    return _withPreferencesLock((storage) async {
+      await storage.setString(
+        _scopedPreferencesKey(scope),
+        preferences.encode(scope),
+      );
+    });
+  }
+
+  Future<T> _withPreferencesLock<T>(
+    Future<T> Function(SharedPreferences preferences) operation,
+  ) {
+    final completer = Completer<T>();
+    _preferencesTail = _preferencesTail.then((_) async {
+      try {
+        final preferences = await _preferencesLoader();
+        completer.complete(await operation(preferences));
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future;
+  }
+
+  void _applyPreferences(_AppearancePreferences preferences) {
+    _themeMode = preferences.themeMode;
+    _sidebarPaletteCode = preferences.sidebarPaletteCode;
+    _messagingUsesSidebarPalette = preferences.messagingUsesSidebarPalette;
+    _rightToolbarOverContent = preferences.rightToolbarOverContent;
+    _rightToolbarBlurEnabled = preferences.rightToolbarBlurEnabled;
+  }
+
+  _AppearancePreferences _mergeLoadedPreferences(
+    _AppearancePreferences loaded, {
+    required Map<_AppearancePreferenceField, int> revisionsAtStart,
+  }) {
+    bool unchanged(_AppearancePreferenceField field) =>
+        revisionsAtStart[field] == _preferenceRevisions[field];
+
+    return _AppearancePreferences(
+      themeMode: unchanged(_AppearancePreferenceField.themeMode)
+          ? loaded.themeMode
+          : _themeMode,
+      sidebarPaletteCode: unchanged(_AppearancePreferenceField.sidebarPalette)
+          ? loaded.sidebarPaletteCode
+          : _sidebarPaletteCode,
+      messagingUsesSidebarPalette:
+          unchanged(_AppearancePreferenceField.messagingSidebarPalette)
+              ? loaded.messagingUsesSidebarPalette
+              : _messagingUsesSidebarPalette,
+      rightToolbarOverContent:
+          unchanged(_AppearancePreferenceField.rightToolbarOverContent)
+              ? loaded.rightToolbarOverContent
+              : _rightToolbarOverContent,
+      rightToolbarBlurEnabled:
+          unchanged(_AppearancePreferenceField.rightToolbarBlurEnabled)
+              ? loaded.rightToolbarBlurEnabled
+              : _rightToolbarBlurEnabled,
+    );
+  }
+
+  Map<_AppearancePreferenceField, int> get _preferenceRevisionSnapshot =>
+      Map<_AppearancePreferenceField, int>.unmodifiable(
+        _preferenceRevisions,
+      );
+
+  bool _preferencesChangedSince(
+    Map<_AppearancePreferenceField, int> snapshot,
+  ) {
+    return _AppearancePreferenceField.values.any(
+      (field) => snapshot[field] != _preferenceRevisions[field],
+    );
+  }
+
+  void _markPreferenceChanged(_AppearancePreferenceField field) {
+    _preferenceRevisions[field] = _preferenceRevisions[field]! + 1;
+  }
+
+  ErpAuthorityScopeKey? _preferenceMutationScope() {
+    if (_authorityResolutionPending) {
+      throw StateError(
+        'Appearance settings cannot change while ERP authority is resolving',
+      );
+    }
+    return _authorityScope.key;
+  }
+
+  void _applyCompanySettings(List<Map<String, dynamic>> settings) {
+    _homeIcon = Icons.pedal_bike;
+    _companyLogoUrl = null;
+    for (final row in settings) {
+      final key = row['key']?.toString();
+      final value = row['value']?.toString();
+      if (key == _homeIconKey && value != null && value.isNotEmpty) {
+        _homeIcon = availableIcons
+            .firstWhere(
+              (option) => option.code == value,
+              orElse: () => availableIcons.first,
+            )
+            .icon;
+      } else if (key == _companyLogoKey && value != null && value.isNotEmpty) {
+        _companyLogoUrl = value.split('?').first;
+      }
+    }
+  }
+
+  bool _ownsRequest(
+    int generation,
+    String userId, {
+    ErpAuthorityScopeKey? scope,
+  }) {
+    if (_disposed ||
+        generation != _synchronizationGeneration ||
+        _requestedUserId != userId) {
+      return false;
+    }
+    return scope == null || _authorityScope.key == scope;
+  }
+
+  void _resetState({required bool resetPreferences}) {
+    _homeIcon = Icons.pedal_bike;
+    _companyLogoUrl = null;
+    _hasLoadedWithTenant = false;
+    if (resetPreferences) _resetPreferences();
+  }
+
+  void _resetPreferences() {
+    _themeMode = ThemeMode.light;
+    _sidebarPaletteCode = 'vinabike';
+    _messagingUsesSidebarPalette = false;
+    _rightToolbarOverContent = true;
+    _rightToolbarBlurEnabled = true;
+  }
+
+  _AppearancePreferences get _currentPreferences => _AppearancePreferences(
+        themeMode: _themeMode,
+        sidebarPaletteCode: _sidebarPaletteCode,
+        messagingUsesSidebarPalette: _messagingUsesSidebarPalette,
+        rightToolbarOverContent: _rightToolbarOverContent,
+        rightToolbarBlurEnabled: _rightToolbarBlurEnabled,
+      );
+
+  AuthorityCacheLease _requireAuthorityLease() {
+    final lease = _authorityScope.capture();
+    if (lease == null) {
+      throw StateError('Appearance settings require an active ERP authority');
+    }
+    return lease;
+  }
+
+  static String? _normalized(String? value) {
+    final normalized = value?.trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
+  }
+
+  static ThemeMode _parseThemeMode(Object? value) {
+    if (value is! String) return ThemeMode.light;
+    return ThemeMode.values.firstWhere(
+      (mode) => mode.name == value,
+      orElse: () => ThemeMode.light,
+    );
+  }
+
+  static String _parsePaletteCode(Object? value) {
+    if (value is String &&
+        sidebarPalettes.any((palette) => palette.code == value)) {
+      return value;
+    }
+    return 'vinabike';
+  }
+
+  static String _scopeToken(ErpAuthorityScopeKey scope) =>
+      '${scope.tenantId}:${scope.userId}';
+
+  static String _scopedPreferencesKey(ErpAuthorityScopeKey scope) =>
+      '$_scopedPreferencesPrefix:${_scopeToken(scope)}';
+
+  static const List<String> _legacyPreferenceKeys = [
+    _themeModeKey,
+    _sidebarPaletteKey,
+    _messagingSidebarPaletteKey,
+    _rightToolbarOverContentKey,
+    _rightToolbarBlurEnabledKey,
+  ];
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
   }
 
   /// Refresh the logo with a new cache-buster to force reload
   void refreshLogo() {
     _cacheBuster = DateTime.now().millisecondsSinceEpoch;
-    notifyListeners();
+    _notify();
   }
 
-  /// Reload settings from database (call after authentication)
+  /// Reload settings for the currently requested Auth identity.
   Future<void> reloadSettings() async {
-    await _loadSettings();
+    final resolver = _tenantResolver;
+    if (resolver == null) return;
+    await synchronize(
+      userId: _requestedUserId,
+      resolveTenantId: resolver,
+    );
   }
 
   Future<void> setHomeIcon(IconData icon, String iconCode) async {
     try {
-      // Get tenant_id
-      final tenantId = await TenantService().getTenantId();
-      if (tenantId == null) {
-        throw Exception('No tenant found');
-      }
+      final lease = _requireAuthorityLease();
+      final tenantId = lease.scope.tenantId;
 
       // Check if setting exists
       final existing = await _supabase
@@ -303,6 +621,9 @@ class AppearanceService extends ChangeNotifier {
           .eq('tenant_id', tenantId)
           .eq('key', _homeIconKey)
           .maybeSingle();
+      if (!_authorityScope.owns(lease)) {
+        throw const AuthorityScopeChangedException();
+      }
 
       if (existing != null) {
         // Update existing record
@@ -324,8 +645,10 @@ class AppearanceService extends ChangeNotifier {
         });
       }
 
-      _homeIcon = icon;
-      notifyListeners();
+      if (_authorityScope.owns(lease)) {
+        _homeIcon = icon;
+        _notify();
+      }
     } catch (e) {
       debugPrint('[AppearanceService] Error saving home icon: $e');
       rethrow;
@@ -344,11 +667,8 @@ class AppearanceService extends ChangeNotifier {
     try {
       debugPrint('[AppearanceService] uploadCompanyLogo started: $fileName');
 
-      // Get tenant_id
-      final tenantId = await TenantService().getTenantId();
-      if (tenantId == null) {
-        throw Exception('No tenant found');
-      }
+      final lease = _requireAuthorityLease();
+      final tenantId = lease.scope.tenantId;
 
       debugPrint('[AppearanceService] Tenant ID: $tenantId');
 
@@ -364,6 +684,9 @@ class AppearanceService extends ChangeNotifier {
       debugPrint('[AppearanceService] Upload complete, URL: $imageUrl');
 
       if (imageUrl != null) {
+        if (!_authorityScope.owns(lease)) {
+          throw const AuthorityScopeChangedException();
+        }
         // Check if setting exists
         debugPrint('[AppearanceService] Checking existing settings...');
         final existing = await _supabase
@@ -372,6 +695,9 @@ class AppearanceService extends ChangeNotifier {
             .eq('tenant_id', tenantId)
             .eq('key', _companyLogoKey)
             .maybeSingle();
+        if (!_authorityScope.owns(lease)) {
+          throw const AuthorityScopeChangedException();
+        }
 
         debugPrint(
             '[AppearanceService] Existing record: ${existing != null ? "found" : "not found"}');
@@ -400,15 +726,17 @@ class AppearanceService extends ChangeNotifier {
 
         debugPrint('[AppearanceService] Database updated successfully');
 
-        _companyLogoUrl = imageUrl;
-        // Update cache-buster to force reload on all devices
-        _cacheBuster = DateTime.now().millisecondsSinceEpoch;
+        if (_authorityScope.owns(lease)) {
+          _companyLogoUrl = imageUrl;
+          // Update cache-buster to force reload on all devices
+          _cacheBuster = DateTime.now().millisecondsSinceEpoch;
 
-        debugPrint('[AppearanceService] Logo URL set to: $_companyLogoUrl');
-        debugPrint('[AppearanceService] Cache buster: $_cacheBuster');
-        debugPrint('[AppearanceService] Notifying listeners...');
+          debugPrint('[AppearanceService] Logo URL set to: $_companyLogoUrl');
+          debugPrint('[AppearanceService] Cache buster: $_cacheBuster');
+          debugPrint('[AppearanceService] Notifying listeners...');
 
-        notifyListeners();
+          _notify();
+        }
 
         debugPrint('[AppearanceService] Upload complete!');
       } else {
@@ -422,11 +750,8 @@ class AppearanceService extends ChangeNotifier {
 
   Future<void> removeCompanyLogo() async {
     try {
-      // Get tenant_id
-      final tenantId = await TenantService().getTenantId();
-      if (tenantId == null) {
-        throw Exception('No tenant found');
-      }
+      final lease = _requireAuthorityLease();
+      final tenantId = lease.scope.tenantId;
 
       // Remove from Supabase database (synced across devices)
       await _supabase
@@ -436,8 +761,10 @@ class AppearanceService extends ChangeNotifier {
           .eq('tenant_id', tenantId)
           .eq('key', _companyLogoKey);
 
-      _companyLogoUrl = null;
-      notifyListeners();
+      if (_authorityScope.owns(lease)) {
+        _companyLogoUrl = null;
+        _notify();
+      }
     } catch (e) {
       debugPrint('[AppearanceService] Error removing logo: $e');
       rethrow;
@@ -447,10 +774,13 @@ class AppearanceService extends ChangeNotifier {
   /// Set theme mode (light, dark, or system)
   Future<void> setThemeMode(ThemeMode mode) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_themeModeKey, mode.name);
+      final scope = _preferenceMutationScope();
       _themeMode = mode;
-      notifyListeners();
+      _markPreferenceChanged(_AppearancePreferenceField.themeMode);
+      _notify();
+      if (scope != null) {
+        await _persistPreferences(scope, _currentPreferences);
+      }
     } catch (e) {
       debugPrint('[AppearanceService] Error saving theme mode: $e');
       rethrow;
@@ -461,10 +791,13 @@ class AppearanceService extends ChangeNotifier {
     if (!sidebarPalettes.any((palette) => palette.code == paletteCode)) return;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_sidebarPaletteKey, paletteCode);
+      final scope = _preferenceMutationScope();
       _sidebarPaletteCode = paletteCode;
-      notifyListeners();
+      _markPreferenceChanged(_AppearancePreferenceField.sidebarPalette);
+      _notify();
+      if (scope != null) {
+        await _persistPreferences(scope, _currentPreferences);
+      }
     } catch (e) {
       debugPrint('[AppearanceService] Error saving sidebar palette: $e');
       rethrow;
@@ -473,10 +806,15 @@ class AppearanceService extends ChangeNotifier {
 
   Future<void> setMessagingUsesSidebarPalette(bool value) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_messagingSidebarPaletteKey, value);
+      final scope = _preferenceMutationScope();
       _messagingUsesSidebarPalette = value;
-      notifyListeners();
+      _markPreferenceChanged(
+        _AppearancePreferenceField.messagingSidebarPalette,
+      );
+      _notify();
+      if (scope != null) {
+        await _persistPreferences(scope, _currentPreferences);
+      }
     } catch (e) {
       debugPrint(
           '[AppearanceService] Error saving messaging palette setting: $e');
@@ -490,10 +828,15 @@ class AppearanceService extends ChangeNotifier {
 
   Future<void> setRightToolbarOverContent(bool value) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_rightToolbarOverContentKey, value);
+      final scope = _preferenceMutationScope();
       _rightToolbarOverContent = value;
-      notifyListeners();
+      _markPreferenceChanged(
+        _AppearancePreferenceField.rightToolbarOverContent,
+      );
+      _notify();
+      if (scope != null) {
+        await _persistPreferences(scope, _currentPreferences);
+      }
     } catch (e) {
       debugPrint('[AppearanceService] Error saving toolbar layout: $e');
       rethrow;
@@ -502,10 +845,15 @@ class AppearanceService extends ChangeNotifier {
 
   Future<void> setRightToolbarBlurEnabled(bool value) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_rightToolbarBlurEnabledKey, value);
+      final scope = _preferenceMutationScope();
       _rightToolbarBlurEnabled = value;
-      notifyListeners();
+      _markPreferenceChanged(
+        _AppearancePreferenceField.rightToolbarBlurEnabled,
+      );
+      _notify();
+      if (scope != null) {
+        await _persistPreferences(scope, _currentPreferences);
+      }
     } catch (e) {
       debugPrint('[AppearanceService] Error saving toolbar blur setting: $e');
       rethrow;
@@ -513,39 +861,30 @@ class AppearanceService extends ChangeNotifier {
   }
 }
 
+enum _AppearancePreferenceField {
+  themeMode,
+  sidebarPalette,
+  messagingSidebarPalette,
+  rightToolbarOverContent,
+  rightToolbarBlurEnabled,
+}
+
 ThemeData buildSidebarPaletteTheme(
   ThemeData baseTheme,
   SidebarPaletteOption palette,
 ) {
-  final textTheme = baseTheme.textTheme.apply(
-    bodyColor: palette.foreground,
-    displayColor: palette.foreground,
-  );
-
-  return baseTheme.copyWith(
-    primaryColor: palette.accent,
-    dividerColor: palette.border,
-    scaffoldBackgroundColor: palette.background,
-    canvasColor: palette.background,
-    cardColor: palette.backgroundAlt,
-    iconTheme: baseTheme.iconTheme.copyWith(color: palette.mutedForeground),
-    textTheme: textTheme,
-    listTileTheme: baseTheme.listTileTheme.copyWith(
-      iconColor: palette.mutedForeground,
-      textColor: palette.foreground,
-    ),
-    colorScheme: baseTheme.colorScheme.copyWith(
-      brightness: palette.background.computeLuminance() < 0.35
-          ? Brightness.dark
-          : Brightness.light,
-      primary: palette.accent,
-      onPrimary: palette.onAccent,
-      secondary: palette.accent,
-      surface: palette.background,
-      onSurface: palette.foreground,
-      onSurfaceVariant: palette.mutedForeground,
-      outline: palette.border,
-      outlineVariant: palette.border,
+  return WorkspaceChromeTheme.sidebarTheme(
+    baseTheme,
+    WorkspaceChromeStyleData(
+      canvas: palette.background,
+      raised: palette.backgroundAlt,
+      edge: palette.border,
+      foreground: palette.foreground,
+      mutedForeground: palette.mutedForeground,
+      accent: palette.accent,
+      onAccent: palette.onAccent,
+      dirty: const Color(0xFFF5B545),
+      attention: const Color(0xFFF2637A),
     ),
   );
 }
@@ -566,30 +905,91 @@ BoxDecoration buildSidebarPaletteDecoration(SidebarPaletteOption palette) {
   );
 }
 
-class SidebarPaletteOption {
-  final String code;
-  final String name;
-  final String description;
-  final Color background;
-  final Color backgroundAlt;
-  final Color foreground;
-  final Color mutedForeground;
-  final Color accent;
-  final Color onAccent;
-  final Color border;
-
-  const SidebarPaletteOption({
-    required this.code,
-    required this.name,
-    required this.description,
-    required this.background,
-    required this.backgroundAlt,
-    required this.foreground,
-    required this.mutedForeground,
-    required this.accent,
-    required this.onAccent,
-    required this.border,
+@immutable
+class _AppearancePreferences {
+  const _AppearancePreferences({
+    required this.themeMode,
+    required this.sidebarPaletteCode,
+    required this.messagingUsesSidebarPalette,
+    required this.rightToolbarOverContent,
+    required this.rightToolbarBlurEnabled,
   });
+
+  const _AppearancePreferences.defaults()
+      : themeMode = ThemeMode.light,
+        sidebarPaletteCode = 'vinabike',
+        messagingUsesSidebarPalette = false,
+        rightToolbarOverContent = true,
+        rightToolbarBlurEnabled = true;
+
+  static const int version = 2;
+
+  final ThemeMode themeMode;
+  final String sidebarPaletteCode;
+  final bool messagingUsesSidebarPalette;
+  final bool rightToolbarOverContent;
+  final bool rightToolbarBlurEnabled;
+
+  String encode(ErpAuthorityScopeKey scope) {
+    return jsonEncode({
+      'version': version,
+      'tenant_id': scope.tenantId,
+      'user_id': scope.userId,
+      'theme_mode': themeMode.name,
+      'sidebar_palette': sidebarPaletteCode,
+      'quick_chat_uses_sidebar_palette': messagingUsesSidebarPalette,
+      'right_toolbar_over_content': rightToolbarOverContent,
+      'right_toolbar_blur_enabled': rightToolbarBlurEnabled,
+    });
+  }
+
+  static _AppearancePreferences? tryDecode(
+    String raw, {
+    required ErpAuthorityScopeKey expectedScope,
+    required List<SidebarPaletteOption> supportedPalettes,
+  }) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map ||
+          decoded['version'] != version ||
+          decoded['tenant_id'] != expectedScope.tenantId ||
+          decoded['user_id'] != expectedScope.userId) {
+        return null;
+      }
+
+      final themeModeValue = decoded['theme_mode'];
+      final themeMode = themeModeValue is String
+          ? ThemeMode.values.firstWhere(
+              (mode) => mode.name == themeModeValue,
+              orElse: () => ThemeMode.light,
+            )
+          : ThemeMode.light;
+      final paletteValue = decoded['sidebar_palette'];
+      final paletteCode = paletteValue is String &&
+              supportedPalettes.any(
+                (palette) => palette.code == paletteValue,
+              )
+          ? paletteValue
+          : 'vinabike';
+
+      return _AppearancePreferences(
+        themeMode: themeMode,
+        sidebarPaletteCode: paletteCode,
+        messagingUsesSidebarPalette:
+            decoded['quick_chat_uses_sidebar_palette'] is bool
+                ? decoded['quick_chat_uses_sidebar_palette'] as bool
+                : false,
+        rightToolbarOverContent: decoded['right_toolbar_over_content'] is bool
+            ? decoded['right_toolbar_over_content'] as bool
+            : true,
+        rightToolbarBlurEnabled: decoded['right_toolbar_blur_enabled'] is bool
+            ? decoded['right_toolbar_blur_enabled'] as bool
+            : true,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 class HomeIconOption {

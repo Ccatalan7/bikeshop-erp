@@ -53,6 +53,7 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
         _filteredEntries = entries;
         _isLoading = false;
       });
+      return;
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -108,6 +109,19 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
   }
 
   // 🗑️ TEMP: Quick delete for testing (no confirmation)
+  /// Trae la siguiente página del libro y la agrega a lo mostrado.
+  Future<void> _loadMoreEntries() async {
+    final service = _accountingService.journalEntries;
+    await service.loadMore();
+    if (!mounted) return;
+    final entries = await _accountingService.getJournalEntries();
+    if (!mounted) return;
+    setState(() {
+      _journalEntries = entries;
+      _filterEntries();
+    });
+  }
+
   Future<void> _quickDeleteEntry(JournalEntry entry) async {
     // Check if entry has ID
     if (entry.id == null) {
@@ -360,10 +374,17 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
                         )
                       : ListView.separated(
                           padding: const EdgeInsets.all(16),
-                          itemCount: _filteredEntries.length,
+                          // Una fila extra al final: el control de "traer más".
+                          itemCount: _filteredEntries.length + 1,
                           separatorBuilder: (context, index) =>
                               const SizedBox(height: 12),
                           itemBuilder: (context, index) {
+                            if (index == _filteredEntries.length) {
+                              return _LoadMoreFooter(
+                                loaded: _filteredEntries.length,
+                                onLoadMore: _loadMoreEntries,
+                              );
+                            }
                             final entry = _filteredEntries[index];
                             return _JournalEntryCard(
                               entry: entry,
@@ -378,6 +399,54 @@ class _JournalEntryListPageState extends State<JournalEntryListPage> {
         ),
       );
     });
+  }
+}
+
+/// Pie de la lista: dice cuántos asientos hay cargados y trae los siguientes.
+///
+/// El libro puede tener miles de asientos; cargarlos todos de una sería lento y
+/// cargar sólo 100 sin salida dejaba los antiguos inalcanzables. El control es
+/// explícito —no scroll infinito— porque acá se viene a BUSCAR un asiento y un
+/// scroll que crece solo hace perder la posición.
+class _LoadMoreFooter extends StatelessWidget {
+  const _LoadMoreFooter({required this.loaded, required this.onLoadMore});
+
+  final int loaded;
+  final Future<void> Function() onLoadMore;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final service = context.watch<AccountingService>().journalEntries;
+    if (!service.hasMore) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        child: Center(
+          child: Text(
+            '$loaded asientos · no hay más',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Center(
+        child: service.isLoadingMore
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.2),
+              )
+            : OutlinedButton.icon(
+                onPressed: onLoadMore,
+                icon: const Icon(Icons.expand_more, size: 18),
+                label: Text('Ver más · $loaded cargados'),
+              ),
+      ),
+    );
   }
 }
 

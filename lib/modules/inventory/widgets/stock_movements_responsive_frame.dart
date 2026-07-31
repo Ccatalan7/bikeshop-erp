@@ -12,6 +12,7 @@ class StockMovementsResponsiveFrame extends StatelessWidget {
     super.key,
     required this.isRecentMode,
     required this.hasSelectedProduct,
+    required this.recentScopeLabel,
     required this.desktopHeader,
     required this.recentBody,
     required this.productList,
@@ -25,6 +26,7 @@ class StockMovementsResponsiveFrame extends StatelessWidget {
 
   final bool isRecentMode;
   final bool hasSelectedProduct;
+  final String recentScopeLabel;
   final Widget desktopHeader;
   final Widget recentBody;
   final Widget productList;
@@ -45,6 +47,7 @@ class StockMovementsResponsiveFrame extends StatelessWidget {
           _CompactStockMovementsHeader(
             isRecentMode: isRecentMode,
             hasSelectedProduct: hasSelectedProduct,
+            recentScopeLabel: recentScopeLabel,
             onSelectRecentMode: onSelectRecentMode,
             onSelectProductMode: onSelectProductMode,
           )
@@ -76,12 +79,14 @@ class _CompactStockMovementsHeader extends StatelessWidget {
   const _CompactStockMovementsHeader({
     required this.isRecentMode,
     required this.hasSelectedProduct,
+    required this.recentScopeLabel,
     required this.onSelectRecentMode,
     required this.onSelectProductMode,
   });
 
   final bool isRecentMode;
   final bool hasSelectedProduct;
+  final String recentScopeLabel;
   final VoidCallback onSelectRecentMode;
   final VoidCallback onSelectProductMode;
 
@@ -89,7 +94,7 @@ class _CompactStockMovementsHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final subtitle = isRecentMode
-        ? 'Últimos 100 registros'
+        ? recentScopeLabel
         : hasSelectedProduct
             ? 'Historial del producto'
             : 'Selecciona un producto';

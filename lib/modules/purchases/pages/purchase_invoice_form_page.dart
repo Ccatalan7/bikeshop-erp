@@ -12,6 +12,7 @@ import '../../../shared/models/supplier.dart' as shared_supplier;
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/number_generation_service.dart';
+import '../../../shared/services/return_navigation.dart';
 import '../../../shared/services/remote_scanner_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/invoice_parser_service.dart';
@@ -2378,6 +2379,23 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     );
   }
 
+  /// Closes the form and returns to whatever opened it.
+  ///
+  /// The live history entry restores the host with its filters, selection and
+  /// scroll intact. The referrer hint only reconstructs a route, so it serves
+  /// deep links that have no history to return to.
+  void _returnToOrigin() {
+    if (ReturnNavigation.canReturn(context)) {
+      ReturnNavigation.close(context, fallbackRoute: '/purchases/invoices');
+      return;
+    }
+    if (widget.referrer == 'movements') {
+      context.go('/inventory/movements');
+      return;
+    }
+    context.go('/purchases/invoices');
+  }
+
   Widget _buildHeader(ThemeData theme) {
     final title = widget.invoiceId == null
         ? 'Nueva factura de compra'
@@ -2746,13 +2764,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                 Row(
                   children: [
                     IconButton(
-                      onPressed: () {
-                        if (widget.referrer == 'movements') {
-                          context.go('/inventory/movements');
-                        } else {
-                          context.pop();
-                        }
-                      },
+                      onPressed: _returnToOrigin,
                       icon: const Icon(Icons.arrow_back),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
@@ -2810,13 +2822,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             child: Row(
               children: [
                 IconButton(
-                  onPressed: () {
-                    if (widget.referrer == 'movements') {
-                      context.go('/inventory/movements');
-                    } else {
-                      context.pop();
-                    }
-                  },
+                  onPressed: _returnToOrigin,
                   icon: const Icon(Icons.arrow_back),
                   tooltip: 'Volver',
                 ),

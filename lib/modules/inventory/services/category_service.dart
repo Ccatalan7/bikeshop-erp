@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/services/authority_scoped_cache.dart';
 import '../models/category_models.dart' as models;
 
 class CategoryService extends ChangeNotifier {
@@ -14,23 +15,79 @@ class CategoryService extends ChangeNotifier {
   List<models.Category>? _cachedCategories;
   DateTime? _categoriesCacheTime;
   static const Duration _cacheMaxAge = Duration(minutes: 5);
-  bool _isLoadingCategories = false;
-  
+  final AuthorityCacheScope _cacheScope = AuthorityCacheScope();
+  late final AuthorityScopedLoad<List<models.Category>> _categoriesLoad =
+      AuthorityScopedLoad<List<models.Category>>(_cacheScope);
+
   // Public getters for cached data (instant access)
   List<models.Category> get cachedCategories => _cachedCategories ?? [];
   bool get hasCategoriesCache => _cachedCategories != null;
-  
+  ErpAuthorityScopeKey? get authorityScope => _cacheScope.key;
+
   bool _isCacheValid(DateTime? cacheTime) {
     if (cacheTime == null) return false;
     return DateTime.now().difference(cacheTime) < _cacheMaxAge;
   }
-  
+
   void invalidateCategoriesCache() {
+    _cacheScope.invalidate();
+    _categoriesLoad.detach();
     _cachedCategories = null;
     _categoriesCacheTime = null;
   }
 
   CategoryService(this._db, this._tenantService);
+
+  void bindAuthorityScope({
+    required String? userId,
+    required String? tenantId,
+  }) {
+    if (!_cacheScope.bind(userId: userId, tenantId: tenantId)) return;
+    _clearAuthorityOwnedState();
+  }
+
+  AuthorityScopeResolution _resolveAuthorityScope({
+    required String? userId,
+    required String? tenantId,
+  }) {
+    final resolution = _cacheScope.resolve(
+      userId: userId,
+      tenantId: tenantId,
+    );
+    if (resolution.didChange) _clearAuthorityOwnedState();
+    return resolution;
+  }
+
+  void _clearAuthorityOwnedState() {
+    final hadCache = _cachedCategories != null;
+    _categoriesLoad.detach();
+    _cachedCategories = null;
+    _categoriesCacheTime = null;
+    if (hadCache) notifyListeners();
+  }
+
+  Future<bool> _ensureAuthorityScope() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) {
+      _resolveAuthorityScope(userId: null, tenantId: null);
+      return false;
+    }
+
+    final tenantId = await _tenantService.getTenantId();
+    if (Supabase.instance.client.auth.currentUser?.id != userId) return false;
+    if (tenantId == null || tenantId.isEmpty) {
+      _resolveAuthorityScope(userId: null, tenantId: null);
+      return false;
+    }
+    final resolution = _resolveAuthorityScope(
+      userId: userId,
+      tenantId: tenantId,
+    );
+    if (resolution == AuthorityScopeResolution.rejectedTenantChange) {
+      throw const AuthorityScopeChangedException();
+    }
+    return resolution.isAccepted;
+  }
 
   // Category operations
   Future<List<models.Category>> getCategories({
@@ -38,71 +95,78 @@ class CategoryService extends ChangeNotifier {
     bool? activeOnly,
     bool forceRefresh = false,
   }) async {
-    try {
-      // Check if this is a filtered query
-      final isFilteredQuery =
-          (searchTerm != null && searchTerm.isNotEmpty) || activeOnly == true;
-      
-      // Return cached data if valid and not a filtered query
-      if (!forceRefresh &&
-          !isFilteredQuery &&
-          _isCacheValid(_categoriesCacheTime) &&
-          _cachedCategories != null) {
-        return _cachedCategories!;
+    if (!await _ensureAuthorityScope()) {
+      throw const AuthorityScopeChangedException();
+    }
+    final isFilteredQuery =
+        (searchTerm != null && searchTerm.isNotEmpty) || activeOnly == true;
+
+    if (!forceRefresh &&
+        !isFilteredQuery &&
+        _isCacheValid(_categoriesCacheTime) &&
+        _cachedCategories != null) {
+      return _cachedCategories!;
+    }
+
+    if (isFilteredQuery) {
+      final lease = _cacheScope.capture();
+      if (lease == null) throw const AuthorityScopeChangedException();
+      final categories = await _loadCategories(
+        searchTerm: searchTerm,
+        activeOnly: activeOnly,
+        expectedTenantId: lease.scope.tenantId,
+      );
+      if (!_cacheScope.owns(lease)) {
+        throw const AuthorityScopeChangedException();
       }
-      
-      // Prevent concurrent fetches
-      if (_isLoadingCategories && !isFilteredQuery) {
-        while (_isLoadingCategories) {
-          await Future.delayed(const Duration(milliseconds: 50));
-        }
-        if (_cachedCategories != null && !isFilteredQuery)
-          return _cachedCategories!;
-      }
-      
-      if (!isFilteredQuery) _isLoadingCategories = true;
-      
-      List<Map<String, dynamic>> data;
+      return categories;
+    }
 
-      if (searchTerm != null && searchTerm.isNotEmpty) {
-        // Search by name or description
-        final nameResults =
-            await _db.searchRecords('product_categories', 'name', searchTerm);
-        final descResults = await _db.searchRecords(
-            'product_categories', 'description', searchTerm);
-
-        // Combine and deduplicate results
-        final Set<int> ids = {};
-        data = [...nameResults, ...descResults]
-            .where((item) => ids.add(item['id']))
-            .toList();
-      } else {
-        data = await _db.select('product_categories');
-      }
-
-      List<models.Category> categories =
-          data.map((json) => models.Category.fromJson(json)).toList();
-
-      // Apply filters
-      if (activeOnly == true) {
-        categories = categories.where((c) => c.isActive).toList();
-      }
-
-      // Sort by full_path for hierarchical display
-      categories.sort((a, b) => a.fullPath.compareTo(b.fullPath));
-      
-      // Cache only unfiltered results
-      if (!isFilteredQuery) {
+    return _categoriesLoad.run(
+      load: (lease) => _loadCategories(
+        expectedTenantId: lease.scope.tenantId,
+      ),
+      publish: (categories, _) {
         _cachedCategories = categories;
         _categoriesCacheTime = DateTime.now();
-        _isLoadingCategories = false;
-      }
+      },
+    );
+  }
 
-      return categories;
-    } catch (e) {
-      _isLoadingCategories = false;
-      rethrow;
+  Future<List<models.Category>> _loadCategories({
+    String? searchTerm,
+    bool? activeOnly,
+    required String expectedTenantId,
+  }) async {
+    List<Map<String, dynamic>> data;
+    if (searchTerm != null && searchTerm.isNotEmpty) {
+      final nameResults =
+          await _db.searchRecords('product_categories', 'name', searchTerm);
+      final descResults = await _db.searchRecords(
+        'product_categories',
+        'description',
+        searchTerm,
+      );
+      final ids = <int>{};
+      data = [...nameResults, ...descResults]
+          .where((item) => ids.add(item['id']))
+          .toList();
+    } else {
+      data = await _db.select('product_categories');
     }
+
+    var categories =
+        data.map((json) => models.Category.fromJson(json)).toList();
+    if (categories.any((category) => category.tenantId != expectedTenantId)) {
+      throw StateError(
+        'Category query returned data outside the authority tenant',
+      );
+    }
+    if (activeOnly == true) {
+      categories = categories.where((category) => category.isActive).toList();
+    }
+    categories.sort((a, b) => a.fullPath.compareTo(b.fullPath));
+    return categories;
   }
 
   Future<models.Category?> getCategoryById(String id) async {
@@ -135,7 +199,8 @@ class CategoryService extends ChangeNotifier {
       }
 
       // Category already has tenant_id from the form - no need to add it again
-      final data = await _db.insert('product_categories', category.toJson());
+      final data = await _db.insert(
+          'product_categories', category.toPersistencePayload());
       invalidateCategoriesCache();
       notifyListeners(); // ✅ Notify listeners to refresh UI
       return models.Category.fromJson(data);
@@ -159,8 +224,8 @@ class CategoryService extends ChangeNotifier {
       }
 
       final updatedCategory = category.copyWith(updatedAt: DateTime.now());
-      await _db.update(
-          'product_categories', category.id!, updatedCategory.toJson());
+      await _db.update('product_categories', category.id!,
+          updatedCategory.toPersistencePayload());
       invalidateCategoriesCache();
       notifyListeners(); // ✅ Notify listeners to refresh UI
       return updatedCategory;
@@ -291,7 +356,7 @@ class CategoryService extends ChangeNotifier {
             description: 'Productos para mantenimiento y limpieza'),
         models.Category(
             tenantId: tenantId,
-            name: 'Otros', 
+            name: 'Otros',
             fullPath: 'Otros',
             description: 'Productos diversos no clasificados'),
       ];
@@ -319,7 +384,7 @@ class CategoryService extends ChangeNotifier {
         if (kDebugMode) print('No tenant_id found for getRootCategories');
         return [];
       }
-      
+
       // Use direct Supabase query to filter by both level AND tenant_id
       final data = await Supabase.instance.client
           .from('product_categories')
@@ -328,7 +393,7 @@ class CategoryService extends ChangeNotifier {
           .eq('level', 0)
           .order('sort_order')
           .order('name');
-      
+
       return (data as List)
           .map((json) =>
               models.Category.fromJson(Map<String, dynamic>.from(json as Map)))
@@ -347,7 +412,7 @@ class CategoryService extends ChangeNotifier {
         if (kDebugMode) print('No tenant_id found for getSubcategories');
         return [];
       }
-      
+
       // Use direct Supabase query to filter by both parent_id AND tenant_id
       final data = await Supabase.instance.client
           .from('product_categories')
@@ -356,7 +421,7 @@ class CategoryService extends ChangeNotifier {
           .eq('parent_id', parentId)
           .order('sort_order')
           .order('name');
-      
+
       return (data as List)
           .map((json) =>
               models.Category.fromJson(Map<String, dynamic>.from(json as Map)))
@@ -375,14 +440,14 @@ class CategoryService extends ChangeNotifier {
         if (kDebugMode) print('No tenant_id found for getCategoryByPath');
         return null;
       }
-      
+
       final data = await Supabase.instance.client
           .from('product_categories')
           .select()
           .eq('tenant_id', tenantId)
           .eq('full_path', fullPath)
           .limit(1);
-      
+
       if ((data as List).isEmpty) return null;
       return models.Category.fromJson(
           Map<String, dynamic>.from(data.first as Map));
@@ -429,10 +494,10 @@ class CategoryService extends ChangeNotifier {
       // Sort paths by depth (fewer slashes first)
       final sortedPaths = paths.toList()
         ..sort((a, b) {
-        final aDepth = '/'.allMatches(a).length;
-        final bDepth = '/'.allMatches(b).length;
-        return aDepth.compareTo(bDepth);
-      });
+          final aDepth = '/'.allMatches(a).length;
+          final bDepth = '/'.allMatches(b).length;
+          return aDepth.compareTo(bDepth);
+        });
 
       for (final fullPath in sortedPaths) {
         try {
@@ -521,7 +586,7 @@ class CategoryService extends ChangeNotifier {
         if (kDebugMode) print('No tenant_id found for getWebsiteCategories');
         return [];
       }
-      
+
       final data = await Supabase.instance.client
           .from('product_categories')
           .select()
@@ -531,66 +596,13 @@ class CategoryService extends ChangeNotifier {
           .eq('is_active', true)
           .order('sort_order')
           .order('name');
-      
+
       return (data as List)
           .map((json) =>
               models.Category.fromJson(Map<String, dynamic>.from(json as Map)))
           .toList();
     } catch (e) {
       if (kDebugMode) print('Error fetching website categories: $e');
-      rethrow;
-    }
-  }
-
-  /// Toggle show_on_website flag for a category
-  Future<void> toggleWebsiteVisibility(
-      String categoryId, bool showOnWebsite) async {
-    try {
-      await Supabase.instance.client.from('product_categories').update({
-            'show_on_website': showOnWebsite,
-            'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', categoryId);
-      
-      invalidateCategoriesCache();
-      notifyListeners();
-    } catch (e) {
-      if (kDebugMode) print('Error toggling website visibility: $e');
-      rethrow;
-    }
-  }
-
-  /// Bulk update website visibility for multiple categories
-  Future<void> setWebsiteCategories(List<String> categoryIds) async {
-    try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
-        throw Exception('No tenant_id found');
-      }
-      
-      // First, set all level-0 categories to show_on_website = false
-      await Supabase.instance.client
-          .from('product_categories')
-          .update({
-            'show_on_website': false,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('tenant_id', tenantId)
-          .eq('level', 0);
-      
-      // Then, set the selected ones to true
-      if (categoryIds.isNotEmpty) {
-        for (final id in categoryIds) {
-          await Supabase.instance.client.from('product_categories').update({
-                'show_on_website': true,
-                'updated_at': DateTime.now().toIso8601String(),
-          }).eq('id', id);
-        }
-      }
-      
-      invalidateCategoriesCache();
-      notifyListeners();
-    } catch (e) {
-      if (kDebugMode) print('Error setting website categories: $e');
       rethrow;
     }
   }

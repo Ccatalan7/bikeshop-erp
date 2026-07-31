@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../shared/models/product.dart';
-import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/utils/responsive_viewport.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/services/inventory_service.dart';
@@ -18,11 +17,12 @@ import '../../purchases/models/purchase_invoice.dart';
 import '../../purchases/services/purchase_service.dart';
 import '../../sales/models/sales_models.dart';
 import '../../sales/services/sales_service.dart';
-import '../../../shared/models/tax_treatment.dart';
 
 import '../models/stock_movement.dart';
 import '../models/stock_adjustment.dart';
 import '../services/inventory_service.dart' as module_inventory;
+import '../widgets/movement_inspector.dart';
+import '../widgets/stock_ledger.dart';
 import '../services/stock_movements_service.dart';
 import '../widgets/stock_movements_responsive_frame.dart';
 
@@ -55,18 +55,6 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   static const double _defaultPanelWidth = 400.0;
   double _productListWidth = _defaultPanelWidth;
 
-  // Column widths (resizable)
-  double _colProductWidth = 250.0;
-  double _colDateWidth = 130.0;
-  double _colTypeWidth = 80.0;
-  double _colSourceWidth = 120.0;
-  double _colRefWidth = 140.0;
-  double _colIniWidth = 50.0;
-  double _colMovWidth = 50.0;
-  final double _colFinWidth = 50.0;
-
-  static const double _minColWidth = 40.0;
-
   StockMovement? _selectedLinkedMovement;
   Invoice? _selectedSalesInvoice;
   PurchaseInvoice? _selectedPurchaseInvoice;
@@ -75,6 +63,9 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   String? _linkedDocumentError;
   Map<String, dynamic>? _selectedOperationTrace;
   bool _isLoadingOperationTrace = false;
+  String? _operationTraceError;
+  int _linkedDocumentRequestGeneration = 0;
+  int _operationTraceRequestGeneration = 0;
 
   @override
   void initState() {
@@ -84,6 +75,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     // Load recent movements by default. Products are loaded lazily when the
     // user opens "Por Producto" so this module does not preload inventory.
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       context.read<StockMovementsService>().loadRecentMovements();
     });
   }
@@ -185,7 +177,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedWidth = prefs.getDouble('stock_movements_panel_width');
-      if (savedWidth != null) {
+      if (savedWidth != null && mounted) {
         setState(() {
           _productListWidth = savedWidth;
         });
@@ -213,33 +205,35 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   }
 
   Future<void> _selectDateRange() async {
+    final service = context.read<StockMovementsService>();
+    final storeNow = stockMovementStoreTime(
+      DateTime.now().toUtc(),
+      storeTimezone: service.storeTimezone,
+    );
+    final firstDate = DateTime(2020);
+    final lastDate = DateTime(storeNow.year, storeNow.month, storeNow.day);
+    final selectedRange = _startDate != null && _endDate != null
+        ? DateTimeRange(start: _startDate!, end: _endDate!)
+        : null;
+    final initialRange = selectedRange != null &&
+            !selectedRange.start.isBefore(firstDate) &&
+            !selectedRange.end.isAfter(lastDate)
+        ? selectedRange
+        : null;
     final result = await showDateRangePicker(
       context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      initialDateRange: _startDate != null && _endDate != null
-          ? DateTimeRange(start: _startDate!, end: _endDate!)
-          : null,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Colors.blue,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Colors.black,
-            ),
-          ),
-          child: child!,
-        );
-      },
+      firstDate: firstDate,
+      lastDate: lastDate,
+      initialDateRange: initialRange,
     );
 
+    if (!mounted) return;
     if (result != null) {
       setState(() {
         _startDate = result.start;
         _endDate = result.end;
       });
+      await _pushFilters();
     }
   }
 
@@ -248,6 +242,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       _startDate = null;
       _endDate = null;
     });
+    unawaited(_pushFilters(explicitAllPeriod: true));
   }
 
   void _clearAllMovementFilters() {
@@ -256,18 +251,111 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       _startDate = null;
       _endDate = null;
     });
+    unawaited(_pushFilters(explicitAllPeriod: true));
+  }
+
+  /// Hands the current filters to the service, which refetches when the date
+  /// range changed. The range must reach the query: applying it to the newest
+  /// rows already in memory answers a different question than the one asked.
+  Future<void> _pushFilters({bool explicitAllPeriod = false}) async {
+    final service = context.read<StockMovementsService>();
+    if (explicitAllPeriod && _startDate == null && _endDate == null) {
+      // `clearPeriod` owns the durable "Todo el período" intent. Merely pushing
+      // two null dates makes the next Realtime refresh look like an initial
+      // load, which reinstates the default 30-day period.
+      await service.applyFilters(
+        type: _movementTypeFilter,
+        refetch: false,
+      );
+      await service.clearPeriod();
+      return;
+    }
+    await service.applyFilters(
+      type: _movementTypeFilter,
+      startDate: _startDate,
+      endDate: _endDate,
+    );
+  }
+
+  void _closeInspector() {
+    _linkedDocumentRequestGeneration++;
+    _operationTraceRequestGeneration++;
+    setState(() {
+      _selectedLinkedMovement = null;
+      _selectedSalesInvoice = null;
+      _selectedPurchaseInvoice = null;
+      _selectedStockAdjustment = null;
+      _linkedDocumentError = null;
+      _isLoadingLinkedDocument = false;
+      _selectedOperationTrace = null;
+      _isLoadingOperationTrace = false;
+      _operationTraceError = null;
+    });
+  }
+
+  /// Routes to the module that owns the loaded document. `push`, so the
+  /// ledger, its filters and its scroll are all still here on return.
+  void _openLinkedDocumentRoute() {
+    final movement = _selectedLinkedMovement;
+    final referenceId = movement?.navigableReferenceId;
+    if (movement != null && referenceId != null) {
+      if (movement.isPurchaseReceiptMovement) {
+        unawaited(
+          context.push(
+            '/purchases/receipts/${Uri.encodeComponent(referenceId)}',
+          ),
+        );
+        return;
+      }
+      if (movement.isMechanicJobSourceDocument) {
+        unawaited(
+          context.push('/taller/pegas/${Uri.encodeComponent(referenceId)}'),
+        );
+        return;
+      }
+      if (movement.isOnlineOrderSourceDocument) {
+        unawaited(
+          context.push(
+            '/website/orders?order=${Uri.encodeQueryComponent(referenceId)}',
+          ),
+        );
+        return;
+      }
+    }
+
+    final sales = _selectedSalesInvoice;
+    if (sales?.id != null) {
+      unawaited(context.push('/sales/invoices/${sales!.id}'));
+      return;
+    }
+    final purchase = _selectedPurchaseInvoice;
+    if (purchase?.id != null) {
+      unawaited(context.push('/purchases/${purchase!.id}/detail'));
+    }
   }
 
   Future<void> _navigateToReference(StockMovement movement) async {
+    final documentGeneration = ++_linkedDocumentRequestGeneration;
     final referenceId = movement.navigableReferenceId;
-    if (!movement.hasNavigableReference || referenceId == null) {
-      return;
-    }
 
-    if (movement.isPurchaseReceiptMovement) {
-      await context.push(
-        '/purchases/receipts/${Uri.encodeComponent(referenceId)}',
-      );
+    // Every row can be inspected — the movement and its evidence exist even
+    // when no document backs them. The old behaviour returned early here, so
+    // exactly the rows most worth questioning could not be opened at all.
+    if (!movement.hasNavigableReference ||
+        referenceId == null ||
+        !_loadsInlineDocument(movement)) {
+      setState(() {
+        _selectedLinkedMovement = movement;
+        _selectedSalesInvoice = null;
+        _selectedPurchaseInvoice = null;
+        _selectedStockAdjustment = null;
+        _linkedDocumentError = null;
+        _isLoadingLinkedDocument = false;
+        _selectedOperationTrace = null;
+        _isLoadingOperationTrace = movement.operationId != null;
+        _operationTraceError = null;
+      });
+      unawaited(_loadOperationTrace(movement));
       return;
     }
 
@@ -280,15 +368,18 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       _isLoadingLinkedDocument = true;
       _selectedOperationTrace = null;
       _isLoadingOperationTrace = movement.operationId != null;
+      _operationTraceError = null;
     });
     unawaited(_loadOperationTrace(movement));
 
     try {
-      if (movement.category == StockMovementCategory.adjustment) {
+      if (movement.isStockAdjustmentSourceDocument ||
+          (!movement.hasTypedSourceDocument &&
+              movement.category == StockMovementCategory.adjustment)) {
         final adjustment = await context
             .read<module_inventory.InventoryService>()
             .getStockAdjustmentDetails(referenceId);
-        if (!mounted) return;
+        if (!_isCurrentDocumentRequest(movement, documentGeneration)) return;
 
         setState(() {
           _selectedStockAdjustment = adjustment;
@@ -297,11 +388,13 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         return;
       }
 
-      if (movement.category == StockMovementCategory.purchase) {
+      if (movement.isPurchaseInvoiceSourceDocument ||
+          (!movement.hasTypedSourceDocument &&
+              movement.category == StockMovementCategory.purchase)) {
         final invoice = await context
             .read<PurchaseService>()
-            .getPurchaseInvoice(referenceId);
-        if (!mounted) return;
+            .getPurchaseInvoice(referenceId, refresh: true);
+        if (!_isCurrentDocumentRequest(movement, documentGeneration)) return;
 
         if (invoice == null) {
           throw Exception('No se pudo cargar la factura de compra.');
@@ -314,13 +407,20 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         return;
       }
 
+      if (movement.hasTypedSourceDocument &&
+          !movement.isSalesInvoiceSourceDocument) {
+        throw StateError(
+          'El tipo de documento fuente no tiene un cargador de detalle.',
+        );
+      }
+
       final salesService = context.read<SalesService>();
       final invoice = await salesService.fetchInvoice(
         referenceId,
         refresh: true,
       );
       await salesService.loadPayments(forceRefresh: false);
-      if (!mounted) return;
+      if (!_isCurrentDocumentRequest(movement, documentGeneration)) return;
 
       if (invoice == null) {
         throw Exception('No se pudo cargar la factura de venta.');
@@ -331,7 +431,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         _isLoadingLinkedDocument = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!_isCurrentDocumentRequest(movement, documentGeneration)) return;
       setState(() {
         _linkedDocumentError = e.toString();
         _isLoadingLinkedDocument = false;
@@ -339,24 +439,66 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     }
   }
 
+  bool _loadsInlineDocument(StockMovement movement) {
+    if (movement.hasTypedSourceDocument) {
+      return movement.isSalesInvoiceSourceDocument ||
+          movement.isPurchaseInvoiceSourceDocument ||
+          movement.isStockAdjustmentSourceDocument;
+    }
+    return movement.category == StockMovementCategory.sale ||
+        movement.category == StockMovementCategory.purchase ||
+        movement.category == StockMovementCategory.adjustment;
+  }
+
+  bool _canOpenSelectedDocument(StockMovement movement) {
+    if (movement.navigableReferenceId == null) return false;
+    return movement.isPurchaseReceiptMovement ||
+        movement.isMechanicJobSourceDocument ||
+        movement.isOnlineOrderSourceDocument ||
+        _selectedSalesInvoice != null ||
+        _selectedPurchaseInvoice != null;
+  }
+
+  bool _isCurrentDocumentRequest(StockMovement movement, int generation) {
+    return mounted &&
+        generation == _linkedDocumentRequestGeneration &&
+        _selectedLinkedMovement?.id == movement.id;
+  }
+
   Future<void> _loadOperationTrace(StockMovement movement) async {
-    if (movement.operationId == null) return;
+    final operationId = movement.operationId;
+    if (operationId == null) return;
+    final traceGeneration = ++_operationTraceRequestGeneration;
     try {
       final trace = await context
           .read<StockMovementsService>()
-          .getOperationTrace(movement.operationId);
-      if (!mounted || _selectedLinkedMovement?.id != movement.id) return;
+          .getOperationTrace(operationId);
+      if (!_isCurrentTraceRequest(movement, traceGeneration)) return;
       setState(() {
         _selectedOperationTrace = trace;
         _isLoadingOperationTrace = false;
+        _operationTraceError = trace == null
+            ? 'La operación registrada no está disponible para esta empresa.'
+            : null;
       });
     } catch (_) {
-      if (!mounted || _selectedLinkedMovement?.id != movement.id) return;
-      setState(() => _isLoadingOperationTrace = false);
+      if (!_isCurrentTraceRequest(movement, traceGeneration)) return;
+      setState(() {
+        _isLoadingOperationTrace = false;
+        _operationTraceError = 'No se pudo cargar la traza de la operación.';
+      });
     }
   }
 
+  bool _isCurrentTraceRequest(StockMovement movement, int generation) {
+    return mounted &&
+        generation == _operationTraceRequestGeneration &&
+        _selectedLinkedMovement?.id == movement.id;
+  }
+
   void _closeLinkedDocument() {
+    _linkedDocumentRequestGeneration++;
+    _operationTraceRequestGeneration++;
     setState(() {
       _selectedLinkedMovement = null;
       _selectedSalesInvoice = null;
@@ -366,6 +508,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       _isLoadingLinkedDocument = false;
       _selectedOperationTrace = null;
       _isLoadingOperationTrace = false;
+      _operationTraceError = null;
     });
   }
 
@@ -410,6 +553,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         child: StockMovementsResponsiveFrame(
           isRecentMode: isRecentMode,
           hasSelectedProduct: movementsService.selectedProductId != null,
+          recentScopeLabel: _compactRecentScopeLabel(movementsService),
           desktopHeader: _buildHeader(),
           recentBody: _buildMovementDetails(),
           productList: _buildProductList(),
@@ -424,48 +568,70 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     );
   }
 
+  String _compactRecentScopeLabel(StockMovementsService service) {
+    final start = service.startDate;
+    final end = service.endDate;
+    if (start != null && end != null) {
+      return '${DateFormat('dd/MM/yy').format(start)} – '
+          '${DateFormat('dd/MM/yy').format(end)}';
+    }
+    if (service.isAllPeriodScope) {
+      return service.isWindowTruncated
+          ? 'Ventana de ${StockMovementsService.recentWindow} registros'
+          : 'Todo el período';
+    }
+    return service.isLoading ? 'Cargando período reciente' : 'Período reciente';
+  }
+
+  /// The module's own title band.
+  ///
+  /// It carries one thing the workspace tab does not: which of the two
+  /// readings is active. It deliberately no longer states the scope — the
+  /// scope bar directly below owns that, and a second copy here is how the
+  /// header came to announce "los últimos 100 movimientos" over a ledger that
+  /// had been showing the last 30 days for some time.
   Widget _buildHeader() {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final isRecentMode = _viewMode == StockMovementsViewMode.recent;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: colors.surface,
+        border: Border(bottom: BorderSide(color: colors.outlineVariant)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.timeline, size: 28),
-          const SizedBox(width: 12),
-          const Text(
-            'Movimientos de Stock',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          Text(
+            'Movimientos de stock',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.2,
+            ),
           ),
-          const SizedBox(width: 32),
-          // View mode toggle
+          const SizedBox(width: 20),
+          // Two readings of the same ledger, not two destinations: a segmented
+          // control states both alternatives and the current one at zero click
+          // cost, which a pair of filled buttons never did.
           Container(
+            padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(8),
+              color: colors.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(9),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildViewModeButton(
-                  icon: Icons.history,
-                  label: 'Últimos',
+                  icon: Icons.receipt_long_outlined,
+                  label: 'Todo el movimiento',
                   isSelected: isRecentMode,
                   onTap: _selectRecentMode,
                 ),
                 _buildViewModeButton(
-                  icon: Icons.inventory_2,
-                  label: 'Por Producto',
+                  icon: Icons.inventory_2_outlined,
+                  label: 'Por producto',
                   isSelected: !isRecentMode,
                   onTap: _selectProductMode,
                 ),
@@ -473,16 +639,20 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
             ),
           ),
           const Spacer(),
-          Text(
-            isRecentMode
-                ? 'Mostrando los últimos 100 movimientos'
-                : 'Selecciona un producto para ver su historial',
-            style: const TextStyle(color: Colors.grey),
-          ),
+          if (!isRecentMode && !_hasSelectedProduct)
+            Text(
+              'Elige un producto para ver su historial',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
         ],
       ),
     );
   }
+
+  bool get _hasSelectedProduct =>
+      context.read<StockMovementsService>().selectedProductId != null;
 
   Widget _buildViewModeButton({
     required IconData icon,
@@ -496,35 +666,60 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       label: 'Vista $label',
       onTap: onTap,
       excludeSemantics: true,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: isSelected ? Colors.blue : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 18,
-                  color: isSelected ? Colors.white : Colors.grey[700],
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.grey[700],
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
+      // A segment, not a button. The selected one is a raised surface inside
+      // the track; the other is plain text on it. A saturated blue fill made a
+      // reading mode look like the screen's primary action, which it is not.
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Theme.of(context).colorScheme.surface
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .shadow
+                        .withValues(alpha: 0.06),
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
                   ),
-                ),
-              ],
+                ]
+              : null,
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(7),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 34),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 13),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    size: 16,
+                    color: isSelected
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.onSurface
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -597,7 +792,10 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                             isSearching
                                 ? 'Sin resultados'
                                 : 'No hay productos cargados',
-                            style: TextStyle(color: Colors.grey[600]),
+                            style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant),
                           ),
                         )
                       : ListView.builder(
@@ -777,16 +975,18 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.inventory_2_outlined,
-                    size: 80, color: Colors.grey[300]),
+                    size: 80, color: theme.colorScheme.outlineVariant),
                 const SizedBox(height: 16),
                 Text(
                   'Selecciona un producto',
-                  style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                  style: TextStyle(
+                      fontSize: 18, color: theme.colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'para ver su historial de movimientos',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                  style: TextStyle(
+                      fontSize: 14, color: theme.colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -807,7 +1007,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
           );
         }
 
-        if (movementsService.error != null) {
+        if (movementsService.error != null &&
+            movementsService.movements.isEmpty) {
           return Column(
             children: [
               if (selectedProduct != null)
@@ -826,13 +1027,21 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                       const SizedBox(height: 16),
                       Text(
                         'Error al cargar movimientos',
-                        style: TextStyle(fontSize: 18, color: Colors.grey[700]),
+                        style: TextStyle(
+                            fontSize: 18, color: theme.colorScheme.onSurface),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        movementsService.error!,
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        'No se pudo obtener el libro de stock.',
+                        style: TextStyle(
+                            fontSize: 14,
+                            color: theme.colorScheme.onSurfaceVariant),
                         textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      OutlinedButton(
+                        onPressed: () => _retryMovementLoad(movementsService),
+                        child: const Text('Reintentar'),
                       ),
                     ],
                   ),
@@ -842,10 +1051,9 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
           );
         }
 
-        // Apply filters
-        var movements = movementsService.movements;
-        movements = movementsService.filterByType(_movementTypeFilter);
-        movements = movementsService.filterByDateRange(_startDate, _endDate);
+        // Filters compose inside the service and the date range is applied by
+        // the query, so this list is the real answer to what was asked.
+        final movements = movementsService.visibleMovements;
 
         return Column(
           children: [
@@ -855,6 +1063,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                 selectedProduct,
                 movementCount: movements.length,
               ),
+            if (movementsService.error != null)
+              _buildMovementRefreshWarning(movementsService),
             _buildMovementFilters(movementsService),
             _buildMovementSummary(movements),
             const Divider(height: 1),
@@ -865,6 +1075,55 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         );
       },
     );
+  }
+
+  Widget _buildMovementRefreshWarning(StockMovementsService service) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 48),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      color: colors.errorContainer,
+      child: Row(
+        children: [
+          Icon(
+            Icons.cloud_off_outlined,
+            size: 18,
+            color: colors.onErrorContainer,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'No se pudo actualizar. Se conserva el último libro cargado.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onErrorContainer,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _retryMovementLoad(service),
+            style: TextButton.styleFrom(
+              foregroundColor: colors.onErrorContainer,
+              minimumSize: const Size(48, 40),
+            ),
+            child: const Text('Reintentar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _retryMovementLoad(StockMovementsService service) {
+    if (service.isRecentMode) {
+      unawaited(service.loadRecentMovements());
+      return;
+    }
+    final productId = service.selectedProductId;
+    if (productId != null) {
+      unawaited(service.loadMovementsForProduct(productId));
+    }
   }
 
   Product? _findSelectedMovementProduct(
@@ -1091,59 +1350,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   }
 
   Widget _buildMovementContent(List<StockMovement> movements) {
-    if (_isLoadingLinkedDocument) {
-      return const Center(child: BrandedLoading());
-    }
-
-    if (_linkedDocumentError != null) {
-      return _buildInlineDocumentScaffold(
-        title: 'No se pudo cargar el documento',
-        subtitle: _selectedLinkedMovement?.referenceDisplay,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, color: Colors.red, size: 48),
-                const SizedBox(height: 12),
-                Text(
-                  _linkedDocumentError!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey[700]),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (_selectedSalesInvoice != null) {
-      return _buildInlineDocumentScaffold(
-        title: null,
-        subtitle: null,
-        child: _buildSalesInvoiceInlineView(_selectedSalesInvoice!),
-      );
-    }
-
-    if (_selectedStockAdjustment != null) {
-      return _buildInlineDocumentScaffold(
-        title: 'Detalle de ajuste',
-        subtitle: _selectedStockAdjustment!.referenceDisplay,
-        child: _buildStockAdjustmentInlineView(_selectedStockAdjustment!),
-      );
-    }
-
-    if (_selectedPurchaseInvoice != null) {
-      return _buildInlineDocumentScaffold(
-        title: 'Detalle de compra',
-        subtitle: _selectedLinkedMovement?.productName,
-        child: _buildPurchaseInvoiceInlineView(_selectedPurchaseInvoice!),
-      );
-    }
-
-    if (movements.isEmpty) {
+    if (movements.isEmpty && _selectedLinkedMovement == null) {
+      final isRecentMode = context.read<StockMovementsService>().isRecentMode;
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -1155,9 +1363,11 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
               Text(
                 _hasActiveMovementFilters
                     ? 'No hay movimientos con los filtros actuales'
-                    : 'No hay movimientos para este producto',
+                    : isRecentMode
+                        ? 'No hay movimientos en este período'
+                        : 'No hay movimientos para este producto',
                 style: TextStyle(
-                  color: Colors.grey[700],
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1167,8 +1377,11 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
               Text(
                 _hasActiveMovementFilters
                     ? 'Prueba quitando el tipo o el rango de fechas para ver más resultados.'
-                    : 'Este producto todavía no registra cambios de stock.',
-                style: TextStyle(color: Colors.grey[600]),
+                    : isRecentMode
+                        ? 'No se registraron cambios de stock dentro del período cargado.'
+                        : 'Este producto todavía no registra cambios de stock.',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
                 textAlign: TextAlign.center,
               ),
               if (_hasActiveMovementFilters) ...[
@@ -1185,1455 +1398,95 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       );
     }
 
+    // One ledger for every width. The old split rendered a horizontally
+    // panning table on desktop and a wall of cards on compact — two different
+    // readings of the same statement, and neither let a column be scanned
+    // vertically, which is the only reason to put figures in a column.
+    final service = context.read<StockMovementsService>();
+    final ledger = StockLedger(
+      movements: movements,
+      chronological: service.isChronological,
+      sortKey: service.sortKey,
+      ascending: service.ascending,
+      storeTimezone: service.storeTimezone,
+      showProduct: service.isRecentMode,
+      selectedId: _selectedLinkedMovement?.id,
+      scrollController: _ledgerScrollController,
+      onSort: (key) {
+        final ascending = service.sortKey == key ? !service.ascending : false;
+        unawaited(service.applySort(key, ascending: ascending));
+      },
+      onOpen: _navigateToReference,
+    );
+
+    final selected = _selectedLinkedMovement;
+    if (selected == null) return ledger;
+
+    final inspector = MovementInspector(
+      key: ValueKey('movement-inspector-${selected.id}'),
+      movement: selected,
+      storeTimezone: service.storeTimezone,
+      salesInvoice: _selectedSalesInvoice,
+      purchaseInvoice: _selectedPurchaseInvoice,
+      adjustment: _selectedStockAdjustment,
+      loadingDocument: _isLoadingLinkedDocument,
+      documentError: _linkedDocumentError,
+      onRetryDocument: _loadsInlineDocument(selected)
+          ? () => _navigateToReference(selected)
+          : null,
+      operationTrace: _selectedOperationTrace,
+      loadingOperationTrace: _isLoadingOperationTrace,
+      operationTraceError: _operationTraceError,
+      onRetryOperationTrace: () {
+        setState(() {
+          _selectedOperationTrace = null;
+          _operationTraceError = null;
+          _isLoadingOperationTrace = selected.operationId != null;
+        });
+        unawaited(_loadOperationTrace(selected));
+      },
+      onOpenDocument:
+          _canOpenSelectedDocument(selected) ? _openLinkedDocumentRoute : null,
+      onClose: _closeInspector,
+    );
+
+    // With room, the inspector participates in layout beside the ledger:
+    // rows stay clickable and inspecting a run of them costs one click each.
+    // Without room it takes the pane, and closing restores the exact ledger
+    // because the ledger never unmounted its state.
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = !ResponsiveViewport.usesCompactShell(context);
-
-        if (isWide) {
-          final tableWidth = _totalTableWidth > constraints.maxWidth
-              ? _totalTableWidth
-              : constraints.maxWidth;
-
-          return Scrollbar(
-            controller: _horizontalScrollController,
-            trackVisibility: true,
-            thumbVisibility: true,
-            child: SingleChildScrollView(
-              controller: _horizontalScrollController,
-              scrollDirection: Axis.horizontal,
-              child: SizedBox(
-                width: tableWidth,
-                child: Column(
-                  children: [
-                    _buildMovementTableHeader(),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: movements.length,
-                        itemBuilder: (context, index) {
-                          return _buildMovementRow(movements[index]);
-                        },
-                      ),
-                    ),
-                  ],
-                ),
+        if (constraints.maxWidth >= 1080) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: ledger),
+              Container(
+                width: 1,
+                color: Theme.of(context).colorScheme.outlineVariant,
               ),
-            ),
+              SizedBox(width: 380, child: inspector),
+            ],
           );
         }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(8),
-          itemCount: movements.length,
-          itemBuilder: (context, index) {
-            return _buildMovementCard(movements[index]);
-          },
-        );
+        return inspector;
       },
     );
   }
 
-  Widget _buildInlineDocumentScaffold({
-    String? title,
-    String? subtitle,
-    required Widget child,
-  }) {
-    final isCompact = ResponsiveViewport.usesCompactShell(context);
-    final backButton = OutlinedButton.icon(
-      onPressed: _closeLinkedDocument,
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(0, 48),
-      ),
-      icon: const Icon(Icons.arrow_back, size: 18),
-      label: const Text('Volver a movimientos'),
-    );
-    final hasHeading = (title != null && title.isNotEmpty) ||
-        (subtitle != null && subtitle.isNotEmpty);
-    final heading = hasHeading
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (title != null && title.isNotEmpty)
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              if (subtitle != null && subtitle.isNotEmpty)
-                Text(
-                  subtitle,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-            ],
-          )
-        : null;
-
-    return Column(
-      children: [
-        Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: isCompact ? 12 : 16,
-            vertical: isCompact ? 8 : 12,
-          ),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-          ),
-          child: isCompact
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    backButton,
-                    if (heading != null) ...[
-                      const SizedBox(height: 8),
-                      heading,
-                    ],
-                  ],
-                )
-              : Row(
-                  children: [
-                    backButton,
-                    if (heading != null) ...[
-                      const SizedBox(width: 12),
-                      Expanded(child: heading),
-                    ],
-                  ],
-                ),
-        ),
-        if (_selectedLinkedMovement != null)
-          _buildMovementAuditPanel(_selectedLinkedMovement!),
-        Expanded(child: child),
-      ],
-    );
-  }
-
-  Widget _buildMovementAuditPanel(StockMovement movement) {
-    final theme = Theme.of(context);
-    final warning = movement.hasIntegrityWarning;
-    final statusColor = warning ? Colors.orange[800]! : Colors.green[700]!;
-    final effectiveDate =
-        DateFormat('dd/MM/yyyy HH:mm').format(movement.transactionDate);
-    final recordedDate =
-        DateFormat('dd/MM/yyyy HH:mm').format(movement.createdAt);
-    final ledgerDelta = movement.reconciledQuantity;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: statusColor.withValues(alpha: 0.06),
-        border: Border(
-          bottom: BorderSide(color: statusColor.withValues(alpha: 0.25)),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                warning ? Icons.warning_amber_rounded : Icons.verified_outlined,
-                size: 18,
-                color: statusColor,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                movement.integrityLabel,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: statusColor,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${movement.stockBefore} ${ledgerDelta >= 0 ? '+' : '-'} ${ledgerDelta.abs()} = ${movement.stockAfter}',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            movement.integrityExplanation,
-            style: theme.textTheme.bodySmall,
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 16,
-            runSpacing: 4,
-            children: [
-              Text('Fecha efectiva: $effectiveDate',
-                  style: theme.textTheme.labelSmall),
-              Text('Registrado: $recordedDate',
-                  style: theme.textTheme.labelSmall),
-              if (movement.hasRawActualDifference)
-                Text(
-                  'Huella original: ${movement.rawQuantity >= 0 ? '+' : ''}${movement.rawQuantity}; cambio real: ${movement.actualStockDelta >= 0 ? '+' : ''}${movement.actualStockDelta}',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: statusColor,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              if (movement.isSummaryExcluded)
-                Text(
-                  'Excluido de totales para evitar doble conteo',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: statusColor,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              if (movement.hasEvidenceBalanceDifference)
-                Text(
-                  'Evidencia fuente: ${movement.evidenceStockBefore} → ${movement.evidenceStockAfter}',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: statusColor,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          _buildTriggerTrace(movement, theme, statusColor),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTriggerTrace(
-    StockMovement movement,
-    ThemeData theme,
-    Color statusColor,
-  ) {
-    if (movement.operationId == null) {
-      return Text(
-        'Disparador: no registrado históricamente. Este movimiento es anterior al sistema de trazas.',
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: Colors.orange[800],
-          fontWeight: FontWeight.w700,
-        ),
-      );
-    }
-
-    if (_isLoadingOperationTrace) {
-      return Text('Cargando acción disparadora…',
-          style: theme.textTheme.labelSmall);
-    }
-
-    final trace = _selectedOperationTrace;
-    if (trace == null) {
-      return Text(
-        'Traza ${movement.operationId}: no se pudo cargar el detalle.',
-        style: theme.textTheme.labelSmall?.copyWith(color: statusColor),
-      );
-    }
-
-    final parentAction = trace['parent_action']?.toString();
-    if (parentAction == 'void' || movement.triggerAction == 'void') {
-      final parentOperationId = trace['parent_operation_id']?.toString() ??
-          movement.triggerOperationId;
-      final actor =
-          trace['parent_actor_id']?.toString() ?? movement.triggerActorId;
-      final parentContext = trace['parent_context'];
-      final reason = parentContext is Map
-          ? parentContext['reason']?.toString()
-          : movement.triggerReason;
-      final reasonText = reason == null || reason.trim().isEmpty
-          ? ''
-          : ' • motivo: ${reason.trim()}';
-      final actorText =
-          actor == null || actor.isEmpty ? '' : ' • usuario registrado: $actor';
-      final commandText = parentOperationId == null || parentOperationId.isEmpty
-          ? ''
-          : ' • operación de descarte $parentOperationId';
-
-      return Text(
-        'Disparador probado: Descartar factura • ${trace['old_status'] ?? '∅'} → ${trace['new_status'] ?? '∅'}$reasonText$actorText$commandText • movimiento ${movement.operationId}',
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: theme.colorScheme.primary,
-          fontWeight: FontWeight.w700,
-        ),
-      );
-    }
-
-    final action = trace['action']?.toString() ?? 'acción';
-    final sourceChannel = trace['source_channel']?.toString();
-    final executor = trace['executor']?.toString();
-    final documentType = trace['document_type']?.toString() ?? 'documento';
-    final oldStatus = trace['old_status']?.toString();
-    final newStatus = trace['new_status']?.toString();
-    final actor = trace['actor_id']?.toString();
-    final statusTransition = oldStatus != null || newStatus != null
-        ? ' • ${oldStatus ?? '∅'} → ${newStatus ?? '∅'}'
-        : '';
-    final actorText = actor == null ? '' : ' • actor $actor';
-    final sourceText = sourceChannel == null || sourceChannel.isEmpty
-        ? ''
-        : ' • canal $sourceChannel';
-    final executorText =
-        executor == null || executor.isEmpty ? '' : ' • ejecutor $executor';
-
-    return Text(
-      'Disparador probado: $action de $documentType$sourceText$executorText$statusTransition$actorText • operación ${movement.operationId}',
-      style: theme.textTheme.labelSmall?.copyWith(
-        color: theme.colorScheme.primary,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-  }
-
-  Widget _buildStockAdjustmentInlineView(StockAdjustmentDetail detail) {
-    final theme = Theme.of(context);
-    final metrics = <Widget>[
-      _buildAdjustmentMetricCard(
-        'Cantidad',
-        detail.quantity > 0 ? '+${detail.quantity}' : '${detail.quantity}',
-        valueColor: detail.isIncrease ? Colors.green[700] : Colors.red[700],
-      ),
-      _buildAdjustmentMetricCard(
-        'Stock antes',
-        '${detail.stockBefore}',
-      ),
-      _buildAdjustmentMetricCard(
-        'Stock despues',
-        '${detail.stockAfter}',
-      ),
-      _buildAdjustmentMetricCard(
-        detail.unitCostLabel,
-        ChileanUtils.formatCurrency(detail.displayedUnitCost),
-      ),
-      _buildAdjustmentMetricCard(
-        detail.inventoryValueLabel,
-        ChileanUtils.formatCurrency(detail.displayedInventoryValue),
-      ),
-    ];
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      detail.productName,
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    if ((detail.productSku ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        detail.productSku!,
-                        style: TextStyle(color: Colors.grey[600]),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: detail.isIncrease
-                      ? Colors.green.withValues(alpha: 0.12)
-                      : Colors.red.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  detail.adjustmentTypeLabel,
-                  style: TextStyle(
-                    color:
-                        detail.isIncrease ? Colors.green[700] : Colors.red[700],
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[200]!),
-            ),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _buildAdjustmentMetaItem('Referencia', detail.referenceDisplay),
-                _buildAdjustmentMetaItem(
-                  'Fecha efectiva',
-                  DateFormat('dd/MM/yyyy HH:mm').format(detail.adjustmentDate),
-                ),
-                _buildAdjustmentMetaItem(
-                    'Registrado por', detail.createdByDisplay),
-                if (detail.hasAdjustmentOrigin)
-                  _buildAdjustmentMetaItem(
-                    'Origen',
-                    detail.adjustmentOriginDisplay!,
-                  ),
-                if ((detail.journalEntryNumber ?? '').isNotEmpty)
-                  _buildAdjustmentMetaItem(
-                    'Asiento',
-                    detail.journalEntryNumber!,
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: metrics,
-          ),
-          const SizedBox(height: 20),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest
-                  .withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Motivo registrado',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(detail.reasonDisplay),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[200]!),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Impacto contable',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if ((detail.journalEntryNumber ?? '').isEmpty)
-                  Text(detail.accountingImpactMessage)
-                else ...[
-                  _buildAdjustmentMetaItem(
-                    'Descripción',
-                    detail.journalEntryDescription ?? '-',
-                  ),
-                  const SizedBox(height: 10),
-                  _buildAdjustmentMetaItem(
-                    'Cuenta contraparte',
-                    [
-                      if ((detail.counterpartAccountCode ?? '').isNotEmpty)
-                        detail.counterpartAccountCode,
-                      if ((detail.counterpartAccountName ?? '').isNotEmpty)
-                        detail.counterpartAccountName,
-                    ].whereType<String>().join(' - '),
-                  ),
-                  const SizedBox(height: 10),
-                  _buildAdjustmentMetaItem(
-                    detail.isIncrease
-                        ? 'Crédito contraparte'
-                        : 'Débito contraparte',
-                    ChileanUtils.formatCurrency(detail.counterpartAmount),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAdjustmentMetricCard(
-    String label,
-    String value, {
-    Color? valueColor,
-  }) {
-    return Container(
-      width: 180,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: valueColor,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAdjustmentMetaItem(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSalesInvoiceInlineView(Invoice invoice) {
-    final payments =
-        context.read<SalesService>().getPaymentsForInvoice(invoice.id ?? '');
-    final inventoryService = context.watch<InventoryService>();
-
-    final statusColor = _salesStatusColor(invoice.status);
-    final statusText = _salesStatusLabel(invoice.status);
-
-    // Group Items by Bike
-    final Map<String, List<InvoiceItem>> groupedItems = {};
-    for (final item in invoice.items) {
-      final key =
-          item.bikeName?.isNotEmpty == true ? item.bikeName! : 'General';
-      groupedItems.putIfAbsent(key, () => []).add(item);
-    }
-    final sortedKeys = groupedItems.keys.toList()
-      ..sort((a, b) {
-        if (a == 'General' && b != 'General') return -1;
-        if (b == 'General' && a != 'General') return 1;
-        return a.compareTo(b);
-      });
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // HEADER ROW
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      invoice.invoiceNumber.isNotEmpty
-                          ? 'Factura ${invoice.invoiceNumber}'
-                          : 'Factura',
-                      style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      invoice.customerName ?? 'Cliente Asociado',
-                      style: TextStyle(fontSize: 16, color: Colors.grey[700]),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                        invoice.status == InvoiceStatus.paid
-                            ? Icons.check_circle
-                            : Icons.info_outline,
-                        size: 16,
-                        color: statusColor),
-                    const SizedBox(width: 6),
-                    Text(
-                      statusText.toUpperCase(),
-                      style: TextStyle(
-                          color: statusColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          letterSpacing: 0.5),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 32),
-
-          // DATES AND SOURCE
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[200]!),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.02),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4)),
-              ],
-            ),
-            child: Row(
-              children: [
-                _buildInfoColumn(
-                    'Fecha de emisión',
-                    ChileanUtils.formatDate(invoice.date),
-                    Icons.calendar_today),
-                const SizedBox(width: 32),
-                if (invoice.dueDate != null) ...[
-                  _buildInfoColumn(
-                      'Vencimiento',
-                      ChileanUtils.formatDate(invoice.dueDate!),
-                      Icons.schedule),
-                  const SizedBox(width: 32),
-                ],
-                _buildInfoColumn(
-                    'Origen', invoice.source ?? 'sale', Icons.storefront),
-                if (invoice.reference != null &&
-                    invoice.reference!.isNotEmpty) ...[
-                  const SizedBox(width: 32),
-                  _buildInfoColumn(
-                      'Referencia', invoice.reference!, Icons.link),
-                ],
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 32),
-          const Text('Bicicletas y Productos',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 16),
-
-          // ITEMS GROUPED BY BIKE
-          if (invoice.items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                  child: Text('Esta factura no tiene ítems asociados.',
-                      style: TextStyle(fontStyle: FontStyle.italic))),
-            )
-          else
-            ...sortedKeys.map((sectionKey) {
-              final items = groupedItems[sectionKey]!;
-              final subtotal =
-                  items.fold<double>(0, (sum, i) => sum + i.lineTotal);
-              final isGeneral = sectionKey == 'General';
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey[200]!),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.02),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2)),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Section Header
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[50],
-                        borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(12)),
-                        border: Border(
-                            bottom: BorderSide(color: Colors.grey[200]!)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                              isGeneral
-                                  ? Icons.inventory_2_outlined
-                                  : Icons.pedal_bike,
-                              size: 20,
-                              color: Colors.blue[700]),
-                          const SizedBox(width: 12),
-                          Text(
-                            isGeneral ? 'Artículos Generales' : sectionKey,
-                            style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.grey[800]),
-                          ),
-                          const Spacer(),
-                          Text(
-                            ChileanUtils.formatCurrency(subtotal),
-                            style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.grey[800]),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Items List
-                    ...items.map((item) {
-                      final product = item.productId != null
-                          ? inventoryService.products
-                              .cast<Product?>()
-                              .firstWhere((p) => p?.id == item.productId,
-                                  orElse: () => null)
-                          : null;
-                      final imageUrl = product?.imageUrls.isNotEmpty == true
-                          ? product!.imageUrls.first
-                          : (product?.imageUrl);
-                      final isLast = items.last == item;
-
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 16),
-                        decoration: BoxDecoration(
-                          border: isLast
-                              ? null
-                              : Border(
-                                  bottom: BorderSide(color: Colors.grey[100]!)),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Thumbnail
-                            Container(
-                              width: 56,
-                              height: 56,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[50],
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.grey[200]!),
-                                image: imageUrl != null && imageUrl.isNotEmpty
-                                    ? DecorationImage(
-                                        image: NetworkImage(imageUrl),
-                                        fit: BoxFit.cover)
-                                    : null,
-                              ),
-                              child: imageUrl == null || imageUrl.isEmpty
-                                  ? Icon(
-                                      item.isService
-                                          ? Icons.build_outlined
-                                          : Icons.inventory_2_outlined,
-                                      color: Colors.grey[400])
-                                  : null,
-                            ),
-                            const SizedBox(width: 16),
-                            // Item info
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item.productName ??
-                                        item.productSku ??
-                                        'Ítem sin nombre',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 15),
-                                  ),
-                                  if (item.productSku != null &&
-                                      item.productSku!.isNotEmpty) ...[
-                                    const SizedBox(height: 4),
-                                    Text('SKU: ${item.productSku}',
-                                        style: TextStyle(
-                                            color: Colors.grey[500],
-                                            fontSize: 12)),
-                                  ],
-                                  if (item.description != null &&
-                                      item.description!.isNotEmpty) ...[
-                                    const SizedBox(height: 4),
-                                    Text(item.description!,
-                                        style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 13,
-                                            fontStyle: FontStyle.italic)),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            // Price
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  ChileanUtils.formatCurrency(item.lineTotal),
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 15),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${_formatQuantity(item.quantity)} x ${ChileanUtils.formatCurrency(item.unitPrice)}',
-                                  style: TextStyle(
-                                      color: Colors.grey[600], fontSize: 13),
-                                ),
-                                if (item.discount > 0) ...[
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '-${ChileanUtils.formatCurrency(item.discount)}',
-                                    style: const TextStyle(
-                                        color: Colors.red,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              );
-            }),
-
-          // TOTALS
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Payments (Left side)
-              Expanded(
-                flex: 3,
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey[200]!),
-                    boxShadow: [
-                      BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.02),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4))
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Restumen de Pagos',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 16)),
-                      const SizedBox(height: 16),
-                      if (payments.isEmpty)
-                        Text('No se han registrado pagos.',
-                            style: TextStyle(
-                                color: Colors.grey[600],
-                                fontStyle: FontStyle.italic))
-                      else
-                        ...payments.map((p) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.payments_outlined,
-                                      size: 16, color: Colors.green[600]),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                      child: Text(
-                                          ChileanUtils.formatDate(p.date),
-                                          style: TextStyle(
-                                              color: Colors.grey[700]))),
-                                  Text(ChileanUtils.formatCurrency(p.amount),
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                            )),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 24),
-              // Summary Calculation (Right side)
-              Expanded(
-                flex: 2,
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey[200]!),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Subtotal',
-                              style: TextStyle(color: Colors.grey[600])),
-                          Text(ChileanUtils.formatCurrency(invoice.subtotal),
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('IVA (19%)',
-                              style: TextStyle(color: Colors.grey[600])),
-                          Text(ChileanUtils.formatCurrency(invoice.ivaAmount),
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Divider(height: 1),
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Total',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w800, fontSize: 18)),
-                          Text(ChileanUtils.formatCurrency(invoice.total),
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 18,
-                                  color: Colors.blue)),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Pagado',
-                              style: TextStyle(
-                                  color: Colors.green[700],
-                                  fontWeight: FontWeight.w600)),
-                          Text(ChileanUtils.formatCurrency(invoice.paidAmount),
-                              style: TextStyle(
-                                  color: Colors.green[700],
-                                  fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Saldo Pendiente',
-                              style: TextStyle(
-                                  color: invoice.balance > 0
-                                      ? Colors.orange[800]
-                                      : Colors.grey[600],
-                                  fontWeight: FontWeight.w600)),
-                          Text(ChileanUtils.formatCurrency(invoice.balance),
-                              style: TextStyle(
-                                  color: invoice.balance > 0
-                                      ? Colors.orange[800]
-                                      : Colors.grey[600],
-                                  fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoColumn(String label, String value, IconData icon) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-              color: Colors.blue.withValues(alpha: 0.05),
-              shape: BoxShape.circle),
-          child: Icon(icon, size: 16, color: Colors.blue[700]),
-        ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.2)),
-            const SizedBox(height: 2),
-            Text(value,
-                style:
-                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMetricCol(String label, String value,
-      [Color? valueColor,
-      double fontSize = 16,
-      FontWeight fontWeight = FontWeight.bold]) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[500],
-              letterSpacing: 1),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-              fontSize: fontSize,
-              fontWeight: fontWeight,
-              color: valueColor ?? Colors.black87),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPurchaseInvoiceInlineView(PurchaseInvoice invoice) {
-    final inventoryService = context.watch<InventoryService>();
-    final totalUnits = invoice.items.fold<double>(
-      0,
-      (sum, item) => sum + item.quantity,
-    );
-
-    final statusColor = _purchaseStatusColor(invoice.status);
-    final statusText = invoice.status.displayName;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // HEADER ROW
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      invoice.invoiceNumber.isNotEmpty
-                          ? 'Factura de Compra ${invoice.invoiceNumber}'
-                          : 'Factura de Compra',
-                      style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      invoice.supplierName ?? 'Proveedor Asociado',
-                      style: TextStyle(fontSize: 16, color: Colors.grey[700]),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                        invoice.status == PurchaseInvoiceStatus.paid
-                            ? Icons.check_circle
-                            : Icons.info_outline,
-                        size: 16,
-                        color: statusColor),
-                    const SizedBox(width: 6),
-                    Text(
-                      statusText.toUpperCase(),
-                      style: TextStyle(
-                          color: statusColor,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 32),
-
-          // SUMMARY METRICS ROW
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey[200]!),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                )
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildMetricCol(
-                      'FECHA', DateFormat('dd/MM/yyyy').format(invoice.date)),
-                ),
-                Expanded(
-                  child: _buildMetricCol(
-                    'ÍTEMS',
-                    '${invoice.items.length} prod. / ${_formatQuantity(totalUnits)} uds.',
-                  ),
-                ),
-                Expanded(
-                  child: _buildMetricCol(
-                      'IMPUESTO',
-                      invoice.taxTreatment == TaxTreatment.taxIncluded
-                          ? 'IVA Incluido'
-                          : 'Sin IVA'),
-                ),
-                Expanded(
-                  child: _buildMetricCol(
-                    'TOTAL',
-                    ChileanUtils.formatCurrency(invoice.total),
-                    Colors.black87,
-                    20,
-                    FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 40),
-
-          // ITEMS LIST
-          Text(
-            'Productos ingresados',
-            style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[800],
-                letterSpacing: -0.5),
-          ),
-          const SizedBox(height: 16),
-
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[300]!),
-            ),
-            child: Column(
-              children: [
-                // Table Header
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(11)),
-                    border:
-                        Border(bottom: BorderSide(color: Colors.grey[300]!)),
-                  ),
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 48 + 16), // space for image
-                      Expanded(
-                        flex: 3,
-                        child: Text('PRODUCTO',
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey[600],
-                                letterSpacing: 0.5)),
-                      ),
-                      Expanded(
-                        flex: 1,
-                        child: Text('CANT.',
-                            textAlign: TextAlign.end,
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey[600],
-                                letterSpacing: 0.5)),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text('COSTO U.',
-                            textAlign: TextAlign.end,
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey[600],
-                                letterSpacing: 0.5)),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text('TOTAL',
-                            textAlign: TextAlign.end,
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey[600],
-                                letterSpacing: 0.5)),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Items List
-                ...invoice.items.map((item) {
-                  final productList = inventoryService.products
-                      .where((p) => p.id == item.productId)
-                      .toList();
-                  final product =
-                      productList.isNotEmpty ? productList.first : null;
-
-                  final imageUrl = product?.imageUrls.isNotEmpty == true
-                      ? product!.imageUrls.first
-                      : (product?.imageUrl);
-                  final isLast = invoice.items.last == item;
-
-                  final subtotal = item.quantity * item.unitCost;
-
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 16),
-                    decoration: BoxDecoration(
-                      border: !isLast
-                          ? Border(bottom: BorderSide(color: Colors.grey[200]!))
-                          : null,
-                    ),
-                    child: Row(
-                      children: [
-                        // Image Thumbnail
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[50],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey[200]!),
-                            image: imageUrl != null && imageUrl.isNotEmpty
-                                ? DecorationImage(
-                                    image: NetworkImage(imageUrl),
-                                    fit: BoxFit.cover)
-                                : null,
-                          ),
-                          child: imageUrl == null || imageUrl.isEmpty
-                              ? Icon(
-                                  Icons.inventory_2_outlined,
-                                  color: Colors.grey[400],
-                                  size: 20,
-                                )
-                              : null,
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          flex: 3,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                item.productName ?? 'Producto sin nombre',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600, fontSize: 14),
-                              ),
-                              if (item.productSku != null &&
-                                  item.productSku!.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Text(
-                                    item.productSku!,
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[500],
-                                        fontFamily: 'monospace'),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          flex: 1,
-                          child: Text(
-                            item.quantity.toStringAsFixed(0),
-                            textAlign: TextAlign.end,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            ChileanUtils.formatCurrency(item.unitCost),
-                            textAlign: TextAlign.end,
-                            style: TextStyle(
-                                color: Colors.grey[700], fontSize: 13),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            ChileanUtils.formatCurrency(subtotal),
-                            textAlign: TextAlign.end,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 15,
-                                color: Colors.black87),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              ],
-            ),
-          ),
-          const SizedBox(height: 32),
-        ],
-      ), // Ensure child Column is closed here
-    ); // Ensure SingleChildScrollView is closed here
-  }
-
-  String _formatQuantity(double value) {
-    final rounded = value.roundToDouble();
-    if ((value - rounded).abs() < 0.0001) {
-      return rounded.toInt().toString();
-    }
-    return value.toStringAsFixed(2);
-  }
-
-  String _salesStatusLabel(InvoiceStatus status) {
-    switch (status) {
-      case InvoiceStatus.draft:
-        return 'Borrador';
-      case InvoiceStatus.sent:
-        return 'Enviada';
-      case InvoiceStatus.confirmed:
-        return 'Confirmada';
-      case InvoiceStatus.paid:
-        return 'Pagada';
-      case InvoiceStatus.overdue:
-        return 'Vencida';
-      case InvoiceStatus.cancelled:
-        return 'Anulada';
-    }
-  }
-
-  Color _salesStatusColor(InvoiceStatus status) {
-    switch (status) {
-      case InvoiceStatus.draft:
-        return Colors.grey;
-      case InvoiceStatus.sent:
-        return Colors.blue;
-      case InvoiceStatus.confirmed:
-        return Colors.purple;
-      case InvoiceStatus.paid:
-        return Colors.green;
-      case InvoiceStatus.overdue:
-        return Colors.orange;
-      case InvoiceStatus.cancelled:
-        return Colors.red;
-    }
-  }
-
-  Color _purchaseStatusColor(PurchaseInvoiceStatus status) {
-    switch (status) {
-      case PurchaseInvoiceStatus.draft:
-        return Colors.grey;
-      case PurchaseInvoiceStatus.sent:
-        return Colors.blue;
-      case PurchaseInvoiceStatus.confirmed:
-        return Colors.purple;
-      case PurchaseInvoiceStatus.received:
-        return Colors.teal;
-      case PurchaseInvoiceStatus.paid:
-        return Colors.green;
-      case PurchaseInvoiceStatus.cancelled:
-        return Colors.red;
-    }
+  /// Mirrors the service's scope into the page's controls.
+  ///
+  /// The service is the single owner: it is what the query uses, so it is what
+  /// the bar must display. Keeping a second copy here is how the bar came to
+  /// claim a period the query was not using.
+  void _syncScopeFromService(StockMovementsService service) {
+    _movementTypeFilter = service.typeFilter ?? 'all';
+    _startDate = service.startDate;
+    _endDate = service.endDate;
   }
 
   Widget _buildMovementFilters(StockMovementsService service) {
+    _syncScopeFromService(service);
     if (ResponsiveViewport.usesCompactShell(context)) {
       final hasDateRange = _startDate != null && _endDate != null;
       final compactDateLabel = hasDateRange
@@ -2644,8 +1497,10 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       return Container(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         decoration: BoxDecoration(
-          color: Colors.grey[50],
-          border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
+          border: Border(
+              bottom: BorderSide(
+                  color: Theme.of(context).colorScheme.outlineVariant)),
         ),
         child: Row(
           children: [
@@ -2676,6 +1531,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                   ],
                   onChanged: (value) {
                     setState(() => _movementTypeFilter = value ?? 'all');
+                    unawaited(_pushFilters());
                   },
                 ),
               ),
@@ -2693,9 +1549,14 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 48),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    foregroundColor: hasDateRange ? Colors.blue[800] : null,
+                    foregroundColor: hasDateRange
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
                     backgroundColor: hasDateRange
-                        ? Colors.blue.withValues(alpha: 0.07)
+                        ? Theme.of(context)
+                            .colorScheme
+                            .secondaryContainer
+                            .withValues(alpha: 0.55)
                         : null,
                   ),
                   child: Text(
@@ -2723,69 +1584,75 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       );
     }
 
+    // A scope bar, not a form. The type selector used to be a full-width
+    // outlined field with a floating label, so a one-word value claimed most of
+    // the row while the date range — the filter that actually changes the
+    // answer — was pushed to the edge. Both are now compact peers sized to
+    // their content.
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final hasRange = _startDate != null && _endDate != null;
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+        color: colors.surface,
+        border: Border(bottom: BorderSide(color: colors.outlineVariant)),
       ),
       child: Row(
         children: [
-          // Type filter
-          Expanded(
-            child: DropdownButtonFormField<String>(
-              initialValue: _movementTypeFilter,
-              decoration: const InputDecoration(
-                labelText: 'Tipo de movimiento',
+          _MovementScopeControl(
+            icon: Icons.filter_list,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _movementTypeFilter,
                 isDense: true,
-                border: OutlineInputBorder(),
+                borderRadius: BorderRadius.circular(10),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurface,
+                  fontWeight: FontWeight.w600,
+                ),
+                items: const [
+                  DropdownMenuItem(
+                      value: 'all', child: Text('Todo movimiento')),
+                  DropdownMenuItem(value: 'purchase', child: Text('Compras')),
+                  DropdownMenuItem(value: 'sale', child: Text('Ventas')),
+                  DropdownMenuItem(value: 'adjustment', child: Text('Ajustes')),
+                  DropdownMenuItem(
+                      value: 'transfer', child: Text('Transferencias')),
+                ],
+                onChanged: (value) {
+                  setState(() => _movementTypeFilter = value ?? 'all');
+                  unawaited(_pushFilters());
+                },
               ),
-              items: const [
-                DropdownMenuItem(value: 'all', child: Text('Todos')),
-                DropdownMenuItem(value: 'purchase', child: Text('Compras')),
-                DropdownMenuItem(value: 'sale', child: Text('Ventas')),
-                DropdownMenuItem(value: 'adjustment', child: Text('Ajustes')),
-                DropdownMenuItem(
-                    value: 'transfer', child: Text('Transferencias')),
-              ],
-              onChanged: (value) {
-                setState(() => _movementTypeFilter = value ?? 'all');
-              },
             ),
           ),
-          const SizedBox(width: 16),
-          // Date range picker
-          ElevatedButton.icon(
-            onPressed: _selectDateRange,
-            icon: const Icon(Icons.date_range, size: 18),
-            label: Text(
-              _startDate != null && _endDate != null
-                  ? '${DateFormat('dd/MM/yy').format(_startDate!)} - ${DateFormat('dd/MM/yy').format(_endDate!)}'
-                  : 'Rango de fechas',
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _startDate != null && _endDate != null
-                  ? Colors.blue.withValues(alpha: 0.1)
-                  : Colors.white,
-              foregroundColor: _startDate != null && _endDate != null
-                  ? Colors.blue
-                  : Colors.black87,
+          const SizedBox(width: 10),
+          _MovementScopeControl(
+            icon: Icons.event_outlined,
+            selected: hasRange,
+            onTap: _selectDateRange,
+            onClear: hasRange ? _clearDateRange : null,
+            child: Text(
+              hasRange
+                  ? '${DateFormat('dd/MM/yy').format(_startDate!)} – '
+                      '${DateFormat('dd/MM/yy').format(_endDate!)}'
+                  : 'Todo el período',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color:
+                    hasRange ? colors.onSecondaryContainer : colors.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-          if (_startDate != null || _endDate != null)
-            IconButton(
-              onPressed: _clearDateRange,
-              icon: const Icon(Icons.clear, size: 18),
-              tooltip: 'Limpiar filtro de fecha',
-            ),
-          if (_hasActiveMovementFilters) ...[
-            const SizedBox(width: 8),
-            TextButton.icon(
+          const Spacer(),
+          if (_hasActiveMovementFilters)
+            TextButton(
               onPressed: _clearAllMovementFilters,
-              icon: const Icon(Icons.filter_alt_off, size: 18),
-              label: const Text('Quitar filtros'),
+              style: TextButton.styleFrom(minimumSize: const Size(48, 40)),
+              child: const Text('Quitar filtros'),
             ),
-          ],
         ],
       ),
     );
@@ -2793,35 +1660,86 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
 
   Widget _buildMovementSummary(List<StockMovement> movements) {
     final summary = _buildFilteredSummary(movements);
+    final truncated = context.read<StockMovementsService>().isWindowTruncated;
 
+    // A total computed over the newest rows describes the window, not the
+    // business. Say so rather than presenting it as the period's figure.
+    if (truncated) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildTruncatedSummaryNotice(),
+          _buildMovementSummaryMetrics(summary),
+        ],
+      );
+    }
+
+    return _buildMovementSummaryMetrics(summary);
+  }
+
+  Widget _buildTruncatedSummaryNotice() {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      color: theme.colorScheme.tertiaryContainer,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline,
+            size: 17,
+            color: theme.colorScheme.onTertiaryContainer,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              'Totales sobre una ventana de '
+              '${StockMovementsService.recentWindow} registros según el orden '
+              'actual, no sobre todo el período. Elige un rango de fechas para '
+              'un total exacto.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onTertiaryContainer,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMovementSummaryMetrics(Map<String, int> summary) {
     if (ResponsiveViewport.usesCompactShell(context)) {
       final netChange = summary['net_change'] ?? 0;
       final metrics = <({String label, String value, Color color})>[
         (
           label: _hasActiveMovementFilters ? 'Resultados' : 'Movimientos',
           value: summary['transaction_count'].toString(),
-          color: Colors.blue[800]!,
+          color: Theme.of(context).colorScheme.primary,
         ),
         (
           label: 'Entradas',
           value: '+${summary['total_increase']}',
-          color: Colors.green[800]!,
+          color: Theme.of(context).colorScheme.primary,
         ),
         (
           label: 'Salidas',
           value: '-${summary['total_decrease']}',
-          color: Colors.red[800]!,
+          color: Theme.of(context).colorScheme.error,
         ),
         (
           label: 'Neto',
           value: netChange >= 0 ? '+$netChange' : '$netChange',
-          color: netChange >= 0 ? Colors.green[800]! : Colors.red[800]!,
+          color: netChange >= 0
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.error,
         ),
         if ((summary['warning_count'] ?? 0) > 0)
           (
             label: 'A revisar',
             value: summary['warning_count'].toString(),
-            color: Colors.orange[800]!,
+            color: Theme.of(context).colorScheme.tertiary,
           ),
       ];
 
@@ -2829,8 +1747,12 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.blue.withValues(alpha: 0.04),
-          border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
+          border: Border(
+            bottom: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+          ),
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -2887,52 +1809,70 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       );
     }
 
+    // Comparable figures share one aligned row separated by hairlines. The
+    // previous strip gave each metric its own coloured icon disc over a tinted
+    // blue band, which is decoration competing with four numbers that are only
+    // useful when read against each other.
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final net = summary['net_change'] ?? 0;
+    final warnings = summary['warning_count'] ?? 0;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       decoration: BoxDecoration(
-        color: Colors.blue.withValues(alpha: 0.05),
-        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+        color: colors.surfaceContainerLow,
+        border: Border(bottom: BorderSide(color: colors.outlineVariant)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _buildSummaryItem(
-            _hasActiveMovementFilters ? 'Resultados' : 'Transacciones',
-            summary['transaction_count'].toString(),
-            Icons.receipt_long,
-            Colors.blue,
+          _MovementFigure(
+            label: _hasActiveMovementFilters ? 'Resultados' : 'Transacciones',
+            value: summary['transaction_count'].toString(),
           ),
-          const SizedBox(width: 24),
-          _buildSummaryItem(
-            'Entradas',
-            '+${summary['total_increase']}',
-            Icons.add_circle_outline,
-            Colors.green,
+          _MovementFigure(
+            label: 'Entradas',
+            value: '+${summary['total_increase']}',
+            divided: true,
           ),
-          const SizedBox(width: 24),
-          _buildSummaryItem(
-            'Salidas',
-            '${summary['total_decrease']}',
-            Icons.remove_circle_outline,
-            Colors.red,
+          _MovementFigure(
+            label: 'Salidas',
+            value: '−${summary['total_decrease']}',
+            divided: true,
           ),
-          const SizedBox(width: 24),
-          _buildSummaryItem(
-            'Cambio neto',
-            (summary['net_change'] ?? 0) >= 0
-                ? '+${summary['net_change']}'
-                : summary['net_change'].toString(),
-            Icons.bar_chart,
-            (summary['net_change'] ?? 0) >= 0 ? Colors.green : Colors.red,
+          _MovementFigure(
+            label: 'Cambio neto',
+            value: net >= 0 ? '+$net' : '$net',
+            tone: net >= 0 ? colors.primary : colors.error,
+            emphasized: true,
+            divided: true,
           ),
-          if ((summary['warning_count'] ?? 0) > 0) ...[
-            const Spacer(),
-            _buildSummaryItem(
-              'Filas a revisar',
-              summary['warning_count'].toString(),
-              Icons.warning_amber_rounded,
-              Colors.orange,
+          const Spacer(),
+          if (warnings > 0)
+            Tooltip(
+              message: 'Movimientos cuya evidencia de origen está incompleta. '
+                  'Casi siempre son anteriores al registro de trazabilidad.',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: colors.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    '$warnings ${warnings == 1 ? 'fila' : 'filas'} con '
+                    'evidencia parcial',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
         ],
       ),
     );
@@ -2972,632 +1912,148 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     };
   }
 
-  Widget _buildSummaryItem(
-      String label, String value, IconData icon, Color color) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: color),
-        const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-            ),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  final ScrollController _horizontalScrollController = ScrollController();
+  final ScrollController _ledgerScrollController = ScrollController();
   final ScrollController _productListScrollController = ScrollController();
 
   @override
   void dispose() {
     _productSearchDebounce?.cancel();
-    _horizontalScrollController.dispose();
+    _ledgerScrollController.dispose();
     _productListScrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  double get _totalTableWidth {
-    final movementsService = context.read<StockMovementsService>();
-    final showProductColumn = movementsService.isRecentMode;
-    // Sum of all visible columns + resize handles (8px each)
-    double width = 0;
-    if (showProductColumn) width += _colProductWidth + 8;
-    width += _colDateWidth + 8;
-    width += _colTypeWidth + 8;
-    width += _colSourceWidth + 8;
-    width += _colRefWidth + 8;
-    width += _colIniWidth + 8;
-    width += _colMovWidth + 8;
-    width += _colFinWidth; // Last one has no handle
-    return width;
-  }
+  // Mobile card layout for smaller screens
+}
 
-  Widget _buildMovementTableHeader() {
-    final showProductColumn = _viewMode == StockMovementsViewMode.recent;
-    final theme = Theme.of(context);
+/// One compact scope control in the movements filter bar.
+///
+/// Both filters are peers sized to their content: a scope bar states what you
+/// are looking at, it is not a form to fill in.
+class _MovementScopeControl extends StatelessWidget {
+  const _MovementScopeControl({
+    required this.icon,
+    required this.child,
+    this.selected = false,
+    this.onTap,
+    this.onClear,
+  });
 
-    TextStyle headerStyle = theme.textTheme.labelSmall!.copyWith(
-      fontWeight: FontWeight.w700,
-      color: theme.colorScheme.onSurfaceVariant,
-      letterSpacing: 0.3,
-    );
+  final IconData icon;
+  final Widget child;
+  final bool selected;
+  final VoidCallback? onTap;
+  final VoidCallback? onClear;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        border: Border(
-          bottom: BorderSide(
-              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.35)),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Product column (only in recent mode)
-          if (showProductColumn) ...[
-            SizedBox(
-              width: _colProductWidth,
-              child: Text('Producto', style: headerStyle),
-            ),
-            _buildResizeHandle((delta) => setState(() => _colProductWidth =
-                (_colProductWidth + delta).clamp(_minColWidth, 400))),
-          ],
-          SizedBox(
-            width: _colDateWidth,
-            child: Text('Registrado', style: headerStyle),
-          ),
-          _buildResizeHandle((delta) => setState(() => _colDateWidth =
-              (_colDateWidth + delta).clamp(_minColWidth, 200))),
-          SizedBox(
-            width: _colTypeWidth,
-            child: Text('Movimiento', style: headerStyle),
-          ),
-          _buildResizeHandle((delta) => setState(() => _colTypeWidth =
-              (_colTypeWidth + delta).clamp(_minColWidth, 150))),
-          SizedBox(
-            width: _colSourceWidth,
-            child: Text('Origen', style: headerStyle),
-          ),
-          _buildResizeHandle((delta) => setState(() => _colSourceWidth =
-              (_colSourceWidth + delta).clamp(_minColWidth, 200))),
-          SizedBox(
-            width: _colRefWidth,
-            child: Text('Referencia', style: headerStyle),
-          ),
-          _buildResizeHandle((delta) => setState(() =>
-              _colRefWidth = (_colRefWidth + delta).clamp(_minColWidth, 200))),
-          SizedBox(
-            width: _colIniWidth,
-            child: Text(
-              'Inicial',
-              style: headerStyle,
-              textAlign: TextAlign.right,
-            ),
-          ),
-          _buildResizeHandle((delta) => setState(
-              () => _colIniWidth = (_colIniWidth + delta).clamp(35, 80))),
-          SizedBox(
-            width: _colMovWidth,
-            child: Text(
-              'Cambio',
-              style: headerStyle,
-              textAlign: TextAlign.right,
-            ),
-          ),
-          _buildResizeHandle((delta) => setState(
-              () => _colMovWidth = (_colMovWidth + delta).clamp(35, 80))),
-          SizedBox(
-            width: _colFinWidth,
-            child: Text(
-              'Final',
-              style: headerStyle,
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildResizeHandle(Function(double) onDrag) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.resizeColumn,
-      child: GestureDetector(
-        onHorizontalDragUpdate: (details) => onDrag(details.delta.dx),
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: selected ? colors.secondaryContainer : colors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(10),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
         child: Container(
-          width: 8,
-          height: 20,
-          color: Colors.transparent, // Transparent hit target
-          // Removed visible line to reduce noise
+          constraints: const BoxConstraints(minHeight: 40),
+          padding: EdgeInsets.fromLTRB(11, 0, onClear == null ? 11 : 4, 0),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: selected ? Colors.transparent : colors.outlineVariant,
+            ),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 17,
+                color: selected
+                    ? colors.onSecondaryContainer
+                    : colors.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              child,
+              if (onClear != null)
+                IconButton(
+                  onPressed: onClear,
+                  icon: const Icon(Icons.close, size: 15),
+                  tooltip: 'Quitar el rango',
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  padding: EdgeInsets.zero,
+                  color: colors.onSecondaryContainer,
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildMovementRow(StockMovement movement) {
-    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
-    final showProductColumn = _viewMode == StockMovementsViewMode.recent;
+/// One figure in the movements summary row.
+///
+/// The hairline on the left is what groups these numbers as comparable. It
+/// replaces a coloured icon disc per metric, which drew the eye to the
+/// decoration rather than to the values being compared.
+class _MovementFigure extends StatelessWidget {
+  const _MovementFigure({
+    required this.label,
+    required this.value,
+    this.tone,
+    this.emphasized = false,
+    this.divided = false,
+  });
+
+  final String label;
+  final String value;
+  final Color? tone;
+  final bool emphasized;
+  final bool divided;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
+    final colors = theme.colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.22)),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Product column (only in recent mode)
-          if (showProductColumn) ...[
-            SizedBox(
-              width: _colProductWidth,
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    margin: const EdgeInsets.only(right: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(4),
-                      image: movement.productImageUrl != null &&
-                              movement.productImageUrl!.isNotEmpty
-                          ? DecorationImage(
-                              image: NetworkImage(movement.productImageUrl!),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
-                    ),
-                    child: movement.productImageUrl == null ||
-                            movement.productImageUrl!.isEmpty
-                        ? Icon(Icons.inventory_2_outlined,
-                            size: 20, color: Colors.grey[400])
-                        : null,
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          movement.productName,
-                          style: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w500),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (movement.productSku != null)
-                          Text(
-                            movement.productSku!,
-                            style: TextStyle(
-                                fontSize: 10, color: Colors.grey[600]),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8), // Matches resize handle
-          ],
-          // Date
-          SizedBox(
-            width: _colDateWidth,
-            child: Text(
-              dateFormat.format(movement.createdAt),
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Type
-          SizedBox(
-            width: _colTypeWidth,
-            child: _buildMovementTypeCell(movement),
-          ),
-          const SizedBox(width: 8),
-          // Source
-          SizedBox(
-            width: _colSourceWidth,
-            child: _buildSourceCell(movement),
-          ),
-          const SizedBox(width: 8),
-          // Reference
-          SizedBox(
-            width: _colRefWidth,
-            child: _buildReferenceCell(movement),
-          ),
-          const SizedBox(width: 8),
-          // Stock Before
-          SizedBox(
-            width: _colIniWidth,
-            child: Text(
-              movement.stockBefore.toString(),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-              textAlign: TextAlign.right,
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Quantity
-          SizedBox(
-            width: _colMovWidth,
-            child: Text(
-              movement.displayQuantity >= 0
-                  ? '+${movement.displayQuantity}'
-                  : movement.displayQuantity.toString(),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color:
-                    movement.isIncrease ? Colors.green[700] : Colors.red[700],
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-              textAlign: TextAlign.right,
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Stock After
-          SizedBox(
-            width: _colFinWidth,
-            child: Text(
-              movement.stockAfter.toString(),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMovementTypeCell(StockMovement movement) {
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          movement.movementTypeDisplay,
-          style: theme.textTheme.bodySmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: theme.colorScheme.onSurface,
-            height: 1.15,
-          ),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 2),
-        Text(
-          movement.category.displayName,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSourceCell(StockMovement movement) {
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          movement.sourceDisplay,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        if (movement.hasAdjustmentOrigin) ...[
-          const SizedBox(height: 2),
-          Text(
-            movement.adjustmentOriginDisplay!,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.w600,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-        if (movement.hasIntegrityWarning) ...[
-          const SizedBox(height: 2),
-          Text(
-            movement.operationId == null &&
-                    movement.source == 'purchase_invoice_reversal'
-                ? 'Disparador histórico no registrado'
-                : movement.isLegacyDuplicateFootprint
-                    ? 'Huella duplicada'
-                    : movement.integrityStatus ==
-                            'legacy_purchase_reversal_collision'
-                        ? 'Cambio real conciliado'
-                        : 'Revisión histórica',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: Colors.orange[800],
-              fontWeight: FontWeight.w700,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildCompactSourceInfo(StockMovement movement) {
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          movement.sourceDisplay,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        if (movement.hasAdjustmentOrigin)
-          Text(
-            movement.adjustmentOriginDisplay!,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.w600,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        if (movement.hasIntegrityWarning)
-          Text(
-            movement.operationId == null &&
-                    movement.source == 'purchase_invoice_reversal'
-                ? 'Disparador histórico no registrado'
-                : movement.isLegacyDuplicateFootprint
-                    ? 'Huella duplicada'
-                    : movement.integrityStatus ==
-                            'legacy_purchase_reversal_collision'
-                        ? 'Cambio real conciliado'
-                        : 'Revisión histórica',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: Colors.orange[800],
-              fontWeight: FontWeight.w700,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-      ],
-    );
-  }
-
-  Widget _buildReferenceCell(StockMovement movement) {
-    final theme = Theme.of(context);
-    final child = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: movement.hasNavigableReference
-              ? theme.colorScheme.primary.withValues(alpha: 0.22)
-              : theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
-        ),
-      ),
-      child: Row(
+      margin: EdgeInsets.only(left: divided ? 20 : 0),
+      padding: EdgeInsets.only(left: divided ? 20 : 0),
+      decoration: divided
+          ? BoxDecoration(
+              border: Border(left: BorderSide(color: colors.outlineVariant)),
+            )
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Text(
-              movement.referenceDisplay,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: movement.hasNavigableReference
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurface,
-                fontWeight: FontWeight.w600,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colors.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          if (movement.hasNavigableReference) ...[
-            const SizedBox(width: 6),
-            Icon(
-              Icons.open_in_new,
-              size: 14,
-              color: theme.colorScheme.primary,
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: (emphasized
+                    ? theme.textTheme.titleMedium
+                    : theme.textTheme.titleSmall)
+                ?.copyWith(
+              color: tone ?? colors.onSurface,
+              fontWeight: FontWeight.w700,
+              height: 1.05,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
-          ],
+          ),
         ],
-      ),
-    );
-
-    if (!movement.hasNavigableReference) {
-      return child;
-    }
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: () => _navigateToReference(movement),
-      child: child,
-    );
-  }
-
-  // Mobile card layout for smaller screens
-  Widget _buildMovementCard(StockMovement movement) {
-    final dateFormat = DateFormat('dd/MM/yy HH:mm');
-    final showProductHeader = _viewMode == StockMovementsViewMode.recent;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Product name + type chip
-            if (showProductHeader)
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      movement.productName,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 14),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _buildTypeChip(movement),
-                ],
-              )
-            else
-              _buildTypeChip(movement),
-            const SizedBox(height: 8),
-            // Date + Source
-            Row(
-              children: [
-                Icon(Icons.access_time, size: 14, color: Colors.grey[600]),
-                const SizedBox(width: 4),
-                Text(
-                  dateFormat.format(movement.createdAt),
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildCompactSourceInfo(movement),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // Stock changes
-            Row(
-              children: [
-                // Reference
-                if (movement.referenceNumber != null ||
-                    movement.hasNavigableReference)
-                  Expanded(
-                    child: _buildCompactReferenceAction(movement),
-                  )
-                else
-                  const Spacer(),
-                const SizedBox(width: 8),
-                // Stock: before -> change -> after
-                Row(
-                  children: [
-                    Text(
-                      '${movement.stockBefore}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      movement.displayQuantity >= 0
-                          ? '+${movement.displayQuantity}'
-                          : '${movement.displayQuantity}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: movement.isIncrease ? Colors.green : Colors.red,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(Icons.arrow_forward,
-                        size: 12, color: Colors.grey[400]),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${movement.stockAfter}',
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCompactReferenceAction(StockMovement movement) {
-    return StockMovementCompactReferenceAction(
-      label: movement.referenceDisplay,
-      onTap: movement.hasNavigableReference
-          ? () => _navigateToReference(movement)
-          : null,
-    );
-  }
-
-  Widget _buildTypeChip(StockMovement movement) {
-    Color color;
-    switch (movement.category) {
-      case StockMovementCategory.purchase:
-        color = Colors.green;
-        break;
-      case StockMovementCategory.sale:
-        color = Colors.blue;
-        break;
-      case StockMovementCategory.adjustment:
-        color = Colors.orange;
-        break;
-      case StockMovementCategory.transfer:
-        color = Colors.purple;
-        break;
-    }
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 148),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Text(
-          movement.movementTypeDisplay,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: color,
-          ),
-        ),
       ),
     );
   }

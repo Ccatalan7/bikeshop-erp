@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../../modules/crm/models/crm_models.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/current_user_profile_service.dart';
+import '../../../shared/services/return_navigation.dart';
 import '../../../shared/services/user_management_navigation.dart';
 import '../../../shared/utils/responsive_viewport.dart';
 import '../../../shared/widgets/branded_loading.dart';
@@ -1221,7 +1222,10 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
           children: [
             // ── Back link ──
             GestureDetector(
-              onTap: () => context.go('/clientes'),
+              onTap: () => ReturnNavigation.close(
+                context,
+                fallbackRoute: '/clientes',
+              ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

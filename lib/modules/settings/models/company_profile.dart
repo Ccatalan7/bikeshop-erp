@@ -55,31 +55,36 @@ class CompanyProfile {
     this.updatedAt,
   });
 
-  factory CompanyProfile.vinabikeDefault({
+  /// Unsaved first-run draft built only from the active tenant's own data.
+  ///
+  /// Opening company settings must never manufacture a real company's legal,
+  /// tax, contact, or payment identity for another tenant. The operator may
+  /// review and complete this neutral draft before the first explicit save.
+  factory CompanyProfile.neutralDraft({
     String? tenantId,
-    String email = 'vinabikechile@gmail.com',
+    String shopName = '',
+    String ownerEmail = '',
   }) {
     return CompanyProfile(
       tenantId: tenantId,
-      name: 'Viñabike',
-      legalName: 'NEWEN SpA',
-      fantasyName: 'Viñabike',
-      taxId: '77.541.999-7',
-      businessActivity:
-          'Venta al por menor de bicicletas y sus repuestos en comercios especializados',
+      name: shopName.trim(),
+      legalName: '',
+      fantasyName: '',
+      taxId: '',
+      businessActivity: '',
       address: '',
       comuna: '',
       city: '',
       region: '',
       postalCode: '',
-      country: 'Chile',
-      phone: '+56 9 9835 7797',
-      whatsappPhone: '+56 9 9835 7797',
-      whatsappApiPhone: '+56 9 4188 4520',
+      country: '',
+      phone: '',
+      whatsappPhone: '',
+      whatsappApiPhone: '',
       supportPhone: '',
-      email: email,
-      billingEmail: email,
-      publicEmail: email,
+      email: ownerEmail.trim(),
+      billingEmail: '',
+      publicEmail: '',
       websiteUrl: '',
       isDefault: true,
     );

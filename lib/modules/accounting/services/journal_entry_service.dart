@@ -15,6 +15,14 @@ class JournalEntryService extends ChangeNotifier {
   int _nextEntryNumber = 1;
   bool _isLoaded = false;
 
+  /// Paginación real del libro. Antes la lista traía un tope fijo de 100 y no
+  /// había forma de ver más: para encontrar un asiento antiguo había que
+  /// adivinar un límite mayor y recargar todo. Ahora se piden los siguientes
+  /// [_pageSize] sin volver a traer lo ya cargado.
+  static const int _pageSize = 100;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+
   JournalEntryService(
     this._databaseService,
     this._chartOfAccountsService, {
@@ -23,6 +31,11 @@ class JournalEntryService extends ChangeNotifier {
             FinancialProjectionRefreshCoordinator.fallback;
 
   List<JournalEntry> get journalEntries => List.unmodifiable(_journalEntries);
+
+  /// Quedan asientos más antiguos por traer.
+  bool get hasMore => _hasMore;
+  bool get isLoadingMore => _isLoadingMore;
+  int get loadedCount => _journalEntries.length;
 
   Future<void> ensureLoaded() async {
     if (_isLoaded) return;
@@ -35,7 +48,28 @@ class JournalEntryService extends ChangeNotifier {
     await loadJournalEntries(limit: limit);
   }
 
-  Future<void> loadJournalEntries({int limit = 100}) async {
+  /// Trae la siguiente página y la AGREGA a lo ya cargado.
+  Future<void> loadMore() async {
+    if (_isLoadingMore || !_hasMore) return;
+    _isLoadingMore = true;
+    notifyListeners();
+    try {
+      await loadJournalEntries(
+        limit: _pageSize,
+        offset: _journalEntries.length,
+        append: true,
+      );
+    } finally {
+      _isLoadingMore = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadJournalEntries({
+    int limit = _pageSize,
+    int offset = 0,
+    bool append = false,
+  }) async {
     try {
       debugPrint('🔍 Loading journal entries with limit: $limit');
       final startTime = DateTime.now();
@@ -46,6 +80,7 @@ class JournalEntryService extends ChangeNotifier {
         orderBy: 'entry_date', // Use new column name
         descending: true,
         limit: limit,
+        offset: offset,
       );
 
       final entriesLoadTime =
@@ -54,7 +89,10 @@ class JournalEntryService extends ChangeNotifier {
           '✅ Loaded ${entryDocs.length} entries in ${entriesLoadTime}ms');
 
       if (entryDocs.isEmpty) {
-        _journalEntries.clear();
+        // Una página vacía significa que se acabó el libro, no que no haya
+        // nada: al paginar, vaciar la lista borraría lo ya cargado.
+        if (!append) _journalEntries.clear();
+        _hasMore = false;
         _isLoaded = true;
         notifyListeners();
         return;
@@ -130,9 +168,16 @@ class JournalEntryService extends ChangeNotifier {
       }
 
       // Already sorted by date DESC from query
-      _journalEntries
-        ..clear()
-        ..addAll(entries);
+      if (append) {
+        final known = _journalEntries.map((e) => e.id).toSet();
+        _journalEntries.addAll(entries.where((e) => !known.contains(e.id)));
+      } else {
+        _journalEntries
+          ..clear()
+          ..addAll(entries);
+      }
+      // Una página incompleta es la última.
+      _hasMore = entryDocs.length >= limit;
 
       _isLoaded = true;
       _syncNextEntryNumber();

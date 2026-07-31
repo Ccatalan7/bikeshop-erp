@@ -312,28 +312,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           _closeSelectedInvoice();
         },
         compactHeader: MainLayoutCompactHeader(
-          title: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                selectedInvoice.invoiceNumber,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-              Text(
-                selectedInvoice.customerName ?? 'Sin cliente',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ],
-          ),
+          title: selectedInvoice.invoiceNumber,
+          contextLine: selectedInvoice.customerName ?? 'Sin cliente',
           actions: [
             _buildCompactPreviewActions(selectedInvoice),
           ],

@@ -22,7 +22,11 @@ import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/models/supplier.dart';
 import '../../../public_store/utils/product_url.dart';
+import '../../../public_store/models/public_commerce_product_projection.dart';
+import '../../../public_store/models/public_product_seo_copy.dart';
 import '../../purchases/services/purchase_service.dart';
+import '../../website/models/website_seo_settings_aliases.dart';
+import '../../website/services/website_service.dart';
 import '../models/category_models.dart' as category_models;
 import '../models/brand_models.dart';
 import '../models/inventory_models.dart';
@@ -9021,32 +9025,64 @@ class _ProductFormPageState extends State<ProductFormPage>
     return '';
   }
 
-  String get _effectiveWebsiteName => _firstNonEmptyText([
-        _websiteNameController.text,
+  PublicProductSeoCopy _effectiveSeoCopy() {
+    final websiteService = context.read<WebsiteService>();
+    final storeName = websiteService.getSetting('store_name', 'Vinabike');
+    final locality = websiteService.getSetting(
+      'seo_address_city',
+      websiteService.getSetting('seo_address_locality', ''),
+    );
+    final titleTemplate = websiteService.getSetting(
+      'seo_product_title_template',
+      '{product_name} | {store_name}',
+    );
+    final descriptionTemplate = websiteService.getSetting(
+      'seo_product_description_template',
+      '{product_description}',
+    );
+    final commerce = PublicCommerceProductProjection.fromDraft(
+      id: _existingProduct?.id ?? '',
+      sku: _skuController.text.trim(),
+      catalogTitle: _firstNonEmptyText([
         _nameController.text,
         _existingProduct?.name,
-      ]);
-
-  String get _effectiveWebsiteDescription => _firstNonEmptyText([
-        _websiteDescriptionController.text,
+        'Producto',
+      ]),
+      websiteTitle: _websiteNameController.text,
+      merchantTitle: _websiteMerchantTitleController.text,
+      catalogDescription: _firstNonEmptyText([
         _descriptionController.text,
         _existingProduct?.description,
-      ]);
-
-  String get _effectiveSeoTitle => _firstNonEmptyText([
-        _websiteSeoTitleController.text,
-        '${_effectiveWebsiteName.isEmpty ? 'Producto' : _effectiveWebsiteName} | Vinabike Viña del Mar',
-      ]);
-
-  String get _effectiveSeoDescription {
-    final override = _websiteSeoDescriptionController.text.trim();
-    if (override.isNotEmpty) return override;
-    final base = _effectiveWebsiteDescription;
-    if (base.isNotEmpty) return base;
-    final name = _effectiveWebsiteName;
-    return name.isEmpty
-        ? 'Producto disponible en Vinabike, tienda de bicicletas en Viña del Mar.'
-        : '$name disponible en Vinabike, tienda de bicicletas en Viña del Mar. Compra online, retiro en tienda y asesoría especializada.';
+      ]),
+      websiteDescription: _websiteDescriptionController.text,
+      merchantDescription: _websiteMerchantDescriptionController.text,
+      price: _effectiveWebsitePrice,
+      currency: _existingProduct?.priceCurrency ?? 'CLP',
+      brand: _effectiveMerchantBrand,
+      categoryId: _selectedCategoryId ?? _existingProduct?.categoryId ?? '',
+      categoryPath: _effectiveProductCategoryPath,
+    );
+    return resolvePublicProductSeoCopyFromInput(
+      PublicProductSeoCopyInput(
+        seoTitleOverride: _websiteSeoTitleController.text,
+        seoDescriptionOverride: _websiteSeoDescriptionController.text,
+        titleTemplate: titleTemplate,
+        descriptionTemplate: descriptionTemplate,
+        storeName: storeName,
+        locality: locality,
+        searchTerms: _parseWebsiteSearchTerms(
+          _websiteSearchTermsController.text,
+        ),
+        product: PublicProductSeoProductInput(
+          name: commerce.title,
+          sku: commerce.sku,
+          price: commerce.price,
+          brand: commerce.brand,
+          description: commerce.description,
+          categoryPath: commerce.categoryPath,
+        ),
+      ),
+    );
   }
 
   double get _effectiveWebsitePrice {
@@ -9114,6 +9150,13 @@ class _ProductFormPageState extends State<ProductFormPage>
   String get _effectiveProductCategoryName {
     for (final category in _categories) {
       if (category.id == _selectedCategoryId) return category.name;
+    }
+    return _existingProduct?.categoryName ?? '';
+  }
+
+  String get _effectiveProductCategoryPath {
+    for (final category in _categories) {
+      if (category.id == _selectedCategoryId) return category.fullPath;
     }
     return _existingProduct?.categoryName ?? '';
   }
@@ -9224,9 +9267,24 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
     }
   }
 
+  /// The tenant's own public origin.
+  ///
+  /// `store_url` is the single canonical origin owner and the Edge function
+  /// validates every `productUrl` against it (`assertStoreUrl`). A hardcoded
+  /// domain here made product diagnostics fail for any tenant but one, so an
+  /// unset or malformed origin now degrades visibly instead of lying.
+  String get _storeOrigin {
+    final websiteService = context.read<WebsiteService>();
+    return WebsiteSeoSettingsAliases.normalizeHttpsOrigin(
+      websiteService.getSetting('store_url', ''),
+    );
+  }
+
   String? get _activeProductUrl {
     final id = _existingProduct?.id;
     if (id == null || id.isEmpty) return null;
+    final origin = _storeOrigin;
+    if (origin.isEmpty) return null;
     final path = buildPublicProductPath(
       name: _firstNonEmptyText([
         _websiteNameController.text,
@@ -9240,26 +9298,32 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
       ]),
       fallbackProductId: id,
     );
-    return 'https://vinabike.cl$path';
+    return '$origin$path';
+  }
+
+  /// The Search Console property, exactly as the backend resolved it.
+  ///
+  /// The client cannot know whether the tenant's property is a domain or a
+  /// URL-prefix property, so it never composes one; it reads the value the
+  /// diagnostics response reported and otherwise offers no link.
+  String get _reportedSearchConsoleProperty {
+    final diagnostics = _googleDiagnostics;
+    final searchConsole = diagnostics?['searchConsole'];
+    final sitemap = diagnostics?['searchConsoleSitemap'];
+    return _firstNonEmptyText([
+      searchConsole is Map ? searchConsole['siteUrl']?.toString() : null,
+      sitemap is Map ? sitemap['siteUrl']?.toString() : null,
+    ]);
   }
 
   String? get _searchConsoleInspectionUrl {
     final productUrl = _activeProductUrl;
-    if (productUrl == null) return null;
+    final property = _reportedSearchConsoleProperty;
+    if (productUrl == null || property.isEmpty) return null;
     return 'https://search.google.com/search-console/inspect'
-        '?resource_id=sc-domain%3Avinabike.cl'
+        '?resource_id=${Uri.encodeComponent(property)}'
         '&id=${Uri.encodeComponent(productUrl)}';
   }
-
-  String get _searchConsoleUsersUrl =>
-      'https://search.google.com/search-console/users'
-      '?resource_id=sc-domain%3Avinabike.cl';
-
-  String get _merchantFeedUrl =>
-      'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/google-merchant-feed?domain=vinabike.cl';
-
-  String get _merchantCenterProductsUrl =>
-      'https://merchants.google.com/mc/items?a=5635601285';
 
   String get _websitePreviewImageUrl {
     if (_selectedWebsiteImageBytes != null) return '';
@@ -9292,33 +9356,6 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
     final uri = Uri.tryParse(value.trim());
     if (uri == null) return;
     await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-
-  Future<void> _connectSearchConsoleOAuth() async {
-    setState(() {
-      _isLoadingGoogleDiagnostics = true;
-      _googleDiagnosticsError = null;
-    });
-    try {
-      final response = await Supabase.instance.client.functions.invoke(
-        'google-oauth-callback',
-        body: {'action': 'start'},
-      );
-      final data = response.data;
-      final authUrl = data is Map ? data['authUrl']?.toString() : null;
-      final uri = authUrl == null ? null : Uri.tryParse(authUrl);
-      if (uri == null) {
-        throw Exception('Google no devolvió una URL de autorización válida.');
-      }
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _googleDiagnosticsError = e.toString());
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingGoogleDiagnostics = false);
-      }
-    }
   }
 
   Future<void> _refreshGoogleDiagnostics() async {
@@ -9356,48 +9393,11 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
     }
   }
 
-  Future<void> _runGoogleLinkMaintenance(String action) async {
-    if (_isLoadingGoogleDiagnostics) return;
-    setState(() {
-      _isLoadingGoogleDiagnostics = true;
-      _googleDiagnosticsError = null;
-    });
-    try {
-      final response = await Supabase.instance.client.functions.invoke(
-        'google-product-diagnostics',
-        body: {'action': action},
-      );
-      final data = response.data is Map
-          ? Map<String, dynamic>.from(response.data as Map)
-          : <String, dynamic>{'raw': response.data};
-      if (!mounted) return;
-      setState(() {
-        final diagnostics =
-            Map<String, dynamic>.from(_googleDiagnostics ?? const {});
-        diagnostics[action == 'submit_sitemap'
-            ? 'searchConsoleSitemap'
-            : 'merchantRefresh'] = data;
-        _googleDiagnostics = diagnostics;
-        if (data['ok'] != true) {
-          _googleDiagnosticsError = data['error']?.toString() ??
-              'Google no pudo completar la acción.';
-        }
-      });
-    } catch (error) {
-      if (mounted) {
-        setState(() => _googleDiagnosticsError = error.toString());
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingGoogleDiagnostics = false);
-      }
-    }
-  }
-
   List<Widget> _buildWebsiteSeoFields(ThemeData theme) {
     final productUrl = _activeProductUrl;
-    final title = _effectiveSeoTitle;
-    final description = _effectiveSeoDescription;
+    final seoCopy = _effectiveSeoCopy();
+    final title = seoCopy.title;
+    final description = seoCopy.description;
     final hasImage = _selectedWebsiteImageBytes != null ||
         _websitePreviewImageUrl.trim().isNotEmpty;
 
@@ -9464,7 +9464,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
           labelText: 'Búsquedas objetivo',
           hintText: 'camara aro 26 Viña del Mar\ncamara bicicleta aro 26',
           helperText:
-              'Una por línea o separadas por coma. Sirven como guía SEO, no se muestran como spam.',
+              'La primera frase refuerza el texto generado. Las demás quedan como guía editorial y nunca se publican como meta-keywords.',
         ),
         maxLines: 4,
       ),
@@ -9728,20 +9728,9 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
       const SizedBox(height: 16),
       _buildMerchantPreview(theme),
       const SizedBox(height: 16),
-      _buildUrlToolRow(
-        theme,
-        title: 'Feed XML',
-        value: _merchantFeedUrl,
-        canOpen: true,
-      ),
-      const SizedBox(height: 10),
-      _buildUrlToolRow(
-        theme,
-        title: 'Productos en Merchant Center',
-        value: _merchantCenterProductsUrl,
-        canOpen: true,
-      ),
-      const SizedBox(height: 16),
+      // The feed endpoint and the Merchant account are site-level integration
+      // targets, not product data. They used to be hardcoded here with this
+      // deployment's project reference, domain and account id.
       _buildGoogleDiagnosticsPanel(theme, showMerchant: true),
     ];
   }
@@ -10238,7 +10227,13 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
     String description,
     String? productUrl,
   ) {
-    final shownUrl = productUrl ?? 'https://vinabike.cl/productos/...';
+    // The placeholder must not name another tenant's domain. When the real URL
+    // is unavailable the preview says so instead of showing a plausible lie.
+    final origin = _storeOrigin;
+    final shownUrl = productUrl ??
+        (origin.isEmpty
+            ? 'Define la URL pública del sitio para ver la ruta real'
+            : '$origin/productos/…');
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -10530,9 +10525,6 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
     final sitemap = diagnostics?['searchConsoleSitemap'] is Map
         ? Map<String, dynamic>.from(diagnostics!['searchConsoleSitemap'] as Map)
         : null;
-    final merchantRefresh = diagnostics?['merchantRefresh'] is Map
-        ? Map<String, dynamic>.from(diagnostics!['merchantRefresh'] as Map)
-        : null;
     final searchConsoleNeedsConnection =
         searchConsole?['connectRequired'] == true ||
             searchConsole?['reconnectRequired'] == true ||
@@ -10546,11 +10538,6 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
       searchConsole?['serviceAccountEmail']?.toString(),
       sitemap?['serviceAccountEmail']?.toString(),
     ]);
-    final searchConsoleUsesServiceAccount = serviceAccountAccessRequired ||
-        searchConsole?['authSource'] == 'service_account' ||
-        sitemap?['authSource'] == 'service_account';
-    final searchConsoleHasConnection =
-        searchConsole?['configured'] == true || sitemap?['configured'] == true;
 
     return Container(
       width: double.infinity,
@@ -10578,6 +10565,10 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
             ],
           ),
           const SizedBox(height: 12),
+          // Only product-scoped actions live here. Connecting Search Console,
+          // submitting the sitemap and refreshing the Merchant feed act on the
+          // whole site, so they belong to the SEO center; offering them inside
+          // one product's form made a site operation look product-scoped.
           Align(
             alignment: Alignment.centerRight,
             child: Wrap(
@@ -10585,38 +10576,6 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
               runSpacing: 8,
               alignment: WrapAlignment.end,
               children: [
-                if (diagnostics != null && !searchConsoleUsesServiceAccount)
-                  TextButton.icon(
-                    onPressed: _isLoadingGoogleDiagnostics
-                        ? null
-                        : _connectSearchConsoleOAuth,
-                    icon: Icon(
-                      searchConsoleNeedsConnection
-                          ? Icons.link_off_outlined
-                          : Icons.link_outlined,
-                    ),
-                    label: Text(
-                      searchConsoleHasConnection || searchConsoleNeedsConnection
-                          ? 'Reconectar'
-                          : 'Conectar',
-                    ),
-                  ),
-                if (serviceAccountAccessRequired &&
-                    serviceAccountEmail.isNotEmpty)
-                  TextButton.icon(
-                    onPressed: () => _copyWebsiteText(
-                      serviceAccountEmail,
-                      'Cuenta técnica',
-                    ),
-                    icon: const Icon(Icons.copy_outlined),
-                    label: const Text('Copiar cuenta técnica'),
-                  ),
-                if (serviceAccountAccessRequired)
-                  TextButton.icon(
-                    onPressed: () => _openWebsiteUrl(_searchConsoleUsersUrl),
-                    icon: const Icon(Icons.manage_accounts_outlined),
-                    label: const Text('Abrir permisos'),
-                  ),
                 OutlinedButton.icon(
                   onPressed: productUrl == null || _isLoadingGoogleDiagnostics
                       ? null
@@ -10630,32 +10589,26 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
                       : const Icon(Icons.refresh_outlined),
                   label: const Text('Consultar'),
                 ),
-                OutlinedButton.icon(
-                  onPressed: _isLoadingGoogleDiagnostics
-                      ? null
-                      : () => _runGoogleLinkMaintenance('submit_sitemap'),
-                  icon: const Icon(Icons.upload_file_outlined),
-                  label: const Text('Enviar sitemap'),
+                TextButton.icon(
+                  onPressed: () => context.push('/website/seo'),
+                  icon: const Icon(Icons.travel_explore_outlined),
+                  label: const Text('Operaciones del sitio'),
                 ),
-                if (showMerchant)
-                  OutlinedButton.icon(
-                    onPressed: _isLoadingGoogleDiagnostics
-                        ? null
-                        : () =>
-                            _runGoogleLinkMaintenance('refresh_merchant_feed'),
-                    icon: const Icon(Icons.sync_outlined),
-                    label: const Text('Actualizar feed'),
-                  ),
               ],
             ),
           ),
           const SizedBox(height: 10),
           Text(
             productUrl == null
-                ? 'Guarda el producto para consultar estados reales.'
-                : searchConsoleUsesServiceAccount
-                    ? 'Search Console y Merchant usan una cuenta técnica del servidor. No requieren iniciar sesión ni pasar por una aplicación Google en pruebas.'
-                    : 'Search Console se conecta con tu cuenta Google autorizada. Merchant usa la cuenta técnica de Google ya configurada.',
+                ? _storeOrigin.isEmpty
+                    ? 'Define la URL pública en Sitio web > Configuración para '
+                        'poder consultar estados reales.'
+                    : 'Guarda el producto para consultar estados reales.'
+                : searchConsoleNeedsConnection
+                    ? 'Search Console no está conectado para esta tienda. La '
+                        'conexión se realiza una vez desde el Centro SEO.'
+                    : 'Estados reportados por Google para este producto. '
+                        'Consultar no solicita rastreo ni indexación.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
               height: 1.35,
@@ -10665,9 +10618,9 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
               serviceAccountEmail.isNotEmpty) ...[
             const SizedBox(height: 10),
             Text(
-              'En Search Console, abre Configuración → Usuarios y permisos y '
-              'agrega $serviceAccountEmail con acceso completo. Es el único '
-              'paso pendiente para dejar esta integración operando sin OAuth.',
+              'Search Console no autoriza a la cuenta técnica de esta tienda. '
+              'Resuélvelo una vez desde el Centro SEO; este producto no puede '
+              'diagnosticarse hasta entonces.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.error,
                 fontWeight: FontWeight.w700,
@@ -10711,20 +10664,15 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
                 'Merchant',
                 merchant,
               ),
-            if (showMerchant && merchantRefresh != null)
-              _buildDiagnosticsStatusLine(
-                theme,
-                'Actualización Merchant',
-                merchantRefresh,
-              ),
           ],
           const SizedBox(height: 12),
           Text(
-            searchConsoleUsesServiceAccount
-                ? 'La cuenta técnica mantiene la automatización activa sin depender de sesiones personales ni permisos OAuth que expiran.'
-                : 'Search Console requiere conectar Google una vez. Merchant requiere GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY y GOOGLE_MERCHANT_ACCOUNT_ID.',
+            'La conexión con Google, el envío del sitemap y la actualización '
+            'del feed pertenecen al sitio completo y se operan en el Centro '
+            'SEO.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
+              height: 1.35,
             ),
           ),
         ],

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/models/supplier.dart' as shared_supplier;
+import '../../../shared/services/authority_scoped_cache.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../accounting/services/accounting_service.dart';
@@ -36,6 +37,10 @@ class PurchaseService extends ChangeNotifier {
   bool _invoicesLoaded = false;
   bool _paymentsLoaded = false;
   bool _isLoadingListInvoices = false;
+  final AuthorityCacheScope _supplierCacheScope = AuthorityCacheScope();
+  late final AuthorityScopedLoad<List<shared_supplier.Supplier>>
+      _suppliersLoad =
+      AuthorityScopedLoad<List<shared_supplier.Supplier>>(_supplierCacheScope);
 
   // ============================================================
   // CACHING - TTL-based cache for performance optimization
@@ -61,6 +66,7 @@ class PurchaseService extends ChangeNotifier {
       _listInvoiceCache.isNotEmpty && _listInvoicesCacheTime != null;
   bool get hasPaymentsCache =>
       _paymentCache.isNotEmpty && _paymentsCacheTime != null;
+  ErpAuthorityScopeKey? get supplierAuthorityScope => _supplierCacheScope.key;
 
   void _recordFinancialChange(
     FinancialProjectionChangeKind kind, {
@@ -85,9 +91,72 @@ class PurchaseService extends ChangeNotifier {
 
   /// Invalidate supplier cache (call after create/update/delete)
   void invalidateSuppliersCache() {
+    _supplierCacheScope.invalidate();
+    _suppliersLoad.detach();
     _suppliersCacheTime = null;
     _suppliersLoaded = false;
     debugPrint('🗑️ [PurchaseService] Suppliers cache invalidated');
+  }
+
+  void bindSupplierAuthorityScope({
+    required String? userId,
+    required String? tenantId,
+  }) {
+    if (!_supplierCacheScope.bind(userId: userId, tenantId: tenantId)) return;
+    _clearSupplierAuthorityOwnedState();
+  }
+
+  AuthorityScopeResolution _resolveSupplierAuthorityScope({
+    required String? userId,
+    required String? tenantId,
+  }) {
+    final resolution = _supplierCacheScope.resolve(
+      userId: userId,
+      tenantId: tenantId,
+    );
+    if (resolution.didChange) _clearSupplierAuthorityOwnedState();
+    return resolution;
+  }
+
+  void _clearSupplierAuthorityOwnedState() {
+    final hadCache = _supplierCache.isNotEmpty;
+    _suppliersLoad.detach();
+    _supplierCache = const [];
+    _suppliersCacheTime = null;
+    _suppliersLoaded = false;
+    if (hadCache) notifyListeners();
+  }
+
+  Future<bool> _ensureSupplierAuthorityScope() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) {
+      _resolveSupplierAuthorityScope(userId: null, tenantId: null);
+      return false;
+    }
+
+    final tenantId = await _tenantService.getTenantId();
+    if (_supabase.auth.currentUser?.id != userId) return false;
+    if (tenantId == null || tenantId.isEmpty) {
+      _resolveSupplierAuthorityScope(userId: null, tenantId: null);
+      return false;
+    }
+    final resolution = _resolveSupplierAuthorityScope(
+      userId: userId,
+      tenantId: tenantId,
+    );
+    if (resolution == AuthorityScopeResolution.rejectedTenantChange) {
+      throw const AuthorityScopeChangedException();
+    }
+    return resolution.isAccepted;
+  }
+
+  Future<AuthorityCacheLease> _requireSupplierAuthorityLease() async {
+    if (!await _ensureSupplierAuthorityScope()) {
+      throw const AuthorityScopeChangedException();
+    }
+    final lease = _supplierCacheScope.capture();
+    if (lease == null) throw const AuthorityScopeChangedException();
+    return lease;
   }
 
   /// Invalidate invoice cache (call after create/update/delete)
@@ -250,6 +319,9 @@ class PurchaseService extends ChangeNotifier {
     bool forceRefresh = false,
     bool activeOnly = false,
   }) async {
+    if (!await _ensureSupplierAuthorityScope()) {
+      throw const AuthorityScopeChangedException();
+    }
     // Return cached data if valid
     if (!forceRefresh &&
         _isCacheValid(_suppliersCacheTime) &&
@@ -261,19 +333,37 @@ class PurchaseService extends ChangeNotifier {
           : _supplierCache;
     }
     try {
-      final data = await _db.select('suppliers');
-      _supplierCache = data
-          .map((row) => shared_supplier.Supplier.fromJson(row))
-          .toList()
-        ..sort((a, b) => a.name.compareTo(b.name));
-      _suppliersLoaded = true;
-      _suppliersCacheTime = DateTime.now();
-      debugPrint(
-          '✅ [PurchaseService] Cached ${_supplierCache.length} suppliers');
-      notifyListeners(); // Notify UI after loading suppliers
+      final suppliers = await _suppliersLoad.run(
+        load: (lease) async {
+          final data = await _db.select('suppliers');
+          final loadedSuppliers = data
+              .map((row) => shared_supplier.Supplier.fromJson(row))
+              .toList();
+          if (loadedSuppliers.any(
+            (supplier) => supplier.tenantId != lease.scope.tenantId,
+          )) {
+            throw StateError(
+              'Supplier query returned data outside the authority tenant',
+            );
+          }
+          loadedSuppliers.sort((a, b) => a.name.compareTo(b.name));
+          return loadedSuppliers;
+        },
+        publish: (loadedSuppliers, _) {
+          _supplierCache = loadedSuppliers;
+          _suppliersLoaded = true;
+          _suppliersCacheTime = DateTime.now();
+          debugPrint(
+            '✅ [PurchaseService] Cached ${_supplierCache.length} suppliers',
+          );
+          notifyListeners();
+        },
+      );
       return activeOnly
-          ? _supplierCache.where((s) => s.isActive).toList()
-          : _supplierCache;
+          ? suppliers.where((supplier) => supplier.isActive).toList()
+          : suppliers;
+    } on AuthorityScopeChangedException {
+      rethrow;
     } catch (e) {
       throw Exception('No se pudieron cargar los proveedores: $e');
     }
@@ -281,6 +371,9 @@ class PurchaseService extends ChangeNotifier {
 
   Future<shared_supplier.Supplier?> getSupplier(String id) async {
     if (id.isEmpty) return null;
+    if (!await _ensureSupplierAuthorityScope()) {
+      throw const AuthorityScopeChangedException();
+    }
     if (!_suppliersLoaded) {
       await getSuppliers(forceRefresh: true);
     }
@@ -300,10 +393,8 @@ class PurchaseService extends ChangeNotifier {
 
   Future<shared_supplier.Supplier> createSupplier(String name) async {
     try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
-        throw Exception('No se pudo obtener el tenant_id del usuario');
-      }
+      final lease = await _requireSupplierAuthorityLease();
+      final tenantId = lease.scope.tenantId;
 
       final result = await _db.insert('suppliers', {
         'tenant_id': tenantId,
@@ -311,9 +402,16 @@ class PurchaseService extends ChangeNotifier {
         'default_tax_treatment': 'tax_included', // Most suppliers charge IVA
       });
       final supplier = shared_supplier.Supplier.fromJson(result);
-      _supplierCache = [..._supplierCache, supplier];
-      invalidateSuppliersCache();
-      notifyListeners();
+      if (supplier.tenantId != tenantId) {
+        throw StateError(
+          'Supplier insert returned data outside the authority tenant',
+        );
+      }
+      if (_supplierCacheScope.owns(lease)) {
+        _supplierCache = [..._supplierCache, supplier];
+        invalidateSuppliersCache();
+        notifyListeners();
+      }
       return supplier;
     } catch (e) {
       throw Exception('No se pudo crear el proveedor: $e');
@@ -323,10 +421,8 @@ class PurchaseService extends ChangeNotifier {
   Future<shared_supplier.Supplier> saveSupplier(
       shared_supplier.Supplier supplier) async {
     try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
-        throw Exception('No se pudo obtener el tenant_id del usuario');
-      }
+      final lease = await _requireSupplierAuthorityLease();
+      final tenantId = lease.scope.tenantId;
 
       final payload = supplier.toJson();
       // Ensure tenant_id is set
@@ -335,18 +431,34 @@ class PurchaseService extends ChangeNotifier {
       if (supplier.id.isEmpty) {
         final inserted = await _db.insert('suppliers', payload..remove('id'));
         final created = shared_supplier.Supplier.fromJson(inserted);
+        if (created.tenantId != tenantId) {
+          throw StateError(
+            'Supplier insert returned data outside the authority tenant',
+          );
+        }
+        if (!_supplierCacheScope.owns(lease)) return created;
         invalidateSuppliersCache();
-        await getSuppliers(forceRefresh: true);
+        try {
+          await getSuppliers(forceRefresh: true);
+        } on AuthorityScopeChangedException {
+          return created;
+        }
         notifyListeners();
         return created;
       } else {
         payload.remove('created_at');
         await _db.update('suppliers', supplier.id, payload);
+        final saved = supplier.copyWith(tenantId: tenantId);
+        if (!_supplierCacheScope.owns(lease)) return saved;
         invalidateSuppliersCache();
-        await getSuppliers(forceRefresh: true);
+        try {
+          await getSuppliers(forceRefresh: true);
+        } on AuthorityScopeChangedException {
+          return saved;
+        }
         notifyListeners();
         final refreshed = await getSupplier(supplier.id);
-        return refreshed ?? supplier;
+        return refreshed ?? saved;
       }
     } catch (e) {
       throw Exception('No se pudo guardar el proveedor: $e');
@@ -355,9 +467,15 @@ class PurchaseService extends ChangeNotifier {
 
   Future<void> deleteSupplier(String id) async {
     try {
+      final lease = await _requireSupplierAuthorityLease();
       await _db.delete('suppliers', id);
+      if (!_supplierCacheScope.owns(lease)) return;
       invalidateSuppliersCache();
-      await getSuppliers(forceRefresh: true);
+      try {
+        await getSuppliers(forceRefresh: true);
+      } on AuthorityScopeChangedException {
+        return;
+      }
       notifyListeners();
     } catch (e) {
       throw Exception('No se pudo eliminar el proveedor: $e');

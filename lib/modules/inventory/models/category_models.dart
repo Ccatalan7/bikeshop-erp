@@ -33,10 +33,10 @@ class Category {
   // Get breadcrumb parts: ["Accesorios", "Asientos", "Tija"]
   List<String> get breadcrumbs =>
       fullPath.split(' / ').map((s) => s.trim()).toList();
-  
+
   // Is this a root category?
   bool get isRoot => level == 0 && parentId == null;
-  
+
   // Get the direct parent name (last part before this one)
   String? get parentName {
     final parts = breadcrumbs;
@@ -80,6 +80,20 @@ class Category {
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
+  }
+
+  /// Payload for `product_categories` writes issued by CategoryService.
+  ///
+  /// Deliberately excludes `show_on_website`: publication has exactly one
+  /// productive writer — Catálogo web through the atomic, audited RPC
+  /// `replace_website_category_visibility` — and a category form holding a
+  /// stale copy must never overwrite a concurrent publication change on save.
+  /// Creation relies on the column's database default (`false NOT NULL`);
+  /// updates leave the column untouched. The field remains readable through
+  /// [Category.fromJson], [toJson] and [copyWith] for projections and
+  /// diagnostics.
+  Map<String, dynamic> toPersistencePayload() {
+    return toJson()..remove('show_on_website');
   }
 
   Category copyWith({

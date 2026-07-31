@@ -23,6 +23,8 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/interactive_table_field.dart';
 import '../../../shared/widgets/modern_context_menu.dart';
 import '../../../shared/widgets/operational_status_badge.dart';
+import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/widgets/vb_anchored_popover.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/invoice_pdf_generator.dart';
 import '../../../shared/utils/responsive_viewport.dart';
@@ -2328,34 +2330,12 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   MainLayoutCompactHeader _buildMobileMainLayoutHeader() {
-    final theme = Theme.of(context);
     final overdueCount = _filteredJobs.where((job) => job.isOverdue).length;
 
     if (_viewMode == 'tasks') {
       return MainLayoutCompactHeader(
-        title: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Tareas',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            Text(
-              'Planificación operativa',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
+        title: 'Tareas',
+        contextLine: 'Planificación operativa',
         actions: [
           IconButton(
             key: const ValueKey('workshop-mobile-tasks-view'),
@@ -2369,24 +2349,14 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     if (_isSearchExpanded) {
       return MainLayoutCompactHeader(
-        title: TextField(
-          key: const ValueKey('workshop-mobile-search-field'),
+        title: 'Trabajos',
+        search: MainLayoutCompactSearch(
+          fieldKey: const ValueKey('workshop-mobile-search-field'),
           controller: _mobileSearchController,
           autofocus: true,
           textInputAction: TextInputAction.search,
-          decoration: InputDecoration(
-            hintText: 'Buscar trabajos…',
-            prefixIcon: const Icon(Icons.search_rounded, size: 20),
-            suffixIcon: _searchTerm.isEmpty
-                ? null
-                : IconButton(
-                    icon: const Icon(Icons.clear_rounded, size: 18),
-                    tooltip: 'Limpiar búsqueda',
-                    onPressed: _clearMobileSearch,
-                  ),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 12),
-          ),
+          hintText: 'Buscar trabajos…',
+          onClear: _searchTerm.isEmpty ? null : _clearMobileSearch,
           onChanged: _updateMobileSearch,
         ),
         actions: [
@@ -2407,48 +2377,16 @@ class _PegasTablePageState extends State<PegasTablePage>
       );
     }
 
+    final contextParts = <String>[
+      _statusFilterLabel(_statusFilter),
+      '${_filteredJobs.length}',
+      if (_searchTerm.isNotEmpty) 'búsqueda',
+      if (overdueCount > 0)
+        '$overdueCount ${overdueCount == 1 ? 'vencido' : 'vencidos'}',
+    ];
     return MainLayoutCompactHeader(
-      title: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Trabajos',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(
-                  text:
-                      '${_statusFilterLabel(_statusFilter)} · ${_filteredJobs.length}',
-                ),
-                if (_searchTerm.isNotEmpty)
-                  TextSpan(
-                    text: ' · búsqueda',
-                    style: TextStyle(color: theme.colorScheme.primary),
-                  ),
-                if (overdueCount > 0)
-                  TextSpan(
-                    text:
-                        ' · $overdueCount ${overdueCount == 1 ? 'vencido' : 'vencidos'}',
-                    style: TextStyle(color: theme.colorScheme.error),
-                  ),
-              ],
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
+      title: 'Trabajos',
+      contextLine: contextParts.join(' · '),
       actions: [
         TextButton.icon(
           key: const ValueKey('workshop-mobile-new-job'),
@@ -3634,45 +3572,72 @@ class _PegasTablePageState extends State<PegasTablePage>
   Widget _buildNewJobDropdown() {
     return MenuAnchor(
       builder: (context, controller, child) {
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FilledButton.icon(
-              onPressed: () {
-                _markNeedsRefresh();
-                context.push('/taller/pegas/nueva');
-              },
-              icon: const Icon(Icons.add, size: 20),
-              label: const Text('Nuevo Trabajo'),
-              style: FilledButton.styleFrom(
-                backgroundColor: _workshopCommandColor,
-                foregroundColor: Colors.white,
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(8),
-                    bottomLeft: Radius.circular(8),
+        // A split button is ONE control drawn as two halves, so the two halves
+        // have to agree on height and touch each other.
+        //
+        // They did neither. Material gives every button an invisible padded
+        // tap target that is larger than its paint box, which is what pushed
+        // the halves apart; and only the right half pinned a height, so the
+        // left one followed the theme's density instead. Hence the notch.
+        //
+        // `shrinkWrap` makes each layout box equal its paint box, and
+        // IntrinsicHeight + stretch makes both halves adopt the taller one —
+        // so the seam stays closed if the label ever grows.
+        const splitHeight = 40.0;
+        // The fill was a frozen navy (#12324A), so in dark mode the primary
+        // action of the screen sat as a dark slab on a dark canvas and never
+        // followed the palette. A primary CTA is an action accent: 100% of the
+        // preset, per the tint budget. The scheme pair also guarantees the
+        // label's contrast in both brightnesses, which `Colors.white` did not.
+        final splitScheme = Theme.of(context).colorScheme;
+        return IntrinsicHeight(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FilledButton.icon(
+                onPressed: () {
+                  _markNeedsRefresh();
+                  context.push('/taller/pegas/nueva');
+                },
+                icon: const Icon(Icons.add, size: 20),
+                label: const Text('Nuevo Trabajo'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: splitScheme.primary,
+                  foregroundColor: splitScheme.onPrimary,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.standard,
+                  minimumSize: const Size(0, splitHeight),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(8),
+                      bottomLeft: Radius.circular(8),
+                    ),
                   ),
                 ),
               ),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  controller.isOpen ? controller.close() : controller.open(),
-              style: FilledButton.styleFrom(
-                backgroundColor: _workshopCommandColor,
-                foregroundColor: Colors.white,
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.only(
-                    topRight: Radius.circular(8),
-                    bottomRight: Radius.circular(8),
+              const SizedBox(width: 1),
+              FilledButton(
+                onPressed: () =>
+                    controller.isOpen ? controller.close() : controller.open(),
+                style: FilledButton.styleFrom(
+                  backgroundColor: splitScheme.primary,
+                  foregroundColor: splitScheme.onPrimary,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.standard,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.only(
+                      topRight: Radius.circular(8),
+                      bottomRight: Radius.circular(8),
+                    ),
                   ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(32, splitHeight),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: const Size(32, 40),
+                child: const Icon(Icons.arrow_drop_down, size: 20),
               ),
-              child: const Icon(Icons.arrow_drop_down, size: 20),
-            ),
-          ],
+            ],
+          ),
         );
       },
       menuChildren: [
@@ -6898,7 +6863,12 @@ class _PegasTablePageState extends State<PegasTablePage>
       children: [
         Container(
           width: tableWidth,
-          height: 60,
+          // 60 is a FLOOR, not a height. A fixed height clipped any row whose
+          // status badge carries both a wrapped label and a timestamp — that
+          // is the "BOTTOM OVERFLOWED BY 4.0 PIXELS" stripe on PRESUPUESTO.
+          // With a minimum the row still renders exactly 60 for ordinary
+          // content and grows on its own when the content asks for more.
+          constraints: const BoxConstraints(minHeight: 60),
           decoration: BoxDecoration(
             color: isSelected
                 ? Color.alphaBlend(
@@ -6990,14 +6960,24 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Widget _buildBikeGlyph({double size = 35}) {
+    // The asset is a 99.9% pure-black silhouette, so it painted black on a
+    // black row: an image obeys no theme. Tinting recolours it without
+    // touching its shape. It stays on the muted CONTENT role rather than the
+    // preset accent because a subject glyph is description, not an action —
+    // only actions spend the accent budget.
+    //
+    // The fallback icon was already theme-aware while the real artwork was
+    // not, which is why the bug only ever showed when the asset loaded.
+    final glyphColor = Theme.of(context).colorScheme.onSurfaceVariant;
     return Image.asset(
       'assets/icons/mtb_bike_v3.png',
       width: size,
       height: size,
+      color: glyphColor,
       errorBuilder: (context, error, stackTrace) => Icon(
         Icons.pedal_bike,
         size: size,
-        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+        color: glyphColor,
       ),
     );
   }
@@ -7462,6 +7442,15 @@ class _PegasTablePageState extends State<PegasTablePage>
 
       case 'arrival_date':
         final days = DateTime.now().difference(job.arrivalDate).inDays;
+        // How long a bike has been sitting is a severity, so it reads from the
+        // same three tones as every other state in the table instead of its
+        // own pastel scale — which stayed light-mode pale on a dark row.
+        final ageRoles = VinabikeThemeRoles.of(context);
+        final ageTone = days > 14
+            ? ageRoles.danger
+            : days > 7
+                ? ageRoles.warning
+                : ageRoles.neutral;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
@@ -7473,11 +7462,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
               decoration: BoxDecoration(
-                color: days > 14
-                    ? Colors.red.shade50
-                    : days > 7
-                        ? Colors.orange.shade50
-                        : Colors.grey.shade100,
+                color: ageTone.container,
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
@@ -7485,11 +7470,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
-                  color: days > 14
-                      ? Colors.red.shade700
-                      : days > 7
-                          ? Colors.orange.shade700
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: ageTone.onContainer,
                 ),
               ),
             ),
@@ -7569,16 +7550,23 @@ class _PegasTablePageState extends State<PegasTablePage>
 
             return Align(
               alignment: Alignment.centerLeft,
-              child: _buildStatusBadge(
-                label: statusName,
-                accentColor: statusColor,
-                timestamp: job.isStandaloneQuotation ? null : statusUpdatedAt,
-                metaText: proposalMeta ?? _serviceWarrantyMeta(job),
-                metaIcon: proposalMeta == null
-                    ? Icons.shield_outlined
-                    : Icons.request_quote_outlined,
-                onTap: job.isSaleWorkflow ? null : () => _showStatusMenu(job),
-                maxWidth: chipWidth,
+              // The Builder exists so the chip has a BuildContext of its OWN.
+              // The popover anchors to the trigger's rect, and the surrounding
+              // cell context would resolve to the whole column instead.
+              child: Builder(
+                builder: (chipContext) => _buildStatusBadge(
+                  label: statusName,
+                  accentColor: statusColor,
+                  timestamp: job.isStandaloneQuotation ? null : statusUpdatedAt,
+                  metaText: proposalMeta ?? _serviceWarrantyMeta(job),
+                  metaIcon: proposalMeta == null
+                      ? Icons.shield_outlined
+                      : Icons.request_quote_outlined,
+                  onTap: job.isSaleWorkflow
+                      ? null
+                      : () => _showStatusMenu(job, anchorContext: chipContext),
+                  maxWidth: chipWidth,
+                ),
               ),
             );
           },
@@ -8352,57 +8340,63 @@ class _PegasTablePageState extends State<PegasTablePage>
         final status = invoice?.status ??
             (job.isPaid ? InvoiceStatus.paid : InvoiceStatus.draft);
 
-        // Define colors and labels for each status
-        Color bgColor;
-        Color borderColor;
-        Color textColor;
+        // An invoice status is a MEANING, not a colour. Asking the theme for
+        // the tone is what makes the chip invert between light and dark
+        // (pale fill + dark ink → dark fill + light ink) instead of keeping a
+        // light-mode pastel glowing on a dark table.
+        //
+        // The six states stay tellable apart without borrowing the preset
+        // accent — which must never recolour a semantic chip — by pairing five
+        // tones with one emphasis step: `paid` is the only filled chip,
+        // because it is the only terminal good outcome.
+        final roles = VinabikeThemeRoles.of(context);
+        final VinabikeSemanticTone tone;
+        final bool filled;
         IconData icon;
         String label;
 
         switch (status) {
           case InvoiceStatus.draft:
-            bgColor = Colors.grey.shade100;
-            borderColor = Colors.grey.shade300;
-            textColor = Colors.grey.shade700;
+            tone = roles.neutral;
+            filled = false;
             icon = Icons.edit_note;
             label = 'BORRADOR';
             break;
           case InvoiceStatus.sent:
-            bgColor = Colors.blue.shade50;
-            borderColor = Colors.blue.shade300;
-            textColor = Colors.blue.shade800;
+            tone = roles.info;
+            filled = false;
             icon = Icons.send;
             label = 'ENVIADO';
             break;
           case InvoiceStatus.confirmed:
-            bgColor = Colors.purple.shade50;
-            borderColor = Colors.purple.shade300;
-            textColor = Colors.purple.shade800;
+            tone = roles.success;
+            filled = false;
             icon = Icons.check_circle_outline;
             label = 'CONFIRMADO';
             break;
           case InvoiceStatus.paid:
-            bgColor = Colors.green.shade50;
-            borderColor = Colors.green.shade300;
-            textColor = Colors.green.shade800;
+            tone = roles.success;
+            filled = true;
             icon = Icons.check_circle;
             label = 'PAGADO';
             break;
           case InvoiceStatus.overdue:
-            bgColor = Colors.orange.shade50;
-            borderColor = Colors.orange.shade300;
-            textColor = Colors.orange.shade800;
+            tone = roles.warning;
+            filled = false;
             icon = Icons.schedule;
             label = 'VENCIDO';
             break;
           case InvoiceStatus.cancelled:
-            bgColor = Colors.red.shade50;
-            borderColor = Colors.red.shade300;
-            textColor = Colors.red.shade800;
+            tone = roles.danger;
+            filled = false;
             icon = Icons.cancel;
             label = 'CANCELADO';
             break;
         }
+
+        final Color bgColor = filled ? tone.accent : tone.container;
+        final Color borderColor = filled ? tone.accent : tone.border;
+        final Color textColor = filled ? tone.onAccent : tone.onContainer;
 
         final canOpenInvoice =
             job.invoiceId != null && job.invoiceId!.isNotEmpty;
@@ -8461,6 +8455,13 @@ class _PegasTablePageState extends State<PegasTablePage>
         final count = job.imageUrls.length;
         final isImg = imageUrl != null ? _isImage(imageUrl) : false;
         final isDroppingOnThis = _draggingJobId == job.id;
+        // Every slot here used a fixed grey ramp, so the empty "+" tile stayed
+        // near-white on a dark row. The neutral tone carries its own pair per
+        // brightness, and the drop highlight uses the preset accent instead of
+        // a literal blue that ignored the palette.
+        final attachRoles = VinabikeThemeRoles.of(context);
+        final attachTone = attachRoles.neutral;
+        final dropAccent = Theme.of(context).colorScheme.primary;
 
         return DropTarget(
           onDragDone: (details) => _handleDrop(job, details),
@@ -8475,8 +8476,8 @@ class _PegasTablePageState extends State<PegasTablePage>
             child: Container(
               decoration: isDroppingOnThis
                   ? BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.2),
-                      border: Border.all(color: Colors.blue, width: 2),
+                      color: dropAccent.withValues(alpha: 0.2),
+                      border: Border.all(color: dropAccent, width: 2),
                       borderRadius: BorderRadius.circular(4),
                     )
                   : null,
@@ -8493,12 +8494,12 @@ class _PegasTablePageState extends State<PegasTablePage>
                               width: 32,
                               height: 32,
                               decoration: BoxDecoration(
-                                color: Colors.grey.shade200,
+                                color: attachTone.container,
                                 borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: Colors.grey.shade300),
+                                border: Border.all(color: attachTone.border),
                               ),
-                              child: const Icon(Icons.insert_drive_file,
-                                  size: 16, color: Colors.blueGrey),
+                              child: Icon(Icons.insert_drive_file,
+                                  size: 16, color: attachTone.onContainer),
                             ),
                       if (count > 1) ...[
                         const SizedBox(width: 4),
@@ -8506,7 +8507,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                           padding: const EdgeInsets.symmetric(
                               horizontal: 4, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
+                            color: attachTone.container,
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
@@ -8514,7 +8515,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: Colors.grey.shade700,
+                              color: attachTone.onContainer,
                             ),
                           ),
                         ),
@@ -8525,14 +8526,17 @@ class _PegasTablePageState extends State<PegasTablePage>
                         height: 32,
                         decoration: BoxDecoration(
                           border: Border.all(
-                              color: Colors.grey.shade300,
+                              color: attachTone.border,
                               style: BorderStyle.solid),
                           borderRadius: BorderRadius.circular(4),
-                          color: Colors.grey.shade50,
+                          color: attachTone.container,
                         ),
                         child: Center(
                           child: Icon(Icons.add,
-                              size: 16, color: Colors.grey.shade400),
+                              size: 16,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant),
                         ),
                       ),
                   ],
@@ -10953,7 +10957,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
   }
 
-  void _showStatusMenu(MechanicJob job) {
+  void _showStatusMenu(MechanicJob job, {BuildContext? anchorContext}) {
     if (job.isSaleWorkflow) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -10964,192 +10968,223 @@ class _PegasTablePageState extends State<PegasTablePage>
       );
       return;
     }
+
+    // Guide S-05: anchored popover, never a centred modal. Only the paths that
+    // actually have a trigger widget can anchor; the compact shell is excluded
+    // on purpose because the guide routes touch to a bottom sheet, not to a
+    // popover ("la lista es un bottom sheet, no un popover de 200 px").
+    final canAnchor = anchorContext != null &&
+        anchorContext.mounted &&
+        !ResponsiveViewport.usesCompactShell(context);
+
+    if (canAnchor) {
+      showVbAnchoredPopover<void>(
+        anchorContext: anchorContext,
+        builder: (popoverContext) => _buildStatusManager(
+          job,
+          popoverContext,
+          asPopover: true,
+        ),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
-      builder: (dialogContext) => _StatusManagerDialog(
-        job: job,
-        jobStatusService: _jobStatusService,
-        warrantyPaymentReviewRequired: _hasWarrantyPaymentEvidence(job),
-        onStatusSelected: (status) async {
-          Navigator.pop(dialogContext);
-          await _updateJobToCustomStatus(job, status);
-        },
-        onWarrantyOutcomeSelected: (outcome) async {
-          Navigator.pop(dialogContext);
-          final currentOutcome = job.warrantyOutcome ?? WarrantyOutcome.pending;
-          if (outcome == currentOutcome) return;
-          if (outcome == WarrantyOutcome.covered &&
-              _hasWarrantyPaymentEvidence(job)) {
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text(
-                  'Esta garantía tiene pagos vigentes. Primero revisa, revierte o reembolsa el pago desde la factura; el historial financiero no se modificará desde este estado.',
-                ),
-                backgroundColor: Colors.orange.shade900,
-                duration: const Duration(seconds: 10),
-                action: job.invoiceId == null
-                    ? null
-                    : SnackBarAction(
-                        label: 'ABRIR FACTURA',
-                        textColor: Colors.white,
-                        onPressed: () => _openInvoice(job.invoiceId!),
-                      ),
+      builder: (dialogContext) => _buildStatusManager(job, dialogContext),
+    );
+  }
+
+  Widget _buildStatusManager(
+    MechanicJob job,
+    BuildContext hostContext, {
+    bool asPopover = false,
+  }) {
+    final dialogContext = hostContext;
+    return _StatusManagerDialog(
+      asPopover: asPopover,
+      job: job,
+      jobStatusService: _jobStatusService,
+      warrantyPaymentReviewRequired: _hasWarrantyPaymentEvidence(job),
+      onStatusSelected: (status) async {
+        Navigator.pop(dialogContext);
+        await _updateJobToCustomStatus(job, status);
+      },
+      onWarrantyOutcomeSelected: (outcome) async {
+        Navigator.pop(dialogContext);
+        final currentOutcome = job.warrantyOutcome ?? WarrantyOutcome.pending;
+        if (outcome == currentOutcome) return;
+        if (outcome == WarrantyOutcome.covered &&
+            _hasWarrantyPaymentEvidence(job)) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Esta garantía tiene pagos vigentes. Primero revisa, revierte o reembolsa el pago desde la factura; el historial financiero no se modificará desde este estado.',
               ),
-            );
-            return;
-          }
-          final reason = await _requestWarrantyDecisionReason(job, outcome);
-          if (reason == null) return;
-          final normalizedReason = reason.trim().isEmpty ? null : reason.trim();
-          final existingAttempt = _pendingWarrantyDecisionAttempts[job.id!];
-          final attempt = existingAttempt != null &&
-                  existingAttempt.matches(outcome, normalizedReason)
-              ? existingAttempt
-              : _PendingWarrantyDecisionAttempt(
-                  outcome: outcome,
-                  reason: normalizedReason,
-                  operationKey: const Uuid().v4(),
-                );
-          _pendingWarrantyDecisionAttempts[job.id!] = attempt;
-          _startLocalOperation();
-          try {
-            final receipt = await _bikeshopService.decideWarrantyClaim(
-              warrantyJobId: job.id!,
-              outcome: outcome,
-              reason: normalizedReason,
-              operationKey: attempt.operationKey,
-            );
-            if (mounted) {
-              final receiptInvoiceId = receipt['invoice_id']?.toString();
-              var updated = job.copyWith(
-                warrantyOutcome: outcome,
-                invoiceId: receiptInvoiceId,
-                isInvoiced: receiptInvoiceId == null ? null : true,
-                updatedAt: DateTime.now(),
+              backgroundColor: Colors.orange.shade900,
+              duration: const Duration(seconds: 10),
+              action: job.invoiceId == null
+                  ? null
+                  : SnackBarAction(
+                      label: 'ABRIR FACTURA',
+                      textColor: Colors.white,
+                      onPressed: () => _openInvoice(job.invoiceId!),
+                    ),
+            ),
+          );
+          return;
+        }
+        final reason = await _requestWarrantyDecisionReason(job, outcome);
+        if (reason == null) return;
+        final normalizedReason = reason.trim().isEmpty ? null : reason.trim();
+        final existingAttempt = _pendingWarrantyDecisionAttempts[job.id!];
+        final attempt = existingAttempt != null &&
+                existingAttempt.matches(outcome, normalizedReason)
+            ? existingAttempt
+            : _PendingWarrantyDecisionAttempt(
+                outcome: outcome,
+                reason: normalizedReason,
+                operationKey: const Uuid().v4(),
               );
-              setState(() {
-                final index =
-                    _jobs.indexWhere((candidate) => candidate.id == job.id);
-                if (index != -1) _jobs[index] = updated;
-                if (_selectedJob?.id == job.id) _selectedJob = updated;
-                _applyFiltersAndSort();
-              });
-              if (identical(
-                _pendingWarrantyDecisionAttempts[job.id!],
-                attempt,
-              )) {
-                _pendingWarrantyDecisionAttempts.remove(job.id!);
-              }
-              Object? refreshError;
-              try {
-                await _loadData(
-                  surfaceErrors: false,
-                  rethrowErrors: true,
-                  forceInvoiceRefresh: true,
-                );
-                updated = _jobs.cast<MechanicJob?>().firstWhere(
-                          (candidate) => candidate?.id == job.id,
-                          orElse: () => updated,
-                        ) ??
-                    updated;
-              } catch (error) {
-                // The command already returned an exact receipt. A projection
-                // refresh failure must not be reported as a rejected decision
-                // or trigger a second command with a new operation key.
-                refreshError = error;
-                debugPrint(
-                  'Warranty decision ${attempt.operationKey} was confirmed, '
-                  'but table refresh failed: $error',
-                );
-              }
-              if (!mounted) return;
-              final confirmedMessage = switch (outcome) {
-                WarrantyOutcome.covered =>
-                  'Garantía cubierta: respaldo interno actualizado.',
-                WarrantyOutcome.notCovered
-                    when _hasWarrantyPaymentEvidence(job) =>
-                  'Garantía no cubierta registrada: la factura pagada se conservó sin cambios.',
-                WarrantyOutcome.notCovered =>
-                  'Garantía no cubierta: factura cobrable creada.',
-                WarrantyOutcome.pending => 'Garantía devuelta a evaluación.',
-              };
-              final message = refreshError == null
-                  ? confirmedMessage
-                  : '$confirmedMessage No se pudo refrescar la tabla; usa Actualizar para releerla.';
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(message),
-                  backgroundColor: outcome == WarrantyOutcome.notCovered
-                      ? Colors.red.shade700
-                      : Colors.green.shade700,
-                  action: updated.invoiceId == null
-                      ? null
-                      : SnackBarAction(
-                          label: outcome == WarrantyOutcome.covered
-                              ? 'Abrir respaldo'
-                              : 'Abrir factura',
-                          textColor: Colors.white,
-                          onPressed: () => _openInvoice(updated.invoiceId!),
-                        ),
-                ),
-              );
-            }
-          } on MechanicJobWarrantyCommandOutcomeUnknown catch (error) {
-            debugPrint(
-              'Warranty decision outcome remains unknown for ${job.id} with '
-              'operation ${attempt.operationKey}: $error',
+        _pendingWarrantyDecisionAttempts[job.id!] = attempt;
+        _startLocalOperation();
+        try {
+          final receipt = await _bikeshopService.decideWarrantyClaim(
+            warrantyJobId: job.id!,
+            outcome: outcome,
+            reason: normalizedReason,
+            operationKey: attempt.operationKey,
+          );
+          if (mounted) {
+            final receiptInvoiceId = receipt['invoice_id']?.toString();
+            var updated = job.copyWith(
+              warrantyOutcome: outcome,
+              invoiceId: receiptInvoiceId,
+              isInvoiced: receiptInvoiceId == null ? null : true,
+              updatedAt: DateTime.now(),
             );
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text(
-                    'No se pudo confirmar el resultado. La decisión puede haberse guardado; vuelve a elegir exactamente la misma opción y motivo para reutilizar la misma operación.',
-                  ),
-                  backgroundColor: Colors.orange.shade900,
-                  duration: const Duration(seconds: 10),
-                ),
-              );
-            }
-          } catch (error) {
+            setState(() {
+              final index =
+                  _jobs.indexWhere((candidate) => candidate.id == job.id);
+              if (index != -1) _jobs[index] = updated;
+              if (_selectedJob?.id == job.id) _selectedJob = updated;
+              _applyFiltersAndSort();
+            });
             if (identical(
               _pendingWarrantyDecisionAttempts[job.id!],
               attempt,
             )) {
               _pendingWarrantyDecisionAttempts.remove(job.id!);
             }
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'El servidor rechazó la decisión; no se confirmó ningún cambio: $error',
-                  ),
-                  backgroundColor: Colors.red,
-                ),
+            Object? refreshError;
+            try {
+              await _loadData(
+                surfaceErrors: false,
+                rethrowErrors: true,
+                forceInvoiceRefresh: true,
+              );
+              updated = _jobs.cast<MechanicJob?>().firstWhere(
+                        (candidate) => candidate?.id == job.id,
+                        orElse: () => updated,
+                      ) ??
+                  updated;
+            } catch (error) {
+              // The command already returned an exact receipt. A projection
+              // refresh failure must not be reported as a rejected decision
+              // or trigger a second command with a new operation key.
+              refreshError = error;
+              debugPrint(
+                'Warranty decision ${attempt.operationKey} was confirmed, '
+                'but table refresh failed: $error',
               );
             }
-          } finally {
-            _endLocalOperation();
+            if (!mounted) return;
+            final confirmedMessage = switch (outcome) {
+              WarrantyOutcome.covered =>
+                'Garantía cubierta: respaldo interno actualizado.',
+              WarrantyOutcome.notCovered
+                  when _hasWarrantyPaymentEvidence(job) =>
+                'Garantía no cubierta registrada: la factura pagada se conservó sin cambios.',
+              WarrantyOutcome.notCovered =>
+                'Garantía no cubierta: factura cobrable creada.',
+              WarrantyOutcome.pending => 'Garantía devuelta a evaluación.',
+            };
+            final message = refreshError == null
+                ? confirmedMessage
+                : '$confirmedMessage No se pudo refrescar la tabla; usa Actualizar para releerla.';
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(message),
+                backgroundColor: outcome == WarrantyOutcome.notCovered
+                    ? Colors.red.shade700
+                    : Colors.green.shade700,
+                action: updated.invoiceId == null
+                    ? null
+                    : SnackBarAction(
+                        label: outcome == WarrantyOutcome.covered
+                            ? 'Abrir respaldo'
+                            : 'Abrir factura',
+                        textColor: Colors.white,
+                        onPressed: () => _openInvoice(updated.invoiceId!),
+                      ),
+              ),
+            );
           }
-        },
-        onQuotationStatusSelected: (qStatus) async {
-          Navigator.pop(dialogContext);
-          final reason = await _requestQuotationStatusReason(job, qStatus);
-          if (reason == null) return;
-          final normalizedReason = reason.trim().isEmpty ? null : reason.trim();
-          final existingAttempt = _pendingQuotationTransitionAttempts[job.id!];
-          final attempt = existingAttempt != null &&
-                  existingAttempt.matches(qStatus, normalizedReason)
-              ? existingAttempt
-              : _PendingQuotationTransitionAttempt(
-                  status: qStatus,
-                  reason: normalizedReason,
-                  operationKey: const Uuid().v4(),
-                );
-          _pendingQuotationTransitionAttempts[job.id!] = attempt;
-          await _submitQuotationTransition(job, attempt);
-        },
-      ),
+        } on MechanicJobWarrantyCommandOutcomeUnknown catch (error) {
+          debugPrint(
+            'Warranty decision outcome remains unknown for ${job.id} with '
+            'operation ${attempt.operationKey}: $error',
+          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'No se pudo confirmar el resultado. La decisión puede haberse guardado; vuelve a elegir exactamente la misma opción y motivo para reutilizar la misma operación.',
+                ),
+                backgroundColor: Colors.orange.shade900,
+                duration: const Duration(seconds: 10),
+              ),
+            );
+          }
+        } catch (error) {
+          if (identical(
+            _pendingWarrantyDecisionAttempts[job.id!],
+            attempt,
+          )) {
+            _pendingWarrantyDecisionAttempts.remove(job.id!);
+          }
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'El servidor rechazó la decisión; no se confirmó ningún cambio: $error',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        } finally {
+          _endLocalOperation();
+        }
+      },
+      onQuotationStatusSelected: (qStatus) async {
+        Navigator.pop(dialogContext);
+        final reason = await _requestQuotationStatusReason(job, qStatus);
+        if (reason == null) return;
+        final normalizedReason = reason.trim().isEmpty ? null : reason.trim();
+        final existingAttempt = _pendingQuotationTransitionAttempts[job.id!];
+        final attempt = existingAttempt != null &&
+                existingAttempt.matches(qStatus, normalizedReason)
+            ? existingAttempt
+            : _PendingQuotationTransitionAttempt(
+                status: qStatus,
+                reason: normalizedReason,
+                operationKey: const Uuid().v4(),
+              );
+        _pendingQuotationTransitionAttempts[job.id!] = attempt;
+        await _submitQuotationTransition(job, attempt);
+      },
     );
   }
 
@@ -13498,6 +13533,10 @@ class _StatusManagerDialog extends StatefulWidget {
   final Future<void> Function(QuotationStatus)? onQuotationStatusSelected;
   final bool warrantyPaymentReviewRequired;
 
+  /// Render as an anchored popover surface instead of a centred dialog.
+  /// Set by callers that have a trigger to anchor to; see guide S-05.
+  final bool asPopover;
+
   const _StatusManagerDialog({
     required this.job,
     required this.jobStatusService,
@@ -13505,6 +13544,7 @@ class _StatusManagerDialog extends StatefulWidget {
     this.onWarrantyOutcomeSelected,
     this.onQuotationStatusSelected,
     this.warrantyPaymentReviewRequired = false,
+    this.asPopover = false,
   });
 
   @override
@@ -13652,6 +13692,119 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
             widget.job.statusId ?? widget.job.customStatus?.id;
         final usesCompactLayout = ResponsiveViewport.usesCompactShell(context);
 
+        final dialogTitle = Row(
+          children: [
+            Expanded(
+              child: Text(_isEditMode
+                  ? (_editingStatus != null ? 'Editar Estado' : 'Nuevo Estado')
+                  : widget.job.isStandaloneQuotation
+                      ? 'Gestionar ${widget.job.proposalDocumentLabelLower}'
+                      : widget.job.isServiceBudget
+                          ? 'Estado operativo y presupuesto'
+                          : 'Cambiar Estado'),
+            ),
+            if (!_isEditMode && !widget.job.isStandaloneQuotation)
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline, size: 22),
+                tooltip: 'Agregar estado',
+                constraints: BoxConstraints.tight(const Size(48, 48)),
+                onPressed: () => _startEditing(null),
+              ),
+          ],
+        );
+
+        final dialogContent = SizedBox(
+          width: usesCompactLayout ? double.maxFinite : 360,
+          child: _isEditMode
+              ? _buildEditForm()
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (widget.job.jobType == JobType.warranty)
+                      _buildWarrantyOutcomeSection(),
+                    if (widget.job.isQuotationWorkflow)
+                      _buildQuotationStatusSection(),
+                    if (widget.job.jobType == JobType.warranty ||
+                        widget.job.isServiceBudget)
+                      const Divider(height: 16),
+                    if (!widget.job.isStandaloneQuotation)
+                      Flexible(
+                          child: _buildStatusList(
+                              statusesByPhase, currentStatusId)),
+                  ],
+                ),
+        );
+
+        final dialogActions = _isEditMode
+            ? [
+                TextButton(
+                  onPressed: _cancelEditing,
+                  style: usesCompactLayout
+                      ? TextButton.styleFrom(
+                          minimumSize: const Size(88, 48),
+                        )
+                      : null,
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: _saveStatus,
+                  style: usesCompactLayout
+                      ? FilledButton.styleFrom(
+                          minimumSize: const Size(96, 48),
+                        )
+                      : null,
+                  child: const Text('Guardar'),
+                ),
+              ]
+            : [
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: usesCompactLayout
+                        ? TextButton.styleFrom(
+                            minimumSize: const Size(72, 48),
+                          )
+                        : null,
+                    child: const Text('Cerrar')),
+              ];
+
+        // Guide S-05: a select opens as a popover anchored to its trigger, and
+        // "jamás un modal centrado". The centred AlertDialog stays only for the
+        // paths that have no anchor to attach to (bulk toolbar, compact shell,
+        // where the guide asks for a sheet instead).
+        if (widget.asPopover) {
+          return VbPopoverSurface(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+                  child: DefaultTextStyle(
+                    style: Theme.of(context).textTheme.titleSmall ??
+                        const TextStyle(fontWeight: FontWeight.w600),
+                    child: dialogTitle,
+                  ),
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: dialogContent,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 2, 8, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: dialogActions,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
         return AlertDialog(
           key: const ValueKey('workshop-status-manager-dialog'),
           insetPadding: usesCompactLayout
@@ -13666,81 +13819,9 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
           actionsPadding: usesCompactLayout
               ? const EdgeInsets.fromLTRB(12, 4, 12, 8)
               : null,
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(_isEditMode
-                    ? (_editingStatus != null
-                        ? 'Editar Estado'
-                        : 'Nuevo Estado')
-                    : widget.job.isStandaloneQuotation
-                        ? 'Gestionar ${widget.job.proposalDocumentLabelLower}'
-                        : widget.job.isServiceBudget
-                            ? 'Estado operativo y presupuesto'
-                            : 'Cambiar Estado'),
-              ),
-              if (!_isEditMode && !widget.job.isStandaloneQuotation)
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline, size: 22),
-                  tooltip: 'Agregar estado',
-                  constraints: BoxConstraints.tight(const Size(48, 48)),
-                  onPressed: () => _startEditing(null),
-                ),
-            ],
-          ),
-          content: SizedBox(
-            width: usesCompactLayout ? double.maxFinite : 360,
-            child: _isEditMode
-                ? _buildEditForm()
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (widget.job.jobType == JobType.warranty)
-                        _buildWarrantyOutcomeSection(),
-                      if (widget.job.isQuotationWorkflow)
-                        _buildQuotationStatusSection(),
-                      if (widget.job.jobType == JobType.warranty ||
-                          widget.job.isServiceBudget)
-                        const Divider(height: 16),
-                      if (!widget.job.isStandaloneQuotation)
-                        Flexible(
-                            child: _buildStatusList(
-                                statusesByPhase, currentStatusId)),
-                    ],
-                  ),
-          ),
-          actions: _isEditMode
-              ? [
-                  TextButton(
-                    onPressed: _cancelEditing,
-                    style: usesCompactLayout
-                        ? TextButton.styleFrom(
-                            minimumSize: const Size(88, 48),
-                          )
-                        : null,
-                    child: const Text('Cancelar'),
-                  ),
-                  FilledButton(
-                    onPressed: _saveStatus,
-                    style: usesCompactLayout
-                        ? FilledButton.styleFrom(
-                            minimumSize: const Size(96, 48),
-                          )
-                        : null,
-                    child: const Text('Guardar'),
-                  ),
-                ]
-              : [
-                  TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: usesCompactLayout
-                          ? TextButton.styleFrom(
-                              minimumSize: const Size(72, 48),
-                            )
-                          : null,
-                      child: const Text('Cerrar')),
-                ],
+          title: dialogTitle,
+          content: dialogContent,
+          actions: dialogActions,
         );
       },
     );

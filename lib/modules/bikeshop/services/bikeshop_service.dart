@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../shared/services/authority_scoped_cache.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/bikeshop_models.dart';
@@ -47,7 +48,7 @@ class _BikeSystemStateTarget {
 
 class BikeshopService extends ChangeNotifier {
   final DatabaseService _db;
-  final TenantService _tenantService = TenantService();
+  final TenantService _tenantService;
 
   static const List<String> _derivedJobObservationSources = [
     'job_diagnosis_sync',
@@ -78,11 +79,14 @@ class BikeshopService extends ChangeNotifier {
   DateTime? _bikesCacheTime;
   DateTime? _jobBikesCacheTime;
   static const Duration _cacheMaxAge = Duration(minutes: 5);
-
-  // Loading state flags to prevent concurrent fetches
-  bool _isLoadingJobs = false;
-  bool _isLoadingBikes = false;
-  bool _isLoadingAllJobBikes = false;
+  final AuthorityCacheScope _cacheScope = AuthorityCacheScope();
+  late final AuthorityScopedLoad<List<MechanicJob>> _jobsLoad =
+      AuthorityScopedLoad<List<MechanicJob>>(_cacheScope);
+  late final AuthorityScopedLoad<List<Bike>> _bikesLoad =
+      AuthorityScopedLoad<List<Bike>>(_cacheScope);
+  late final AuthorityScopedLoad<Map<String, List<MechanicJobBike>>>
+      _jobBikesLoad =
+      AuthorityScopedLoad<Map<String, List<MechanicJobBike>>>(_cacheScope);
 
   // Public getters for cached data (instant access)
   List<MechanicJob> get cachedJobs => _cachedJobs ?? [];
@@ -92,6 +96,7 @@ class BikeshopService extends ChangeNotifier {
   bool get hasJobsCache => _cachedJobs != null;
   bool get hasBikesCache => _cachedBikes != null;
   bool get hasJobBikesCache => _cachedAllJobBikes != null;
+  ErpAuthorityScopeKey? get authorityScope => _cacheScope.key;
   bool get isJobsCacheFresh =>
       _cachedJobs != null && _isCacheValid(_jobsCacheTime);
   bool get isBikesCacheFresh =>
@@ -107,16 +112,19 @@ class BikeshopService extends ChangeNotifier {
 
   /// Invalidate caches (call after create/update/delete)
   void invalidateJobsCache() {
+    _jobsLoad.detach();
     _cachedJobs = null;
     _jobsCacheTime = null;
   }
 
   void invalidateBikesCache() {
+    _bikesLoad.detach();
     _cachedBikes = null;
     _bikesCacheTime = null;
   }
 
   void invalidateJobBikesCache() {
+    _jobBikesLoad.detach();
     _cachedAllJobBikes = null;
     _jobBikesCacheTime = null;
   }
@@ -195,11 +203,75 @@ class BikeshopService extends ChangeNotifier {
   String pegasSearchTerm = '';
   String pegasViewMode = 'table';
 
-  BikeshopService(this._db) {
-    // Fire and forget - with debouncing, realtime is now safe!
-    _setupMechanicJobsRealtime();
-    _setupMechanicJobBikesRealtime();
-    _setupSalesInvoicesRealtime(); // Also listen to invoice changes (for payment status)
+  BikeshopService(
+    this._db, {
+    TenantService? tenantService,
+  }) : _tenantService = tenantService ?? TenantService();
+
+  void bindAuthorityScope({
+    required String? userId,
+    required String? tenantId,
+  }) {
+    if (!_cacheScope.bind(userId: userId, tenantId: tenantId)) return;
+    _clearAuthorityOwnedState();
+  }
+
+  AuthorityScopeResolution _resolveAuthorityScope({
+    required String? userId,
+    required String? tenantId,
+  }) {
+    final resolution = _cacheScope.resolve(
+      userId: userId,
+      tenantId: tenantId,
+    );
+    if (resolution.didChange) _clearAuthorityOwnedState();
+    return resolution;
+  }
+
+  void _clearAuthorityOwnedState() {
+    final hadCache = _cachedJobs != null ||
+        _cachedBikes != null ||
+        _cachedAllJobBikes != null;
+    _jobsLoad.detach();
+    _bikesLoad.detach();
+    _jobBikesLoad.detach();
+    _cachedJobs = null;
+    _cachedBikes = null;
+    _cachedAllJobBikes = null;
+    _jobsCacheTime = null;
+    _bikesCacheTime = null;
+    _jobBikesCacheTime = null;
+    _detachRealtimeChannels();
+    final lease = _cacheScope.capture();
+    if (lease != null) {
+      unawaited(_setupMechanicJobsRealtime(lease));
+      unawaited(_setupMechanicJobBikesRealtime(lease));
+      unawaited(_setupSalesInvoicesRealtime(lease));
+    }
+    if (hadCache) notifyListeners();
+  }
+
+  Future<bool> _ensureAuthorityScope() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) {
+      _resolveAuthorityScope(userId: null, tenantId: null);
+      return false;
+    }
+
+    final tenantId = await _tenantService.getTenantId();
+    if (Supabase.instance.client.auth.currentUser?.id != userId) return false;
+    if (tenantId == null || tenantId.isEmpty) {
+      _resolveAuthorityScope(userId: null, tenantId: null);
+      return false;
+    }
+    final resolution = _resolveAuthorityScope(
+      userId: userId,
+      tenantId: tenantId,
+    );
+    if (resolution == AuthorityScopeResolution.rejectedTenantChange) {
+      throw const AuthorityScopeChangedException();
+    }
+    return resolution.isAccepted;
   }
 
   // ============================================================
@@ -212,11 +284,13 @@ class BikeshopService extends ChangeNotifier {
     String? searchTerm,
     bool forceRefresh = false,
   }) async {
+    if (!await _ensureAuthorityScope()) {
+      throw const AuthorityScopeChangedException();
+    }
     // For filtered queries, always fetch fresh (but still cache the full list)
     final isFilteredQuery = (customerId != null && customerId.isNotEmpty) ||
         (searchTerm != null && searchTerm.isNotEmpty);
 
-    // Return cached data if valid and not a filtered query
     if (!forceRefresh &&
         !isFilteredQuery &&
         _isCacheValid(_bikesCacheTime) &&
@@ -226,19 +300,38 @@ class BikeshopService extends ChangeNotifier {
       return _cachedBikes!;
     }
 
-    // Prevent concurrent fetches
-    if (_isLoadingBikes && !isFilteredQuery) {
-      debugPrint('⏳ [BikeshopService] Already loading bikes, waiting...');
-      // Wait for existing fetch to complete
-      while (_isLoadingBikes) {
-        await Future.delayed(const Duration(milliseconds: 50));
+    if (isFilteredQuery) {
+      final lease = _cacheScope.capture();
+      if (lease == null) throw const AuthorityScopeChangedException();
+      final bikes = await _loadBikes(
+        customerId: customerId,
+        searchTerm: searchTerm,
+        expectedTenantId: lease.scope.tenantId,
+      );
+      if (!_cacheScope.owns(lease)) {
+        throw const AuthorityScopeChangedException();
       }
-      if (_cachedBikes != null) return _cachedBikes!;
+      return bikes;
     }
 
-    try {
-      if (!isFilteredQuery) _isLoadingBikes = true;
+    return _bikesLoad.run(
+      load: (lease) => _loadBikes(
+        expectedTenantId: lease.scope.tenantId,
+      ),
+      publish: (bikes, _) {
+        _cachedBikes = bikes;
+        _bikesCacheTime = DateTime.now();
+        debugPrint('✅ [BikeshopService] Cached ${bikes.length} bikes');
+      },
+    );
+  }
 
+  Future<List<Bike>> _loadBikes({
+    String? customerId,
+    String? searchTerm,
+    required String expectedTenantId,
+  }) async {
+    try {
       List<Map<String, dynamic>> data;
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
@@ -267,20 +360,15 @@ class BikeshopService extends ChangeNotifier {
 
       final bikes = data.map((json) => Bike.fromJson(json)).toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-      // Cache only unfiltered results
-      if (!isFilteredQuery) {
-        _cachedBikes = bikes;
-        _bikesCacheTime = DateTime.now();
-        debugPrint('✅ [BikeshopService] Cached ${bikes.length} bikes');
+      if (bikes.any((bike) => bike.tenantId != expectedTenantId)) {
+        throw StateError(
+          'Bike query returned data outside the authority tenant',
+        );
       }
-
       return bikes;
     } catch (e) {
       if (kDebugMode) print('Error fetching bikes: $e');
       rethrow;
-    } finally {
-      if (!isFilteredQuery) _isLoadingBikes = false;
     }
   }
 
@@ -2777,6 +2865,9 @@ class BikeshopService extends ChangeNotifier {
     bool includeDeleted = false,
     bool forceRefresh = false,
   }) async {
+    if (!await _ensureAuthorityScope()) {
+      throw const AuthorityScopeChangedException();
+    }
     // Check if this is a filtered query
     final isFilteredQuery = (customerId != null && customerId.isNotEmpty) ||
         (bikeId != null && bikeId.isNotEmpty) ||
@@ -2795,18 +2886,46 @@ class BikeshopService extends ChangeNotifier {
       return _cachedJobs!;
     }
 
-    // Prevent concurrent fetches
-    if (_isLoadingJobs && !isFilteredQuery) {
-      debugPrint('⏳ [BikeshopService] Already loading jobs, waiting...');
-      while (_isLoadingJobs) {
-        await Future.delayed(const Duration(milliseconds: 50));
+    if (isFilteredQuery) {
+      final lease = _cacheScope.capture();
+      if (lease == null) throw const AuthorityScopeChangedException();
+      final jobs = await _loadJobs(
+        customerId: customerId,
+        bikeId: bikeId,
+        status: status,
+        searchTerm: searchTerm,
+        includeCompleted: includeCompleted,
+        includeDeleted: includeDeleted,
+        expectedTenantId: lease.scope.tenantId,
+      );
+      if (!_cacheScope.owns(lease)) {
+        throw const AuthorityScopeChangedException();
       }
-      if (_cachedJobs != null && !isFilteredQuery) return _cachedJobs!;
+      return jobs;
     }
 
-    try {
-      if (!isFilteredQuery) _isLoadingJobs = true;
+    return _jobsLoad.run(
+      load: (lease) => _loadJobs(
+        expectedTenantId: lease.scope.tenantId,
+      ),
+      publish: (jobs, _) {
+        _cachedJobs = jobs;
+        _jobsCacheTime = DateTime.now();
+        debugPrint('✅ [BikeshopService] Cached ${jobs.length} jobs');
+      },
+    );
+  }
 
+  Future<List<MechanicJob>> _loadJobs({
+    String? customerId,
+    String? bikeId,
+    JobStatus? status,
+    String? searchTerm,
+    bool includeCompleted = true,
+    bool includeDeleted = false,
+    required String expectedTenantId,
+  }) async {
+    try {
       // Join with job_statuses only. Subject data is hydrated separately so
       // the app does not depend on a deployed PostgREST relationship cache.
       var query = Supabase.instance.client.from('mechanic_jobs').select('''
@@ -2840,6 +2959,11 @@ class BikeshopService extends ChangeNotifier {
       var jobs = data
           .map((json) => MechanicJob.fromJson(json as Map<String, dynamic>))
           .toList();
+      if (jobs.any((job) => job.tenantId != expectedTenantId)) {
+        throw StateError(
+          'Mechanic job query returned data outside the authority tenant',
+        );
+      }
 
       jobs = await _hydrateJobSubjects(jobs);
       jobs = await _hydrateServiceWarranties(jobs);
@@ -2858,20 +2982,10 @@ class BikeshopService extends ChangeNotifier {
       }
 
       jobs.sort((a, b) => b.arrivalDate.compareTo(a.arrivalDate));
-
-      // Cache only unfiltered results
-      if (!isFilteredQuery) {
-        _cachedJobs = jobs;
-        _jobsCacheTime = DateTime.now();
-        debugPrint('✅ [BikeshopService] Cached ${jobs.length} jobs');
-      }
-
       return jobs;
     } catch (e) {
       if (kDebugMode) print('Error fetching jobs: $e');
       rethrow;
-    } finally {
-      if (!isFilteredQuery) _isLoadingJobs = false;
     }
   }
 
@@ -3672,13 +3786,16 @@ class BikeshopService extends ChangeNotifier {
     bool forceRefresh = false,
   }) async {
     try {
+      if (!await _ensureAuthorityScope()) {
+        throw const AuthorityScopeChangedException();
+      }
       if (!forceRefresh && isJobBikesCacheFresh && _cachedAllJobBikes != null) {
         return List<MechanicJobBike>.from(
             _cachedAllJobBikes![jobId] ?? const []);
       }
 
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) return [];
+      final lease = _cacheScope.capture();
+      if (lease == null) throw const AuthorityScopeChangedException();
 
       final data = await Supabase.instance.client
           .from('mechanic_job_bikes')
@@ -3687,13 +3804,23 @@ class BikeshopService extends ChangeNotifier {
             bike:bikes(*),
             status:job_statuses(*)
           ''')
-          .eq('tenant_id', tenantId)
+          .eq('tenant_id', lease.scope.tenantId)
           .eq('job_id', jobId)
           .order('order_index');
 
-      return (data as List)
-          .map((json) => MechanicJobBike.fromJson(json))
-          .toList();
+      if (!_cacheScope.owns(lease)) {
+        throw const AuthorityScopeChangedException();
+      }
+      final jobBikes =
+          (data as List).map((json) => MechanicJobBike.fromJson(json)).toList();
+      if (jobBikes.any(
+        (jobBike) => jobBike.tenantId != lease.scope.tenantId,
+      )) {
+        throw StateError(
+          'Job bike query returned data outside the authority tenant',
+        );
+      }
+      return jobBikes;
     } catch (e) {
       if (kDebugMode) print('Error fetching job bikes: $e');
       rethrow;
@@ -3705,45 +3832,49 @@ class BikeshopService extends ChangeNotifier {
     bool forceRefresh = false,
   }) async {
     try {
+      if (!await _ensureAuthorityScope()) {
+        throw const AuthorityScopeChangedException();
+      }
       if (!forceRefresh && isJobBikesCacheFresh && _cachedAllJobBikes != null) {
         return _cloneJobBikesMap(_cachedAllJobBikes!);
       }
 
-      if (_isLoadingAllJobBikes && !forceRefresh) {
-        while (_isLoadingAllJobBikes) {
-          await Future.delayed(const Duration(milliseconds: 50));
-        }
-        if (_cachedAllJobBikes != null) {
-          return _cloneJobBikesMap(_cachedAllJobBikes!);
-        }
-      }
+      final result = await _jobBikesLoad.run(
+        load: (lease) async {
+          final data = await Supabase.instance.client
+              .from('mechanic_job_bikes')
+              .select('''
+                *,
+                bike:bikes(*),
+                status:job_statuses(*)
+              ''')
+              .eq('tenant_id', lease.scope.tenantId)
+              .order('order_index');
 
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) return {};
-
-      _isLoadingAllJobBikes = true;
-      final data =
-          await Supabase.instance.client.from('mechanic_job_bikes').select('''
-            *,
-            bike:bikes(*),
-            status:job_statuses(*)
-          ''').eq('tenant_id', tenantId).order('order_index');
-
-      final allJobBikes =
-          (data as List).map((json) => MechanicJobBike.fromJson(json)).toList();
-
-      // Group by job_id
-      final result = <String, List<MechanicJobBike>>{};
-      for (final jb in allJobBikes) {
-        result.putIfAbsent(jb.jobId, () => []).add(jb);
-      }
-      _cacheAllJobBikes(result);
+          final allJobBikes = (data as List)
+              .map((json) => MechanicJobBike.fromJson(json))
+              .toList();
+          if (allJobBikes.any(
+            (jobBike) => jobBike.tenantId != lease.scope.tenantId,
+          )) {
+            throw StateError(
+              'Job bike query returned data outside the authority tenant',
+            );
+          }
+          final grouped = <String, List<MechanicJobBike>>{};
+          for (final jobBike in allJobBikes) {
+            grouped.putIfAbsent(jobBike.jobId, () => []).add(jobBike);
+          }
+          return grouped;
+        },
+        publish: (jobBikes, _) => _cacheAllJobBikes(jobBikes),
+      );
       return _cloneJobBikesMap(result);
+    } on AuthorityScopeChangedException {
+      rethrow;
     } catch (e) {
       if (kDebugMode) print('Error fetching all job bikes: $e');
       return {};
-    } finally {
-      _isLoadingAllJobBikes = false;
     }
   }
 
@@ -3753,13 +3884,19 @@ class BikeshopService extends ChangeNotifier {
     bool syncBikeMemory = true,
   }) async {
     try {
+      if (!await _ensureAuthorityScope()) {
+        throw const AuthorityScopeChangedException();
+      }
+      final lease = _cacheScope.capture()!;
       final data = await _db.insert('mechanic_job_bikes', jobBike.toJson());
       final createdJobBike = MechanicJobBike.fromJson(data);
-      _upsertJobBikeInCache(createdJobBike);
+      if (_cacheScope.owns(lease)) {
+        _upsertJobBikeInCache(createdJobBike);
+      }
       if (syncBikeMemory) {
         await _safeSyncBikeMemoryForJob(createdJobBike.jobId);
       }
-      notifyListeners();
+      if (_cacheScope.owns(lease)) notifyListeners();
       return createdJobBike;
     } catch (e) {
       if (kDebugMode) print('Error adding bike to job: $e');
@@ -3773,6 +3910,10 @@ class BikeshopService extends ChangeNotifier {
     bool syncBikeMemory = true,
   }) async {
     try {
+      if (!await _ensureAuthorityScope()) {
+        throw const AuthorityScopeChangedException();
+      }
+      final lease = _cacheScope.capture()!;
       if (jobBike.id == null || jobBike.id!.isEmpty) {
         throw Exception('ID de bicicleta de trabajo inválido');
       }
@@ -3782,11 +3923,13 @@ class BikeshopService extends ChangeNotifier {
         jobBike.toJson(forUpdate: true),
       );
       final updatedJobBike = MechanicJobBike.fromJson(data);
-      _upsertJobBikeInCache(updatedJobBike);
+      if (_cacheScope.owns(lease)) {
+        _upsertJobBikeInCache(updatedJobBike);
+      }
       if (syncBikeMemory) {
         await _safeSyncBikeMemoryForJob(updatedJobBike.jobId);
       }
-      notifyListeners();
+      if (_cacheScope.owns(lease)) notifyListeners();
       return updatedJobBike;
     } catch (e) {
       if (kDebugMode) print('Error updating job bike: $e');
@@ -3800,6 +3943,10 @@ class BikeshopService extends ChangeNotifier {
     bool syncBikeMemory = true,
   }) async {
     try {
+      if (!await _ensureAuthorityScope()) {
+        throw const AuthorityScopeChangedException();
+      }
+      final lease = _cacheScope.capture()!;
       if (jobBikeId.isEmpty) throw Exception('ID inválido');
 
       String? jobId;
@@ -3808,16 +3955,19 @@ class BikeshopService extends ChangeNotifier {
             .from('mechanic_job_bikes')
             .select('job_id')
             .eq('id', jobBikeId)
+            .eq('tenant_id', lease.scope.tenantId)
             .maybeSingle();
         jobId = existing?['job_id']?.toString();
       }
 
       await _db.delete('mechanic_job_bikes', jobBikeId);
-      _removeJobBikeFromCache(jobBikeId, jobId: jobId);
+      if (_cacheScope.owns(lease)) {
+        _removeJobBikeFromCache(jobBikeId, jobId: jobId);
+      }
       if (syncBikeMemory) {
         await _safeSyncBikeMemoryForJob(jobId);
       }
-      notifyListeners();
+      if (_cacheScope.owns(lease)) notifyListeners();
     } catch (e) {
       if (kDebugMode) print('Error removing bike from job: $e');
       rethrow;
@@ -4149,18 +4299,37 @@ class BikeshopService extends ChangeNotifier {
   // Realtime subscription for mechanic jobs
   // Uses SURGICAL UPDATES - only updates the specific changed record in cache
   // instead of triggering full page rebuilds
-  Future<void> _setupMechanicJobsRealtime() async {
+  void _detachRealtimeChannels() {
+    final jobsChannel = _mechanicJobsChannel;
+    final jobBikesChannel = _jobBikesChannel;
+    final salesInvoicesChannel = _salesInvoicesChannel;
+    _mechanicJobsChannel = null;
+    _jobBikesChannel = null;
+    _salesInvoicesChannel = null;
+    _notifyDebounceTimer?.cancel();
+    _invoiceNotifyDebounceTimer?.cancel();
+
+    if (jobsChannel != null) {
+      unawaited(jobsChannel.unsubscribe());
+    }
+    if (jobBikesChannel != null) {
+      unawaited(jobBikesChannel.unsubscribe());
+    }
+    if (salesInvoicesChannel != null) {
+      unawaited(salesInvoicesChannel.unsubscribe());
+    }
+  }
+
+  Future<void> _setupMechanicJobsRealtime(
+    AuthorityCacheLease lease,
+  ) async {
     try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
-        debugPrint('⚠️ [BikeshopService] Cannot setup realtime: no tenant_id');
-        return;
-      }
+      if (!_cacheScope.owns(lease)) return;
+      final tenantId = lease.scope.tenantId;
 
-      await _mechanicJobsChannel?.unsubscribe();
-
-      _mechanicJobsChannel = Supabase.instance.client
-          .channel('mechanic_jobs_changes')
+      late final RealtimeChannel channel;
+      channel = Supabase.instance.client
+          .channel('mechanic_jobs_changes-$tenantId-${lease.generation}')
           .onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
@@ -4170,9 +4339,16 @@ class BikeshopService extends ChangeNotifier {
               column: 'tenant_id',
               value: tenantId,
             ),
-            callback: (payload) => _handleMechanicJobChange(payload),
+            callback: (payload) =>
+                _handleMechanicJobChange(channel, lease, payload),
           )
           .subscribe();
+
+      if (!_cacheScope.owns(lease)) {
+        await channel.unsubscribe();
+        return;
+      }
+      _mechanicJobsChannel = channel;
 
       if (!kReleaseMode) {
         debugPrint(
@@ -4185,19 +4361,16 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-  Future<void> _setupMechanicJobBikesRealtime() async {
+  Future<void> _setupMechanicJobBikesRealtime(
+    AuthorityCacheLease lease,
+  ) async {
     try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
-        debugPrint(
-            '⚠️ [BikeshopService] Cannot setup job bike realtime: no tenant_id');
-        return;
-      }
+      if (!_cacheScope.owns(lease)) return;
+      final tenantId = lease.scope.tenantId;
 
-      await _jobBikesChannel?.unsubscribe();
-
-      _jobBikesChannel = Supabase.instance.client
-          .channel('mechanic_job_bikes_changes')
+      late final RealtimeChannel channel;
+      channel = Supabase.instance.client
+          .channel('mechanic_job_bikes_changes-$tenantId-${lease.generation}')
           .onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
@@ -4207,9 +4380,16 @@ class BikeshopService extends ChangeNotifier {
               column: 'tenant_id',
               value: tenantId,
             ),
-            callback: _handleMechanicJobBikeChange,
+            callback: (payload) =>
+                _handleMechanicJobBikeChange(channel, lease, payload),
           )
           .subscribe();
+
+      if (!_cacheScope.owns(lease)) {
+        await channel.unsubscribe();
+        return;
+      }
+      _jobBikesChannel = channel;
 
       if (!kReleaseMode) {
         debugPrint('✅ [BikeshopService] Job bike realtime subscription active');
@@ -4221,19 +4401,29 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-  void _handleMechanicJobBikeChange(PostgresChangePayload payload) {
+  void _handleMechanicJobBikeChange(
+    RealtimeChannel channel,
+    AuthorityCacheLease lease,
+    PostgresChangePayload payload,
+  ) {
+    if (!_cacheScope.owns(lease) || !identical(channel, _jobBikesChannel)) {
+      return;
+    }
+
     try {
       switch (payload.eventType) {
         case PostgresChangeEvent.insert:
         case PostgresChangeEvent.update:
           final rawNew = payload.newRecord;
+          if (!_recordMatchesLease(rawNew, lease)) return;
           final jobBikeId = rawNew['id']?.toString();
           if (jobBikeId != null && jobBikeId.isNotEmpty) {
-            _fetchAndUpdateJobBike(jobBikeId);
+            unawaited(_fetchAndUpdateJobBike(jobBikeId, lease));
           }
           break;
         case PostgresChangeEvent.delete:
           final rawOld = payload.oldRecord;
+          if (!_recordMatchesLease(rawOld, lease)) return;
           final jobBikeId = rawOld['id']?.toString();
           if (jobBikeId != null && jobBikeId.isNotEmpty) {
             _removeJobBikeFromCache(
@@ -4254,16 +4444,30 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-  Future<void> _fetchAndUpdateJobBike(String jobBikeId) async {
+  Future<void> _fetchAndUpdateJobBike(
+    String jobBikeId,
+    AuthorityCacheLease lease,
+  ) async {
     try {
-      final data =
-          await Supabase.instance.client.from('mechanic_job_bikes').select('''
+      final data = await Supabase.instance.client
+          .from('mechanic_job_bikes')
+          .select('''
             *,
             bike:bikes(*),
             status:job_statuses(*)
-          ''').eq('id', jobBikeId).maybeSingle();
+          ''')
+          .eq('id', jobBikeId)
+          .eq(
+            'tenant_id',
+            lease.scope.tenantId,
+          )
+          .maybeSingle();
 
-      if (data == null) return;
+      if (data == null ||
+          !_cacheScope.owns(lease) ||
+          data['tenant_id']?.toString() != lease.scope.tenantId) {
+        return;
+      }
 
       final jobBike = MechanicJobBike.fromJson(data);
       _upsertJobBikeInCache(jobBike);
@@ -4277,20 +4481,30 @@ class BikeshopService extends ChangeNotifier {
 
   /// Handle realtime change for mechanic_jobs with SURGICAL UPDATE
   /// Fetches the complete record with joins to ensure all data is available
-  void _handleMechanicJobChange(PostgresChangePayload payload) {
+  void _handleMechanicJobChange(
+    RealtimeChannel channel,
+    AuthorityCacheLease lease,
+    PostgresChangePayload payload,
+  ) {
+    if (!_cacheScope.owns(lease) || !identical(channel, _mechanicJobsChannel)) {
+      return;
+    }
+
     try {
       switch (payload.eventType) {
         case PostgresChangeEvent.insert:
         case PostgresChangeEvent.update:
           final rawNew = payload.newRecord;
+          if (!_recordMatchesLease(rawNew, lease)) return;
           final jobId = rawNew['id']?.toString();
           if (jobId != null && jobId.isNotEmpty) {
             // Fetch complete job with joined data (async, non-blocking)
-            _fetchAndUpdateJob(jobId);
+            unawaited(_fetchAndUpdateJob(jobId, lease));
           }
           break;
         case PostgresChangeEvent.delete:
           final rawOld = payload.oldRecord;
+          if (!_recordMatchesLease(rawOld, lease)) return;
           final id = rawOld['id']?.toString();
           if (id != null) {
             _surgicalRemoveJob(id);
@@ -4310,19 +4524,33 @@ class BikeshopService extends ChangeNotifier {
   }
 
   /// Fetch a complete job with joined data and update the cache surgically
-  Future<void> _fetchAndUpdateJob(String jobId) async {
+  Future<void> _fetchAndUpdateJob(
+    String jobId,
+    AuthorityCacheLease lease,
+  ) async {
     try {
       // Fetch with job_status join only. Subject data is hydrated separately.
-      final data =
-          await Supabase.instance.client.from('mechanic_jobs').select('''
+      final data = await Supabase.instance.client
+          .from('mechanic_jobs')
+          .select('''
             *,
             job_status:job_statuses(*)
-          ''').eq('id', jobId).isFilter('deleted_at', null).maybeSingle();
+          ''')
+          .eq('id', jobId)
+          .eq(
+            'tenant_id',
+            lease.scope.tenantId,
+          )
+          .isFilter('deleted_at', null)
+          .maybeSingle();
 
-      if (data != null) {
+      if (data != null &&
+          _cacheScope.owns(lease) &&
+          data['tenant_id']?.toString() == lease.scope.tenantId) {
         final hydrated = await _hydrateJobSubjects([
           MechanicJob.fromJson(data),
         ]);
+        if (!_cacheScope.owns(lease)) return;
         final job = hydrated.first;
         _surgicalUpdateJob(job);
         debugPrint('🔧 [BikeshopService] Surgical update: ${job.jobNumber}');
@@ -4356,17 +4584,16 @@ class BikeshopService extends ChangeNotifier {
 
   /// Setup realtime subscription for sales_invoices (for invoice status updates)
   /// Uses lighter-weight notification since we don't cache invoices here
-  Future<void> _setupSalesInvoicesRealtime() async {
+  Future<void> _setupSalesInvoicesRealtime(
+    AuthorityCacheLease lease,
+  ) async {
     try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
-        return;
-      }
+      if (!_cacheScope.owns(lease)) return;
+      final tenantId = lease.scope.tenantId;
 
-      await _salesInvoicesChannel?.unsubscribe();
-
-      _salesInvoicesChannel = Supabase.instance.client
-          .channel('sales_invoices_for_pegas')
+      late final RealtimeChannel channel;
+      channel = Supabase.instance.client
+          .channel('sales_invoices_for_pegas-$tenantId-${lease.generation}')
           .onPostgresChanges(
             event: PostgresChangeEvent
                 .update, // Only care about updates (status changes)
@@ -4377,38 +4604,16 @@ class BikeshopService extends ChangeNotifier {
               column: 'tenant_id',
               value: tenantId,
             ),
-            callback: (payload) {
-              // 1. Try to find if this invoice serves a cached job and update it surgically
-              // This is critical because invoice updates change job totals via DB triggers
-              try {
-                final newRecord = payload.newRecord;
-                if (_cachedJobs != null) {
-                  final invoiceId = newRecord['id']?.toString();
-                  if (invoiceId != null) {
-                    final jobIndex = _cachedJobs!
-                        .indexWhere((j) => j.invoiceId == invoiceId);
-                    if (jobIndex != -1) {
-                      final jobId = _cachedJobs![jobIndex].id;
-                      if (jobId != null) {
-                        debugPrint(
-                            '🔗 [BikeshopService] Invoice update linked to job $jobId - refreshing job...');
-                        // Fetch fresh job data immediately to reflect DB trigger updates
-                        _fetchAndUpdateJob(jobId);
-                      }
-                    }
-                  }
-                }
-              } catch (e) {
-                debugPrint(
-                    '⚠️ [BikeshopService] Error linking invoice to job: $e');
-              }
-
-              // For invoice changes, we use a longer debounce since these are less critical
-              // The Trabajos table will still show correct data on next user interaction
-              _debouncedNotifyInvoiceChange();
-            },
+            callback: (payload) =>
+                _handleSalesInvoiceChange(channel, lease, payload),
           )
           .subscribe();
+
+      if (!_cacheScope.owns(lease)) {
+        await channel.unsubscribe();
+        return;
+      }
+      _salesInvoicesChannel = channel;
 
       if (!kReleaseMode) {
         debugPrint(
@@ -4422,13 +4627,56 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
+  void _handleSalesInvoiceChange(
+    RealtimeChannel channel,
+    AuthorityCacheLease lease,
+    PostgresChangePayload payload,
+  ) {
+    if (!_cacheScope.owns(lease) ||
+        !identical(channel, _salesInvoicesChannel) ||
+        !_recordMatchesLease(payload.newRecord, lease)) {
+      return;
+    }
+
+    // Try to find whether this invoice serves a cached job and update only it.
+    try {
+      final invoiceId = payload.newRecord['id']?.toString();
+      if (_cachedJobs != null && invoiceId != null) {
+        final jobIndex =
+            _cachedJobs!.indexWhere((job) => job.invoiceId == invoiceId);
+        if (jobIndex != -1) {
+          final jobId = _cachedJobs![jobIndex].id;
+          if (jobId != null) {
+            debugPrint(
+                '🔗 [BikeshopService] Invoice update linked to job $jobId - refreshing job...');
+            unawaited(_fetchAndUpdateJob(jobId, lease));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ [BikeshopService] Error linking invoice to job: $e');
+    }
+
+    _debouncedNotifyInvoiceChange(lease);
+  }
+
+  bool _recordMatchesLease(
+    Map<String, dynamic> record,
+    AuthorityCacheLease lease,
+  ) {
+    final tenantId = record['tenant_id']?.toString();
+    return tenantId == null ||
+        tenantId.isEmpty ||
+        tenantId == lease.scope.tenantId;
+  }
+
   Timer? _invoiceNotifyDebounceTimer;
 
   /// Longer debounce for invoice changes (3 seconds) - less disruptive
-  void _debouncedNotifyInvoiceChange() {
+  void _debouncedNotifyInvoiceChange(AuthorityCacheLease lease) {
     _invoiceNotifyDebounceTimer?.cancel();
     _invoiceNotifyDebounceTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
+      if (!mounted || !_cacheScope.owns(lease)) return;
       debugPrint(
           '🔔 [BikeshopService] Invoice change notification (3s debounce)');
       notifyListeners();
@@ -4877,12 +5125,7 @@ class BikeshopService extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
-    _notifyDebounceTimer?.cancel();
-    _invoiceNotifyDebounceTimer?.cancel();
-    _mechanicJobsChannel?.unsubscribe();
-    _jobBikesChannel?.unsubscribe();
-    _salesInvoicesChannel
-        ?.unsubscribe(); // Clean up sales invoices subscription
+    _detachRealtimeChannels();
     super.dispose();
   }
 }

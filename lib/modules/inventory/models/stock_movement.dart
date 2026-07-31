@@ -157,8 +157,8 @@ class StockMovement {
       linkedAdjustmentId: json['linked_adjustment_id']?.toString(),
       canonicalMovementId: json['canonical_movement_id']?.toString(),
       operationId: json['operation_id']?.toString(),
-      sourceDocumentType: json['source_document_type'] as String?,
-      sourceDocumentId: json['source_document_id']?.toString(),
+      sourceDocumentType: _trimmedText(json['source_document_type']),
+      sourceDocumentId: _trimmedText(json['source_document_id']),
       triggerOperationId: json['trigger_operation_id']?.toString(),
       triggerAction: json['trigger_action']?.toString(),
       triggerSourceChannel: json['trigger_source_channel']?.toString(),
@@ -324,6 +324,15 @@ class StockMovement {
   bool get hasEvidenceBalanceDifference =>
       evidenceStockBefore != stockBefore || evidenceStockAfter != stockAfter;
 
+  /// Whether a source document actually recorded the balances in
+  /// [evidenceStockBefore] / [evidenceStockAfter].
+  ///
+  /// For every other provenance the database reconstructs them by walking
+  /// backwards, which is an inference and must never be shown as evidence.
+  bool get hasRecordedSourceBalance =>
+      evidenceBalanceProvenance == 'stock_adjustment' ||
+      evidenceBalanceProvenance == 'legacy_collision_adjustment';
+
   String get integrityLabel {
     switch (integrityStatus) {
       case 'verified':
@@ -376,7 +385,7 @@ class StockMovement {
   /// Receipt stock rows are owned by the formal receipt document, even though
   /// older read-model projections can describe them as generic adjustments.
   bool get isPurchaseReceiptMovement {
-    final documentType = sourceDocumentType?.trim().toLowerCase();
+    final documentType = normalizedSourceDocumentType;
     if (documentType != null && documentType.isNotEmpty) {
       return documentType == 'purchase_receipt' ||
           documentType == 'purchase_receipt_component';
@@ -390,6 +399,40 @@ class StockMovement {
         source == 'purchase_receipt_reversal';
   }
 
+  String? get normalizedSourceDocumentType {
+    final value = sourceDocumentType?.trim().toLowerCase();
+    return value == null || value.isEmpty ? null : value;
+  }
+
+  bool get hasTypedSourceDocument => normalizedSourceDocumentType != null;
+  bool get isSalesInvoiceSourceDocument =>
+      normalizedSourceDocumentType == 'sales_invoice' ||
+      normalizedSourceDocumentType == 'sales_invoice_component';
+  bool get isPurchaseInvoiceSourceDocument =>
+      normalizedSourceDocumentType == 'purchase_invoice';
+  bool get isStockAdjustmentSourceDocument =>
+      normalizedSourceDocumentType == 'stock_adjustment';
+  bool get isMechanicJobSourceDocument =>
+      normalizedSourceDocumentType == 'mechanic_job';
+  bool get isOnlineOrderSourceDocument =>
+      normalizedSourceDocumentType == 'online_order';
+
+  String get sourceDocumentDisplay {
+    return switch (normalizedSourceDocumentType) {
+      'sales_invoice' || 'sales_invoice_component' => 'factura de venta',
+      'purchase_invoice' => 'factura de compra',
+      'purchase_receipt' ||
+      'purchase_receipt_component' =>
+        'recepción de compra',
+      'stock_adjustment' => 'ajuste de inventario',
+      'sales_return' => 'devolución de venta',
+      'purchase_supplier_return' => 'devolución a proveedor',
+      'mechanic_job' => 'trabajo de taller',
+      'online_order' => 'pedido online',
+      _ => 'documento fuente',
+    };
+  }
+
   bool get isPurchaseReceiptReversal {
     if (!isPurchaseReceiptMovement) return false;
     return movementType == 'purchase_receipt_reversal' ||
@@ -399,6 +442,28 @@ class StockMovement {
 
   StockMovementCategory get category {
     if (isPurchaseReceiptMovement) {
+      return StockMovementCategory.purchase;
+    }
+
+    // Corrections still belong to the commercial flow they correct. Treating
+    // a customer return or supplier return as a generic adjustment made the
+    // Venta/Compra facets silently omit real stock movement. Prefer the typed
+    // business owner when present, then cover legacy rows by their movement
+    // and source prefixes.
+    final documentType = normalizedSourceDocumentType;
+    if (documentType == 'sales_return' ||
+        documentType == 'sales_return_quarantine_resolution') {
+      return StockMovementCategory.sale;
+    }
+    if (documentType == 'purchase_supplier_return') {
+      return StockMovementCategory.purchase;
+    }
+    if (movementType.startsWith('sales_return') ||
+        source.startsWith('sales_return')) {
+      return StockMovementCategory.sale;
+    }
+    if (movementType.startsWith('purchase_supplier_return') ||
+        source.startsWith('purchase_supplier_return')) {
       return StockMovementCategory.purchase;
     }
 
@@ -448,13 +513,14 @@ class StockMovement {
         : movementCategory == categoryKey;
   }
 
-  /// The source document is authoritative for receipt navigation. In
-  /// particular, [referenceId] may be null or point at a generic adjustment
-  /// because it comes from a legacy projection.
+  /// The typed source document is the stable identity for every movement that
+  /// supplies one. [referenceId] is only a legacy fallback: depending on the
+  /// projection it may point at an adjustment or another implementation
+  /// detail instead of the business document that caused the movement.
   String? get navigableReferenceId {
-    if (isPurchaseReceiptMovement) {
-      final receiptId = sourceDocumentId?.trim();
-      return receiptId == null || receiptId.isEmpty ? null : receiptId;
+    final documentId = sourceDocumentId?.trim();
+    if (documentId != null && documentId.isNotEmpty) {
+      return documentId;
     }
 
     final legacyId = referenceId?.trim();
@@ -462,10 +528,23 @@ class StockMovement {
   }
 
   bool get hasNavigableReference {
-    return navigableReferenceId != null &&
-        (category == StockMovementCategory.sale ||
-            category == StockMovementCategory.purchase ||
-            category == StockMovementCategory.adjustment);
+    if (navigableReferenceId == null) return false;
+
+    // A typed identity belongs to its declared business owner. Falling back to
+    // the broad movement category here can send, for example, a mechanic-job
+    // UUID to the sales-invoice loader merely because both decrease stock.
+    if (hasTypedSourceDocument) {
+      return isSalesInvoiceSourceDocument ||
+          isPurchaseInvoiceSourceDocument ||
+          isPurchaseReceiptMovement ||
+          isStockAdjustmentSourceDocument ||
+          isMechanicJobSourceDocument ||
+          isOnlineOrderSourceDocument;
+    }
+
+    return category == StockMovementCategory.sale ||
+        category == StockMovementCategory.purchase ||
+        category == StockMovementCategory.adjustment;
   }
 
   String get referenceDisplay {
@@ -564,6 +643,11 @@ class StockMovement {
     }
 
     return 'Sin referencia';
+  }
+
+  static String? _trimmedText(Object? value) {
+    final text = value?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
   }
 
   String get movementTypeDisplay {

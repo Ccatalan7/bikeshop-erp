@@ -1740,8 +1740,7 @@ class _ProductListPageState extends State<ProductListPage> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
-          bottom: BorderSide(
-              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.2)),
+          bottom: BorderSide(color: theme.colorScheme.outlineVariant),
         ),
       ),
       child: Row(
@@ -3794,11 +3793,11 @@ class _ProductListPageState extends State<ProductListPage> {
           child: Container(
             decoration: BoxDecoration(
               color: rowColor,
+              // Record boundaries use the hairline role at full strength.
+              // Diluting it makes a long table read as one undivided block,
+              // which is exactly what separated rows are for.
               border: Border(
-                bottom: BorderSide(
-                  color:
-                      theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
-                ),
+                bottom: BorderSide(color: theme.colorScheme.outlineVariant),
               ),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

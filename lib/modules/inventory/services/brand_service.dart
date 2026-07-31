@@ -1,10 +1,14 @@
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../shared/services/authority_scoped_cache.dart';
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../models/brand_models.dart';
 
 class BrandService extends ChangeNotifier {
   final DatabaseService _db;
+  final TenantService _tenantService;
 
   // ============================================================
   // CACHING - Avoid refetching on every page navigation
@@ -12,98 +16,169 @@ class BrandService extends ChangeNotifier {
   List<ProductBrand>? _cachedBrands;
   DateTime? _brandsCacheTime;
   static const Duration _cacheMaxAge = Duration(minutes: 5);
-  bool _isLoadingBrands = false;
-  
+  final AuthorityCacheScope _cacheScope = AuthorityCacheScope();
+  late final AuthorityScopedLoad<List<ProductBrand>> _brandsLoad =
+      AuthorityScopedLoad<List<ProductBrand>>(_cacheScope);
+
   // Public getters for cached data (instant access)
   List<ProductBrand> get cachedBrands => _cachedBrands ?? [];
   bool get hasBrandsCache => _cachedBrands != null;
-  
+  ErpAuthorityScopeKey? get authorityScope => _cacheScope.key;
+
   bool _isCacheValid(DateTime? cacheTime) {
     if (cacheTime == null) return false;
     return DateTime.now().difference(cacheTime) < _cacheMaxAge;
   }
-  
+
   void invalidateBrandsCache() {
+    _cacheScope.invalidate();
+    _brandsLoad.detach();
     _cachedBrands = null;
     _brandsCacheTime = null;
   }
 
-  BrandService(this._db);
+  BrandService(
+    this._db, {
+    TenantService? tenantService,
+  }) : _tenantService = tenantService ?? TenantService();
+
+  void bindAuthorityScope({
+    required String? userId,
+    required String? tenantId,
+  }) {
+    if (!_cacheScope.bind(userId: userId, tenantId: tenantId)) return;
+    _clearAuthorityOwnedState();
+  }
+
+  AuthorityScopeResolution _resolveAuthorityScope({
+    required String? userId,
+    required String? tenantId,
+  }) {
+    final resolution = _cacheScope.resolve(
+      userId: userId,
+      tenantId: tenantId,
+    );
+    if (resolution.didChange) _clearAuthorityOwnedState();
+    return resolution;
+  }
+
+  void _clearAuthorityOwnedState() {
+    final hadCache = _cachedBrands != null;
+    _brandsLoad.detach();
+    _cachedBrands = null;
+    _brandsCacheTime = null;
+    if (hadCache) notifyListeners();
+  }
+
+  Future<bool> _ensureAuthorityScope() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) {
+      _resolveAuthorityScope(userId: null, tenantId: null);
+      return false;
+    }
+
+    final tenantId = await _tenantService.getTenantId();
+    if (Supabase.instance.client.auth.currentUser?.id != userId) return false;
+    if (tenantId == null || tenantId.isEmpty) {
+      _resolveAuthorityScope(userId: null, tenantId: null);
+      return false;
+    }
+    final resolution = _resolveAuthorityScope(
+      userId: userId,
+      tenantId: tenantId,
+    );
+    if (resolution == AuthorityScopeResolution.rejectedTenantChange) {
+      throw const AuthorityScopeChangedException();
+    }
+    return resolution.isAccepted;
+  }
 
   Future<List<ProductBrand>> getBrands({
     String? searchTerm,
     bool? activeOnly,
     bool forceRefresh = false,
   }) async {
-    try {
-      // Check if this is a filtered query
-      final isFilteredQuery =
-          (searchTerm != null && searchTerm.trim().isNotEmpty) ||
-                              activeOnly == true;
-      
-      // Return cached data if valid and not a filtered query
-      if (!forceRefresh &&
-          !isFilteredQuery &&
-          _isCacheValid(_brandsCacheTime) &&
-          _cachedBrands != null) {
-        return _cachedBrands!;
+    if (!await _ensureAuthorityScope()) {
+      throw const AuthorityScopeChangedException();
+    }
+    final isFilteredQuery =
+        (searchTerm != null && searchTerm.trim().isNotEmpty) ||
+            activeOnly == true;
+
+    if (!forceRefresh &&
+        !isFilteredQuery &&
+        _isCacheValid(_brandsCacheTime) &&
+        _cachedBrands != null) {
+      return _cachedBrands!;
+    }
+
+    if (isFilteredQuery) {
+      final lease = _cacheScope.capture();
+      if (lease == null) throw const AuthorityScopeChangedException();
+      final brands = await _loadBrands(
+        searchTerm: searchTerm,
+        activeOnly: activeOnly,
+        expectedTenantId: lease.scope.tenantId,
+      );
+      if (!_cacheScope.owns(lease)) {
+        throw const AuthorityScopeChangedException();
       }
-      
-      // Prevent concurrent fetches
-      if (_isLoadingBrands && !isFilteredQuery) {
-        while (_isLoadingBrands) {
-          await Future.delayed(const Duration(milliseconds: 50));
-        }
-        if (_cachedBrands != null && !isFilteredQuery) return _cachedBrands!;
-      }
-      
-      if (!isFilteredQuery) _isLoadingBrands = true;
-      
-      List<Map<String, dynamic>> data;
+      return brands;
+    }
 
-      if (searchTerm != null && searchTerm.trim().isNotEmpty) {
-        final normalizedTerm = searchTerm.trim();
-        final nameResults =
-            await _db.searchRecords('product_brands', 'name', normalizedTerm);
-        final descResults = await _db.searchRecords(
-            'product_brands', 'description', normalizedTerm);
-
-        final ids = <String>{};
-        data = [...nameResults, ...descResults]
-            .where((item) {
-              final id = item['id']?.toString();
-              if (id == null) return false;
-              return ids.add(id);
-            })
-            .map((item) => Map<String, dynamic>.from(item))
-            .toList();
-      } else {
-    data = (await _db.select('product_brands'))
-      .map((row) => Map<String, dynamic>.from(row))
-      .toList();
-      }
-
-      var brands = data.map(ProductBrand.fromJson).toList();
-
-      if (activeOnly == true) {
-        brands = brands.where((brand) => brand.isActive).toList();
-      }
-
-      brands
-          .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-      
-      // Cache only unfiltered results
-      if (!isFilteredQuery) {
+    return _brandsLoad.run(
+      load: (lease) => _loadBrands(
+        expectedTenantId: lease.scope.tenantId,
+      ),
+      publish: (brands, _) {
         _cachedBrands = brands;
         _brandsCacheTime = DateTime.now();
-        _isLoadingBrands = false;
-      }
-      
-      return brands;
-    } catch (e) {
-      _isLoadingBrands = false;
-      rethrow;
+      },
+    );
+  }
+
+  Future<List<ProductBrand>> _loadBrands({
+    String? searchTerm,
+    bool? activeOnly,
+    required String expectedTenantId,
+  }) async {
+    List<Map<String, dynamic>> data;
+    if (searchTerm != null && searchTerm.trim().isNotEmpty) {
+      final normalizedTerm = searchTerm.trim();
+      final nameResults =
+          await _db.searchRecords('product_brands', 'name', normalizedTerm);
+      final descResults = await _db.searchRecords(
+        'product_brands',
+        'description',
+        normalizedTerm,
+      );
+      final ids = <String>{};
+      data = [...nameResults, ...descResults]
+          .where((item) {
+            final id = item['id']?.toString();
+            return id != null && ids.add(id);
+          })
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    } else {
+      data = (await _db.select('product_brands'))
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
     }
+
+    var brands = data.map(ProductBrand.fromJson).toList();
+    if (brands.any((brand) => brand.tenantId != expectedTenantId)) {
+      throw StateError(
+        'Brand query returned data outside the authority tenant',
+      );
+    }
+    if (activeOnly == true) {
+      brands = brands.where((brand) => brand.isActive).toList();
+    }
+    brands.sort(
+      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+    );
+    return brands;
   }
 
   Future<ProductBrand?> getBrandById(String id) async {
@@ -156,18 +231,18 @@ class BrandService extends ChangeNotifier {
         throw Exception('Ya existe una marca con este nombre');
       }
 
-    final payload = brand.copyWith(
-    name: brand.name.trim(),
-    description: (brand.description?.trim().isEmpty ?? true)
-      ? null
-      : brand.description!.trim(),
-    website: (brand.website?.trim().isEmpty ?? true)
-      ? null
-      : brand.website!.trim(),
-    country: (brand.country?.trim().isEmpty ?? true)
-      ? null
-      : brand.country!.trim(),
-    );
+      final payload = brand.copyWith(
+        name: brand.name.trim(),
+        description: (brand.description?.trim().isEmpty ?? true)
+            ? null
+            : brand.description!.trim(),
+        website: (brand.website?.trim().isEmpty ?? true)
+            ? null
+            : brand.website!.trim(),
+        country: (brand.country?.trim().isEmpty ?? true)
+            ? null
+            : brand.country!.trim(),
+      );
 
       final data = await _db.insert('product_brands', payload.toJson());
       final created = ProductBrand.fromJson(data);
@@ -193,19 +268,19 @@ class BrandService extends ChangeNotifier {
         throw Exception('Ya existe una marca con este nombre');
       }
 
-    final payload = brand.copyWith(
-    name: brand.name.trim(),
-    description: (brand.description?.trim().isEmpty ?? true)
-      ? null
-      : brand.description!.trim(),
-    website: (brand.website?.trim().isEmpty ?? true)
-      ? null
-      : brand.website!.trim(),
-    country: (brand.country?.trim().isEmpty ?? true)
-      ? null
-      : brand.country!.trim(),
-    updatedAt: DateTime.now(),
-    );
+      final payload = brand.copyWith(
+        name: brand.name.trim(),
+        description: (brand.description?.trim().isEmpty ?? true)
+            ? null
+            : brand.description!.trim(),
+        website: (brand.website?.trim().isEmpty ?? true)
+            ? null
+            : brand.website!.trim(),
+        country: (brand.country?.trim().isEmpty ?? true)
+            ? null
+            : brand.country!.trim(),
+        updatedAt: DateTime.now(),
+      );
 
       final updated = await _db.update(
         'product_brands',

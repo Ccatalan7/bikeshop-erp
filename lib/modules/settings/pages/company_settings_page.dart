@@ -94,12 +94,15 @@ class _CompanySettingsPageState extends State<CompanySettingsPage> {
 
   Future<void> _loadCompany() async {
     try {
-      final profile = await _service.getOrCreateDefaultCompany();
+      final profile = await _service.loadInitialCompanyProfile();
       if (!mounted) return;
       _profile = profile;
       _fillControllers(profile);
       if ((profile.id ?? '').isNotEmpty) {
-        _bankAccounts = await _service.loadBankAccounts(profile.id!);
+        _bankAccounts = await _service.loadBankAccounts(
+          profile.id!,
+          expectedTenantId: profile.tenantId!,
+        );
         _selectedBankIndex = _bankAccounts.isEmpty ? -1 : 0;
         _fillBankControllers(_selectedBank);
       }
@@ -141,6 +144,14 @@ class _CompanySettingsPageState extends State<CompanySettingsPage> {
   Future<void> _saveCompany() async {
     final form = _formKey.currentState;
     if (form == null || !form.validate()) return;
+    final loadedProfile = _profile;
+    if (loadedProfile == null || (loadedProfile.tenantId ?? '').isEmpty) {
+      _showSnackBar(
+        'Los datos de empresa ya no pertenecen al tenant activo. '
+        'Vuelve a abrir esta sección.',
+      );
+      return;
+    }
 
     _commitBankDraft();
     if (!_bankAccountsAreValid()) {
@@ -150,7 +161,7 @@ class _CompanySettingsPageState extends State<CompanySettingsPage> {
     setState(() => _isSaving = true);
 
     final taxId = ChileanUtils.formatRut(_taxIdController.text).toUpperCase();
-    final profile = (_profile ?? CompanyProfile.vinabikeDefault()).copyWith(
+    final profile = loadedProfile.copyWith(
       name: _text(_nameController),
       legalName: _text(_legalNameController),
       fantasyName: _text(_fantasyNameController),
@@ -189,6 +200,7 @@ class _CompanySettingsPageState extends State<CompanySettingsPage> {
           : await _service.saveBankAccounts(
               companyId: saved.id!,
               accounts: _bankAccounts,
+              expectedTenantId: saved.tenantId!,
             );
       final defaultBankAccount = _defaultBankAccount(savedAccounts);
       if (_syncPublicData) {
@@ -276,8 +288,15 @@ class _CompanySettingsPageState extends State<CompanySettingsPage> {
   }
 
   void _addBankAccount() {
+    final loadedProfile = _profile;
+    if (loadedProfile == null || (loadedProfile.tenantId ?? '').isEmpty) {
+      _showSnackBar(
+        'Vuelve a abrir esta sección antes de agregar una cuenta.',
+      );
+      return;
+    }
     _commitBankDraft();
-    final company = (_profile ?? CompanyProfile.vinabikeDefault()).copyWith(
+    final company = loadedProfile.copyWith(
       legalName: _text(_legalNameController),
       name: _text(_nameController),
       taxId: _text(_taxIdController),
@@ -287,8 +306,8 @@ class _CompanySettingsPageState extends State<CompanySettingsPage> {
     );
     final nextIndex = _bankAccounts.length + 1;
     final account = CompanyBankAccount.empty(
-      tenantId: _profile?.tenantId,
-      companyId: _profile?.id,
+      tenantId: loadedProfile.tenantId,
+      companyId: loadedProfile.id,
       index: nextIndex,
       company: company,
       isDefault: _bankAccounts.isEmpty,
@@ -546,14 +565,14 @@ class _CompanySettingsPageState extends State<CompanySettingsPage> {
                 _AppTextField(
                   controller: _fantasyNameController,
                   label: 'Nombre de fantasia *',
-                  hint: 'Viñabike',
+                  hint: 'Nombre comercial',
                   validator: _requiredValidator,
                   onChanged: (_) => setState(() {}),
                 ),
                 _AppTextField(
                   controller: _nameController,
                   label: 'Nombre interno *',
-                  hint: 'Viñabike',
+                  hint: 'Nombre de la empresa',
                   validator: _requiredValidator,
                   onChanged: (_) => setState(() {}),
                 ),
@@ -566,14 +585,14 @@ class _CompanySettingsPageState extends State<CompanySettingsPage> {
                 _AppTextField(
                   controller: _legalNameController,
                   label: 'Razon social *',
-                  hint: 'NEWEN SpA',
+                  hint: 'Empresa Ejemplo SpA',
                   validator: _requiredValidator,
                   onChanged: (_) => setState(() {}),
                 ),
                 _AppTextField(
                   controller: _taxIdController,
                   label: 'RUT *',
-                  hint: '77.541.999-7',
+                  hint: '12.345.678-5',
                   keyboardType: TextInputType.text,
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9kK.\-]')),
@@ -592,7 +611,7 @@ class _CompanySettingsPageState extends State<CompanySettingsPage> {
             _AppTextField(
               controller: _businessActivityController,
               label: 'Giro *',
-              hint: 'Venta al por menor de bicicletas...',
+              hint: 'Actividad económica principal...',
               minLines: 2,
               maxLines: 3,
               validator: _requiredValidator,
@@ -611,14 +630,14 @@ class _CompanySettingsPageState extends State<CompanySettingsPage> {
                 _AppTextField(
                   controller: _emailController,
                   label: 'Email interno',
-                  hint: 'vinabikechile@gmail.com',
+                  hint: 'administracion@tuempresa.cl',
                   keyboardType: TextInputType.emailAddress,
                   validator: _optionalEmailValidator,
                 ),
                 _AppTextField(
                   controller: _publicEmailController,
                   label: 'Email publico',
-                  hint: 'contacto@vinabike.cl',
+                  hint: 'contacto@tuempresa.cl',
                   keyboardType: TextInputType.emailAddress,
                   validator: _optionalEmailValidator,
                 ),
@@ -631,14 +650,14 @@ class _CompanySettingsPageState extends State<CompanySettingsPage> {
                 _AppTextField(
                   controller: _billingEmailController,
                   label: 'Email facturacion',
-                  hint: 'facturacion@vinabike.cl',
+                  hint: 'facturacion@tuempresa.cl',
                   keyboardType: TextInputType.emailAddress,
                   validator: _optionalEmailValidator,
                 ),
                 _AppTextField(
                   controller: _websiteUrlController,
                   label: 'Sitio web',
-                  hint: 'https://vinabike.cl',
+                  hint: 'https://tuempresa.cl',
                   keyboardType: TextInputType.url,
                 ),
               ],
@@ -650,13 +669,13 @@ class _CompanySettingsPageState extends State<CompanySettingsPage> {
                 _AppTextField(
                   controller: _phoneController,
                   label: 'Telefono principal',
-                  hint: '+56 9 9835 7797',
+                  hint: '+56 9 1234 5678',
                   keyboardType: TextInputType.phone,
                 ),
                 _AppTextField(
                   controller: _supportPhoneController,
                   label: 'Soporte',
-                  hint: '+56 9 9835 7797',
+                  hint: '+56 9 1234 5678',
                   keyboardType: TextInputType.phone,
                 ),
               ],
@@ -668,13 +687,13 @@ class _CompanySettingsPageState extends State<CompanySettingsPage> {
                 _AppTextField(
                   controller: _whatsappPhoneController,
                   label: 'WhatsApp tienda / SIM',
-                  hint: '+56 9 9835 7797',
+                  hint: '+56 9 1234 5678',
                   keyboardType: TextInputType.phone,
                 ),
                 _AppTextField(
                   controller: _whatsappApiPhoneController,
                   label: 'WhatsApp API Meta',
-                  hint: '+56 9 4188 4520',
+                  hint: '+56 9 1234 5678',
                   keyboardType: TextInputType.phone,
                 ),
               ],
@@ -895,13 +914,13 @@ class _CompanySettingsPageState extends State<CompanySettingsPage> {
             _AppTextField(
               controller: _bankHolderNameController,
               label: 'Titular *',
-              hint: 'NEWEN SpA',
+              hint: 'Empresa Ejemplo SpA',
               validator: _requiredValidator,
             ),
             _AppTextField(
               controller: _bankHolderRutController,
               label: 'RUT titular *',
-              hint: '77.541.999-7',
+              hint: '12.345.678-5',
               keyboardType: TextInputType.text,
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9kK.\-]')),
@@ -922,7 +941,7 @@ class _CompanySettingsPageState extends State<CompanySettingsPage> {
             _AppTextField(
               controller: _bankContactEmailController,
               label: 'Email comprobantes',
-              hint: 'vinabikechile@gmail.com',
+              hint: 'comprobantes@tuempresa.cl',
               keyboardType: TextInputType.emailAddress,
               validator: _optionalEmailValidator,
             ),

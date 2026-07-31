@@ -1,22 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../shared/services/user_management_service.dart';
-import '../../hr/services/hr_service.dart';
-import '../../hr/models/hr_models.dart';
+
+import '../../../shared/models/erp_employee_directory_entry.dart';
+import '../../../shared/services/current_user_profile_service.dart';
+import '../../../shared/services/erp_employee_directory_service.dart';
+import '../../../shared/services/erp_chat_principal_directory_service.dart';
+import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../providers/chat_provider.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
 import '../../sales/services/sales_service.dart';
 
 class NewChatDialog extends StatefulWidget {
-  const NewChatDialog({super.key});
+  const NewChatDialog({
+    super.key,
+    this.employeeDirectoryService,
+    this.chatPrincipalDirectoryService,
+  });
+
+  final ErpEmployeeDirectoryService? employeeDirectoryService;
+  final ErpChatPrincipalDirectoryService? chatPrincipalDirectoryService;
 
   @override
   State<NewChatDialog> createState() => _NewChatDialogState();
 }
 
 class _NewChatDialogState extends State<NewChatDialog> {
+  late final ErpEmployeeDirectoryService _employeeDirectoryService;
+  late final ErpChatPrincipalDirectoryService _chatPrincipalDirectoryService;
+
   // Global Search
   String _searchQuery = '';
 
@@ -24,6 +37,7 @@ class _NewChatDialogState extends State<NewChatDialog> {
   List<ChatCandidate> _internalCandidates = [];
   List<ChatCandidate> _customerCandidates = [];
   bool _isLoading = true;
+  bool _hasLoadError = false;
 
   // Group State
   final Set<String> _selectedGroupUsers = {};
@@ -32,6 +46,10 @@ class _NewChatDialogState extends State<NewChatDialog> {
   @override
   void initState() {
     super.initState();
+    _employeeDirectoryService =
+        widget.employeeDirectoryService ?? ErpEmployeeDirectoryService();
+    _chatPrincipalDirectoryService = widget.chatPrincipalDirectoryService ??
+        ErpChatPrincipalDirectoryService();
     _loadAllData();
   }
 
@@ -42,59 +60,84 @@ class _NewChatDialogState extends State<NewChatDialog> {
   }
 
   Future<void> _loadAllData() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _hasLoadError = false;
+        _internalCandidates = const [];
+        _customerCandidates = const [];
+        _selectedGroupUsers.clear();
+      });
+    }
+
     try {
       final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-      final userManagementService = context.read<UserManagementService>();
-      final hrService = context.read<HRService>();
       final customerService = context.read<CustomerService>();
-
-      // 1. Fetch Internals (Users + Employees)
-      final internalResults = await Future.wait([
-        userManagementService.getTenantUsers(),
-        hrService.getEmployees(forceRefresh: true),
-      ]);
-
-      // 2. Fetch Customers
-      final customers = await customerService.getCustomersForList();
-
-      // Process Internals
-      final users = internalResults[0] as List<Map<String, dynamic>>;
-      final employees = internalResults[1] as List<Employee>;
-
-      final candidates = <ChatCandidate>[];
-      final userIds = <String>{};
-
-      // Add Users
-      for (final user in users) {
-        final uid = user['id'] as String;
-        if (uid == currentUserId) continue; // Skip self
-
-        userIds.add(uid);
-        candidates.add(ChatCandidate(
-          id: uid,
-          displayName: _getUserDisplayName(user),
-          subtitle: _getUserSubtitle(user),
-          initials: _getUserInitials(user),
-          isActive: user['is_active'] as bool? ?? true,
-          canChat: user['is_active'] as bool? ?? true,
-          type: CandidateType.user,
-        ));
+      final currentProfileService = context.read<CurrentUserProfileService>();
+      final currentProfile = currentProfileService.profile;
+      if (currentProfile == null ||
+          currentProfileService.isLoading ||
+          currentProfileService.loadIssue != null) {
+        throw StateError('Current ERP authority is unavailable');
       }
 
-      // Add unlinked Employees
-      for (final emp in employees) {
-        if (emp.userId != null && userIds.contains(emp.userId)) continue;
+      final results = await Future.wait<Object>([
+        _employeeDirectoryService.getEntries(
+          authorityTenantId: currentProfile.tenantId,
+          forceRefresh: true,
+        ),
+        _chatPrincipalDirectoryService.getEntries(
+          authorityTenantId: currentProfile.tenantId,
+        ),
+        customerService.getCustomersForList(),
+      ]);
+      final employees = results[0] as List<ErpEmployeeDirectoryEntry>;
+      final principals = results[1] as List<ErpChatPrincipalDirectoryEntry>;
+      final customers = results[2] as List<Customer>;
+
+      final candidates = <ChatCandidate>[];
+      final representedUserIds = <String>{};
+      for (final employee in employees) {
+        final userId = employee.userId;
+        if (userId == currentUserId) continue;
+        if (userId != null) representedUserIds.add(userId);
+        final isActive = employee.status == 'active';
+        final canChat = isActive && userId != null;
+        final jobTitle = employee.jobTitle?.trim();
 
         candidates.add(ChatCandidate(
-          id: emp.id!,
-          displayName: '${emp.firstName} ${emp.lastName}',
-          subtitle: 'Trabajador sin cuenta activa',
-          initials: emp.firstName.isNotEmpty ? emp.firstName[0] : '?',
-          isActive: emp.status == EmployeeStatus.active,
-          canChat: false,
-          type: CandidateType.employee,
-          errorMessage: 'Requiere cuenta de usuario',
+          id: userId ?? employee.employeeId,
+          displayName: employee.fullName,
+          subtitle: jobTitle == null || jobTitle.isEmpty
+              ? 'Equipo interno'
+              : jobTitle,
+          initials: employee.initials,
+          isActive: isActive,
+          canChat: canChat,
+          type: userId == null ? CandidateType.employee : CandidateType.user,
+          errorMessage: canChat
+              ? null
+              : isActive
+                  ? 'Requiere una cuenta ERP activa'
+                  : 'Trabajador inactivo',
         ));
+      }
+      for (final principal in principals) {
+        if (principal.userId == currentUserId ||
+            representedUserIds.contains(principal.userId)) {
+          continue;
+        }
+        candidates.add(
+          ChatCandidate(
+            id: principal.userId,
+            displayName: principal.displayName,
+            subtitle: _erpRoleLabel(principal.role),
+            initials: principal.initials,
+            isActive: true,
+            canChat: true,
+            type: CandidateType.user,
+          ),
+        );
       }
 
       // Process Customers
@@ -132,34 +175,32 @@ class _NewChatDialogState extends State<NewChatDialog> {
         _internalCandidates = candidates;
         _customerCandidates = customerCandidates;
         _isLoading = false;
+        _hasLoadError = false;
       });
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
-        debugPrint('Error loading candidates: $e');
+        setState(() {
+          _isLoading = false;
+          _hasLoadError = true;
+          _internalCandidates = const [];
+          _customerCandidates = const [];
+          _selectedGroupUsers.clear();
+        });
+        debugPrint(
+          'Error loading chat candidates (${e.runtimeType})',
+        );
       }
     }
   }
 
-  String _getUserDisplayName(Map<String, dynamic> user) {
-    final name = user['employee_name'] as String?;
-    if (name != null && name.isNotEmpty) return name;
-    final email = user['email'] as String? ?? '';
-    return email.split('@').first;
-  }
-
-  String _getUserSubtitle(Map<String, dynamic> user) {
-    final email = user['email'] as String? ?? 'Sin email';
-    final role = user['role'] as String? ?? 'Usuario';
-    return '$role • $email';
-  }
-
-  String _getUserInitials(Map<String, dynamic> user) {
-    final name = user['employee_name'] as String?;
-    if (name != null && name.isNotEmpty) return name[0];
-    final email = user['email'] as String? ?? '';
-    return email.isNotEmpty ? email[0].toUpperCase() : '?';
-  }
+  String _erpRoleLabel(String role) => switch (role) {
+        'admin' => 'Administración',
+        'manager' => 'Gerencia',
+        'accountant' => 'Contabilidad',
+        'mechanic' => 'Taller',
+        'cashier' => 'Caja',
+        _ => 'Equipo ERP',
+      };
 
   void _createInternalChat(String userId) async {
     try {
@@ -266,26 +307,70 @@ class _NewChatDialogState extends State<NewChatDialog> {
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : TabBarView(
-                        children: [
-                          // Internos Tab
-                          _buildList(_internalCandidates,
-                              (c) => _createInternalChat(c.id)),
+                    : _hasLoadError
+                        ? _buildLoadFailure()
+                        : TabBarView(
+                            children: [
+                              // Internos Tab
+                              _buildList(_internalCandidates,
+                                  (c) => _createInternalChat(c.id)),
 
-                          // Clientes Tab
-                          _buildList(
-                            _customerCandidates,
-                            (c) => _createCustomerChat(c.id),
-                            type: CandidateType.customer,
+                              // Clientes Tab
+                              _buildList(
+                                _customerCandidates,
+                                (c) => _createCustomerChat(c.id),
+                                type: CandidateType.customer,
+                              ),
+
+                              // Grupo Tab
+                              _buildGroupList(),
+                            ],
                           ),
-
-                          // Grupo Tab
-                          _buildGroupList(),
-                        ],
-                      ),
               )
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadFailure() {
+    final theme = Theme.of(context);
+    return Center(
+      key: const ValueKey('new-chat-directory-error'),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.cloud_off_outlined,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No pudimos cargar las personas disponibles.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'No se mostrará un directorio incompleto. Inténtalo nuevamente.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.tonalIcon(
+              onPressed: _loadAllData,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, 48),
+              ),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
+            ),
+          ],
         ),
       ),
     );

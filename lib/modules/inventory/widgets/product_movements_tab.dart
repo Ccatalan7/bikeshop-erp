@@ -18,6 +18,8 @@ class _ProductMovementsTabState extends State<ProductMovementsTab> {
   bool _isLoading = true;
   List<StockMovement> _movements = [];
   String? _error;
+  String _storeTimezone = stockMovementsDefaultStoreTimezone;
+  int _requestGeneration = 0;
   final ScrollController _horizontalController = ScrollController();
 
   @override
@@ -28,6 +30,7 @@ class _ProductMovementsTabState extends State<ProductMovementsTab> {
 
   @override
   void dispose() {
+    _requestGeneration++;
     _horizontalController.dispose();
     super.dispose();
   }
@@ -42,6 +45,8 @@ class _ProductMovementsTabState extends State<ProductMovementsTab> {
 
   Future<void> _loadMovements() async {
     if (!mounted) return;
+    final generation = ++_requestGeneration;
+    final productId = widget.productId;
     setState(() {
       _isLoading = true;
       _error = null;
@@ -49,16 +54,21 @@ class _ProductMovementsTabState extends State<ProductMovementsTab> {
 
     try {
       final service = context.read<StockMovementsService>();
-      final movements = await service.getMovementsList(widget.productId);
+      final movements = await service.getMovementsList(productId);
 
-      if (mounted) {
+      if (mounted &&
+          generation == _requestGeneration &&
+          productId == widget.productId) {
         setState(() {
           _movements = movements;
+          _storeTimezone = service.storeTimezone;
           _isLoading = false;
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted &&
+          generation == _requestGeneration &&
+          productId == widget.productId) {
         setState(() {
           _error = 'Error cargando movimientos';
           _isLoading = false;
@@ -218,11 +228,19 @@ class _ProductMovementsTabState extends State<ProductMovementsTab> {
 
   Widget _buildMovementRow(BuildContext context, StockMovement move) {
     final theme = Theme.of(context);
-    final isPositive = move.quantity > 0;
+    // INICIAL and FINAL come from the reconciled chain, so CAMBIO must too.
+    // Printing the raw quantity beside them made the three columns disagree
+    // on rows the ledger had already corrected.
+    final change = move.reconciledQuantity;
+    final isPositive = change > 0;
     final color = isPositive ? Colors.green : Colors.red;
 
-    final dateStr =
-        DateFormat('dd MMM yyyy, HH:mm').format(move.transactionDate);
+    final dateStr = DateFormat('dd MMM yyyy, HH:mm').format(
+      stockMovementStoreTime(
+        move.transactionDate,
+        storeTimezone: _storeTimezone,
+      ),
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -324,7 +342,7 @@ class _ProductMovementsTabState extends State<ProductMovementsTab> {
           SizedBox(
             width: 70,
             child: Text(
-              '${isPositive ? '+' : ''}${move.quantity}',
+              '${isPositive ? '+' : ''}$change',
               textAlign: TextAlign.right,
               style: theme.textTheme.titleSmall?.copyWith(
                 color: color,

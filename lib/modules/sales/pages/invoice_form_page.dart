@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
+import '../../../shared/services/return_navigation.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/number_generation_service.dart';
 import '../../../shared/services/remote_scanner_service.dart';
@@ -1710,6 +1711,30 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     );
   }
 
+  /// Closes the form and returns to whatever opened it.
+  ///
+  /// A live history entry is the most faithful origin available: it restores
+  /// the host with its filters, selection and scroll intact. The referrer
+  /// hints only reconstruct a route, so they serve deep links that have no
+  /// history to return to.
+  void _returnToOrigin() {
+    if (ReturnNavigation.canReturn(context)) {
+      ReturnNavigation.close(context, fallbackRoute: '/sales/invoices');
+      return;
+    }
+
+    final returnTo = GoRouterState.of(context).uri.queryParameters['returnTo'];
+    if (widget.referrer == 'job' && widget.referrerJobId != null) {
+      context.go('/taller/pegas/${widget.referrerJobId}');
+    } else if (widget.referrer == 'movements') {
+      context.go('/inventory/movements');
+    } else if (returnTo != null && returnTo.isNotEmpty) {
+      context.go(returnTo);
+    } else {
+      context.go('/sales/invoices');
+    }
+  }
+
   Widget _buildHeader(ThemeData theme) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -2062,28 +2087,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
               Row(
                 children: [
                   IconButton(
-                    onPressed: () {
-                      debugPrint(
-                          '🔙 Back button pressed - referrer: ${widget.referrer}, jobId: ${widget.referrerJobId}');
-                      final returnTo = GoRouterState.of(context)
-                          .uri
-                          .queryParameters['returnTo'];
-                      if (widget.referrer == 'job' &&
-                          widget.referrerJobId != null) {
-                        debugPrint(
-                            '🔙 Navigating back to job: ${widget.referrerJobId}');
-                        context.go('/taller/pegas/${widget.referrerJobId}');
-                      } else if (widget.referrer == 'movements') {
-                        debugPrint('🔙 Navigating back to movements');
-                        context.go('/inventory/movements');
-                      } else if (returnTo != null && returnTo.isNotEmpty) {
-                        debugPrint('🔙 Navigating to returnTo: $returnTo');
-                        context.go(returnTo);
-                      } else {
-                        debugPrint('🔙 Navigating to default: /sales/invoices');
-                        context.go('/sales/invoices');
-                      }
-                    },
+                    onPressed: _returnToOrigin,
                     icon: const Icon(Icons.arrow_back),
                     tooltip: 'Volver',
                   ),
