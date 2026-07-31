@@ -6,55 +6,51 @@ hecha y el método cambió.
 
 ---
 
-## ⛔ ANTES QUE NADA: hay una publicación de Codex en vuelo
+## ⛔ ANTES QUE NADA: mira si Codex está publicando
 
-**No toques NADA del repositorio hasta que termine.** Ni código, ni tests, ni
-documentación. Escribir un `.md` durante su gate ya apareció una vez como
-movimiento concurrente en su revisión, y eso le cuesta a él una vuelta entera.
-
-### Dónde estaba al cerrar esta sesión (2026-07-31 ~11:40)
-
-- Codex **ya commiteó y pusheó**: `3789c5b6 chore: publish ERP update
-  2026-07-31 11:36`, y `origin/smartpegas1.0` está al día con `HEAD`.
-- Lo que seguía corriendo era **la publicación misma** (gate completo, luego
-  calificación y los dos publicadores en paralelo).
-- El árbol tenía ~55 rutas sucias: son documentación de Nóminas de esta sesión,
-  posteriores a su commit.
-
-### Cómo esperar activamente
-
-No te quedes mirando. Arma una espera con señal concreta y **haz trabajo que no
-toque el repo** mientras tanto:
+Codex publica desde este mismo checkout. Hay **dos situaciones distintas** y se
+confunden fácil, así que compruébalo en vez de suponerlo:
 
 ```bash
-# Espera a que no quede ningún proceso de build/publicación vivo.
-until ! pgrep -fl "flutter build|run_flutter_test_gate|firebase deploy|fastlane|gradlew" >/dev/null 2>&1; do
+git status --porcelain | wc -l                       # ¿árbol limpio?
+git log --oneline -1                                 # ¿en qué commit?
+git rev-list --count origin/smartpegas1.0..HEAD      # ¿algo sin pushear?
+pgrep -fl "flutter build|run_flutter_test_gate|firebase deploy|fastlane|gradlew"
+```
+
+| Lo que ves | Qué significa | Qué puedes hacer |
+|---|---|---|
+| **Procesos de build vivos** o árbol sucio que no es tuyo | Publicación **local** en curso: está leyendo el árbol | **Nada.** Ni código, ni tests, ni documentación |
+| Sin procesos, árbol limpio, `HEAD == origin` | La publicación es **remota**: corre en CI sobre un SHA ya congelado | Trabaja normal. **Pero no commitees ni pushees** hasta que cierre |
+
+**El caso remoto es el habitual.** Codex pushea, y desde ahí la calificación y
+los dos publicadores corren en CI sobre ese SHA exacto. Tu árbol local ya no los
+afecta — lo único que los rompería es un push que mueva `origin` en medio.
+
+### Por qué esto está escrito
+
+El 31/07 esta sesión escribió un `.md` mientras Codex corría su gate **local**,
+y apareció como movimiento concurrente en su revisión de diff. No costó la
+publicación, pero pudo haberla costado. Y la advertencia sin matiz es igual de
+mala: deja a un agente esperando algo que no lo afecta.
+
+**La ausencia de procesos no prueba que terminó bien.** Si vas a pushear,
+pregúntale al dueño primero — igual el guard mecánico del repo te lo va a
+denegar, así que la pregunta es de todos modos suya.
+
+### Si toca esperar, espera activamente
+
+```bash
+until ! pgrep -f "flutter build|run_flutter_test_gate|firebase deploy|fastlane|gradlew" >/dev/null 2>&1; do
   sleep 30
 done
 echo "sin procesos de publicación vivos"
 ```
 
-Lánzala en segundo plano y, cuando avise, **confirma antes de escribir**:
-
-```bash
-git log --oneline -3            # ¿hay un commit posterior a 3789c5b6?
-git status --porcelain | wc -l  # ¿el árbol quedó como lo dejaste?
-git fetch -q && git log --oneline -1 origin/smartpegas1.0
-```
-
-**La ausencia de procesos no prueba que terminó bien.** Antes de la primera
-edición, dile al dueño en una línea qué ves y pregúntale si Codex ya cerró. Es
-la única pregunta que vale la pena hacer acá, porque equivocarse le arruina la
-publicación.
-
-### Mientras esperas, sí puedes
-
-Leer los documentos, bajar frames de Design con `DesignSync`, mirarlos, levantar
-la sesión de debug y comparar contra la app, y **planificar** el frame que
-sigue. Todo eso es lectura: no escribe una sola línea del repositorio.
-
-Lo que **no** puedes: editar archivos, correr `dart format`, crear ramas, ni
-correr nada que escriba en `.tmp/` del repo — usa el scratchpad de la sesión.
+Lánzalo en segundo plano y mientras tanto haz lo que **no escribe el repo**:
+leer los documentos, bajar frames con `DesignSync` y mirarlos, levantar la
+sesión de debug, comparar contra la app y planificar el frame que sigue.
+Escribe en el scratchpad de la sesión, nunca en `.tmp/` del repositorio.
 
 Plan padre y ledger completo: **`PAYROLL_COMPLETION_PLAN.md`** (§13
 autorizaciones · §14.c lo que se le pidió a Design · §15 ledger).
