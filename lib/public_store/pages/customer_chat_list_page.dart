@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import '../../modules/messaging/services/messaging_service.dart';
 import '../services/customer_account_service.dart';
 import '../widgets/customer_portal_layout.dart';
+import '../widgets/public_store_layout.dart';
 
 /// Customer chat list page - shows all customer conversations
 /// Uses the new design with frictionless chat request flow
@@ -93,7 +93,8 @@ class _CustomerChatListPageState extends State<CustomerChatListPage> {
             ),
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: () => context.go('/login'),
+              onPressed: () =>
+                  PublicStoreLayout.navigateToHref(context, '/cuenta/login'),
               child: const Text('IR AL LOGIN'),
             ),
           ],
@@ -178,7 +179,10 @@ class _CustomerChatListPageState extends State<CustomerChatListPage> {
         children: _conversations.map((conv) {
           return _ConversationCard(
             conversation: conv,
-            onTap: () => context.go('/cuenta/chats/${conv['id']}'),
+            onTap: () => PublicStoreLayout.navigateToHref(
+              context,
+              '/cuenta/chats/${conv['id']}',
+            ),
           );
         }).toList(),
       ),
@@ -302,7 +306,10 @@ class _CustomerChatListPageState extends State<CustomerChatListPage> {
                           ),
                         );
                         // Navigate to the new chat using parent context
-                        parentContext.go('/cuenta/chats/$conversationId');
+                        await PublicStoreLayout.navigateToHref(
+                          parentContext,
+                          '/cuenta/chats/$conversationId',
+                        );
                       }
                     } catch (e, stack) {
                       debugPrint('❌ Error creating chat: $e');

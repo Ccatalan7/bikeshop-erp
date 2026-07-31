@@ -177,6 +177,7 @@ class MegaMenuButton extends StatefulWidget {
   final Color panelRailBackgroundColor;
   final Color panelRailForegroundColor;
   final Map<String, MegaMenuBranchPresentation> branchPresentations;
+  final bool Function(WebsiteNavigation navigation)? canNavigate;
   final Function(String href, bool openInNewTab) onNavigate;
 
   const MegaMenuButton({
@@ -191,6 +192,7 @@ class MegaMenuButton extends StatefulWidget {
     required this.panelRailBackgroundColor,
     required this.panelRailForegroundColor,
     this.branchPresentations = const <String, MegaMenuBranchPresentation>{},
+    this.canNavigate,
     required this.onNavigate,
   });
 
@@ -206,6 +208,7 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
   bool _isFocusWithinPanel = false;
   bool _isFocused = false;
   bool _suppressFocusReopen = false;
+  bool _overlayRebuildScheduled = false;
   Timer? _openTimer;
   Timer? _closeTimer;
   final GlobalKey _buttonKey = GlobalKey();
@@ -218,6 +221,24 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
   void initState() {
     super.initState();
     MegaMenuController.instance.addListener(_onControllerChange);
+  }
+
+  @override
+  void didUpdateWidget(covariant MegaMenuButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Overlay entries live outside this subtree. Rebuild the active panel when
+    // a fresh category-publication projection removes or reclassifies rows.
+    // didUpdateWidget itself runs inside the owner's build; marking the
+    // OverlayEntry dirty synchronously from here causes Flutter's
+    // "markNeedsBuild called during build" red screen. Coalesce changes and
+    // invalidate the overlay only after the current frame has completed.
+    if (_overlayEntry == null || _overlayRebuildScheduled) return;
+    _overlayRebuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _overlayRebuildScheduled = false;
+      if (!mounted || !_isOpen) return;
+      _overlayEntry?.markNeedsBuild();
+    });
   }
 
   @override
@@ -309,6 +330,7 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
           panelRailBackgroundColor: widget.panelRailBackgroundColor,
           panelRailForegroundColor: widget.panelRailForegroundColor,
           branchPresentations: widget.branchPresentations,
+          canNavigate: widget.canNavigate,
           onEnter: () {
             _isHoveringPanel = true;
             _closeTimer?.cancel();
@@ -557,6 +579,7 @@ class NavigationDropdownButton extends StatelessWidget {
     required this.textColor,
     required this.panelBackgroundColor,
     required this.panelForegroundColor,
+    this.canNavigate,
     required this.onNavigate,
   });
 
@@ -567,6 +590,7 @@ class NavigationDropdownButton extends StatelessWidget {
   final Color textColor;
   final Color panelBackgroundColor;
   final Color panelForegroundColor;
+  final bool Function(WebsiteNavigation navigation)? canNavigate;
   final void Function(String href, bool openInNewTab) onNavigate;
 
   @override
@@ -609,10 +633,26 @@ class NavigationDropdownButton extends StatelessWidget {
                       controller.open();
                     }
                   },
-            style: TextButton.styleFrom(
-              foregroundColor: textColor,
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              minimumSize: const Size(0, 34),
+            style: ButtonStyle(
+              foregroundColor: WidgetStatePropertyAll(textColor),
+              backgroundColor: WidgetStateProperty.resolveWith((states) {
+                if (controller.isOpen ||
+                    states.contains(WidgetState.hovered) ||
+                    states.contains(WidgetState.focused)) {
+                  return textColor.withValues(alpha: 0.08);
+                }
+                return Colors.transparent;
+              }),
+              overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+              padding: const WidgetStatePropertyAll(
+                EdgeInsets.symmetric(vertical: 5),
+              ),
+              minimumSize: const WidgetStatePropertyAll(Size(0, 34)),
+              shape: WidgetStatePropertyAll(
+                RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -655,7 +695,7 @@ class NavigationDropdownButton extends StatelessWidget {
       ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
     final items = <Widget>[];
 
-    if (root.href?.trim().isNotEmpty == true) {
+    if (_canNavigate(root) && root.href?.trim().isNotEmpty == true) {
       items.add(
         MenuItemButton(
           trailingIcon: Icon(
@@ -679,7 +719,9 @@ class NavigationDropdownButton extends StatelessWidget {
         ),
       );
     }
-    if (root.href?.trim().isNotEmpty == true && sorted.isNotEmpty) {
+    if (_canNavigate(root) &&
+        root.href?.trim().isNotEmpty == true &&
+        sorted.isNotEmpty) {
       items.add(
         Divider(
           height: 17,
@@ -699,7 +741,8 @@ class NavigationDropdownButton extends StatelessWidget {
     int depth = 0,
   }) {
     final theme = Theme.of(context);
-    final isDirectCategory = _isDirectCategoryDestination(node.href);
+    final isDirectCategory =
+        _canNavigate(node) && _isDirectCategoryDestination(node.href);
     final children = node.children
         .where((child) => child.isVisible && child.showOnDesktop)
         .toList()
@@ -713,10 +756,12 @@ class NavigationDropdownButton extends StatelessWidget {
                 size: 17,
                 color: panelForegroundColor.withValues(alpha: 0.55),
               ),
-        onPressed: () => onNavigate(
-          node.href ?? '/',
-          node.openInNewTab,
-        ),
+        onPressed: _canNavigate(node)
+            ? () => onNavigate(
+                  node.href ?? '/',
+                  node.openInNewTab,
+                )
+            : null,
         style: _compactItemStyle(
           context,
           depth: depth,
@@ -770,6 +815,9 @@ class NavigationDropdownButton extends StatelessWidget {
     return items;
   }
 
+  bool _canNavigate(WebsiteNavigation navigation) =>
+      canNavigate?.call(navigation) ?? true;
+
   ButtonStyle _compactItemStyle(
     BuildContext context, {
     int depth = 0,
@@ -783,7 +831,10 @@ class NavigationDropdownButton extends StatelessWidget {
       padding: WidgetStatePropertyAll(
         EdgeInsets.fromLTRB(16 + depth * 18, 10, 14, 10),
       ),
-      minimumSize: const WidgetStatePropertyAll(Size(280, 40)),
+      // GUI_MOBILE_DESIGN_PRINCIPLES: 48px minimum in both dimensions. This
+      // dropdown is the phone/tablet path through the whole category tree, so
+      // a 40px row was the smallest target on the most-used navigation.
+      minimumSize: const WidgetStatePropertyAll(Size(280, 48)),
       textStyle: WidgetStatePropertyAll(
         Theme.of(context).textTheme.bodyMedium?.copyWith(
               fontWeight: emphasized ? FontWeight.w700 : FontWeight.w500,
@@ -803,6 +854,7 @@ class _MegaMenuOverlay extends StatefulWidget {
   final Color panelRailBackgroundColor;
   final Color panelRailForegroundColor;
   final Map<String, MegaMenuBranchPresentation> branchPresentations;
+  final bool Function(WebsiteNavigation navigation)? canNavigate;
   final VoidCallback onEnter;
   final VoidCallback onExit;
   final VoidCallback onFocusEnter;
@@ -823,6 +875,7 @@ class _MegaMenuOverlay extends StatefulWidget {
     required this.panelRailBackgroundColor,
     required this.panelRailForegroundColor,
     required this.branchPresentations,
+    this.canNavigate,
     required this.onEnter,
     required this.onExit,
     required this.onFocusEnter,
@@ -847,6 +900,9 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
 
   bool isClosing = false;
 
+  bool _canNavigate(WebsiteNavigation navigation) =>
+      widget.canNavigate?.call(navigation) ?? true;
+
   @override
   void initState() {
     super.initState();
@@ -860,6 +916,33 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
       reverseCurve: Curves.easeInCubic,
     );
     _controller.forward();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MegaMenuOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final currentById = <String, WebsiteNavigation>{};
+
+    void collect(Iterable<WebsiteNavigation> nodes) {
+      for (final node in nodes) {
+        currentById[node.id] = node;
+        collect(node.children);
+      }
+    }
+
+    collect(widget.children);
+    final currentId = _currentHoveredCategory?.id;
+    _currentHoveredCategory = currentId == null ? null : currentById[currentId];
+
+    final reconciledPath = <WebsiteNavigation>[];
+    for (final previous in _drilldownPath) {
+      final current = currentById[previous.id];
+      if (current == null) break;
+      reconciledPath.add(current);
+    }
+    _drilldownPath
+      ..clear()
+      ..addAll(reconciledPath);
   }
 
   List<WebsiteNavigation> _visibleDesktopNodes(
@@ -927,7 +1010,7 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
     }
 
     final href = node.href?.trim();
-    if (href != null && href.isNotEmpty) {
+    if (_canNavigate(node) && href != null && href.isNotEmpty) {
       widget.onNavigate(href, node.openInNewTab);
     }
   }
@@ -1122,7 +1205,9 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
                                 onSelect: () => _selectBranch(root),
                                 onNavigate: () {
                                   final href = root.href?.trim();
-                                  if (href == null || href.isEmpty) {
+                                  if (!_canNavigate(root) ||
+                                      href == null ||
+                                      href.isEmpty) {
                                     _selectBranch(root);
                                     return;
                                   }
@@ -1143,7 +1228,8 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
                         ),
                       ),
               ),
-              if (widget.parent.href?.trim().isNotEmpty == true) ...[
+              if (_canNavigate(widget.parent) &&
+                  widget.parent.href?.trim().isNotEmpty == true) ...[
                 const SizedBox(width: 28),
                 SizedBox(
                   height: 62,
@@ -1301,12 +1387,13 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
               label: branch.label,
               foreground: foreground,
               mainAxisAlignment: contentAlignment,
-              onExplore: branch.href?.trim().isNotEmpty == true
-                  ? () => widget.onNavigate(
-                        branch.href!,
-                        branch.openInNewTab,
-                      )
-                  : null,
+              onExplore:
+                  _canNavigate(branch) && branch.href?.trim().isNotEmpty == true
+                      ? () => widget.onNavigate(
+                            branch.href!,
+                            branch.openInNewTab,
+                          )
+                      : null,
             ),
           ),
         ],
@@ -1375,7 +1462,8 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
                 ),
               ),
               const Spacer(),
-              if (levelOwner.href?.trim().isNotEmpty == true)
+              if (_canNavigate(levelOwner) &&
+                  levelOwner.href?.trim().isNotEmpty == true)
                 _MegaMenuLink(
                   label: 'VER TODO EN ${levelOwner.label.toUpperCase()}',
                   color: widget.panelForegroundColor.withValues(alpha: 0.66),
@@ -1442,16 +1530,18 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
                   widget.branchPresentations[node.id]?.cardOverlay ?? 0,
               childLabels:
                   children.map((child) => child.label).toList(growable: false),
-              directCategory: _isDirectCategoryDestination(node.href),
+              directCategory:
+                  _canNavigate(node) && _isDirectCategoryDestination(node.href),
               foregroundColor: widget.panelForegroundColor,
               panelColor: widget.panelBackgroundColor,
               onExplore: () => _openVisualCategory(node),
-              onNavigate: node.href?.trim().isNotEmpty == true
-                  ? () => widget.onNavigate(
-                        node.href!,
-                        node.openInNewTab,
-                      )
-                  : null,
+              onNavigate:
+                  _canNavigate(node) && node.href?.trim().isNotEmpty == true
+                      ? () => widget.onNavigate(
+                            node.href!,
+                            node.openInNewTab,
+                          )
+                      : null,
             );
           },
         );
@@ -1505,7 +1595,7 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
                     onSelect: () => onSelect(node),
                     onNavigate: () {
                       final href = node.href?.trim();
-                      if (href == null || href.isEmpty) {
+                      if (!_canNavigate(node) || href == null || href.isEmpty) {
                         onSelect(node);
                         return;
                       }
@@ -1754,14 +1844,26 @@ class _MegaMenuMediaCardState extends State<_MegaMenuMediaCard> {
     final hasChildren = widget.childLabels.isNotEmpty;
     final imageUrl = widget.imageUrl.trim();
     final imageOverlay = widget.imageOverlay.clamp(0.0, 0.65);
+    // One destination per control, and each says where it goes.
+    //
+    // The artwork and the caption used to look like one target with one
+    // outcome: the caption promised "VER SUBCATEGORÍAS" while the artwork
+    // directly above it opened the product list. Whichever the visitor aimed
+    // at, half of them landed somewhere the card had not advertised. The card
+    // now states both destinations, and the caption carries the child count so
+    // the depth of a branch is visible before entering it.
+    final childCount = widget.childLabels.length;
     final actionLabel = hasChildren
-        ? 'VER SUBCATEGORÍAS'
-        : widget.directCategory
-            ? 'SOLO ESTA CATEGORÍA'
-            : 'VER CATEGORÍA';
+        ? (childCount == 1 ? '1 SUBCATEGORÍA' : '$childCount SUBCATEGORÍAS')
+        : 'SOLO ESTA CATEGORÍA';
+    // A plain leaf has one destination, so it gets one control. Repeating the
+    // artwork's own destination underneath it just reintroduces the ambiguity
+    // this card is meant to remove. A direct-scope card keeps its caption
+    // because the narrower scope is real information, not a duplicate.
+    final showActionCaption = hasChildren || widget.directCategory;
     final semanticLabel = widget.directCategory
         ? 'Ver solo productos de ${widget.label}'
-        : 'Ver categoría ${widget.label}';
+        : 'Ver productos de ${widget.label}';
 
     Widget buildImage() => ClipRRect(
           borderRadius: BorderRadius.circular(3),
@@ -1878,21 +1980,42 @@ class _MegaMenuMediaCardState extends State<_MegaMenuMediaCard> {
                                     ),
                                 ],
                               )
-                            : Text(
-                                widget.label,
+                            : Column(
                                 key: ValueKey<String>(
                                   'mega-menu-card-title-'
                                   '${widget.navigationId}',
                                 ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                                style: theme.textTheme.titleLarge?.copyWith(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.2,
-                                ),
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    widget.label,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                    style: theme.textTheme.titleLarge?.copyWith(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  // Names the artwork's own destination, so it
+                                  // is never confused with the caption's.
+                                  Text(
+                                    widget.directCategory
+                                        ? 'Solo esta categoría'
+                                        : 'Ver productos',
+                                    textAlign: TextAlign.center,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.82),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 0.2,
+                                    ),
+                                  ),
+                                ],
                               ),
                       ),
                     ),
@@ -1930,64 +2053,69 @@ class _MegaMenuMediaCardState extends State<_MegaMenuMediaCard> {
                 ),
               ),
             ),
-            const SizedBox(height: 5),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Semantics(
-                button: true,
-                label: hasChildren
-                    ? 'Ver subcategorías de ${widget.label}'
-                    : semanticLabel,
-                child: InkWell(
-                  key: ValueKey<String>(
-                    hasChildren
-                        ? 'mega-menu-card-explore-${widget.navigationId}'
-                        : 'mega-menu-card-action-${widget.navigationId}',
-                  ),
-                  onTap: hasChildren
-                      ? widget.onExplore
-                      : widget.onNavigate ?? widget.onExplore,
-                  onHover: hasChildren
-                      ? (value) {
-                          if (_isExploreHovered != value) {
-                            setState(() => _isExploreHovered = value);
+            if (showActionCaption) const SizedBox(height: 5),
+            if (showActionCaption)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Semantics(
+                  button: true,
+                  label: hasChildren
+                      ? 'Ver las $childCount subcategorías de ${widget.label}'
+                      : semanticLabel,
+                  child: InkWell(
+                    key: ValueKey<String>(
+                      hasChildren
+                          ? 'mega-menu-card-explore-${widget.navigationId}'
+                          : 'mega-menu-card-action-${widget.navigationId}',
+                    ),
+                    onTap: hasChildren
+                        ? widget.onExplore
+                        : widget.onNavigate ?? widget.onExplore,
+                    onHover: hasChildren
+                        ? (value) {
+                            if (_isExploreHovered != value) {
+                              setState(() => _isExploreHovered = value);
+                            }
                           }
-                        }
-                      : null,
-                  onFocusChange: hasChildren
-                      ? (value) {
-                          if (_isExploreFocused != value) {
-                            setState(() => _isExploreFocused = value);
+                        : null,
+                    onFocusChange: hasChildren
+                        ? (value) {
+                            if (_isExploreFocused != value) {
+                              setState(() => _isExploreFocused = value);
+                            }
                           }
-                        }
-                      : null,
-                  borderRadius: BorderRadius.circular(3),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          actionLabel,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: PublicStoreTheme.info,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.45,
+                        : null,
+                    borderRadius: BorderRadius.circular(3),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            actionLabel,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: PublicStoreTheme.info,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.45,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 5),
-                        const Icon(
-                          Icons.arrow_forward_rounded,
-                          size: 16,
-                          color: PublicStoreTheme.info,
-                        ),
-                      ],
+                          const SizedBox(width: 5),
+                          // Drilling one level deeper and leaving for a product
+                          // list are different moves; the glyph says which.
+                          Icon(
+                            hasChildren
+                                ? Icons.chevron_right_rounded
+                                : Icons.arrow_forward_rounded,
+                            size: 16,
+                            color: PublicStoreTheme.info,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),

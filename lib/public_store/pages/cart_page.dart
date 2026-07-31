@@ -5,9 +5,9 @@ import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/public_inventory_service.dart';
 import '../../shared/utils/chilean_utils.dart';
-import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 import '../utils/product_url.dart';
+import '../widgets/cart_restore_notice.dart';
 import '../widgets/public_store_layout.dart';
 
 class CartPage extends StatelessWidget {
@@ -18,13 +18,9 @@ class CartPage extends StatelessWidget {
     final cart = context.watch<CartProvider>();
 
     // Get edit mode for key to prevent element reactivation conflicts
-    final editProvider = context.watch<WebsiteEditModeProvider>();
-    final modeKey = editProvider.isEditMode
-        ? 'edit'
-        : (editProvider.isPreviewMode ? 'preview' : 'normal');
 
     return MediaQueryLayoutBuilder(
-      key: ValueKey('cart_layout_$modeKey'),
+      key: const ValueKey('cart_layout'),
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 980;
         final horizontalMargin = constraints.maxWidth < 760 ? 16.0 : 24.0;
@@ -93,7 +89,7 @@ class CartPage extends StatelessWidget {
         _buildSectionHeading(context, 'Carrito de compras'),
         const SizedBox(height: 12),
         Text(
-          '${cart.itemCount} ${cart.itemCount == 1 ? 'producto' : 'productos'} en revisión',
+          '${cart.itemCount} ${cart.itemCount == 1 ? 'unidad' : 'unidades'} en revisión',
           style: storeTheme.text.bodyLarge?.copyWith(
             fontSize: 18,
             color: storeTheme.textSecondary,
@@ -108,6 +104,13 @@ class CartPage extends StatelessWidget {
             height: 1.5,
           ),
         ),
+        if (cart.droppedOnRestore > 0) ...[
+          const SizedBox(height: 14),
+          CartRestoreNotice(
+            dropped: cart.droppedOnRestore,
+            onAcknowledged: cart.acknowledgeDroppedLines,
+          ),
+        ],
       ],
     );
   }
@@ -469,6 +472,11 @@ class CartPage extends StatelessWidget {
   }) {
     final storeTheme = PublicStoreSurfaceTheme.of(context);
     final taxSummary = cart.taxSummary;
+    final knownGross = cart.grossMerchandiseAmountClp;
+    final totalLabel = taxSummary.isValid ? 'TOTAL' : 'TOTAL PRODUCTOS';
+    final totalValue = knownGross == null
+        ? '—'
+        : ChileanUtils.formatCurrency(knownGross.toDouble());
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(isMobile ? 20 : 24),
@@ -523,7 +531,7 @@ class CartPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'TOTAL',
+                totalLabel,
                 style: storeTheme.text.labelSmall?.copyWith(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -532,7 +540,7 @@ class CartPage extends StatelessWidget {
                 ),
               ),
               Text(
-                ChileanUtils.formatCurrency(cart.total),
+                totalValue,
                 style: storeTheme.text.displaySmall?.copyWith(
                   fontSize: 44,
                   fontWeight: FontWeight.w700,
@@ -652,8 +660,10 @@ class CartPage extends StatelessWidget {
           _buildQuantityButton(
             context: context,
             icon: Icons.add,
-            enabled: item.quantity < product.availableStockQuantity,
-            onTap: item.quantity < product.availableStockQuantity
+            enabled: !product.tracksInventory ||
+                item.quantity < product.availableStockQuantity,
+            onTap: !product.tracksInventory ||
+                    item.quantity < product.availableStockQuantity
                 ? () => cart.incrementQuantity(product.id)
                 : null,
           ),

@@ -3,16 +3,14 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../modules/website/models/website_font_registry.dart';
+import '../../modules/website/models/website_page_composition.dart';
 import '../../modules/website/services/website_service.dart';
-import '../../modules/website/widgets/website_block_renderer.dart';
-import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
-import '../../modules/website/widgets/add_block_dialog.dart';
-import '../../modules/website/widgets/block_spacer_handle.dart';
+import '../../modules/website/models/website_editor_capability.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../modules/website/widgets/website_editor_document_binding.dart';
 import '../../shared/models/product.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
 import '../../shared/services/tenant_service.dart';
@@ -20,6 +18,7 @@ import '../theme/public_store_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/public_inventory_service.dart';
 import '../services/public_store_scroll_state.dart';
+import '../widgets/page_composition.dart';
 import '../widgets/public_store_layout.dart';
 
 class PublicHomePage extends StatefulWidget {
@@ -32,15 +31,22 @@ class PublicHomePage extends StatefulWidget {
 class _PublicHomePageState extends State<PublicHomePage>
     with AutomaticKeepAliveClientMixin {
   List<Product> _featuredProducts = [];
-  bool _editModeChecked =
-      false; // Track if we've checked edit mode for this navigation
-  bool _syncedEditorContextForHome = false;
   bool _featuredProductsLoaded = false; // Load featured products once
   String? _resolvedTenantId;
   bool _isResolvingTenantId = false;
 
   PublicStoreScrollState? _scrollState;
   int _lastHomeRefreshSignal = 0;
+
+  // ---- Authority-bound HOME editor snapshot (RPC-only) -------------------
+  // The public bootstrap (websiteService.blocks) stays 100% public: draft
+  // and hidden HOME blocks arrive EXCLUSIVELY through
+  // loadEditorPageWithBlocks('') under the exact granted lease.
+  CachedPageSnapshot? _editorSnapshot;
+  WebsiteEditorCapabilitySnapshot? _editorSnapshotLease;
+  int _editorLoadSerial = 0;
+  bool _editorLoadInFlight = false;
+  WebsiteService? _observedFreshnessService;
   PublicInventoryService? _observedInventoryService;
   bool _inventoryRevalidationPending = false;
   bool _inventoryRevalidationScheduled = false;
@@ -57,16 +63,12 @@ class _PublicHomePageState extends State<PublicHomePage>
   int? _progressiveScheduledIntermediateTarget;
   String? _lastProgressiveTenantId;
 
-  static const List<String> _responsiveBreakpoints = [
-    'desktop',
-    'tablet',
-    'mobile',
-  ];
-
-  // DISABLED: AutomaticKeepAliveClientMixin causes element activation conflicts
-  // during edit/preview mode switches. The performance cost of reloading is acceptable.
+  // Kept alive: the storefront shell keeps ONE stable content anchor
+  // across Public|Preview|Edit, so the old element-activation conflicts
+  // that forced this off no longer exist. Route changes still remount
+  // legitimately.
   @override
-  bool get wantKeepAlive => false;
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -291,132 +293,140 @@ class _PublicHomePageState extends State<PublicHomePage>
     ]);
   }
 
-  /// Check edit mode using GoRouter state (called from build method)
-  void _checkEditModeFromRouter(BuildContext context) {
-    if (_editModeChecked) return;
-
-    // Get query parameters from GoRouter
-    final goRouterState = GoRouterState.of(context);
-    final queryParams = goRouterState.uri.queryParameters;
-
-    final shouldEdit = queryParams['edit'] == 'true';
-    // If both are present, edit wins because explicit editor entry points use
-    // edit=true to override stale preview URLs in the persistent shell.
-    final shouldPreview = !shouldEdit && queryParams['preview'] == 'true';
-
-    // Only process once per navigation (avoid infinite rebuilds)
-    if (_editModeChecked) return;
-
-    if (!shouldEdit && !shouldPreview) {
-      _editModeChecked = true;
-      return;
-    }
-
-    final editProvider = context.read<WebsiteEditModeProvider>();
-    final websiteService = context.read<WebsiteService>();
-
-    // Wait until the service has data; otherwise we risk entering edit mode
-    // with empty blocks/settings on the very first frame.
-    if (websiteService.blocks.isEmpty && !websiteService.hasLoadedForTenant) {
-      return;
-    }
-
-    _editModeChecked = true;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-
-      // URL params should only be used to ENTER editor context.
-      // Once already inside the editor shell, ignore URL forcing to prevent
-      // preview/edit bouncing on persistent shell routes.
-      if (editProvider.isInEditorContext) return;
-
-      final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
-      final settings = Map<String, dynamic>.from(websiteService.settings);
-
-      if (shouldEdit) {
-        editProvider.enterEditMode(blocks, settings);
-      } else {
-        editProvider.enterPreviewMode(blocks, settings);
-      }
+  /// The ONE freshness listener: a lease transition invalidates the editor
+  /// snapshot so the next build re-requests it under the CURRENT lease.
+  void _handleCmsFreshnessSignal() {
+    if (!mounted) return;
+    if (_editorSnapshot == null && !_editorLoadInFlight) return;
+    setState(() {
+      _editorSnapshot = null;
+      _editorSnapshotLease = null;
+      _editorLoadSerial++; // Supersedes any in-flight editor load.
+      _editorLoadInFlight = false;
     });
   }
 
-  /// When navigating back to the HOME route while already inside the editor shell,
-  /// we must also reset the editor page context and swap the provider blocks to
-  /// the HOME blocks.
-  ///
-  /// Otherwise the home page will keep rendering the previous page's blocks
-  /// because `PublicHomePage` prefers `editProvider.blocks` in editor context.
-  void _syncEditorContextToHomeIfNeeded({
+  /// Loads the HOME editor projection through the authority-bound RPC. The
+  /// FULL identity context — provider generation and identity revision,
+  /// lease fingerprint + authorityEpoch, tenant, service epoch and request
+  /// identity — is captured BEFORE the await and re-validated (plus
+  /// mounted/editor-context) at completion; a stale completion never binds.
+  void _ensureEditorSnapshot({
+    required WebsiteEditModeProvider editProvider,
+    required WebsiteService websiteService,
+    required String? tenantId,
+  }) {
+    final lease = editProvider.editorEntryLease;
+    if (!editProvider.isInEditorContext ||
+        lease == null ||
+        !lease.granted ||
+        tenantId == null ||
+        tenantId.isEmpty) {
+      return;
+    }
+    final heldLease = _editorSnapshotLease;
+    if (_editorSnapshot != null &&
+        heldLease != null &&
+        heldLease.fingerprint == lease.fingerprint &&
+        heldLease.authorityEpoch == lease.authorityEpoch) {
+      return;
+    }
+    if (_editorLoadInFlight) return;
+    _editorLoadInFlight = true;
+    final serial = ++_editorLoadSerial;
+    final generation = editProvider.editorEntryLeaseGeneration;
+    final identityRevision = editProvider.editorEntryLeaseIdentityRevision;
+    final leaseFingerprint = lease.fingerprint;
+    final leaseEpoch = lease.authorityEpoch;
+    final serviceEpoch = websiteService.identityEpoch;
+    final requestIdentity = websiteService.editorCapabilityRequestIdentity;
+    unawaited(() async {
+      CachedPageSnapshot? snapshot;
+      var authorityLost = false;
+      try {
+        snapshot = await websiteService.loadEditorPageWithBlocks(
+          '',
+          tenantId: tenantId,
+        );
+      } on WebsiteEditorReadSupersededException {
+        // Obsolete completion: silently release ONLY this loader's flight
+        // state so the current identity can retry; the new session is
+        // never touched.
+        if (mounted && serial == _editorLoadSerial) {
+          _editorLoadInFlight = false;
+        }
+        return;
+      } on WebsiteEditorAuthorityException {
+        authorityLost = true;
+      } catch (_) {
+        // Transient: Home keeps rendering the public bootstrap; the
+        // pending lease will retry on a later signal/build.
+      }
+      if (!mounted || serial != _editorLoadSerial) return;
+      _editorLoadInFlight = false;
+      if (authorityLost) {
+        // One revocation; the SINGLE CMS signal is emitted by the layout
+        // when it adopts the durable denial.
+        editProvider.revokeEditorEntryLease();
+        return;
+      }
+      final currentLease = editProvider.editorEntryLease;
+      if (!editProvider.isInEditorContext ||
+          currentLease == null ||
+          !currentLease.granted ||
+          currentLease.fingerprint != leaseFingerprint ||
+          currentLease.authorityEpoch != leaseEpoch ||
+          generation != editProvider.editorEntryLeaseGeneration ||
+          identityRevision !=
+              editProvider.editorEntryLeaseIdentityRevision ||
+          serviceEpoch != websiteService.identityEpoch ||
+          requestIdentity !=
+              websiteService.editorCapabilityRequestIdentity) {
+        return; // The identity context moved: never adopt this result.
+      }
+      if (snapshot == null) return; // No HOME page row yet.
+      setState(() {
+        _editorSnapshot = snapshot;
+        _editorSnapshotLease = currentLease;
+      });
+    }());
+  }
+
+  /// Attaches the HOME document to the open editor session once the
+  /// AUTHORITY-BOUND editor snapshot for the exact current lease is loaded.
+  /// Mode entry/exit is owned by the FSM route binding in the storefront
+  /// layout; this consumer only supplies its page document.
+  void _bindEditorDocument({
     required WebsiteEditModeProvider editProvider,
     required WebsiteService websiteService,
   }) {
-    if (_syncedEditorContextForHome) return;
-
-    // Home is kept alive in the shell. Never let an offstage home instance
-    // overwrite the editor provider while the user is viewing another page.
-    if (!TickerMode.of(context)) return;
-    if (!editProvider.isInEditorContext) return;
-
-    final currentSlug = (editProvider.currentPageSlug ?? '').trim();
-    if (currentSlug.isEmpty) {
-      // Already home.
-      _syncedEditorContextForHome = true;
-      return;
-    }
-
-    // Wait until we have blocks/settings available.
-    if (websiteService.blocks.isEmpty && !websiteService.hasLoadedForTenant) {
-      return;
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (_syncedEditorContextForHome) return;
-      if (!TickerMode.of(context)) return;
-
-      // Re-check in case something changed between scheduling and execution.
-      final slugNow = (editProvider.currentPageSlug ?? '').trim();
-      if (slugNow.isEmpty) {
-        _syncedEditorContextForHome = true;
-        return;
-      }
-
-      final blocks = List<Map<String, dynamic>>.from(websiteService.blocks);
-      final settings = Map<String, dynamic>.from(websiteService.settings);
-
-      debugPrint(
-        '🔄 [PublicHomePage] Sync editor context: ${editProvider.currentPageSlug} → home (${blocks.length} blocks)',
-      );
-
-      if (editProvider.isEditMode) {
-        editProvider.enterEditMode(
-          blocks,
-          settings,
-          pageId: null,
-          pageSlug: null,
-        );
-      } else {
-        editProvider.enterPreviewMode(
-          blocks,
-          settings,
-          pageId: null,
-          pageSlug: null,
-        );
-      }
-
-      _syncedEditorContextForHome = true;
-    });
+    final lease = editProvider.editorEntryLease;
+    final snapshot = _editorSnapshot;
+    final heldLease = _editorSnapshotLease;
+    final snapshotIsCurrent = snapshot != null &&
+        lease != null &&
+        lease.granted &&
+        heldLease != null &&
+        heldLease.fingerprint == lease.fingerprint &&
+        heldLease.authorityEpoch == lease.authorityEpoch;
+    WebsiteEditorDocumentBinding.bind(
+      context,
+      editProvider: editProvider,
+      ready: snapshotIsCurrent,
+      blocks: () => List<Map<String, dynamic>>.from(
+        snapshotIsCurrent ? snapshot.blocks : const <Map<String, dynamic>>[],
+      ),
+      settings: () => Map<String, dynamic>.from(websiteService.settings),
+      // The HOME document has a REAL owner: the canonical home row. Save
+      // targets exactly this page.
+      pageId: snapshotIsCurrent ? snapshot.page.id : null,
+      pageSlug: snapshotIsCurrent ? snapshot.page.slug : null,
+    );
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-
-    // Reset edit mode check on navigation
-    // _editModeChecked = false; // DISABLED: Causes infinite loop with provider updates
-    // _syncedEditorContextForHome = false; // DISABLED: Causes infinite loop with provider updates
 
     final nextScrollState = context.read<PublicStoreScrollState>();
     if (_scrollState != nextScrollState) {
@@ -424,6 +434,15 @@ class _PublicHomePageState extends State<PublicHomePage>
       _scrollState = nextScrollState;
       _lastHomeRefreshSignal = nextScrollState.homeRefreshSignal.value;
       nextScrollState.homeRefreshSignal.addListener(_onHomeRefreshSignal);
+    }
+
+    final freshnessOwner = context.read<WebsiteService>();
+    if (!identical(_observedFreshnessService, freshnessOwner)) {
+      _observedFreshnessService?.cmsPageFreshnessSignal
+          .removeListener(_handleCmsFreshnessSignal);
+      _observedFreshnessService = freshnessOwner;
+      freshnessOwner.cmsPageFreshnessSignal
+          .addListener(_handleCmsFreshnessSignal);
     }
 
     PublicInventoryService? nextInventoryService;
@@ -514,7 +533,6 @@ class _PublicHomePageState extends State<PublicHomePage>
     });
   }
 
-  // Note: _updateEditProviderIfNeeded was removed - not needed with simple routing
 
   String _currentBreakpoint(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
@@ -527,65 +545,10 @@ class _PublicHomePageState extends State<PublicHomePage>
     return 'desktop';
   }
 
-  bool? _toBool(dynamic value) {
-    if (value is bool) return value;
-    if (value is num) return value != 0;
-    if (value is String) {
-      final normalized = value.trim().toLowerCase();
-      if (normalized == 'true' ||
-          normalized == '1' ||
-          normalized == 'si' ||
-          normalized == 'sí') {
-        return true;
-      }
-      if (normalized == 'false' || normalized == '0' || normalized == 'no') {
-        return false;
-      }
-    }
-    return null;
-  }
-
-  Map<String, bool> _normalizeBlockVisibility(dynamic raw) {
-    final visibility = {
-      for (final breakpoint in _responsiveBreakpoints) breakpoint: true,
-    };
-
-    dynamic source = raw;
-
-    if (source is String) {
-      final trimmed = source.trim();
-      if (trimmed.isEmpty) {
-        source = null;
-      } else {
-        try {
-          final decoded = jsonDecode(trimmed);
-          if (decoded is Map) {
-            source = decoded;
-          }
-        } catch (_) {
-          source = null;
-        }
-      }
-    }
-
-    if (source is Map) {
-      source.forEach((key, value) {
-        final keyString = key.toString();
-        if (!visibility.containsKey(keyString)) {
-          return;
-        }
-        final parsed = _toBool(value);
-        if (parsed != null) {
-          visibility[keyString] = parsed;
-        }
-      });
-    }
-
-    return visibility;
-  }
-
   @override
   void dispose() {
+    _observedFreshnessService?.cmsPageFreshnessSignal
+        .removeListener(_handleCmsFreshnessSignal);
     // Debug: dispose
     _scrollState?.homeRefreshSignal.removeListener(_onHomeRefreshSignal);
     _observedInventoryService
@@ -598,22 +561,21 @@ class _PublicHomePageState extends State<PublicHomePage>
     super.build(context); // Required for AutomaticKeepAliveClientMixin
     // Debug: build called
 
-    // Check for edit/preview mode from URL query parameters (using GoRouter)
-    // We check this here to prevent a 1-frame flash where hidden blocks are filtered out
-    // before the edit provider fully initializes.
-    final qp = GoRouterState.of(context).uri.queryParameters;
-    final forceEditMode = qp['edit'] == 'true';
-
-    _checkEditModeFromRouter(context);
-    // Note: _updateEditProviderIfNeeded() removed - not needed with simple routing
-
     // Read data from providers - WATCH WebsiteService to rebuild when blocks load
     final tenantProvider = context.read<PublicStoreTenantProvider>();
     final websiteService = context
         .watch<WebsiteService>(); // Changed to watch() for progressive loading
     final editProvider = context.watch<WebsiteEditModeProvider>();
 
-    _syncEditorContextToHomeIfNeeded(
+    // The FSM route command in the storefront layout already owns the mode;
+    // this consumer requests its authority-bound editor snapshot and binds
+    // the HOME document once THAT is ready (public bootstrap never binds).
+    _ensureEditorSnapshot(
+      editProvider: editProvider,
+      websiteService: websiteService,
+      tenantId: tenantProvider.tenantId ?? _resolvedTenantId,
+    );
+    _bindEditorDocument(
       editProvider: editProvider,
       websiteService: websiteService,
     );
@@ -683,11 +645,8 @@ class _PublicHomePageState extends State<PublicHomePage>
       eff('theme_text_color', textColorSetting),
       PublicStoreTheme.textPrimary,
     );
-    final sectionSpacing = _resolveDouble(
+    final sectionSpacing = WebsitePageComposition.resolveSectionSpacing(
       eff('theme_section_spacing', sectionSpacingSetting),
-      64.0,
-      min: 32.0,
-      max: 128.0,
     );
     final containerPadding = _resolveDouble(
       eff('theme_container_padding', containerPaddingSetting),
@@ -762,439 +721,126 @@ class _PublicHomePageState extends State<PublicHomePage>
     }
 
     final currentBreakpoint = _currentBreakpoint(context);
+    final mode = switch (editProvider.mode) {
+      WebsiteEditorMode.edit => WebsitePageCompositionMode.edit,
+      WebsiteEditorMode.preview => WebsitePageCompositionMode.preview,
+      WebsiteEditorMode.public => WebsitePageCompositionMode.public,
+    };
+    final ownsHomeDocument = _editorSnapshot != null
+        ? editProvider.ownsPageDocument(
+            pageId: _editorSnapshot!.page.id,
+            pageSlug: _editorSnapshot!.page.slug,
+          )
+        : editProvider.ownsPageDocument();
+    if (editProvider.isInEditorContext && !ownsHomeDocument) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final sourceBlocks =
+        editProvider.isInEditorContext ? editProvider.blocks : blocksToRender;
+    final composition = WebsitePageComposition.project(
+      blocks: sourceBlocks,
+      mode: mode,
+      breakpoint: currentBreakpoint,
+      sectionSpacing: sectionSpacing,
+    );
+    final effectiveTenantId = tenantProvider.tenantId ?? _resolvedTenantId;
+    final isEditMode = mode == WebsitePageCompositionMode.edit;
+    _scheduleProgressiveExpansionIfNeeded(
+      tenantId: effectiveTenantId,
+      isEditMode: isEditMode,
+      blockCount: composition.blocks.length,
+    );
 
-    // Use Selector to only rebuild when edit mode state or block IDs change
-    // This prevents full page rebuilds when only block DATA changes (which is handled by each block)
-    return Selector<
-        WebsiteEditModeProvider,
-        ({
-          bool isEditMode,
-          bool isPreviewMode,
-          bool isInEditorContext,
-          List<String> blockIds,
-        })>(
-      selector: (_, provider) {
-        final blocks =
-            provider.isInEditorContext ? provider.blocks : blocksToRender;
-        final ids = blocks.map((b) => b['id']?.toString() ?? '').toList();
-        return (
-          isEditMode: provider.isEditMode,
-          isPreviewMode: provider.isPreviewMode,
-          isInEditorContext: provider.isInEditorContext,
-          blockIds: ids,
-        );
-      },
-      // Custom shouldRebuild to compare block IDs by content, not reference
-      shouldRebuild: (prev, next) {
-        if (prev.isEditMode != next.isEditMode) return true;
-        if (prev.isPreviewMode != next.isPreviewMode) return true;
-        if (prev.isInEditorContext != next.isInEditorContext) return true;
-        if (prev.blockIds.length != next.blockIds.length) return true;
-        for (int i = 0; i < prev.blockIds.length; i++) {
-          if (prev.blockIds[i] != next.blockIds[i]) return true;
-        }
-        return false;
-      },
-      builder: (context, state, _) {
-        final editProvider = context.read<WebsiteEditModeProvider>();
-
-        // If URL forces edit mode, we treat it as edit mode even if provider isn't ready
-        // BUT: if provider is explicitly in Preview Mode, respect that (don't force edit)
-        final isProviderInPreviewMode = editProvider.isPreviewMode;
-        final effectiveForceEdit = forceEditMode && !isProviderInPreviewMode;
-
-        final isEditMode = state.isEditMode || effectiveForceEdit;
-        final isInEditorContext = state.isInEditorContext || effectiveForceEdit;
-
-        // Use edit provider blocks if in editor context, otherwise use the blocks we have
-        // Note: If forceEditMode is true but provider IS NOT ready (state.isInEditorContext is false),
-        // we use blocksToRender (from service) but display them with edit-mode visibility rules.
-        final finalBlocks =
-            state.isInEditorContext ? editProvider.blocks : blocksToRender;
-
-        // In editor context, show all blocks (even hidden ones, with opacity)
-        // In normal mode, filter by visibility
-        final visibleBlocks = List<Map<String, dynamic>>.from(
-          finalBlocks.where((block) {
-            if (isInEditorContext) {
-              return true; // Show all blocks in editor context
-            }
-
-            final isGloballyVisible = block['is_visible'] ?? true;
-            if (!isGloballyVisible) {
-              return false;
-            }
-
-            final data = Map<String, dynamic>.from(
-              block['block_data'] ?? {},
-            );
-            final visibility = _normalizeBlockVisibility(
-              data['visibility'],
-            );
-            return visibility[currentBreakpoint] ?? true;
-          }),
-        )..sort(
-            (a, b) => (a['sort_order'] ?? a['order_index'] ?? 0).compareTo(
-              b['sort_order'] ?? b['order_index'] ?? 0,
-            ),
-          );
-
-        // Build the page content (blocks)
-        final effectiveTenantId = tenantProvider.tenantId ?? _resolvedTenantId;
-
-        _scheduleProgressiveExpansionIfNeeded(
-          tenantId: effectiveTenantId,
-          isEditMode: isEditMode,
-          blockCount: visibleBlocks.length,
-        );
-
-        Widget pageContent = _buildPageContent(
-          context: context,
-          visibleBlocks: visibleBlocks,
-          isEditMode: isEditMode,
-          editProvider: editProvider,
-          primaryColor: primaryColor,
-          accentColor: accentColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-          headingSize: headingSize,
-          bodySize: bodySize,
-          textColor: textColor,
-          sectionSpacing: sectionSpacing,
-          containerPadding: containerPadding,
-          tenantId: effectiveTenantId,
-          isInitialLoading: false, // Loading handled by main.dart
-        );
-
-        // Just return the page content - toolbar and side panel are handled by PublicStoreLayout
-        return pageContent;
-      },
+    return PageComposition(
+      composition: composition,
+      visibleBlockLimit: isEditMode ? null : _progressiveBlockLimit,
+      primaryColor: primaryColor,
+      accentColor: accentColor,
+      textColor: textColor,
+      containerPadding: containerPadding,
+      featuredProducts: _featuredProducts,
+      featuredProductsReady: _featuredProductsLoaded,
+      headingFont: headingFont,
+      bodyFont: bodyFont,
+      headingSize: headingSize,
+      bodySize: bodySize,
+      tenantId: effectiveTenantId,
+      onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
+      isNavigationEligible: (href) =>
+          PublicStoreLayout.isHrefPubliclyEligible(context, href),
+      onAddBlock: (type, {atIndex}) =>
+          editProvider.addBlock(type, atIndex: atIndex),
+      onSpacingChanged: (blockId, spacing) =>
+          editProvider.updateBlockData(blockId, 'spacingAfter', spacing),
+      emptyState: _buildEmptyCompositionState(
+        context,
+        isEditMode: isEditMode,
+        primaryColor: primaryColor,
+      ),
     );
   }
 
-  /// Build the main page content (blocks list)
-  Widget _buildPageContent({
-    required BuildContext context,
-    required List<Map<String, dynamic>> visibleBlocks,
+  Widget _buildEmptyCompositionState(
+    BuildContext context, {
     required bool isEditMode,
-    required WebsiteEditModeProvider editProvider,
     required Color primaryColor,
-    required Color accentColor,
-    required String headingFont,
-    required String bodyFont,
-    required double headingSize,
-    required double bodySize,
-    required Color textColor,
-    required double sectionSpacing,
-    required double containerPadding,
-    String? tenantId,
-    bool isInitialLoading = false,
   }) {
-    // If still loading initial data, show empty container (not "Próximamente")
-    // This prevents the flash of "Coming Soon" while blocks are loading
-    if (isInitialLoading && visibleBlocks.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    if (visibleBlocks.isNotEmpty) {
-      final blocksToBuild =
-          (!isEditMode && visibleBlocks.length > _progressiveBlockLimit)
-              ? visibleBlocks.take(_progressiveBlockLimit).toList()
-              : visibleBlocks;
-
-      // NOTE: PublicStoreLayout provides the scroll container.
-      // Keep this widget NON-scrollable to avoid nested scroll views.
-      return Column(
-        children: [
-          for (int i = 0; i < blocksToBuild.length; i++) ...[
-            // Use _BlockDataSelector to read block data from provider
-            // This ensures each block only rebuilds when ITS data changes
-            _BlockDataSelector(
-              key: ValueKey(
-                '${blocksToBuild[i]['id']}_${tenantId}_$isEditMode',
-              ),
-              blockId: blocksToBuild[i]['id']?.toString() ?? '',
-              fallbackBlockData: blocksToBuild[i],
-              isInEditorContext: isEditMode,
-              builder: (context, blockData) => _buildBlockFromData(
-                blockData,
-                primaryColor,
-                accentColor,
-                headingFont: headingFont,
-                bodyFont: bodyFont,
-                headingSize: headingSize,
-                bodySize: bodySize,
-                textColor: textColor,
-                sectionSpacing: sectionSpacing,
-                containerPadding: containerPadding,
-                isEditMode: isEditMode,
-                tenantId: tenantId,
-              ),
-            ),
-            // Add spacer between blocks (not after the last one)
-            if (i < blocksToBuild.length - 1)
-              _buildBlockSpacer(
-                blockId: blocksToBuild[i]['id']?.toString() ?? '',
-                blockData: Map<String, dynamic>.from(
-                  blocksToBuild[i]['block_data'] ?? {},
-                ),
-                defaultSpacing: sectionSpacing,
-                isEditMode: isEditMode,
-                editProvider: editProvider,
-              ),
-          ],
-          SizedBox(height: sectionSpacing),
-
-          // Add block button at the end in edit mode
-          if (isEditMode)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 32),
-              child: _AddBlockButtonLarge(
-                onAdd: (type) => editProvider.addBlock(type),
-              ),
-            ),
-        ],
-      );
-    } else if (isEditMode) {
-      // Edit mode with no blocks - show empty state with add button
-      return Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(48),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.web, size: 80, color: Colors.grey[400]),
-                const SizedBox(height: 24),
-                Text(
-                  'Tu sitio web está vacío',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.headlineMedium?.copyWith(color: Colors.grey[600]),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Agrega bloques para construir tu página',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyLarge?.copyWith(color: Colors.grey[500]),
-                ),
-                const SizedBox(height: 32),
-                _AddBlockButtonLarge(
-                  onAdd: (type) => editProvider.addBlock(type),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-    } else {
-      // No blocks - show coming soon page for visitors
+    if (isEditMode) {
       return Container(
-        constraints: const BoxConstraints(minHeight: 500),
         padding: const EdgeInsets.all(48),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.storefront,
-                size: 100,
-                color: primaryColor.withValues(alpha: 0.5),
-              ),
-              const SizedBox(height: 32),
-              Text(
-                'Próximamente',
-                style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      color: primaryColor,
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Estamos preparando algo increíble para ti',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(color: Colors.grey[600]),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.web, size: 80, color: Colors.grey[400]),
+            const SizedBox(height: 24),
+            Text(
+              'Tu sitio web está vacío',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Agrega bloques para construir tu página',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: Colors.grey[500]),
+            ),
+          ],
         ),
       );
     }
-  }
 
-  /// Build a spacer handle between blocks
-  Widget _buildBlockSpacer({
-    required String blockId,
-    required Map<String, dynamic> blockData,
-    required double defaultSpacing,
-    required bool isEditMode,
-    required WebsiteEditModeProvider editProvider,
-  }) {
-    // Get spacing from block data, default to theme setting
-    final spacingAfter =
-        (blockData['spacingAfter'] as num?)?.toDouble() ?? defaultSpacing;
-
-    if (isEditMode) {
-      return BlockSpacerHandle(
-        currentSpacing: spacingAfter,
-        minSpacing: 0,
-        maxSpacing: 200,
-        snapIncrement: 4,
-        isActive: true,
-        onSpacingChanged: (newSpacing) {
-          // Update in provider (will be saved when user saves)
-          editProvider.updateBlockData(blockId, 'spacingAfter', newSpacing);
-        },
-        onSpacingChangeEnd: (finalSpacing) {
-          // Already updated in onSpacingChanged
-        },
-      );
-    } else {
-      // Non-edit mode: just show the spacing
-      return SizedBox(height: spacingAfter);
-    }
-  }
-
-  Widget _buildBlockFromData(
-    Map<String, dynamic> blockData,
-    Color primaryColor,
-    Color accentColor, {
-    required String headingFont,
-    required String bodyFont,
-    required double headingSize,
-    required double bodySize,
-    required Color textColor,
-    required double sectionSpacing,
-    required double containerPadding,
-    bool isEditMode = false,
-    String? tenantId,
-  }) {
-    final blockId = blockData['id']?.toString() ?? '';
-    final blockType = (blockData['block_type'] ?? '').toString();
-    final data = Map<String, dynamic>.from(blockData['block_data'] ?? {});
-    final isVisible = blockData['is_visible'] ?? true;
-
-    // Debug: trace style data flow
-    if (blockType == 'hero') {
-      final style = data['style'];
-      debugPrint('🎨 [_buildBlockFromData] Hero isEditMode=$isEditMode');
-      debugPrint('🎨 [_buildBlockFromData] Hero data.style=$style');
-      if (style is Map) {
-        debugPrint(
-          '🎨 [_buildBlockFromData] backgroundType=${style['backgroundType']}, gradientColor1=${style['gradientColor1']}',
-        );
-      }
-    }
-
-    data.remove('visibility');
-    final resolvedHeadingFont = headingFont.isNotEmpty ? headingFont : null;
-    final resolvedBodyFont = bodyFont.isNotEmpty ? bodyFont : null;
-
-    final baseTheme = Theme.of(context);
-    final themedText = baseTheme.textTheme.apply(
-      bodyColor: textColor,
-      displayColor: textColor,
-    );
-
-    // Full-width blocks (like Commencal's edge-to-edge banners) get no horizontal padding
-    final blockTypeNormalized = blockType.toLowerCase();
-    final fullBleed = _toBool(data['fullBleed']) ?? false;
-    final isFullWidthBlock = fullBleed ||
-        const [
-          'hero',
-          'carousel',
-          'videobanner',
-          'categorygrid',
-          'partnersbanner',
-        ].contains(blockTypeNormalized);
-
-    final horizontalPadding =
-        isFullWidthBlock ? 0.0 : containerPadding.clamp(0.0, 200.0).toDouble();
-
-    // Use editable renderer if in edit mode
-    final blockHeight = (data['blockHeight'] as num?)?.toDouble();
-
-    Widget content = isEditMode
-        ? DeferredEditableBlockRenderer.build(
-            context: context,
-            blockId: blockId,
-            blockType: blockType,
-            data: data,
-            primaryColor: primaryColor,
-            accentColor: accentColor,
-            featuredProducts:
-                blockType == 'products' ? _featuredProducts : null,
-            headingFont: resolvedHeadingFont,
-            bodyFont: resolvedBodyFont,
-            headingSize: headingSize,
-            bodySize: bodySize,
-            onNavigate: (route) =>
-                PublicStoreLayout.navigateToHref(context, route),
-            isVisible: isVisible,
-            tenantId: tenantId,
-          )
-        : WebsiteBlockRenderer.build(
-            context: context,
-            blockType: blockType,
-            data: data,
-            primaryColor: primaryColor,
-            accentColor: accentColor,
-            featuredProducts:
-                blockType == 'products' ? _featuredProducts : null,
-            featuredProductsReady: _featuredProductsLoaded,
-            previewMode: false,
-            headingFont: resolvedHeadingFont,
-            bodyFont: resolvedBodyFont,
-            headingSize: headingSize,
-            bodySize: bodySize,
-            onNavigate: (route) =>
-                PublicStoreLayout.navigateToHref(context, route),
-            tenantId: tenantId,
-          );
-
-    // Apply custom block height if set (for non-edit mode - edit mode handles it in EditableBlockRenderer)
-    // Blocks use LayoutBuilder internally to fill/center within this height
-    // Dynamic content blocks should NOT have fixed height - they need to grow with content
-    if (!isEditMode && blockHeight != null) {
-      // Blocks with dynamic content should NOT have fixed height (clips content)
-      const dynamicContentBlocks = {
-        'products',
-        'services',
-        'features',
-        'testimonials',
-        'faq',
-        'team',
-        'pricing',
-        'stats',
-        'gallery',
-        'categorygrid',
-        'brandlogos',
-        'partnersbanner',
-      };
-      final isDynamicContent = dynamicContentBlocks.contains(
-        blockTypeNormalized,
-      );
-
-      if (!isDynamicContent) {
-        // Only apply fixed height for blocks that support it (hero, carousel, canvas, etc.)
-        content = SizedBox(
-          height: blockHeight,
-          width: double.infinity,
-          child: content,
-        );
-      }
-      // Dynamic content blocks: don't wrap - let them size naturally
-    }
-
-    // Only apply horizontal padding - vertical spacing is now handled by BlockSpacerHandle
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-      child: Theme(
-        data: baseTheme.copyWith(textTheme: themedText),
-        child: content,
+    return Container(
+      constraints: const BoxConstraints(minHeight: 500),
+      padding: const EdgeInsets.all(48),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.storefront,
+              size: 100,
+              color: primaryColor.withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: 32),
+            Text(
+              'Próximamente',
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                    color: primaryColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Estamos preparando algo increíble para ti',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(color: Colors.grey[600]),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1255,136 +901,5 @@ class _PublicHomePageState extends State<PublicHomePage>
       result = max;
     }
     return result;
-  }
-}
-
-/// Large add block button for the end of the page
-class _AddBlockButtonLarge extends StatelessWidget {
-  final void Function(String blockType) onAdd;
-
-  const _AddBlockButtonLarge({required this.onAdd});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      child: Material(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: () async {
-            final blockType = await showDialog<String>(
-              context: context,
-              builder: (context) => const AddBlockDialog(),
-            );
-            if (blockType != null) {
-              onAdd(blockType);
-            }
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: Colors.blue.withValues(alpha: 0.3),
-                width: 2,
-                strokeAlign: BorderSide.strokeAlignInside,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(50),
-                  ),
-                  child: const Icon(Icons.add, color: Colors.blue, size: 32),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Agregar nuevo bloque',
-                  style: TextStyle(
-                    color: Colors.blue,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Haz clic para agregar contenido a tu página',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A widget that selects block data from the provider and only rebuilds when THAT block's data changes.
-/// This prevents all blocks from rebuilding when any block is edited.
-class _BlockDataSelector extends StatelessWidget {
-  final String blockId;
-  final Map<String, dynamic> fallbackBlockData;
-  final bool isInEditorContext;
-  final Widget Function(BuildContext, Map<String, dynamic>) builder;
-
-  const _BlockDataSelector({
-    super.key,
-    required this.blockId,
-    required this.fallbackBlockData,
-    required this.isInEditorContext,
-    required this.builder,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // If not in editor context, use fallback data (from WebsiteService)
-    if (!isInEditorContext) {
-      return builder(context, fallbackBlockData);
-    }
-
-    // In editor context, select only THIS block's data from the provider
-    return Selector<WebsiteEditModeProvider, Map<String, dynamic>?>(
-      selector: (_, provider) {
-        // Find this block in the provider's blocks list
-        for (final block in provider.blocks) {
-          if (block['id']?.toString() == blockId) {
-            return block;
-          }
-        }
-        return null;
-      },
-      // Compare block data by content, not reference
-      // For canvas blocks, ignore activeElementId since it's managed internally
-      shouldRebuild: (prev, next) {
-        if (prev == null && next == null) return false;
-        if (prev == null || next == null) return true;
-
-        final prevData = Map<String, dynamic>.from(prev['block_data'] ?? {});
-        final nextData = Map<String, dynamic>.from(next['block_data'] ?? {});
-
-        // For canvas blocks, don't rebuild for activeElementId changes
-        // The canvas widget manages this internally
-        final blockType = (prev['block_type'] ?? '').toString().toLowerCase();
-        if (blockType == 'canvas') {
-          // Remove transient properties before comparing
-          prevData.remove('activeElementId');
-          nextData.remove('activeElementId');
-        }
-
-        // Compare remaining data
-        // Use string representation for deep comparison
-        return prevData.toString() != nextData.toString();
-      },
-      builder: (context, blockData, _) {
-        // Use the selected block data, or fallback if not found
-        return builder(context, blockData ?? fallbackBlockData);
-      },
-    );
   }
 }

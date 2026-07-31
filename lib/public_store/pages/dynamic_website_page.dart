@@ -1,26 +1,32 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../modules/website/models/website_block_public_visibility.dart';
+import '../../modules/website/models/website_editor_capability.dart';
 import '../../modules/website/models/website_font_registry.dart';
+import '../../modules/website/models/website_page_composition.dart';
+import '../../modules/website/models/website_page_models.dart';
+import '../../modules/website/models/website_seo_settings_aliases.dart';
 import '../../modules/website/services/website_service.dart';
-import '../../modules/website/widgets/website_block_renderer.dart';
-import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../modules/website/widgets/website_editor_document_binding.dart';
 import '../../shared/services/tenant_service.dart';
+import '../../shared/utils/seo_helper.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../widgets/full_page_loading.dart';
+import '../widgets/page_composition.dart';
 import '../widgets/public_store_layout.dart';
+import 'static_policy_page.dart'
+    show PublicWebsiteContactFacts, hasMeaningfulPublicWebsitePageContent;
 
 /// Dynamic page that renders website_blocks for any page based on slug
 ///
 /// This widget:
 /// 1. Loads the page by slug from website_pages
 /// 2. Loads blocks associated with that page from website_blocks
-/// 3. Renders blocks using WebsiteBlockRenderer (or EditableBlockRenderer if in edit mode)
+/// 3. Projects and renders blocks through the shared PageComposition
 /// 4. Applies theme settings (colors, fonts, spacing)
 ///
 /// Dec 2025 - Multi-page website support with inline editing
@@ -43,10 +49,15 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   List<Map<String, dynamic>> _blocks = [];
 
   // Page info for editing
+  WebsitePage? _page;
   String? _pageId;
   String? _snapshotFingerprint;
-  bool _editModeChecked =
-      false; // Track if we've checked edit mode for this navigation
+  // Audience/provenance of the currently held content. Editor-provenance
+  // content may only render while the exact lease that authorized it is
+  // still granted; see the audience guard in build().
+  WebsitePageContentAudience _blocksAudience =
+      WebsitePageContentAudience.public;
+  WebsiteEditorCapabilitySnapshot? _blocksLease;
   int _loadGeneration = 0;
   WebsiteService? _observedWebsiteService;
   bool _cmsRevalidationPending = false;
@@ -63,16 +74,12 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   double _sectionSpacing = 64.0;
   double _containerPadding = 24.0;
 
-  static const List<String> _responsiveBreakpoints = [
-    'desktop',
-    'tablet',
-    'mobile'
-  ];
-
-  // DISABLED: AutomaticKeepAliveClientMixin causes element activation conflicts
-  // during edit/preview mode switches. The performance cost of reloading is acceptable.
+  // Kept alive: the storefront shell keeps ONE stable content anchor
+  // across Public|Preview|Edit, so the old element-activation conflicts
+  // that forced this off no longer exist. Route changes still remount
+  // legitimately.
   @override
-  bool get wantKeepAlive => false;
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -97,21 +104,15 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
       _cmsRevalidationPending = false;
       _scheduleCmsPageOriginRevalidation();
     }
-
-    // Reset edit mode check flag on each navigation
-    _editModeChecked = false;
   }
 
   @override
   void didUpdateWidget(DynamicWebsitePage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.slug != widget.slug) {
-      _editModeChecked = false; // Reset on slug change
       _seedFromSnapshot(widget.slug, clearOnMiss: true);
-      _loadPageData().then((_) {
-        // After loading new page data, update edit provider if in edit mode
-        _updateEditProviderIfNeeded();
-      });
+      // The rebuild after loading binds the new page document idempotently.
+      _loadPageData();
     }
   }
 
@@ -162,17 +163,17 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
             .peekPageWithBlocks(slug, tenantId: tenantId);
 
     if (snapshot != null && snapshot.page.isPublished) {
+      _page = snapshot.page;
       _pageId = snapshot.page.id;
       _snapshotFingerprint = snapshot.fingerprint;
-      _blocks = snapshot.blocks
-          .where((block) => block['is_visible'] == true)
-          .toList();
+      _blocks = snapshot.blocks.toList(growable: false);
       _isLoading = false;
       _error = null;
       return true;
     }
 
     if (clearOnMiss) {
+      _page = null;
       _pageId = null;
       _snapshotFingerprint = null;
       _blocks = [];
@@ -182,186 +183,48 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     return false;
   }
 
-  /// Update the edit provider with new page's blocks if we're in edit mode
-  void _updateEditProviderIfNeeded() {
-    if (!mounted) return;
-    // Dynamic pages are kept alive across shell branch navigation. Only the
-    // active (ticker-enabled) page should sync provider state.
-    if (!TickerMode.of(context)) return;
-
-    final editProvider = context.read<WebsiteEditModeProvider>();
-
-    bool providerHasBlocksForThisPage() {
-      if (_pageId == null) return false;
-
-      final contextMatches = (editProvider.currentPageId == _pageId) ||
-          (editProvider.currentPageSlug == widget.slug);
-      if (!contextMatches) return false;
-
-      final providerBlocks = editProvider.blocks;
-      if (providerBlocks.isEmpty) return false;
-
-      final hasPageId = providerBlocks.any((b) => b['page_id'] != null);
-      if (!hasPageId) return true;
-
-      return providerBlocks
-          .every((b) => b['page_id']?.toString() == _pageId.toString());
-    }
-
-    // If we're already in edit mode (or preview mode), update the blocks for the new page
-    if (editProvider.isEditMode || editProvider.isPreviewMode) {
-      // Check if provider isn't actually synced to this page (context + blocks).
-      if (!providerHasBlocksForThisPage()) {
-        final websiteService = context.read<WebsiteService>();
-        final blocks = List<Map<String, dynamic>>.from(_blocks);
-        final settings = Map<String, dynamic>.from(websiteService.settings);
-
-        debugPrint(
-            '🔄 [DynamicPage] Sync editor context while in edit mode: ${editProvider.currentPageSlug} → ${widget.slug}');
-        debugPrint(
-            '📄 [DynamicPage] Updating provider with ${_blocks.length} blocks for: ${widget.slug}');
-
-        if (editProvider.isEditMode) {
-          editProvider.enterEditMode(
-            blocks,
-            settings,
-            pageId: _pageId,
-            pageSlug: widget.slug,
-          );
-        } else {
-          editProvider.enterPreviewMode(
-            blocks,
-            settings,
-            pageId: _pageId,
-            pageSlug: widget.slug,
-          );
-        }
-
-        _editModeChecked =
-            true; // Mark as checked so _checkEditModeFromRouter doesn't double-process
-      }
-    }
+  /// Invalidates an editor-provenance snapshot whose lease was lost and
+  /// reloads through the public read path. The current frame already renders
+  /// the safe loading state; the reset happens post-frame (build-safe).
+  void _invalidateEditorContentAndReloadPublic() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_blocksAudience != WebsitePageContentAudience.editor) return;
+      setState(() {
+        _page = null;
+        _pageId = null;
+        _snapshotFingerprint = null;
+        _blocks = [];
+        _blocksAudience = WebsitePageContentAudience.public;
+        _blocksLease = null;
+        _isLoading = true;
+        _error = null;
+      });
+      // The reload arrives exclusively through the central CMS revalidation
+      // signal emitted on the lease transition (exactly one load per
+      // transition; no second local path).
+    });
   }
 
-  /// Check edit mode using GoRouter state (called from build method)
-  void _checkEditModeFromRouter(BuildContext context) {
-    // Don't check edit mode until blocks are loaded
+  /// Attaches this CMS page's document to the open editor session once its
+  /// blocks are loaded. Mode entry/exit is owned by the FSM route binding in
+  /// the storefront layout; this consumer only supplies its page document.
+  void _bindEditorDocument(WebsiteEditModeProvider editProvider) {
     if (_isLoading || _pageId == null) return;
-
-    // URL params should only be used to ENTER editor context.
-    // Once already inside the editor shell, ignore URL forcing to prevent
-    // preview/edit bouncing on persistent shell routes.
-    final editProvider = context.read<WebsiteEditModeProvider>();
-    if (editProvider.isInEditorContext) {
-      _editModeChecked = true;
-      return;
-    }
-
-    // Get query parameters from GoRouter
-    final goRouterState = GoRouterState.of(context);
-    final queryParams = goRouterState.uri.queryParameters;
-
-    final shouldPreview = queryParams['preview'] == 'true';
-    // If both are present, preview wins (prevents mode bouncing).
-    final shouldEdit = !shouldPreview && queryParams['edit'] == 'true';
-
-    // Only process once per navigation (avoid infinite rebuilds)
-    if (_editModeChecked) return;
-
-    if (shouldEdit || shouldPreview) {
-      _editModeChecked = true;
-
-      final editProvider = context.read<WebsiteEditModeProvider>();
-      final websiteService = context.read<WebsiteService>();
-
-      // Schedule for next frame to avoid calling during build
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (!TickerMode.of(context)) return;
-
-        final blocks = List<Map<String, dynamic>>.from(_blocks);
-        final settings = Map<String, dynamic>.from(websiteService.settings);
-
-        debugPrint(
-            '📄 [DynamicPage] Setting up edit mode for page: ${widget.slug} (${_blocks.length} blocks)');
-
-        if (shouldEdit) {
-          editProvider.enterEditMode(
-            blocks,
-            settings,
-            pageId: _pageId,
-            pageSlug: widget.slug,
-          );
-          debugPrint('✏️ [DynamicPage] Entered EDIT mode for: ${widget.slug}');
-        } else {
-          editProvider.enterPreviewMode(
-            blocks,
-            settings,
-            pageId: _pageId,
-            pageSlug: widget.slug,
-          );
-          debugPrint(
-              '👁️ [DynamicPage] Entered PREVIEW mode for: ${widget.slug}');
-        }
-      });
-    }
+    WebsiteEditorDocumentBinding.bind(
+      context,
+      editProvider: editProvider,
+      ready: true,
+      blocks: () => List<Map<String, dynamic>>.from(_blocks),
+      settings: () =>
+          Map<String, dynamic>.from(context.read<WebsiteService>().settings),
+      pageId: _pageId,
+      pageSlug: widget.slug,
+    );
   }
 
   String _currentBreakpoint(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    if (width < 640) return 'mobile';
-    if (width < 1024) return 'tablet';
-    return 'desktop';
-  }
-
-  bool? _toBool(dynamic value) {
-    if (value is bool) return value;
-    if (value is num) return value != 0;
-    if (value is String) {
-      final normalized = value.trim().toLowerCase();
-      if (normalized == 'true' ||
-          normalized == '1' ||
-          normalized == 'si' ||
-          normalized == 'sí') {
-        return true;
-      }
-      if (normalized == 'false' || normalized == '0' || normalized == 'no') {
-        return false;
-      }
-    }
-    return null;
-  }
-
-  Map<String, bool> _normalizeBlockVisibility(dynamic raw) {
-    final visibility = {
-      for (final breakpoint in _responsiveBreakpoints) breakpoint: true,
-    };
-
-    dynamic source = raw;
-    if (source is String) {
-      final trimmed = source.trim();
-      if (trimmed.isEmpty) {
-        source = null;
-      } else {
-        try {
-          final decoded = jsonDecode(trimmed);
-          if (decoded is Map) source = decoded;
-        } catch (_) {
-          source = null;
-        }
-      }
-    }
-
-    if (source is Map) {
-      source.forEach((key, value) {
-        final keyString = key.toString();
-        if (!visibility.containsKey(keyString)) return;
-        final parsed = _toBool(value);
-        if (parsed != null) visibility[keyString] = parsed;
-      });
-    }
-
-    return visibility;
+    return websitePublicBreakpointForWidth(MediaQuery.sizeOf(context).width);
   }
 
   Color? _tryParseColor(String value) {
@@ -406,6 +269,12 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
         _error = null;
       });
     }
+    _scheduleSeoUpdate(
+      _page,
+      _blocks,
+      loadGeneration,
+      originConfirmed: false,
+    );
 
     try {
       final websiteService = context.read<WebsiteService>();
@@ -460,17 +329,77 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
       debugPrint(
           '🏪 [DynamicWebsitePage] Loading page "$requestedSlug" for tenant: $tenantId');
 
+      WebsiteEditModeProvider? editProvider;
+      try {
+        editProvider = context.read<WebsiteEditModeProvider>();
+      } catch (_) {
+        editProvider = null;
+      }
+      // The provider is the sole mode owner and the layout's capability gate
+      // has already applied (or refused) any URL entry command by the time
+      // this routed child builds: an unauthorized visitor can never request
+      // the editor load path from here.
+      final editorRequested = editProvider?.isInEditorContext == true;
+
       // Start the joined page+blocks request immediately. Theme settings may
       // load alongside it; they must not create a page -> blocks waterfall.
-      final pageFuture = websiteService.loadPageWithBlocks(
-        requestedSlug,
-        tenantId: tenantId,
-      );
-      final settingsFuture = websiteService.settings.isEmpty
+      final requestLease = editProvider?.editorEntryLease;
+      final requestGeneration = editProvider?.editorEntryLeaseGeneration;
+      final requestIdentityRevision =
+          editProvider?.editorEntryLeaseIdentityRevision;
+      final requestServiceEpoch = websiteService.identityEpoch;
+      final requestServiceIdentity =
+          websiteService.editorCapabilityRequestIdentity;
+      var adoptedAudience = editorRequested
+          ? WebsitePageContentAudience.editor
+          : WebsitePageContentAudience.public;
+      final Future<PageSnapshotLoadResult> pageFuture;
+      if (editorRequested) {
+        pageFuture = () async {
+          try {
+            final editorSnapshot =
+                await websiteService.loadEditorPageWithBlocks(
+              requestedSlug,
+              tenantId: tenantId!,
+            );
+            return editorSnapshot == null
+                ? const PageSnapshotLoadResult.originMissing()
+                : PageSnapshotLoadResult.origin(editorSnapshot);
+          } on WebsiteEditorAuthorityException {
+            // Editor authority was lost: either the local gate denied, or
+            // the server (RLS/auth) rejected a read a stale cached grant
+            // still believed authorized. Revoke the lease/FSM and adopt
+            // ONLY the public result, never draft content. Transient errors
+            // never take this branch (they rethrow upstream unclassified).
+            // The single CMS revalidation for this transition is emitted by
+            // the layout when it adopts the durable denial — emitting here
+            // too would double the reload.
+            if (mounted) {
+              try {
+                context
+                    .read<WebsiteEditModeProvider>()
+                    .revokeEditorEntryLease();
+              } catch (_) {}
+            }
+            adoptedAudience = WebsitePageContentAudience.public;
+            return websiteService.loadPageWithBlocksResult(
+              requestedSlug,
+              tenantId: tenantId!,
+            );
+          }
+        }();
+      } else {
+        pageFuture = websiteService.loadPageWithBlocksResult(
+          requestedSlug,
+          tenantId: tenantId,
+        );
+      }
+      final settingsFuture = !websiteService.hasSettingsForTenant(tenantId)
           ? websiteService.loadSettingsForTenant(tenantId)
           : Future<void>.value();
       await settingsFuture;
-      final snapshot = await pageFuture;
+      final loadResult = await pageFuture;
+      final snapshot = loadResult.snapshot;
 
       if (loadGeneration != _loadGeneration ||
           requestedSlug != widget.slug ||
@@ -478,46 +407,88 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
         return;
       }
 
-      if (snapshot == null || !snapshot.page.isPublished) {
-        throw Exception('Page not found: $requestedSlug');
+      if (loadResult.isAuthoritativelyMissing) {
+        setState(() {
+          _page = null;
+          _pageId = null;
+          _snapshotFingerprint = null;
+          _blocks = const [];
+          _isLoading = false;
+          _error = 'Esta página no está disponible.';
+        });
+        _scheduleSeoUpdate(
+          null,
+          const [],
+          loadGeneration,
+          originConfirmed: false,
+        );
+        return;
       }
 
-      WebsiteEditModeProvider? editProvider;
-      try {
-        editProvider = context.read<WebsiteEditModeProvider>();
-      } catch (_) {
-        editProvider = null;
+      if (snapshot == null ||
+          (!editorRequested && !snapshot.page.isPublished)) {
+        throw Exception('Page not found: $requestedSlug');
       }
 
       debugPrint(
           '📄 [DynamicWebsitePage] Found page: "${snapshot.page.title}" (id: ${snapshot.page.id}, slug: ${snapshot.page.slug})');
 
-      final nextBlocks = snapshot.blocks
-          .where((block) => block['is_visible'] == true)
-          .toList(growable: false);
+      final nextBlocks = snapshot.blocks.toList(growable: false);
+      // Editor-provenance content may only be adopted while the EXACT lease
+      // that requested it is still granted; a stale editor response after a
+      // revocation is dropped (the audience guard in build() reloads public).
+      if (adoptedAudience == WebsitePageContentAudience.editor) {
+        final currentLease = editProvider?.editorEntryLease;
+        if (currentLease == null ||
+            !currentLease.granted ||
+            requestLease == null ||
+            currentLease.fingerprint != requestLease.fingerprint ||
+            currentLease.authorityEpoch != requestLease.authorityEpoch ||
+            requestGeneration != editProvider?.editorEntryLeaseGeneration ||
+            requestIdentityRevision !=
+                editProvider?.editorEntryLeaseIdentityRevision ||
+            requestServiceEpoch != websiteService.identityEpoch ||
+            requestServiceIdentity !=
+                websiteService.editorCapabilityRequestIdentity) {
+          return;
+        }
+      }
       final didContentChange = _snapshotFingerprint != snapshot.fingerprint ||
-          _pageId != snapshot.page.id;
+          _pageId != snapshot.page.id ||
+          _blocksAudience != adoptedAudience;
       _loadThemeFromSettings(
         websiteService,
         editProvider: editProvider,
       );
       if (didContentChange || _isLoading || _error != null) {
         setState(() {
+          _page = snapshot.page;
           _pageId = snapshot.page.id;
           _snapshotFingerprint = snapshot.fingerprint;
           _blocks = nextBlocks;
+          _blocksAudience = adoptedAudience;
+          _blocksLease =
+              adoptedAudience == WebsitePageContentAudience.editor
+                  ? requestLease
+                  : null;
           _isLoading = false;
           _error = null;
         });
       }
+      _scheduleSeoUpdate(
+        snapshot.page,
+        nextBlocks,
+        loadGeneration,
+        originConfirmed: !editorRequested && loadResult.isOriginConfirmed,
+      );
 
-      // If we arrived here while already inside the persistent editor shell
-      // (edit/preview), keep its canonical page context synchronized.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (!TickerMode.of(context)) return;
-        _updateEditProviderIfNeeded();
-      });
+      // The setState above triggers a rebuild, whose document binding keeps
+      // the canonical page context synchronized inside the editor shell.
+    } on WebsiteEditorReadSupersededException {
+      // An obsolete completion for a previous identity: discard silently —
+      // no error surface, no revocation, no data. The current identity's
+      // own load (triggered by the lease transition) owns the screen.
+      return;
     } catch (e) {
       debugPrint('❌ [DynamicWebsitePage] Error: $e');
       if (mounted &&
@@ -527,8 +498,156 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
           _isLoading = false;
           _error = e.toString();
         });
+        _scheduleSeoUpdate(
+          _page,
+          _blocks,
+          loadGeneration,
+          originConfirmed: false,
+        );
       }
     }
+  }
+
+  void _scheduleSeoUpdate(
+    WebsitePage? page,
+    List<Map<String, dynamic>> blocks,
+    int loadGeneration, {
+    bool originConfirmed = false,
+  }) {
+    final requestedSlug = widget.slug;
+    final websiteService = context.read<WebsiteService>();
+    final storeName = websiteService
+        .getSetting(
+          'seo_business_name',
+          websiteService.getSetting('store_name', ''),
+        )
+        .trim();
+    final configuredTitle = page?.metaTitle?.trim() ?? '';
+    final pageTitle = page?.title.trim() ?? '';
+    final fallbackPageTitle = requestedSlug
+        .replaceAll(RegExp(r'[-_]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    final effectivePageTitle =
+        pageTitle.isNotEmpty ? pageTitle : fallbackPageTitle;
+    final title = configuredTitle.isNotEmpty
+        ? configuredTitle
+        : storeName.isEmpty
+            ? effectivePageTitle
+            : '$effectivePageTitle | $storeName';
+
+    final configuredDescription = page?.metaDescription?.trim() ?? '';
+    final globalDescription = websiteService
+        .getSetting(
+          'seo_meta_description',
+          websiteService.getSetting(
+            'meta_description',
+            websiteService.getSetting('store_description', ''),
+          ),
+        )
+        .trim();
+    final description = configuredDescription.isNotEmpty
+        ? configuredDescription
+        : globalDescription.isNotEmpty
+            ? globalDescription
+            : effectivePageTitle;
+
+    final configuredImage = page?.ogImageUrl?.trim() ?? '';
+    final fallbackImage =
+        websiteService.getSetting('seo_og_image', '').trim().isNotEmpty
+            ? websiteService.getSetting('seo_og_image', '').trim()
+            : websiteService.getSetting('logo_url', '').trim();
+    // The canonical ERP-mounted flag: an inherited-widget lookup here is
+    // reachable from initState and would assert (ModalRoute dependOn). The
+    // SEO route derives from the page's own slug under that flag.
+    final isErpMounted = PublicStoreRuntimeConfig.isErpMounted;
+    final currentUri = Uri(
+      path: isErpMounted
+          ? '/tienda/pagina/$requestedSlug'
+          : '/pagina/$requestedSlug',
+    );
+    final contactFacts = PublicWebsiteContactFacts(
+      phone: websiteService
+          .getSetting(
+            'seo_phone',
+            websiteService.getSetting(
+              'contact_phone',
+              websiteService.getSetting('business_phone', ''),
+            ),
+          )
+          .trim(),
+      email: websiteService
+          .getSetting(
+            'seo_email',
+            websiteService.getSetting('contact_email', ''),
+          )
+          .trim(),
+      address: <String>{
+        websiteService
+            .getSetting(
+              'seo_address_street',
+              websiteService.getSetting('contact_address', ''),
+            )
+            .trim(),
+        websiteService
+            .getSetting(
+              'seo_address_city',
+              websiteService.getSetting('seo_address_locality', ''),
+            )
+            .trim(),
+        websiteService.getSetting('seo_address_region', '').trim(),
+        websiteService.getSetting('seo_address_postal', '').trim(),
+        websiteService.getSetting('seo_address_country', '').trim(),
+      }.where((part) => part.isNotEmpty).join(', '),
+    );
+    final hasEligibleContent = originConfirmed &&
+        page != null &&
+        hasMeaningfulPublicWebsitePageContent(
+          blocks,
+          isContactPage: requestedSlug == 'contacto',
+          contactFacts: contactFacts,
+        );
+    final routeProjection = projectStorefrontSeoRoute(
+      currentUri,
+      isErpMounted: isErpMounted,
+      ownerIsPublished: originConfirmed && (page?.isPublished ?? false),
+      hasEligibleContent: hasEligibleContent,
+    );
+    final configuredStoreUrl = WebsiteSeoSettingsAliases.normalizeHttpsOrigin(
+      websiteService.getSetting('store_url', ''),
+    );
+    final canonicalBase = configuredStoreUrl.isEmpty
+        ? null
+        : Uri.tryParse(
+            configuredStoreUrl.endsWith('/')
+                ? configuredStoreUrl
+                : '$configuredStoreUrl/',
+          );
+    final canonicalUrl = canonicalBase
+        ?.resolve(routeProjection.canonicalPath)
+        .replace(query: null, fragment: null)
+        .toString();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          loadGeneration != _loadGeneration ||
+          requestedSlug != widget.slug ||
+          !TickerMode.of(context)) {
+        return;
+      }
+      SeoHelper.updateSeo(
+        title: title,
+        description: description,
+        imageUrl: configuredImage.isNotEmpty
+            ? configuredImage
+            : fallbackImage.isEmpty
+                ? null
+                : fallbackImage,
+        keywords: page?.metaKeywords,
+        canonicalUrl: canonicalUrl,
+        robots: routeProjection.robots,
+      );
+    });
   }
 
   void _loadThemeFromSettings(
@@ -584,9 +703,9 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
       _headingSize = parsedHeadingSize.clamp(24.0, 72.0);
     }
     if (parsedBodySize != null) _bodySize = parsedBodySize.clamp(12.0, 24.0);
-    if (parsedSectionSpacing != null) {
-      _sectionSpacing = parsedSectionSpacing.clamp(32.0, 128.0);
-    }
+    _sectionSpacing = WebsitePageComposition.resolveSectionSpacing(
+      parsedSectionSpacing,
+    );
     if (parsedContainerPadding != null) {
       _containerPadding = parsedContainerPadding.clamp(16.0, 64.0);
     }
@@ -596,13 +715,49 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
 
-    // Check edit mode from URL parameters (called every build, but only acts once per navigation)
-    _checkEditModeFromRouter(context);
-
     // Watch edit mode provider for changes
     final editProvider = context.watch<WebsiteEditModeProvider>();
-    final isEditMode = editProvider.isEditMode;
     final isInEditorContext = editProvider.isInEditorContext;
+
+    // Audience guard: editor-provenance content must never render a single
+    // frame beyond its authorizing lease. On revoke/suspend the snapshot is
+    // invalidated BEFORE painting and the page reloads through the public
+    // read; an unpublished public origin then resolves to unavailable.
+    final editorContentAuthorized =
+        _blocksAudience != WebsitePageContentAudience.editor ||
+            (editProvider.isInEditorContext &&
+                editProvider.editorEntryLeaseGranted &&
+                _blocksLease != null &&
+                editProvider.editorEntryLease?.fingerprint ==
+                    _blocksLease?.fingerprint &&
+                editProvider.editorEntryLease?.authorityEpoch ==
+                    _blocksLease?.authorityEpoch);
+    if (!editorContentAuthorized) {
+      _invalidateEditorContentAndReloadPublic();
+      return const FullPageLoading();
+    }
+    // Desired vs loaded audience. A late lease grant triggers the CENTRAL
+    // CMS revalidation signal (emitted by the layout on the lease
+    // transition); while the desired editor audience is still pending, the
+    // page renders loading and never binds a public snapshot into the editor
+    // session.
+    final desiredEditorAudience =
+        isInEditorContext && editProvider.editorEntryLeaseGranted;
+    final audienceSatisfied = desiredEditorAudience
+        ? (_blocksAudience == WebsitePageContentAudience.editor &&
+            _blocksLease != null &&
+            _blocksLease?.fingerprint ==
+                editProvider.editorEntryLease?.fingerprint &&
+            _blocksLease?.authorityEpoch ==
+                editProvider.editorEntryLease?.authorityEpoch)
+        : _blocksAudience == WebsitePageContentAudience.public;
+
+    // The FSM route command in the storefront layout already owns the mode;
+    // this consumer only binds its page document once blocks are loaded AND
+    // the loaded audience matches the session's audience.
+    if (audienceSatisfied) {
+      _bindEditorDocument(editProvider);
+    }
 
     // Watch website service so theme changes can apply without full reload
     final websiteService = context.watch<WebsiteService>();
@@ -620,10 +775,10 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
 
     // In editor context (preview or edit), render the provider blocks for THIS page.
     // This ensures switching to preview after saving shows the updated content.
-    final matchesPage = (editProvider.currentPageId != null &&
-            editProvider.currentPageId == _pageId) ||
-        (editProvider.currentPageSlug != null &&
-            editProvider.currentPageSlug == widget.slug);
+    final matchesPage = editProvider.ownsPageDocument(
+      pageId: _pageId,
+      pageSlug: widget.slug,
+    );
 
     final blocksToRender =
         (isInEditorContext && matchesPage) ? editProvider.blocks : _blocks;
@@ -635,80 +790,44 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     if (_error != null) {
       return _buildErrorView();
     }
+    if (isInEditorContext && !matchesPage) {
+      return const FullPageLoading();
+    }
 
-    // Return just the blocks - PublicStoreLayout handles Scaffold and scrolling
-    return Column(
-      children: _buildBlockWidgets(blocksToRender, isEditMode, tenantId),
+    final mode = editProvider.isEditMode
+        ? WebsitePageCompositionMode.edit
+        : editProvider.isPreviewMode
+            ? WebsitePageCompositionMode.preview
+            : WebsitePageCompositionMode.public;
+    final composition = WebsitePageComposition.project(
+      blocks: blocksToRender,
+      mode: mode,
+      breakpoint: _currentBreakpoint(context),
+      sectionSpacing: _sectionSpacing,
     );
-  }
 
-  /// Build block widgets (non-sliver version for Column layout)
-  List<Widget> _buildBlockWidgets(
-      List<Map<String, dynamic>> blocks, bool isEditMode, String? tenantId) {
-    final breakpoint = _currentBreakpoint(context);
-    final visibleBlocks = <Map<String, dynamic>>[];
-
-    for (final block in blocks) {
-      final blockData = block['block_data'] as Map<String, dynamic>? ?? {};
-      final visibility = _normalizeBlockVisibility(blockData['visibility']);
-
-      // In edit mode, show all blocks; in view mode, respect visibility settings
-      if (isEditMode || visibility[breakpoint] == true) {
-        visibleBlocks.add(block);
-      }
-    }
-
-    if (visibleBlocks.isEmpty) {
-      return [_buildEmptyState(isEditMode)];
-    }
-
-    return visibleBlocks.map((block) {
-      final blockId = block['id']?.toString() ?? '';
-      final blockType = block['block_type']?.toString() ?? 'hero';
-      final blockData = block['block_data'] as Map<String, dynamic>? ?? {};
-      final isVisible = block['is_visible'] == true;
-
-      // Use EditableBlockRenderer in edit mode, WebsiteBlockRenderer in view mode
-      final blockWidget = isEditMode
-          ? DeferredEditableBlockRenderer.build(
-              context: context,
-              blockId: blockId,
-              blockType: blockType,
-              data: blockData,
-              primaryColor: _primaryColor,
-              accentColor: _accentColor,
-              headingFont: _headingFont,
-              bodyFont: _bodyFont,
-              headingSize: _headingSize,
-              bodySize: _bodySize,
-              onNavigate: (route) =>
-                  PublicStoreLayout.navigateToHref(context, route),
-              isVisible: isVisible,
-              tenantId: tenantId,
-            )
-          : WebsiteBlockRenderer.build(
-              context: context,
-              blockType: blockType,
-              data: blockData,
-              primaryColor: _primaryColor,
-              accentColor: _accentColor,
-              headingFont: _headingFont,
-              bodyFont: _bodyFont,
-              headingSize: _headingSize,
-              bodySize: _bodySize,
-              onNavigate: (route) =>
-                  PublicStoreLayout.navigateToHref(context, route),
-              tenantId: tenantId,
-            );
-
-      return KeyedSubtree(
-        key: ValueKey<String>('website-block-$blockId'),
-        child: Padding(
-          padding: EdgeInsets.only(bottom: _sectionSpacing),
-          child: blockWidget,
-        ),
-      );
-    }).toList();
+    return PageComposition(
+      composition: composition,
+      primaryColor: _primaryColor,
+      accentColor: _accentColor,
+      textColor: _textColor,
+      containerPadding: _containerPadding,
+      headingFont: _headingFont,
+      bodyFont: _bodyFont,
+      headingSize: _headingSize,
+      bodySize: _bodySize,
+      tenantId: tenantId,
+      onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
+      isNavigationEligible: (href) =>
+          PublicStoreLayout.isHrefPubliclyEligible(context, href),
+      onAddBlock: (type, {atIndex}) =>
+          editProvider.addBlock(type, atIndex: atIndex),
+      onSpacingChanged: (blockId, spacing) =>
+          editProvider.updateBlockData(blockId, 'spacingAfter', spacing),
+      emptyState: _buildEmptyState(
+        mode == WebsitePageCompositionMode.edit,
+      ),
+    );
   }
 
   Widget _buildEmptyState(bool isEditMode) {
@@ -783,7 +902,8 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
-              onPressed: () => context.go('/tienda'),
+              onPressed: () =>
+                  PublicStoreLayout.navigateToHref(context, '/tienda'),
               icon: const Icon(Icons.home),
               label: const Text('Volver al inicio'),
             ),

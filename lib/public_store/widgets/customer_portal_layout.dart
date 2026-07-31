@@ -189,18 +189,20 @@ class _CustomerPortalAuthBoundary extends StatelessWidget {
                 FilledButton(
                   onPressed: hasSession
                       ? () => accountService.reloadCustomerMembership()
-                      : () => context.go('/cuenta/login'),
+                      : () => PublicStoreLayout.navigateToHref(
+                            context,
+                            '/cuenta/login',
+                          ),
                   child: Text(hasSession ? 'REINTENTAR' : 'INICIAR SESIÓN'),
                 ),
                 if (hasSession) ...[
                   const SizedBox(height: 8),
                   TextButton(
-                    onPressed: () async {
-                      await accountService.signOut();
-                      if (context.mounted) {
-                        context.go('/cuenta/login');
-                      }
-                    },
+                    onPressed: () => PublicStoreLayout.signOutCustomer(
+                      context,
+                      accountService,
+                      destination: '/cuenta/login',
+                    ),
                     child: const Text('CERRAR ESTA SESIÓN'),
                   ),
                 ],
@@ -358,7 +360,7 @@ void _navigateWithinPortal(BuildContext context, String path) {
   final current = GoRouterState.of(context).uri.toString();
   if (current == target) return;
 
-  context.go(target);
+  PublicStoreLayout.navigateToHref(context, target);
 }
 
 class _PortalNavigation extends StatelessWidget {

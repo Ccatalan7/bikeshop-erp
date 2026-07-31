@@ -1,13 +1,16 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/public_store_theme.dart';
+import '../models/product_purchase_authority.dart';
+import '../utils/category_trail.dart';
 import '../theme/public_store_surface_theme.dart';
 import '../models/public_commerce_product_projection.dart';
+import '../models/public_product_seo_copy.dart';
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/catalog_page_prefetch_cache.dart';
@@ -20,6 +23,7 @@ import '../../shared/models/public_product_visibility_policy.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../../shared/utils/seo_helper.dart';
 import '../../modules/inventory/models/category_models.dart';
+import 'package:vinabike_erp/modules/website/models/website_seo_settings_aliases.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
 import 'package:vinabike_erp/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
@@ -64,6 +68,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   bool _isLoading = true;
   bool _isProductValidated = false;
   bool _productValidationFailed = false;
+
+  /// When the origin last confirmed this product. Purchase authority after a
+  /// failed refresh is bounded by [productPurchaseAuthorityWindow] from here.
+  DateTime? _lastValidatedAt;
   bool _isLoadingRelated = false;
   bool _isLoadingTechnicalSpecs = false;
   bool _technicalSpecsRequested = false;
@@ -72,10 +80,15 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   int _quantity = 1;
   int _selectedImageIndex = 0;
   int _loadToken = 0;
+  int _relatedRequestGeneration = 0;
   List<_PublicProductTechnicalSpec> _technicalSpecs = const [];
   OverlayEntry? _productFeedbackOverlay;
   Timer? _productFeedbackTimer;
   Timer? _productFeedbackRemovalTimer;
+
+  /// Transient "done" state on the add-to-cart control itself.
+  bool _justAddedToCart = false;
+  Timer? _justAddedResetTimer;
   ValueNotifier<bool>? _productFeedbackVisible;
   PublicInventoryService? _observedInventoryService;
   String? _seededRouteKey;
@@ -85,7 +98,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   // DISABLED: AutomaticKeepAliveClientMixin causes element activation conflicts
   // during edit/preview mode switches. The performance cost of reloading is acceptable.
   @override
-  bool get wantKeepAlive => false;
+  // Kept alive: the storefront shell keeps ONE stable content anchor
+  // across Public|Preview|Edit, so the old element-activation conflicts
+  // that forced this off no longer exist. Scroll and local state survive
+  // mode toggles; route changes still remount legitimately.
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -99,6 +116,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // Register an inherited dependency. A tenant switch can keep this State
+    // and product route alive, so a one-off `read` is not enough to revoke the
+    // previous tenant's purchase/SEO authority.
+    final tenantId =
+        context.watch<PublicStoreTenantProvider>().tenantId?.trim() ?? '';
     final inventoryService = context.read<PublicInventoryService>();
     if (!identical(_observedInventoryService, inventoryService)) {
       _observedInventoryService
@@ -106,7 +128,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       _observedInventoryService = inventoryService
         ..addListener(_handlePublicInventoryInvalidated);
     }
-    _seedProductFromSessionSnapshot();
+    _seedProductFromSessionSnapshot(tenantId);
     if (_inventoryRevalidationPending && TickerMode.of(context)) {
       _inventoryRevalidationPending = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -119,21 +141,24 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   void didUpdateWidget(ProductDetailPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.productId != oldWidget.productId) {
+      _resetRouteLocalUiState();
       removeStructuredDataScript(_structuredDataScriptId);
       _product = null;
       _categoryTrail = const [];
+      _relatedProducts = const [];
+      _isLoadingRelated = false;
+      _relatedRequestGeneration++;
       _technicalSpecs = const [];
       _isProductValidated = false;
       _productValidationFailed = false;
+      _lastValidatedAt = null;
       _isLoadingTechnicalSpecs = false;
       _technicalSpecsRequested = false;
       _validatedTenantId = null;
-      _selectedDetailsTab = 0;
-      _quantity = 1;
-      _selectedImageIndex = 0;
       _seededRouteKey = null;
-      _trackedProductIdForRoute = null;
-      _seedProductFromSessionSnapshot();
+      _seedProductFromSessionSnapshot(
+        context.read<PublicStoreTenantProvider>().tenantId?.trim() ?? '',
+      );
       unawaited(_loadProduct());
     }
   }
@@ -143,8 +168,26 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     _observedInventoryService
         ?.removeListener(_handlePublicInventoryInvalidated);
     _hideProductFeedbackBanner(animated: false);
+    _justAddedResetTimer?.cancel();
     removeStructuredDataScript(_structuredDataScriptId);
     super.dispose();
+  }
+
+  /// Clears interaction state that belongs to one product route and tenant.
+  ///
+  /// A host/editor tenant switch can keep this State alive. Carrying image
+  /// selection, quantity, "added" feedback or analytics identity across that
+  /// boundary is both misleading and unsafe (an image index valid for tenant A
+  /// can be out of range for tenant B).
+  void _resetRouteLocalUiState() {
+    _justAddedResetTimer?.cancel();
+    _justAddedResetTimer = null;
+    _justAddedToCart = false;
+    _hideProductFeedbackBanner(animated: false);
+    _selectedDetailsTab = 0;
+    _quantity = 1;
+    _selectedImageIndex = 0;
+    _trackedProductIdForRoute = null;
   }
 
   void _handlePublicInventoryInvalidated() {
@@ -156,27 +199,55 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     _relatedPageCache.markStale();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // Stale-while-revalidate. The freshness monitor invalidates inventory
+      // roughly every 30 seconds, so this is a steady pulse, not an event.
+      // Tearing validation down here put the visible page through a 1–2 s
+      // "Actualizando precio y disponibilidad…" cycle on every pulse — buy
+      // button disabled, breadcrumb collapsed, SEO title flapping — for data
+      // that almost never changed. A product the origin already validated
+      // stays interactive; _loadProduct refreshes it in the background and
+      // the UI only moves if the authoritative row actually differs.
       setState(() {
-        _isProductValidated = false;
         _productValidationFailed = false;
       });
       unawaited(_loadProduct());
     });
   }
 
-  void _seedProductFromSessionSnapshot() {
-    String tenantId;
-    try {
-      tenantId =
-          context.read<PublicStoreTenantProvider>().tenantId?.trim() ?? '';
-    } catch (_) {
-      return;
-    }
-    if (tenantId.isEmpty) return;
-    final routeKey = '$tenantId:${widget.productId}';
+  void _seedProductFromSessionSnapshot(String tenantId) {
+    final routeKey =
+        '${tenantId.isEmpty ? '<unresolved>' : tenantId}:${widget.productId}';
     if (_seededRouteKey == routeKey) return;
+    final tenantRouteChanged =
+        _seededRouteKey != null && _seededRouteKey != routeKey;
     _seededRouteKey = routeKey;
 
+    if (tenantRouteChanged) {
+      // The same widget can survive a host/editor tenant switch. A snapshot
+      // validated for tenant A is never purchase authority for tenant B, even
+      // when the product identifier happens to be the same.
+      _resetRouteLocalUiState();
+      _loadToken++;
+      _relatedRequestGeneration++;
+      removeStructuredDataScript(_structuredDataScriptId);
+      _product = null;
+      _categoryTrail = const [];
+      _relatedProducts = const [];
+      _technicalSpecs = const [];
+      _isLoading = true;
+      _isProductValidated = false;
+      _productValidationFailed = false;
+      _lastValidatedAt = null;
+      _validatedTenantId = null;
+      _isLoadingRelated = false;
+      _isLoadingTechnicalSpecs = false;
+      _technicalSpecsRequested = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_loadProduct());
+      });
+    }
+
+    if (tenantId.isEmpty) return;
     final snapshot = context
         .read<PublicInventoryService>()
         .getCachedProductSnapshotForIdentifier(
@@ -189,11 +260,28 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     _isLoading = false;
     _isProductValidated = snapshot.isOriginFresh(_originTrustWindow);
     _productValidationFailed = false;
+    _lastValidatedAt = _isProductValidated ? snapshot.originValidatedAt : null;
     _validatedTenantId = _isProductValidated ? tenantId : null;
+
+    // The visitor almost always arrives from the catalog, so the category
+    // list is already in memory. Derive the full breadcrumb before the first
+    // build instead of painting a short crumb and morphing when the
+    // authoritative load finishes.
+    final cachedTrail = categoryTrailFromCategories(
+      context
+          .read<PublicInventoryService>()
+          .cachedCategoriesForTenant(tenantId: tenantId)
+          ?.categories,
+      snapshot.value.categoryId,
+    );
+    if (cachedTrail != null) {
+      _categoryTrail = cachedTrail;
+    }
   }
 
   Future<void> _loadProduct() async {
     final token = ++_loadToken;
+    String? resolvedTenantId;
     final hadVisibleProduct = _product != null;
     final hadRecentValidation = _isProductValidated;
     setState(() {
@@ -218,18 +306,37 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     // Session snapshots are a paint optimization only. Until the origin
     // confirms the current publication/visibility policy, do not emit Product
     // JSON-LD or indexable metadata for the cached projection.
-    removeStructuredDataScript(_structuredDataScriptId);
-    _updateUnavailableSeo(token, force: true);
+    //
+    // A background revalidation of an already-validated product is the
+    // exception: its metadata was legitimately confirmed and stays in place
+    // while the fresh row loads. (_updateUnavailableSeo also self-guards on
+    // _isProductValidated, which this reload preserves.)
+    if (!hadRecentValidation) {
+      removeStructuredDataScript(_structuredDataScriptId);
+    }
+    _updatePendingSeo(token);
 
     try {
       final inventoryService = context.read<PublicInventoryService>();
       final tenantId = await resolvePublicStoreTenantId(context);
+      resolvedTenantId = tenantId;
       if (!mounted || token != _loadToken) return;
 
       if (tenantId == null) {
         debugPrint('❌ [ProductDetail] No tenant ID available');
-        setState(() => _isLoading = false);
-        _updateUnavailableSeo(token);
+        removeStructuredDataScript(_structuredDataScriptId);
+        setState(() {
+          _product = null;
+          _categoryTrail = const [];
+          _relatedProducts = const [];
+          _technicalSpecs = const [];
+          _isLoading = false;
+          _isProductValidated = false;
+          _productValidationFailed = true;
+          _lastValidatedAt = null;
+          _validatedTenantId = null;
+        });
+        _updateUnavailableSeo(token, force: true);
         return;
       }
       final visibilityPolicy = _readVisibilityPolicy();
@@ -296,11 +403,27 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               _sameProductSnapshot(previousProduct, loadedProduct)
           ? previousProduct
           : loadedProduct;
-      _categoryTrail = const [];
+      // The trail belongs to the product's category, not to this load. On a
+      // background revalidation of the same product, clearing it collapsed
+      // the breadcrumb to its short form for a second on every freshness
+      // pulse. It only resets when the product identity actually changed.
+      if (previousProduct?.id != _product?.id ||
+          previousProduct?.categoryId != _product?.categoryId) {
+        _categoryTrail = const [];
+        _relatedProducts = const [];
+        _isLoadingRelated = false;
+        _relatedRequestGeneration++;
+      }
 
       if (_product != null) {
+        final imageCount = _commerceProjection(_product!).imageUrls.length;
+        if (_selectedImageIndex < 0 ||
+            (imageCount > 0 && _selectedImageIndex >= imageCount)) {
+          _selectedImageIndex = 0;
+        }
         _isProductValidated = true;
         _productValidationFailed = false;
+        _lastValidatedAt = DateTime.now();
         _validatedTenantId = tenantId;
         if (_trackedProductIdForRoute != _product!.id) {
           _trackedProductIdForRoute = _product!.id;
@@ -319,7 +442,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         // technical specs and suggestions are independent and must never
         // extend the route's critical path.
         setState(() => _isLoading = false);
-        _updateSeo();
+        _updateSeo(token);
         _updateStructuredData();
         unawaited(
           _loadCategoryTrail(
@@ -348,16 +471,37 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       debugPrint('[ProductDetailPage] Error loading product: $e');
       if (mounted && token == _loadToken && _product == null) {
         removeStructuredDataScript(_structuredDataScriptId);
-        setState(() => _isLoading = false);
-        _updateUnavailableSeo(token);
+        setState(() {
+          _isLoading = false;
+          _isProductValidated = false;
+          _productValidationFailed = true;
+          _lastValidatedAt = null;
+          _validatedTenantId = null;
+        });
+        _updateUnavailableSeo(token, force: true);
       } else if (mounted && token == _loadToken) {
         // A transport failure is not proof that the cached product vanished.
-        // Keep the useful session snapshot visible and retry on the next
-        // navigation/invalidation.
+        // Keep the useful last-known-good state visible — but only inside the
+        // bounded authority window. Past it, the page stops selling against
+        // data it can no longer confirm and says so.
+        final retainsAuthority = resolvedTenantId != null &&
+            resolvedTenantId == _validatedTenantId &&
+            purchaseAuthoritySurvivesRefreshFailure(
+              lastValidatedAt: _lastValidatedAt,
+              now: DateTime.now(),
+            );
         setState(() {
           _isLoading = false;
           _productValidationFailed = true;
+          if (!retainsAuthority) {
+            _isProductValidated = false;
+            _validatedTenantId = null;
+          }
         });
+        if (!retainsAuthority) {
+          removeStructuredDataScript(_structuredDataScriptId);
+          _updateUnavailableSeo(token, force: true);
+        }
       }
     }
   }
@@ -395,12 +539,32 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     required String tenantId,
     required Product product,
   }) async {
+    // Paint the retained trail immediately when the category list is in
+    // memory — for a visitor coming from the catalog it always is. Without
+    // this the breadcrumb painted short (Inicio / Productos / <name>) and
+    // morphed into the full path a beat later.
+    //
+    // Retained is not confirmed: a stale snapshot is painted AND the origin
+    // revalidation continues, so a renamed or moved category reconciles on
+    // the next answer instead of staying wrong until the page is rebuilt.
+    final snapshot =
+        inventoryService.cachedCategoriesForTenant(tenantId: tenantId);
+    final cached =
+        categoryTrailFromCategories(snapshot?.categories, product.categoryId);
+    if (cached != null && mounted && _product?.id == product.id) {
+      if (!sameCategoryTrail(_categoryTrail, cached)) {
+        setState(() => _categoryTrail = cached);
+      }
+      if (snapshot!.isFresh) return;
+    }
+
     final categoryTrail = await _resolveCategoryTrail(
       inventoryService: inventoryService,
       tenantId: tenantId,
       product: product,
     );
     if (!mounted || token != _loadToken || _product?.id != product.id) return;
+    if (sameCategoryTrail(_categoryTrail, categoryTrail)) return;
     setState(() => _categoryTrail = categoryTrail);
   }
 
@@ -415,21 +579,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final categories = await inventoryService.getCategoriesForTenant(
       tenantId: tenantId,
     );
-    final byId = {
-      for (final category in categories)
-        if (category.id?.trim().isNotEmpty == true)
-          category.id!.trim(): category,
-    };
-    final reversedTrail = <Category>[];
-    final visited = <String>{};
-    var currentId = categoryId;
-    while (currentId.isNotEmpty && visited.add(currentId)) {
-      final category = byId[currentId];
-      if (category == null) break;
-      reversedTrail.add(category);
-      currentId = category.parentId?.trim() ?? '';
-    }
-    return List.unmodifiable(reversedTrail.reversed);
+    return categoryTrailFromCategories(categories, categoryId) ?? const [];
   }
 
   Future<String?> _resolveProductAlias(String tenantId) async {
@@ -449,7 +599,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       return productId.isEmpty ? null : productId;
     } catch (error) {
       debugPrint('[ProductDetailPage] Alias lookup failed: $error');
-      return null;
+      // Transport failure is not proof that no alias exists. Let the page's
+      // retryable unavailable state distinguish it from a confirmed miss.
+      rethrow;
     }
   }
 
@@ -514,8 +666,21 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     required Product product,
     required PublicProductVisibilityPolicy? visibilityPolicy,
   }) async {
-    final categoryId = product.categoryId;
-    if (categoryId == null || categoryId.isEmpty) return;
+    final requestGeneration = ++_relatedRequestGeneration;
+    final categoryId = product.categoryId?.trim() ?? '';
+    if (categoryId.isEmpty) {
+      if (_relatedRequestOwnsPage(
+        requestGeneration: requestGeneration,
+        routeToken: token,
+        productId: product.id,
+      )) {
+        setState(() {
+          _relatedProducts = const [];
+          _isLoadingRelated = false;
+        });
+      }
+      return;
+    }
 
     final signature = _relatedPageSignature(
       tenantId: tenantId,
@@ -531,6 +696,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         page: cachedPage,
         product: product,
         token: token,
+        requestGeneration: requestGeneration,
         tenantId: tenantId,
         inventoryService: inventoryService,
         isRefreshing: !_relatedPageCache.isFresh(
@@ -559,12 +725,19 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         page: page,
         product: product,
         token: token,
+        requestGeneration: requestGeneration,
         tenantId: tenantId,
         inventoryService: inventoryService,
         isRefreshing: false,
       );
     } catch (_) {
-      if (!mounted || token != _loadToken) return;
+      if (!_relatedRequestOwnsPage(
+        requestGeneration: requestGeneration,
+        routeToken: token,
+        productId: product.id,
+      )) {
+        return;
+      }
       setState(() => _isLoadingRelated = false);
     }
   }
@@ -588,11 +761,18 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     required PublicProductPage page,
     required Product product,
     required int token,
+    required int requestGeneration,
     required String tenantId,
     required PublicInventoryService inventoryService,
     required bool isRefreshing,
   }) {
-    if (!mounted || token != _loadToken || _product?.id != product.id) return;
+    if (!_relatedRequestOwnsPage(
+      requestGeneration: requestGeneration,
+      routeToken: token,
+      productId: product.id,
+    )) {
+      return;
+    }
     final nextProducts = page.products
         .where((candidate) => candidate.id != product.id)
         .take(4)
@@ -609,6 +789,22 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       inventoryService: inventoryService,
       products: nextProducts,
     );
+  }
+
+  bool _relatedRequestOwnsPage({
+    required int requestGeneration,
+    required int routeToken,
+    required String productId,
+  }) {
+    return mounted &&
+        relatedProductsRequestStillOwnsPage(
+          requestGeneration: requestGeneration,
+          activeGeneration: _relatedRequestGeneration,
+          routeToken: routeToken,
+          activeRouteToken: _loadToken,
+          requestedProductId: productId,
+          visibleProductId: _product?.id,
+        );
   }
 
   void _warmRelatedProductNavigation({
@@ -660,19 +856,20 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
   void _updateStructuredData() {
     final product = _product;
-    if (product == null) {
+    if (product == null || !_isProductValidated) {
       removeStructuredDataScript(_structuredDataScriptId);
       return;
     }
 
     final websiteService = context.read<WebsiteService>();
-    final storeName = websiteService.getSetting('store_name', 'Vinabike');
-    final storeUrl = websiteService.getSetting(
-      'store_url',
-      'https://vinabike.cl',
-    );
-
-    final normalizedStoreUrl = storeUrl.replaceAll(RegExp(r'/+$'), '');
+    final storeName = websiteService.getSetting('store_name', '').trim();
+    final normalizedStoreUrl = _publicStoreOrigin(websiteService);
+    if (normalizedStoreUrl.isEmpty) {
+      // Without a trustworthy origin the only honest options are omitting the
+      // structured data or asserting a URL on someone else's domain. Omit.
+      removeStructuredDataScript(_structuredDataScriptId);
+      return;
+    }
     final productUrl = '$normalizedStoreUrl${publicProductPath(product)}';
     final commerce = _commerceProjection(product);
     if (commerce.imageUrls.isEmpty) {
@@ -726,18 +923,42 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     );
   }
 
-  void _updateSeo() {
+  /// The origin this store may legitimately claim, or `''`.
+  ///
+  /// Prefers the configured `store_url` (validated as one clean HTTPS origin
+  /// by the same normalizer the editor and the static generator use). On web,
+  /// falls back to the origin actually serving the page, which is by
+  /// definition this store's own domain. It never falls back to a literal
+  /// domain: doing so published another tenant's canonical and JSON-LD URLs.
+  String _publicStoreOrigin(WebsiteService websiteService) {
+    final configured = WebsiteSeoSettingsAliases.normalizeHttpsOrigin(
+      websiteService.getSetting('store_url', ''),
+    );
+    if (configured.isNotEmpty) {
+      return configured.replaceAll(RegExp(r'/+$'), '');
+    }
+    if (kIsWeb) {
+      final base = Uri.base;
+      if (base.isScheme('https') && base.host.isNotEmpty) {
+        return base.replace(path: '', query: null, fragment: null).toString();
+      }
+    }
+    return '';
+  }
+
+  void _updateSeo(int token) {
     final product = _product;
     if (product == null) return;
+    final productId = product.id;
+    final tenantId = _validatedTenantId;
 
     final websiteService = context.read<WebsiteService>();
-    final storeName = websiteService.getSetting('store_name', 'Vinabike');
-    final storeUrl = websiteService.getSetting(
-      'store_url',
-      'https://vinabike.cl',
-    );
+    final storeName = websiteService.getSetting('store_name', '').trim();
+    final origin = _publicStoreOrigin(websiteService);
+    // A canonical pointing at another tenant's domain is worse than none: it
+    // would ask Google to consolidate this store's pages onto that domain.
     final canonicalUrl =
-        '${storeUrl.replaceAll(RegExp(r'/+$'), '')}${publicProductPath(product)}';
+        origin.isEmpty ? null : '$origin${publicProductPath(product)}';
     final commerce = _commerceProjection(product);
     final routeProjection = _productSeoRouteProjection(
       hasEligibleContent: true,
@@ -752,49 +973,80 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       'seo_product_description_template',
       '{product_description}',
     );
-
-    final seoTitleOverride = product.websiteSeoTitle?.trim() ?? '';
-    final resolvedTitle = _cleanSeoText(
-      (seoTitleOverride.isNotEmpty
-              ? seoTitleOverride
-              : _applySeoTemplate(
-                  template: titleTemplate,
-                  storeName: storeName,
-                  commerce: commerce,
-                ))
-          .trim(),
-    );
-
-    final seoDescriptionOverride = product.websiteSeoDescription?.trim() ?? '';
-    final resolvedDescription = (seoDescriptionOverride.isNotEmpty
-            ? seoDescriptionOverride
-            : _applySeoTemplate(
-                template: descriptionTemplate,
-                storeName: storeName,
-                commerce: commerce,
-              ))
+    final storeLocality = websiteService
+        .getSetting(
+          'seo_address_city',
+          websiteService.getSetting('seo_address_locality', ''),
+        )
         .trim();
 
-    final cleanResolvedDescription = _cleanSeoText(resolvedDescription);
+    // The typed resolver owns the factual fallback that
+    // buildPublicProductSeoDescription(...) also delegates to. Keeping the
+    // resolution here as one operation prevents hydrated metadata from
+    // diverging from the editor preview or static snapshot.
+    final seoCopy = resolvePublicProductSeoCopyFromInput(
+      PublicProductSeoCopyInput(
+        seoTitleOverride: product.websiteSeoTitle ?? '',
+        seoDescriptionOverride: product.websiteSeoDescription ?? '',
+        titleTemplate: titleTemplate,
+        descriptionTemplate: descriptionTemplate,
+        storeName: storeName,
+        locality: storeLocality,
+        searchTerms: product.websiteSearchTerms,
+        product: PublicProductSeoProductInput(
+          name: commerce.title,
+          sku: commerce.sku,
+          price: commerce.price,
+          brand: commerce.brand,
+          description: commerce.description,
+          categoryPath: commerce.categoryPath,
+        ),
+      ),
+    );
 
     final image =
         commerce.imageUrls.isNotEmpty ? commerce.imageUrls.first : null;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted ||
+          token != _loadToken ||
+          !_isProductValidated ||
+          _product?.id != productId ||
+          _validatedTenantId != tenantId) {
+        return;
+      }
       SeoHelper.updateSeo(
-        title: resolvedTitle.isNotEmpty ? resolvedTitle : storeName,
-        description: cleanResolvedDescription.isNotEmpty
-            ? cleanResolvedDescription
-            : null,
+        title: seoCopy.title.isNotEmpty ? seoCopy.title : storeName,
+        description: seoCopy.description,
         imageUrl: image,
         canonicalUrl: canonicalUrl,
         robots: routeProjection.robots,
+        ogType: 'product',
       );
     });
   }
 
   void _updateUnavailableSeo(int token, {bool force = false}) {
+    _updateRestrictedSeo(
+      token,
+      titlePrefix: 'Producto no disponible',
+      force: force,
+    );
+  }
+
+  void _updatePendingSeo(int token) {
+    _updateRestrictedSeo(
+      token,
+      titlePrefix: 'Producto',
+      force: true,
+    );
+  }
+
+  void _updateRestrictedSeo(
+    int token, {
+    required String titlePrefix,
+    required bool force,
+  }) {
     final websiteService = context.read<WebsiteService>();
     final storeName =
         websiteService.getSetting('store_name', 'Vinabike').trim();
@@ -825,8 +1077,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         return;
       }
       SeoHelper.updateSeo(
-        title:
-            'Producto no disponible | ${storeName.isEmpty ? 'Tienda' : storeName}',
+        title: '$titlePrefix | ${storeName.isEmpty ? 'Tienda' : storeName}',
         canonicalUrl: canonicalUrl,
         robots: routeProjection.robots,
       );
@@ -866,22 +1117,6 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     return ChileanUtils.formatCurrency(value).replaceFirst(r'$ ', r'$');
   }
 
-  String _applySeoTemplate({
-    required String template,
-    required String storeName,
-    required PublicCommerceProductProjection commerce,
-  }) {
-    final priceText = ChileanUtils.formatCurrency(commerce.price);
-
-    return template
-        .replaceAll('{store_name}', storeName)
-        .replaceAll('{product_name}', commerce.title)
-        .replaceAll('{product_sku}', commerce.sku)
-        .replaceAll('{product_price}', priceText)
-        .replaceAll('{product_brand}', commerce.brand)
-        .replaceAll('{product_description}', commerce.description);
-  }
-
   void _addToCart() {
     if (_product == null || !_isProductValidated) return;
 
@@ -904,10 +1139,20 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       backgroundColor: _storeTheme.commerceAccent,
       foregroundColor: _storeTheme.onCommerceAccent,
       actionLabel: 'Ver carrito',
-      onActionPressed: () => context.go('/carrito'),
+      onActionPressed: () =>
+          PublicStoreLayout.navigateToHref(context, '/carrito'),
     );
 
-    setState(() => _quantity = 1);
+    _justAddedResetTimer?.cancel();
+    _justAddedResetTimer = Timer(const Duration(milliseconds: 2600), () {
+      if (!mounted) return;
+      setState(() => _justAddedToCart = false);
+    });
+
+    setState(() {
+      _quantity = 1;
+      _justAddedToCart = true;
+    });
   }
 
   void _buyNow() {
@@ -1101,44 +1346,62 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     }
 
     if (_product == null) {
+      final loadFailed = _productValidationFailed;
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: _storeTheme.commerceTextMuted,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Producto no encontrado',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                if (context.canPop()) {
-                  context.pop();
-                } else {
-                  context.go('/productos');
-                }
-              },
-              child: const Text('Volver a productos'),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                loadFailed ? Icons.cloud_off_outlined : Icons.error_outline,
+                size: 64,
+                color: _storeTheme.commerceTextMuted,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                loadFailed
+                    ? 'No se pudo cargar el producto'
+                    : 'Producto no encontrado',
+                style: Theme.of(context).textTheme.titleLarge,
+                textAlign: TextAlign.center,
+              ),
+              if (loadFailed) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Revisa tu conexión e inténtalo nuevamente.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: _storeTheme.commerceTextMuted,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+              const SizedBox(height: 24),
+              if (loadFailed) ...[
+                FilledButton.icon(
+                  key: const ValueKey('product-detail-retry'),
+                  onPressed: () => unawaited(_loadProduct()),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reintentar'),
+                ),
+                const SizedBox(height: 8),
+              ],
+              TextButton(
+                onPressed: () =>
+                    PublicStoreLayout.navigateToHref(context, '/productos'),
+                child: const Text('Volver a productos'),
+              ),
+            ],
+          ),
         ),
       );
     }
 
     // Get edit mode for key to prevent element reactivation conflicts
-    final editProvider = context.watch<WebsiteEditModeProvider>();
-    final modeKey = editProvider.isEditMode
-        ? 'edit'
-        : (editProvider.isPreviewMode ? 'preview' : 'normal');
 
     return MediaQueryLayoutBuilder(
-      key: ValueKey('product_detail_layout_$modeKey'),
+      key: const ValueKey('product_detail_layout'),
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 768;
         final isTablet = constraints.maxWidth < 1100;
@@ -1251,36 +1514,31 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final catalogHref = isService ? '/servicios' : '/productos';
     final categoryId = _product?.categoryId?.trim() ?? '';
     final categoryName = _product?.categoryName?.trim() ?? '';
-    final fallbackCategory = _categoryTrail.isEmpty &&
-            categoryId.isNotEmpty &&
-            categoryName.isNotEmpty
-        ? Category(
-            id: categoryId,
-            tenantId: '',
-            name: categoryName,
-            fullPath: categoryName,
-            showOnWebsite: true,
-          )
-        : null;
-    final breadcrumbCategories = _categoryTrail.isNotEmpty
-        ? _categoryTrail
-        : fallbackCategory == null
-            ? const <Category>[]
-            : [fallbackCategory];
+    final breadcrumbCategories = productBreadcrumbCategories(
+      authoritativeTrail: _categoryTrail,
+      fallbackCategoryId: categoryId,
+      fallbackCategoryName: categoryName,
+    );
 
     return Wrap(
       spacing: 8,
       runSpacing: 6,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _buildBreadcrumbLink('Inicio', () => context.go('/')),
+        _buildBreadcrumbLink(
+          'Inicio',
+          () => PublicStoreLayout.navigateToHref(context, '/'),
+        ),
         _buildBreadcrumbSeparator(),
-        _buildBreadcrumbLink(catalogLabel, () => context.go(catalogHref)),
+        _buildBreadcrumbLink(
+          catalogLabel,
+          () => PublicStoreLayout.navigateToHref(context, catalogHref),
+        ),
         _buildBreadcrumbSeparator(),
         for (final category in breadcrumbCategories) ...[
           Builder(
             builder: (context) {
-              if (!category.showOnWebsite) {
+              if (!category.isActive || !category.showOnWebsite) {
                 return Text(
                   category.name,
                   style: _storeTheme.text.bodyMedium?.copyWith(
@@ -1358,11 +1616,15 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           );
         }
 
+        final selectedImageIndex =
+            _selectedImageIndex >= 0 && _selectedImageIndex < images.length
+                ? _selectedImageIndex
+                : 0;
         final mainStage = _buildProductImageStage(
           height: imageHeight,
           isMobile: isMobile,
           child: Image.network(
-            images[_selectedImageIndex],
+            images[selectedImageIndex],
             alignment: Alignment.center,
             fit: BoxFit.contain,
             filterQuality: FilterQuality.medium,
@@ -1393,7 +1655,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                   separatorBuilder: (_, __) =>
                       SizedBox(width: isMobile ? 12 : 18),
                   itemBuilder: (context, index) {
-                    final isSelected = index == _selectedImageIndex;
+                    final isSelected = index == selectedImageIndex;
                     return _buildThumbnail(
                       imageUrl: images[index],
                       isSelected: isSelected,
@@ -1490,55 +1752,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         const SizedBox(height: 10),
         SizedBox(
           height: 34,
-          child: Row(
-            children: [
-              if (_isProductValidated)
-                Icon(
-                  Icons.check_circle_outline,
-                  size: 15,
-                  color: _storeTheme.commerceAccent,
-                )
-              else if (_productValidationFailed)
-                Icon(
-                  Icons.cloud_off_outlined,
-                  size: 15,
-                  color: _storeTheme.commerceTextSecondary,
-                )
-              else
-                SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: _storeTheme.commerceTextSecondary,
-                  ),
-                ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _isProductValidated
-                      ? 'Precio y disponibilidad actualizados.'
-                      : _productValidationFailed
-                          ? 'No pudimos confirmar precio y disponibilidad.'
-                          : 'Actualizando precio y disponibilidad…',
-                  style: _storeTheme.text.bodySmall?.copyWith(
-                    fontSize: 12,
-                    color: _storeTheme.commerceTextSecondary,
-                  ),
-                ),
-              ),
-              if (_productValidationFailed)
-                TextButton(
-                  onPressed: () => unawaited(_loadProduct()),
-                  style: TextButton.styleFrom(
-                    minimumSize: const Size(0, 30),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: const Text('Reintentar'),
-                ),
-            ],
-          ),
+          child: _buildAvailabilityStatusRow(),
         ),
         SizedBox(height: isMobile ? 18 : 22),
         if (inStock)
@@ -1593,7 +1807,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                       ),
                     ),
                     TextButton(
-                      onPressed: () => context.go('/carrito'),
+                      onPressed: () =>
+                          PublicStoreLayout.navigateToHref(context, '/carrito'),
                       style: TextButton.styleFrom(
                         foregroundColor: _storeTheme.commerceAccent,
                         padding: EdgeInsets.zero,
@@ -1628,29 +1843,64 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             ),
           ),
         const SizedBox(height: 28),
-        Container(
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: _storeTheme.commerceLine),
-            ),
-          ),
-          child: Column(
-            children: [
-              _buildInfoTile(
-                icon: Icons.local_shipping_outlined,
-                title: 'Despacho a Chile continental',
-                subtitle: 'Entrega estimada de 3 a 12 días hábiles.',
-              ),
-              _buildInfoTile(
-                icon: Icons.storefront_outlined,
-                title: 'Retiro en tienda',
-                subtitle: 'Disponible en Alvarez 32, Local 17, Viña del Mar.',
-                isLast: true,
-              ),
-            ],
-          ),
-        ),
+        _buildFulfilmentPromises(),
       ],
+    );
+  }
+
+  /// Delivery and pickup promises, shown only when the owner configured them.
+  ///
+  /// These were hardcoded as "Despacho a Chile continental / 3 a 12 días
+  /// hábiles" and a literal street address. Both are commercial commitments:
+  /// stating them for a store that never agreed to them misleads the customer,
+  /// and the address belonged to a different tenant entirely.
+  Widget _buildFulfilmentPromises() {
+    final websiteService = context.read<WebsiteService>();
+    String setting(List<String> keys) {
+      for (final key in keys) {
+        final value = websiteService.getSetting(key, '').trim();
+        if (value.isNotEmpty) return value;
+      }
+      return '';
+    }
+
+    final shippingTitle = setting(const ['shipping_promise_title']);
+    final shippingDetail = setting(const ['shipping_promise_detail']);
+    final pickupDetail = setting(
+      const ['pickup_promise_detail', 'contact_address'],
+    );
+
+    final promises = <({IconData icon, String title, String subtitle})>[
+      if (shippingTitle.isNotEmpty || shippingDetail.isNotEmpty)
+        (
+          icon: Icons.local_shipping_outlined,
+          title: shippingTitle.isEmpty ? 'Despacho' : shippingTitle,
+          subtitle: shippingDetail,
+        ),
+      if (pickupDetail.isNotEmpty)
+        (
+          icon: Icons.storefront_outlined,
+          title: 'Retiro en tienda',
+          subtitle: pickupDetail.replaceAll('\n', ', '),
+        ),
+    ];
+    if (promises.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: _storeTheme.commerceLine)),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < promises.length; i++)
+            _buildInfoTile(
+              icon: promises[i].icon,
+              title: promises[i].title,
+              subtitle: promises[i].subtitle,
+              isLast: i == promises.length - 1,
+            ),
+        ],
+      ),
     );
   }
 
@@ -2570,27 +2820,117 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     );
   }
 
+  /// The availability/status row, honest about both facts it reports:
+  /// purchase authority (last-known-good origin confirmation, bounded) and
+  /// the outcome of the most recent refresh. The old single-boolean ternary
+  /// showed a green "actualizados" check beside a Reintentar button when a
+  /// refresh failed on a still-authorized page.
+  Widget _buildAvailabilityStatusRow() {
+    final rowState = productAvailabilityRowState(
+      validated: _isProductValidated,
+      refreshFailed: _productValidationFailed,
+    );
+
+    final Widget leading;
+    final String message;
+    switch (rowState) {
+      case ProductAvailabilityRowState.confirmed:
+        leading = Icon(
+          Icons.check_circle_outline,
+          size: 15,
+          color: _storeTheme.commerceAccent,
+        );
+        message = 'Precio y disponibilidad actualizados.';
+      case ProductAvailabilityRowState.staleConfirmed:
+        leading = Icon(
+          Icons.history_toggle_off_rounded,
+          size: 15,
+          color: _storeTheme.warning,
+        );
+        message = 'Mostrando la última información confirmada.';
+      case ProductAvailabilityRowState.refreshing:
+        leading = SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: _storeTheme.commerceTextSecondary,
+          ),
+        );
+        message = 'Actualizando precio y disponibilidad…';
+      case ProductAvailabilityRowState.unavailable:
+        leading = Icon(
+          Icons.cloud_off_outlined,
+          size: 15,
+          color: _storeTheme.commerceTextSecondary,
+        );
+        message = 'No pudimos confirmar precio y disponibilidad.';
+    }
+
+    return Row(
+      children: [
+        leading,
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            message,
+            style: _storeTheme.text.bodySmall?.copyWith(
+              fontSize: 12,
+              color: _storeTheme.commerceTextSecondary,
+            ),
+          ),
+        ),
+        if (_productValidationFailed)
+          TextButton(
+            onPressed: () => unawaited(_loadProduct()),
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 30),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Reintentar'),
+          ),
+      ],
+    );
+  }
+
   Widget _buildCartAction({
     required bool inCart,
     required double width,
   }) {
+    // The confirmation banner sits at the bottom of the viewport, which on a
+    // tall product page is nowhere near the button the visitor just pressed —
+    // easy to miss entirely, and then they press again. The control itself
+    // also acknowledges the click, right where the eye already is.
+    final justAdded = _justAddedToCart;
     return SizedBox(
       width: width,
       height: 50,
       child: FilledButton.icon(
         onPressed: _isProductValidated ? _addToCart : null,
         style: FilledButton.styleFrom(
-          backgroundColor: _storeTheme.commerceAccent,
-          foregroundColor: _storeTheme.onCommerceAccent,
+          backgroundColor:
+              justAdded ? _storeTheme.success : _storeTheme.commerceAccent,
+          foregroundColor:
+              justAdded ? _storeTheme.onSuccess : _storeTheme.onCommerceAccent,
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(5),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
         ),
-        icon: const Icon(Icons.shopping_cart_outlined, size: 17),
+        icon: Icon(
+          justAdded
+              ? Icons.check_circle_outline_rounded
+              : Icons.shopping_cart_outlined,
+          size: 17,
+        ),
         label: Text(
-          inCart ? 'Añadir otra unidad' : 'Agregar al carrito',
+          justAdded
+              ? 'Agregado al carrito'
+              : inCart
+                  ? 'Añadir otra unidad'
+                  : 'Agregar al carrito',
           style: const TextStyle(
             fontFamily: null,
             fontSize: 14,

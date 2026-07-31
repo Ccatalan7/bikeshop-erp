@@ -62,6 +62,22 @@ class PublicProductPage {
   });
 }
 
+/// Immutable synchronous view of the category cache with explicit freshness.
+class PublicCategoryCacheSnapshot {
+  const PublicCategoryCacheSnapshot({
+    required this.categories,
+    required this.isFresh,
+  });
+
+  /// Unmodifiable copy; callers can never mutate the cache through it.
+  final List<Category> categories;
+
+  /// False once the cache TTL elapsed or the freshness monitor invalidated
+  /// it. The list is still the best thing to paint, but it is not an answer:
+  /// continue the origin revalidation and reconcile.
+  final bool isFresh;
+}
+
 class PublicCategoryCountSnapshot {
   final Map<String, int> directCountsByCategoryId;
   final int totalCount;
@@ -783,6 +799,7 @@ class PublicInventoryService extends ChangeNotifier {
     int? limit,
     int offset = 0,
     bool includeUnpublished = false,
+    bool rethrowErrors = false,
   }) async {
     final sw = Stopwatch()..start();
     try {
@@ -933,8 +950,36 @@ class PublicInventoryService extends ChangeNotifier {
     } catch (e) {
       debugPrint(
           '⏱️ [PublicInventory] Products ERROR: ${sw.elapsedMilliseconds}ms - $e');
+      if (rethrowErrors) rethrow;
       return [];
     }
+  }
+
+  /// Synchronous snapshot of the already-loaded category list.
+  ///
+  /// For paint-time derivations only — a breadcrumb trail, a label. A visitor
+  /// reaching a product page has almost always been through the catalog, so
+  /// the categories are already here; deriving the trail from this snapshot
+  /// means the full breadcrumb paints in the first frame instead of morphing
+  /// from a short crumb into the real one when the network answer lands.
+  ///
+  /// [PublicCategoryCacheSnapshot.isFresh] is explicit so the caller can
+  /// paint the retained list immediately AND still run an origin
+  /// revalidation when the cache has been invalidated. Availability decisions
+  /// still require their route-owned origin checks. The shared storefront
+  /// navigation may retain this as its last-known-good publication projection
+  /// during SWR, but only after bootstrap established the origin snapshot; an
+  /// absent snapshot must fail closed for category destinations.
+  PublicCategoryCacheSnapshot? cachedCategoriesForTenant({
+    required String tenantId,
+  }) {
+    final cacheKey = 'categories_$tenantId';
+    final categories = _categoriesCache[cacheKey];
+    if (categories == null) return null;
+    return PublicCategoryCacheSnapshot(
+      categories: List.unmodifiable(categories),
+      isFresh: _isCacheValid(cacheKey),
+    );
   }
 
   /// Get categories for specific tenant (public access)
@@ -1025,6 +1070,7 @@ class PublicInventoryService extends ChangeNotifier {
     if ((_categoryCacheGenerations[cacheKey] ?? 0) == generation) {
       _categoriesCache[cacheKey] = categories;
       _cacheTimestamps[cacheKey] = DateTime.now();
+      notifyListeners();
     }
 
     return categories;
@@ -1219,6 +1265,28 @@ class PublicInventoryService extends ChangeNotifier {
 
   /// Destructively clears retained values. Reserve this for tenant changes or
   /// explicit editor resets; ordinary freshness pulses use [markCacheStale].
+  void clearProductCache({String? tenantId}) {
+    _productPageGeneration++;
+    _productPagesInFlight.clear();
+    if (tenantId != null) {
+      _productsCache.remove('products_$tenantId');
+      _productSnapshots.clear(tenantId: tenantId);
+      _cacheTimestamps.remove('products_$tenantId');
+      _publicInventoryDebugLog(
+          '🗑️ PublicInventoryService: Cleared product cache for tenant $tenantId');
+    } else {
+      _productsCache.clear();
+      _productSnapshots.clear();
+      _cacheTimestamps
+          .removeWhere((cacheKey, _) => cacheKey.startsWith('products_'));
+      _publicInventoryDebugLog(
+          '🗑️ PublicInventoryService: Cleared all product caches');
+    }
+    notifyListeners();
+  }
+
+  /// Destructively clears retained values. Reserve this for tenant changes or
+  /// explicit editor resets; ordinary freshness pulses use [markCacheStale].
   void clearCache({String? tenantId}) {
     _productPageGeneration++;
     _productPagesInFlight.clear();
@@ -1255,7 +1323,7 @@ class PublicInventoryService extends ChangeNotifier {
   Future<List<Product>> refreshProductsForTenant({
     required String tenantId,
   }) async {
-    clearCache(tenantId: tenantId);
+    clearProductCache(tenantId: tenantId);
     return getProductsForTenant(tenantId: tenantId);
   }
 
@@ -1265,10 +1333,17 @@ class PublicInventoryService extends ChangeNotifier {
   Future<List<Category>> refreshCategoriesForTenant({
     required String tenantId,
   }) async {
-    return getCategoriesForTenant(
-      tenantId: tenantId,
-      forceRefresh: true,
-    );
+    // Explicit refresh is still SWR: retain the last authoritative projection
+    // until its replacement arrives so header/footer category navigation never
+    // vanishes between an editor save and the origin response. A pre-save
+    // request is detached by generation: it may finish, but cannot publish
+    // over the post-save answer or be reused as that answer.
+    final cacheKey = 'categories_$tenantId';
+    _categoryCacheGenerations[cacheKey] =
+        (_categoryCacheGenerations[cacheKey] ?? 0) + 1;
+    _categoriesInFlight.remove(cacheKey);
+    _cacheTimestamps.remove(cacheKey);
+    return getCategoriesForTenant(tenantId: tenantId);
   }
 
   /// Search products using fuzzy matching (RPC) for live preview

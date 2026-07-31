@@ -199,6 +199,7 @@ class PublicProductSnapshotValue<T> {
   }) {
     final validatedAt = originValidatedAt;
     if (validatedAt == null) return false;
-    return (now ?? DateTime.now)().difference(validatedAt) < freshness;
+    final age = (now ?? DateTime.now)().difference(validatedAt);
+    return age >= Duration.zero && age < freshness;
   }
 }

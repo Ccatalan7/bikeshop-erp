@@ -1,5 +1,6 @@
 import '../../shared/models/product.dart';
 import '../../shared/utils/gtin_utils.dart';
+import 'public_product_seo_copy.dart';
 
 enum PublicCommerceAvailability {
   inStock,
@@ -157,6 +158,54 @@ class PublicCommerceProductProjection {
     );
   }
 
+  /// Projects unsaved editor values with the exact public precedence and text
+  /// normalization used by [fromProduct] and [fromJson].
+  ///
+  /// The editor cannot build a complete persisted [Product] while a form is
+  /// being edited. This seam prevents its SEO preview from reimplementing the
+  /// Merchant → website → catalog precedence independently.
+  factory PublicCommerceProductProjection.fromDraft({
+    String id = '',
+    String sku = '',
+    required String catalogTitle,
+    String websiteTitle = '',
+    String merchantTitle = '',
+    required String catalogDescription,
+    String websiteDescription = '',
+    String merchantDescription = '',
+    required double price,
+    String currency = 'CLP',
+    bool available = true,
+    String brand = '',
+    String categoryId = '',
+    String categoryPath = '',
+  }) {
+    return _build(
+      id: id,
+      sku: sku,
+      title: _firstNonEmpty(
+        merchantTitle,
+        websiteTitle,
+        catalogTitle,
+      ),
+      description: _firstNonEmpty(
+        merchantDescription,
+        websiteDescription,
+        catalogDescription,
+      ),
+      price: price,
+      currency: currency,
+      available: available,
+      imageUrls: const [],
+      brand: brand,
+      gtin: '',
+      mpn: '',
+      categoryId: categoryId,
+      categoryPath: categoryId.trim().isEmpty ? '' : categoryPath,
+      googleProductCategory: '',
+    );
+  }
+
   final String id;
   final String sku;
   final String title;
@@ -234,8 +283,8 @@ class PublicCommerceProductProjection {
     return PublicCommerceProductProjection(
       id: id.trim(),
       sku: sku.trim(),
-      title: title.trim(),
-      description: description.trim(),
+      title: storefrontDisplayTitle(title),
+      description: storefrontDisplayText(description),
       price: price,
       currency: currency.trim().toUpperCase(),
       availability: availability,
@@ -249,6 +298,62 @@ class PublicCommerceProductProjection {
       merchantIssues: List.unmodifiable(issues),
     );
   }
+}
+
+/// Builds a truthful, useful meta-description when the catalog owner has not
+/// supplied product copy yet.
+///
+/// This is deliberately separate from [description]: it must not make a
+/// product Merchant-eligible or pretend that generic SEO copy is authoritative
+/// catalog content. Runtime and static snapshots share it only as a final
+/// metadata fallback.
+String buildPublicProductSeoDescription({
+  required PublicCommerceProductProjection product,
+  required String storeName,
+}) {
+  return buildPublicProductSeoFallbackDescription(
+    product: PublicProductSeoProductInput(
+      name: product.title,
+      sku: product.sku,
+      price: product.price,
+      brand: product.brand,
+      description: product.description,
+      categoryPath: product.categoryPath,
+    ),
+    storeName: storeName,
+  );
+}
+
+/// Collapses whitespace a catalog operator never meant to publish.
+///
+/// Product names are typed in the ERP, where a line break or a double space is
+/// invisible. On the storefront they are not: an embedded newline splits an H1
+/// across two lines mid-phrase, and a double space shows up in the middle of a
+/// title. Measured on the live catalog: 25 names carry a line break or tab and
+/// 18 carry a double space.
+///
+/// Presentation-layer only — the ERP row is untouched, and this also guards
+/// every future entry rather than one round of data cleanup.
+String storefrontDisplayText(String raw) {
+  return raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+/// [storefrontDisplayText] plus the ERP's unit-of-measure marker.
+///
+/// `C/U` ("cada uno") is a stock-keeping unit of measure, not part of a product
+/// name — "CADENA ... Z8.3 DISPLAY KMC C/U" should read "... KMC". Only this
+/// marker is stripped: trailing words like `PAR` or `SET` are genuine product
+/// information for bike parts sold in pairs or kits, so removing them would
+/// destroy meaning rather than noise.
+String storefrontDisplayTitle(String raw) {
+  final normalized = storefrontDisplayText(raw);
+  final withoutUnit = normalized.replaceFirst(
+    RegExp(r'[\s,\-–—]*\bc\s*/\s*u\.?$', caseSensitive: false),
+    '',
+  );
+  final trimmed = withoutUnit.trim();
+  // Never let normalisation empty a title that had content.
+  return trimmed.isEmpty ? normalized : trimmed;
 }
 
 String _firstNonEmpty(

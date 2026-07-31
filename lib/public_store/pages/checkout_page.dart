@@ -1,23 +1,30 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart' as typeahead;
 import 'package:uuid/uuid.dart';
 import '../utils/web_utils.dart' as web_utils;
 import '../theme/public_store_surface_theme.dart';
+import '../models/checkout_submission_session.dart';
 import '../models/public_commerce_product_projection.dart';
+import '../models/public_checkout_capabilities.dart';
+import '../../modules/website/models/public_order_access.dart';
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/customer_account_service.dart';
 import '../services/address_autocomplete_service.dart';
+import '../services/checkout_exit_guard.dart';
+import '../services/checkout_session_store.dart';
+import '../services/cart_store.dart';
 import '../services/meta_pixel_service.dart';
-import '../services/public_order_access_token_store.dart';
+import '../services/public_checkout_capability_service.dart';
+import '../widgets/public_store_layout.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/services/mercadopago_service.dart';
 import '../../modules/website/models/public_shipping_quote.dart';
-import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../../shared/utils/auth_input_validation.dart';
 import '../../shared/models/customer_address.dart';
@@ -29,8 +36,31 @@ void _checkoutDebugLog(String message) {
   }
 }
 
+class _CreatedOrderContext {
+  const _CreatedOrderContext({
+    required this.tenantId,
+    required this.paymentMethod,
+    required this.isPickup,
+    required this.resolvedAddress,
+    required this.customerId,
+    required this.shouldSaveAddress,
+  });
+
+  final String tenantId;
+  final String paymentMethod;
+  final bool isPickup;
+  final ResolvedAddress? resolvedAddress;
+  final String? customerId;
+  final bool shouldSaveAddress;
+}
+
 class CheckoutPage extends StatefulWidget {
-  const CheckoutPage({super.key});
+  const CheckoutPage({
+    super.key,
+    this.capabilityLoader,
+  });
+
+  final PublicCheckoutCapabilityLoader? capabilityLoader;
 
   @override
   State<CheckoutPage> createState() => _CheckoutPageState();
@@ -60,7 +90,13 @@ class _CheckoutPageState extends State<CheckoutPage>
   final _accountPasswordConfirmController = TextEditingController();
 
   String _deliveryType = 'shipping'; // shipping, pickup
-  String _paymentMethod = 'mercadopago'; // mercadopago, transfer
+  String _paymentMethod = '';
+  PublicCheckoutCapabilities? _paymentCapabilities;
+  String? _paymentCapabilitiesTenantId;
+  String? _paymentCapabilitiesRequestedTenantId;
+  String? _paymentCapabilitiesError;
+  bool _paymentCapabilitiesLoading = true;
+  int _paymentCapabilitiesGeneration = 0;
   bool _isProcessing = false;
   CustomerAccountService? _accountService;
   AddressAutocompleteService? _addressAutocompleteService;
@@ -78,8 +114,24 @@ class _CheckoutPageState extends State<CheckoutPage>
   String? _shippingQuoteSignature;
   String? _shippingQuoteAttemptedSignature;
   int _shippingQuoteGeneration = 0;
-  // Stable for this checkout page so a timeout/retry returns the same order.
-  final String _checkoutIdempotencyKey = const Uuid().v4();
+  CheckoutSubmissionSession _submission = CheckoutSubmissionSession(
+    idempotencyKey: const Uuid().v4(),
+  );
+  CheckoutSessionStore? _sessionStore;
+  CheckoutSessionSnapshot? _durableSnapshot;
+  CheckoutExitLease? _exitLease;
+  final Object _exitLeaseOwner = Object();
+  bool _sessionRestoring = true;
+  bool _sessionStorageUnavailable = false;
+  bool _isRestoredCheckoutSession = false;
+  _CreatedOrderContext? _createdOrderContext;
+  bool _postOrderAccountAttempted = false;
+  bool _postOrderAddressAttempted = false;
+  String? _outcomeUnknownMessage;
+  String? _postOrderRecoveryMessage;
+
+  bool get _checkoutLocked =>
+      (_exitLease?.isCurrent ?? false) || _submission.hasStarted;
 
   // Keep this page alive in memory to prevent reloading on navigation
   @override
@@ -102,34 +154,128 @@ class _CheckoutPageState extends State<CheckoutPage>
       autocompleteService.addListener(_onAutocompleteChanged);
       final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
       autocompleteService.initialize(tenantId: tenantId);
+      unawaited(_restoreDurableCheckoutSession(tenantId));
+      unawaited(_loadPaymentCapabilities(tenantId));
 
       final cart = context.read<CartProvider>();
-      MetaPixelService.instance.trackInitiateCheckout(
-        items: cart.items
-            .map(
-              (item) {
-                final commerce = item.commerce;
-                return MetaCatalogEventItem(
-                  contentId: MetaPixelService.catalogContentId(
-                    sku: commerce.sku,
-                    productId: commerce.id,
-                  ),
-                  quantity: item.quantity,
-                  itemPrice: commerce.price,
-                );
-              },
-            )
-            .where((item) => item.contentId.isNotEmpty)
-            .toList(),
-        value: cart.total,
-      );
+      final checkoutTotal = cart.total;
+      if (checkoutTotal != null) {
+        MetaPixelService.instance.trackInitiateCheckout(
+          items: cart.items
+              .map(
+                (item) {
+                  final commerce = item.commerce;
+                  return MetaCatalogEventItem(
+                    contentId: MetaPixelService.catalogContentId(
+                      sku: commerce.sku,
+                      productId: commerce.id,
+                    ),
+                    quantity: item.quantity,
+                    itemPrice: commerce.price,
+                  );
+                },
+              )
+              .where((item) => item.contentId.isNotEmpty)
+              .toList(),
+          value: checkoutTotal,
+        );
+      }
 
       _handleCheckoutQueryParameters();
     });
   }
 
+  Future<PublicCheckoutCapabilities?> _loadPaymentCapabilities(
+    String? tenantId, {
+    bool force = false,
+    bool preserveSelection = false,
+  }) async {
+    final normalizedTenantId = tenantId?.trim() ?? '';
+    if (normalizedTenantId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _paymentCapabilities = null;
+          _paymentCapabilitiesTenantId = null;
+          _paymentCapabilitiesRequestedTenantId = normalizedTenantId;
+          _paymentCapabilitiesLoading = false;
+          _paymentCapabilitiesError =
+              'No pudimos identificar la tienda para consultar sus medios de pago.';
+          if (!_submission.hasStarted) _paymentMethod = '';
+        });
+      }
+      return null;
+    }
+    if (!force &&
+        _paymentCapabilitiesTenantId == normalizedTenantId &&
+        _paymentCapabilities != null) {
+      return _paymentCapabilities;
+    }
+    if (!force &&
+        _paymentCapabilitiesRequestedTenantId == normalizedTenantId &&
+        _paymentCapabilitiesLoading) {
+      return null;
+    }
+
+    final generation = ++_paymentCapabilitiesGeneration;
+    _paymentCapabilitiesRequestedTenantId = normalizedTenantId;
+    if (mounted) {
+      setState(() {
+        _paymentCapabilitiesLoading = true;
+        _paymentCapabilitiesError = null;
+      });
+    }
+
+    try {
+      final loader = widget.capabilityLoader ??
+          const PublicCheckoutCapabilityService().load;
+      final capabilities = await loader(normalizedTenantId);
+      if (!mounted || generation != _paymentCapabilitiesGeneration) {
+        return null;
+      }
+
+      final selectionStillAvailable = capabilities.isAvailable(_paymentMethod);
+      setState(() {
+        _paymentCapabilities = capabilities;
+        _paymentCapabilitiesTenantId = normalizedTenantId;
+        _paymentCapabilitiesLoading = false;
+        _paymentCapabilitiesError = null;
+        if (!_submission.hasStarted &&
+            !selectionStillAvailable &&
+            !preserveSelection) {
+          final methods = capabilities.availableMethods;
+          _paymentMethod = methods.isEmpty ? '' : methods.first.wireValue;
+        }
+      });
+      return capabilities;
+    } catch (error) {
+      debugPrint('Checkout payment capability load failed: $error');
+      if (!mounted || generation != _paymentCapabilitiesGeneration) {
+        return null;
+      }
+      setState(() {
+        _paymentCapabilities = null;
+        _paymentCapabilitiesTenantId = null;
+        _paymentCapabilitiesLoading = false;
+        _paymentCapabilitiesError =
+            'No pudimos verificar los medios de pago disponibles. Reintenta antes de crear el pedido.';
+        if (!_submission.hasStarted) _paymentMethod = '';
+      });
+      return null;
+    }
+  }
+
+  void _schedulePaymentCapabilityRefresh(String? tenantId) {
+    final normalizedTenantId = tenantId?.trim() ?? '';
+    if (_paymentCapabilitiesRequestedTenantId == normalizedTenantId) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_loadPaymentCapabilities(normalizedTenantId));
+    });
+  }
+
   @override
   void dispose() {
+    _exitLease?.release();
     _accountService?.removeListener(_onAccountServiceChanged);
     _addressAutocompleteService?.removeListener(_onAutocompleteChanged);
     _nameController.dispose();
@@ -150,6 +296,131 @@ class _CheckoutPageState extends State<CheckoutPage>
     super.dispose();
   }
 
+  Future<void> _restoreDurableCheckoutSession(String? tenantId) async {
+    final normalizedTenantId = tenantId?.trim() ?? '';
+    if (normalizedTenantId.isEmpty) {
+      if (mounted) setState(() => _sessionRestoring = false);
+      return;
+    }
+
+    final store = _sessionStore ??= context.read<CheckoutSessionStore>();
+    final CheckoutSessionSnapshot? snapshot;
+    try {
+      snapshot = await store.read(normalizedTenantId);
+    } catch (error) {
+      debugPrint('Checkout durable session read failed.');
+      if (!mounted) return;
+      setState(() {
+        _sessionRestoring = false;
+        _sessionStorageUnavailable = true;
+        _outcomeUnknownMessage =
+            'No pudimos revisar la recuperación segura de este checkout. '
+            'Por protección, no enviaremos un pedido nuevo mientras el '
+            'almacenamiento no esté disponible. Recarga la aplicación e '
+            'inténtalo nuevamente.';
+        _postOrderRecoveryMessage = null;
+      });
+      return;
+    }
+    if (!mounted) return;
+    if (snapshot == null) {
+      setState(() {
+        _sessionRestoring = false;
+        _sessionStorageUnavailable = false;
+      });
+      return;
+    }
+    final restoredSnapshot = snapshot;
+
+    final websiteService = context.read<WebsiteService>();
+    final restoredSubmission = restoredSnapshot.receipt == null
+        ? CheckoutSubmissionSession.restorePending(
+            idempotencyKey: restoredSnapshot.idempotencyKey,
+            creator: (idempotencyKey) {
+              if (idempotencyKey != restoredSnapshot.idempotencyKey) {
+                throw StateError(
+                  'La recuperación no corresponde al intento guardado.',
+                );
+              }
+              // These are the exact payload values persisted before the first
+              // RPC. Never rebuild them from the current form or cart.
+              return websiteService.createOrder(
+                restoredSnapshot.orderData,
+                restoredSnapshot.orderItems,
+              );
+            },
+          )
+        : CheckoutSubmissionSession.restoreReceipt(
+            idempotencyKey: restoredSnapshot.idempotencyKey,
+            receipt: restoredSnapshot.receipt!,
+          );
+
+    final restoredContext = _CreatedOrderContext(
+      tenantId: normalizedTenantId,
+      paymentMethod: restoredSnapshot.handoff.paymentMethod,
+      isPickup: restoredSnapshot.handoff.deliveryType == 'pickup',
+      resolvedAddress: null,
+      customerId: null,
+      shouldSaveAddress: false,
+    );
+    final lease = context.read<CheckoutExitGuard>().acquire(
+          owner: _exitLeaseOwner,
+          phase: restoredSnapshot.receipt == null
+              ? CheckoutExitPhase.recoveringOrder
+              : CheckoutExitPhase.orderCreated,
+        );
+
+    final receipt = restoredSnapshot.receipt;
+    if (receipt != null) {
+      try {
+        await store.saveOrderAccess(
+          tenantId: normalizedTenantId,
+          access: receipt,
+        );
+      } catch (error) {
+        lease.release();
+        if (!mounted) return;
+        setState(() {
+          _sessionRestoring = false;
+          _sessionStorageUnavailable = true;
+          _outcomeUnknownMessage =
+              'Recuperamos tu pedido, pero no pudimos verificar su acceso '
+              'seguro en este dispositivo. Reinicia la aplicación e inténtalo '
+              'nuevamente.';
+        });
+        return;
+      }
+    }
+
+    setState(() {
+      _submission = restoredSubmission;
+      _durableSnapshot = restoredSnapshot;
+      _exitLease = lease;
+      _isRestoredCheckoutSession = true;
+      _createdOrderContext = restoredContext;
+      _deliveryType = restoredSnapshot.handoff.deliveryType;
+      _paymentMethod = restoredSnapshot.handoff.paymentMethod;
+      _postOrderAccountAttempted = true;
+      _postOrderAddressAttempted = true;
+      _sessionRestoring = false;
+      _sessionStorageUnavailable = false;
+      if (receipt == null) {
+        _outcomeUnknownMessage =
+            'Recuperamos el intento seguro de esta sesión. Reintenta la '
+            'confirmación para consultar el mismo pedido, sin reconstruir sus '
+            'datos. Por seguridad no repetiremos tareas opcionales de cuenta '
+            'o dirección.';
+        _postOrderRecoveryMessage = null;
+      } else {
+        _outcomeUnknownMessage = null;
+        _postOrderRecoveryMessage =
+            'Recuperamos el pedido ya creado en esta sesión. Continúa para '
+            'retomar el pago o la confirmación sin crear otro. Por seguridad '
+            'no repetiremos tareas opcionales de cuenta o dirección.';
+      }
+    });
+  }
+
   void _onAccountServiceChanged() {
     if (!mounted) return;
     _prefillFromAccount();
@@ -162,6 +433,7 @@ class _CheckoutPageState extends State<CheckoutPage>
 
   int? _wholeClpCartTotal(CartProvider cart) {
     final value = cart.total;
+    if (value == null) return null;
     if (!value.isFinite || value < 0) return null;
     final rounded = value.round();
     return (value - rounded).abs() <= 0.000001 ? rounded : null;
@@ -245,7 +517,11 @@ class _CheckoutPageState extends State<CheckoutPage>
           'La cotización recibida no corresponde al carrito actual.',
         );
       }
-      if (!mounted || generation != _shippingQuoteGeneration) return null;
+      if (!mounted ||
+          generation != _shippingQuoteGeneration ||
+          _shippingSignature(context.read<CartProvider>()) != signature) {
+        return null;
+      }
       setState(() {
         _shippingQuote = quote;
         _shippingQuoteSignature = signature;
@@ -268,6 +544,7 @@ class _CheckoutPageState extends State<CheckoutPage>
   }
 
   void _selectDeliveryType(String value) {
+    if (_checkoutLocked) return;
     if (value == _deliveryType) return;
     setState(() {
       _deliveryType = value;
@@ -565,9 +842,8 @@ class _CheckoutPageState extends State<CheckoutPage>
       CustomerAccountService service) async {
     if (!_createAccountAfterCheckout || service.isAuthenticated) return null;
 
-    service.setTenantId(context.read<PublicStoreTenantProvider>().tenantId);
-
     try {
+      service.setTenantId(context.read<PublicStoreTenantProvider>().tenantId);
       final result = await service.signUp(
         email: _emailController.text.trim(),
         password: _accountPasswordController.text,
@@ -589,13 +865,26 @@ class _CheckoutPageState extends State<CheckoutPage>
   Future<void> _placeOrder() async {
     _checkoutDebugLog('🔵 [Checkout] _placeOrder() CALLED!');
 
+    if (_isProcessing || _sessionRestoring || _sessionStorageUnavailable) {
+      return;
+    }
+
+    final cart = context.read<CartProvider>();
+    if (_submission.hasReceipt) {
+      await _resumeCreatedOrder();
+      return;
+    }
+    if (_submission.hasCreationAttempt) {
+      await _retryOriginalOrderCreation();
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
       _checkoutDebugLog('🔵 [Checkout] Form validation FAILED');
       return;
     }
     _checkoutDebugLog('🔵 [Checkout] Form validation PASSED');
 
-    final cart = Provider.of<CartProvider>(context, listen: false);
     _checkoutDebugLog('🔵 [Checkout] Cart items: ${cart.items.length}');
 
     if (cart.items.isEmpty) {
@@ -632,6 +921,38 @@ class _CheckoutPageState extends State<CheckoutPage>
       return;
     }
 
+    final checkoutTenantId =
+        context.read<PublicStoreTenantProvider>().tenantId?.trim();
+    if (checkoutTenantId == null || checkoutTenantId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No pudimos identificar la tienda. Recarga la página antes de crear el pedido.',
+          ),
+        ),
+      );
+      return;
+    }
+    final selectedPaymentMethod = _paymentMethod;
+    final currentCapabilities = await _loadPaymentCapabilities(
+      checkoutTenantId,
+      force: true,
+      preserveSelection: true,
+    );
+    if (!mounted) return;
+    if (currentCapabilities == null ||
+        !currentCapabilities.isAvailable(selectedPaymentMethod)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'El medio de pago seleccionado ya no está disponible. Revisa las opciones antes de crear el pedido.',
+          ),
+          duration: Duration(seconds: 7),
+        ),
+      );
+      return;
+    }
+
     final shippingQuote = await _loadShippingQuote(force: true);
     if (!mounted) return;
     if (shippingQuote == null ||
@@ -648,7 +969,18 @@ class _CheckoutPageState extends State<CheckoutPage>
     }
 
     _checkoutDebugLog('🔵 [Checkout] Setting _isProcessing = true');
-    setState(() => _isProcessing = true);
+    final exitGuard = context.read<CheckoutExitGuard>();
+    final attemptLease = exitGuard.acquire(
+      owner: _exitLeaseOwner,
+      phase: CheckoutExitPhase.preparingOrder,
+    );
+    _exitLease = attemptLease;
+    CheckoutSessionSnapshot? attemptedPendingSnapshot;
+    setState(() {
+      _isProcessing = true;
+      _outcomeUnknownMessage = null;
+      _postOrderRecoveryMessage = null;
+    });
 
     try {
       _checkoutDebugLog('🔵 [Checkout] Getting services...');
@@ -675,22 +1007,15 @@ class _CheckoutPageState extends State<CheckoutPage>
       final tenantProvider = context.read<PublicStoreTenantProvider>();
       _checkoutDebugLog(
           '🔵 [Checkout] Got tenant provider, tenantId: ${tenantProvider.tenantId}');
-      final tenantId = tenantProvider.tenantId;
+      final tenantId = checkoutTenantId;
       _checkoutDebugLog('🔵 [Checkout] tenantId assigned: $tenantId');
-
-      if (tenantId == null) {
-        _checkoutDebugLog(
-            '🔵 [Checkout] ❌ tenantId is NULL! Throwing exception...');
-        throw Exception(
-            'No se pudo detectar la tienda. Por favor recarga la página.');
-      }
       _checkoutDebugLog('🔵 [Checkout] ✅ tenantId is valid, continuing...');
 
       _checkoutDebugLog('🔵 [Checkout] Creating orderData map...');
       // Create order data (database will generate id and orderNumber)
       final Map<String, dynamic> orderData = {
         'tenant_id': tenantId, // ⚠️ REQUIRED for multi-tenant isolation
-        'checkout_idempotency_key': _checkoutIdempotencyKey,
+        'checkout_idempotency_key': _submission.idempotencyKey,
         'customer_email': _emailController.text.trim(),
         'customer_name': _nameController.text.trim(),
         'customer_phone': _phoneController.text.trim(),
@@ -765,135 +1090,166 @@ class _CheckoutPageState extends State<CheckoutPage>
       _checkoutDebugLog(
           '🔵 [Checkout] orderItems created: ${orderItems.length} items');
 
-      _checkoutDebugLog(
-          '🔵 [Checkout] Calling websiteService.createOrder()...');
-      final checkoutAccess =
-          await websiteService.createOrder(orderData, orderItems);
-      final orderId = checkoutAccess.orderId;
-
-      // Persist before any external redirect or local navigation. The token is
-      // never appended to the URL, logged, or copied into Mercado Pago URLs.
-      PublicOrderAccessTokenStore.save(
-        orderId: orderId,
-        accessToken: checkoutAccess.accessToken,
+      final orderContext = _CreatedOrderContext(
+        tenantId: tenantId,
+        paymentMethod: _paymentMethod,
+        isPickup: isPickup,
+        resolvedAddress: resolvedAddress,
+        customerId: profile?['id']?.toString(),
+        shouldSaveAddress: !isPickup &&
+            accountService.isAuthenticated &&
+            _saveAddressToAccount &&
+            profile?['id'] != null,
       );
-      _checkoutDebugLog('🔵 [Checkout] ✅ Secure order created');
+      final checkoutSessionStore =
+          _sessionStore ??= context.read<CheckoutSessionStore>();
 
-      if (!mounted) return;
-
-      final accountMessage = await _createAccountFromCheckout(accountService);
-      if (accountMessage != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(accountMessage),
-              duration: const Duration(seconds: 6)),
+      late final CheckoutSessionSnapshot initialSnapshot;
+      try {
+        final orderedCartLines = orderItems
+            .map(
+              (item) => PersistedCartLine(
+                productId: item['product_id'].toString(),
+                quantity: item['quantity'] as int,
+              ),
+            )
+            .toList(growable: false);
+        final cartRevision = await cart.captureDurableCheckoutRevision(
+          tenantId: tenantId,
+          orderedLines: orderedCartLines,
         );
-      }
-
-      if (!isPickup &&
-          (_accountService?.isAuthenticated ?? false) &&
-          _saveAddressToAccount &&
-          profile != null &&
-          profile['id'] != null) {
-        await _saveAddressForCustomer(
-          accountService,
-          resolvedAddress!,
-          profile['id'] as String,
+        if (!mounted || !attemptLease.isCurrent) {
+          attemptLease.release();
+          if (identical(_exitLease, attemptLease)) {
+            _exitLease = null;
+          }
+          return;
+        }
+        final pendingSnapshot = CheckoutSessionSnapshot.create(
+          tenantId: tenantId,
+          savedAt: DateTime.now().toUtc(),
+          idempotencyKey: _submission.idempotencyKey,
+          orderData: orderData,
+          orderItems: orderItems,
+          handoff: CheckoutHandoffSnapshot(
+            paymentMethod: _paymentMethod,
+            deliveryType: _deliveryType,
+          ),
+          cartRevision: cartRevision,
         );
-      }
-
-      // Handle payment based on selected method
-      if (_paymentMethod == 'mercadopago') {
-        // Redirect to MercadoPago checkout
-        try {
-          _checkoutDebugLog(
-              '🔵 [Checkout] Starting MercadoPago flow for order: $orderId');
-
-          // Initialize MercadoPago with tenant context
-          _checkoutDebugLog(
-              '🔵 [Checkout] Initializing MercadoPago with tenant: $tenantId');
-          await mercadopagoService.initialize(tenantId: tenantId);
-
-          if (!mercadopagoService.isConfigured) {
-            debugPrint('❌ [Checkout] MercadoPago not configured!');
-            throw Exception(
-                'MercadoPago no está configurado para esta tienda.');
+        attemptedPendingSnapshot = pendingSnapshot;
+        // This awaited durability boundary must round-trip the exact payload
+        // before the RPC can be attempted on web or native.
+        initialSnapshot =
+            await checkoutSessionStore.createPendingIfAbsent(pendingSnapshot);
+      } catch (error) {
+        debugPrint('Checkout durable session save failed before creation.');
+        final pendingSnapshot = attemptedPendingSnapshot;
+        if (pendingSnapshot != null) {
+          try {
+            await checkoutSessionStore.clearPendingIfMatches(
+              tenantId: pendingSnapshot.tenantId,
+              idempotencyKey: pendingSnapshot.idempotencyKey,
+            );
+          } catch (_) {
+            // The exact compare-before-clear guard protects any newer attempt.
           }
-          _checkoutDebugLog('✅ [Checkout] MercadoPago is configured');
-
-          _checkoutDebugLog('🔵 [Checkout] Creating MercadoPago preference...');
-          final preference = await mercadopagoService.createPreference(
-            orderId: orderId,
-            orderAccessToken: checkoutAccess.accessToken,
-          );
-          _checkoutDebugLog(
-              '✅ [Checkout] Preference created: ${preference.keys}');
-
-          // Open MercadoPago checkout
-          final initPoint = preference['init_point'] as String?;
-          _checkoutDebugLog(
-            '🔵 [Checkout] MercadoPago checkout URL received: '
-            '${initPoint?.isNotEmpty == true}',
-          );
-
-          if (initPoint == null || initPoint.isEmpty) {
-            debugPrint('❌ [Checkout] No init_point in preference!');
-            throw Exception('MercadoPago no devolvió URL de pago');
-          }
-
-          _checkoutDebugLog('🚀 [Checkout] Redirecting to MercadoPago');
-          if (kIsWeb) {
-            // For web, use window.open to redirect to MercadoPago
-            web_utils.WebUtils.openUrl(initPoint);
-          } else {
-            // For mobile/desktop, use url_launcher
-            final url = Uri.parse(initPoint);
-            if (await canLaunchUrl(url)) {
-              await launchUrl(url, mode: LaunchMode.externalApplication);
-            }
-          }
-
-          // Clear cart (only for non-web or after redirect)
-          if (!kIsWeb) {
-            while (cart.items.isNotEmpty) {
-              cart.removeProduct(cart.items.first.product.id);
-            }
-
-            // Navigate to order confirmation
-            if (mounted) {
-              context.go('/tienda/pedido/$orderId');
-            }
-          }
-        } catch (e, stackTrace) {
-          debugPrint('❌ [Checkout] MercadoPago error: $e');
-          debugPrint('❌ [Checkout] Stack trace: $stackTrace');
-          if (!mounted) return;
-
+        }
+        attemptLease.release();
+        if (identical(_exitLease, attemptLease)) {
+          _exitLease = null;
+        }
+        if (mounted) {
+          const message =
+              'No pudimos guardar una recuperación segura en este dispositivo. '
+              'El pedido no fue enviado. Recarga la aplicación e inténtalo '
+              'nuevamente.';
+          setState(() {
+            _outcomeUnknownMessage = message;
+            _postOrderRecoveryMessage = null;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error al procesar pago con MercadoPago: $e'),
-              backgroundColor: _storeTheme.error,
-              duration: const Duration(seconds: 10),
+            const SnackBar(
+              content: Text(message),
+              duration: Duration(seconds: 9),
             ),
           );
         }
-      } else {
-        // Offline payment methods such as bank transfer
-        // Clear cart
-        while (cart.items.isNotEmpty) {
-          cart.removeProduct(cart.items.first.product.id);
-        }
-
-        // Navigate to order confirmation
-        if (!mounted) return;
-        context.go('/tienda/pedido/$orderId');
+        return;
       }
-    } catch (e) {
+
+      if (!mounted || !attemptLease.isCurrent) {
+        await checkoutSessionStore.clearPendingIfMatches(
+          tenantId: tenantId,
+          idempotencyKey: initialSnapshot.idempotencyKey,
+        );
+        attemptLease.release();
+        if (identical(_exitLease, attemptLease)) {
+          _exitLease = null;
+        }
+        return;
+      }
+      _durableSnapshot = initialSnapshot;
+      // Publish the execution context only after the exact snapshot has
+      // round-tripped through durable storage. A pre-RPC save failure leaves
+      // checkout editable, so the next attempt must rebuild both values from
+      // the customer's latest delivery and payment choices.
+      _createdOrderContext = orderContext;
+      attemptLease.updatePhase(CheckoutExitPhase.recoveringOrder);
+
+      _checkoutDebugLog(
+          '🔵 [Checkout] Calling websiteService.createOrder()...');
+      final checkoutAccess = await _submission.ensureOrderCreated(
+        (idempotencyKey) {
+          if (idempotencyKey != initialSnapshot.idempotencyKey) {
+            throw StateError(
+              'La sesión no corresponde al intento durable guardado.',
+            );
+          }
+          return websiteService.createOrder(
+            initialSnapshot.orderData,
+            initialSnapshot.orderItems,
+          );
+        },
+      );
+      await _ensureReceiptDurable(checkoutAccess);
+      if (!mounted || !attemptLease.isCurrent) return;
+      _checkoutDebugLog('🔵 [Checkout] ✅ Secure order created');
+
+      await _completeCreatedOrder(
+        checkoutAccess: checkoutAccess,
+        orderContext: orderContext,
+        accountService: accountService,
+        mercadopagoService: mercadopagoService,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('❌ [Checkout] Submission error: $error');
+      debugPrint('❌ [Checkout] Stack trace: $stackTrace');
+      if (!_submission.hasCreationAttempt && !_submission.hasReceipt) {
+        final pendingSnapshot = attemptedPendingSnapshot;
+        final store = _sessionStore;
+        if (pendingSnapshot != null && store != null) {
+          try {
+            await store.clearPendingIfMatches(
+              tenantId: pendingSnapshot.tenantId,
+              idempotencyKey: pendingSnapshot.idempotencyKey,
+            );
+          } catch (_) {
+            // A cleanup failure keeps the conservative recovery record.
+          }
+        }
+        attemptLease.release();
+        if (identical(_exitLease, attemptLease)) {
+          _exitLease = null;
+        }
+      }
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al crear pedido: $e')),
-      );
+      if (_submission.hasReceipt) {
+        _showPostOrderRecovery();
+      } else {
+        _showOutcomeUnknownRecovery();
+      }
     } finally {
       if (mounted) {
         setState(() => _isProcessing = false);
@@ -901,38 +1257,399 @@ class _CheckoutPageState extends State<CheckoutPage>
     }
   }
 
+  Future<void> _retryOriginalOrderCreation() async {
+    final orderContext = _createdOrderContext;
+    if (orderContext == null) {
+      _showOutcomeUnknownRecovery();
+      return;
+    }
+
+    setState(() {
+      _isProcessing = true;
+      _outcomeUnknownMessage = null;
+      _postOrderRecoveryMessage = null;
+    });
+
+    try {
+      final checkoutAccess = await _submission.retryOriginalOrder();
+      await _ensureReceiptDurable(checkoutAccess);
+      if (!mounted) return;
+      await _completeCreatedOrder(
+        checkoutAccess: checkoutAccess,
+        orderContext: orderContext,
+        accountService:
+            _accountService ?? context.read<CustomerAccountService>(),
+        mercadopagoService: context.read<MercadoPagoService>(),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('❌ [Checkout] Original order retry error: $error');
+      debugPrint('❌ [Checkout] Stack trace: $stackTrace');
+      if (!mounted) return;
+      if (_submission.hasReceipt) {
+        _showPostOrderRecovery();
+      } else {
+        _showOutcomeUnknownRecovery();
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
+    }
+  }
+
+  Future<void> _resumeCreatedOrder() async {
+    final checkoutAccess = _submission.receipt;
+    final orderContext = _createdOrderContext;
+    if (checkoutAccess == null || orderContext == null) {
+      _showPostOrderRecovery();
+      return;
+    }
+
+    setState(() {
+      _isProcessing = true;
+      _outcomeUnknownMessage = null;
+      _postOrderRecoveryMessage = null;
+    });
+
+    try {
+      await _completeCreatedOrder(
+        checkoutAccess: checkoutAccess,
+        orderContext: orderContext,
+        accountService:
+            _accountService ?? context.read<CustomerAccountService>(),
+        mercadopagoService: context.read<MercadoPagoService>(),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('❌ [Checkout] Post-order handoff error: $error');
+      debugPrint('❌ [Checkout] Stack trace: $stackTrace');
+      if (mounted) _showPostOrderRecovery();
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
+    }
+  }
+
+  Future<void> _completeCreatedOrder({
+    required PublicOrderCheckoutAccess checkoutAccess,
+    required _CreatedOrderContext orderContext,
+    required CustomerAccountService accountService,
+    required MercadoPagoService mercadopagoService,
+  }) async {
+    if (!(_exitLease?.isCurrent ?? false)) {
+      if (!mounted) return;
+      final route = ModalRoute.of(context);
+      if (route?.isCurrent != true) return;
+      _exitLease = context.read<CheckoutExitGuard>().acquire(
+            owner: _exitLeaseOwner,
+            phase: CheckoutExitPhase.orderCreated,
+          );
+    }
+
+    await _submission.handOff((receipt) async {
+      await _ensureReceiptDurable(receipt);
+      // Persist before any external redirect or local navigation. Retrying this
+      // post-order step is safe and never invokes createOrder again.
+      final store = _sessionStore;
+      if (store == null) {
+        throw StateError(
+          'No existe un almacén seguro para abrir el pedido creado.',
+        );
+      }
+      await store.saveOrderAccess(
+        tenantId: orderContext.tenantId,
+        access: receipt,
+      );
+
+      await _runNonBlockingPostOrderTasks(
+        accountService: accountService,
+        orderContext: orderContext,
+      );
+      if (!mounted || !(_exitLease?.isCurrent ?? false)) return;
+
+      if (orderContext.paymentMethod == 'mercadopago') {
+        await _openMercadoPagoForCreatedOrder(
+          checkoutAccess: checkoutAccess,
+          tenantId: orderContext.tenantId,
+          mercadopagoService: mercadopagoService,
+        );
+        return;
+      }
+
+      await _consumeOrderedCartLinesOnce();
+      if (!mounted) return;
+      // The checkout operation is complete and durable at this point. Release
+      // its lease before the shared navigation boundary runs so only an
+      // editor draft (if any) can block the transition to confirmation.
+      _exitLease?.release();
+      await PublicStoreLayout.navigateToHref(
+        context,
+        '/tienda/pedido/${checkoutAccess.orderId}',
+      );
+    });
+
+    if (mounted) {
+      setState(() {
+        _outcomeUnknownMessage = null;
+        _postOrderRecoveryMessage = null;
+      });
+    }
+  }
+
+  Future<void> _ensureReceiptDurable(
+    PublicOrderCheckoutAccess receipt,
+  ) async {
+    final snapshot = _durableSnapshot;
+    if (snapshot == null) {
+      throw StateError(
+        'No existe una sesión durable para guardar el recibo del pedido.',
+      );
+    }
+    final existingReceipt = snapshot.receipt;
+    if (existingReceipt != null &&
+        (existingReceipt.orderId != receipt.orderId ||
+            existingReceipt.accessToken != receipt.accessToken)) {
+      throw StateError(
+        'El recibo no corresponde a la sesión durable del checkout.',
+      );
+    }
+
+    final store = _sessionStore;
+    if (store == null) {
+      throw StateError(
+        'No existe un almacén durable para guardar el recibo del pedido.',
+      );
+    }
+    final durable = await store.attachReceiptIfMatches(
+      tenantId: snapshot.tenantId,
+      idempotencyKey: snapshot.idempotencyKey,
+      receipt: receipt,
+    );
+    _durableSnapshot = durable;
+    _exitLease?.updatePhase(CheckoutExitPhase.orderCreated);
+  }
+
+  Future<void> _consumeOrderedCartLinesOnce() async {
+    final snapshot = _durableSnapshot;
+    final store = _sessionStore;
+    if (snapshot == null || snapshot.receipt == null || store == null) {
+      return;
+    }
+    final cart = context.read<CartProvider>();
+
+    final outcome = await store.consumeCartOnce(
+      tenantId: snapshot.tenantId,
+      orderId: snapshot.receipt!.orderId,
+      consume: (claimed) async {
+        final cartRevision = claimed.cartRevision;
+        if (cartRevision == null || cartRevision.isEmpty) return false;
+        final orderedLines = claimed.orderItems
+            .map(
+              (item) => PersistedCartLine(
+                productId: item['product_id'].toString(),
+                quantity: item['quantity'] as int,
+              ),
+            )
+            .toList(growable: false);
+        final result = await cart.consumeOrderedLines(
+          tenantId: claimed.tenantId,
+          orderedLines: orderedLines,
+          expectedRevision: cartRevision,
+        );
+        return result.applied;
+      },
+    );
+    try {
+      final refreshed = await store.read(snapshot.tenantId);
+      if (refreshed?.receipt?.orderId == snapshot.receipt!.orderId) {
+        _durableSnapshot = refreshed;
+      }
+    } catch (_) {
+      // The independently verified terminal outcome is authoritative. A
+      // best-effort UI refresh must not turn a completed one-shot operation
+      // back into a retry.
+    }
+    if (outcome.showsWarning) {
+      _showCartConsumptionWarning();
+    }
+  }
+
+  void _showCartConsumptionWarning() {
+    if (!mounted) return;
+    const message =
+        'Tu pedido se completó. Revisa tu carrito: puede que aún contenga '
+        'artículos comprados.';
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(message),
+        duration: Duration(seconds: 9),
+      ),
+    );
+  }
+
+  Future<void> _runNonBlockingPostOrderTasks({
+    required CustomerAccountService accountService,
+    required _CreatedOrderContext orderContext,
+  }) async {
+    if (!_postOrderAccountAttempted) {
+      _postOrderAccountAttempted = true;
+      final accountMessage = await _createAccountFromCheckout(accountService);
+      if (accountMessage != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(accountMessage),
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+    }
+
+    if (_postOrderAddressAttempted ||
+        !orderContext.shouldSaveAddress ||
+        orderContext.resolvedAddress == null ||
+        orderContext.customerId == null) {
+      return;
+    }
+
+    _postOrderAddressAttempted = true;
+    try {
+      await _saveAddressForCustomer(
+        accountService,
+        orderContext.resolvedAddress!,
+        orderContext.customerId!,
+      );
+    } catch (error) {
+      debugPrint('Checkout address save failed after order creation: $error');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Tu pedido quedó guardado, pero no pudimos guardar la dirección '
+            'en tu cuenta.',
+          ),
+          duration: Duration(seconds: 7),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openMercadoPagoForCreatedOrder({
+    required PublicOrderCheckoutAccess checkoutAccess,
+    required String tenantId,
+    required MercadoPagoService mercadopagoService,
+  }) async {
+    _checkoutDebugLog(
+      '🔵 [Checkout] Starting MercadoPago flow for order: '
+      '${checkoutAccess.orderId}',
+    );
+    // Availability was confirmed by the tenant-scoped server contract before
+    // order creation. The public client only supplies routing context here;
+    // provider credentials remain server-side.
+    mercadopagoService.setTenantId(tenantId);
+
+    final preference = await mercadopagoService.createPreference(
+      orderId: checkoutAccess.orderId,
+      orderAccessToken: checkoutAccess.accessToken,
+    );
+    final initPoint = preference['init_point'] as String?;
+    if (initPoint == null || initPoint.isEmpty) {
+      throw const FormatException('MercadoPago preference has no init point.');
+    }
+
+    if (kIsWeb) {
+      if (!mounted || !(_exitLease?.isCurrent ?? false)) return;
+      web_utils.WebUtils.openUrl(initPoint);
+      return;
+    }
+
+    final url = Uri.parse(initPoint);
+    if (!await canLaunchUrl(url)) {
+      throw StateError('MercadoPago checkout could not be opened.');
+    }
+    if (!mounted || !(_exitLease?.isCurrent ?? false)) return;
+    final launched = await launchUrl(
+      url,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!launched) {
+      throw StateError('MercadoPago checkout could not be opened.');
+    }
+
+    if (!mounted) return;
+    // The external handoff succeeded; the local confirmation transition no
+    // longer represents an abandoned checkout.
+    _exitLease?.release();
+    await PublicStoreLayout.navigateToHref(
+      context,
+      '/tienda/pedido/${checkoutAccess.orderId}',
+    );
+  }
+
+  void _showPostOrderRecovery() {
+    if (!mounted) return;
+    const message =
+        'Tu pedido ya quedó guardado. No pudimos completar el siguiente paso. '
+        'Continúa para retomar el mismo pedido sin crear otro.';
+    setState(() {
+      _outcomeUnknownMessage = null;
+      _postOrderRecoveryMessage = message;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(message),
+        duration: Duration(seconds: 10),
+      ),
+    );
+  }
+
+  void _showOutcomeUnknownRecovery() {
+    if (!mounted) return;
+    const message =
+        'No pudimos confirmar el resultado del intento. Tu carrito sigue aquí. '
+        'Reintenta con los mismos datos: si el pedido ya existe, recuperaremos '
+        'ese mismo pedido.';
+    setState(() {
+      _outcomeUnknownMessage = message;
+      _postOrderRecoveryMessage = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(message),
+        duration: Duration(seconds: 10),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
     final cart = context.watch<CartProvider>();
+    context.watch<CheckoutExitGuard>();
     context.watch<CustomerAccountService>();
-    context.watch<PublicStoreTenantProvider>();
+    final tenantProvider = context.watch<PublicStoreTenantProvider>();
     _accountService ??=
         Provider.of<CustomerAccountService>(context, listen: false);
+    _schedulePaymentCapabilityRefresh(tenantProvider.tenantId);
 
     _checkoutDebugLog(
         '🛒 [CheckoutPage.build] cart.isEmpty: ${cart.isEmpty}, items: ${cart.items.length}');
 
-    if (cart.isNotEmpty) {
+    if (_durableSnapshot == null && cart.isNotEmpty && cart.total != null) {
       _scheduleShippingQuoteRefresh(cart);
     }
 
     // Get edit mode for key to prevent element reactivation conflicts
-    final editProvider = context.watch<WebsiteEditModeProvider>();
-    final modeKey = editProvider.isEditMode
-        ? 'edit'
-        : (editProvider.isPreviewMode ? 'preview' : 'normal');
 
     _checkoutDebugLog(
         '🛒 [CheckoutPage.build] Building ${cart.isEmpty ? "empty-cart" : "checkout"} state');
     return MediaQueryLayoutBuilder(
-      key: ValueKey('checkout_layout_$modeKey'),
+      key: const ValueKey('checkout_layout'),
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 980;
         final horizontalMargin = constraints.maxWidth < 760 ? 16.0 : 24.0;
         final verticalMargin = isMobile ? 28.0 : 44.0;
 
-        if (cart.isEmpty) {
+        if (cart.isEmpty && _durableSnapshot == null) {
           return _buildEmptyCart(
             context,
             horizontalMargin: horizontalMargin,
@@ -952,7 +1669,13 @@ class _CheckoutPageState extends State<CheckoutPage>
                   children: [
                     _buildPageHeader(),
                     const SizedBox(height: 28),
-                    _buildCheckoutForm(isMobile: true),
+                    if (_isRestoredCheckoutSession)
+                      _buildRestoredCheckoutNotice()
+                    else
+                      IgnorePointer(
+                        ignoring: _checkoutLocked,
+                        child: _buildCheckoutForm(isMobile: true),
+                      ),
                     const SizedBox(height: 32),
                     _buildOrderSummary(cart, isMobile: true),
                   ],
@@ -967,7 +1690,13 @@ class _CheckoutPageState extends State<CheckoutPage>
                         children: [
                           _buildPageHeader(),
                           const SizedBox(height: 34),
-                          _buildCheckoutForm(isMobile: false),
+                          if (_isRestoredCheckoutSession)
+                            _buildRestoredCheckoutNotice()
+                          else
+                            IgnorePointer(
+                              ignoring: _checkoutLocked,
+                              child: _buildCheckoutForm(isMobile: false),
+                            ),
                         ],
                       ),
                     ),
@@ -990,7 +1719,8 @@ class _CheckoutPageState extends State<CheckoutPage>
         _buildSectionHeading('Finalizar compra'),
         const SizedBox(height: 12),
         Text(
-          'Completa tus datos de contacto, entrega y pago para confirmar tu pedido con el mismo lenguaje claro del resto de la tienda.',
+          'Completa tus datos de contacto, elige la forma de entrega y '
+          'selecciona el medio de pago antes de confirmar tu pedido.',
           style: _storeTheme.text.bodyMedium?.copyWith(
             fontSize: 15,
             color: _storeTheme.textSecondary,
@@ -998,6 +1728,55 @@ class _CheckoutPageState extends State<CheckoutPage>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildRestoredCheckoutNotice() {
+    return Container(
+      key: const ValueKey('checkout-restored-session-notice'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _storeTheme.softSurface,
+        border: Border(
+          left: BorderSide(color: _storeTheme.primary, width: 4),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.restore_rounded,
+            color: _storeTheme.primary,
+            size: 26,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'PEDIDO RECUPERADO',
+                  style: _storeTheme.text.labelLarge?.copyWith(
+                    color: _storeTheme.primary,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Los productos y totales mostrados pertenecen al intento '
+                  'guardado. No se reemplazan con el carrito actual.',
+                  style: _storeTheme.text.bodyMedium?.copyWith(
+                    color: _storeTheme.textSecondary,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1047,7 +1826,8 @@ class _CheckoutPageState extends State<CheckoutPage>
               ),
               const SizedBox(height: 32),
               FilledButton.icon(
-                onPressed: () => context.go('/productos'),
+                onPressed: () =>
+                    PublicStoreLayout.navigateToHref(context, '/productos'),
                 icon: const Icon(Icons.shopping_bag_outlined),
                 label: const Text('EXPLORAR PRODUCTOS'),
                 style: FilledButton.styleFrom(
@@ -1228,31 +2008,7 @@ class _CheckoutPageState extends State<CheckoutPage>
           const SizedBox(height: 24),
           _buildFormSection(
             title: '3. Método de pago',
-            child: RadioGroup<String>(
-              groupValue: _paymentMethod,
-              onChanged: (value) {
-                if (value == null) return;
-                setState(() => _paymentMethod = value);
-              },
-              child: Column(
-                children: [
-                  _buildPaymentOption(
-                    value: 'mercadopago',
-                    title: 'MercadoPago',
-                    subtitle:
-                        'Pago seguro con tarjeta de crédito, débito o saldo de Mercado Pago.',
-                    badgeLabel: 'RECOMENDADO',
-                  ),
-                  _buildPaymentOption(
-                    value: 'transfer',
-                    title: 'Transferencia bancaria',
-                    subtitle:
-                        'Recibirás los datos para completar la transferencia.',
-                    isLast: true,
-                  ),
-                ],
-              ),
-            ),
+            child: _buildPaymentMethodSection(),
           ),
           const SizedBox(height: 24),
           _buildFormSection(
@@ -1281,7 +2037,7 @@ class _CheckoutPageState extends State<CheckoutPage>
         RadioGroup<String>(
           groupValue: _deliveryType,
           onChanged: (value) {
-            if (value == null) return;
+            if (_checkoutLocked || value == null) return;
             _selectDeliveryType(value);
           },
           child: Column(
@@ -1428,7 +2184,12 @@ class _CheckoutPageState extends State<CheckoutPage>
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
-                onPressed: () => context.go('/tienda/cuenta/direcciones'),
+                onPressed: _checkoutLocked
+                    ? null
+                    : () => PublicStoreLayout.navigateToHref(
+                          context,
+                          '/tienda/cuenta/direcciones',
+                        ),
                 style: TextButton.styleFrom(
                   foregroundColor: _storeTheme.primary,
                   padding: EdgeInsets.zero,
@@ -1463,7 +2224,7 @@ class _CheckoutPageState extends State<CheckoutPage>
         ),
       ),
       child: InkWell(
-        onTap: () => _selectDeliveryType(value),
+        onTap: _checkoutLocked ? null : () => _selectDeliveryType(value),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 14),
           child: Row(
@@ -1743,19 +2504,48 @@ class _CheckoutPageState extends State<CheckoutPage>
   }
 
   Widget _buildOrderSummary(CartProvider cart, {required bool isMobile}) {
+    final snapshot = _durableSnapshot;
+    final usesDurableSnapshot = snapshot != null;
     final taxSummary = cart.taxSummary;
-    final hasCurrentShippingQuote = _hasCurrentShippingQuote(cart);
+    final knownGross = cart.grossMerchandiseAmountClp;
+    final hasCurrentShippingQuote =
+        !usesDurableSnapshot && _hasCurrentShippingQuote(cart);
+    final hasUsablePaymentMethod = _submission.hasStarted ||
+        (!_paymentCapabilitiesLoading &&
+            _paymentCapabilities?.isAvailable(_paymentMethod) == true);
+    final canPlaceOrResumeOrder = _checkoutLocked ||
+        (!_shippingQuoteLoading &&
+            taxSummary.isValid &&
+            hasCurrentShippingQuote &&
+            hasUsablePaymentMethod);
+    final recoveryMessage = _postOrderRecoveryMessage ?? _outcomeUnknownMessage;
     final shippingQuote = hasCurrentShippingQuote ? _shippingQuote : null;
-    final shippingLabel = shippingQuote == null
-        ? (_shippingQuoteLoading ? 'Calculando…' : '—')
-        : shippingQuote.isPickup
+    final frozenShipping =
+        snapshot == null ? null : _snapshotAmount(snapshot, 'shipping_cost');
+    final frozenSubtotal =
+        snapshot == null ? null : _snapshotAmount(snapshot, 'subtotal');
+    final frozenTax =
+        snapshot == null ? null : _snapshotAmount(snapshot, 'tax_amount');
+    final frozenTotal =
+        snapshot == null ? null : _snapshotAmount(snapshot, 'total');
+    final shippingLabel = usesDurableSnapshot
+        ? (snapshot.handoff.deliveryType == 'pickup' || frozenShipping == 0
             ? 'Sin costo'
-            : ChileanUtils.formatCurrency(
-                shippingQuote.shippingGross.toDouble(),
-              );
-    final orderTotalLabel = shippingQuote == null
-        ? '—'
-        : ChileanUtils.formatCurrency(shippingQuote.orderGross.toDouble());
+            : frozenShipping == null
+                ? '—'
+                : ChileanUtils.formatCurrency(frozenShipping))
+        : shippingQuote == null
+            ? (_shippingQuoteLoading ? 'Calculando…' : '—')
+            : shippingQuote.isPickup
+                ? 'Sin costo'
+                : ChileanUtils.formatCurrency(
+                    shippingQuote.shippingGross.toDouble(),
+                  );
+    final orderTotalLabel = usesDurableSnapshot
+        ? (frozenTotal == null ? '—' : ChileanUtils.formatCurrency(frozenTotal))
+        : shippingQuote == null
+            ? '—'
+            : ChileanUtils.formatCurrency(shippingQuote.orderGross.toDouble());
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(isMobile ? 20 : 24),
@@ -1778,11 +2568,35 @@ class _CheckoutPageState extends State<CheckoutPage>
             ),
           ),
           const SizedBox(height: 18),
-          for (var index = 0; index < cart.items.length; index++)
-            _buildSummaryProductRow(
-              cart.items[index],
-              isLast: index == cart.items.length - 1,
+          if (_isRestoredCheckoutSession) ...[
+            Container(
+              key: const ValueKey('checkout-frozen-order-summary'),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              color: _storeTheme.softSurface,
+              child: Text(
+                'RESUMEN CONGELADO DEL PEDIDO RECUPERADO',
+                style: _storeTheme.text.labelSmall?.copyWith(
+                  color: _storeTheme.primary,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
+              ),
             ),
+            const SizedBox(height: 8),
+          ],
+          if (snapshot != null)
+            for (var index = 0; index < snapshot.orderItems.length; index++)
+              _buildSnapshotSummaryProductRow(
+                snapshot.orderItems[index],
+                isLast: index == snapshot.orderItems.length - 1,
+              )
+          else
+            for (var index = 0; index < cart.items.length; index++)
+              _buildSummaryProductRow(
+                cart.items[index],
+                isLast: index == cart.items.length - 1,
+              ),
           const SizedBox(height: 18),
           Container(
             width: double.infinity,
@@ -1790,7 +2604,20 @@ class _CheckoutPageState extends State<CheckoutPage>
             color: _storeTheme.line,
           ),
           const SizedBox(height: 18),
-          if (taxSummary.isValid) ...[
+          if (snapshot != null) ...[
+            _buildSummaryMetric(
+              'Subtotal neto',
+              frozenSubtotal == null
+                  ? '—'
+                  : ChileanUtils.formatCurrency(frozenSubtotal),
+            ),
+            const SizedBox(height: 12),
+            _buildSummaryMetric(
+              'IVA',
+              frozenTax == null ? '—' : ChileanUtils.formatCurrency(frozenTax),
+              secondary: true,
+            ),
+          ] else if (taxSummary.isValid) ...[
             _buildSummaryMetric(
               taxSummary.netLabel,
               ChileanUtils.formatCurrency(taxSummary.netAmount.toDouble()),
@@ -1806,14 +2633,25 @@ class _CheckoutPageState extends State<CheckoutPage>
               taxSummary.checkoutBlockMessage ??
                   'No podemos validar los impuestos de este carrito.',
             ),
+            const SizedBox(height: 12),
+            _buildSummaryMetric(
+              'Total productos',
+              knownGross == null
+                  ? '—'
+                  : ChileanUtils.formatCurrency(knownGross.toDouble()),
+            ),
           ],
           const SizedBox(height: 12),
           _buildSummaryMetric(
-            _deliveryType == 'pickup' ? 'Retiro' : 'Envío',
+            (snapshot?.handoff.deliveryType ?? _deliveryType) == 'pickup'
+                ? 'Retiro'
+                : 'Envío',
             shippingLabel,
             secondary: true,
           ),
-          if (shippingQuote != null && !shippingQuote.isPickup) ...[
+          if (!usesDurableSnapshot &&
+              shippingQuote != null &&
+              !shippingQuote.isPickup) ...[
             const SizedBox(height: 8),
             Text(
               'IVA incluido · entrega estimada entre '
@@ -1826,11 +2664,11 @@ class _CheckoutPageState extends State<CheckoutPage>
               ),
             ),
           ],
-          if (_shippingQuoteLoading) ...[
+          if (!usesDurableSnapshot && _shippingQuoteLoading) ...[
             const SizedBox(height: 12),
             const LinearProgressIndicator(minHeight: 2),
           ],
-          if (_shippingQuoteError != null) ...[
+          if (!usesDurableSnapshot && _shippingQuoteError != null) ...[
             const SizedBox(height: 12),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1892,13 +2730,42 @@ class _CheckoutPageState extends State<CheckoutPage>
             ],
           ),
           const SizedBox(height: 26),
+          if (recoveryMessage != null) ...[
+            Container(
+              key: ValueKey(
+                _submission.hasReceipt
+                    ? 'checkout-post-order-recovery'
+                    : 'checkout-outcome-unknown-recovery',
+              ),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+              decoration: BoxDecoration(
+                color: _storeTheme.warningSurface,
+                border: Border(
+                  left: BorderSide(color: _storeTheme.warning, width: 3),
+                ),
+              ),
+              child: Text(
+                recoveryMessage,
+                style: _storeTheme.text.bodySmall?.copyWith(
+                  fontSize: 13,
+                  color: _storeTheme.onWarningSurface,
+                  height: 1.45,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           SizedBox(
             width: double.infinity,
             child: FilledButton(
               onPressed: _isProcessing ||
-                      _shippingQuoteLoading ||
-                      !taxSummary.isValid ||
-                      !hasCurrentShippingQuote
+                      _sessionRestoring ||
+                      _sessionStorageUnavailable ||
+                      !canPlaceOrResumeOrder
                   ? null
                   : _placeOrder,
               style: FilledButton.styleFrom(
@@ -1918,14 +2785,22 @@ class _CheckoutPageState extends State<CheckoutPage>
                         color: _storeTheme.onPrimary,
                       ),
                     )
-                  : const Text('REALIZAR PEDIDO'),
+                  : Text(
+                      _submission.hasReceipt
+                          ? 'CONTINUAR CON PEDIDO'
+                          : _submission.hasCreationAttempt
+                              ? 'REINTENTAR CONFIRMACIÓN'
+                              : 'REALIZAR PEDIDO',
+                    ),
             ),
           ),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
-              onPressed: _isProcessing ? null : () => context.go('/carrito'),
+              onPressed: _isProcessing || _sessionRestoring || _checkoutLocked
+                  ? null
+                  : () => PublicStoreLayout.navigateToHref(context, '/carrito'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: _storeTheme.primary,
                 side: BorderSide(color: _storeTheme.primary),
@@ -2042,6 +2917,117 @@ class _CheckoutPageState extends State<CheckoutPage>
     );
   }
 
+  Widget _buildPaymentMethodSection() {
+    if (_paymentCapabilitiesLoading) {
+      return Row(
+        key: const ValueKey('checkout-payment-capabilities-loading'),
+        children: [
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: _storeTheme.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Verificando medios de pago disponibles…',
+              style: _storeTheme.text.bodyMedium?.copyWith(
+                color: _storeTheme.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    final capabilities = _paymentCapabilities;
+    final availableMethods =
+        capabilities?.availableMethods ?? const <PublicCheckoutPaymentCode>[];
+    if (_paymentCapabilitiesError != null || availableMethods.isEmpty) {
+      final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
+      return Container(
+        key: const ValueKey('checkout-payment-capabilities-unavailable'),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: _storeTheme.warningSurface,
+          border: Border(
+            left: BorderSide(color: _storeTheme.warning, width: 3),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _paymentCapabilitiesError ??
+                  'Esta tienda todavía no tiene un medio de pago disponible.',
+              style: _storeTheme.text.bodySmall?.copyWith(
+                color: _storeTheme.onWarningSurface,
+                height: 1.45,
+              ),
+            ),
+            if (_paymentCapabilitiesError != null) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _checkoutLocked
+                    ? null
+                    : () => unawaited(
+                          _loadPaymentCapabilities(tenantId, force: true),
+                        ),
+                child: const Text('REINTENTAR'),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return RadioGroup<String>(
+      groupValue: _paymentMethod,
+      onChanged: (value) {
+        if (_checkoutLocked || value == null) return;
+        setState(() => _paymentMethod = value);
+      },
+      child: Column(
+        children: [
+          for (var index = 0; index < availableMethods.length; index += 1)
+            _buildPaymentOptionForCode(
+              availableMethods[index],
+              isLast: index == availableMethods.length - 1,
+              showRecommended: availableMethods.length > 1 && index == 0,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentOptionForCode(
+    PublicCheckoutPaymentCode code, {
+    required bool isLast,
+    required bool showRecommended,
+  }) {
+    return switch (code) {
+      PublicCheckoutPaymentCode.mercadopago => _buildPaymentOption(
+          value: code.wireValue,
+          title: 'MercadoPago',
+          subtitle:
+              'Pago seguro con tarjeta de crédito, débito o saldo de Mercado Pago.',
+          badgeLabel: showRecommended ? 'RECOMENDADO' : null,
+          isLast: isLast,
+        ),
+      PublicCheckoutPaymentCode.transfer => _buildPaymentOption(
+          value: code.wireValue,
+          title: 'Transferencia bancaria',
+          subtitle: 'Recibirás los datos para completar la transferencia.',
+          badgeLabel: showRecommended ? 'RECOMENDADO' : null,
+          isLast: isLast,
+        ),
+    };
+  }
+
   Widget _buildPaymentOption({
     required String value,
     required String title,
@@ -2060,7 +3046,9 @@ class _CheckoutPageState extends State<CheckoutPage>
         ),
       ),
       child: InkWell(
-        onTap: () => setState(() => _paymentMethod = value),
+        onTap: _checkoutLocked
+            ? null
+            : () => setState(() => _paymentMethod = value),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 14),
           child: Row(
@@ -2186,6 +3174,93 @@ class _CheckoutPageState extends State<CheckoutPage>
           const SizedBox(width: 12),
           Text(
             ChileanUtils.formatCurrency(item.subtotal),
+            style: _storeTheme.text.bodyMedium?.copyWith(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: _storeTheme.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  double? _snapshotAmount(
+    CheckoutSessionSnapshot snapshot,
+    String key,
+  ) {
+    final value = snapshot.orderData[key];
+    if (value is! num) return null;
+    final amount = value.toDouble();
+    return amount.isFinite && amount >= 0 ? amount : null;
+  }
+
+  Widget _buildSnapshotSummaryProductRow(
+    Map<String, dynamic> item, {
+    bool isLast = false,
+  }) {
+    final productName = item['product_name']?.toString() ?? 'Producto';
+    final productSku = item['product_sku']?.toString().trim() ?? '';
+    final quantity = item['quantity'] as int;
+    final subtotal = (item['subtotal'] as num).toDouble();
+
+    return Container(
+      key: ValueKey('checkout-snapshot-item-${item['product_id']}'),
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: isLast ? Colors.transparent : _storeTheme.line,
+          ),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 62,
+            height: 62,
+            color: _storeTheme.softSurface,
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.receipt_long_outlined,
+              size: 24,
+              color: _storeTheme.textMuted,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  productName,
+                  style: _storeTheme.text.bodyMedium?.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _storeTheme.textPrimary,
+                    height: 1.45,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  [
+                    if (productSku.isNotEmpty) 'SKU: $productSku',
+                    'Cantidad: $quantity',
+                  ].join(' · '),
+                  style: _storeTheme.text.bodySmall?.copyWith(
+                    fontSize: 12,
+                    color: _storeTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            ChileanUtils.formatCurrency(subtotal),
             style: _storeTheme.text.bodyMedium?.copyWith(
               fontSize: 14,
               fontWeight: FontWeight.w700,

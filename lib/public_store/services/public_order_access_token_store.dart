@@ -1,63 +1,41 @@
-import '../../shared/utils/web_url.dart' as web_url;
+import '../../modules/website/models/public_order_access.dart';
+import 'checkout_session_store.dart';
 
-/// Same-origin, session-lifetime bearer-token storage for public orders.
+/// Compatibility façade over the single durable checkout authority.
 ///
-/// Web survives the Mercado Pago round trip through sessionStorage without
-/// placing the token in a URL, browser history, referrer or server log. Native
-/// storefronts retain the token only in process memory.
+/// New code can call [CheckoutSessionStore.saveOrderAccess] directly. Keeping
+/// this small instance wrapper avoids reintroducing the former static
+/// memory/sessionStorage split, which lost valid native credentials after the
+/// checkout receipt was retired.
 class PublicOrderAccessTokenStore {
-  PublicOrderAccessTokenStore._();
+  const PublicOrderAccessTokenStore(this._sessions);
 
-  static const String _keyPrefix = 'vinabike.public-order-access.v1.';
-  static final Map<String, String> _memory = <String, String>{};
+  final CheckoutSessionStore _sessions;
 
-  static void save({
+  Future<void> save({
+    required String tenantId,
+    required PublicOrderCheckoutAccess access,
+  }) =>
+      _sessions.saveOrderAccess(
+        tenantId: tenantId,
+        access: access,
+      );
+
+  Future<PublicOrderCheckoutAccess?> read({
+    required String tenantId,
     required String orderId,
-    required String accessToken,
-  }) {
-    final normalizedOrderId = orderId.trim();
-    final normalizedToken = accessToken.trim();
-    if (normalizedOrderId.isEmpty ||
-        normalizedToken.length < 40 ||
-        normalizedToken.length > 128) {
-      throw const FormatException('Credencial pública de pedido inválida');
-    }
+  }) =>
+      _sessions.readOrderAccess(
+        tenantId: tenantId,
+        orderId: orderId,
+      );
 
-    _memory[normalizedOrderId] = normalizedToken;
-    web_url.setSessionStorageValue(
-      '$_keyPrefix$normalizedOrderId',
-      normalizedToken,
-    );
-  }
-
-  static String? read(String orderId) {
-    final normalizedOrderId = orderId.trim();
-    if (normalizedOrderId.isEmpty) return null;
-
-    final memoryToken = _memory[normalizedOrderId];
-    if (_isValidToken(memoryToken)) return memoryToken;
-
-    final sessionToken = web_url.getSessionStorageValue(
-      '$_keyPrefix$normalizedOrderId',
-    );
-    if (!_isValidToken(sessionToken)) return null;
-
-    final normalizedToken = sessionToken!.trim();
-    _memory[normalizedOrderId] = normalizedToken;
-    return normalizedToken;
-  }
-
-  static void forget(String orderId) {
-    final normalizedOrderId = orderId.trim();
-    if (normalizedOrderId.isEmpty) return;
-    _memory.remove(normalizedOrderId);
-    web_url.setSessionStorageValue('$_keyPrefix$normalizedOrderId', '');
-  }
-
-  static bool _isValidToken(String? token) {
-    final length = token?.trim().length ?? 0;
-    return length >= 40 && length <= 128;
-  }
-
-  static void clearMemoryForTesting() => _memory.clear();
+  Future<void> forget({
+    required String tenantId,
+    required String orderId,
+  }) =>
+      _sessions.forgetOrderAccess(
+        tenantId: tenantId,
+        orderId: orderId,
+      );
 }

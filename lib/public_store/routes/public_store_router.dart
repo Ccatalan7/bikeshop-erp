@@ -163,13 +163,6 @@ class _PublicStoreNavObserver extends NavigatorObserver {
 // PAGE BUILDER HELPER
 // ============================================================================
 
-String _storefrontMode(GoRouterState state) {
-  final uri = state.uri;
-  final isEdit = uri.queryParameters['edit'] == 'true';
-  final isPreview = uri.queryParameters['preview'] == 'true';
-  return isEdit ? 'edit' : (isPreview ? 'preview' : 'normal');
-}
-
 /// Keeps the routed [Page] identity owned by go_router.
 ///
 /// A previous implementation cached one process-wide [UniqueKey]. During a
@@ -179,18 +172,20 @@ String _storefrontMode(GoRouterState state) {
 @visibleForTesting
 LocalKey publicStoreRoutePageKey(GoRouterState state) => state.pageKey;
 
-/// Recreates only the storefront layout when Edit/Preview mode changes.
+/// Scopes the storefront layout subtree to its routed page identity.
 ///
 /// This key is intentionally separate from the Navigator [Page] key. Its
 /// parent page scopes it, so two routes can coexist safely while a replacement
-/// is being reconciled.
+/// is being reconciled. Edit/Preview mode is deliberately NOT part of this
+/// key: the provider-owned FSM changes mode by rebuilding in place, never by
+/// remounting the routed subtree (which would dispose Scaffold, Navigator
+/// descendants and open drafts).
 @visibleForTesting
 LocalKey publicStoreModeContentKey(GoRouterState state) {
-  return ValueKey<(LocalKey, String, String)>(
+  return ValueKey<(LocalKey, String)>(
     (
       state.pageKey,
       state.matchedLocation,
-      _storefrontMode(state),
     ),
   );
 }

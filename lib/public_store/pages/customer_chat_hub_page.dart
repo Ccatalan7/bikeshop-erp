@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../modules/messaging/services/messaging_service.dart';
@@ -10,6 +9,7 @@ import '../widgets/customer_portal_layout.dart';
 import '../widgets/customer_chat_view.dart';
 import '../widgets/customer_chat_context_support.dart';
 import '../widgets/deferred_customer_chat_context_panel.dart';
+import '../widgets/public_store_layout.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 
 /// Unified customer chat page handling both list and detail views
@@ -118,9 +118,12 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
 
     if (updateUrl) {
       if (conversationId != null) {
-        context.go('/cuenta/chats/$conversationId');
+        PublicStoreLayout.navigateToHref(
+          context,
+          '/cuenta/chats/$conversationId',
+        );
       } else {
-        context.go('/cuenta/chats');
+        PublicStoreLayout.navigateToHref(context, '/cuenta/chats');
       }
     }
   }

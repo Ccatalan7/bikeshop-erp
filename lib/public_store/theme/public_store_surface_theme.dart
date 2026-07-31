@@ -73,6 +73,10 @@ class PublicStoreSurfaceTheme {
         minimumRatio: 4.5,
       );
 
+  /// Foreground for content sitting *on* [success] — a confirmed button, for
+  /// instance. Declared here so a feature never has to guess at white.
+  Color get onSuccess => _readableForeground(success);
+
   static Color _ensureContrast(
     Color semantic,
     Color background, {

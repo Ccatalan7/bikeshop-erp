@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import '../services/customer_account_service.dart';
 import '../widgets/customer_portal_layout.dart';
+import '../widgets/public_store_layout.dart';
 import '../../shared/utils/chilean_utils.dart';
 
 /// Customer bikes page - view registered bikes and their service history
@@ -94,7 +94,8 @@ class _CustomerBikesPageState extends State<CustomerBikesPage>
             ),
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: () => context.go('/cuenta/login'),
+              onPressed: () =>
+                  PublicStoreLayout.navigateToHref(context, '/cuenta/login'),
               child: const Text('IR AL LOGIN'),
             ),
           ],
@@ -153,7 +154,8 @@ class _CustomerBikesPageState extends State<CustomerBikesPage>
           ),
           const SizedBox(height: 32),
           FilledButton.icon(
-            onPressed: () => context.go('/contacto'),
+            onPressed: () =>
+                PublicStoreLayout.navigateToHref(context, '/contacto'),
             icon: const Icon(Icons.contact_support_outlined),
             label: const Text('CONTACTAR TIENDA'),
             style: FilledButton.styleFrom(
@@ -174,8 +176,10 @@ class _CustomerBikesPageState extends State<CustomerBikesPage>
         return _BikeCard(
           bike: bike,
           onTap: () => _showBikeDetails(bike),
-          onViewServices: () =>
-              context.go('/cuenta/servicios?bike_id=${bike['id']}'),
+          onViewServices: () => PublicStoreLayout.navigateToHref(
+            context,
+            '/cuenta/servicios?bike_id=${bike['id']}',
+          ),
         );
       }).toList(),
     );
@@ -186,7 +190,13 @@ class _CustomerBikesPageState extends State<CustomerBikesPage>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _BikeDetailSheet(bike: bike),
+      builder: (context) => _BikeDetailSheet(
+        bike: bike,
+        onViewHistory: () => PublicStoreLayout.navigateToHref(
+          this.context,
+          '/cuenta/servicios?bike_id=${bike['id']}',
+        ),
+      ),
     );
   }
 }
@@ -426,8 +436,12 @@ class _BikeCard extends StatelessWidget {
 
 class _BikeDetailSheet extends StatelessWidget {
   final Map<String, dynamic> bike;
+  final VoidCallback onViewHistory;
 
-  const _BikeDetailSheet({required this.bike});
+  const _BikeDetailSheet({
+    required this.bike,
+    required this.onViewHistory,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -573,7 +587,7 @@ class _BikeDetailSheet extends StatelessWidget {
                     child: FilledButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
-                        context.go('/cuenta/servicios?bike_id=${bike['id']}');
+                        onViewHistory();
                       },
                       icon: const Icon(Icons.history),
                       label: const Text('VER HISTORIAL COMPLETO'),

@@ -5,9 +5,50 @@ import 'dart:async';
 
 import '../../modules/website/services/website_service.dart';
 import '../../shared/utils/web_url.dart';
+import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/meta_pixel_service.dart';
 import '../services/public_inventory_service.dart';
+
+/// Initializes the durable cart scope for a storefront tenant.
+///
+/// This is the single composition-root adapter between [CartProvider] and
+/// [PublicInventoryService]. Keeping the authoritative catalog loader here
+/// prevents the standalone storefront and the ERP-mounted storefront from
+/// drifting into different restore semantics.
+Future<void> restorePublicStoreCart(
+  BuildContext context, {
+  required String tenantId,
+}) {
+  return restorePublicStoreCartForTenant(
+    cartProvider: context.read<CartProvider>(),
+    inventoryService: context.read<PublicInventoryService>(),
+    tenantId: tenantId,
+  );
+}
+
+Future<void> restorePublicStoreCartForTenant({
+  required CartProvider cartProvider,
+  required PublicInventoryService inventoryService,
+  required String tenantId,
+}) async {
+  final normalizedTenantId = tenantId.trim();
+  if (normalizedTenantId.isEmpty) return;
+
+  await cartProvider.restore(
+    tenantId: normalizedTenantId,
+    loadProducts: (productIds) async {
+      if (productIds.isEmpty) return const [];
+      final page = await inventoryService.getProductPageForTenant(
+        tenantId: normalizedTenantId,
+        productIds: productIds,
+        onlyInStock: false,
+        limit: productIds.length,
+      );
+      return page.products;
+    },
+  );
+}
 
 /// SIMPLE bootstrap widget for public store
 ///
@@ -94,6 +135,7 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap>
 
     final tenantProvider = context.read<PublicStoreTenantProvider>();
     final websiteService = context.read<WebsiteService>();
+    final inventoryService = context.read<PublicInventoryService>();
 
     try {
       // Step 1: Detect tenant
@@ -111,6 +153,17 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap>
         _hideHtmlSplashAfterFrame();
         return;
       }
+
+      // Category publication is a public-navigation eligibility boundary, not
+      // merely catalog decoration. Start this preflight alongside the website
+      // load so the first visible header never offers category destinations
+      // before `show_on_website` can classify them.
+      final categoryPublicationPreflight =
+          inventoryService.getCategoriesForTenant(tenantId: tenantId);
+      final pagePublicationPreflight = websiteService.loadPagesForTenant(
+        tenantId,
+        rethrowErrors: true,
+      );
 
       // Step 2: Pre-populate from fresh sync cache for faster first paint.
       final didPreloadFromCache =
@@ -141,6 +194,26 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap>
           debugPrint('⚠️ [Bootstrap] Navigation preflight failed: $e');
         }
       }
+
+      try {
+        await categoryPublicationPreflight;
+      } catch (e) {
+        // With no retained snapshot the navigation projection fails closed for
+        // categories while preserving ordinary page/action destinations.
+        debugPrint('⚠️ [Bootstrap] Category publication preflight failed: $e');
+      }
+      try {
+        await pagePublicationPreflight;
+      } catch (e) {
+        // Editor-owned page destinations fail closed until an origin read
+        // confirms their current publication state.
+        debugPrint('⚠️ [Bootstrap] Page publication preflight failed: $e');
+      }
+
+      // Bring back a basket the visitor left behind. Revalidated against the
+      // live catalog, so it never restores a price or a quantity the shop can
+      // no longer honour. Off the critical path: the shell must not wait on it.
+      unawaited(_restoreSavedCart(tenantId));
 
       // Step 3: Allow the app to render immediately after tenant detection.
       setState(() {
@@ -176,6 +249,8 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap>
     final tenantId =
         context.read<PublicStoreTenantProvider>().tenantId?.trim() ?? '';
     if (tenantId.isEmpty) return;
+    final inventory = context.read<PublicInventoryService>();
+    final websiteService = context.read<WebsiteService>();
 
     final now = DateTime.now();
     final inventoryAge = _lastInventoryFreshnessPulse == null
@@ -192,22 +267,30 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap>
     try {
       if (inventoryDue) {
         _lastInventoryFreshnessPulse = now;
-        context
-            .read<PublicInventoryService>()
-            .markCacheStale(tenantId: tenantId);
+        inventory.markCacheStale(tenantId: tenantId);
+        // Refresh the category-publication snapshot as part of the same pulse.
+        // Product pages keep their own SWR loaders, while the shared shell
+        // needs this answer to update every navigation surface.
+        await inventory.getCategoriesForTenant(tenantId: tenantId);
       }
       if (websiteDue) {
         _lastWebsiteFreshnessPulse = now;
-        final websiteService = context.read<WebsiteService>();
         try {
-          await websiteService.loadPublicStoreDataUnified(
-            tenantId,
-            forceRefresh: true,
-          );
+          await Future.wait([
+            websiteService.loadPublicStoreDataUnified(
+              tenantId,
+              forceRefresh: true,
+            ),
+            websiteService.loadPagesForTenant(
+              tenantId,
+              rethrowErrors: true,
+            ),
+          ]);
         } finally {
-          // Unified data owns settings/navigation/home blocks. Route-owned CMS
-          // pages keep their current paint and revalidate their own joined
-          // page+blocks projection only when active.
+          // Unified data owns settings/navigation/home blocks. The page list
+          // owns which editor pages may appear anywhere in public navigation,
+          // while route-owned CMS pages revalidate their joined page+blocks
+          // projection only when active.
           websiteService.requestActiveCmsPageOriginRevalidation();
         }
       }
@@ -215,6 +298,14 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap>
       debugPrint('⚠️ [Bootstrap] Background freshness check failed: $error');
     } finally {
       _freshnessRefreshActive = false;
+    }
+  }
+
+  Future<void> _restoreSavedCart(String tenantId) async {
+    try {
+      await restorePublicStoreCart(context, tenantId: tenantId);
+    } catch (error) {
+      debugPrint('⚠️ [Bootstrap] Cart restore failed: $error');
     }
   }
 

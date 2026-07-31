@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import '../services/customer_account_service.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../theme/public_store_theme.dart';
+import '../widgets/public_store_layout.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 
@@ -76,7 +76,8 @@ class _CustomerAccountPageState extends State<CustomerAccountPage>
           const Text('Debes iniciar sesión para ver tu cuenta'),
           const SizedBox(height: 24),
           FilledButton(
-            onPressed: () => context.go('/login'),
+            onPressed: () =>
+                PublicStoreLayout.navigateToHref(context, '/cuenta/login'),
             child: const Text('INICIAR SESIÓN'),
           ),
           const SizedBox(height: 48),
@@ -117,10 +118,10 @@ class _CustomerAccountPageState extends State<CustomerAccountPage>
               IconButton(
                 icon: const Icon(Icons.logout, color: Colors.white),
                 onPressed: () async {
-                  await accountService.signOut();
-                  if (context.mounted) {
-                    context.go('/');
-                  }
+                  await PublicStoreLayout.signOutCustomer(
+                    context,
+                    accountService,
+                  );
                 },
                 tooltip: 'Cerrar sesión',
               ),
@@ -172,9 +173,10 @@ class _CustomerAccountPageState extends State<CustomerAccountPage>
                       ),
                       IconButton(
                         icon: const Icon(Icons.edit_outlined),
-                        onPressed: () {
-                          context.go('/cuenta/perfil');
-                        },
+                        onPressed: () => PublicStoreLayout.navigateToHref(
+                          context,
+                          '/cuenta/perfil',
+                        ),
                         tooltip: 'Editar perfil',
                       ),
                     ],
@@ -202,13 +204,19 @@ class _CustomerAccountPageState extends State<CustomerAccountPage>
                         icon: Icons.receipt_long_outlined,
                         title: 'Mis Pedidos',
                         subtitle: '${accountService.orders.length} pedidos',
-                        onTap: () => context.go('/cuenta/pedidos'),
+                        onTap: () => PublicStoreLayout.navigateToHref(
+                          context,
+                          '/cuenta/pedidos',
+                        ),
                       ),
                       _QuickActionCard(
                         icon: Icons.pedal_bike_outlined,
                         title: 'Mis Bicicletas',
                         subtitle: '${accountService.bikes.length} registradas',
-                        onTap: () => context.go('/cuenta/bicicletas'),
+                        onTap: () => PublicStoreLayout.navigateToHref(
+                          context,
+                          '/cuenta/bicicletas',
+                        ),
                       ),
                       _QuickActionCard(
                         icon: Icons.build_outlined,
@@ -220,26 +228,38 @@ class _CustomerAccountPageState extends State<CustomerAccountPage>
                             accountService.servicesAwaitingApproval.isNotEmpty
                                 ? accountService.servicesAwaitingApproval.length
                                 : null,
-                        onTap: () => context.go('/cuenta/servicios'),
+                        onTap: () => PublicStoreLayout.navigateToHref(
+                          context,
+                          '/cuenta/servicios',
+                        ),
                       ),
                       _QuickActionCard(
                         icon: Icons.location_on_outlined,
                         title: 'Direcciones',
                         subtitle:
                             '${accountService.addresses.length} guardadas',
-                        onTap: () => context.go('/cuenta/direcciones'),
+                        onTap: () => PublicStoreLayout.navigateToHref(
+                          context,
+                          '/cuenta/direcciones',
+                        ),
                       ),
                       _QuickActionCard(
                         icon: Icons.person_outline,
                         title: 'Perfil',
                         subtitle: 'Datos personales',
-                        onTap: () => context.go('/cuenta/perfil'),
+                        onTap: () => PublicStoreLayout.navigateToHref(
+                          context,
+                          '/cuenta/perfil',
+                        ),
                       ),
                       _QuickActionCard(
                         icon: Icons.chat_bubble_outline,
                         title: 'Ayuda',
                         subtitle: 'Mensajes y Soporte',
-                        onTap: () => context.go('/tienda/cuenta/chats'),
+                        onTap: () => PublicStoreLayout.navigateToHref(
+                          context,
+                          '/tienda/cuenta/chats',
+                        ),
                       ),
                     ],
                   );
@@ -278,7 +298,10 @@ class _CustomerAccountPageState extends State<CustomerAccountPage>
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton.tonal(
-                          onPressed: () => context.go('/cuenta/servicios'),
+                          onPressed: () => PublicStoreLayout.navigateToHref(
+                            context,
+                            '/cuenta/servicios',
+                          ),
                           child: const Text('VER PRESUPUESTOS'),
                         ),
                       ),
@@ -298,7 +321,10 @@ class _CustomerAccountPageState extends State<CustomerAccountPage>
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     TextButton(
-                      onPressed: () => context.go('/cuenta/servicios'),
+                      onPressed: () => PublicStoreLayout.navigateToHref(
+                        context,
+                        '/cuenta/servicios',
+                      ),
                       child: const Text('VER TODOS'),
                     ),
                   ],
@@ -328,7 +354,10 @@ class _CustomerAccountPageState extends State<CustomerAccountPage>
                         '${service['job_number']} • ${_getServiceStatusText(service['status'])}',
                       ),
                       trailing: const Icon(Icons.chevron_right),
-                      onTap: () => context.go('/cuenta/servicios'),
+                      onTap: () => PublicStoreLayout.navigateToHref(
+                        context,
+                        '/cuenta/servicios',
+                      ),
                     ),
                   );
                 }),
@@ -345,7 +374,10 @@ class _CustomerAccountPageState extends State<CustomerAccountPage>
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     TextButton(
-                      onPressed: () => context.go('/cuenta/pedidos'),
+                      onPressed: () => PublicStoreLayout.navigateToHref(
+                        context,
+                        '/cuenta/pedidos',
+                      ),
                       child: const Text('VER TODOS'),
                     ),
                   ],
@@ -368,9 +400,10 @@ class _CustomerAccountPageState extends State<CustomerAccountPage>
                         '${ChileanUtils.formatCurrency(order.total)} • ${_getStatusText(order.status)}',
                       ),
                       trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        context.go('/pedido/${order.id}');
-                      },
+                      onTap: () => PublicStoreLayout.navigateToHref(
+                        context,
+                        '/pedido/${order.id}',
+                      ),
                     ),
                   );
                 }),

@@ -1,7 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'order_confirmation_pdf.dart' deferred as order_pdf;
@@ -11,8 +12,10 @@ import '../providers/public_store_tenant_provider.dart';
 import '../providers/cart_provider.dart';
 import '../models/storefront_tax_summary.dart';
 import '../models/order_confirmation_policy.dart';
+import '../services/cart_store.dart';
+import '../services/checkout_session_store.dart';
 import '../services/meta_pixel_service.dart';
-import '../services/public_order_access_token_store.dart';
+import '../widgets/public_store_layout.dart';
 import '../../modules/website/services/mercadopago_service.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/models/website_models.dart';
@@ -28,7 +31,29 @@ class OrderConfirmationPage extends StatefulWidget {
     super.key,
     required this.orderId,
     this.paymentStatus,
+    this.callbackUriProvider,
+    this.orderLoadDelay = const Duration(milliseconds: 800),
   });
+
+  /// Injectable only so same-State query transitions are deterministic in
+  /// widget tests. Production always reads a fresh [Uri.base].
+  @visibleForTesting
+  final Uri Function()? callbackUriProvider;
+
+  @visibleForTesting
+  final Duration orderLoadDelay;
+
+  @visibleForTesting
+  static void clearCachesForTesting() {
+    _OrderConfirmationCache.processedCallbackIdentities.clear();
+    _OrderConfirmationCache.callbackClaims.clear();
+    _OrderConfirmationCache.callbackResults.clear();
+    _OrderConfirmationCache.loadedOrders.clear();
+    _OrderConfirmationCache.inFlightOrderLoads.clear();
+    _OrderConfirmationCache.orderLoadGenerations.clear();
+    _OrderConfirmationCache.loadErrors.clear();
+    _OrderConfirmationCache.cartPreservationWarningOrderIds.clear();
+  }
 
   @override
   State<OrderConfirmationPage> createState() => _OrderConfirmationPageState();
@@ -36,11 +61,59 @@ class OrderConfirmationPage extends StatefulWidget {
 
 // Static cache to persist state across widget rebuilds during provider notifications
 class _OrderConfirmationCache {
-  static final Set<String> processedOrderIds = {};
+  static final Set<String> processedCallbackIdentities = {};
+  static final Map<String, Future<_CallbackResult>> callbackClaims = {};
+  static final Map<String, _CallbackResult> callbackResults = {};
   static final Map<String, OnlineOrder> loadedOrders = {};
-  static final Set<String> currentlyLoading = {};
+  static final Map<String, _OrderLoadTicket> inFlightOrderLoads = {};
+  static final Map<String, int> orderLoadGenerations = {};
   static final Map<String, String?> loadErrors = {};
-  static final Map<String, String?> paymentMessages = {};
+  static final Set<String> cartPreservationWarningOrderIds = {};
+}
+
+class _OrderLoadTicket {
+  const _OrderLoadTicket({
+    required this.generation,
+    required this.future,
+  });
+
+  final int generation;
+  final Future<void> future;
+}
+
+class _CallbackObservation {
+  const _CallbackObservation({
+    required this.orderId,
+    required this.orderAccessToken,
+    required this.routeEpoch,
+    required this.rawStatus,
+    required this.statusGroup,
+    required this.paymentId,
+    required this.identity,
+  });
+
+  final String orderId;
+  final String orderAccessToken;
+  final int routeEpoch;
+  final String? rawStatus;
+  final String? statusGroup;
+  final String paymentId;
+  final String? identity;
+}
+
+enum _CallbackProcessingOutcome {
+  completed,
+  retryableFailure,
+}
+
+class _CallbackResult {
+  const _CallbackResult({
+    required this.outcome,
+    required this.message,
+  });
+
+  final _CallbackProcessingOutcome outcome;
+  final String? message;
 }
 
 enum _PaymentPresentation {
@@ -59,13 +132,24 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
   static const Color _warmSurface = Color(0xFFF7F4EE);
   static const Color _softSurface = Color(0xFFFCFBF8);
   static const Color _successGreen = Color(0xFF10B981);
+  static const String _cartPreservationWarningText =
+      'Tu pedido se completó. Revisa tu carrito: puede que aún contenga '
+      'artículos comprados.';
 
   OnlineOrder? _order;
   bool _isLoading = true;
   bool _isRetryingPayment = false;
+  bool _showCartPreservationWarning = false;
+  bool _isAcknowledgingCartPreservationWarning = false;
   String? _error;
   String? _paymentMessage;
   String? _orderAccessToken;
+  String? _confirmationTenantId;
+  String? _lastObservedPaymentStatus;
+  String? _lastObservedPaymentId;
+  String? _lastObservedCallbackIdentity;
+  int _routeEpoch = 0;
+  int _initializationGeneration = 0;
 
   // Keep this page alive in memory to prevent reloading on navigation
   @override
@@ -76,53 +160,157 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     super.initState();
     debugPrint(
         '🎉 [OrderConfirmationPage] initState() - orderId: ${widget.orderId}, status: ${widget.paymentStatus}');
+    _showCartPreservationWarning = _OrderConfirmationCache
+        .cartPreservationWarningOrderIds
+        .contains(widget.orderId);
 
+    _orderAccessToken = null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadWebsiteSettings();
+      unawaited(_initializeCurrentOrderRoute());
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant OrderConfirmationPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.orderId != widget.orderId) {
+      _orderAccessToken = null;
+      _order = null;
+      _paymentMessage = null;
+      _confirmationTenantId = null;
+      _showCartPreservationWarning = _OrderConfirmationCache
+          .cartPreservationWarningOrderIds
+          .contains(widget.orderId);
+      _isAcknowledgingCartPreservationWarning = false;
+      _error = null;
+      _isLoading = true;
+      _lastObservedPaymentStatus = null;
+      _lastObservedPaymentId = null;
+      _lastObservedCallbackIdentity = null;
+      unawaited(_initializeCurrentOrderRoute());
+      return;
+    }
+    _evaluateObservedRoute();
+  }
+
+  Future<void> _initializeCurrentOrderRoute() async {
+    final generation = ++_initializationGeneration;
+    final orderId = widget.orderId;
+    final tenantProvider = context.read<PublicStoreTenantProvider>();
+    final store = context.read<CheckoutSessionStore>();
+
+    final tenantId = await _resolveTenantIdFrom(tenantProvider);
+    if (!_ownsInitialization(orderId, generation) ||
+        tenantId == null ||
+        tenantId.isEmpty) {
+      if (_ownsInitialization(orderId, generation)) {
+        setState(() {
+          _error = 'No pudimos identificar la tienda de este pedido.';
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+
+    String? token;
+    var showPreservationWarning = _OrderConfirmationCache
+        .cartPreservationWarningOrderIds
+        .contains(orderId);
+    try {
+      final durableAccess = await store.readOrderAccess(
+        tenantId: tenantId,
+        orderId: orderId,
+      );
+      token = durableAccess?.accessToken;
+      final snapshot = await store.read(tenantId);
+      if (snapshot?.receipt?.orderId == orderId) {
+        final receipt = snapshot!.receipt!;
+        // The protected exact-order receipt is authoritative over a stale
+        // process/session cache left by an earlier route instance.
+        token = receipt.accessToken;
+        await store.saveOrderAccess(
+          tenantId: tenantId,
+          access: receipt,
+        );
+      }
+      final cartOutcome = await store.settleCartOutcomeForPresentation(
+        tenantId: tenantId,
+        orderId: orderId,
+      );
+      if (cartOutcome != null) {
+        showPreservationWarning = cartOutcome.showsWarning;
+        if (showPreservationWarning) {
+          _OrderConfirmationCache.cartPreservationWarningOrderIds.add(orderId);
+        } else {
+          _OrderConfirmationCache.cartPreservationWarningOrderIds
+              .remove(orderId);
+        }
+      }
+    } catch (error) {
+      debugPrint(
+        '🎉 [OrderConfirmationPage] Secure checkout recovery read failed.',
+      );
+      // Never hide a possible preserved outcome just because its durable
+      // backend is temporarily unavailable.
+      showPreservationWarning = true;
+      if (token == null && _ownsInitialization(orderId, generation)) {
+        setState(() {
+          _confirmationTenantId = tenantId;
+          _showCartPreservationWarning = true;
+          _error = 'No pudimos abrir la recuperación segura de este pedido. '
+              'Reinicia la aplicación e inténtalo nuevamente.';
+          _isLoading = false;
+        });
+        return;
+      }
+    }
+
+    if (!_ownsInitialization(orderId, generation)) return;
+    if (token == null) {
+      setState(() {
+        _confirmationTenantId = tenantId;
+        _showCartPreservationWarning = showPreservationWarning;
+        _error =
+            'Esta sesión no tiene acceso a ese pedido. Vuelve al checkout o abre el enlace seguro enviado por la tienda.';
+        _isLoading = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _confirmationTenantId = tenantId;
+      _orderAccessToken = token;
+      _showCartPreservationWarning = showPreservationWarning;
+      _error = null;
     });
 
-    _orderAccessToken = PublicOrderAccessTokenStore.read(widget.orderId);
-    if (_orderAccessToken == null) {
-      _error =
-          'Esta sesión no tiene acceso a ese pedido. Vuelve al checkout o abre el enlace seguro enviado por la tienda.';
-      _isLoading = false;
-      return;
-    }
-
-    // Check if order is already cached (survives widget rebuilds)
-    if (_OrderConfirmationCache.loadedOrders.containsKey(widget.orderId)) {
-      debugPrint('🎉 [OrderConfirmationPage] Using cached order data');
-      _order = _OrderConfirmationCache.loadedOrders[widget.orderId];
-      _paymentMessage = _OrderConfirmationCache.paymentMessages[widget.orderId];
-      _error = _OrderConfirmationCache.loadErrors[widget.orderId];
-      _isLoading = false;
-      return;
-    }
-
-    // Check if this order was already processed (prevents duplicate on page rebuild)
-    if (_OrderConfirmationCache.processedOrderIds.contains(widget.orderId)) {
+    unawaited(_loadWebsiteSettingsForTenant(tenantId));
+    try {
+      await _finalizeTransferCheckoutSessionOnEntry(
+        orderId: orderId,
+        tenantId: tenantId,
+        store: store,
+      );
+    } catch (error) {
       debugPrint(
-          '🎉 [OrderConfirmationPage] Order already processed, skipping callback');
-      // Check if another instance is already loading
-      if (!_OrderConfirmationCache.currentlyLoading.contains(widget.orderId)) {
-        _loadOrder();
-      } else {
-        debugPrint(
-            '🎉 [OrderConfirmationPage] Another instance is loading, waiting...');
-        _waitForLoading();
+        '🎉 [OrderConfirmationPage] Transfer checkout finalization failed.',
+      );
+      if (_ownsInitialization(orderId, generation)) {
+        setState(() => _showCartPreservationWarning = true);
       }
-    } else {
-      _handleMercadoPagoCallback();
+    }
+    if (_ownsInitialization(orderId, generation)) {
+      _evaluateObservedRoute(force: true);
     }
   }
 
-  Future<void> _loadWebsiteSettings() async {
-    try {
-      final tenantId = await _resolveTenantId(
-        timeout: const Duration(seconds: 4),
-      );
-      if (!mounted || tenantId == null) return;
+  bool _ownsInitialization(String orderId, int generation) =>
+      mounted &&
+      widget.orderId == orderId &&
+      _initializationGeneration == generation;
 
+  Future<void> _loadWebsiteSettingsForTenant(String tenantId) async {
+    try {
       await context.read<WebsiteService>().loadSettingsForTenant(tenantId);
     } catch (e) {
       debugPrint(
@@ -130,11 +318,11 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     }
   }
 
-  Future<String?> _resolveTenantId({
+  Future<String?> _resolveTenantIdFrom(
+    PublicStoreTenantProvider tenantProvider, {
     Duration timeout = const Duration(seconds: 8),
   }) async {
     final startedAt = DateTime.now();
-    final tenantProvider = context.read<PublicStoreTenantProvider>();
 
     while (mounted && DateTime.now().difference(startedAt) < timeout) {
       final tenantId = tenantProvider.tenantId;
@@ -158,136 +346,399 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     return tenantProvider.tenantId;
   }
 
-  /// Wait for another instance to finish loading, then use cached data
-  Future<void> _waitForLoading() async {
-    // Poll until loading is complete
-    while (_OrderConfirmationCache.currentlyLoading.contains(widget.orderId)) {
-      await Future.delayed(const Duration(milliseconds: 100));
-      if (!mounted) return;
-    }
-
-    final cachedOrder = _OrderConfirmationCache.loadedOrders[widget.orderId];
-    final cachedError = _OrderConfirmationCache.loadErrors[widget.orderId];
-
-    if (cachedOrder == null && cachedError == null) {
-      debugPrint(
-          '🎉 [OrderConfirmationPage] Loader finished without cache, retrying from active instance...');
-      await _loadOrder();
+  Future<void> _finalizeTransferCheckoutSessionOnEntry({
+    required String orderId,
+    required String tenantId,
+    required CheckoutSessionStore store,
+  }) async {
+    final snapshot = await store.read(tenantId);
+    if (snapshot?.receipt?.orderId != orderId ||
+        snapshot!.handoff.paymentMethod != 'transfer') {
       return;
     }
 
-    // Use cached data
-    if (mounted) {
-      setState(() {
-        _order = cachedOrder;
-        _paymentMessage =
-            _OrderConfirmationCache.paymentMessages[widget.orderId];
-        _error = cachedError;
-        _isLoading = false;
-      });
+    // A transfer has no provider callback that can close the checkout later.
+    // Complete (or durably preserve) the one-shot cart outcome now, then
+    // retire only the receipt belonging to this confirmation route.
+    await _consumeCheckoutCartIfNeeded(
+      tenantId,
+      orderId: orderId,
+      store: store,
+    );
+
+    await store.takeTransferReceiptIfMatches(
+      tenantId: tenantId,
+      orderId: orderId,
+      requireTerminalCartOutcome: true,
+    );
+  }
+
+  _CallbackObservation _observeCallback({required int routeEpoch}) {
+    final rawStatus = widget.paymentStatus?.trim().toLowerCase();
+    final statusGroup = switch (rawStatus) {
+      'success' || 'approved' => 'approved',
+      'pending' || 'in_process' => 'pending',
+      'failure' || 'failed' || 'rejected' => 'failure',
+      _ => null,
+    };
+    final uri = widget.callbackUriProvider?.call() ?? Uri.base;
+    final paymentId = (uri.queryParameters['payment_id'] ??
+            uri.queryParameters['collection_id'] ??
+            '')
+        .trim();
+    final identity = statusGroup == null
+        ? null
+        : '${widget.orderId}\u0000$statusGroup\u0000$paymentId';
+    return _CallbackObservation(
+      orderId: widget.orderId,
+      orderAccessToken: _orderAccessToken!,
+      routeEpoch: routeEpoch,
+      rawStatus: rawStatus,
+      statusGroup: statusGroup,
+      paymentId: paymentId,
+      identity: identity,
+    );
+  }
+
+  void _evaluateObservedRoute({bool force = false}) {
+    if (!mounted || _orderAccessToken == null) return;
+    var observation = _observeCallback(routeEpoch: _routeEpoch);
+    final changed = force ||
+        observation.rawStatus != _lastObservedPaymentStatus ||
+        observation.paymentId != _lastObservedPaymentId ||
+        observation.identity != _lastObservedCallbackIdentity;
+    if (!changed) return;
+
+    _routeEpoch++;
+    observation = _observeCallback(routeEpoch: _routeEpoch);
+    _lastObservedPaymentStatus = observation.rawStatus;
+    _lastObservedPaymentId = observation.paymentId;
+    _lastObservedCallbackIdentity = observation.identity;
+
+    if (observation.identity == null) {
+      if (_OrderConfirmationCache.loadedOrders
+              .containsKey(observation.orderId) ||
+          _OrderConfirmationCache.loadErrors.containsKey(observation.orderId)) {
+        _applyCachedOrderState(
+          orderId: observation.orderId,
+          routeEpoch: observation.routeEpoch,
+          callbackIdentity: null,
+        );
+      } else {
+        unawaited(
+          _loadOrder(
+            orderId: observation.orderId,
+            orderAccessToken: observation.orderAccessToken,
+            routeEpoch: observation.routeEpoch,
+            callbackIdentity: null,
+          ),
+        );
+      }
+      return;
+    }
+
+    unawaited(_handleObservedCallback(observation));
+  }
+
+  Future<void> _handleObservedCallback(
+    _CallbackObservation observation,
+  ) async {
+    final identity = observation.identity!;
+    if (_OrderConfirmationCache.processedCallbackIdentities
+        .contains(identity)) {
+      await _loadOrder(
+        orderId: observation.orderId,
+        orderAccessToken: observation.orderAccessToken,
+        routeEpoch: observation.routeEpoch,
+        callbackIdentity: identity,
+      );
+      return;
+    }
+
+    final existingClaim = _OrderConfirmationCache.callbackClaims[identity];
+    if (existingClaim != null) {
+      final existingResult = await existingClaim;
+      _releaseRetryableCallbackObservation(
+        identity: identity,
+        routeEpoch: observation.routeEpoch,
+        result: existingResult,
+      );
+      if (mounted) {
+        await _loadOrder(
+          orderId: observation.orderId,
+          orderAccessToken: observation.orderAccessToken,
+          routeEpoch: observation.routeEpoch,
+          callbackIdentity: identity,
+        );
+      }
+      return;
+    }
+
+    // Claim synchronously before the first await. A second State observing the
+    // same callback can only wait for this exact event.
+    final claim = Completer<_CallbackResult>();
+    _OrderConfirmationCache.callbackClaims[identity] = claim.future;
+    late _CallbackResult result;
+    try {
+      result = await _runClaimedCallback(observation);
+    } catch (error) {
+      result = const _CallbackResult(
+        outcome: _CallbackProcessingOutcome.retryableFailure,
+        message:
+            'Estamos confirmando tu pago. Si ya fue aprobado, el pedido se actualizará en unos segundos.',
+      );
+      _OrderConfirmationCache.callbackResults[identity] = result;
+    } finally {
+      _releaseRetryableCallbackObservation(
+        identity: identity,
+        routeEpoch: observation.routeEpoch,
+        result: result,
+      );
+      if (identical(
+        _OrderConfirmationCache.callbackClaims[identity],
+        claim.future,
+      )) {
+        _OrderConfirmationCache.callbackClaims.remove(identity);
+      }
+      claim.complete(result);
     }
   }
 
-  /// Handle MercadoPago callback when returning from payment
-  Future<void> _handleMercadoPagoCallback() async {
-    final status = widget.paymentStatus;
+  void _releaseRetryableCallbackObservation({
+    required String identity,
+    required int routeEpoch,
+    required _CallbackResult result,
+  }) {
+    if (result.outcome == _CallbackProcessingOutcome.retryableFailure &&
+        mounted &&
+        routeEpoch == _routeEpoch &&
+        _lastObservedCallbackIdentity == identity) {
+      // A later didUpdate/re-navigation with the identical URI must be able to
+      // claim the event again regardless of which pre-processing step failed.
+      _lastObservedCallbackIdentity = null;
+    }
+  }
 
-    if (status == null || status.isEmpty) {
-      // No payment callback, just load the order
-      _loadOrder();
-      return;
+  Future<_CallbackResult> _runClaimedCallback(
+    _CallbackObservation observation,
+  ) async {
+    final identity = observation.identity!;
+    final websiteService = context.read<WebsiteService>();
+    final orderLoadDelay = widget.orderLoadDelay;
+    final callbackStatus = observation.rawStatus;
+    _invalidateCachedOrder(
+      observation.orderId,
+      supersedeInFlightLoad: true,
+    );
+
+    late _CallbackResult result;
+    try {
+      result = await _processCallback(observation);
+    } catch (error) {
+      debugPrint(
+        '🎉 [OrderConfirmationPage] Error processing callback: $error',
+      );
+      result = const _CallbackResult(
+        outcome: _CallbackProcessingOutcome.retryableFailure,
+        message:
+            'Estamos confirmando tu pago. Si ya fue aprobado, el pedido se actualizará en unos segundos.',
+      );
     }
 
+    if (result.outcome == _CallbackProcessingOutcome.completed) {
+      _OrderConfirmationCache.processedCallbackIdentities.add(identity);
+    }
+    _OrderConfirmationCache.callbackResults[identity] = result;
+    // Every observed callback invalidates stale order state and owns a fresh
+    // generation. A pre-existing no-status load cannot satisfy this refresh.
+    await _loadOrder(
+      orderId: observation.orderId,
+      orderAccessToken: observation.orderAccessToken,
+      routeEpoch: observation.routeEpoch,
+      callbackIdentity: identity,
+      forceRefresh: true,
+      capturedWebsiteService: websiteService,
+      capturedDelay: orderLoadDelay,
+      capturedCallbackStatus: callbackStatus,
+    );
+    return result;
+  }
+
+  Future<_CallbackResult> _processCallback(
+    _CallbackObservation observation,
+  ) async {
     debugPrint(
-        '🎉 [OrderConfirmationPage] Processing MercadoPago callback: status=$status');
+      '🎉 [OrderConfirmationPage] Processing Mercado Pago callback: '
+      'status=${observation.rawStatus}, payment=${observation.paymentId}',
+    );
 
-    if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-    });
-
-    var callbackProcessed = false;
-
-    try {
-      // Get payment_id from URL query params (MercadoPago adds it)
-      String? paymentId;
-      if (kIsWeb) {
-        final params = Uri.base.queryParameters;
-        paymentId = params['payment_id'] ?? params['collection_id'];
-        debugPrint(
-            '🎉 [OrderConfirmationPage] Payment ID from URL: $paymentId');
-      }
-
-      if (status == 'success' || status == 'approved') {
-        // Payment successful - update order status
-        debugPrint(
-            '🎉 [OrderConfirmationPage] Payment SUCCESS - processing...');
-
-        final mercadopagoService =
-            Provider.of<MercadoPagoService>(context, listen: false);
-        final tenantId = await _resolveTenantId();
-
-        if (tenantId == null || tenantId.isEmpty) {
-          throw Exception(
-              'No se pudo detectar la tienda para verificar el pago.');
+    switch (observation.statusGroup) {
+      case 'pending':
+        return const _CallbackResult(
+          outcome: _CallbackProcessingOutcome.completed,
+          message:
+              'Tu pago está pendiente de confirmación. Te notificaremos cuando se procese.',
+        );
+      case 'failure':
+        return const _CallbackResult(
+          outcome: _CallbackProcessingOutcome.completed,
+          message: 'El pago no se completó. Puedes intentar nuevamente.',
+        );
+      case 'approved':
+        if (observation.paymentId.isEmpty) {
+          return const _CallbackResult(
+            outcome: _CallbackProcessingOutcome.retryableFailure,
+            message:
+                'MercadoPago no devolvió un identificador de pago. Revisaremos el pedido y te contactaremos si el pago se acredita.',
+          );
         }
 
+        // Capture all effect owners before the first await. A later route
+        // update cannot retarget this callback to another order or token.
+        final tenantProvider = context.read<PublicStoreTenantProvider>();
+        final mercadopagoService = context.read<MercadoPagoService>();
+        final checkoutStore = context.read<CheckoutSessionStore>();
+        final cartProvider = context.read<CartProvider>();
+        final tenantId = await _resolveTenantIdFrom(tenantProvider);
+        if (tenantId == null || tenantId.isEmpty) {
+          throw StateError(
+            'No se pudo detectar la tienda para verificar el pago.',
+          );
+        }
         await mercadopagoService.initialize(tenantId: tenantId);
 
-        if (paymentId == null || paymentId.isEmpty) {
-          _paymentMessage =
-              'MercadoPago no devolvió un identificador de pago. Revisaremos el pedido y te contactaremos si el pago se acredita.';
-          callbackProcessed = true;
-          await _loadOrder();
-          return;
-        }
-
         final payment = await mercadopagoService.getPaymentStatus(
-          paymentId,
-          orderId: widget.orderId,
-          orderAccessToken: _orderAccessToken!,
+          observation.paymentId,
+          orderId: observation.orderId,
+          orderAccessToken: observation.orderAccessToken,
         );
-        final paymentStatus = payment?['status']?.toString();
-        final paymentOrderId = payment?['order_id']?.toString();
-
-        if (payment == null ||
-            paymentStatus != 'approved' ||
-            paymentOrderId != widget.orderId) {
-          _paymentMessage =
-              'MercadoPago todavía no confirmó el pago. Te notificaremos cuando se procese.';
-          callbackProcessed = true;
-          await _loadOrder();
-          return;
+        final paymentStatus =
+            payment?['status']?.toString().trim().toLowerCase();
+        final paymentOrderId = payment?['order_id']?.toString().trim();
+        if (paymentStatus != 'approved' ||
+            paymentOrderId != observation.orderId) {
+          return const _CallbackResult(
+            outcome: _CallbackProcessingOutcome.retryableFailure,
+            message:
+                'MercadoPago todavía no confirmó el pago. Te notificaremos cuando se procese.',
+          );
         }
 
-        _paymentMessage = '¡Pago exitoso! Tu pedido está siendo procesado.';
-        callbackProcessed = true;
+        await _consumeCheckoutCartIfNeeded(
+          tenantId,
+          orderId: observation.orderId,
+          store: checkoutStore,
+          cartProvider: cartProvider,
+        );
 
-        // Clear the cart
-        if (mounted) {
-          final cart = Provider.of<CartProvider>(context, listen: false);
-          cart.clear();
-        }
-      } else if (status == 'pending' || status == 'in_process') {
-        _paymentMessage =
-            'Tu pago está pendiente de confirmación. Te notificaremos cuando se procese.';
-        callbackProcessed = true;
-      } else if (status == 'failure' || status == 'rejected') {
-        _paymentMessage = 'El pago no se completó. Puedes intentar nuevamente.';
-        callbackProcessed = true;
+        // Only provider verification bound to this exact order may retire its
+        // Mercado Pago recovery receipt.
+        await checkoutStore.clearReceiptIfMatches(
+          tenantId: tenantId,
+          orderId: observation.orderId,
+          requireTerminalCartOutcome: true,
+        );
+        return const _CallbackResult(
+          outcome: _CallbackProcessingOutcome.completed,
+          message: '¡Pago exitoso! Tu pedido está siendo procesado.',
+        );
+      default:
+        return const _CallbackResult(
+          outcome: _CallbackProcessingOutcome.retryableFailure,
+          message: null,
+        );
+    }
+  }
+
+  void _invalidateCachedOrder(
+    String orderId, {
+    bool supersedeInFlightLoad = false,
+  }) {
+    _OrderConfirmationCache.loadedOrders.remove(orderId);
+    _OrderConfirmationCache.loadErrors.remove(orderId);
+    if (supersedeInFlightLoad) {
+      _OrderConfirmationCache.orderLoadGenerations[orderId] =
+          (_OrderConfirmationCache.orderLoadGenerations[orderId] ?? 0) + 1;
+    }
+  }
+
+  Future<void> _consumeCheckoutCartIfNeeded(
+    String tenantId, {
+    required String orderId,
+    required CheckoutSessionStore store,
+    CartProvider? cartProvider,
+  }) async {
+    // Capture the provider before any await so a later route transition cannot
+    // make this durable effect depend on a disposed BuildContext.
+    final activeCartProvider = cartProvider ?? context.read<CartProvider>();
+    final outcome = await store.consumeCartOnce(
+      tenantId: tenantId,
+      orderId: orderId,
+      consume: (snapshot) async {
+        final revision = snapshot.cartRevision;
+        if (revision == null || revision.isEmpty) return false;
+        final orderedLines = snapshot.orderItems
+            .map(
+              (item) => PersistedCartLine(
+                productId: item['product_id'].toString(),
+                quantity: item['quantity'] as int,
+              ),
+            )
+            .toList(growable: false);
+        final result = await activeCartProvider.consumeOrderedLines(
+          tenantId: tenantId,
+          orderedLines: orderedLines,
+          expectedRevision: revision,
+        );
+        return result.applied;
+      },
+    );
+    final showWarning = outcome.showsWarning;
+    if (showWarning) {
+      _OrderConfirmationCache.cartPreservationWarningOrderIds.add(orderId);
+    } else {
+      _OrderConfirmationCache.cartPreservationWarningOrderIds.remove(orderId);
+    }
+    if (!mounted ||
+        widget.orderId != orderId ||
+        _showCartPreservationWarning == showWarning) {
+      return;
+    }
+    setState(() => _showCartPreservationWarning = showWarning);
+  }
+
+  Future<void> _acknowledgeCartPreservationWarning() async {
+    if (_isAcknowledgingCartPreservationWarning) return;
+    final tenantId = _confirmationTenantId;
+    final orderId = widget.orderId;
+    if (tenantId == null || tenantId.isEmpty) return;
+
+    final store = context.read<CheckoutSessionStore>();
+    setState(() => _isAcknowledgingCartPreservationWarning = true);
+    try {
+      await store.acknowledgeCartPreservationWarning(
+        tenantId: tenantId,
+        orderId: orderId,
+      );
+      _OrderConfirmationCache.cartPreservationWarningOrderIds.remove(orderId);
+      if (mounted && widget.orderId == orderId) {
+        setState(() => _showCartPreservationWarning = false);
       }
-    } catch (e) {
-      debugPrint('🎉 [OrderConfirmationPage] Error processing callback: $e');
-      _paymentMessage =
-          'Estamos confirmando tu pago. Si ya fue aprobado, el pedido se actualizará en unos segundos.';
+    } catch (error) {
+      if (mounted && widget.orderId == orderId) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No pudimos confirmar el aviso. Inténtalo nuevamente.',
+            ),
+          ),
+        );
+      }
     } finally {
-      if (callbackProcessed) {
-        _OrderConfirmationCache.processedOrderIds.add(widget.orderId);
+      if (mounted && widget.orderId == orderId) {
+        setState(() => _isAcknowledgingCartPreservationWarning = false);
       }
     }
-
-    // Load the order regardless of payment processing result
-    await _loadOrder();
   }
 
   bool _canRetryMercadoPago(OnlineOrder order) {
@@ -311,8 +762,13 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     final mercadopagoService = context.read<MercadoPagoService>();
 
     try {
-      final orderAccessToken =
-          _orderAccessToken ?? PublicOrderAccessTokenStore.read(widget.orderId);
+      final durableAccess = _orderAccessToken == null
+          ? await context.read<CheckoutSessionStore>().readOrderAccess(
+                tenantId: tenantId,
+                orderId: widget.orderId,
+              )
+          : null;
+      final orderAccessToken = _orderAccessToken ?? durableAccess?.accessToken;
       if (orderAccessToken == null) {
         throw Exception('La sesión segura del pedido venció.');
       }
@@ -345,17 +801,26 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
         if (!await canLaunchUrl(url)) {
           throw Exception('No se pudo abrir MercadoPago.');
         }
-        await launchUrl(url, mode: LaunchMode.externalApplication);
+        final launched = await launchUrl(
+          url,
+          mode: LaunchMode.externalApplication,
+        );
+        if (!launched) {
+          throw Exception('No se pudo abrir MercadoPago.');
+        }
       }
     } catch (error) {
       debugPrint('MercadoPago retry failed: $error');
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('No pudimos reintentar el pago: $error'),
+        const SnackBar(
+          content: Text(
+            'No pudimos reintentar el pago. '
+            'Inténtalo nuevamente en unos minutos.',
+          ),
           backgroundColor: Colors.red,
-          duration: const Duration(seconds: 8),
+          duration: Duration(seconds: 8),
         ),
       );
     } finally {
@@ -365,131 +830,205 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     }
   }
 
-  Future<void> _loadOrder() async {
-    debugPrint('🎉 [OrderConfirmationPage] _loadOrder() started');
-
-    // Check if already loading (another instance might be doing it)
-    if (_OrderConfirmationCache.currentlyLoading.contains(widget.orderId)) {
-      debugPrint(
-          '🎉 [OrderConfirmationPage] Already loading in another instance, waiting...');
-      await _waitForLoading();
+  Future<void> _loadOrder({
+    required String orderId,
+    required String orderAccessToken,
+    required int routeEpoch,
+    required String? callbackIdentity,
+    bool forceRefresh = false,
+    WebsiteService? capturedWebsiteService,
+    Duration? capturedDelay,
+    String? capturedCallbackStatus,
+  }) async {
+    if (!forceRefresh &&
+        (_OrderConfirmationCache.loadedOrders.containsKey(orderId) ||
+            _OrderConfirmationCache.loadErrors.containsKey(orderId))) {
+      _applyCachedOrderState(
+        orderId: orderId,
+        routeEpoch: routeEpoch,
+        callbackIdentity: callbackIdentity,
+      );
       return;
     }
 
-    // Check if already cached
-    if (_OrderConfirmationCache.loadedOrders.containsKey(widget.orderId)) {
-      debugPrint('🎉 [OrderConfirmationPage] Using cached order');
-      if (mounted) {
-        setState(() {
-          _order = _OrderConfirmationCache.loadedOrders[widget.orderId];
-          _paymentMessage =
-              _OrderConfirmationCache.paymentMessages[widget.orderId];
-          _error = _OrderConfirmationCache.loadErrors[widget.orderId];
-          _isLoading = false;
-        });
+    var ticket = _OrderConfirmationCache.inFlightOrderLoads[orderId];
+    if (forceRefresh || ticket == null) {
+      WebsiteService websiteService;
+      try {
+        websiteService =
+            capturedWebsiteService ?? context.read<WebsiteService>();
+      } catch (error) {
+        _OrderConfirmationCache.loadErrors[orderId] =
+            'Error al cargar el pedido: $error';
+        _applyCachedOrderState(
+          orderId: orderId,
+          routeEpoch: routeEpoch,
+          callbackIdentity: callbackIdentity,
+        );
+        return;
       }
-      return;
+      ticket = _startOrderLoad(
+        orderId: orderId,
+        orderAccessToken: orderAccessToken,
+        websiteService: websiteService,
+        delay: capturedDelay ?? widget.orderLoadDelay,
+        callbackStatus: capturedCallbackStatus ?? widget.paymentStatus,
+      );
     }
 
-    // Mark as loading
-    _OrderConfirmationCache.currentlyLoading.add(widget.orderId);
-
-    if (mounted) {
+    if (_ownsRouteEpoch(orderId, routeEpoch)) {
       setState(() {
         _isLoading = true;
         _error = null;
       });
     }
 
-    try {
-      // Small delay to let database trigger complete
-      await Future.delayed(const Duration(milliseconds: 800));
-      if (!mounted) return;
+    await ticket.future;
+    if (!_ownsRouteEpoch(orderId, routeEpoch)) return;
 
-      debugPrint(
-          '🎉 [OrderConfirmationPage] Loading order directly from Supabase...');
-
-      final websiteService =
-          Provider.of<WebsiteService>(context, listen: false);
-      final orderAccessToken =
-          _orderAccessToken ?? PublicOrderAccessTokenStore.read(widget.orderId);
-      if (orderAccessToken == null) {
-        throw Exception('La sesión segura del pedido venció');
+    // A callback force-refresh may have superseded the ticket this State
+    // originally awaited. Adopt only the newest generation.
+    final latestGeneration =
+        _OrderConfirmationCache.orderLoadGenerations[orderId];
+    if (ticket.generation != latestGeneration) {
+      final latest = _OrderConfirmationCache.inFlightOrderLoads[orderId];
+      if (latest != null && latest.generation == latestGeneration) {
+        await latest.future;
       }
+      if (!_ownsRouteEpoch(orderId, routeEpoch)) return;
+    }
+    _applyCachedOrderState(
+      orderId: orderId,
+      routeEpoch: routeEpoch,
+      callbackIdentity: callbackIdentity,
+    );
+  }
 
+  _OrderLoadTicket _startOrderLoad({
+    required String orderId,
+    required String orderAccessToken,
+    required WebsiteService websiteService,
+    required Duration delay,
+    required String? callbackStatus,
+  }) {
+    final generation =
+        (_OrderConfirmationCache.orderLoadGenerations[orderId] ?? 0) + 1;
+    _OrderConfirmationCache.orderLoadGenerations[orderId] = generation;
+
+    late final _OrderLoadTicket ticket;
+    final future = _performOrderLoad(
+      orderId: orderId,
+      generation: generation,
+      orderAccessToken: orderAccessToken,
+      websiteService: websiteService,
+      delay: delay,
+      callbackStatus: callbackStatus,
+    );
+    ticket = _OrderLoadTicket(
+      generation: generation,
+      future: future,
+    );
+    _OrderConfirmationCache.inFlightOrderLoads[orderId] = ticket;
+    unawaited(
+      future.whenComplete(() {
+        if (identical(
+          _OrderConfirmationCache.inFlightOrderLoads[orderId],
+          ticket,
+        )) {
+          _OrderConfirmationCache.inFlightOrderLoads.remove(orderId);
+        }
+      }),
+    );
+    return ticket;
+  }
+
+  Future<void> _performOrderLoad({
+    required String orderId,
+    required int generation,
+    required String orderAccessToken,
+    required WebsiteService websiteService,
+    required Duration delay,
+    required String? callbackStatus,
+  }) async {
+    try {
+      if (delay > Duration.zero) {
+        await Future<void>.delayed(delay);
+      }
       final order = await websiteService.getPublicOrderById(
-        orderId: widget.orderId,
+        orderId: orderId,
         accessToken: orderAccessToken,
       );
+      if (order == null) throw StateError('Order not found');
 
-      if (order == null) {
-        throw Exception('Order not found');
+      if (_OrderConfirmationCache.orderLoadGenerations[orderId] != generation) {
+        return;
       }
-
+      _OrderConfirmationCache.loadedOrders[orderId] = order;
+      _OrderConfirmationCache.loadErrors.remove(orderId);
+      _trackPurchaseIfEligible(order, callbackStatus: callbackStatus);
+    } catch (error, stackTrace) {
+      debugPrint('🎉 [OrderConfirmationPage] ERROR loading order: $error');
       debugPrint(
-          '🎉 [OrderConfirmationPage] Order data received: ${order.orderNumber}');
-      debugPrint(
-          '🎉 [OrderConfirmationPage] Order parsed: ${order.orderNumber}');
-
-      // Cache the result regardless of mount state
-      _OrderConfirmationCache.loadedOrders[widget.orderId] = order;
-      _OrderConfirmationCache.paymentMessages[widget.orderId] = _paymentMessage;
-      _OrderConfirmationCache.loadErrors.remove(widget.orderId);
-
-      final paymentFailed = const {'failure', 'failed', 'rejected'}.contains(
-        widget.paymentStatus?.toLowerCase(),
+        '🎉 [OrderConfirmationPage] Stack trace: $stackTrace',
       );
-      if (order.status.toLowerCase() != 'cancelled' &&
-          order.paymentStatus.toLowerCase() != 'failed' &&
-          !paymentFailed) {
-        final metaItems = order.items
-            .map(
-              (item) => MetaCatalogEventItem(
-                contentId: MetaPixelService.catalogContentId(
-                  sku: item.productSku ?? item.liveProductSku,
-                  productId: item.productId,
-                ),
-                quantity: item.quantity,
-                itemPrice: item.unitPrice,
-              ),
-            )
-            .where((item) => item.contentId.isNotEmpty)
-            .toList();
-        MetaPixelService.instance.trackPurchase(
-          orderId: order.id,
-          items: metaItems,
-          value: order.total,
-        );
+      if (_OrderConfirmationCache.orderLoadGenerations[orderId] == generation) {
+        _OrderConfirmationCache.loadedOrders.remove(orderId);
+        _OrderConfirmationCache.loadErrors[orderId] =
+            'Error al cargar el pedido: $error';
       }
-
-      if (mounted) {
-        setState(() {
-          _order = order;
-          _isLoading = false;
-        });
-        debugPrint(
-            '🎉 [OrderConfirmationPage] setState complete, _order is SET');
-      } else {
-        debugPrint(
-            '🎉 [OrderConfirmationPage] Widget unmounted but order cached for next instance');
-      }
-    } catch (e, stackTrace) {
-      debugPrint('🎉 [OrderConfirmationPage] ERROR loading order: $e');
-      debugPrint('🎉 [OrderConfirmationPage] Stack trace: $stackTrace');
-
-      // Cache the error
-      _OrderConfirmationCache.loadErrors[widget.orderId] =
-          'Error al cargar el pedido: $e';
-
-      if (mounted) {
-        setState(() {
-          _error = 'Error al cargar el pedido: $e';
-          _isLoading = false;
-        });
-      }
-    } finally {
-      _OrderConfirmationCache.currentlyLoading.remove(widget.orderId);
     }
+  }
+
+  bool _ownsRouteEpoch(String orderId, int routeEpoch) =>
+      mounted && widget.orderId == orderId && _routeEpoch == routeEpoch;
+
+  void _applyCachedOrderState({
+    required String orderId,
+    required int routeEpoch,
+    required String? callbackIdentity,
+  }) {
+    if (!_ownsRouteEpoch(orderId, routeEpoch)) return;
+    setState(() {
+      _order = _OrderConfirmationCache.loadedOrders[orderId];
+      _paymentMessage = callbackIdentity == null
+          ? null
+          : _OrderConfirmationCache.callbackResults[callbackIdentity]?.message;
+      _error = _OrderConfirmationCache.loadErrors[orderId];
+      _isLoading = false;
+    });
+  }
+
+  void _trackPurchaseIfEligible(
+    OnlineOrder order, {
+    required String? callbackStatus,
+  }) {
+    final paymentFailed = const {'failure', 'failed', 'rejected'}.contains(
+      callbackStatus?.toLowerCase(),
+    );
+    if (order.status.toLowerCase() == 'cancelled' ||
+        order.paymentStatus.toLowerCase() == 'failed' ||
+        paymentFailed) {
+      return;
+    }
+
+    final metaItems = order.items
+        .map(
+          (item) => MetaCatalogEventItem(
+            contentId: MetaPixelService.catalogContentId(
+              sku: item.productSku ?? item.liveProductSku,
+              productId: item.productId,
+            ),
+            quantity: item.quantity,
+            itemPrice: item.unitPrice,
+          ),
+        )
+        .where((item) => item.contentId.isNotEmpty)
+        .toList();
+    MetaPixelService.instance.trackPurchase(
+      orderId: order.id,
+      items: metaItems,
+      value: order.total,
+    );
   }
 
   @override
@@ -497,16 +1036,108 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     super.build(context); // Required for AutomaticKeepAliveClientMixin
 
     // Return just the content - PublicStoreLayout handles Scaffold and scrolling
+    late final Widget content;
     if (_isLoading) {
-      return const Center(child: BrandedLoading());
+      content = const Center(child: BrandedLoading());
+    } else if (_error != null) {
+      content = _buildError();
+    } else if (_order == null) {
+      content = _buildNotFound();
+    } else {
+      content = _buildConfirmation();
     }
-    if (_error != null) {
-      return _buildError();
-    }
-    if (_order == null) {
-      return _buildNotFound();
-    }
-    return _buildConfirmation();
+
+    if (!_showCartPreservationWarning) return content;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildCartPreservationWarning(),
+        content,
+      ],
+    );
+  }
+
+  Widget _buildCartPreservationWarning() {
+    return Container(
+      key: const ValueKey('checkout-cart-preservation-warning'),
+      width: double.infinity,
+      constraints: const BoxConstraints(maxWidth: 1320),
+      margin: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        border: Border.all(color: const Color(0xFFF59E0B)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.info_outline,
+            color: Color(0xFF92400E),
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  _cartPreservationWarningText,
+                  style: TextStyle(
+                    color: Color(0xFF78350F),
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF78350F),
+                        side: const BorderSide(color: Color(0xFFB45309)),
+                        minimumSize: const Size(0, 48),
+                      ),
+                      onPressed: () => PublicStoreLayout.navigateToHref(
+                        context,
+                        '/tienda/carrito',
+                      ),
+                      child: const Text('VER CARRITO'),
+                    ),
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF78350F),
+                        minimumSize: const Size(0, 48),
+                      ),
+                      onPressed: _isAcknowledgingCartPreservationWarning
+                          ? null
+                          : _acknowledgeCartPreservationWarning,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_isAcknowledgingCartPreservationWarning) ...[
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          const Text('ENTENDIDO'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildError() {
@@ -515,7 +1146,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
       title: 'No pudimos cargar tu pedido',
       message: _error ?? 'Error desconocido',
       actionLabel: 'VOLVER AL INICIO',
-      onPressed: () => context.go('/tienda'),
+      onPressed: () => PublicStoreLayout.navigateToHref(context, '/tienda'),
       accentColor: const Color(0xFFB91C1C),
     );
   }
@@ -526,7 +1157,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
       title: 'Pedido no encontrado',
       message: 'No pudimos encontrar este pedido.',
       actionLabel: 'VOLVER AL INICIO',
-      onPressed: () => context.go('/tienda'),
+      onPressed: () => PublicStoreLayout.navigateToHref(context, '/tienda'),
       accentColor: _logoBlue,
     );
   }
@@ -829,6 +1460,19 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text(
+                order.storefrontIdentity.displayName.toUpperCase(),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: null,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white.withValues(alpha: 0.68),
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 12),
               Text(
                 'PEDIDO',
                 style: TextStyle(
@@ -1311,7 +1955,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
-              onPressed: () => context.go('/productos'),
+              onPressed: () =>
+                  PublicStoreLayout.navigateToHref(context, '/productos'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: _logoBlue,
                 side: const BorderSide(color: _logoBlue),
@@ -1327,7 +1972,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: () => context.go('/tienda'),
+              onPressed: () =>
+                  PublicStoreLayout.navigateToHref(context, '/tienda'),
               style: FilledButton.styleFrom(
                 backgroundColor: _logoBlue,
                 foregroundColor: Colors.white,

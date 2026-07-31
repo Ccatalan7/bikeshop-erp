@@ -178,6 +178,32 @@ class StorefrontTaxSummary {
     );
   }
 
+  /// Returns the known gross merchandise amount without requiring a tax rate.
+  ///
+  /// Public catalog prices already include tax, so a missing classification
+  /// makes the net/tax split unavailable, not the merchandise price zero. A
+  /// `null` result means the monetary inputs themselves are unsafe to display.
+  static int? calculateGrossAmount(
+    Iterable<StorefrontTaxLineInput> inputs,
+  ) {
+    var grossAmount = 0;
+
+    for (final input in inputs) {
+      if (input.quantity < 1) return null;
+
+      final unitPrice = _wholePositiveClp(input.grossUnitPrice);
+      if (unitPrice == null || unitPrice > _maxSafeInteger ~/ input.quantity) {
+        return null;
+      }
+
+      final lineGross = unitPrice * input.quantity;
+      if (grossAmount > _maxSafeInteger - lineGross) return null;
+      grossAmount += lineGross;
+    }
+
+    return grossAmount;
+  }
+
   static int? normalizeTaxRate(num? rawRate) {
     if (rawRate == null) return null;
     final value = rawRate.toDouble();

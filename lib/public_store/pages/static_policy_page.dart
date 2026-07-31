@@ -1,16 +1,23 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../modules/website/models/website_block_public_visibility.dart';
+import '../../modules/website/models/website_editor_capability.dart';
+import '../../modules/website/models/website_page_composition.dart';
+import '../../modules/website/models/website_page_models.dart';
+import '../../modules/website/models/website_seo_settings_aliases.dart';
 import '../../modules/website/services/website_service.dart';
-import '../../modules/website/widgets/website_block_renderer.dart';
-import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../modules/website/widgets/website_editor_document_binding.dart';
+import '../../shared/utils/seo_helper.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../theme/public_store_theme.dart';
+import '../widgets/page_composition.dart';
 import '../widgets/public_store_layout.dart';
 
 /// Policy page renderer that uses WebsiteService for caching.
@@ -30,11 +37,19 @@ class _PublicPolicyView extends StatelessWidget {
   final String slug;
   final String fallbackTitle;
   final List<Map<String, dynamic>> blocks;
+  final Widget composedContent;
+  final WebsitePage? page;
+  final Set<String> availablePolicySlugs;
+  final bool isStale;
 
   const _PublicPolicyView({
     required this.slug,
     required this.fallbackTitle,
     required this.blocks,
+    required this.composedContent,
+    required this.page,
+    required this.availablePolicySlugs,
+    required this.isStale,
   });
 
   static const _ink = PublicStoreTheme.textPrimary;
@@ -44,9 +59,19 @@ class _PublicPolicyView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final meta = _PolicyMeta.forSlug(slug, fallbackTitle);
-    final sections = _extractSections(blocks, meta.fallbackBody);
+    final configuredTitle = page?.title.trim() ?? '';
+    final configuredSummary = page?.metaDescription?.trim() ?? '';
+    final summaryFromContent = contentSummary(blocks);
+    final title = configuredTitle.isNotEmpty ? configuredTitle : meta.title;
+    final summary = configuredSummary.isNotEmpty
+        ? configuredSummary
+        : summaryFromContent.isNotEmpty
+            ? summaryFromContent
+            : 'Información publicada por la tienda.';
+    final showNavigation = availablePolicySlugs.isNotEmpty;
 
     return Container(
+      key: const ValueKey<String>('static-policy-public-view'),
       width: double.infinity,
       color: Colors.white,
       child: Center(
@@ -62,11 +87,25 @@ class _PublicPolicyView extends StatelessWidget {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _PolicyHero(meta: meta),
+                      if (isStale) ...[
+                        const _PolicyFreshnessNotice(),
+                        const SizedBox(height: 24),
+                      ],
+                      _PolicyHero(
+                        meta: meta,
+                        title: title,
+                        summary: summary,
+                      ),
+                      if (showNavigation) ...[
+                        const SizedBox(height: 32),
+                        _PolicyNav(
+                          currentSlug: slug,
+                          availableSlugs: availablePolicySlugs,
+                          isDesktop: false,
+                        ),
+                      ],
                       const SizedBox(height: 32),
-                      _PolicyNav(currentSlug: slug, isDesktop: false),
-                      const SizedBox(height: 32),
-                      _PolicyContent(sections: sections),
+                      composedContent,
                     ],
                   );
                 }
@@ -79,15 +118,29 @@ class _PublicPolicyView extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _PolicyHero(meta: meta),
-                          const SizedBox(height: 32),
-                          _PolicyNav(currentSlug: slug, isDesktop: true),
+                          if (isStale) ...[
+                            const _PolicyFreshnessNotice(),
+                            const SizedBox(height: 24),
+                          ],
+                          _PolicyHero(
+                            meta: meta,
+                            title: title,
+                            summary: summary,
+                          ),
+                          if (showNavigation) ...[
+                            const SizedBox(height: 32),
+                            _PolicyNav(
+                              currentSlug: slug,
+                              availableSlugs: availablePolicySlugs,
+                              isDesktop: true,
+                            ),
+                          ],
                         ],
                       ),
                     ),
                     const SizedBox(width: 64),
                     Expanded(
-                      child: _PolicyContent(sections: sections),
+                      child: composedContent,
                     ),
                   ],
                 );
@@ -99,18 +152,11 @@ class _PublicPolicyView extends StatelessWidget {
     );
   }
 
-  List<_PolicySection> _extractSections(
+  static List<_PolicySection> extractSections(
     List<Map<String, dynamic>> source,
-    String fallback,
   ) {
-    final visible = source
-        .where((block) => block['is_visible'] != false)
-        .toList(growable: false);
-    visible.sort(
-        (a, b) => _toInt(a['order_index']).compareTo(_toInt(b['order_index'])));
-
     final sections = <_PolicySection>[];
-    for (final block in visible) {
+    for (final block in source) {
       final type = (block['block_type'] ?? '').toString().toLowerCase();
       final data = block['block_data'] is Map
           ? Map<String, dynamic>.from(block['block_data'] as Map)
@@ -154,7 +200,7 @@ class _PublicPolicyView extends StatelessWidget {
             final map = Map<String, dynamic>.from(item);
             final question = _clean(map['question']);
             final answer = _clean(map['answer']);
-            if (question.isEmpty && answer.isEmpty) continue;
+            if (question.isEmpty || answer.isEmpty) continue;
             items.add(_PolicyItem(question, answer));
           }
         }
@@ -172,7 +218,18 @@ class _PublicPolicyView extends StatelessWidget {
         ..._paragraphs(subtitle),
         ..._paragraphs(content),
       ];
-      if (title.isNotEmpty || paragraphs.isNotEmpty) {
+      if (type == 'contact') {
+        final facts = _publicContactFactStrings(data);
+        if (facts.isNotEmpty) {
+          sections.add(_PolicySection(
+            title.isEmpty ? 'Información de contacto' : title,
+            facts,
+            const [],
+          ));
+        }
+        continue;
+      }
+      if (paragraphs.isNotEmpty) {
         sections.add(_PolicySection(
           title.isEmpty ? 'Detalle' : title,
           paragraphs,
@@ -181,14 +238,26 @@ class _PublicPolicyView extends StatelessWidget {
       }
     }
 
-    if (sections.isNotEmpty) return sections;
-    return [_PolicySection('Información', _paragraphs(fallback), const [])];
+    return sections;
+  }
+
+  static String contentSummary(List<Map<String, dynamic>> source) {
+    final fragments = <String>[];
+    for (final section in extractSections(source)) {
+      fragments.addAll(section.paragraphs);
+      for (final item in section.items) {
+        if (item.title.isNotEmpty) fragments.add(item.title);
+        if (item.body.isNotEmpty) fragments.add(item.body);
+      }
+    }
+    final summary = fragments.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (summary.length <= 320) return summary;
+    return summary.substring(0, 320).trimRight();
   }
 
   static String _clean(dynamic value) {
     return (value ?? '')
         .toString()
-        .replaceAll('vinabikechile@gmail.com', 'contacto@vinabike.cl')
         .replaceAll(r'\n', '\n')
         .replaceAll(RegExp(r'[ \t]+'), ' ')
         .trim();
@@ -203,18 +272,18 @@ class _PublicPolicyView extends StatelessWidget {
         .where((line) => line.isNotEmpty)
         .toList(growable: false);
   }
-
-  static int _toInt(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    return int.tryParse(value?.toString() ?? '') ?? 0;
-  }
 }
 
 class _PolicyHero extends StatelessWidget {
   final _PolicyMeta meta;
+  final String title;
+  final String summary;
 
-  const _PolicyHero({required this.meta});
+  const _PolicyHero({
+    required this.meta,
+    required this.title,
+    required this.summary,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -232,7 +301,7 @@ class _PolicyHero extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         Text(
-          meta.title,
+          title,
           style: const TextStyle(
             fontFamily: null,
             fontSize: 32,
@@ -244,7 +313,7 @@ class _PolicyHero extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          meta.summary,
+          summary,
           style: const TextStyle(
             fontSize: 16,
             height: 1.5,
@@ -256,21 +325,70 @@ class _PolicyHero extends StatelessWidget {
   }
 }
 
-class _PolicyNav extends StatelessWidget {
-  final String currentSlug;
-  final bool isDesktop;
-
-  const _PolicyNav({required this.currentSlug, this.isDesktop = false});
+class _PolicyFreshnessNotice extends StatelessWidget {
+  const _PolicyFreshnessNotice();
 
   @override
   Widget build(BuildContext context) {
-    const slugs = [
+    return Semantics(
+      key: const ValueKey<String>('static-policy-freshness-notice'),
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF7ED),
+          border: Border.all(color: const Color(0xFFFED7AA)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.sync_outlined,
+              size: 20,
+              color: Color(0xFF9A3412),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Estamos verificando esta información. La última versión '
+                'disponible podría cambiar.',
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.45,
+                  color: Color(0xFF7C2D12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PolicyNav extends StatelessWidget {
+  final String currentSlug;
+  final Set<String> availableSlugs;
+  final bool isDesktop;
+
+  const _PolicyNav({
+    required this.currentSlug,
+    required this.availableSlugs,
+    this.isDesktop = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const orderedSlugs = [
       'nosotros',
       'envios',
       'devoluciones',
       'terminos',
       'privacidad'
     ];
+    final slugs =
+        orderedSlugs.where(availableSlugs.contains).toList(growable: false);
 
     if (isDesktop) {
       return Column(
@@ -297,35 +415,38 @@ class _PolicyNav extends StatelessWidget {
           for (final slug in slugs)
             Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                selected: currentSlug == slug,
-                label: Text(_PolicyMeta.forSlug(slug, slug).navLabel),
-                avatar: Icon(
-                  _PolicyMeta.forSlug(slug, slug).icon,
-                  size: 16,
-                  color: currentSlug == slug
-                      ? _PublicPolicyView._ink
-                      : _PublicPolicyView._muted,
-                ),
-                onSelected: (_) =>
-                    PublicStoreLayout.navigateToHref(context, '/$slug'),
-                selectedColor: const Color(0xFFF1F5F9),
-                backgroundColor: Colors.white,
-                side: BorderSide(
-                  color: currentSlug == slug
-                      ? Colors.transparent
-                      : _PublicPolicyView._line,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                labelStyle: TextStyle(
-                  fontSize: 14,
-                  fontWeight:
-                      currentSlug == slug ? FontWeight.w700 : FontWeight.w500,
-                  color: currentSlug == slug
-                      ? _PublicPolicyView._ink
-                      : _PublicPolicyView._muted,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: ChoiceChip(
+                  selected: currentSlug == slug,
+                  label: Text(_PolicyMeta.forSlug(slug, slug).navLabel),
+                  avatar: Icon(
+                    _PolicyMeta.forSlug(slug, slug).icon,
+                    size: 16,
+                    color: currentSlug == slug
+                        ? _PublicPolicyView._ink
+                        : _PublicPolicyView._muted,
+                  ),
+                  onSelected: (_) =>
+                      PublicStoreLayout.navigateToHref(context, '/$slug'),
+                  selectedColor: const Color(0xFFF1F5F9),
+                  backgroundColor: Colors.white,
+                  side: BorderSide(
+                    color: currentSlug == slug
+                        ? Colors.transparent
+                        : _PublicPolicyView._line,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  labelStyle: TextStyle(
+                    fontSize: 14,
+                    fontWeight:
+                        currentSlug == slug ? FontWeight.w700 : FontWeight.w500,
+                    color: currentSlug == slug
+                        ? _PublicPolicyView._ink
+                        : _PublicPolicyView._muted,
+                  ),
                 ),
               ),
             ),
@@ -354,6 +475,7 @@ class _NavButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       hoverColor: const Color(0xFFF8FAFC),
       child: Container(
+        constraints: const BoxConstraints(minHeight: 48),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFF1F5F9) : Colors.transparent,
@@ -487,92 +609,377 @@ class _PolicyItemCard extends StatelessWidget {
   }
 }
 
+class _PublicPolicyUnavailableView extends StatelessWidget {
+  final String title;
+
+  const _PublicPolicyUnavailableView({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey<String>('static-policy-unavailable-view'),
+      width: double.infinity,
+      color: Colors.white,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 72),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.info_outline,
+                  size: 48,
+                  color: PublicStoreTheme.textSecondary,
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800,
+                    height: 1.15,
+                    color: PublicStoreTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Esta página no tiene contenido público disponible en este '
+                  'momento.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    height: 1.5,
+                    color: PublicStoreTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: OutlinedButton(
+                    onPressed: () => PublicStoreLayout.navigateToHref(
+                      context,
+                      '/productos',
+                    ),
+                    child: const Text('Ver productos'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PublicWebsiteContactFacts {
+  const PublicWebsiteContactFacts({
+    this.phone = '',
+    this.email = '',
+    this.address = '',
+  });
+
+  final String phone;
+  final String email;
+  final String address;
+
+  bool get hasAny =>
+      phone.trim().isNotEmpty ||
+      email.trim().isNotEmpty ||
+      address.trim().isNotEmpty;
+}
+
+/// Runtime counterpart of the deploy-time crawler-content gate.
+///
+/// A title, image, link or CTA is presentation, not a complete public page.
+/// Structured Features/FAQ blocks need real items, while Contacto may rely on
+/// factual contact data owned by website settings.
+bool hasMeaningfulPublicWebsitePageContent(
+  List<Map<String, dynamic>> blocks, {
+  bool isContactPage = false,
+  PublicWebsiteContactFacts contactFacts = const PublicWebsiteContactFacts(),
+}) {
+  if (isContactPage && contactFacts.hasAny) return true;
+  return WebsitePageComposition.projectPubliclyReachableBlocks(blocks)
+      .map((block) => block.sourceBlock)
+      .any(_hasMeaningfulPublicWebsiteBlockContent);
+}
+
+bool _hasMeaningfulPublicWebsiteBlockContent(Map<String, dynamic> block) {
+  final type = (block['block_type'] ?? '').toString().trim().toLowerCase();
+  final rawData = block['block_data'];
+  if (rawData is! Map) return false;
+  final data = Map<String, dynamic>.from(rawData);
+
+  if (type == 'cta') return false;
+  if (type == 'features') {
+    final features = data['features'];
+    if (features is! List) return false;
+    return features.whereType<Map>().any((rawItem) {
+      final item = Map<String, dynamic>.from(rawItem);
+      return _publicContentText(item['title']).isNotEmpty ||
+          _publicContentText(item['description']).isNotEmpty;
+    });
+  }
+  if (type == 'faq') {
+    final items = data['items'];
+    if (items is! List) return false;
+    return items.whereType<Map>().any((rawItem) {
+      final item = Map<String, dynamic>.from(rawItem);
+      return _publicContentText(item['question']).isNotEmpty &&
+          _publicContentText(item['answer']).isNotEmpty;
+    });
+  }
+  if (type == 'contact') {
+    return _publicContactFactStrings(data).isNotEmpty;
+  }
+
+  return _publicSemanticBodyFragments(data).isNotEmpty;
+}
+
+List<String> _publicSemanticBodyFragments(Map<String, dynamic> data) {
+  const semanticBodyKeys = <String>{
+    'answer',
+    'body',
+    'caption',
+    'comment',
+    'content',
+    'description',
+    'detail',
+    'details',
+    'html',
+    'quote',
+    'richtext',
+    'subtitle',
+    'text',
+  };
+  final fragments = <String>[];
+  final seen = <String>{};
+
+  void collect(dynamic value, {String? fieldName}) {
+    if (value is Map) {
+      for (final entry in value.entries) {
+        collect(entry.value, fieldName: entry.key.toString());
+      }
+      return;
+    }
+    if (value is List) {
+      for (final item in value) {
+        collect(item, fieldName: fieldName);
+      }
+      return;
+    }
+    if (value is! String || fieldName == null) return;
+    final normalizedField =
+        fieldName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    if (!semanticBodyKeys.contains(normalizedField)) return;
+    final text = _publicContentText(value);
+    if (text.isEmpty || !seen.add(text.toLowerCase())) return;
+    fragments.add(text);
+  }
+
+  collect(data);
+  return fragments;
+}
+
+List<String> _publicContactFactStrings(Map<String, dynamic> data) {
+  const factualKeys = <String>{
+    'address',
+    'contactaddress',
+    'email',
+    'contactemail',
+    'phone',
+    'telephone',
+    'contactphone',
+    'whatsapp',
+  };
+  final facts = <String>[];
+  final seen = <String>{};
+
+  void collect(dynamic value, {String? fieldName}) {
+    if (value is Map) {
+      for (final entry in value.entries) {
+        collect(entry.value, fieldName: entry.key.toString());
+      }
+      return;
+    }
+    if (value is List) {
+      for (final item in value) {
+        collect(item, fieldName: fieldName);
+      }
+      return;
+    }
+    if (value is! String || fieldName == null) return;
+    final normalizedField =
+        fieldName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    if (!factualKeys.contains(normalizedField)) return;
+    final fact = _publicContentText(value);
+    if (fact.isNotEmpty && seen.add(fact.toLowerCase())) facts.add(fact);
+  }
+
+  collect(data);
+  return facts;
+}
+
+String _publicContentText(dynamic value) {
+  return (value ?? '')
+      .toString()
+      .replaceAll(RegExp(r'<[^>]+>'), ' ')
+      .replaceAll(r'\n', '\n')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+
+bool hasMeaningfulPublicPolicyContent(
+  List<Map<String, dynamic>> blocks,
+) {
+  final projected = WebsitePageComposition.projectPubliclyReachableBlocks(
+    blocks,
+  ).map((block) => block.sourceBlock).toList(growable: false);
+  return _PublicPolicyView.extractSections(projected).isNotEmpty;
+}
+
+enum StaticPolicyRetainedProvenance {
+  none,
+  editor,
+  publicOrigin,
+  publicStale,
+}
+
+/// Pure public-trust projection shared by rendering, SEO and tests.
+///
+/// Cached editor reads are useful for authoring but never establish public
+/// publication or indexability. A stale public snapshot may remain visible
+/// with a freshness notice, while only origin-confirmed content is canonical.
+class StaticPolicyPublicationProjection {
+  const StaticPolicyPublicationProjection({
+    required this.hasOwner,
+    required this.ownerIsPublished,
+    required this.hasEligibleContent,
+    required this.provenance,
+  });
+
+  factory StaticPolicyPublicationProjection.fromLoadResult(
+    PageSnapshotLoadResult result,
+  ) {
+    final snapshot = result.snapshot;
+    return StaticPolicyPublicationProjection(
+      hasOwner: snapshot != null,
+      ownerIsPublished:
+          result.isOriginConfirmed && snapshot?.page.isPublished == true,
+      hasEligibleContent: hasMeaningfulPublicPolicyContent(
+        snapshot?.blocks ?? const <Map<String, dynamic>>[],
+      ),
+      provenance: snapshot == null
+          ? StaticPolicyRetainedProvenance.none
+          : result.isOriginConfirmed
+              ? StaticPolicyRetainedProvenance.publicOrigin
+              : result.isStaleFallback
+                  ? StaticPolicyRetainedProvenance.publicStale
+                  : StaticPolicyRetainedProvenance.none,
+    );
+  }
+
+  factory StaticPolicyPublicationProjection.fromState({
+    required WebsitePage? page,
+    required List<Map<String, dynamic>> blocks,
+    required StaticPolicyRetainedProvenance provenance,
+  }) {
+    return StaticPolicyPublicationProjection(
+      hasOwner: page != null,
+      ownerIsPublished:
+          provenance == StaticPolicyRetainedProvenance.publicOrigin &&
+              page?.isPublished == true,
+      hasEligibleContent: hasMeaningfulPublicPolicyContent(blocks),
+      provenance:
+          page == null ? StaticPolicyRetainedProvenance.none : provenance,
+    );
+  }
+
+  final bool hasOwner;
+  final bool ownerIsPublished;
+  final bool hasEligibleContent;
+  final StaticPolicyRetainedProvenance provenance;
+
+  bool get isStaleSnapshot =>
+      provenance == StaticPolicyRetainedProvenance.publicStale;
+  bool get canRenderRetainedContent => hasOwner && hasEligibleContent;
+  bool get isAuthoritativelyPublic => ownerIsPublished && hasEligibleContent;
+  bool get shouldRenderPublicContent =>
+      canRenderRetainedContent && (isAuthoritativelyPublic || isStaleSnapshot);
+  bool get shouldIndex => isAuthoritativelyPublic;
+}
+
+Set<String> availablePublicPolicySlugs(
+  Map<String, PageSnapshotLoadResult> results,
+) {
+  return Set<String>.unmodifiable({
+    for (final entry in results.entries)
+      if (StaticPolicyPublicationProjection.fromLoadResult(entry.value)
+          .isAuthoritativelyPublic)
+        entry.key,
+  });
+}
+
 class _PolicyMeta {
   final String title;
   final String navLabel;
-  final String summary;
   final IconData icon;
   final Color color;
-  final List<String> chips;
-  final String fallbackBody;
 
   const _PolicyMeta({
     required this.title,
     required this.navLabel,
-    required this.summary,
     required this.icon,
     required this.color,
-    required this.chips,
-    required this.fallbackBody,
   });
 
   static _PolicyMeta forSlug(String slug, String fallbackTitle) {
     switch (slug) {
       case 'nosotros':
         return const _PolicyMeta(
-          title: 'Sobre Viñabike',
+          title: 'Sobre nosotros',
           navLabel: 'Nosotros',
-          summary:
-              'Tienda, taller y repuestos para bicicletas en Viña del Mar.',
           icon: Icons.storefront_outlined,
           color: PublicStoreTheme.primaryBlue,
-          chips: ['Viña del Mar', 'Tienda física', 'Taller'],
-          fallbackBody:
-              'Viñabike es el nombre comercial de NEWEN SpA, RUT 77.541.999-7, con domicilio en Álvarez 32, Local 17, Viña del Mar. Vendemos bicicletas, repuestos y accesorios, y realizamos mantenciones y reparaciones.',
         );
       case 'envios':
         return const _PolicyMeta(
           title: 'Envíos',
           navLabel: 'Envíos',
-          summary: 'Retiro en tienda y despacho dentro de Chile según destino.',
           icon: Icons.local_shipping_outlined,
           color: Color(0xFF2E7D32),
-          chips: ['Chile', '3-12 días hábiles', 'Costo según pedido'],
-          fallbackBody:
-              'Despachamos a Chile continental en 3 a 12 días hábiles: \$6.990 hasta \$29.999; \$8.990 entre \$30.000 y \$79.999; \$11.990 entre \$80.000 y \$149.999; y \$14.990 desde \$150.000. El checkout muestra y suma el costo exacto antes de pagar. El retiro en Álvarez 32, Local 17, Viña del Mar no tiene costo.',
         );
       case 'devoluciones':
         return const _PolicyMeta(
           title: 'Devoluciones',
           navLabel: 'Devoluciones',
-          summary: 'Condiciones claras para cambios, devoluciones y garantías.',
           icon: Icons.assignment_return_outlined,
           color: PublicStoreTheme.primaryBlue,
-          chips: ['10 días', 'Cambios disponibles', 'Soporte directo'],
-          fallbackBody:
-              'En compras a distancia puedes ejercer el retracto dentro de 10 días desde la recepción, antes de usar el producto y devolviéndolo en buen estado. Si no recibes confirmación escrita, el plazo legal puede extenderse a 90 días. La garantía legal se mantiene y una oferta o liquidación no la elimina. Para iniciar el proceso escribe a ventas@vinabike.cl con tu número de pedido.',
         );
       case 'terminos':
         return const _PolicyMeta(
           title: 'Términos y condiciones',
           navLabel: 'Términos',
-          summary: 'Condiciones generales para comprar en la tienda online.',
           icon: Icons.gavel_outlined,
           color: Color(0xFFB45309),
-          chips: ['CLP', 'Stock sujeto a disponibilidad', 'Compra segura'],
-          fallbackBody:
-              'Este sitio es operado por NEWEN SpA, RUT 77.541.999-7, bajo el nombre comercial Viñabike. Los precios se publican en pesos chilenos (CLP) e incluyen los impuestos informados. Antes de confirmar mostramos productos, despacho y total; la compra se confirma una vez validado el pago y el stock reservado.',
         );
       case 'privacidad':
         return const _PolicyMeta(
           title: 'Privacidad',
           navLabel: 'Privacidad',
-          summary: 'Uso de datos personales para pedidos, soporte y atención.',
           icon: Icons.shield_outlined,
           color: PublicStoreTheme.primaryBlue,
-          chips: ['Pedidos', 'Soporte', 'Sin venta de datos'],
-          fallbackBody:
-              'Usamos los datos personales entregados por clientes para procesar pedidos, coordinar entregas, responder consultas y entregar soporte. No vendemos datos personales a terceros.',
         );
       default:
         return _PolicyMeta(
           title: fallbackTitle,
           navLabel: fallbackTitle,
-          summary: 'Información de la tienda.',
           icon: Icons.info_outline,
           color: PublicStoreTheme.primaryBlue,
-          chips: const ['Viñabike'],
-          fallbackBody: 'Información de la tienda.',
         );
     }
   }
@@ -606,13 +1013,27 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _blocks = [];
+  WebsitePage? _page;
   String? _pageId;
   String? _snapshotFingerprint;
-  bool _editModeChecked = false;
+  Set<String> _availablePolicySlugs = const <String>{};
+  // TYPED lease that authorized editor-provenance content (fingerprint AND
+  // authorityEpoch — an A→B→A churn reproduces the fingerprint, never the
+  // epoch); see the audience guard in build().
+  WebsiteEditorCapabilitySnapshot? _editorLease;
   int _loadGeneration = 0;
   WebsiteService? _observedWebsiteService;
   bool _cmsRevalidationPending = false;
   bool _cmsRevalidationScheduled = false;
+  bool _seoProjectionPending = false;
+  bool _initialLoadStarted = false;
+  StaticPolicyRetainedProvenance _retainedProvenance =
+      StaticPolicyRetainedProvenance.none;
+
+  bool get _originConfirmed =>
+      _retainedProvenance == StaticPolicyRetainedProvenance.publicOrigin;
+  bool get _isStaleSnapshot =>
+      _retainedProvenance == StaticPolicyRetainedProvenance.publicStale;
 
   // Keep this page alive in memory to prevent reloading on navigation
   @override
@@ -622,7 +1043,6 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
   void initState() {
     super.initState();
     _seedFromSnapshot(widget.slug);
-    _loadPage();
   }
 
   @override
@@ -636,10 +1056,23 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
       websiteService.cmsPageFreshnessSignal
           .addListener(_handleCmsPageFreshnessSignal);
     }
+    if (!_initialLoadStarted) {
+      _initialLoadStarted = true;
+      unawaited(_loadPage());
+    }
 
     if (_cmsRevalidationPending && TickerMode.of(context)) {
       _cmsRevalidationPending = false;
       _scheduleCmsPageOriginRevalidation();
+    }
+    if (_seoProjectionPending && TickerMode.of(context)) {
+      _seoProjectionPending = false;
+      _scheduleSeoUpdate(
+        _page,
+        _loadGeneration,
+        originConfirmed: _originConfirmed,
+        hasEligibleContent: hasMeaningfulPublicPolicyContent(_blocks),
+      );
     }
   }
 
@@ -647,7 +1080,6 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
   void didUpdateWidget(covariant StaticPolicyPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.slug != widget.slug) {
-      _editModeChecked = false;
       _seedFromSnapshot(widget.slug, clearOnMiss: true);
       _loadPage();
     }
@@ -692,80 +1124,67 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
             .peekPageWithBlocks(slug, tenantId: tenantId);
 
     if (snapshot != null) {
+      _page = snapshot.page;
       _pageId = snapshot.page.id;
       _snapshotFingerprint = snapshot.fingerprint;
       _blocks = snapshot.blocks;
+      _retainedProvenance = StaticPolicyRetainedProvenance.publicStale;
       _loading = false;
       _error = null;
       return true;
     }
 
     if (clearOnMiss) {
+      _page = null;
       _pageId = null;
       _snapshotFingerprint = null;
       _blocks = [];
+      _retainedProvenance = StaticPolicyRetainedProvenance.none;
+      _availablePolicySlugs = const <String>{};
       _loading = true;
       _error = null;
     }
     return false;
   }
 
-  bool _providerHasBlocksForThisPage(WebsiteEditModeProvider editProvider) {
-    if (_pageId == null) return false;
-
-    final contextMatches = (editProvider.currentPageId == _pageId) ||
-        (editProvider.currentPageSlug == widget.slug);
-    if (!contextMatches) return false;
-
-    final providerBlocks = editProvider.blocks;
-    if (providerBlocks.isEmpty) return false;
-
-    // If blocks include page_id, ensure they match this page.
-    final hasPageId = providerBlocks.any((b) => b['page_id'] != null);
-    if (!hasPageId) return true;
-
-    return providerBlocks
-        .every((b) => b['page_id']?.toString() == _pageId.toString());
+  /// Invalidates an editor-provenance snapshot whose lease was lost and
+  /// reloads through the public read path. The current frame already renders
+  /// the safe loading state; the reset happens post-frame (build-safe).
+  void _invalidateEditorContentAndReloadPublic() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_retainedProvenance != StaticPolicyRetainedProvenance.editor) return;
+      setState(() {
+        _page = null;
+        _pageId = null;
+        _snapshotFingerprint = null;
+        _blocks = [];
+        _retainedProvenance = StaticPolicyRetainedProvenance.none;
+        _editorLease = null;
+        _loading = true;
+        _error = null;
+      });
+      // The reload arrives exclusively through the central CMS revalidation
+      // signal emitted on the lease transition (exactly one load per
+      // transition; no second local path).
+    });
   }
 
-  void _updateEditProviderIfNeeded() {
-    if (!mounted) return;
-    // This page is kept alive across tab/branch navigation. Only the active
-    // (ticker-enabled) branch should be allowed to sync the editor provider;
-    // otherwise offstage pages will fight over currentPageSlug/blocks.
-    if (!TickerMode.of(context)) return;
+  /// Attaches this policy page's document to the open editor session once its
+  /// blocks are loaded. Mode entry/exit is owned by the FSM route binding in
+  /// the storefront layout; this consumer only supplies its page document.
+  void _bindEditorDocument(WebsiteEditModeProvider editProvider) {
     if (_loading || _pageId == null) return;
-
-    final editProvider = context.read<WebsiteEditModeProvider>();
-
-    // Only sync when we are already in editor context and the provider is
-    // not actually synced to this page.
-    if (!editProvider.isInEditorContext) return;
-    if (_providerHasBlocksForThisPage(editProvider)) return;
-
-    final websiteService = context.read<WebsiteService>();
-    final blocks = List<Map<String, dynamic>>.from(_blocks);
-    final settings = Map<String, dynamic>.from(websiteService.settings);
-
-    debugPrint(
-        '🔄 [StaticPolicyPage] Sync editor context: ${editProvider.currentPageSlug} → ${widget.slug} (${blocks.length} blocks)');
-
-    // This resets selection/history for the new page (same as DynamicWebsitePage).
-    if (editProvider.isEditMode) {
-      editProvider.enterEditMode(
-        blocks,
-        settings,
-        pageId: _pageId,
-        pageSlug: widget.slug,
-      );
-    } else {
-      editProvider.enterPreviewMode(
-        blocks,
-        settings,
-        pageId: _pageId,
-        pageSlug: widget.slug,
-      );
-    }
+    WebsiteEditorDocumentBinding.bind(
+      context,
+      editProvider: editProvider,
+      ready: true,
+      blocks: () => List<Map<String, dynamic>>.from(_blocks),
+      settings: () =>
+          Map<String, dynamic>.from(context.read<WebsiteService>().settings),
+      pageId: _pageId,
+      pageSlug: widget.slug,
+    );
   }
 
   Future<void> _loadPage() async {
@@ -781,6 +1200,12 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
       // Keep rendering existing content; just clear previous error.
       _error = null;
     }
+    _scheduleSeoUpdate(
+      _page,
+      loadGeneration,
+      originConfirmed: _originConfirmed,
+      hasEligibleContent: hasMeaningfulPublicPolicyContent(_blocks),
+    );
 
     try {
       // Get tenant from provider or authenticated user
@@ -815,9 +1240,123 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
         });
       }
 
+      WebsiteEditModeProvider? editProvider;
+      try {
+        editProvider = context.read<WebsiteEditModeProvider>();
+      } catch (_) {
+        editProvider = null;
+      }
+      // The provider is the sole mode owner and the layout's capability gate
+      // has already applied (or refused) any URL entry command by the time
+      // this routed child builds: an unauthorized visitor can never request
+      // the editor load path from here.
+      final editorRequested = editProvider?.isInEditorContext == true;
+
+      if (editorRequested) {
+        final requestLease = editProvider?.editorEntryLease;
+        final requestGeneration = editProvider?.editorEntryLeaseGeneration;
+        final requestIdentityRevision =
+            editProvider?.editorEntryLeaseIdentityRevision;
+        final requestServiceEpoch = websiteService.identityEpoch;
+        final requestServiceIdentity =
+            websiteService.editorCapabilityRequestIdentity;
+        CachedPageSnapshot? editorSnapshot;
+        var editorAuthorityLost = false;
+        try {
+          editorSnapshot = await websiteService.loadEditorPageWithBlocks(
+            requestedSlug,
+            tenantId: tenantId,
+          );
+        } on WebsiteEditorAuthorityException {
+          // Editor authority was lost: either the local gate denied, or the
+          // server (RLS/auth) rejected a read a stale cached grant still
+          // believed authorized. Revoke the lease/FSM and adopt ONLY the
+          // public result, never draft content. Transient errors never take
+          // this branch (they rethrow upstream unclassified).
+          editorAuthorityLost = true;
+          // The single CMS revalidation for this transition is emitted by
+          // the layout when it adopts the durable denial — emitting here
+          // too would double the reload.
+          if (mounted) {
+            try {
+              context
+                  .read<WebsiteEditModeProvider>()
+                  .revokeEditorEntryLease();
+            } catch (_) {}
+          }
+        }
+        // A stale editor response after a revoke/identity change is dropped;
+        // the audience guard in build() reloads through the public read.
+        if (!editorAuthorityLost) {
+          final currentLease = editProvider?.editorEntryLease;
+          if (currentLease == null ||
+              !currentLease.granted ||
+              requestLease == null ||
+              currentLease.fingerprint != requestLease.fingerprint ||
+              currentLease.authorityEpoch != requestLease.authorityEpoch ||
+              requestGeneration !=
+                  editProvider?.editorEntryLeaseGeneration ||
+              requestIdentityRevision !=
+                  editProvider?.editorEntryLeaseIdentityRevision ||
+              requestServiceEpoch != websiteService.identityEpoch ||
+              requestServiceIdentity !=
+                  websiteService.editorCapabilityRequestIdentity) {
+            return;
+          }
+        }
+        if (!editorAuthorityLost) {
+          if (!mounted ||
+              loadGeneration != _loadGeneration ||
+              requestedSlug != widget.slug) {
+            return;
+          }
+          if (editorSnapshot == null) {
+            setState(() {
+              _page = null;
+              _pageId = null;
+              _snapshotFingerprint = null;
+              _blocks = [];
+              _retainedProvenance = StaticPolicyRetainedProvenance.none;
+              _loading = false;
+              _error = null;
+            });
+            _scheduleSeoUpdate(
+              null,
+              loadGeneration,
+              originConfirmed: false,
+              hasEligibleContent: false,
+            );
+            return;
+          }
+
+          setState(() {
+            _page = editorSnapshot!.page;
+            _pageId = editorSnapshot.page.id;
+            _snapshotFingerprint = editorSnapshot.fingerprint;
+            _blocks = editorSnapshot.blocks;
+            // Authorized editor reads never become public trust/index
+            // evidence.
+            _retainedProvenance = StaticPolicyRetainedProvenance.editor;
+            _editorLease = requestLease;
+            _loading = false;
+            _error = null;
+          });
+          _scheduleSeoUpdate(
+            editorSnapshot.page,
+            loadGeneration,
+            originConfirmed: false,
+            hasEligibleContent: false,
+          );
+          // The setState above triggers a rebuild whose document binding
+          // attaches this page to the editor session.
+          return;
+        }
+        // editorAuthorityLost: fall through to the public revalidation below.
+      }
+
       // Even when a snapshot painted synchronously, this always revalidates
       // the canonical CMS page and blocks against the origin.
-      final refreshed = await websiteService.loadPageWithBlocks(
+      final result = await websiteService.loadPageWithBlocksResult(
         requestedSlug,
         tenantId: tenantId,
       );
@@ -828,34 +1367,109 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
         return;
       }
 
+      if (result.isAuthoritativelyMissing) {
+        setState(() {
+          _page = null;
+          _pageId = null;
+          _snapshotFingerprint = null;
+          _blocks = [];
+          _retainedProvenance = StaticPolicyRetainedProvenance.none;
+          _loading = false;
+          _error = null;
+        });
+        _scheduleSeoUpdate(
+          null,
+          loadGeneration,
+          originConfirmed: false,
+          hasEligibleContent: false,
+        );
+        unawaited(
+          _refreshPublishedPolicyNavigation(
+            websiteService: websiteService,
+            tenantId: tenantId,
+            requestedSlug: requestedSlug,
+            currentResult: result,
+            loadGeneration: loadGeneration,
+          ),
+        );
+        return;
+      }
+
+      final refreshed = result.snapshot;
       if (refreshed == null) {
-        throw Exception('Página no encontrada');
+        setState(() {
+          _page = null;
+          _pageId = null;
+          _snapshotFingerprint = null;
+          _blocks = [];
+          _retainedProvenance = StaticPolicyRetainedProvenance.none;
+          _loading = false;
+          _error = null;
+        });
+        _scheduleSeoUpdate(
+          null,
+          loadGeneration,
+          originConfirmed: false,
+          hasEligibleContent: false,
+        );
+        unawaited(
+          _refreshPublishedPolicyNavigation(
+            websiteService: websiteService,
+            tenantId: tenantId,
+            requestedSlug: requestedSlug,
+            currentResult: result,
+            loadGeneration: loadGeneration,
+          ),
+        );
+        return;
       }
 
       final didContentChange = _snapshotFingerprint != refreshed.fingerprint ||
           _pageId != refreshed.page.id;
-      if (didContentChange || _loading || _error != null) {
+      final nextProvenance = result.isOriginConfirmed
+          ? StaticPolicyRetainedProvenance.publicOrigin
+          : result.isStaleFallback
+              ? StaticPolicyRetainedProvenance.publicStale
+              : StaticPolicyRetainedProvenance.none;
+      final didProvenanceChange = _retainedProvenance != nextProvenance;
+      if (didContentChange ||
+          didProvenanceChange ||
+          _loading ||
+          _error != null) {
         setState(() {
+          _page = refreshed.page;
           _pageId = refreshed.page.id;
           _snapshotFingerprint = refreshed.fingerprint;
           _blocks = refreshed.blocks;
+          _retainedProvenance = nextProvenance;
           _loading = false;
           _error = null;
         });
       }
-
-      // Warm the other policy snapshots only when missing. Opening one still
-      // performs its own mandatory background origin revalidation.
-      _prefetchOtherPolicyPages(
-        websiteService: websiteService,
-        tenantId: tenantId,
+      _scheduleSeoUpdate(
+        refreshed.page,
+        loadGeneration,
+        originConfirmed: result.isOriginConfirmed,
+        hasEligibleContent: hasMeaningfulPublicPolicyContent(refreshed.blocks),
       );
 
-      // If the user navigated here while already in edit/preview mode,
-      // update the provider so the right panel can edit selected blocks.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _updateEditProviderIfNeeded();
-      });
+      unawaited(
+        _refreshPublishedPolicyNavigation(
+          websiteService: websiteService,
+          tenantId: tenantId,
+          requestedSlug: requestedSlug,
+          currentResult: result,
+          loadGeneration: loadGeneration,
+        ),
+      );
+
+      // If the user navigated here while already in edit/preview mode, the
+      // rebuild after the setState above binds this page's document so the
+      // right panel can edit selected blocks.
+    } on WebsiteEditorReadSupersededException {
+      // An obsolete completion for a previous identity: discard silently —
+      // no error surface, no revocation, no data.
+      return;
     } catch (e) {
       if (mounted &&
           loadGeneration == _loadGeneration &&
@@ -863,99 +1477,240 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
         setState(() {
           _loading = false;
           _error = e.toString();
+          _retainedProvenance = switch (_retainedProvenance) {
+            StaticPolicyRetainedProvenance.publicOrigin =>
+              StaticPolicyRetainedProvenance.publicStale,
+            StaticPolicyRetainedProvenance.publicStale =>
+              StaticPolicyRetainedProvenance.publicStale,
+            StaticPolicyRetainedProvenance.editor =>
+              StaticPolicyRetainedProvenance.editor,
+            StaticPolicyRetainedProvenance.none =>
+              StaticPolicyRetainedProvenance.none,
+          };
         });
+        _scheduleSeoUpdate(
+          _page,
+          loadGeneration,
+          originConfirmed: false,
+          hasEligibleContent: hasMeaningfulPublicPolicyContent(_blocks),
+        );
       }
     }
   }
 
-  void _prefetchOtherPolicyPages({
-    required WebsiteService websiteService,
-    required String tenantId,
+  void _scheduleSeoUpdate(
+    WebsitePage? page,
+    int loadGeneration, {
+    required bool originConfirmed,
+    required bool hasEligibleContent,
   }) {
-    for (final slug in _policySlugs) {
-      if (slug == widget.slug) continue;
-      // Fire-and-forget.
-      websiteService.prefetchPageWithBlocks(slug, tenantId: tenantId);
-    }
+    final requestedSlug = widget.slug;
+    final websiteService = context.read<WebsiteService>();
+    final policyMeta = _PolicyMeta.forSlug(
+      requestedSlug,
+      widget.fallbackTitle,
+    );
+    final storeName = websiteService
+        .getSetting(
+          'seo_business_name',
+          websiteService.getSetting('store_name', ''),
+        )
+        .trim();
+    final configuredTitle = page?.metaTitle?.trim() ?? '';
+    final pageTitle = page?.title.trim() ?? '';
+    final effectivePageTitle =
+        pageTitle.isNotEmpty ? pageTitle : policyMeta.title;
+    final title = configuredTitle.isNotEmpty
+        ? configuredTitle
+        : storeName.isEmpty
+            ? effectivePageTitle
+            : '$effectivePageTitle | $storeName';
+    final configuredDescription = page?.metaDescription?.trim() ?? '';
+    final configuredImage = page?.ogImageUrl?.trim() ?? '';
+    final contentSummary = _PublicPolicyView.contentSummary(_blocks);
+    final defaultImage =
+        websiteService.getSetting('seo_og_image', '').trim().isNotEmpty
+            ? websiteService.getSetting('seo_og_image', '').trim()
+            : websiteService.getSetting('logo_url', '').trim();
+    final currentUri = GoRouterState.of(context).uri;
+    final isErpMounted =
+        currentUri.path == '/tienda' || currentUri.path.startsWith('/tienda/');
+    final routeProjection = projectStorefrontSeoRoute(
+      currentUri,
+      isErpMounted: isErpMounted,
+      ownerIsPublished: originConfirmed && page?.isPublished == true,
+      hasEligibleContent: hasEligibleContent,
+    );
+    final configuredStoreUrl = WebsiteSeoSettingsAliases.normalizeHttpsOrigin(
+      websiteService.getSetting('store_url', ''),
+    );
+    final canonicalBase = configuredStoreUrl.isEmpty
+        ? null
+        : Uri.tryParse(
+            configuredStoreUrl.endsWith('/')
+                ? configuredStoreUrl
+                : '$configuredStoreUrl/',
+          );
+    final canonicalUrl = canonicalBase
+        ?.resolve(routeProjection.canonicalPath)
+        .replace(query: null, fragment: null)
+        .toString();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          loadGeneration != _loadGeneration ||
+          requestedSlug != widget.slug) {
+        return;
+      }
+      if (!TickerMode.of(context)) {
+        _seoProjectionPending = true;
+        return;
+      }
+      _seoProjectionPending = false;
+      SeoHelper.updateSeo(
+        title: title,
+        description: configuredDescription.isNotEmpty
+            ? configuredDescription
+            : contentSummary.isNotEmpty
+                ? contentSummary
+                : 'Esta página no tiene contenido público disponible en este '
+                    'momento.',
+        imageUrl: configuredImage.isNotEmpty
+            ? configuredImage
+            : defaultImage.isEmpty
+                ? null
+                : defaultImage,
+        keywords: page?.metaKeywords,
+        canonicalUrl: canonicalUrl,
+        robots: routeProjection.robots,
+      );
+    });
   }
 
-  void _checkEditModeFromRouter(BuildContext context) {
-    if (_loading || _pageId == null) return;
-    if (_editModeChecked) return;
-    // Avoid entering edit/preview from an offstage kept-alive page.
-    if (!TickerMode.of(context)) return;
+  Future<void> _refreshPublishedPolicyNavigation({
+    required WebsiteService websiteService,
+    required String tenantId,
+    required String requestedSlug,
+    required PageSnapshotLoadResult currentResult,
+    required int loadGeneration,
+  }) async {
+    final results = <String, PageSnapshotLoadResult>{
+      requestedSlug: currentResult,
+    };
+    final otherSlugs =
+        _policySlugs.where((slug) => slug != requestedSlug).toList();
+    final List<PageSnapshotLoadResult> otherResults;
+    try {
+      otherResults = await Future.wait(
+        otherSlugs.map(
+          (slug) => websiteService.loadPageWithBlocksResult(
+            slug,
+            tenantId: tenantId,
+          ),
+        ),
+      );
+    } catch (error) {
+      debugPrint(
+        'No se pudo verificar la navegación pública de políticas: $error',
+      );
+      return;
+    }
+    for (var index = 0; index < otherSlugs.length; index++) {
+      results[otherSlugs[index]] = otherResults[index];
+    }
 
-    // URL params should only be used to ENTER editor context.
-    // Once already inside the editor shell, ignore URL forcing to prevent
-    // preview/edit bouncing on persistent shell routes.
-    final editProvider = context.read<WebsiteEditModeProvider>();
-    if (editProvider.isInEditorContext) {
-      _editModeChecked = true;
+    if (!mounted ||
+        loadGeneration != _loadGeneration ||
+        requestedSlug != widget.slug) {
       return;
     }
 
-    final goRouterState = GoRouterState.of(context);
-    final queryParams = goRouterState.uri.queryParameters;
-    final shouldPreview = queryParams['preview'] == 'true';
-    // If both are present, preview wins (prevents mode bouncing).
-    final shouldEdit = !shouldPreview && queryParams['edit'] == 'true';
-
-    if (!shouldEdit && !shouldPreview) return;
-    _editModeChecked = true;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final websiteService = context.read<WebsiteService>();
-      final blocks = List<Map<String, dynamic>>.from(_blocks);
-      final settings = Map<String, dynamic>.from(websiteService.settings);
-
-      if (shouldEdit) {
-        editProvider.enterEditMode(
-          blocks,
-          settings,
-          pageId: _pageId,
-          pageSlug: widget.slug,
-        );
-      } else {
-        editProvider.enterPreviewMode(
-          blocks,
-          settings,
-          pageId: _pageId,
-          pageSlug: widget.slug,
-        );
-      }
+    final publishedSlugs = availablePublicPolicySlugs(results);
+    if (setEquals(_availablePolicySlugs, publishedSlugs)) return;
+    setState(() {
+      _availablePolicySlugs = Set.unmodifiable(publishedSlugs);
     });
+  }
+
+  StaticPolicyPublicationProjection get _publication {
+    return StaticPolicyPublicationProjection.fromState(
+      page: _page,
+      blocks: _blocks,
+      provenance: _retainedProvenance,
+    );
+  }
+
+  bool get _canRenderRetainedPublicContent {
+    return _publication.canRenderRetainedContent;
+  }
+
+  bool get _isAuthoritativelyPublic {
+    return _publication.isAuthoritativelyPublic;
+  }
+
+  String get _unavailableTitle {
+    final title = _page?.title.trim() ?? '';
+    if (title.isNotEmpty && _isStaleSnapshot) {
+      return title;
+    }
+    return widget.fallbackTitle;
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
-    _checkEditModeFromRouter(context);
-
-    // If already in editor context and the user navigated without ?edit=true,
-    // keep provider synced to this page so the editor panel can render fields.
-    if (TickerMode.of(context)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _updateEditProviderIfNeeded();
-      });
-    }
 
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final websiteService = context.watch<WebsiteService>();
     final isEditMode = editProvider.isEditMode;
 
+    // Audience guard: editor-provenance content must never render a single
+    // frame beyond its authorizing lease. On revoke/suspend the snapshot is
+    // invalidated BEFORE painting and the page reloads through the public
+    // read; an unpublished public owner then resolves to unavailable.
+    final editorContentAuthorized =
+        _retainedProvenance != StaticPolicyRetainedProvenance.editor ||
+            (editProvider.isInEditorContext &&
+                editProvider.editorEntryLeaseGranted &&
+                _editorLease != null &&
+                editProvider.editorEntryLease?.fingerprint ==
+                    _editorLease?.fingerprint &&
+                editProvider.editorEntryLease?.authorityEpoch ==
+                    _editorLease?.authorityEpoch);
+    if (!editorContentAuthorized) {
+      _invalidateEditorContentAndReloadPublic();
+      return const Center(child: CircularProgressIndicator());
+    }
+    // Desired vs loaded audience. A late lease grant triggers the CENTRAL
+    // CMS revalidation signal (emitted by the layout on the lease
+    // transition); while the desired editor audience is still pending, this
+    // page keeps rendering its safe state and never binds a public snapshot
+    // into the editor session.
+    final desiredEditorAudience = editProvider.isInEditorContext &&
+        editProvider.editorEntryLeaseGranted;
+    final audienceSatisfied = desiredEditorAudience
+        ? (_retainedProvenance == StaticPolicyRetainedProvenance.editor &&
+            _editorLease != null &&
+            _editorLease?.fingerprint ==
+                editProvider.editorEntryLease?.fingerprint &&
+            _editorLease?.authorityEpoch ==
+                editProvider.editorEntryLease?.authorityEpoch)
+        : _retainedProvenance != StaticPolicyRetainedProvenance.editor;
+
+    // The FSM route command in the storefront layout already owns the mode;
+    // this consumer only binds its page document once blocks are loaded AND
+    // the loaded audience matches the session's audience.
+    if (audienceSatisfied) {
+      _bindEditorDocument(editProvider);
+    }
+
     // Only use provider blocks if we are actually editing THIS page
     // This prevents showing homepage blocks when navigating to a policy page
     // without explicitly entering edit mode for that specific page.
-    final matchesPage = (editProvider.currentPageId != null &&
-            editProvider.currentPageId == _pageId) ||
-        (editProvider.currentPageSlug != null &&
-            editProvider.currentPageSlug == widget.slug);
-
-    // Note: Auto-switching context between cached policy pages was removed
-    // because it caused infinite loops. The _checkEditModeFromRouter handles
-    // entering edit mode when navigating to a page with ?edit=true.
-    // For context switching between already-cached pages, use block selection.
+    final matchesPage = editProvider.ownsPageDocument(
+      pageId: _pageId,
+      pageSlug: widget.slug,
+    );
 
     // In editor context (preview or edit), render the provider blocks for THIS page.
     // This ensures switching to preview after saving shows the updated content.
@@ -995,16 +1750,22 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
               websiteService.getSetting('theme_body_size', '16')),
         ) ??
         16.0;
-    final sectionSpacing = double.tryParse(
-          eff('theme_section_spacing',
-              websiteService.getSetting('theme_section_spacing', '64')),
+    final sectionSpacing = WebsitePageComposition.resolveSectionSpacing(
+      eff(
+        'theme_section_spacing',
+        websiteService.getSetting('theme_section_spacing', '64'),
+      ),
+    );
+    final containerPadding = double.tryParse(
+          eff('theme_container_padding',
+              websiteService.getSetting('theme_container_padding', '24')),
         ) ??
-        64.0;
+        24.0;
     final textColor = _parseColor(eff('theme_text_color',
             websiteService.getSetting('theme_text_color', ''))) ??
         Colors.black87;
 
-    if (_loading && _blocks.isEmpty) {
+    if (_loading && !_canRenderRetainedPublicContent) {
       final minHeight = MediaQuery.sizeOf(context).height * 0.55;
       return Center(
         child: ConstrainedBox(
@@ -1012,6 +1773,103 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
           child: const Center(child: CircularProgressIndicator()),
         ),
       );
+    }
+    if (editProvider.isInEditorContext && !matchesPage) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final breakpoint =
+        websitePublicBreakpointForWidth(MediaQuery.sizeOf(context).width);
+    final compositionMode = isEditMode
+        ? WebsitePageCompositionMode.edit
+        : editProvider.isPreviewMode
+            ? WebsitePageCompositionMode.preview
+            : WebsitePageCompositionMode.public;
+    final composition = WebsitePageComposition.project(
+      blocks: blocksToRender,
+      mode: compositionMode,
+      breakpoint: breakpoint,
+      sectionSpacing: sectionSpacing,
+    );
+    final composedRows = composition.blocks
+        .map((block) => block.sourceBlock)
+        .toList(growable: false);
+    // The trust shell (hero/summary/nav) always derives from PUBLICLY
+    // reachable rows. Edit keeps hidden draft blocks repairable inside the
+    // composed canvas (with chrome), but they must not change the shell's
+    // title/summary relative to Preview/Public.
+    final shellRows = isEditMode
+        ? WebsitePageComposition.project(
+            blocks: blocksToRender,
+            mode: WebsitePageCompositionMode.preview,
+            breakpoint: breakpoint,
+            sectionSpacing: sectionSpacing,
+          ).blocks.map((block) => block.sourceBlock).toList(growable: false)
+        : composedRows;
+    String? tenantId;
+    try {
+      tenantId = context.read<PublicStoreTenantProvider>().tenantId;
+    } catch (_) {
+      tenantId = null;
+    }
+    final composedContent = PageComposition(
+      composition: composition,
+      primaryColor: primaryColor,
+      accentColor: accentColor,
+      textColor: textColor,
+      containerPadding: containerPadding,
+      headingFont: headingFont,
+      bodyFont: bodyFont,
+      headingSize: headingSize,
+      bodySize: bodySize,
+      tenantId: tenantId,
+      onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
+      isNavigationEligible: (href) =>
+          PublicStoreLayout.isHrefPubliclyEligible(context, href),
+      onAddBlock: (type, {atIndex}) =>
+          editProvider.addBlock(type, atIndex: atIndex),
+      onSpacingChanged: (blockId, spacing) =>
+          editProvider.updateBlockData(blockId, 'spacingAfter', spacing),
+      contentAdapter: (context, block, sharedContent) {
+        final sections = _PublicPolicyView.extractSections([
+          block.sourceBlock,
+        ]);
+        return sections.isEmpty
+            ? sharedContent
+            : KeyedSubtree(
+                key: ValueKey<String>(
+                  'static-policy-adapted-content-${block.id}',
+                ),
+                child: _PolicyContent(sections: sections),
+              );
+      },
+      emptyState: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            'Esta página está en construcción',
+            style: TextStyle(
+              fontSize: 18,
+              color: textColor.withValues(alpha: 0.7),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (!editProvider.isInEditorContext) {
+      if (_publication.shouldRenderPublicContent) {
+        return _PublicPolicyView(
+          slug: widget.slug,
+          fallbackTitle: widget.fallbackTitle,
+          blocks: composedRows,
+          composedContent: composedContent,
+          page: _page,
+          availablePolicySlugs: _availablePolicySlugs,
+          isStale: !_isAuthoritativelyPublic,
+        );
+      }
+      return _PublicPolicyUnavailableView(title: _unavailableTitle);
     }
 
     if (_error != null) {
@@ -1044,108 +1902,17 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
       );
     }
 
-    if (_blocks.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(
-            'Esta página está en construcción',
-            style: TextStyle(
-                fontSize: 18, color: textColor.withValues(alpha: 0.7)),
-          ),
-        ),
-      );
-    }
-
-    final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
-
-    if (!editProvider.isInEditorContext && !isEditMode) {
-      return _PublicPolicyView(
-        slug: widget.slug,
-        fallbackTitle: widget.fallbackTitle,
-        blocks: blocksToRender,
-      );
-    }
-
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          for (final block in blocksToRender) ...[
-            KeyedSubtree(
-              key: ValueKey<String>(
-                'policy-block-${block['id']?.toString() ?? ''}',
-              ),
-              child: Padding(
-                padding: EdgeInsets.only(bottom: sectionSpacing),
-                child: _buildBlockWidget(
-                  context: context,
-                  block: block,
-                  isEditMode: isEditMode,
-                  primaryColor: primaryColor,
-                  accentColor: accentColor,
-                  headingFont: headingFont,
-                  bodyFont: bodyFont,
-                  headingSize: headingSize,
-                  bodySize: bodySize,
-                  tenantId: tenantId,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
+    // Edit -> Preview -> Public parity: every mode renders the same trust
+    // shell + adapted composition; Edit only adds chrome inside it.
+    return _PublicPolicyView(
+      slug: widget.slug,
+      fallbackTitle: widget.fallbackTitle,
+      blocks: shellRows,
+      composedContent: composedContent,
+      page: _page,
+      availablePolicySlugs: _availablePolicySlugs,
+      isStale: false,
     );
-  }
-
-  Widget _buildBlockWidget({
-    required BuildContext context,
-    required Map<String, dynamic> block,
-    required bool isEditMode,
-    required Color primaryColor,
-    required Color accentColor,
-    required String headingFont,
-    required String bodyFont,
-    required double headingSize,
-    required double bodySize,
-    required String? tenantId,
-  }) {
-    final data = block['block_data'] as Map<String, dynamic>? ?? {};
-    final isVisible = block['is_visible'] == true;
-    final blockType = block['block_type']?.toString() ?? 'hero';
-    final blockId = block['id']?.toString() ?? '';
-
-    return isEditMode
-        ? DeferredEditableBlockRenderer.build(
-            context: context,
-            blockId: blockId,
-            blockType: blockType,
-            data: data,
-            primaryColor: primaryColor,
-            accentColor: accentColor,
-            headingFont: headingFont,
-            bodyFont: bodyFont,
-            headingSize: headingSize,
-            bodySize: bodySize,
-            onNavigate: (route) =>
-                PublicStoreLayout.navigateToHref(context, route),
-            isVisible: isVisible,
-            tenantId: tenantId,
-          )
-        : WebsiteBlockRenderer.build(
-            context: context,
-            blockType: blockType,
-            data: data,
-            primaryColor: primaryColor,
-            accentColor: accentColor,
-            previewMode: false,
-            headingFont: headingFont,
-            bodyFont: bodyFont,
-            headingSize: headingSize,
-            bodySize: bodySize,
-            onNavigate: (route) =>
-                PublicStoreLayout.navigateToHref(context, route),
-            tenantId: tenantId,
-          );
   }
 
   Color? _parseColor(String raw) {

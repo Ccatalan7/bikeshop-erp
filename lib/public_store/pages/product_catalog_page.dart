@@ -7,7 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 // import '../theme/public_store_theme.dart'; // Unused
+import '../models/catalog_filter_rail_policy.dart';
+import '../providers/public_store_tenant_provider.dart';
 import '../services/catalog_page_prefetch_cache.dart';
+import '../services/public_category_publication.dart';
 import '../services/public_inventory_service.dart';
 import '../services/public_store_scroll_state.dart';
 import '../../shared/models/product.dart';
@@ -20,8 +23,10 @@ import '../widgets/catalog_collection_presentation.dart';
 import '../utils/product_url.dart';
 import '../utils/public_store_tenant_resolver.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../modules/inventory/models/category_models.dart';
 import '../../modules/website/models/website_catalog_presentation.dart';
 import '../../modules/website/models/website_catalog_query.dart';
+import '../../modules/website/models/website_page_models.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 import '../widgets/public_store_layout.dart';
@@ -75,7 +80,14 @@ class _CategoryNode {
   final String description;
   final String imageUrl;
   final int sortOrder;
+
+  /// Raw `product_categories.show_on_website`, the canonical publication flag.
+  /// Menu destinations are retained only as diagnostics and never widen it;
+  /// see [PublicCategoryPublication].
   final bool showOnWebsite;
+
+  /// Whether this category belongs in public catalog navigation for this load.
+  final bool isPublished;
   final List<_CategoryNode> children;
 
   _CategoryNode({
@@ -87,8 +99,10 @@ class _CategoryNode {
     this.imageUrl = '',
     this.sortOrder = 0,
     this.showOnWebsite = false,
+    bool? isPublished,
     List<_CategoryNode>? children,
-  }) : children = children ?? [];
+  })  : isPublished = isPublished ?? showOnWebsite,
+        children = children ?? [];
 
   /// Get all descendant IDs (children, grandchildren, etc.)
   Set<String> getAllDescendantIds() {
@@ -117,7 +131,6 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   int? _visibleCatalogPageNumber;
   bool _isShowingPreviousResults = false;
   String? _lastLoggedModeKey;
-  String? _lastDependencyModeKey;
   String? _lastSeoSignature;
   Timer? _searchDebounce;
   PublicInventoryService? _observedInventoryService;
@@ -143,11 +156,24 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     shouldCache: (snapshot) => snapshot.isAvailable,
   );
 
-  // Hierarchical category tree (only root-level visible categories)
+  // Hierarchical category tree (published categories that have no published
+  // ancestor, so the sidebar always starts at the highest public level).
   List<_CategoryNode> _categoryTree = [];
 
   // All categories indexed by ID for quick lookup
   Map<String, _CategoryNode> _allCategoriesById = {};
+
+  // Categories published by the canonical show_on_website flag. See
+  // [PublicCategoryPublication].
+  Set<String> _publishedCategoryIds = const <String>{};
+  PublicCategoryPublication _categoryPublication =
+      PublicCategoryPublication.empty();
+
+  // Raw category rows kept so menu diagnostics can be re-resolved when the
+  // Website Builder navigation payload arrives or changes.
+  List<Category>? _loadedCategories;
+  List<WebsiteNavigation>? _publicationNavigationRef;
+  bool _publicationResyncScheduled = false;
   Map<String, int> _directCategoryProductCounts = {};
 
   // Track which parent categories are expanded in the UI
@@ -192,7 +218,11 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   // DISABLED: AutomaticKeepAliveClientMixin causes element activation conflicts
   // during edit/preview mode switches. The performance cost of reloading is acceptable.
   @override
-  bool get wantKeepAlive => false;
+  // Kept alive: the storefront shell keeps ONE stable content anchor
+  // across Public|Preview|Edit, so the old element-activation conflicts
+  // that forced this off no longer exist. Mode toggles preserve scroll,
+  // filters and grid state; route changes still remount legitimately.
+  bool get wantKeepAlive => true;
 
   @override
   void didChangeDependencies() {
@@ -204,14 +234,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       _observedInventoryService = inventoryService
         ..addListener(_handlePublicInventoryInvalidated);
     }
-    final editProvider = context.read<WebsiteEditModeProvider>();
-    final modeKey = editProvider.isEditMode
-        ? 'edit'
-        : (editProvider.isPreviewMode ? 'preview' : 'normal');
-    final shouldReloadForMode =
-        _lastDependencyModeKey != null && _lastDependencyModeKey != modeKey;
-    _lastDependencyModeKey = modeKey;
-    _syncFiltersFromRoute(reloadForModeChange: shouldReloadForMode);
+    // A mode toggle (Public|Preview|Edit) is a rebuild-in-place under the
+    // stable content anchor: it never clears caches nor reloads catalog
+    // data. Route changes remain the only legitimate reload trigger.
+    _syncFiltersFromRoute();
     if (_inventoryRevalidationPending && TickerMode.of(context)) {
       _inventoryRevalidationPending = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -239,16 +265,35 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _inventoryInvalidationScheduled = false;
       if (!mounted) return;
+      final inventoryService = _observedInventoryService;
+      final tenantId =
+          context.read<PublicStoreTenantProvider>().tenantId?.trim();
+      final categorySnapshot =
+          inventoryService == null || tenantId == null || tenantId.isEmpty
+              ? null
+              : inventoryService.cachedCategoriesForTenant(tenantId: tenantId);
+
+      // A category fetch publishes through the shared ChangeNotifier too.
+      // Consume that retained snapshot instead of forcing another origin
+      // refresh, otherwise the catalog reacts to its own publication forever.
+      if (categorySnapshot != null && tenantId != null) {
+        _loadedCategories = categorySnapshot.categories;
+        _loadedCategoriesTenantId = tenantId;
+        _applyCategoryPublication(categorySnapshot.categories);
+      }
       unawaited(
         _loadProducts(
           resetPage: false,
-          forceCategoryRefresh: true,
+          // A destructive tenant/reset invalidation has no retained category
+          // snapshot. That exceptional path performs one origin refresh; the
+          // resulting notification is then consumed by the branch above.
+          forceCategoryRefresh: categorySnapshot == null,
         ),
       );
     });
   }
 
-  void _syncFiltersFromRoute({bool reloadForModeChange = false}) {
+  void _syncFiltersFromRoute() {
     final uri = GoRouterState.of(context).uri;
     final qp = uri.queryParameters;
     final routePath = uri.path.trim().toLowerCase();
@@ -272,7 +317,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     }
 
     final signature = uri.toString();
-    if (signature == _lastRouteFiltersSignature && !reloadForModeChange) {
+    if (signature == _lastRouteFiltersSignature) {
       return;
     }
     _lastRouteFiltersSignature = signature;
@@ -288,6 +333,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       String? resolvedAliasCategoryId;
+      String? legacyQueryCategoryId;
 
       setState(() {
         _catalogQueryError = catalogQuery == null
@@ -367,6 +413,13 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                 _isAliasForCategory(routeCategory, resolved)) {
               resolvedAliasCategoryId = resolved;
             }
+            // A category carried in the query string renders the collection but
+            // leaves the address bar on `/productos`, so the page a visitor is
+            // looking at cannot be shared, reloaded or indexed. Upgrade it to
+            // the canonical collection path the router already serves.
+            if (resolved != null && routeCategoryFromPath == null) {
+              legacyQueryCategoryId = resolved;
+            }
           }
         }
       });
@@ -378,29 +431,18 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           )) {
         return;
       }
-      if (reloadForModeChange) {
-        _lastCategoryCountsSignature = '';
-        _activeCatalogPageSignature = null;
-        _catalogPageCache.clear();
-        _catalogFacetCache.clear();
-        if (kDebugMode) {
-          debugPrint(
-            '🧭 [StoreModeTrace][Catalog] RELOAD_FOR_MODE '
-            'mode=$_lastDependencyModeKey uri=${GoRouterState.of(context).uri}',
-          );
-        }
-        // The URL is authoritative during a mode transition. In particular,
-        // keep a direct/back-forward `?page=N` request on that page instead of
-        // silently loading page 1 under a page-N URL.
-        unawaited(
-          _loadProducts(
-            resetPage: false,
-            forceCategoryRefresh: true,
-          ),
-        );
-      } else {
-        _handleFiltersChanged(resetPage: false);
+      if (legacyQueryCategoryId != null &&
+          _replaceCategoryRoute(
+            legacyQueryCategoryId!,
+            preserveCategoryScope: true,
+            forceReplace: true,
+          )) {
+        return;
       }
+      // Route-driven filter application. `resetPage: false` keeps a
+      // direct/back-forward `?page=N` request on that page instead of
+      // silently loading page 1 under a page-N URL.
+      _handleFiltersChanged(resetPage: false);
     });
   }
 
@@ -463,17 +505,31 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     ).hasMatch(value);
   }
 
+  /// Navigation authored in the Website Builder.
+  ///
+  /// It is diagnostic input, never a category-publication owner. Read
+  /// defensively because this page also mounts inside editor hosts that may
+  /// not provide the service.
+  List<WebsiteNavigation> _websiteNavigation() {
+    try {
+      return context.read<WebsiteService>().navigation;
+    } catch (_) {
+      return const <WebsiteNavigation>[];
+    }
+  }
+
+  bool _isPublishedCategory(String? categoryId) =>
+      categoryId != null && _publishedCategoryIds.contains(categoryId);
+
   String? _resolveCategoryIdFromValue(String raw) {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) return null;
 
     // Route identity never overrides category publication. Before categories
     // load this returns null so the value remains pending; afterwards only a
-    // category published by the canonical owner can become route context.
+    // published category can become route context.
     if (_looksLikeUuid(trimmed)) {
-      return _allCategoriesById[trimmed]?.showOnWebsite == true
-          ? trimmed
-          : null;
+      return _isPublishedCategory(trimmed) ? trimmed : null;
     }
 
     final registryClaimCount =
@@ -481,7 +537,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     if (registryClaimCount > 0) {
       final presentation = _presentationRegistry.forSlug(trimmed);
       if (presentation != null &&
-          _allCategoriesById[presentation.categoryId]?.showOnWebsite == true) {
+          _isPublishedCategory(presentation.categoryId)) {
         return presentation.categoryId;
       }
       // A stored but ambiguous/unpublished route must not fall through to a
@@ -494,7 +550,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
     final matches = <String>{};
     for (final entry in _allCategoriesById.entries) {
-      if (!entry.value.showOnWebsite) continue;
+      if (!entry.value.isPublished) continue;
       final normalizedName = _normalizeForSearch(entry.value.name);
       final normalizedPath = _normalizeForSearch(entry.value.fullPath);
       if (normalizedName == wanted ||
@@ -748,6 +804,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         _loadedCategoriesTenantId = null;
         _categoryTree = const [];
         _allCategoriesById = const {};
+        _publishedCategoryIds = const <String>{};
+        _categoryPublication = PublicCategoryPublication.empty();
+        _loadedCategories = null;
+        _publicationNavigationRef = null;
       });
     }
 
@@ -769,21 +829,6 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         _isLoading = true;
       }
     });
-
-    if (_catalogQueryError != null) {
-      if (mounted && token == _loadToken) {
-        setState(() {
-          _allProducts = const [];
-          _filteredProducts = const [];
-          _catalogFacets = const PublicCatalogFacetSnapshot.unavailable();
-          _totalProductCount = 0;
-          _isLoading = false;
-          _isRefreshing = false;
-          _hasLoadedInitialProducts = true;
-        });
-      }
-      return;
-    }
 
     try {
       // Load visible categories (show_on_website = true). Start it early so
@@ -881,7 +926,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         );
       }
 
-      final canStartPageBeforeCategories = !editProvider.isEditMode &&
+      final canStartPageBeforeCategories = _catalogQueryError == null &&
+          !editProvider.isEditMode &&
           _pendingRouteCategoryValue == null &&
           _selectedCategoryId == null;
       if (canStartPageBeforeCategories) {
@@ -925,19 +971,81 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           )) {
             return;
           }
+          // The first route sync can run before the category snapshot exists.
+          // Once the pending UUID/slug resolves, apply the same legacy-query
+          // upgrade as the already-loaded path above; otherwise the visible
+          // collection remains on `?category=...`, noindex, with a generic
+          // canonical even though it now has a published category owner.
+          if (_replaceCategoryRoute(
+            resolved,
+            preserveCategoryScope: true,
+            forceReplace: true,
+          )) {
+            return;
+          }
         } else if (resolved == null && mounted) {
           final unresolved = _pendingRouteCategoryValue!.trim();
+          final isKnownUnpublished =
+              _categoryPublication.isKnownUnpublishedCategoryValue(unresolved);
           setState(() {
             _pendingRouteCategoryValue = null;
             _selectedCategoryId = null;
-            _categoryRouteError = unresolved;
+            _categoryRouteError = isKnownUnpublished ? null : unresolved;
+            if (!isKnownUnpublished) {
+              _allProducts = const [];
+              _filteredProducts = const [];
+              _totalProductCount = 0;
+              _hasLoadedInitialProducts = true;
+            }
+          });
+          if (isKnownUnpublished) {
+            // A durable slug that now belongs to an unpublished category is a
+            // withdrawn collection, not a customer-facing error page. Replace
+            // it with the catalog root. Unknown/ambiguous routes still fail
+            // closed below instead of redirecting arbitrary typos.
+            if (_replaceCategoryRoute(
+              null,
+              forceReplace: true,
+              discardQuery: _catalogQueryError != null,
+            )) {
+              return;
+            }
+            // A host without a working router must never render the catalog
+            // root underneath a withdrawn collection URL. Keep the route
+            // unavailable and canonicalized to the route-owned root.
+            setState(() {
+              _categoryRouteError = unresolved;
+              _allProducts = const [];
+              _filteredProducts = const [];
+              _totalProductCount = 0;
+              _hasLoadedInitialProducts = true;
+              _isLoading = false;
+              _isRefreshing = false;
+            });
+            return;
+          } else {
+            return;
+          }
+        }
+      }
+
+      // Resolve the route owner before rejecting secondary filters. A
+      // withdrawn collection must still redirect to the catalog root, and an
+      // unknown collection must still fail closed, even when `sort`, `page`,
+      // or another visitor filter is malformed.
+      if (_catalogQueryError != null) {
+        if (mounted && token == _loadToken) {
+          setState(() {
             _allProducts = const [];
             _filteredProducts = const [];
+            _catalogFacets = const PublicCatalogFacetSnapshot.unavailable();
             _totalProductCount = 0;
+            _isLoading = false;
+            _isRefreshing = false;
             _hasLoadedInitialProducts = true;
           });
-          return;
         }
+        return;
       }
 
       if (kDebugMode) {
@@ -1327,10 +1435,45 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
               tenantId: tenantId,
             );
       if (!mounted || token != _loadToken) return;
-      final visibleCategoryIds = <String>{};
+      _loadedCategories = categories;
+      _loadedCategoriesTenantId = tenantId;
+      _applyCategoryPublication(categories);
+    } catch (e) {
+      debugPrint('[ProductCatalogPage] Error loading visible categories: $e');
+    }
+  }
 
-      // Build nodes for all categories while separately tracking which ones
-      // the Website Builder publishes as public navigation/filter choices.
+  /// Rebuilds the category tree from the resolved publication set.
+  ///
+  /// Split out from the fetch because the canonical category rows and the
+  /// diagnostic menu payload arrive independently. Whichever lands second
+  /// must refresh both the flag-owned tree and mismatch diagnostics without
+  /// allowing menu rows to publish a category.
+  void _applyCategoryPublication(List<Category> categories) {
+    {
+      final navigation = _websiteNavigation();
+      // Single owner: `show_on_website` decides publication. The resolver only
+      // diagnoses the menus against that truth — a menu row must never widen
+      // what the catalog, routing or breadcrumb treat as public.
+      final publication = PublicCategoryPublication.resolve(
+        categories: [
+          for (final category in categories)
+            if (category.id != null)
+              PublicCategoryDescriptor(
+                id: category.id!,
+                name: category.name,
+                fullPath: category.fullPath,
+                showOnWebsite: category.showOnWebsite,
+              ),
+        ],
+        navigation: navigation,
+        presentationRegistry: _presentationRegistry,
+      );
+      _publicationNavigationRef = navigation;
+      final visibleCategoryIds = publication.publishedIds;
+
+      // Build nodes for every category so membership still resolves through
+      // the complete hierarchy, including unpublished intermediate levels.
       final nodesById = <String, _CategoryNode>{};
       for (final category in categories) {
         final id = category.id;
@@ -1344,10 +1487,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           imageUrl: category.imageUrl ?? '',
           sortOrder: category.sortOrder,
           showOnWebsite: category.showOnWebsite,
+          isPublished: visibleCategoryIds.contains(id),
         );
-        if (category.showOnWebsite) {
-          visibleCategoryIds.add(id);
-        }
       }
 
       // Build parent-child relationships
@@ -1365,14 +1506,13 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         });
       }
 
-      // Build root-level tree: only categories with show_on_website = true
-      // that are either root OR whose parent is not visible
+      // Build the sidebar roots: published categories that have no published
+      // ancestor. The tree therefore always starts at the highest flag-
+      // published level of each branch; menu rows never widen publication.
       final rootCategories = <_CategoryNode>[];
       for (final id in visibleCategoryIds) {
-        final node = nodesById[id]!;
-        // A visible category is a "root" in our display if:
-        // - It has no parent, OR
-        // - Its parent is not in the visible set
+        final node = nodesById[id];
+        if (node == null) continue;
         if (node.parentId == null ||
             !visibleCategoryIds.contains(node.parentId)) {
           rootCategories.add(node);
@@ -1387,14 +1527,48 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         setState(() {
           _categoryTree = rootCategories;
           _allCategoriesById = nodesById;
-          _loadedCategoriesTenantId = tenantId;
+          _publishedCategoryIds = visibleCategoryIds;
+          _categoryPublication = publication;
         });
       }
       _catalogDebugLog(
-          '[ProductCatalogPage] Loaded ${visibleCategoryIds.length} visible categories, ${rootCategories.length} root nodes');
-    } catch (e) {
-      debugPrint('[ProductCatalogPage] Error loading visible categories: $e');
+          '[ProductCatalogPage] Published ${visibleCategoryIds.length} categories, '
+          '${rootCategories.length} root nodes');
+      if (publication.menuOnlyCategoryIds.isNotEmpty) {
+        debugPrint(
+          '[ProductCatalogPage] Menu links target unpublished categories '
+          '(fix the data through the Website Builder, the renderer will not '
+          'widen publication): ${publication.menuOnlyCategoryIds.join(', ')}',
+        );
+      }
+      if (publication.unresolvedNavigationTokens.isNotEmpty) {
+        debugPrint(
+          '[ProductCatalogPage] Menu destinations without a matching category: '
+          '${publication.unresolvedNavigationTokens.join(', ')}',
+        );
+      }
     }
+  }
+
+  /// Re-resolves publication when the Website Builder navigation arrives or
+  /// changes after the categories were already loaded.
+  ///
+  /// Called from `build`, so the identity check must stay allocation-free and
+  /// the rebuild must be deferred past the current frame.
+  void _syncCategoryPublicationWithNavigation() {
+    final categories = _loadedCategories;
+    if (categories == null || categories.isEmpty) return;
+    if (identical(_websiteNavigation(), _publicationNavigationRef)) return;
+    if (_publicationResyncScheduled) return;
+    _publicationResyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _publicationResyncScheduled = false;
+      if (!mounted) return;
+      final current = _loadedCategories;
+      if (current == null || current.isEmpty) return;
+      if (identical(_websiteNavigation(), _publicationNavigationRef)) return;
+      _applyCategoryPublication(current);
+    });
   }
 
   /// Get all category IDs that should be included when filtering by the given category
@@ -1467,12 +1641,15 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                     : logoUrl;
     final isErpMounted =
         currentUri.path == '/tienda' || currentUri.path.startsWith('/tienda/');
-    final ownerIsPublished =
-        selectedId == null || category?.showOnWebsite == true;
-    final hasEligibleContent = _categoryRouteError == null &&
+    final routeUnavailable = _categoryRouteError != null ||
+        (_pendingRouteCategoryValue?.trim().isNotEmpty ?? false);
+    final ownerIsPublished = !routeUnavailable &&
+        (selectedId == null || category?.isPublished == true);
+    final hasEligibleContent = !routeUnavailable &&
         _catalogLoadError == null &&
         _hasLoadedInitialProducts &&
         _totalProductCount > 0;
+    final catalogRootPath = storefrontCatalogRootPath(currentUri.path);
     final routeProjection = projectStorefrontSeoRoute(
       currentUri,
       isErpMounted:
@@ -1480,6 +1657,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       ownerAllowsIndexing: presentation?.allowIndexing ?? false,
       ownerIsPublished: ownerIsPublished,
       hasEligibleContent: hasEligibleContent,
+      unavailableCanonicalPath: routeUnavailable ? catalogRootPath : null,
     );
     final canonicalUrl = _catalogCanonicalUrl(
       websiteService,
@@ -1551,28 +1729,41 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   bool _replaceCategoryRoute(
     String? categoryId, {
     bool preserveCategoryScope = false,
+    bool forceReplace = false,
+    bool discardQuery = false,
   }) {
     try {
       final current = GoRouterState.of(context).uri;
       final isMounted =
           current.path == '/tienda' || current.path.startsWith('/tienda/');
-      final services = _selectedProductType == ProductType.service;
-      final presentation = _presentationForCategory(categoryId);
-      final canonicalPath = presentation == null
-          ? (services ? '/servicios' : '/productos')
-          : publicCategoryPath(
-              presentation: presentation,
-              services: services,
-            );
+      final services = storefrontCatalogRootPath(current.path) == '/servicios';
+      // `null` means "clear the collection", not "use whichever catalog-root
+      // presentation matches a secondary type filter". Keeping those states
+      // separate is what makes a withdrawn `/productos/...?...type=service`
+      // route return to `/productos`.
+      final presentation =
+          categoryId == null ? null : _presentationForCategory(categoryId);
+      final canonicalPath = storefrontCatalogSelectionPath(
+        currentPath: current.path,
+        hasSelectedCategory: categoryId != null,
+        publishedCategoryPath: presentation == null
+            ? null
+            : publicCategoryPath(
+                presentation: presentation,
+                services: services,
+              ),
+      );
       final path = normalizePublicCatalogRouteForRuntime(
         canonicalPath,
         isErpMounted: isMounted,
       );
-      final query = Map<String, String>.from(current.queryParameters)
-        ..remove('category')
-        ..remove('category_id')
-        ..remove('cat')
-        ..remove('categoria');
+      final query = discardQuery
+          ? <String, String>{}
+          : (Map<String, String>.from(current.queryParameters)
+            ..remove('category')
+            ..remove('category_id')
+            ..remove('cat')
+            ..remove('categoria'));
       if (!preserveCategoryScope) {
         query.remove('category_scope');
       }
@@ -1594,7 +1785,11 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       // Flutter's relayout-boundary assertion on desktop. Once inside a
       // collection, replacements remain appropriate for switching collection
       // or clearing it without growing the navigation stack indefinitely.
-      if (categoryId != null && isCatalogRoot) {
+      //
+      // Upgrading a legacy URL in place is the exception: the visitor did not
+      // navigate, so pushing would leave the superseded URL in history and
+      // make Back appear to do nothing.
+      if (categoryId != null && isCatalogRoot && !forceReplace) {
         router.push(destination);
       } else {
         router.replace(destination);
@@ -2044,6 +2239,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                   padding: const EdgeInsets.all(16),
                   child: _buildFilters(
                     refreshPanel: () => setSheetState(() {}),
+                    showTitle: false,
                   ),
                 ),
               ),
@@ -2310,7 +2506,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           ? null
           : _allCategoriesById[current.parentId!];
     }
-    return path.where((node) => node.showOnWebsite).toList(growable: false);
+    return path.where((node) => node.isPublished).toList(growable: false);
   }
 
   Widget _buildCollectionIntroduction({required bool compact}) {
@@ -2333,7 +2529,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     final visibleChildren = category.children
         .where(
           (child) =>
-              child.showOnWebsite &&
+              child.isPublished &&
               _countProductsInCategoryTree(child, null) > 0,
         )
         .toList(growable: false);
@@ -2362,11 +2558,13 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
     final editProvider = context.watch<WebsiteEditModeProvider>();
+    _scheduleCatalogSeo(editProvider);
+    // Cheap identity check; the menu list is replaced wholesale when it loads.
+    _syncCategoryPublicationWithNavigation();
+
     final modeKey = editProvider.isEditMode
         ? 'edit'
         : (editProvider.isPreviewMode ? 'preview' : 'normal');
-    _scheduleCatalogSeo(editProvider);
-
     if (kDebugMode && _lastLoggedModeKey != modeKey) {
       final previousMode = _lastLoggedModeKey ?? 'unmounted';
       _lastLoggedModeKey = modeKey;
@@ -2402,7 +2600,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     return Container(
       color: Colors.white,
       child: MediaQueryLayoutBuilder(
-        key: ValueKey('catalog_layout_$modeKey'),
+        key: const ValueKey('catalog_layout'),
         builder: (context, constraints) {
           // Mobile: stacked layout, hide sidebar
           final isMobile = constraints.maxWidth < 700;
@@ -2507,7 +2705,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                       if (_hasActiveSecondaryFilters)
                         _buildActiveFilterSummary(),
                       const SizedBox(height: 12),
-                      _buildProductGrid(modeKey),
+                      _buildProductGrid(),
                     ],
                   ),
                 ),
@@ -2545,7 +2743,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                               if (_hasActiveSecondaryFilters)
                                 _buildActiveFilterSummary(),
                               const SizedBox(height: 28),
-                              _buildProductGrid(modeKey),
+                              _buildProductGrid(),
                             ],
                           ),
                         ),
@@ -2679,21 +2877,17 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     );
   }
 
-  Widget _buildFilters({VoidCallback? refreshPanel}) {
+  /// [showTitle] is false inside the compact filter sheet, which already
+  /// renders its own titled header with a close button. Emitting the rail's
+  /// title there stacked two "Filtros" headings on top of each other.
+  Widget _buildFilters({VoidCallback? refreshPanel, bool showTitle = true}) {
     final presentation = _presentationForCategory(_selectedCategoryId);
     final facets =
         presentation?.facets ?? WebsiteCatalogPresentation.defaultFacets;
     final sections = <Widget>[];
-    for (final facet in facets) {
-      final content = switch (facet) {
-        WebsiteCatalogFacet.categories => _buildCategoryFacet(),
-        WebsiteCatalogFacet.availability =>
-          _buildAvailabilityFacet(refreshPanel),
-        WebsiteCatalogFacet.brand => _buildBrandFacet(refreshPanel),
-        WebsiteCatalogFacet.price => _buildPriceFacet(refreshPanel),
-      };
+    void addSection(Widget content) {
       if (content is SizedBox && content.width == 0 && content.height == 0) {
-        continue;
+        return;
       }
       if (sections.isNotEmpty) {
         sections.addAll([
@@ -2704,20 +2898,41 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       }
       sections.add(content);
     }
+
+    for (final facet in facets) {
+      // Stored facet keys keep their stored meaning. `availability` renders
+      // the visitor stock filter (suppressed only when the public policy
+      // makes it inert); it is never repurposed into a different control.
+      addSection(switch (facet) {
+        WebsiteCatalogFacet.categories => _buildCategoryFacet(),
+        WebsiteCatalogFacet.availability =>
+          _buildAvailabilityFacet(refreshPanel),
+        WebsiteCatalogFacet.brand => _buildBrandFacet(refreshPanel),
+        WebsiteCatalogFacet.price => _buildPriceFacet(refreshPanel),
+      });
+      // The collection navigator is page-owned presentation accompanying the
+      // category facet — deliberately NOT a persisted facet key, so it needs
+      // no editor round-trip and steals no stored semantic.
+      if (facet == WebsiteCatalogFacet.categories) {
+        addSection(_buildCollectionNavigatorFacet());
+      }
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Filtros',
-          style: TextStyle(
-            fontFamily: null,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-            letterSpacing: 0.2,
+        if (showTitle) ...[
+          const Text(
+            'Filtros',
+            style: TextStyle(
+              fontFamily: null,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+              letterSpacing: 0.2,
+            ),
           ),
-        ),
-        const SizedBox(height: 20),
+          const SizedBox(height: 20),
+        ],
 
         // Search
         TextField(
@@ -2783,10 +2998,27 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     );
   }
 
+  /// The visitor-facing availability filter for the stored `availability`
+  /// facet key.
+  ///
+  /// Meaningful only when the public stock policy admits unavailable products
+  /// into the catalog (`all` / `out_of_stock_only`): under `available_only`
+  /// the result set is in-stock by definition, so visitors get no dead
+  /// control. Editors still see it — disabled, with the reason — so the
+  /// stored facet stays discoverable instead of silently vanishing.
   Widget _buildAvailabilityFacet(VoidCallback? refreshPanel) {
-    final canApplyVisitorFilter =
-        context.read<WebsiteEditModeProvider>().isEditMode ||
-            _catalogFacets.isAvailable;
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final policy =
+        _readVisibilityPolicy() ?? const PublicProductVisibilityPolicy();
+    final decision = decideCatalogAvailabilityFacet(
+      stockPolicy: policy.stockPolicy,
+      isEditMode: editProvider.isEditMode,
+      facetDataAvailable: _catalogFacets.isAvailable,
+    );
+    if (!decision.visible) {
+      return const SizedBox.shrink();
+    }
+    final canApplyVisitorFilter = decision.enabled;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2859,6 +3091,122 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
             ),
           ),
       ],
+    );
+  }
+
+  /// Where the visitor can go from the collection they are looking at.
+  ///
+  /// Page-owned presentation, not a persisted facet: it always accompanies
+  /// the category facet and answers the question a visitor inside a
+  /// collection actually has — where to go next.
+  ///
+  /// It is contextual on purpose:
+  /// - inside a branch, its published children;
+  /// - inside a leaf, the rest of that branch, so a narrow collection is never
+  ///   a dead end;
+  /// - at the catalog root, nothing — `Categorías` above already lists the
+  ///   entry points, and repeating them would be noise.
+  Widget _buildCollectionNavigatorFacet() {
+    final selectedId = _selectedCategoryId;
+    if (selectedId == null) return const SizedBox.shrink();
+    final current = _allCategoriesById[selectedId];
+    if (current == null) return const SizedBox.shrink();
+
+    final children = _navigableChildren(current);
+    final parent =
+        current.parentId == null ? null : _allCategoriesById[current.parentId!];
+    final decision = decideCatalogCollectionFacet<_CategoryNode>(
+      selectedId: selectedId,
+      children: children,
+      parentName: parent?.name,
+      siblings:
+          children.isEmpty && parent != null ? _navigableChildren(parent) : [],
+    );
+    if (decision == null) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildFacetHeading(decision.heading),
+        const SizedBox(height: 4),
+        ...decision.options.map(
+          (node) => _buildCollectionNavigatorOption(
+            node,
+            isCurrent: decision.siblingMode && node.id == selectedId,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Published children that actually have something to show.
+  List<_CategoryNode> _navigableChildren(_CategoryNode parent) {
+    return parent.children
+        .where(
+          (child) =>
+              child.isPublished &&
+              _countProductsInCategoryTree(child, null) > 0,
+        )
+        .toList(growable: false);
+  }
+
+  Widget _buildCollectionNavigatorOption(
+    _CategoryNode node, {
+    required bool isCurrent,
+  }) {
+    final count = _countProductsInCategoryTree(node, null);
+    final deeper = _navigableChildren(node).isNotEmpty;
+    return MergeSemantics(
+      child: MouseRegion(
+        cursor: isCurrent ? SystemMouseCursors.basic : SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: isCurrent ? null : () => _selectCategory(node.id),
+          child: Container(
+            // GUI_MOBILE_DESIGN_PRINCIPLES: every touch target is at least
+            // 48px, and this rail is also the compact filter sheet.
+            constraints: const BoxConstraints(minHeight: 48),
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    node.name,
+                    style: TextStyle(
+                      fontFamily: null,
+                      fontSize: 13,
+                      color: isCurrent ? Colors.black : Colors.grey.shade800,
+                      fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                // Says the branch continues, so depth is visible before entering.
+                if (deeper)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      size: 16,
+                      color: Colors.grey.shade500,
+                    ),
+                  )
+                else
+                  const SizedBox(width: 18),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -3120,7 +3468,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     final childrenWithProducts = hasChildren
         ? node.children
             .where((child) =>
-                child.showOnWebsite &&
+                child.isPublished &&
                 _countProductsInCategoryTree(child, sourceProducts) > 0)
             .toList()
         : <_CategoryNode>[];
@@ -3564,7 +3912,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         : 'productos';
   }
 
-  Widget _buildProductGrid(String modeKey) {
+  Widget _buildProductGrid() {
     if (_isRefreshing && _filteredProducts.isEmpty) {
       return const SizedBox(
         height: 320,
@@ -3623,7 +3971,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
             WebsiteCatalogGridDensity.balanced;
 
     return MediaQueryLayoutBuilder(
-      key: ValueKey('product_grid_layout_$modeKey'),
+      key: const ValueKey('product_grid_layout'),
       builder: (context, constraints) {
         final metrics = websiteCatalogGridMetrics(
           width: constraints.maxWidth,

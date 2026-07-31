@@ -55,7 +55,8 @@ class OrderConfirmationPolicy {
   }
 
   static bool allowsPaymentAction(OrderConfirmationState state) =>
-      state == OrderConfirmationState.failed;
+      state == OrderConfirmationState.failed ||
+      state == OrderConfirmationState.pending;
 
   static bool showsTransferInstructions(OrderConfirmationState state) =>
       state == OrderConfirmationState.transferPending;

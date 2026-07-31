@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import '../../modules/messaging/services/messaging_service.dart';
 import '../widgets/customer_portal_layout.dart';
 import '../widgets/customer_inbox_list.dart';
 import '../widgets/customer_chat_view.dart';
 import '../widgets/customer_chat_context_support.dart';
 import '../widgets/deferred_customer_chat_context_panel.dart';
+import '../widgets/public_store_layout.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 
 class CustomerChatDetailPage extends StatefulWidget {
@@ -114,7 +114,10 @@ class _CustomerChatDetailPageState extends State<CustomerChatDetailPage> {
                 child: CustomerInboxList(
                   activeConversationId: widget.conversationId,
                   onConversationSelected: (id) =>
-                      context.go('/cuenta/chats/$id'),
+                      PublicStoreLayout.navigateToHref(
+                    context,
+                    '/cuenta/chats/$id',
+                  ),
                 ),
               ),
             ],

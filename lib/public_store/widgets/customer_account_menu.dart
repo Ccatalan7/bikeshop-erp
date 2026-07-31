@@ -100,10 +100,10 @@ class CustomerAccountMenu extends StatelessWidget {
             title: const Text('Cerrar sesión',
                 style: TextStyle(color: Colors.red)),
             onTap: () async {
-              await accountService.signOut();
-              if (context.mounted) {
-                PublicStoreLayout.navigateToHref(context, '/');
-              }
+              await PublicStoreLayout.signOutCustomer(
+                context,
+                accountService,
+              );
             },
           ),
         ],
@@ -236,10 +236,10 @@ class CustomerAccountMenu extends StatelessWidget {
             PublicStoreLayout.navigateToHref(context, '/tienda/cuenta/chats');
             break;
           case 'logout':
-            await accountService.signOut();
-            if (context.mounted) {
-              PublicStoreLayout.navigateToHref(context, '/');
-            }
+            await PublicStoreLayout.signOutCustomer(
+              context,
+              accountService,
+            );
             break;
         }
       },

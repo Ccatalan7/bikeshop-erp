@@ -42,7 +42,7 @@ Future<Uint8List> buildOrderPdfBytes(OnlineOrder order) async {
       boldItalic: boldFont,
     ),
     title: 'Resumen de pedido ${order.orderNumber}',
-    author: 'Viña Bike',
+    author: order.storefrontIdentity.displayName,
     subject: 'Resumen informativo de pedido',
   );
   final customerRows = _customerRows(order);
@@ -62,7 +62,10 @@ Future<Uint8List> buildOrderPdfBytes(OnlineOrder order) async {
               child: pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  _brandWordmark(compact: true),
+                  _brandWordmark(
+                    order.storefrontIdentity,
+                    compact: true,
+                  ),
                   pw.Text(
                     order.orderNumber,
                     style: const pw.TextStyle(
@@ -136,7 +139,7 @@ Future<Uint8List> buildOrderPdfBytes(OnlineOrder order) async {
         _totalBlock(order),
         pw.SizedBox(height: 30),
         pw.Text(
-          'Gracias por comprar en Viña Bike.',
+          'Gracias por comprar en ${order.storefrontIdentity.displayName}.',
           style: pw.TextStyle(
             color: _ink,
             fontSize: 13,
@@ -185,7 +188,7 @@ pw.Widget _documentHeader(OnlineOrder order) {
     crossAxisAlignment: pw.CrossAxisAlignment.start,
     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
     children: [
-      _brandWordmark(),
+      _brandWordmark(order.storefrontIdentity),
       pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.end,
         children: [
@@ -229,12 +232,16 @@ pw.Widget _documentHeader(OnlineOrder order) {
   );
 }
 
-pw.Widget _brandWordmark({bool compact = false}) {
+pw.Widget _brandWordmark(
+  StorefrontIdentitySnapshot identity, {
+  bool compact = false,
+}) {
+  final tagline = identity.tagline;
   return pw.Column(
     crossAxisAlignment: pw.CrossAxisAlignment.start,
     children: [
       pw.Text(
-        'VIÑA BIKE',
+        identity.displayName.toUpperCase(),
         style: pw.TextStyle(
           color: _brand,
           fontSize: compact ? 12 : 23,
@@ -242,10 +249,10 @@ pw.Widget _brandWordmark({bool compact = false}) {
           letterSpacing: 0.8,
         ),
       ),
-      if (!compact) ...[
+      if (!compact && tagline != null) ...[
         pw.SizedBox(height: 4),
         pw.Text(
-          'Taller y tienda de bicicletas',
+          tagline,
           style: const pw.TextStyle(color: _muted, fontSize: 9),
         ),
       ],

@@ -10,8 +10,10 @@ import '../../shared/services/tenant_service.dart';
 import '../../shared/models/product.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
 import '../../modules/website/services/website_service.dart';
+import '../../modules/website/widgets/website_editor_navigation_guard.dart';
 import '../utils/product_url.dart';
 import '../models/public_commerce_product_projection.dart';
+import 'public_store_layout.dart';
 
 class SearchOverlay extends StatefulWidget {
   final String tenantId;
@@ -89,10 +91,19 @@ class _SearchOverlayState extends State<SearchOverlay> {
 
   static const int _suggestionsLimit = 20;
 
-  void _goToCatalogSearch(String query) {
+  Future<void> _goToCatalogSearch(String query) async {
     final q = query.trim();
     if (q.isEmpty) return;
 
+    final editorDecision = await WebsiteEditorNavigationGuard.authorize(
+      context,
+      intent: WebsiteEditorNavigationIntent.switchPage,
+    );
+    if (!editorDecision.isAllowed) return;
+    if (!mounted) return;
+    if (!await PublicStoreLayout.authorizeCheckoutExit(context)) return;
+    if (!mounted) return;
+    if (!editorDecision.commit()) return;
     final router = GoRouter.of(context);
     Navigator.of(context, rootNavigator: true).pop();
 
@@ -190,7 +201,16 @@ class _SearchOverlayState extends State<SearchOverlay> {
     }
   }
 
-  void _goToProduct(Product product) {
+  Future<void> _goToProduct(Product product) async {
+    final editorDecision = await WebsiteEditorNavigationGuard.authorize(
+      context,
+      intent: WebsiteEditorNavigationIntent.switchPage,
+    );
+    if (!editorDecision.isAllowed) return;
+    if (!mounted) return;
+    if (!await PublicStoreLayout.authorizeCheckoutExit(context)) return;
+    if (!mounted) return;
+    if (!editorDecision.commit()) return;
     final router = GoRouter.of(context);
     // Close the dialog first (use root navigator to be robust across shells).
     Navigator.of(context, rootNavigator: true).pop();

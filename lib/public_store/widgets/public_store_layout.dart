@@ -1,10 +1,10 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -21,17 +21,27 @@ import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../routes/deferred_commerce_route_page.dart';
 import '../routes/deferred_customer_route_page.dart';
+import '../services/checkout_exit_guard.dart';
+import '../services/public_category_publication.dart';
+import '../services/public_page_publication.dart';
+import '../services/public_inventory_service.dart';
 import '../services/public_store_scroll_state.dart';
 import '../theme/public_store_theme.dart';
 import '../theme/public_header_contrast.dart';
+import '../../shared/models/public_product_visibility_policy.dart';
+import '../models/public_checkout_capabilities.dart';
+import '../services/public_checkout_capability_service.dart';
 import 'floating_whatsapp_button.dart';
 import 'customer_account_menu.dart';
 import '../../modules/website/services/website_service.dart';
+import '../../modules/website/models/website_editor_mode_route_binding.dart';
+import '../../modules/website/models/website_editor_capability.dart';
+import '../../modules/website/models/website_editor_oauth_intent.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../modules/website/widgets/website_link_value_editor.dart';
+import '../../modules/website/widgets/website_editor_navigation_guard.dart';
 import '../../modules/website/widgets/website_workspace_scope.dart';
 import '../../modules/website/theme/website_theme_builder.dart';
-import '../../modules/website/widgets/deferred_website_editor_panel.dart';
 import '../../modules/website/models/website_page_models.dart';
 import '../../modules/website/models/website_destination.dart';
 import '../../modules/website/models/website_catalog_presentation.dart';
@@ -53,6 +63,7 @@ import '../../shared/routes/erp_routes_barrel.dart' deferred as erp
         WebsiteManagementPage,
         WebsiteSettingsPage;
 import '../../shared/services/tenant_service.dart';
+import '../../shared/services/tenant_detection_service.dart';
 import '../../shared/utils/file_download_web.dart'
     if (dart.library.io) '../../shared/utils/file_download_stub.dart';
 import '../../shared/utils/seo_helper.dart';
@@ -61,40 +72,175 @@ import '../utils/product_url.dart';
 import '../../shared/utils/web_url.dart' show setLocationHash;
 import 'customer_chat_widget.dart';
 import 'search_overlay.dart';
+import 'storefront_navigation_guard_scope.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'mega_menu.dart';
 
-/// Runtime routing mode for the public store shell.
-///
-/// The same store UI is embedded in two different apps:
-/// - Standalone public store (`main_store.dart`)
-/// - ERP/admin app preview/editor (`main.dart`)
-///
-/// Route normalization must behave differently between those modes,
-/// especially on native platforms where we cannot infer it from the host.
-class PublicStoreRuntimeConfig {
-  static bool isErpMounted = false;
-}
+part 'store_layout/runtime_href.dart';
+part 'store_layout/header_geometry.dart';
+part 'store_layout/editor_workspace_tabs.dart';
+part 'store_layout/layout_helpers.dart';
+part 'store_layout/page_navigator.dart';
+part 'store_layout/scroll_and_chrome.dart';
 
 class PublicStoreLayout extends StatefulWidget {
   final Widget child;
   final bool showEditorButton;
   final bool enablePageViewScrolling;
   final String? routePath;
+  final WebsiteEditorNavigationIntent? backNavigationIntent;
 
-  /// When true, the editor panel is rendered externally (by PersistentEditorShell)
-  /// so this layout should not render it.
-  final bool useExternalEditorPanel;
+  /// Injection seam for the tenant-scoped checkout capability read.
+  ///
+  /// Production uses the canonical `PublicCheckoutCapabilityService`; tests
+  /// supply a loader so the footer's payment claims can be exercised without
+  /// a backend.
+  final PublicCheckoutCapabilityLoader? checkoutCapabilityLoader;
 
   const PublicStoreLayout({
     super.key,
     required this.child,
     this.showEditorButton = true,
     this.enablePageViewScrolling = true,
-    this.useExternalEditorPanel = true,
     this.routePath,
+    this.backNavigationIntent,
+    this.checkoutCapabilityLoader,
   });
+
+  static bool isCheckoutPath(String path) {
+    final normalized = path.trim().toLowerCase();
+    return normalized == '/checkout' || normalized == '/tienda/checkout';
+  }
+
+  static String? _currentRoutePath(BuildContext context) {
+    try {
+      return GoRouterState.of(context).uri.path;
+    } catch (_) {
+      try {
+        return GoRouter.of(context).routeInformationProvider.value.uri.path;
+      } catch (_) {
+        return kIsWeb ? Uri.base.path : null;
+      }
+    }
+  }
+
+  static bool _isCurrentLocation(BuildContext context, String href) {
+    final target = Uri.tryParse(href);
+    if (target == null || target.scheme.isNotEmpty || href.startsWith('#')) {
+      return false;
+    }
+    try {
+      final current = GoRouterState.of(context).uri;
+      return target.path == current.path &&
+          target.queryParameters.toString() ==
+              current.queryParameters.toString() &&
+          target.fragment == current.fragment;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Confirms a destructive exit only while the active storefront route owns
+  /// a durable checkout lease. A one-shot permit is used when another action
+  /// (for example sign-out) must complete before the actual navigation.
+  static Future<bool> authorizeCheckoutExit(
+    BuildContext context, {
+    bool permitNextNavigation = false,
+  }) async {
+    CheckoutExitGuard guard;
+    try {
+      guard = context.read<CheckoutExitGuard>();
+    } catch (_) {
+      return true;
+    }
+
+    if (!guard.isLocked) return true;
+    if (guard.consumeNavigationPermit()) return true;
+
+    final currentPath = _currentRoutePath(context);
+    if (currentPath != null && !isCheckoutPath(currentPath)) {
+      return true;
+    }
+
+    return guard.requestExitAuthorization(
+      (phase) async {
+        if (!context.mounted) return false;
+        final hasCreatedOrder = phase == CheckoutExitPhase.orderCreated;
+        final isPreparingOrder = phase == CheckoutExitPhase.preparingOrder;
+        return await showDialog<bool>(
+              context: context,
+              barrierDismissible: false,
+              builder: (dialogContext) => AlertDialog(
+                title: Text(
+                  hasCreatedOrder
+                      ? '¿Salir del pedido en curso?'
+                      : isPreparingOrder
+                          ? '¿Salir mientras preparamos tu pedido?'
+                          : '¿Salir de la recuperación segura?',
+                ),
+                content: Text(
+                  hasCreatedOrder
+                      ? 'Tu pedido ya está creado y quedó guardado de forma '
+                          'segura en esta pestaña. Si sales, podrás volver al '
+                          'checkout para continuar el mismo pedido.'
+                      : isPreparingOrder
+                          ? 'Estamos guardando una recuperación segura antes '
+                              'de enviar el pedido. Si sales ahora, este envío '
+                              'se cancelará y podrás volver a intentarlo.'
+                          : 'El intento de pedido quedó guardado de forma '
+                              'segura en esta pestaña. Si sales, podrás volver '
+                              'al checkout y reintentar la confirmación sin '
+                              'crear otro pedido.',
+                ),
+                actions: [
+                  TextButton(
+                    key: const ValueKey('checkout-exit-cancel'),
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: const Text('CANCELAR'),
+                  ),
+                  FilledButton(
+                    key: const ValueKey('checkout-exit-confirm'),
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    child: const Text('SALIR DEL CHECKOUT'),
+                  ),
+                ],
+              ),
+            ) ??
+            false;
+      },
+      permitNextNavigation: permitNextNavigation,
+    );
+  }
+
+  static Future<bool> signOutCustomer(
+    BuildContext context,
+    CustomerAccountService accountService, {
+    String destination = '/',
+  }) async {
+    if (!await authorizeCheckoutExit(
+      context,
+      permitNextNavigation: true,
+    )) {
+      return false;
+    }
+    if (!context.mounted) return false;
+
+    try {
+      await accountService.signOut();
+      if (context.mounted) {
+        await navigateToHref(context, destination);
+      }
+      return true;
+    } catch (_) {
+      if (context.mounted) {
+        try {
+          context.read<CheckoutExitGuard>().revokeNavigationPermit();
+        } catch (_) {}
+      }
+      rethrow;
+    }
+  }
 
   /// Centralized navigation entry-point for public store UI elements.
   ///
@@ -112,22 +258,51 @@ class PublicStoreLayout extends StatefulWidget {
     }
 
     // Fallback (should be rare): best-effort navigation without normalization.
-    final normalized = href.trim();
+    final authored = href.trim();
+    final normalized = WebsiteDestination.normalizeHref(
+      authored,
+      internalOrigins: kIsWeb ? <Uri>[Uri.base] : const <Uri>[],
+    );
     if (normalized.isEmpty) return;
+    final authoredUri = Uri.tryParse(authored);
+    final authoredIsAbsoluteHttp = authoredUri != null &&
+        (authoredUri.scheme == 'http' || authoredUri.scheme == 'https');
+    final normalizedUri = Uri.tryParse(normalized);
+    final launchesExternalWindow = authoredIsAbsoluteHttp &&
+        normalizedUri != null &&
+        (normalizedUri.scheme == 'http' || normalizedUri.scheme == 'https');
+    final keepsCurrentPage = openInNewTab ||
+        normalized.startsWith('#') ||
+        _isCurrentLocation(context, normalized);
+    final editorDecision = await WebsiteEditorNavigationGuard.authorize(
+      context,
+      intent: WebsiteEditorNavigationGuard.classifyIntent(
+        openInNewTab: openInNewTab,
+        launchesExternalWindow: launchesExternalWindow,
+        keepsCurrentPage: keepsCurrentPage,
+      ),
+    );
+    if (!editorDecision.isAllowed) return;
+    if (!context.mounted) return;
+    if (!keepsCurrentPage && !await authorizeCheckoutExit(context)) {
+      return;
+    }
+    if (!context.mounted) return;
 
-    if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
-      final uri = Uri.tryParse(normalized);
-      if (uri != null) {
-        await launchUrl(
-          uri,
+    if (authoredIsAbsoluteHttp && (normalized == authored || openInNewTab)) {
+      if (authoredUri.host.isNotEmpty) {
+        final didLaunch = await launchUrl(
+          authoredUri,
           mode: LaunchMode.platformDefault,
           webOnlyWindowName: openInNewTab ? '_blank' : '_self',
         );
+        if (didLaunch) editorDecision.commit();
       }
       return;
     }
 
     if (normalized.startsWith('#')) {
+      if (!editorDecision.commit()) return;
       if (kIsWeb) {
         setLocationHash(normalized);
       }
@@ -137,7 +312,18 @@ class PublicStoreLayout extends StatefulWidget {
     // Fallback: treat non-external links as top-level navigation.
     // Using go() avoids stacking routes on web (which can lead to blank frames
     // when a layout exception occurs in an offstage route).
+    if (!editorDecision.commit()) return;
     context.go(normalized);
+  }
+
+  /// Defensive public eligibility check for CMS-authored links.
+  ///
+  /// Renderers should remove invalid category affordances when they can. This
+  /// central boundary prevents a stale CTA from becoming a route to an
+  /// unpublished collection while the editor's destination audit is repaired.
+  static bool isHrefPubliclyEligible(BuildContext context, String href) {
+    final state = context.findAncestorStateOfType<_PublicStoreLayoutState>();
+    return state?._allowsPublicHref(href) ?? true;
   }
 
   /// Starts route-specific read-only warm-up when a pointer/focus indicates
@@ -149,11 +335,170 @@ class PublicStoreLayout extends StatefulWidget {
     );
   }
 
+  /// Restores the editor session after a Google OAuth return.
+  ///
+  /// The OAuth return is an UNTRUSTED entry command (the reloaded page may
+  /// not have an open session yet): it passes through the same single
+  /// capability gate as a `?edit=true` deep link and fails closed. The FULL
+  /// identity context — lease generation, identity revision, auth identity
+  /// epoch, request identity and normalized tenant — is captured before the
+  /// await and revalidated immediately after it, so a coalesced A→B→A auth
+  /// sequence or a tenant switch during the await can never re-apply the
+  /// stale identity's grant. A transient failure suspends (drafts retained)
+  /// and NEVER fabricates a denial.
+  @visibleForTesting
+  static Future<WebsiteEditorOAuthRestoreOutcome>
+      restoreEditorSessionAfterOAuth({
+    required WebsiteEditModeProvider editProvider,
+    required WebsiteService websiteService,
+    required String? Function() currentTenantId,
+    String? expectedIssuerFingerprint,
+  }) async {
+    // No short-circuit before the gate: even an already-open Edit session
+    // must revalidate through the capability truth.
+    final wasInEditMode = editProvider.isEditMode;
+    final tenantId = currentTenantId();
+    // START guard: if the session's typed identity evidence (live,
+    // suspended or owner lease) belongs to a DIFFERENT auth identity or
+    // storefront tenant than this request, A dies BEFORE any await — B
+    // never inherits A's session, and the one-shot intention is consumed.
+    final sessionIdentity = editProvider.editorSessionIdentity;
+    if (sessionIdentity != null &&
+        (sessionIdentity.identity !=
+                websiteService.editorCapabilityRequestIdentity ||
+            sessionIdentity.storefrontTenantId != (tenantId?.trim() ?? ''))) {
+      if (editProvider.revokeEditorEntryLease()) {
+        websiteService.requestActiveCmsPageOriginRevalidation();
+      }
+      return WebsiteEditorOAuthRestoreOutcome.superseded;
+    }
+    final generation = editProvider.editorEntryLeaseGeneration;
+    final identityRevision = editProvider.editorEntryLeaseIdentityRevision;
+    final requestEpoch = websiteService.identityEpoch;
+    final requestIdentity = websiteService.editorCapabilityRequestIdentity;
+    final requestTenantNorm = tenantId?.trim() ?? '';
+    WebsiteEditorCapabilitySnapshot? snapshot;
+    var transientFailure = false;
+    try {
+      snapshot = await websiteService.resolveEditorCapability(tenantId);
+    } on WebsiteEditorCapabilityUnresolvedException {
+      transientFailure = true; // Classified transient: identity unresolved.
+    } on WebsiteEditorAuthorityException {
+      snapshot = null;
+      transientFailure = false; // Durable: consumed below as denial.
+    } catch (_) {
+      transientFailure = true; // Transport/unavailability: transient.
+    }
+    if (websiteService.identityEpoch != requestEpoch ||
+        websiteService.editorCapabilityRequestIdentity != requestIdentity ||
+        (currentTenantId()?.trim() ?? '') != requestTenantNorm ||
+        generation != editProvider.editorEntryLeaseGeneration ||
+        identityRevision != editProvider.editorEntryLeaseIdentityRevision) {
+      return WebsiteEditorOAuthRestoreOutcome.superseded;
+    }
+    if (snapshot == null && transientFailure) {
+      // Classified TRANSIENT failure: hide any editor projection but
+      // RETAIN drafts for this identity's retry — never adopt a fabricated
+      // denial. A granted lease on a Public projection is still
+      // authority-unknown and suspends too.
+      if ((editProvider.isInEditorContext ||
+              editProvider.editorEntryLease != null) &&
+          editProvider.suspendEditorEntryLease()) {
+        websiteService.requestActiveCmsPageOriginRevalidation();
+      }
+      return WebsiteEditorOAuthRestoreOutcome.transient;
+    }
+    // VALIDATE the resolved snapshot against the captured request AND the
+    // issuing intent BEFORE any provider mutation: a mismatched identity,
+    // storefront tenant or issuer fingerprint is superseded with ZERO
+    // provider state touched.
+    if (snapshot != null) {
+      if (snapshot.identity != requestIdentity ||
+          snapshot.storefrontTenantId != requestTenantNorm) {
+        return WebsiteEditorOAuthRestoreOutcome.superseded;
+      }
+      if (expectedIssuerFingerprint != null &&
+          snapshot.granted &&
+          snapshot.fingerprint != expectedIssuerFingerprint) {
+        return WebsiteEditorOAuthRestoreOutcome.superseded;
+      }
+    }
+    var transitioned = false;
+    if ((snapshot == null || !snapshot.granted) &&
+        editProvider.isInEditorContext) {
+      // A durable denial closes any projected session before it is
+      // recorded; a different live fingerprint goes through the provider's
+      // central takeover inside adopt.
+      transitioned = editProvider.revokeEditorEntryLease() || transitioned;
+    }
+    if (snapshot != null) {
+      transitioned = editProvider.adoptEditorEntryLease(
+            editProvider.editorEntryLeaseGeneration,
+            snapshot,
+          ) ||
+          transitioned;
+    }
+    if (transitioned) {
+      // Exactly ONE CMS transition per logical outcome, never a double
+      // reload.
+      websiteService.requestActiveCmsPageOriginRevalidation();
+    }
+    if (snapshot != null &&
+        snapshot.granted &&
+        editProvider.editorEntryLeaseGranted) {
+      if (wasInEditMode && editProvider.isEditMode) {
+        return WebsiteEditorOAuthRestoreOutcome.alreadyInEdit;
+      }
+      editProvider.applyRouteModeCommand(WebsiteEditorMode.edit);
+      return WebsiteEditorOAuthRestoreOutcome.granted;
+    }
+    return WebsiteEditorOAuthRestoreOutcome.denied;
+  }
+
   @override
   State<PublicStoreLayout> createState() => _PublicStoreLayoutState();
 }
 
+/// Durable-vs-transient outcome of the OAuth editor restore: the caller
+/// consumes the one-shot localStorage intention ONLY on a durable outcome
+/// and opens Integrations only after a stable grant.
+enum WebsiteEditorOAuthRestoreOutcome {
+  granted,
+  denied,
+  transient,
+  superseded,
+  alreadyInEdit,
+}
+
 class _PublicStoreLayoutState extends State<PublicStoreLayout> {
+  // --- Server-confirmed payment claims -------------------------------------
+  //
+  // Guarded by tenant id plus a monotonic generation, exactly like the
+  // checkout loader: a late response for tenant A must never paint tenant B's
+  // footer, and a superseded request must never overwrite a newer answer.
+  PublicCheckoutCapabilities? _paymentCapabilities;
+  String? _paymentCapabilitiesTenantId;
+  String? _paymentCapabilitiesRequestedTenantId;
+  int _paymentCapabilitiesGeneration = 0;
+
+  /// Bounded retry state for a transient capability read failure.
+  ///
+  /// The attempt budget belongs to exactly one tenant
+  /// ([_paymentCapabilitiesAttemptsTenantId]): tenant B must be able to start
+  /// immediately even when tenant A just exhausted its attempts, because A's
+  /// failures were never B's. The deadline is a real [Timer], not a passive
+  /// gate — recovery must not depend on an unrelated rebuild happening to run
+  /// the footer builder. At most [_kPaymentCapabilityMaxAttempts] requests are
+  /// made per tenant: the initial one plus one retry per backoff entry.
+  String? _paymentCapabilitiesAttemptsTenantId;
+  int _paymentCapabilitiesAttempts = 0;
+  Timer? _paymentCapabilitiesRetryTimer;
+  static const int _kPaymentCapabilityMaxAttempts = 3;
+  static const List<Duration> _kPaymentCapabilityBackoff = [
+    Duration(seconds: 2),
+    Duration(seconds: 8),
+  ];
+
   static const double _externalEditorPanelWidth = 380;
   static const String _actionPageEditorWorkspace = 'workspace_page_editor';
   static const String _actionEcomCatalog = 'ecom_catalog';
@@ -198,11 +543,231 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   // Screenshot capture state
   bool _isCapturingScreenshot = false;
 
-  // Guard to prevent scheduling multiple navigations in the same frame
-  bool _pendingModeNavigation = false;
-  bool _pendingProviderModeSync = false;
-  int _modeTransitionSequence = 0;
-  String? _lastLoggedModeSignature;
+  // Route/provider mode binding memory: the last URI consumed as a mode
+  // command. A changed URI is an entry command for the FSM; an unchanged URI
+  // with a provider change triggers the write-through projection instead.
+  String? _modeBindingUriSignature;
+  // Single in-flight async capability resolution for the ONE editor-entry
+  // gate, keyed by (lease generation, storefront tenant) so an identity or
+  // tenant change can never reuse — nor adopt the result of — a resolution
+  // requested for a previous identity. Lease/ABA safety lives in the
+  // provider (fingerprint + generation); this is request-dedup data only.
+  Future<void>? _editorLeaseResolution;
+  String? _editorLeaseResolutionKey;
+  // Monotonic per-request nonce. The string key above only DEDUPES repeated
+  // builds of the same request; it can be recycled (identity A → B → A with
+  // the provider generation unchanged), so staleness is decided exclusively
+  // by this serial: a completion may apply only when it is still the LATEST
+  // request ever started.
+  int _editorLeaseResolutionSerial = 0;
+  // Identity revision that owned the previous route-command binding; a
+  // change relative to it (sync OR async) consumes the pending URI command.
+  int? _lastBoundLeaseIdentityRevision;
+  bool _leaseRevalidationScheduled = false;
+
+  /// Coalesces every effective lease transition produced during a build into
+  /// exactly ONE post-frame emission of the central CMS revalidation signal
+  /// (a ValueNotifier must never notify during build). Pages then reload
+  /// according to the CURRENT provider mode/lease.
+  void _scheduleLeaseRevalidationEmission(WebsiteService websiteService) {
+    if (_leaseRevalidationScheduled) return;
+    _leaseRevalidationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _leaseRevalidationScheduled = false;
+      if (!mounted) return;
+      websiteService.requestActiveCmsPageOriginRevalidation();
+    });
+  }
+
+  /// Validates the identity-bound editor-entry lease EVERY build — including
+  /// same-mode URIs and programmatic sessions — against the single truth
+  /// (`WebsiteService.editorCapabilitySync`).
+  ///
+  /// A fingerprint change observed through the auth lifecycle (logout, user
+  /// switch, tenant switch, refreshed authority) ALWAYS revokes first —
+  /// discarding the previous identity's page/sitewide/SEO drafts via the
+  /// provider — before the new identity's snapshot is adopted, even when
+  /// both identities are granted. A transient resolution error of the same
+  /// identity only suspends (drafts retained hidden for that identity's
+  /// retry). Remote role/permission edits that the identity cache has not
+  /// observed are enforced by the server boundary instead: RLS blocks the
+  /// reads/writes, and an editor load rejected for classified auth/RLS
+  /// reasons surfaces as WebsiteEditorAuthorityException, which the CMS
+  /// consumers convert into lease revocation plus a public reload (see
+  /// WebsiteEditorCapabilitySnapshot's documented limit).
+  void _syncEditorEntryLease(
+    WebsiteEditModeProvider editProvider,
+    WebsiteService websiteService,
+    String? storefrontTenantId,
+  ) {
+    final sync = websiteService.editorCapabilitySync(storefrontTenantId);
+    final lease = editProvider.editorEntryLease;
+    if (sync != null) {
+      _editorLeaseResolution = null;
+      _editorLeaseResolutionKey = null;
+      if (lease == null) {
+        var changed = false;
+        if (editProvider.isInEditorContext && !sync.granted) {
+          // An editor session without authority for this identity is closed
+          // and its buckets discarded before the denied lease is recorded.
+          changed = editProvider.revokeEditorEntryLease() || changed;
+        }
+        changed = editProvider.adoptEditorEntryLease(
+              editProvider.editorEntryLeaseGeneration,
+              sync,
+            ) ||
+            changed;
+        if (changed) {
+          // One CMS revalidation per effective lease transition: the central
+          // freshness owner reloads Dynamic/Policy through the audience that
+          // provider.mode now dictates (no per-page synchronizers).
+          _scheduleLeaseRevalidationEmission(websiteService);
+        }
+      } else if (lease.fingerprint != sync.fingerprint ||
+          lease.authorityEpoch != sync.authorityEpoch) {
+        // Identity OR epoch changed (a coalesced A→B→A reproduces A's
+        // fingerprint but never A's epoch): revoke/close/discard FIRST,
+        // then adopt — B never inherits A's mode or drafts, granted or
+        // not. (The provider's central takeover in adopt is the backstop
+        // for callers that skip this.)
+        editProvider.revokeEditorEntryLease();
+        editProvider.adoptEditorEntryLease(
+          editProvider.editorEntryLeaseGeneration,
+          sync,
+        );
+        _scheduleLeaseRevalidationEmission(websiteService);
+      } else if (!sync.granted && editProvider.isInEditorContext) {
+        // The warm truth DENIES this exact fingerprint while an editor
+        // session is projected (a programmatic open bypassed the gate):
+        // close it — zero chrome, zero draft survives a denied identity.
+        editProvider.revokeEditorEntryLease();
+        _scheduleLeaseRevalidationEmission(websiteService);
+      }
+      return;
+    }
+    // Cold identity caches: authority is UNKNOWN, so no editor projection
+    // may stay visible during the await (typed field comparison — the
+    // fingerprint string is an opaque token, never parsed).
+    //  - A lease for a different auth identity or storefront tenant →
+    //    REVOKE before the await: B never sees one frame of A's chrome or
+    //    drafts.
+    //  - A lease for the SAME identity → SUSPEND before the await:
+    //    chrome/drafts hidden but retained, and a re-grant of the exact
+    //    fingerprint restores them.
+    //  - An editor session WITHOUT a lease: its typed document owner
+    //    attributes the drafts, so it suspends for that identity; an
+    //    ownerless session is not safely attributable and closes.
+    final coldLease = editProvider.editorEntryLease;
+    if (coldLease != null) {
+      if (coldLease.identity !=
+              websiteService.editorCapabilityRequestIdentity ||
+          coldLease.storefrontTenantId !=
+              (storefrontTenantId?.trim() ?? '')) {
+        editProvider.revokeEditorEntryLease();
+        _scheduleLeaseRevalidationEmission(websiteService);
+      } else if (editProvider.suspendEditorEntryLease()) {
+        _scheduleLeaseRevalidationEmission(websiteService);
+      }
+    } else if (editProvider.isInEditorContext) {
+      if (editProvider.documentOwnerLeaseFingerprint != null) {
+        if (editProvider.suspendEditorEntryLease()) {
+          _scheduleLeaseRevalidationEmission(websiteService);
+        }
+      } else {
+        editProvider.revokeEditorEntryLease();
+        _scheduleLeaseRevalidationEmission(websiteService);
+      }
+    }
+    // One async resolve keyed by generation + identity epoch + tenant.
+    final generation = editProvider.editorEntryLeaseGeneration;
+    final requestedTenant = storefrontTenantId;
+    // The key binds the request to generation + auth identity + tenant: a
+    // user switch with a cold cache can never adopt the previous user's
+    // in-flight response for the same tenant.
+    final key = '$generation|'
+        '${websiteService.identityEpoch}|'
+        '${websiteService.editorCapabilityRequestIdentity}|'
+        '${requestedTenant ?? ''}';
+    if (_editorLeaseResolutionKey == key && _editorLeaseResolution != null) {
+      return;
+    }
+    _editorLeaseResolutionKey = key;
+    final serial = ++_editorLeaseResolutionSerial;
+    // Full identity context captured BEFORE the await. The completion
+    // requires all of it unchanged — without waiting for another build —
+    // so an identity/tenant/epoch change during the await can never adopt
+    // this response, even when the string key was recycled.
+    final requestEpoch = websiteService.identityEpoch;
+    final requestIdentity = websiteService.editorCapabilityRequestIdentity;
+    final requestTenantNorm = requestedTenant?.trim() ?? '';
+    _editorLeaseResolution = () async {
+      WebsiteEditorCapabilitySnapshot? snapshot;
+      try {
+        snapshot = await websiteService.resolveEditorCapability(
+          requestedTenant,
+        );
+      } catch (_) {
+        snapshot = null; // Transient resolver failure.
+      }
+      if (!mounted) return;
+      // ABA-safe supersession: an equal RE-CREATED key (A → B → A) still has
+      // a newer serial, so this stale completion drops itself.
+      if (serial != _editorLeaseResolutionSerial) return;
+      if (websiteService.identityEpoch != requestEpoch ||
+          websiteService.editorCapabilityRequestIdentity !=
+              requestIdentity ||
+          (context.read<PublicStoreTenantProvider>().tenantId?.trim() ??
+                  '') !=
+              requestTenantNorm) {
+        // The identity context moved during the await: drop the response
+        // and let the next build issue a fresh request.
+        _editorLeaseResolution = null;
+        _editorLeaseResolutionKey = null;
+        return;
+      }
+      _editorLeaseResolution = null;
+      _editorLeaseResolutionKey = null;
+      final provider = context.read<WebsiteEditModeProvider>();
+      if (generation != provider.editorEntryLeaseGeneration) {
+        return; // ABA: a revocation happened while resolving.
+      }
+      if (snapshot == null) {
+        // Same-identity transient failure: hide, retain drafts, retry later.
+        if (provider.isInEditorContext &&
+            provider.suspendEditorEntryLease()) {
+          websiteService.requestActiveCmsPageOriginRevalidation();
+        }
+        return;
+      }
+      // The snapshot must still describe the CURRENT identity: if the warm
+      // caches now disagree, drop it and let the next build re-evaluate.
+      final currentSync = websiteService.editorCapabilitySync(requestedTenant);
+      if (currentSync != null &&
+          (currentSync.fingerprint != snapshot.fingerprint ||
+              currentSync.authorityEpoch != snapshot.authorityEpoch)) {
+        return;
+      }
+      var changed = false;
+      if (!snapshot.granted && provider.isInEditorContext) {
+        changed = provider.revokeEditorEntryLease() || changed;
+      }
+      changed = provider.adoptEditorEntryLease(
+            provider.editorEntryLeaseGeneration,
+            snapshot,
+          ) ||
+          changed;
+      if (changed) {
+        websiteService.requestActiveCmsPageOriginRevalidation();
+      }
+    }();
+  }
+  PublicCategoryPublication _categoryPublication =
+      PublicCategoryPublication.empty();
+  PublicPagePublication _pagePublication = const PublicPagePublication(
+    publishedPaths: <String>{},
+    isAuthoritative: false,
+  );
+  List<Uri> _storefrontInternalOrigins = const <Uri>[];
   bool _isErpMountedStore() => PublicStoreRuntimeConfig.isErpMounted;
 
   // ------------------------------------------------------------------------
@@ -220,7 +785,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       kDebugMode || const bool.fromEnvironment('STORE_PERF_LOGS');
 
   String? _lastLoggedUrlSignature;
-  // Payment methods now hardcoded - icons hosted in Supabase Storage
 
   @override
   void initState() {
@@ -232,11 +796,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     if (kIsWeb) {
       _checkGoogleOAuthReturn();
     }
-    // Payment method icons are now hardcoded - no need to fetch from MercadoPago API
   }
 
   @override
   void dispose() {
+    _paymentCapabilitiesRetryTimer?.cancel();
     _inlineFooterNavLabelController.dispose();
     _inlineFooterNavLabelFocusNode.dispose();
     super.dispose();
@@ -390,40 +954,100 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     );
   }
 
-  /// Check localStorage for Google OAuth return flag and restore edit mode
+  /// Check localStorage for Google OAuth return flag and restore edit mode.
+  ///
+  /// The one-shot flags are consumed ONLY on a durable outcome (grant or
+  /// denial): a transient resolution failure keeps them so the intention
+  /// retries on the next load, and Integrations opens only after a stable
+  /// grant.
+  static WebsiteEditorOAuthIntentStore _webOAuthIntentStore() =>
+      WebsiteEditorOAuthIntentStore(
+        readRaw: () => web.window.localStorage
+            .getItem(WebsiteEditorOAuthIntentGate.storageKey),
+        writeRaw: (value) => web.window.localStorage
+            .setItem(WebsiteEditorOAuthIntentGate.storageKey, value),
+        removeRaw: () => web.window.localStorage
+            .removeItem(WebsiteEditorOAuthIntentGate.storageKey),
+      );
+
   void _checkGoogleOAuthReturn() {
     try {
-      final flag =
-          web.window.localStorage.getItem('google_oauth_return_to_editor');
-      final openIntegrations =
-          web.window.localStorage.getItem('google_oauth_open_integrations');
-      if (flag == 'true') {
-        debugPrint(
-            '🔄 [PublicStoreLayout] Detected OAuth return - restoring edit mode');
-        // Clear the flag
-        web.window.localStorage.removeItem('google_oauth_return_to_editor');
+      // Legacy loose flags are consumed unconditionally, fail-closed: ONE
+      // typed intent is the only owner of the OAuth editor return.
+      web.window.localStorage.removeItem('google_oauth_return_to_editor');
+      web.window.localStorage.removeItem('google_oauth_return_path');
+      web.window.localStorage.removeItem('google_oauth_open_integrations');
+      web.window.localStorage.removeItem('google_oauth_return_issuer');
 
-        // Clear one-shot "open integrations" request (if present).
-        if (openIntegrations == 'true') {
-          web.window.localStorage.removeItem('google_oauth_open_integrations');
+      final store = _webOAuthIntentStore();
+      final rawPresent = web.window.localStorage
+              .getItem(WebsiteEditorOAuthIntentGate.storageKey) !=
+          null;
+      if (!rawPresent) return;
+      if (store.peek(nowMs: DateTime.now().millisecondsSinceEpoch) == null) {
+        // A PRESENT but malformed/legacy/expired payload is consumed
+        // fail-closed in THIS mount — never left behind as persistent
+        // garbage under our key. `take` removes it atomically.
+        store.take(nowMs: DateTime.now().millisecondsSinceEpoch);
+        return;
+      }
+      debugPrint(
+          '🔄 [PublicStoreLayout] Detected OAuth return - restoring edit mode');
+
+      // Schedule edit mode activation after the widget tree is built.
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        // ONE-SHOT: take (remove) the exact nonce BEFORE any async
+        // capability await — a second mount or replay finds nothing.
+        final taken = _webOAuthIntentStore()
+            .take(nowMs: DateTime.now().millisecondsSinceEpoch);
+        if (taken == null) return;
+        final intent = taken.intent;
+        // FAIL CLOSED before any restore work: the issuer identity AND
+        // storefront tenant must match the current context. The intent is
+        // already consumed, so a mismatch simply dies here.
+        final currentIdentity =
+            context.read<WebsiteService>().editorCapabilityRequestIdentity;
+        final currentTenant =
+            context.read<PublicStoreTenantProvider>().tenantId?.trim() ?? '';
+        if (intent.issuerIdentity != currentIdentity ||
+            intent.issuerTenantId != currentTenant) {
+          debugPrint('⛔ [PublicStoreLayout] OAuth intent issuer mismatch; '
+              'consumed fail-closed');
+          return;
         }
-
-        // Schedule edit mode activation after the widget tree is built
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            final editProvider = context.read<WebsiteEditModeProvider>();
-            if (!editProvider.isEditMode) {
-              editProvider.switchToEditMode();
-              debugPrint(
-                  '✅ [PublicStoreLayout] Edit mode restored after OAuth');
-            }
-
-            if (openIntegrations == 'true') {
+        final outcome = await PublicStoreLayout.restoreEditorSessionAfterOAuth(
+          editProvider: context.read<WebsiteEditModeProvider>(),
+          websiteService: context.read<WebsiteService>(),
+          currentTenantId: () => mounted
+              ? context.read<PublicStoreTenantProvider>().tenantId
+              : null,
+          expectedIssuerFingerprint: intent.issuerFingerprint,
+        );
+        if (!mounted) return;
+        switch (outcome) {
+          case WebsiteEditorOAuthRestoreOutcome.granted:
+          case WebsiteEditorOAuthRestoreOutcome.alreadyInEdit:
+            debugPrint('✅ [PublicStoreLayout] Edit mode restored after OAuth');
+            if (intent.openIntegrations) {
               _openConfigHub(_EditorConfigHubTab.integrations);
             }
-          }
-        });
-      }
+          case WebsiteEditorOAuthRestoreOutcome.denied:
+          case WebsiteEditorOAuthRestoreOutcome.superseded:
+            // Durable outcomes: the one-shot stays consumed.
+            debugPrint('⛔ [PublicStoreLayout] OAuth return without editor '
+                'capability; staying public');
+          case WebsiteEditorOAuthRestoreOutcome.transient:
+            // ONLY a classified transient failure restores the SAME
+            // unexpired nonce — and only when no newer intent exists.
+            _webOAuthIntentStore().restoreIfNonce(
+              taken,
+              nowMs: DateTime.now().millisecondsSinceEpoch,
+            );
+            debugPrint('🔁 [PublicStoreLayout] OAuth restore transient '
+                'failure; keeping intent for retry');
+        }
+      });
     } catch (e) {
       debugPrint('⚠️ [PublicStoreLayout] Error checking OAuth return: $e');
     }
@@ -491,13 +1115,43 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     }
   }
 
+  Widget _withCheckoutExitScope(
+    BuildContext context,
+    Uri currentUri,
+    Widget child,
+  ) {
+    final routePath = widget.routePath?.trim().isNotEmpty == true
+        ? widget.routePath!
+        : currentUri.path;
+    return StorefrontNavigationGuardScope(
+      guardCheckout: PublicStoreLayout.isCheckoutPath(routePath),
+      editorPopIntentResolver: widget.backNavigationIntent == null
+          ? (navigator) => navigator.canPop()
+              ? WebsiteEditorNavigationIntent.switchPage
+              : WebsiteEditorNavigationIntent.leaveEditor
+          : null,
+      editorPopIntent: widget.backNavigationIntent ??
+          WebsiteEditorNavigationIntent.leaveEditor,
+      authorizeCheckoutExit: (
+        guardContext, {
+        required permitNextNavigation,
+      }) =>
+          PublicStoreLayout.authorizeCheckoutExit(
+        guardContext,
+        permitNextNavigation: permitNextNavigation,
+      ),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final supabase = Supabase.instance.client;
     final isLoggedIn = supabase.auth.currentUser != null;
 
     // Watch providers to rebuild when data changes
-    context.watch<PublicStoreTenantProvider>();
+    final tenantProvider = context.watch<PublicStoreTenantProvider>();
+    final inventoryService = context.watch<PublicInventoryService>();
     final websiteService = context.watch<WebsiteService>();
     final editProvider = context.watch<WebsiteEditModeProvider>();
 
@@ -525,79 +1179,129 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         // Ignore on non-web platforms
       }
     }
-    final qp = currentUri.queryParameters;
-    // IMPORTANT:
-    // - URL params are only used to ENTER editor context (first time).
-    // - Once the provider is already in editor context, ignore URL flags.
-    //   Otherwise stale params (common with persistent shell pages) can cause
-    //   preview/edit to "bounce" back and forth.
-    final requestedEditMode = qp['edit'] == 'true';
-    final requestedPreviewMode = qp['preview'] == 'true';
-
-    // In the native ERP shell, the query string is only an entry signal. Once
-    // the CMS context exists, WebsiteEditModeProvider is the canonical owner
-    // of Edit/Preview state. Re-applying a stale `?edit=true` here would both
-    // bounce Preview back to Edit and unnecessarily remount the routed catalog
-    // through the workspace shell's LayoutBuilder.
-    final shouldSyncProviderFromUrl =
-        !(_isErpMountedStore() && !kIsWeb && editProvider.isInEditorContext);
-
-    if (shouldSyncProviderFromUrl &&
-        editProvider.isInEditorContext &&
-        !_pendingProviderModeSync) {
-      final shouldSwitchToEdit = requestedEditMode && !editProvider.isEditMode;
-      final shouldSwitchToPreview = requestedPreviewMode &&
-          !editProvider.isPreviewMode &&
-          !requestedEditMode;
-
-      if (shouldSwitchToEdit || shouldSwitchToPreview) {
-        _pendingProviderModeSync = true;
+    // ======================================================================
+    // MODE FSM ROUTE BINDING
+    // ======================================================================
+    // WebsiteEditModeProvider owns exactly one mode (public|preview|edit).
+    // The URI participates only two ways, both deterministic and timer-free:
+    //  1. A CHANGED URI is an input command. `?edit=true`/`?preview=true`
+    //    request entering that mode (Edit wins when both flags appear), and
+    //    it is honored only after the single capability gate
+    //    (WebsiteService.canOpenEditorForTenant) resolves to granted —
+    //    anonymous or unauthorized visitors fail closed to public. A
+    //    flag-less URI is never an exit command: exits belong to the guarded
+    //    close flow, so a stale historical URL cannot discard the session.
+    //  2. An UNCHANGED URI with a provider-side mode change receives the
+    //    write-through projection after the frame; the projection re-reads
+    //    the provider so the latest revision always wins.
+    // The lease is validated EVERY build — same-mode URIs and programmatic
+    // sessions included — and WebsiteService relays TenantService auth
+    // notifications, so an identity change (logout, user or tenant switch)
+    // triggers this rebuild and revokes editor context without any other
+    // interaction. Remote authority edits the caches have not observed are
+    // enforced by the server: RLS blocks the reads/writes and a classified
+    // auth/RLS rejection of an editor load surfaces as
+    // WebsiteEditorAuthorityException → lease revocation + public reload.
+    final leaseIdentityRevisionBeforeSync =
+        editProvider.editorEntryLeaseIdentityRevision;
+    _syncEditorEntryLease(
+      editProvider,
+      websiteService,
+      context.read<PublicStoreTenantProvider>().tenantId,
+    );
+    // The URI command is OWNED by the identity revision that last bound it.
+    // Any revision change since the previous binding — inside this build or
+    // asynchronously between builds (async revoke, OAuth, auth event) —
+    // kills the previous identity's pending command: B never inherits A's
+    // intent; the command epoch is consumed and the flags canonicalize to
+    // Public. A same-identity SUSPENSION bumps only the generation, so its
+    // pending command stays pending and reapplies exactly once on regrant.
+    final leaseIdentityRevision =
+        editProvider.editorEntryLeaseIdentityRevision;
+    // Both windows count: a transition DURING this very sync (covers the
+    // first build of a remounted layout, where no previous binding exists)
+    // and one that happened asynchronously since the last binding.
+    final identityChangedThisBuild =
+        leaseIdentityRevision != leaseIdentityRevisionBeforeSync ||
+            (_lastBoundLeaseIdentityRevision != null &&
+                leaseIdentityRevision != _lastBoundLeaseIdentityRevision);
+    _lastBoundLeaseIdentityRevision = leaseIdentityRevision;
+    // Command consumption is keyed by URI + lease generation (grant epoch):
+    // a suspend/revoke bumps the generation, so after a re-grant the SAME
+    // `?edit=true` URI counts as an unconsumed command again and re-enters
+    // exactly once. While unknown/transient the command stays pending with
+    // safe public content; a stable denial consumes it and canonicalizes the
+    // URL, so no state leaves an edit-flagged URL with a permanently public
+    // FSM.
+    final uriSignature = currentUri.toString();
+    final commandKey =
+        '$uriSignature|${editProvider.editorEntryLeaseGeneration}';
+    final modeRequest = websiteEditorModeRequestFromUri(currentUri);
+    if (identityChangedThisBuild &&
+        modeRequest != WebsiteEditorMode.public) {
+      _modeBindingUriSignature = commandKey;
+      if (kIsWeb) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          // Let the top-bar button finish its ink/press animation before the
-          // inspector and catalog fields are reparented. On Flutter desktop,
-          // switching the CMS tree while that ink feature is still painting
-          // can leave an InputDecorator without a completed layout.
-          Future<void>.delayed(const Duration(milliseconds: 220), () {
-            _pendingProviderModeSync = false;
-            if (!context.mounted) return;
-
-            final latestQuery = GoRouterState.of(context).uri.queryParameters;
-            if (shouldSwitchToEdit && latestQuery['edit'] == 'true') {
-              editProvider.switchToEditMode();
-            } else if (shouldSwitchToPreview &&
-                latestQuery['preview'] == 'true') {
-              editProvider.switchToPreviewMode();
-            }
-          });
+          if (!context.mounted) return;
+          final latestUri = GoRouterState.of(context).uri;
+          final cleaned = projectWebsiteEditorModeOntoUri(
+            latestUri,
+            WebsiteEditorMode.public,
+          );
+          if (cleaned.toString() == latestUri.toString()) return;
+          context.go(_routeForPublicStore(cleaned.toString()));
+        });
+      }
+    } else if (modeRequest == WebsiteEditorMode.public ||
+        modeRequest == editProvider.mode) {
+      // No pending entry command: consume the URI so a stale flag cannot
+      // reapply later, then let the write-through branch below reconcile.
+      _modeBindingUriSignature = commandKey;
+    } else if (editProvider.editorEntryLeaseGranted) {
+      if (_modeBindingUriSignature != commandKey) {
+        _modeBindingUriSignature = commandKey;
+        editProvider.applyRouteModeCommand(modeRequest);
+      }
+    } else if (editProvider.editorEntryLeaseDenied) {
+      // Resolved denial: consume the command and canonicalize the URL by
+      // stripping the mode flags, so no ambiguous pending command survives.
+      _modeBindingUriSignature = commandKey;
+      if (kIsWeb) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!context.mounted) return;
+          final latestUri = GoRouterState.of(context).uri;
+          final provider = context.read<WebsiteEditModeProvider>();
+          if (provider.editorEntryLeaseGranted) return;
+          final cleaned = projectWebsiteEditorModeOntoUri(
+            latestUri,
+            WebsiteEditorMode.public,
+          );
+          if (cleaned.toString() == latestUri.toString()) return;
+          context.go(_routeForPublicStore(cleaned.toString()));
         });
       }
     }
-
-    final allowUrlForce = !editProvider.isInEditorContext;
-    final forceEditMode = allowUrlForce && requestedEditMode;
-    final forcePreviewMode = allowUrlForce && requestedPreviewMode;
-
-    final isEditMode = editProvider.isEditMode || forceEditMode;
-    final isPreviewMode = editProvider.isPreviewMode || forcePreviewMode;
-
-    final devicePreviewMode = editProvider.devicePreviewMode;
-    final isInEditorContext =
-        editProvider.isInEditorContext || forceEditMode || forcePreviewMode;
-
-    if (kDebugMode) {
-      final signature =
-          '${currentUri.toString()}|provider=${editProvider.isEditMode}/${editProvider.isPreviewMode}|effective=$isEditMode/$isPreviewMode|pending=$_pendingModeNavigation/$_pendingProviderModeSync';
-      if (_lastLoggedModeSignature != signature) {
-        _lastLoggedModeSignature = signature;
-        debugPrint(
-          '🧭 [StoreModeTrace][Layout] uri=$currentUri '
-          'provider(edit=${editProvider.isEditMode}, preview=${editProvider.isPreviewMode}, context=${editProvider.isInEditorContext}) '
-          'effective(edit=$isEditMode, preview=$isPreviewMode) '
-          'pending(nav=$_pendingModeNavigation, sync=$_pendingProviderModeSync) '
-          'phase=${SchedulerBinding.instance.schedulerPhase}',
-        );
-      }
+    // else: resolution in flight — fail closed this frame; the unconsumed
+    // command retries the SAME URI exactly once when the lease grants.
+    if (_modeBindingUriSignature == commandKey &&
+        kIsWeb &&
+        editProvider.isInEditorContext &&
+        !uriProjectsWebsiteEditorMode(currentUri, editProvider.mode)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        final latestUri = GoRouterState.of(context).uri;
+        final latestMode = context.read<WebsiteEditModeProvider>().mode;
+        if (uriProjectsWebsiteEditorMode(latestUri, latestMode)) return;
+        final projected =
+            projectWebsiteEditorModeOntoUri(latestUri, latestMode);
+        context.go(_routeForPublicStore(projected.toString()));
+      });
     }
+
+    final isEditMode = editProvider.isEditMode;
+    final isPreviewMode = editProvider.isPreviewMode;
+    final devicePreviewMode = editProvider.devicePreviewMode;
+    final isInEditorContext = editProvider.isInEditorContext;
 
     // ======================================================================
     // PAGE CONTENT TRANSITION (WEB)
@@ -694,11 +1398,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Don't block rendering - just use defaults until settings load
     // This makes the site feel faster
 
-    final storeName = websiteService.getSetting('store_name', 'VINABIKE');
-    final storeDescription = websiteService.getSetting(
-      'store_description',
-      'Todo lo que necesitas para tu bicicleta en Viña del Mar',
-    );
+    final storeName = websiteService
+        .getSetting(
+          'seo_business_name',
+          websiteService.getSetting('store_name', 'Tienda'),
+        )
+        .trim();
+    final storeDescription =
+        websiteService.getSetting('store_description', '').trim();
     final logoUrl = websiteService.getSetting('logo_url', '');
     final topBannerText = websiteService
         .getSetting('top_banner_text', 'Envíos a Chile continental')
@@ -751,16 +1458,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           )
         : websiteService.getSetting(
             'twitter', websiteService.getSetting('twitter_handle', ''));
+    // No tenant's real channel may be another tenant's default. An unset
+    // network is omitted, not substituted.
     final youtubeHandle = isInEditorContext
         ? editProvider.getEffectiveFooterSetting(
             'youtube',
             websiteService.getSetting(
-                'youtube',
-                websiteService.getSetting(
-                    'youtube_handle', '@vinabikechannel')),
+                'youtube', websiteService.getSetting('youtube_handle', '')),
           )
-        : websiteService.getSetting('youtube',
-            websiteService.getSetting('youtube_handle', '@vinabikechannel'));
+        : websiteService.getSetting(
+            'youtube', websiteService.getSetting('youtube_handle', ''));
 
     final whatsappRaw = isInEditorContext
         ? editProvider.getEffectiveFooterSetting(
@@ -774,42 +1481,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Site publish flag (stored in website_settings)
     final sitePublished =
         websiteService.getSetting('site_published', 'true') == 'true';
-
-    // While in editor context, keep the URL mode flag consistent with provider
-    // state. This prevents stale query params (common with shell routes) from
-    // lingering like ?preview=true while actually in edit mode.
-    // NOTE: We guard against scheduling multiple navigations within the same
-    // frame (common when provider notifies and triggers rebuild) to avoid
-    // triggering "already marked needs layout" assertions.
-    if (kIsWeb &&
-        editProvider.isInEditorContext &&
-        !_pendingModeNavigation &&
-        !_pendingProviderModeSync) {
-      final desiredModeKey = editProvider.isEditMode
-          ? 'edit'
-          : (editProvider.isPreviewMode ? 'preview' : null);
-
-      final nextQp = Map<String, String>.from(currentUri.queryParameters);
-      nextQp.remove('edit');
-      nextQp.remove('preview');
-      if (desiredModeKey != null) nextQp[desiredModeKey] = 'true';
-
-      final currentQp = currentUri.queryParameters;
-      final qpMatches = nextQp.length == currentQp.length &&
-          nextQp.entries.every((e) => currentQp[e.key] == e.value);
-
-      if (!qpMatches) {
-        _pendingModeNavigation = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _pendingModeNavigation = false;
-          if (!context.mounted) return;
-          final nextUri = currentUri.replace(
-            queryParameters: nextQp.isEmpty ? null : nextQp,
-          );
-          context.go(_routeForPublicStore(nextUri.toString()));
-        });
-      }
-    }
 
     // Theme colors - use provider for live preview when in editor context
     final primaryColor = _resolveColor(
@@ -938,13 +1609,55 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     // Navigation (single source of truth): website_navigation table.
     // Public store loads it via WebsiteService.loadNavigationForTenant().
-    final navItems =
+    final authoredNavItems =
         websiteService.headerNavigation.where((n) => n.isVisible).toList();
+    final navigationCategorySnapshot = tenantProvider.tenantId == null
+        ? null
+        : inventoryService.cachedCategoriesForTenant(
+            tenantId: tenantProvider.tenantId!,
+          );
+    final storefrontInternalOrigins = _resolveStorefrontInternalOrigins(
+      websiteService,
+      tenantProvider,
+    );
+    final categoryPublication = navigationCategorySnapshot == null
+        ? PublicCategoryPublication.empty()
+        : PublicCategoryPublication.resolve(
+            categories: [
+              for (final category in navigationCategorySnapshot.categories)
+                if (category.id != null)
+                  PublicCategoryDescriptor(
+                    id: category.id!,
+                    name: category.name,
+                    fullPath: category.fullPath,
+                    showOnWebsite: category.showOnWebsite,
+                  ),
+            ],
+            navigation: websiteService.navigation,
+            presentationRegistry: websiteService.catalogPresentationRegistry,
+            internalOrigins: storefrontInternalOrigins,
+          );
+    _categoryPublication = categoryPublication;
+    _storefrontInternalOrigins = storefrontInternalOrigins;
+    final pagePublication = PublicPagePublication.resolve(
+      pages: websiteService.pages,
+      isAuthoritative: tenantProvider.tenantId != null &&
+          websiteService.hasAuthoritativePagePublicationForTenant(
+            tenantProvider.tenantId!,
+          ),
+      internalOrigins: storefrontInternalOrigins,
+    );
+    _pagePublication = pagePublication;
+    final navItems = pagePublication.forAllAudiences(authoredNavItems);
+    final categoryNavigationProjection = PublicCategoryNavigationProjection(
+      categoryPublication,
+      internalOrigins: storefrontInternalOrigins,
+    );
 
-    // If the site is unpublished, show a holding page to visitors.
-    // Allow bypass when entering via ?preview=true or ?edit=true, even before provider updates.
-    final bypassUnpublished =
-        isInEditorContext || qp['preview'] == 'true' || qp['edit'] == 'true';
+    // If the site is unpublished, show a holding page to visitors. The FSM
+    // route command already ran in this build, so a `?preview=true` or
+    // `?edit=true` entry is reflected by the provider mode here.
+    final bypassUnpublished = isInEditorContext;
     if (!sitePublished && !bypassUnpublished) {
       return Theme(
         data: websiteTheme,
@@ -969,6 +1682,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       accentColor: accentColor,
       isEditMode: isEditMode,
       logoUrl: logoUrl, // Pass logoUrl
+      categoryNavigationProjection: categoryNavigationProjection,
     );
 
     // Build header widget builder for special layouts
@@ -1000,6 +1714,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         menuRailColor: headerMenuRailColor,
         navigationUppercase: headerNavigationUppercase,
         navItems: navItems,
+        categoryNavigationProjection: categoryNavigationProjection,
         isOverlay: isOverlay,
       );
     }
@@ -1142,6 +1857,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         headerMenuSurfaceColor: headerMenuSurfaceColor,
         headerMenuRailColor: headerMenuRailColor,
         navItems: navItems,
+        categoryNavigationProjection: categoryNavigationProjection,
         isEditMode: isEditMode,
         child: animateBody(widget.child),
         footer: footerWidget,
@@ -1204,17 +1920,23 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // ========================================================================
     // Automatically update browser title and meta tags based on current page
     if (kIsWeb && !isEditMode) {
-      final currentPath = GoRouterState.of(context).uri.path;
+      final seoUri = resolvePublicStoreSeoUri(
+        routerUri: currentUri,
+        routePath: currentRoute,
+      );
+      final currentPath = seoUri.path;
 
-      // Catalog collections and product detail manage SEO only after their
-      // canonical owner and public eligibility have loaded. This also covers
-      // the `/tienda/...` ERP mount without letting the generic page updater
-      // overwrite their metadata.
+      // Catalog collections, product detail, and CMS-owned pages manage SEO
+      // only after their canonical owner and eligibility have loaded. This
+      // also covers the `/tienda/...` ERP mount without letting the generic
+      // page updater overwrite their metadata.
       if (isCatalogSeoManagedPath(currentPath) ||
-          isProductDetailSeoManagedPath(currentPath)) {
+          isProductDetailSeoManagedPath(currentPath) ||
+          isStaticPolicySeoManagedPath(currentPath) ||
+          isDynamicWebsitePageSeoManagedPath(currentPath)) {
         // Skip the generic page SEO updater.
       } else {
-        String normalizedSlug = GoRouterState.of(context).uri.path;
+        String normalizedSlug = currentPath;
         if (normalizedSlug.startsWith('/tienda/')) {
           normalizedSlug = normalizedSlug.substring(8);
         } else if (normalizedSlug.startsWith('/tienda')) {
@@ -1226,7 +1948,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         if (normalizedSlug.isEmpty) normalizedSlug = 'home';
 
         // Handle legacy route specific cases
-        if (GoRouterState.of(context).uri.path == '/') normalizedSlug = 'home';
+        if (currentPath == '/') normalizedSlug = 'home';
 
         WebsitePage? currentPage;
         try {
@@ -1244,9 +1966,40 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           // Page not found or list empty
         }
 
-        String seoTitle = storeName;
-        String? seoDesc = storeDescription;
-        String? seoImage = logoUrl;
+        String seoTitle = resolvePublicStoreSystemSeoTitle(
+          path: currentPath,
+          storeName: storeName,
+        );
+        final globalSeoTitle = [
+          websiteService.getSetting('seo_meta_title', '').trim(),
+          websiteService.getSetting('meta_title', '').trim(),
+        ].firstWhere((value) => value.isNotEmpty, orElse: () => '');
+        final globalSeoDescription = [
+          websiteService.getSetting('seo_meta_description', '').trim(),
+          websiteService.getSetting('meta_description', '').trim(),
+          storeDescription.trim(),
+        ].firstWhere(
+          (value) => value.isNotEmpty,
+          orElse: () => storeName.isEmpty
+              ? 'Información pública de la tienda.'
+              : 'Información pública de $storeName.',
+        );
+        final globalSeoKeywords = [
+          websiteService.getSetting('seo_meta_keywords', '').trim(),
+          websiteService.getSetting('meta_keywords', '').trim(),
+        ].firstWhere((value) => value.isNotEmpty, orElse: () => '');
+        final globalSeoImage = [
+          websiteService.getSetting('seo_og_image', '').trim(),
+          logoUrl.trim(),
+        ].firstWhere((value) => value.isNotEmpty, orElse: () => '');
+        if (normalizeStorefrontSeoPath(currentPath) == '/' &&
+            globalSeoTitle.isNotEmpty) {
+          seoTitle = globalSeoTitle;
+        }
+        String? seoDesc = globalSeoDescription;
+        String? seoKeywords =
+            globalSeoKeywords.isEmpty ? null : globalSeoKeywords;
+        String? seoImage = globalSeoImage.isEmpty ? null : globalSeoImage;
 
         if (currentPage != null) {
           // Only use page-specific SEO if we matched the correct page
@@ -1264,15 +2017,29 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               seoDesc = currentPage.metaDescription;
             }
 
+            if (currentPage.metaKeywords?.isNotEmpty == true) {
+              seoKeywords = currentPage.metaKeywords;
+            }
+
             if (currentPage.ogImageUrl?.isNotEmpty == true) {
               seoImage = currentPage.ogImageUrl;
             }
           }
         }
 
+        // A clean route owned by a `website_pages` row may only be indexed
+        // while that owner is published. Without this the generic branch used
+        // the `ownerIsPublished: true` default, so a draft `/contacto` stayed
+        // `index,follow` at runtime even though the static generator had
+        // already excluded it from the sitemap and written no snapshot.
+        final seoOwnerPath = normalizeStorefrontSeoPath(seoUri.path);
+        final seoOwnerIsPublished =
+            !PublicPagePublication.managedCleanPaths.contains(seoOwnerPath) ||
+                _pagePublication.allowsHref(seoOwnerPath);
         final seoRoute = projectStorefrontSeoRoute(
-          currentUri,
+          seoUri,
           isErpMounted: _isErpMountedStore(),
+          ownerIsPublished: seoOwnerIsPublished,
         );
         final publicStoreUrl = _resolvePublicStoreUrl(websiteService);
         final publicStoreUri = publicStoreUrl == null
@@ -1292,6 +2059,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               title: seoTitle,
               description: seoDesc,
               imageUrl: seoImage,
+              keywords: seoKeywords,
               canonicalUrl: canonicalUrl,
               robots: seoRoute.robots,
             );
@@ -1305,166 +2073,67 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // hidden behind the panel. Keep the top command bar full-width.
     // NOTE: Only apply this padding in DESKTOP preview mode. In mobile/tablet
     // preview, the content is already inside a constrained frame.
-    if (isEditMode &&
-        widget.useExternalEditorPanel &&
-        devicePreviewMode == DevicePreviewMode.desktop) {
+    if (isEditMode && devicePreviewMode == DevicePreviewMode.desktop) {
       pageContent = Padding(
         padding: const EdgeInsets.only(right: _externalEditorPanelWidth),
         child: pageContent,
       );
     }
 
-    // In full edit mode, use Row layout with side panel
-    if (isEditMode) {
-      final editorViewport = _buildEditorViewport(
-          context, pageContent, devicePreviewMode,
-          isEditMode: true);
-
-      final shouldReserveRightSpaceForExternalPanel =
-          widget.useExternalEditorPanel &&
-              devicePreviewMode == DevicePreviewMode.desktop &&
-              !_isConfigHubOpen;
-
+    // ONE storefront shell Scaffold for ALL modes (public|preview|edit):
+    // the FSM rebuilds its body in place, so Public↔Edit↔Preview
+    // transitions never remount the shell and routed consumer State
+    // (scroll positions, kept-alive pages) survives every mode change.
+    // ONE routed content anchor for ALL modes and device previews: the
+    // SAME type/key chain hosts pageContent in public|preview|edit, so mode
+    // toggles and device-frame changes rebuild in place (properties and
+    // constraints only) and routed State — scroll, forms, filters, carts —
+    // survives. Chrome (top bar, config hub, chat, FABs) are SIBLINGS,
+    // never new parents of the content subtree.
+    final contentAnchor = KeyedSubtree(
+      key: const ValueKey('storefront_content_anchor'),
+      child: _buildStorefrontContentViewport(
+        context,
+        pageContent,
+        framed:
+            isInEditorContext && devicePreviewMode != DevicePreviewMode.desktop,
+        isEditMode: isEditMode,
+        devicePreviewMode: devicePreviewMode,
+      ),
+    );
+    Widget shellBody;
+    if (isInEditorContext) {
       Widget overlayLayer = _buildConfigHubOverlay();
-      if (shouldReserveRightSpaceForExternalPanel) {
+      if (isEditMode &&
+          devicePreviewMode == DevicePreviewMode.desktop &&
+          !_isConfigHubOpen) {
         overlayLayer = Padding(
           padding: const EdgeInsets.only(right: _externalEditorPanelWidth),
           child: overlayLayer,
         );
       }
-
-      final Widget mainBody;
-      if (widget.useExternalEditorPanel) {
-        // Editor panel is rendered externally by PersistentEditorShell.
-        // Overlay can cover the full viewport, but must avoid the reserved panel width.
-        mainBody = Stack(
-          children: [
-            Positioned.fill(child: editorViewport),
-            if (_isConfigHubOpen)
-              Positioned.fill(
-                child: overlayLayer,
-              ),
-          ],
-        );
-      } else {
-        // Legacy: render editor panel inline. Ensure overlay only covers the viewport
-        // (left) and never sits behind the right editor panel.
-        mainBody = Row(
-          children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(child: editorViewport),
-                  if (_isConfigHubOpen)
-                    Positioned.fill(
-                      child: overlayLayer,
-                    ),
-                ],
-              ),
-            ),
-            if (!_isConfigHubOpen)
-              DeferredWebsiteEditorPanel(
-                onSave: () async {
-                  await _saveChanges(context, editProvider, websiteService);
-                  if (context.mounted) {
-                    editProvider.switchToPreviewMode();
-                  }
-                },
-                onRestoreComplete: () => _reloadEditorAfterBackupRestore(
-                  context,
-                  editProvider,
-                  websiteService,
-                ),
-                onDiscard: () {
-                  editProvider.discardPendingChanges();
-                  editProvider.switchToPreviewMode();
-                },
-              ),
-          ],
-        );
-      }
-
-      return Theme(
-        data: websiteTheme,
-        child: Scaffold(
-          // Keep the Material/Ink host stable while the provider switches the
-          // workspace between edit and preview. Replacing this Scaffold left
-          // paint features from the routed catalog attached to a detached
-          // render box during the first preview frame.
-          key: const ValueKey('scaffold_editor_context'),
-          backgroundColor: backgroundColor,
-          body: Stack(
-            children: [
-              // Main Body (underneath, with padding for top bar)
-              Positioned.fill(
-                top: 48,
-                child: mainBody,
-              ),
-              // Top Bar (on top)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 48,
-                child: _buildPreviewTopBar(
-                    context, editProvider, websiteService, storeName),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // In preview mode, show top bar with "Editar" button
-    if (isPreviewMode) {
-      final editorViewport = _buildEditorViewport(
-          context, pageContent, devicePreviewMode,
-          isEditMode: false);
-      return Theme(
-        data: websiteTheme,
-        child: Scaffold(
-          // This is intentionally the same identity used by edit mode. The
-          // native ERP owns the mode through WebsiteEditModeProvider, so the
-          // shared Scaffold can update in place without a router transition.
-          key: const ValueKey('scaffold_editor_context'),
-          backgroundColor: backgroundColor,
-          body: Stack(
-            children: [
-              // Page content (underneath, with padding)
-              Positioned.fill(
-                top: 48,
-                child: Stack(
-                  children: [
-                    Positioned.fill(child: editorViewport),
-                    if (_isConfigHubOpen)
-                      Positioned.fill(
-                        child: _buildConfigHubOverlay(),
-                      ),
-                  ],
-                ),
-              ),
-              // Top Bar (on top)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 48,
-                child: _buildPreviewTopBar(
-                    context, editProvider, websiteService, storeName),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Build the main content (normal view mode)
-    final mainContent = Scaffold(
-      key: const ValueKey('scaffold_normal_mode'),
-      backgroundColor: backgroundColor,
-      body: Stack(
+      // The editor panel has one owner: PersistentEditorShell. Keeping an
+      // inline fallback here previously reintroduced a second save
+      // orchestrator and could switch to Preview even after a failed save.
+      shellBody = Stack(
         children: [
-          Positioned.fill(child: pageContent),
+          Positioned.fill(top: 48, child: contentAnchor),
+          if (_isConfigHubOpen)
+            Positioned.fill(top: 48, child: overlayLayer),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 48,
+            child: _buildPreviewTopBar(
+                context, editProvider, websiteService, storeName),
+          ),
+        ],
+      );
+    } else {
+      shellBody = Stack(
+        children: [
+          Positioned.fill(child: contentAnchor),
           // Internal Chat System (replaces WhatsApp for richer interaction)
           const CustomerChatWidget(),
           if (hasWhatsApp &&
@@ -1483,6 +2152,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           // Show the legacy "Edit Site" FAB only when the store is mounted
           // inside the ERP shell. Standalone store debug on localhost should
           // behave like the public storefront and never expose this old entry.
+          // Visibility is gated on the GRANTED entry lease — being logged in
+          // is not authority, and a programmatic open must never bypass the
+          // capability gate.
           if (isLoggedIn && widget.showEditorButton && _isErpMountedStore())
             Positioned(
               bottom: 24,
@@ -1494,6 +2166,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   final websiteService = context.read<WebsiteService>();
 
                   if (isInEditorContext) return const SizedBox.shrink();
+                  if (!editProvider.editorEntryLeaseGranted) {
+                    return const SizedBox.shrink();
+                  }
 
                   return FloatingActionButton.extended(
                     heroTag: 'edit_site_fab',
@@ -1506,7 +2181,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                           Map<String, dynamic>.from(websiteService.settings);
                       debugPrint(
                           '🎨 [Layout] Entering preview mode with ${blocks.length} blocks');
-                      editProvider.enterPreviewMode(blocks, settings);
+                      editProvider.openEditorDocument(
+                        blocks,
+                        settings,
+                        mode: WebsiteEditorMode.preview,
+                      );
                     },
                     backgroundColor: accentColor,
                     icon: const Icon(Icons.edit, color: Colors.white),
@@ -1523,14 +2202,22 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               ),
             ),
         ],
-      ),
-    );
+      );
+    }
 
-    return WebsiteWorkspaceScope(
-      onOpen: _openWorkspacePanel,
-      child: Theme(
-        data: websiteTheme,
-        child: mainContent,
+    return _withCheckoutExitScope(
+      context,
+      currentUri,
+      WebsiteWorkspaceScope(
+        onOpen: _openWorkspacePanel,
+        child: Theme(
+          data: websiteTheme,
+          child: Scaffold(
+            key: const ValueKey('storefront_shell_scaffold'),
+            backgroundColor: backgroundColor,
+            body: shellBody,
+          ),
+        ),
       ),
     );
   }
@@ -1821,119 +2508,50 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             // Main mode button (Preview -> Edit, Edit -> Preview)
             _CmsModeButton(
               label: isEditMode ? 'Vista previa' : 'Editar',
-              onPressed: _pendingModeNavigation
-                  ? null
-                  : () {
-                      final transitionId = ++_modeTransitionSequence;
-                      if (kDebugMode) {
-                        debugPrint(
-                          '🧭 [StoreModeTrace][$transitionId] REQUEST '
-                          '${isEditMode ? 'edit→preview' : 'preview→edit'} '
-                          'uri=${GoRouterState.of(context).uri} '
-                          'erpMounted=${_isErpMountedStore()} web=$kIsWeb '
-                          'phase=${SchedulerBinding.instance.schedulerPhase}',
-                        );
-                      }
+              onPressed: () {
+                final next = isEditMode
+                    ? WebsiteEditorMode.preview
+                    : WebsiteEditorMode.edit;
 
-                      // The native ERP workspace already owns this routed surface.
-                      // Its edit provider is the canonical mode owner after entry;
-                      // changing only a query parameter would rebuild the catalog
-                      // inside the persistent shell's LayoutBuilder and can violate
-                      // Flutter's active relayout boundary. Keep the route stable
-                      // and change the CMS mode after the button interaction frame.
-                      if (_isErpMountedStore() && !kIsWeb) {
-                        _pendingModeNavigation = true;
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          Future<void>.delayed(
-                              const Duration(milliseconds: 260), () {
-                            _pendingModeNavigation = false;
-                            if (!context.mounted) return;
-                            if (kDebugMode) {
-                              debugPrint(
-                                '🧭 [StoreModeTrace][$transitionId] APPLY_PROVIDER '
-                                'before(edit=${editProvider.isEditMode}, preview=${editProvider.isPreviewMode}) '
-                                'phase=${SchedulerBinding.instance.schedulerPhase}',
-                              );
-                            }
-                            if (isEditMode) {
-                              editProvider.switchToPreviewMode();
-                            } else {
-                              editProvider.switchToEditMode();
-                            }
-                            if (kDebugMode) {
-                              debugPrint(
-                                '🧭 [StoreModeTrace][$transitionId] PROVIDER_NOTIFIED '
-                                'after(edit=${editProvider.isEditMode}, preview=${editProvider.isPreviewMode})',
-                              );
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                if (!context.mounted) return;
-                                debugPrint(
-                                  '🧭 [StoreModeTrace][$transitionId] FIRST_FRAME_SETTLED '
-                                  'provider(edit=${editProvider.isEditMode}, preview=${editProvider.isPreviewMode}) '
-                                  'uri=${GoRouterState.of(context).uri} '
-                                  'phase=${SchedulerBinding.instance.schedulerPhase}',
-                                );
-                              });
-                            }
-                          });
-                        });
-                        return;
-                      }
+                // The native ERP workspace keeps its route stable: the FSM is
+                // the only owner and there is no visible URL to project.
+                if (_isErpMountedStore() && !kIsWeb) {
+                  editProvider.setMode(next);
+                  return;
+                }
 
-                      // IMPORTANT: Mode is controlled by BOTH provider state and URL query params.
-                      // If we only flip provider state while the URL still has ?edit=true,
-                      // the page will immediately force edit mode again (bounce).
-                      final state = GoRouterState.of(context);
-                      final currentUri = state.uri;
-
-                      final qp =
-                          Map<String, String>.from(currentUri.queryParameters);
-                      qp.remove('edit');
-                      qp.remove('preview');
-
-                      if (isEditMode) {
-                        // Navigate first. The URL-to-provider synchronizer above
-                        // applies the mode change after the routed surface has
-                        // completed its frame. Mutating provider state here and
-                        // navigating in the same callback can replace the Scaffold
-                        // while Flutter is still painting the editor viewport.
-                        qp['preview'] = 'true';
-                      } else {
-                        qp['edit'] = 'true';
-                      }
-
-                      final nextUri = Uri(
-                        path: currentUri.path,
-                        queryParameters: qp.isEmpty ? null : qp,
-                      );
-                      final destination =
-                          _routeForPublicStore(nextUri.toString());
-
-                      // A GoRouter update rebuilds the routed catalog's
-                      // LayoutBuilder. Starting that rebuild from the same pointer
-                      // frame that still owns this Material ink feature can make
-                      // Flutter adopt catalog children while its relayout boundary
-                      // is active. Wait until the interaction has fully settled;
-                      // the URL-to-provider synchronizer then applies the requested
-                      // CMS mode on a subsequent frame.
-                      _pendingModeNavigation = true;
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        Future<void>.delayed(const Duration(milliseconds: 260),
-                            () {
-                          _pendingModeNavigation = false;
-                          if (!context.mounted) return;
-                          context.go(destination);
-                        });
-                      });
-                    },
+                // On web the toggle is a navigation carrying the canonical
+                // mode projection; the changed URI is then consumed as the
+                // FSM command in the next build. One navigation, one history
+                // entry, so browser Back/forward replay mode transitions.
+                final currentUri = GoRouterState.of(context).uri;
+                final projected =
+                    projectWebsiteEditorModeOntoUri(currentUri, next);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!context.mounted) return;
+                  context.go(_routeForPublicStore(projected.toString()));
+                });
+              },
             ),
             const SizedBox(width: 8),
           ],
 
           // Close/exit button - go back to Website Management
           IconButton(
-            onPressed: () {
-              editProvider.exitEditMode();
+            onPressed: () async {
+              final editorDecision =
+                  await WebsiteEditorNavigationGuard.authorize(
+                context,
+                intent: WebsiteEditorNavigationIntent.leaveEditor,
+              );
+              if (!editorDecision.isAllowed) return;
+              if (!context.mounted) return;
+              if (!await PublicStoreLayout.authorizeCheckoutExit(context)) {
+                return;
+              }
+              if (!context.mounted) return;
+              if (!editorDecision.commit()) return;
+              editProvider.closeEditor();
               context.go(
                 _isErpMountedStore()
                     ? '/website'
@@ -2277,13 +2895,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     if (!navContext.mounted) return;
 
-    final canNavigate = await _confirmNavigateAwayIfUnsaved(
-      navContext,
-      editProvider,
-    );
-    if (!canNavigate) return;
-    if (!navContext.mounted) return;
-
     final initialSlug = _getCurrentSlugFromRoute(navContext, editProvider);
     final pages = List<WebsitePage>.from(websiteService.pages);
 
@@ -2336,43 +2947,35 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // navigation instead of _navigateToHref to avoid UUID resolution loops.
     final href = selected.href;
 
-    // Append edit=true since we're in editor context.
-    final hasQuery = href.contains('?');
-    final target = hasQuery ? '$href&edit=true' : '$href?edit=true';
+    // Project the CURRENT editor mode onto the destination. The page
+    // selector keeps the appropriate edit/preview context; it never escalates
+    // Preview to Edit on its own (that is an explicit toggle command).
+    final currentUri = GoRouterState.of(navContext).uri;
+    final parsedHref = Uri.tryParse(href);
+    final target = parsedHref == null
+        ? href
+        : projectWebsiteEditorModeOntoUri(
+            parsedHref,
+            navContext.read<WebsiteEditModeProvider>().mode,
+          ).toString();
+    final targetUri = Uri.tryParse(target);
+    if (targetUri?.toString() == currentUri.toString()) return;
+    final keepsCurrentDocument =
+        targetUri != null && targetUri.path == currentUri.path;
 
     // Use go() to replace current route (avoids stacking editor pages).
-    navContext.go(target);
-  }
-
-  Future<bool> _confirmNavigateAwayIfUnsaved(
-    BuildContext context,
-    WebsiteEditModeProvider editProvider,
-  ) async {
-    if (!editProvider.isEditMode) return true;
-    if (!editProvider.hasUnsavedChanges) return true;
-
-    final res = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Cambiar de página'),
-          content: const Text(
-            'Tienes cambios sin guardar. Si cambias de página ahora, podrías perderlos.\n\n¿Quieres continuar?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Continuar'),
-            ),
-          ],
-        );
-      },
+    final editorDecision = await WebsiteEditorNavigationGuard.authorize(
+      navContext,
+      intent: keepsCurrentDocument
+          ? WebsiteEditorNavigationIntent.samePage
+          : WebsiteEditorNavigationIntent.switchPage,
     );
-    return res ?? false;
+    if (!editorDecision.isAllowed) return;
+    if (!navContext.mounted) return;
+    if (!await PublicStoreLayout.authorizeCheckoutExit(navContext)) return;
+    if (!navContext.mounted) return;
+    if (!editorDecision.commit()) return;
+    navContext.go(target);
   }
 
   List<_PageNavTarget> _buildPageNavigatorTargets(List<WebsitePage> pages) {
@@ -2521,8 +3124,17 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required String actionId,
   }) async {
     // For actions that go back into ERP pages, ensure we exit editor mode cleanly.
-    void goAdmin(String path) {
-      editProvider.exitEditMode();
+    Future<void> goAdmin(String path) async {
+      final editorDecision = await WebsiteEditorNavigationGuard.authorize(
+        context,
+        intent: WebsiteEditorNavigationIntent.leaveEditor,
+      );
+      if (!editorDecision.isAllowed) return;
+      if (!context.mounted) return;
+      if (!await PublicStoreLayout.authorizeCheckoutExit(context)) return;
+      if (!context.mounted) return;
+      if (!editorDecision.commit()) return;
+      editProvider.closeEditor();
       context.go(path);
     }
 
@@ -2535,7 +3147,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           _openConfigHub(_EditorConfigHubTab.ecomCatalog);
           return;
         }
-        goAdmin('/website/product-visibility');
+        await goAdmin('/website/product-visibility');
         return;
 
       // Site
@@ -2544,35 +3156,35 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           _openConfigHub(_EditorConfigHubTab.sitePages);
           return;
         }
-        goAdmin('/website/pages');
+        await goAdmin('/website/pages');
         return;
       case _actionSiteNavigation:
         if (editProvider.isInEditorContext) {
           _openConfigHub(_EditorConfigHubTab.siteNavigation);
           return;
         }
-        goAdmin('/website/navigation');
+        await goAdmin('/website/navigation');
         return;
       case _actionSiteDestinations:
         if (editProvider.isInEditorContext) {
           _openConfigHub(_EditorConfigHubTab.siteDestinations);
           return;
         }
-        goAdmin('/website/destinations');
+        await goAdmin('/website/destinations');
         return;
       case _actionSiteSettings:
         if (editProvider.isInEditorContext) {
           _openConfigHub(_EditorConfigHubTab.siteSettings);
           return;
         }
-        goAdmin('/website/settings');
+        await goAdmin('/website/settings');
         return;
       case _actionSiteOpenWebsiteHub:
         if (editProvider.isInEditorContext) {
           _openConfigHub(_EditorConfigHubTab.siteHub);
           return;
         }
-        goAdmin('/website');
+        await goAdmin('/website');
         return;
 
       // E-commerce
@@ -2581,14 +3193,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           _openConfigHub(_EditorConfigHubTab.ecomOrders);
           return;
         }
-        goAdmin('/website/orders');
+        await goAdmin('/website/orders');
         return;
       case _actionEcomGoogle:
         if (editProvider.isInEditorContext) {
           _openConfigHub(_EditorConfigHubTab.integrations);
           return;
         }
-        goAdmin('/website/integrations');
+        await goAdmin('/website/integrations');
         return;
 
       // Reports
@@ -2597,14 +3209,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           _openConfigHub(_EditorConfigHubTab.reportsAnalytics);
           return;
         }
-        goAdmin('/tools/analytics');
+        await goAdmin('/tools/analytics');
         return;
       case _actionReportsOrders:
         if (editProvider.isInEditorContext) {
           _openConfigHub(_EditorConfigHubTab.ecomOrders);
           return;
         }
-        goAdmin('/website/orders');
+        await goAdmin('/website/orders');
         return;
 
       // Google quick actions
@@ -2648,21 +3260,21 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           _openConfigHub(_EditorConfigHubTab.seo);
           return;
         }
-        goAdmin('/website/seo');
+        await goAdmin('/website/seo');
         return;
       case _actionConfigIntegrations:
         if (editProvider.isInEditorContext) {
           _openConfigHub(_EditorConfigHubTab.integrations);
           return;
         }
-        goAdmin('/website/integrations');
+        await goAdmin('/website/integrations');
         return;
       case _actionConfigPaymentMethods:
         if (editProvider.isInEditorContext) {
           _openConfigHub(_EditorConfigHubTab.paymentMethods);
           return;
         }
-        goAdmin('/settings/payment-methods');
+        await goAdmin('/settings/payment-methods');
         return;
       case _actionConfigDomain:
         if (editProvider.isInEditorContext) {
@@ -2682,7 +3294,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
       // Store actions
       case _actionStoreOpenWebsite:
-        goAdmin('/website');
+        await goAdmin('/website');
         return;
       case _actionStoreCopyUrl:
         await _copyPublicStoreUrl(context, websiteService);
@@ -2827,6 +3439,40 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final host = Uri.base.host;
     if (host.isEmpty) return null;
     return '${Uri.base.scheme}://$host';
+  }
+
+  List<Uri> _resolveStorefrontInternalOrigins(
+    WebsiteService websiteService,
+    PublicStoreTenantProvider tenantProvider,
+  ) {
+    final tenantId = tenantProvider.tenantId;
+    final subdomain = tenantProvider.subdomain?.trim() ?? '';
+    final customDomain =
+        tenantProvider.currentTenant?.customDomain?.trim() ?? '';
+    return WebsiteDestination.resolveInternalOrigins(
+      configuredUrls: [
+        websiteService.getSetting('store_url', ''),
+        // This is accepted only as an owned alias. `store_url` remains the
+        // public-runtime owner until the unified SEO projection replaces the
+        // legacy duplicate setting.
+        websiteService.getSetting('seo_canonical_url', ''),
+      ],
+      ownedHosts: [
+        customDomain,
+        if (subdomain.isNotEmpty) '$subdomain.bikeshop-erp.app',
+        if (tenantId != null)
+          ...TenantDetectionService.knownHostsForTenant(tenantId),
+      ],
+      currentUri: kIsWeb ? Uri.base : null,
+    );
+  }
+
+  bool _allowsPublicHref(String href) {
+    return _pagePublication.allowsHref(href) &&
+        _categoryPublication.allowsHref(
+          href,
+          internalOrigins: _storefrontInternalOrigins,
+        );
   }
 
   String? _resolveGoogleMerchantFeedUrl(WebsiteService websiteService) {
@@ -2995,140 +3641,68 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     );
   }
 
-  Widget _buildEditorViewport(
-      BuildContext context, Widget child, DevicePreviewMode mode,
-      {bool isEditMode = false}) {
-    // Keep the routed StatefulNavigationShell mounted across Edit/Preview.
-    // That shell owns branch Navigators with GlobalKeys; giving the viewport a
-    // different identity for each mode briefly mounts the same Navigator keys
-    // in both the outgoing and incoming subtree during reconciliation.
-    if (mode == DevicePreviewMode.desktop) {
-      return KeyedSubtree(
-        key: const ValueKey('viewport_desktop'),
-        child: child,
-      );
-    }
-
-    // Checks if we are in an "App Mode" page (like Chat) that handles its own scrolling.
-    if (!widget.enablePageViewScrolling) {
-      final targetWidth = mode == DevicePreviewMode.tablet ? 820.0 : 390.0;
-      return MediaQueryLayoutBuilder(
-          key: ValueKey('viewport_layout_app_${mode.name}'),
-          builder: (context, constraints) {
-            // Provide a STRICT height constraint equal to the available space (or a fixed device height).
-            // Using available space (constraints.maxHeight) prevents overflow/unbounded errors.
-            return Center(
-              child: Container(
-                width: targetWidth,
-                height: constraints.maxHeight,
-                decoration: BoxDecoration(
-                  color: Colors.white, // Standard frame background
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 20,
-                      spreadRadius: 2,
-                    )
-                  ],
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: MediaQuery(
-                  data: MediaQuery.of(context).copyWith(
-                    size: Size(targetWidth, constraints.maxHeight),
-                  ),
-                  child: child,
-                ),
-              ),
-            );
-          });
-    }
-
-    // If we are in an app-like page that handles its own scrolling (like Chat),
-    // and we are simply resizing the viewport for mobile preview, we should
-    // ensure we don't apply restrictive height constraints if possible,
-    // OR we rely on the fact that the inner content is now unbounded.
-    // However, the real issue is likely the Clip.antiAlias and fixed height container.
-
-    // If this is an app page (non-scrollable), we should probably return it as-is
-    // but just constrained by width if we want to simulate mobile.
-    // BUT the user asked to NOT break edit mode.
-    // So we must ensure the container provides a valid height constraint (not infinite, but not zero).
-    // The current implementation uses targetHeight = screenSize.height which IS definite.
-    // The issue might be MediaQuery data overlap.
-
-    // Let's ensure the MediaQuery doesn't mess up the constraints for the inner Expanded.
-    // Actually, getting "RenderBox not laid out" usually means an Expanded is inside a parent with unbounded height (Scrollable)
-    // OR an Expanded is inside a parent with 0 height.
-
-    // If widget.enablePageViewScrolling is false, the passed 'child' (pageContent)
-    // is a Column with Expanded(child: widget.child).
-    // The _buildEditorViewport wraps this in a Container(height: screenSize.height).
-    // This *should* work (Fixed Height > Column > Expanded).
-
-    // Wait, let's look at the 'child' being passed.
-    // pageContent is created in line 438: Column([Expanded(child: widget.child)]).
-    // If that is put inside _buildEditorViewport -> Container(height: screenHeight), it should be fine.
-
-    // Re-reading the error: "RenderBox was not laid out".
-    // This often happens if the Column is inside a SingleChildScrollView.
-    // But we fixed that logic in lines 423-445.
-
-    // Is it possible 'pageContent' is NOT what we think it is?
-    // In build(), 'pageContent' varies by 'headerStyle'.
-    // If headerStyle is transparent... which it might be on some pages?
-    // Chat page probably uses 'solid' (default).
-
-    // Let's modify this method to pass the 'enablePageViewScrolling' check effectively.
-    // If the user wants to "put the edit mode back", we just need to ensure it renders.
-    // The safest fix for the "App Mode" inside Editor is to allow it to fill the container.
-
-    // Actually, looking at the previous file content, I don't see 'enablePageViewScrolling' being checked here.
-    // I will add a check: if (!widget.enablePageViewScrolling) return child; ?
-    // No, user said "don't force it". They want edit mode.
-
-    // If the error persists in edit mode, it might be the MediaQuery.size override?
-    // Let's try to pass the constraints properly.
-
-    final targetWidth = mode == DevicePreviewMode.tablet ? 820.0 : 390.0;
-    return MediaQueryLayoutBuilder(
-      key: ValueKey('viewport_layout_scroll_${mode.name}'),
+  /// ONE viewport for every mode and device preview. The TYPE/KEY chain is
+  /// constant — MediaQueryLayoutBuilder → Padding → Center → Container →
+  /// MediaQuery → child — and only PROPERTY VALUES change (frame width,
+  /// height, decoration, media size). The routed content therefore never
+  /// re-parents across public|preview|edit or desktop|tablet|mobile.
+  Widget _buildStorefrontContentViewport(
+    BuildContext context,
+    Widget child, {
+    required bool framed,
+    required bool isEditMode,
+    required DevicePreviewMode devicePreviewMode,
+  }) {
+    // Captured OUTSIDE the layout builder: the unframed branch must expose
+    // the ORIGINAL ambient MediaQuery (MediaQueryLayoutBuilder injects a
+    // constraint-derived one, which would silently reroute responsive
+    // consumers like the footer).
+    final outerMedia = MediaQuery.of(context);
+    // A REAL LayoutBuilder: the anchor slot's actual constraints drive the
+    // fill (MediaQueryLayoutBuilder would substitute MediaQuery.size and
+    // letterbox the storefront under scoped-media hosts).
+    return LayoutBuilder(
+      key: const ValueKey('storefront_content_viewport'),
       builder: (context, constraints) {
-        final screenSize = MediaQuery.sizeOf(context);
+        final screenSize = outerMedia.size;
         final availableHeight = constraints.maxHeight.isFinite
             ? constraints.maxHeight
             : screenSize.height;
-
-        // Calculate offset for external editor panel (it overlays on the right)
-        // We need to shift the preview left by half the panel width to appear visually centered
-        // Only apply offset in edit mode when the panel is actually visible
-        final panelOffset = (isEditMode && widget.useExternalEditorPanel)
-            ? _externalEditorPanelWidth / 2
-            : 0.0;
-
-        return Container(
-          color: const Color(0xFFF3F3F3),
-          // Use Padding to shift content left to account for overlaid panel
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : screenSize.width;
+        final frameWidth = framed
+            ? (devicePreviewMode == DevicePreviewMode.tablet ? 820.0 : 390.0)
+            : availableWidth;
+        // Shift a framed preview left of the overlaid editor panel so it
+        // reads visually centered.
+        final panelOffset =
+            framed && isEditMode ? _externalEditorPanelWidth / 2 : 0.0;
+        return Padding(
           padding: EdgeInsets.only(right: panelOffset * 2),
           child: Center(
             child: Container(
-              width: targetWidth,
+              width: frameWidth,
               height: availableHeight,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x33000000),
-                    blurRadius: 18,
-                    offset: Offset(0, 6),
-                  ),
-                ],
-              ),
-              clipBehavior: Clip.antiAlias,
+              decoration: framed
+                  ? BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 20,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    )
+                  : null,
+              clipBehavior: framed ? Clip.antiAlias : Clip.none,
               child: MediaQuery(
-                data: MediaQuery.of(context).copyWith(
-                  size: Size(targetWidth, availableHeight),
-                ),
+                data: framed
+                    ? outerMedia.copyWith(
+                        size: Size(frameWidth, availableHeight),
+                      )
+                    : outerMedia,
                 child: child,
               ),
             ),
@@ -3137,8 +3711,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       },
     );
   }
-
   Future<void> _showQuickCreatePageDialog(BuildContext context) async {
+    final editorDecision = await WebsiteEditorNavigationGuard.authorize(
+      context,
+      intent: WebsiteEditorNavigationIntent.switchPage,
+    );
+    if (!editorDecision.isAllowed || !context.mounted) return;
+
     final titleController = TextEditingController();
     final slugController = TextEditingController();
     var autoSlug = true;
@@ -3234,6 +3813,17 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   final title = titleController.text.trim();
                   final slug = slugController.text.trim();
                   if (title.isEmpty || slug.isEmpty) return;
+                  if (!editorDecision.isCurrent) {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'El borrador cambió. Cierra y vuelve a crear la '
+                          'página para no perderlo.',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
 
                   try {
                     final websiteService = context.read<WebsiteService>();
@@ -3272,230 +3862,191 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     slugController.dispose();
 
     if (created == null || !context.mounted) return;
+    if (!editorDecision.commit()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'La página fue creada, pero el borrador cambió y se conservó. '
+            'Ábrela desde el selector de páginas.',
+          ),
+        ),
+      );
+      return;
+    }
 
     // Jump directly into edit mode on the new page.
     context
         .go(_routeForPublicStore('/tienda/pagina/${created.slug}?edit=true'));
   }
 
-  /// Check if we're on the public store domain (customer-facing)
-  bool _isPublicStoreDomain() {
-    if (!kIsWeb) return false;
-    final host = Uri.base.host.toLowerCase();
-    return host == 'vinabike-store.web.app' ||
-        host == 'vinabike-store.firebaseapp.com' ||
-        host == 'vinabike.cl' ||
-        host == 'www.vinabike.cl';
+  /// Requests the tenant's confirmed payment methods.
+  ///
+  /// Never called during build; scheduled from the footer builder when the
+  /// active tenant changes, or fired by the bounded retry timer. All retry
+  /// state mutation lives here — [_paymentCapabilityAutoLoadDue] stays pure.
+  Future<void> _loadPaymentCapabilities(String tenantId) async {
+    final normalized = tenantId.trim();
+    if (normalized.isEmpty) return;
+    if (_paymentCapabilitiesTenantId == normalized &&
+        _paymentCapabilities != null) {
+      return;
+    }
+
+    // The attempt budget belongs to one tenant. A different tenant starts
+    // fresh: its predecessor's failures were never its own, and the
+    // predecessor's pending retry is now moot.
+    if (_paymentCapabilitiesAttemptsTenantId != normalized) {
+      _paymentCapabilitiesRetryTimer?.cancel();
+      _paymentCapabilitiesRetryTimer = null;
+      _paymentCapabilitiesAttemptsTenantId = normalized;
+      _paymentCapabilitiesAttempts = 0;
+    }
+    // A request is already in flight for this exact tenant.
+    if (_paymentCapabilitiesRequestedTenantId == normalized) return;
+    if (_paymentCapabilitiesAttempts >= _kPaymentCapabilityMaxAttempts) return;
+
+    // This attempt supersedes any pending timer for the same tenant.
+    _paymentCapabilitiesRetryTimer?.cancel();
+    _paymentCapabilitiesRetryTimer = null;
+
+    final generation = ++_paymentCapabilitiesGeneration;
+    _paymentCapabilitiesRequestedTenantId = normalized;
+    _paymentCapabilitiesAttempts += 1;
+    try {
+      final capabilities = await (widget.checkoutCapabilityLoader ??
+          const PublicCheckoutCapabilityService().load)(normalized);
+      if (!mounted || generation != _paymentCapabilitiesGeneration) return;
+      _paymentCapabilitiesRetryTimer?.cancel();
+      _paymentCapabilitiesRetryTimer = null;
+      setState(() {
+        _paymentCapabilities = capabilities;
+        _paymentCapabilitiesTenantId = normalized;
+        _paymentCapabilitiesRequestedTenantId = null;
+        _paymentCapabilitiesAttempts = 0;
+      });
+    } catch (_) {
+      if (!mounted || generation != _paymentCapabilitiesGeneration) return;
+      // A failed read is unknown, not "no methods" — the footer keeps
+      // claiming nothing. The in-flight latch is released, and while budget
+      // remains a real timer owns the next attempt so recovery never depends
+      // on an external rebuild.
+      final backoffIndex = _paymentCapabilitiesAttempts - 1;
+      setState(() {
+        _paymentCapabilities = null;
+        _paymentCapabilitiesTenantId = null;
+        _paymentCapabilitiesRequestedTenantId = null;
+      });
+      if (backoffIndex < _kPaymentCapabilityBackoff.length) {
+        _paymentCapabilitiesRetryTimer = Timer(
+          _kPaymentCapabilityBackoff[backoffIndex],
+          () {
+            _paymentCapabilitiesRetryTimer = null;
+            // A timer armed before a tenant switch or a newer request is
+            // stale; the generation comparison keeps it inert.
+            if (!mounted || generation != _paymentCapabilitiesGeneration) {
+              return;
+            }
+            _loadPaymentCapabilities(normalized);
+          },
+        );
+      }
+    }
+  }
+
+  /// Whether the footer builder may schedule a load right now.
+  ///
+  /// Pure by contract: build must never mutate retry state. Every mutation —
+  /// budget reset on tenant change, timer cancellation, attempt accounting —
+  /// happens inside [_loadPaymentCapabilities], which re-validates before
+  /// acting.
+  bool _paymentCapabilityAutoLoadDue(String normalizedTenantId) {
+    // A request for this tenant is already in flight.
+    if (_paymentCapabilitiesRequestedTenantId == normalizedTenantId) {
+      return false;
+    }
+    // The budget and any pending timer belong to another tenant; loading this
+    // one resets them, so it is always allowed to start.
+    if (_paymentCapabilitiesAttemptsTenantId != normalizedTenantId) {
+      return true;
+    }
+    // The pending timer owns the next attempt for this tenant.
+    if (_paymentCapabilitiesRetryTimer != null) return false;
+    return _paymentCapabilitiesAttempts < _kPaymentCapabilityMaxAttempts;
+  }
+
+  /// Renders the "Medios de Pago" block, or nothing while unknown.
+  List<Widget> _buildPaymentBadges(BuildContext context, String? tenantId) {
+    final normalized = tenantId?.trim() ?? '';
+    if (normalized.isEmpty) return const <Widget>[];
+
+    if (_paymentCapabilitiesTenantId != normalized) {
+      // Schedule outside build; until it answers, no claim is made. The pure
+      // due-check keeps this from queueing a callback per frame while a retry
+      // timer or an in-flight request already owns the next attempt.
+      if (_paymentCapabilityAutoLoadDue(normalized)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _loadPaymentCapabilities(normalized);
+        });
+      }
+      return const <Widget>[];
+    }
+
+    final claims = resolvePublicPaymentClaims(_paymentCapabilities);
+    if (claims.isEmpty) return const <Widget>[];
+
+    return [
+      const SizedBox(height: 32),
+      Semantics(
+        container: true,
+        label: 'Medios de pago aceptados',
+        child: Column(
+          children: [
+            Text(
+              'Medios de Pago',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.white60,
+                    fontSize: 11,
+                    letterSpacing: 0.5,
+                  ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final code in claims)
+                  if (kPublicStorePaymentClaims[code]!.imageUrl case final url?)
+                    _PaymentBadge(
+                      name: kPublicStorePaymentClaims[code]!.label,
+                      imageUrl: url,
+                      isSvg: url.endsWith('.svg'),
+                    )
+                  else
+                    _GenericPaymentClaim(
+                      label: kPublicStorePaymentClaims[code]!.label,
+                    ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ];
   }
 
   /// Converts legacy in-app routes under `/tienda` to clean public-store routes.
   ///
   /// Example: `/tienda` -> `/`, `/tienda/productos` -> `/productos`.
   /// Preserves query parameters (e.g. `/tienda?edit=true` -> `/?edit=true`).
-  String _routeForPublicStore(String legacyRoute) {
-    var uri = Uri.tryParse(legacyRoute);
-    if (uri == null) return legacyRoute;
 
-    var path = uri.path;
-
-    // Normalize relative paths like 'productos' to '/productos'.
-    // This avoids odd browser URL behavior on web and keeps routing consistent.
-    if (uri.scheme.isEmpty && path.isNotEmpty && !path.startsWith('/')) {
-      path = '/$path';
-    }
-
-    // When running the public store entrypoint on localhost, we still want the
-    // clean store routes (/, /productos, /contacto, ...) instead of /tienda/*.
-    // We can infer this safely from the current browser path:
-    // - Store-only app: Uri.base.path does NOT start with /tienda
-    // - ERP-mounted store: Uri.base.path starts with /tienda
-    final host = Uri.base.host.toLowerCase().split(':').first;
-    final isLocalHost = host == 'localhost' || host == '127.0.0.1';
-    final isErpMountedStore = _isErpMountedStore();
-    final isStoreOnlyLocal = kIsWeb &&
-        isLocalHost &&
-        !isErpMountedStore &&
-        !Uri.base.path.startsWith('/tienda');
-
-    // Mobile/desktop native apps are always running the public store entrypoint
-    // (there is no ERP-mounted `/tienda/*` router on those platforms).
-    // Therefore we must always produce clean public-store routes.
-    final isStandaloneStoreRuntime = _isPublicStoreDomain() ||
-        isStoreOnlyLocal ||
-        (!kIsWeb && !isErpMountedStore);
-
-    if (isStandaloneStoreRuntime) {
-      // Convert legacy in-app routes under `/tienda` to clean public-store routes.
-      if (path == '/tienda' || path == '/tienda/') {
-        path = '/';
-      } else if (path.startsWith('/tienda/')) {
-        path = path.substring('/tienda'.length);
-        if (path.isEmpty) path = '/';
-      }
-      return uri.replace(path: path).toString();
-    }
-
-    // ERP/legacy host: keep policy pages as clean URLs (they are part of the shell).
-    const policyPaths = {
-      '/nosotros',
-      '/terminos',
-      '/privacidad',
-      '/devoluciones',
-      '/envios',
-    };
-    if (policyPaths.contains(path)) {
-      return uri.toString();
-    }
-
-    // Preserve explicit legacy routes.
-    if (path == '/tienda' || path.startsWith('/tienda/')) {
-      return uri.toString();
-    }
-
-    // Product links use one clean canonical shape. Mount that same route under
-    // `/tienda` inside the ERP so Preview/Edit never hands a canonical product
-    // card to an unregistered clean-route branch.
-    final normalizedProductHref = normalizePublicCatalogRouteForRuntime(
-      uri.replace(path: path).toString(),
-      isErpMounted: true,
-    );
-    if (normalizedProductHref != uri.replace(path: path).toString()) {
-      return normalizedProductHref;
-    }
-
-    // Never navigate to ERP root.
-    if (path.isEmpty || path == '/') {
-      path = '/tienda';
-      return uri.replace(path: path).toString();
-    }
-
-    // Map common clean store routes into the ERP-mounted `/tienda/*` space.
-    if (path == '/carrito') path = '/tienda/carrito';
-    if (path == '/checkout') path = '/tienda/checkout';
-    if (path == '/contacto') path = '/tienda/contacto';
-
-    // Detail and scoped sections.
-    if (path.startsWith('/producto/')) path = '/tienda$path';
-    if (path.startsWith('/pedido/')) path = '/tienda$path';
-    if (path == '/cuenta' || path.startsWith('/cuenta/')) path = '/tienda$path';
-    if (path.startsWith('/pagina/')) path = '/tienda$path';
-
-    return uri.replace(path: path).toString();
-  }
-
-  /// Save changes to the database
-  Future<void> _reloadEditorAfterBackupRestore(
-    BuildContext context,
-    WebsiteEditModeProvider editProvider,
-    WebsiteService websiteService,
-  ) async {
-    final tenantId = await _resolveTenantIdForSave(context);
-    if (tenantId == null) {
-      throw Exception('No se pudo identificar el tenant');
-    }
-
-    await websiteService.loadPublicStoreDataUnified(
-      tenantId,
-      forceRefresh: true,
-    );
-
-    final pageId = editProvider.currentPageId;
-    final freshBlocks = pageId == null
-        ? websiteService.blocks
-        : await websiteService.loadBlocksForPage(pageId, tenantId: tenantId);
-
-    editProvider.enterEditMode(
-      freshBlocks,
-      websiteService.settings,
-      pageId: pageId,
-      pageSlug: editProvider.currentPageSlug,
-    );
-  }
-
-  Future<void> _saveChanges(
-    BuildContext context,
-    WebsiteEditModeProvider editProvider,
-    WebsiteService websiteService,
-  ) async {
-    try {
-      final tenantId = await _resolveTenantIdForSave(context);
-
-      if (tenantId == null) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Error: No se pudo identificar el tenant')),
-          );
-        }
-        return;
-      }
-
-      // Show saving indicator
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Guardando cambios...')),
-        );
-      }
-
-      final result = await websiteService.saveEditorChanges(
-        tenantId: tenantId,
-        editorBlocks: editProvider.blocks,
-        pendingSiteSettings: editProvider.pendingSiteSettings,
-        pendingHeaderSettings: editProvider.pendingHeaderSettings,
-        pendingFooterSettings: editProvider.pendingFooterSettings,
-        pendingThemeSettings: editProvider.pendingThemeSettings,
-        pendingFooterNavLabels: editProvider.pendingFooterNavLabels,
-        pendingFooterNavLinkTypes: editProvider.pendingFooterNavLinkTypes,
-        pendingFooterNavLinkValues: editProvider.pendingFooterNavLinkValues,
-        pendingFooterNavOpenInNewTab: editProvider.pendingFooterNavOpenInNewTab,
-        pendingFooterNavItems: editProvider.pendingFooterNavItems,
-        pendingFooterNavCreates: editProvider.pendingFooterNavCreates,
-        pendingFooterNavDeletes: editProvider.pendingFooterNavDeletes,
-        pendingPageSeo: editProvider.pendingPageSeo,
-        pendingFooterSectionOrder: editProvider.pendingFooterSectionOrder,
-        pendingFooterLinkOrder: editProvider.pendingFooterLinkOrder,
-        pendingCategoryVisibility: editProvider.pendingCategoryVisibility,
-        pageId: editProvider.currentPageId,
-        pageSlug: editProvider.currentPageSlug,
+  /// Converts legacy in-app routes under `/tienda` to clean public-store routes.
+  ///
+  /// Example: `/tienda` -> `/`, `/tienda/productos` -> `/productos`.
+  /// Preserves query parameters (e.g. `/tienda?edit=true` -> `/?edit=true`).
+  String _routeForPublicStore(String legacyRoute) => publicStoreHref(
+        legacyRoute,
+        isErpMounted: _isErpMountedStore(),
       );
-
-      // Keep provider context in sync for subsequent saves
-      if (result.pageId != null || (result.pageSlug?.isNotEmpty ?? false)) {
-        editProvider.updateCurrentPageContext(
-          pageId: result.pageId,
-          pageSlug: result.pageSlug,
-        );
-      }
-
-      editProvider.updateBlocksAfterSave(result.freshBlocks);
-      editProvider.markAsSaved();
-      editProvider.clearSiteSettingsChanges();
-      editProvider.clearHeaderChanged();
-      editProvider.clearFooterChanges();
-      editProvider.clearThemeChanges();
-      editProvider.clearSeoChanges();
-      editProvider.clearCategoryChanges();
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Cambios guardados'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('❌ [SaveChanges] Error: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
 
   Future<String?> _resolveTenantIdForSave(BuildContext context) async {
     // 1) Public store host (anonymous tenant detection) via provider
@@ -3549,16 +4100,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     Color? menuRailColor,
     bool navigationUppercase = true,
     List<WebsiteNavigation> navItems = const [],
+    required PublicCategoryNavigationProjection categoryNavigationProjection,
     bool isOverlay = false, // For transparent mode when scrolled up
   }) {
     final cart = context.watch<CartProvider>();
     final catalogPresentationRegistry =
         context.read<WebsiteService>().catalogPresentationRegistry;
-    final modeKey = isEditMode ? 'edit' : 'normal';
-
+    // The header identity is stable across Edit/Preview/Public: the FSM
+    // rebuilds it in place (edit chrome is overlay state, not a new tree).
     return MediaQueryLayoutBuilder(
-        key: ValueKey(
-            'header_layout_${isOverlay ? 'overlay' : 'solid'}_$modeKey'),
+        key: ValueKey('header_layout_${isOverlay ? 'overlay' : 'solid'}'),
         builder: (context, constraints) {
           return AnimatedBuilder(
             animation: MegaMenuController.instance,
@@ -3618,14 +4169,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               // The desktop header needs enough room for the complete saved
               // navigation and account actions. Below this width the compact
               // navigation is clearer than squeezing the same content.
-              final isDesktopHeader = screenWidth >= 1080;
+              final headerGeometry =
+                  PublicStoreHeaderGeometry.resolve(screenWidth);
+              final isDesktopHeader = headerGeometry.isDesktop;
+              final projectedNavItems = isDesktopHeader
+                  ? categoryNavigationProjection.forDesktop(navItems)
+                  : categoryNavigationProjection.forMobile(navItems);
               final useAdaptiveOverlayScrim = isOverlay &&
                   contrastMode == PublicHeaderContrastMode.automatic;
-              final headerHorizontalPadding = isDesktopHeader ? 24.0 : 16.0;
-              final headerVerticalPadding = isDesktopHeader ? 8.0 : 10.0;
-              final headerLogoHeight = isDesktopHeader ? 38.0 : 40.0;
-              final headerIconSize = isDesktopHeader ? 22.0 : 23.0;
-              final headerIconBox = isDesktopHeader ? 40.0 : 42.0;
 
               // Transform creates a web stacking context so the configured
               // header and its menu remain above carousel/hero layers.
@@ -3740,14 +4291,17 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                           Container(
                             width: double.infinity,
                             padding: EdgeInsets.symmetric(
-                                horizontal: headerHorizontalPadding,
-                                vertical: headerVerticalPadding),
+                                horizontal: headerGeometry.horizontalPadding,
+                                vertical: headerGeometry.verticalPadding),
                             child: Row(
                               children: [
                                 // Logo - uses URL if set, otherwise falls back to asset, then text
                                 // Logo - Force use of local asset for consistency and to fix "white block" issue
                                 // (Database logo_url might be opaque, causing white tint to fill the box)
                                 InkWell(
+                                  key: const ValueKey(
+                                    'public-store-header-home',
+                                  ),
                                   onTap: isEditMode
                                       ? null
                                       : () {
@@ -3759,22 +4313,29 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                             forceHomeRefresh: true,
                                           );
                                         },
-                                  child: _buildLogo(
-                                    context: context,
-                                    logoUrl: logoUrl,
-                                    storeName: storeName,
-                                    textColor: textColor,
-                                    isDarkMode: usesLightForeground,
-                                    height: headerLogoHeight,
+                                  child: SizedBox(
+                                    height: headerGeometry.logoHitBox,
+                                    child: Center(
+                                      child: _buildLogo(
+                                        context: context,
+                                        logoUrl: logoUrl,
+                                        storeName: storeName,
+                                        textColor: textColor,
+                                        isDarkMode: usesLightForeground,
+                                        height: headerGeometry.logoHeight,
+                                        maxWidth: headerGeometry.logoMaxWidth,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                                SizedBox(width: isDesktopHeader ? 22 : 16),
+                                SizedBox(width: headerGeometry.logoGap),
                                 // Only show nav links on desktop, use Spacer on mobile
                                 if (isDesktopHeader)
                                   Expanded(
                                     child: Row(
                                       children: [
-                                        if (navItems.isEmpty && isEditMode)
+                                        if (projectedNavItems.isEmpty &&
+                                            isEditMode)
                                           TextButton.icon(
                                             onPressed: () =>
                                                 _openWorkspacePanel(
@@ -3792,9 +4353,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                             ),
                                           )
                                         else
-                                          ...navItems
-                                              .where((n) => n.showOnDesktop)
-                                              .map((nav) {
+                                          ...projectedNavItems.map((nav) {
                                             final children = nav.children
                                                 .where((c) => c.isVisible)
                                                 .where((c) => c.showOnDesktop)
@@ -3832,6 +4391,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                                     registry:
                                                         catalogPresentationRegistry,
                                                   ),
+                                                  canNavigate:
+                                                      categoryNavigationProjection
+                                                          .canNavigate,
                                                   onNavigate: (href, newTab) =>
                                                       _navigateToHref(
                                                           context, href,
@@ -3857,6 +4419,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                                       resolvedMenuSurface,
                                                   panelForegroundColor:
                                                       menuPanelForegroundColor,
+                                                  canNavigate:
+                                                      categoryNavigationProjection
+                                                          .canNavigate,
                                                   onNavigate: (href, newTab) =>
                                                       _navigateToHref(
                                                     context,
@@ -3888,26 +4453,32 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                 Row(
                                   children: [
                                     IconButton(
+                                      key: const ValueKey(
+                                        'public-store-header-search',
+                                      ),
                                       icon: Icon(Icons.search,
-                                          size: headerIconSize),
+                                          size: headerGeometry.iconSize),
                                       color: iconColor,
                                       onPressed: () =>
                                           SearchOverlay.show(context),
                                       tooltip: 'Buscar',
                                       constraints: BoxConstraints.tightFor(
-                                        width: headerIconBox,
-                                        height: headerIconBox,
+                                        width: headerGeometry.iconBox,
+                                        height: headerGeometry.iconBox,
                                       ),
                                       padding: EdgeInsets.zero,
                                     ),
-                                    SizedBox(width: isDesktopHeader ? 2 : 4),
+                                    SizedBox(width: headerGeometry.actionGap),
                                     Stack(
                                       clipBehavior: Clip.none,
                                       children: [
                                         IconButton(
+                                          key: const ValueKey(
+                                            'public-store-header-cart',
+                                          ),
                                           icon: Icon(
                                             Icons.shopping_cart_outlined,
-                                            size: headerIconSize,
+                                            size: headerGeometry.iconSize,
                                           ),
                                           color: iconColor,
                                           onPressed: () => _navigateToHref(
@@ -3917,8 +4488,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                           ),
                                           tooltip: 'Carrito',
                                           constraints: BoxConstraints.tightFor(
-                                            width: headerIconBox,
-                                            height: headerIconBox,
+                                            width: headerGeometry.iconBox,
+                                            height: headerGeometry.iconBox,
                                           ),
                                           padding: EdgeInsets.zero,
                                         ),
@@ -3967,18 +4538,24 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                     ] else ...[
                                       const SizedBox(width: 4),
                                       IconButton(
+                                        key: const ValueKey(
+                                          'public-store-header-menu',
+                                        ),
                                         icon: Icon(Icons.menu,
-                                            size: headerIconSize),
+                                            size: headerGeometry.iconSize),
                                         color: iconColor,
                                         onPressed: () => _showMobileMenu(
                                           context,
-                                          navItems,
+                                          projectedNavItems,
                                           isEditMode: isEditMode,
+                                          canNavigate:
+                                              categoryNavigationProjection
+                                                  .canNavigate,
                                         ),
                                         tooltip: 'Menú',
                                         constraints: BoxConstraints.tightFor(
-                                          width: headerIconBox,
-                                          height: headerIconBox,
+                                          width: headerGeometry.iconBox,
+                                          height: headerGeometry.iconBox,
                                         ),
                                         padding: EdgeInsets.zero,
                                       ),
@@ -4078,6 +4655,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required Color headerMenuSurfaceColor,
     required Color headerMenuRailColor,
     required List<WebsiteNavigation> navItems,
+    required PublicCategoryNavigationProjection categoryNavigationProjection,
     required bool isEditMode,
     required Widget child,
     required Widget footer,
@@ -4104,6 +4682,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       headerMenuSurfaceColor: headerMenuSurfaceColor,
       headerMenuRailColor: headerMenuRailColor,
       navItems: navItems,
+      categoryNavigationProjection: categoryNavigationProjection,
       isEditMode: isEditMode,
       allowOverlayAtTop: allowOverlayAtTop,
       buildHeader: _buildHeader,
@@ -4128,6 +4707,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required Color primaryColor,
     required Color accentColor,
     required String logoUrl,
+    required bool Function(WebsiteNavigation navigation) canNavigate,
     bool isEditMode = false,
     bool isPreviewMode = false, // Added for preview visibility
   }) {
@@ -4181,17 +4761,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         ),
                       ],
                     )
-                  : Image.asset(
-                      'assets/images/vinabike_logo.png',
-                      fit: BoxFit.contain,
-                      filterQuality: FilterQuality.high,
-                      errorBuilder: (context, error, stackTrace) => Text(
-                        storeName.isNotEmpty ? storeName : 'VINABIKE',
-                        style: textTheme.headlineSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontStyle: FontStyle.italic,
-                        ),
+                  // No configured logo: this store's own wordmark, never the
+                  // bundled asset of a different tenant.
+                  : Text(
+                      storeName.isNotEmpty ? storeName : 'Tienda',
+                      style: textTheme.headlineSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
             ),
@@ -4207,6 +4783,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               letterSpacing: 1.0,
             ),
             isEditMode: isEditMode,
+            canNavigate: canNavigate,
           ),
 
           // Collapsible: Contact
@@ -4323,7 +4900,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           // Copyright
           Center(
             child: Text(
-              '© ${DateTime.now().year} ${storeName.isNotEmpty ? storeName : 'Vinabike'}. Todos los derechos reservados.',
+              '© ${DateTime.now().year}${storeName.isNotEmpty ? ' $storeName' : ''}. Todos los derechos reservados.',
               style: textTheme.bodySmall?.copyWith(color: Colors.white54),
               textAlign: TextAlign.center,
             ),
@@ -4477,8 +5054,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         : Icons.mail_outline,
                   ),
                   helperText: settingKey == 'contact_phone'
-                      ? 'Ej: +56 9 9835 7797'
-                      : 'Ej: contacto@vinabike.cl',
+                      ? 'Ej: +56 9 1234 5678'
+                      : 'Ej: contacto@tienda.cl',
                 ),
                 keyboardType: settingKey == 'contact_phone'
                     ? TextInputType.phone
@@ -4518,13 +5095,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   String _getHintForFooterContactSetting(String key) {
     switch (key) {
       case 'contact_email':
-        return 'contacto@vinabike.cl';
+        return 'contacto@tienda.cl';
       case 'contact_phone':
-        return '+56 9 9835 7797';
+        return '+56 9 1234 5678';
       case 'contact_address':
-        return 'Álvarez 32, Local 17, Viña del Mar';
+        return 'Calle y número, ciudad';
       case 'whatsapp':
-        return '+56 9 9835 7797';
+        return '+56 9 1234 5678';
       default:
         return '';
     }
@@ -4692,17 +5269,20 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required Color primaryColor,
     required Color accentColor,
     required String logoUrl, // Added parameter
+    required PublicCategoryNavigationProjection categoryNavigationProjection,
     bool isEditMode = false,
   }) {
-    final modeKey = isEditMode ? 'edit' : 'normal';
+    // The footer identity is stable across Edit/Preview/Public: the FSM
+    // rebuilds it in place (inline nav editing is overlay state).
     return MediaQueryLayoutBuilder(
-        key: ValueKey('footer_layout_$modeKey'),
+        key: const ValueKey('footer_layout'),
         builder: (context, constraints) {
           final websiteService = context.watch<WebsiteService>();
           final editProvider = context.watch<WebsiteEditModeProvider>();
           var footerNavItems = editProvider.getEffectiveFooterNavigation(
             websiteService.footerNavigation,
           );
+          footerNavItems = _pagePublication.forAllAudiences(footerNavItems);
 
           // Apply pending section order from provider for live preview
           final pendingSectionOrder = editProvider.pendingFooterSectionOrder;
@@ -4749,18 +5329,27 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
           final screenWidth = MediaQuery.of(context).size.width;
           final isMobile = screenWidth < 800;
+          footerNavItems = isMobile
+              ? categoryNavigationProjection.forMobile(footerNavItems)
+              : categoryNavigationProjection.forDesktop(footerNavItems);
 
           final facebookUrl =
-              _buildSocialUrl(facebookHandle, 'https://facebook.com/');
+              normalizeSocialUrl(facebookHandle, 'https://facebook.com/');
           final instagramUrl =
-              _buildSocialUrl(instagramHandle, 'https://instagram.com/');
+              normalizeSocialUrl(instagramHandle, 'https://instagram.com/');
           final twitterUrl =
-              _buildSocialUrl(twitterHandle, 'https://twitter.com/');
-          final youtubeUrl =
-              _buildSocialUrl(youtubeHandle, 'https://youtube.com/');
+              normalizeSocialUrl(twitterHandle, 'https://twitter.com/');
+          final youtubeUrl = normalizeSocialUrl(
+            youtubeHandle,
+            'https://youtube.com/',
+            keepAtPrefix: true,
+          );
           final whatsappUrl = whatsappHandle.isNotEmpty
               ? 'https://wa.me/${_sanitizePhone(whatsappHandle)}?text=${Uri.encodeComponent("Hola $storeName, vengo desde el sitio web")}'
               : null;
+          bool canNavigate(WebsiteNavigation navigation) =>
+              _pagePublication.canNavigate(navigation) &&
+              categoryNavigationProjection.canNavigate(navigation);
 
           if (isMobile) {
             return _buildMobileFooter(
@@ -4779,6 +5368,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               primaryColor: primaryColor,
               accentColor: accentColor,
               logoUrl: logoUrl,
+              canNavigate: canNavigate,
               isEditMode: isEditMode,
               isPreviewMode:
                   isMobile, // Always true when this branch runs, so icons show
@@ -4817,7 +5407,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                               Text(
                                 storeDescription.isNotEmpty
                                     ? storeDescription
-                                    : 'Todo lo que necesitas para tu bicicleta en Viña del Mar',
+                                    : 'Información pública de la tienda.',
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodyMedium
@@ -4889,6 +5479,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                           footerNavItems: footerNavItems,
                           primaryColor: primaryColor,
                           isEditMode: isEditMode,
+                          canNavigate: canNavigate,
                         ),
                         SizedBox(
                           width: 200,
@@ -4969,59 +5560,17 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         ),
                       ],
                     ),
-                    // Payment badges - using our own hosted icons from Supabase Storage
-                    const SizedBox(height: 32),
-                    Column(
-                      children: [
-                        Text(
-                          'Medios de Pago',
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Colors.white60,
-                                    fontSize: 11,
-                                    letterSpacing: 0.5,
-                                  ),
-                        ),
-                        const SizedBox(height: 16),
-                        const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _PaymentBadge(
-                              name: 'MercadoPago',
-                              imageUrl:
-                                  'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/payment-icons/mercadopago.svg',
-                              isSvg: true,
-                            ),
-                            SizedBox(width: 12),
-                            _PaymentBadge(
-                              name: 'Visa',
-                              imageUrl:
-                                  'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/payment-icons/visa.svg',
-                              isSvg: true,
-                            ),
-                            SizedBox(width: 12),
-                            _PaymentBadge(
-                              name: 'Mastercard',
-                              imageUrl:
-                                  'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/payment-icons/mastercard.svg',
-                              isSvg: true,
-                            ),
-                            SizedBox(width: 12),
-                            _PaymentBadge(
-                              name: 'Redcompra',
-                              imageUrl:
-                                  'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/payment-icons/redcompra.png',
-                              isSvg: false,
-                            ),
-                          ],
-                        ),
-                      ],
+                    // Accepted payment methods are a commercial claim, so
+                    // they render only from the tenant-scoped server
+                    // capability.
+                    ..._buildPaymentBadges(
+                      context,
+                      context.read<PublicStoreTenantProvider>().tenantId,
                     ),
                     const Divider(color: Colors.white24),
                     const SizedBox(height: 24),
                     Text(
-                      '© ${DateTime.now().year} ${storeName.isNotEmpty ? storeName : 'Vinabike'}. Todos los derechos reservados.',
+                      '© ${DateTime.now().year}${storeName.isNotEmpty ? ' $storeName' : ''}. Todos los derechos reservados.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Colors.white70,
                           ),
@@ -5098,6 +5647,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required List<WebsiteNavigation> footerNavItems,
     required Color primaryColor,
     required bool isEditMode,
+    required bool Function(WebsiteNavigation navigation) canNavigate,
   }) {
     final desktopItems = footerNavItems
         .where((n) => n.isVisible)
@@ -5105,120 +5655,29 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         .toList();
 
     if (desktopItems.isEmpty) {
-      return [
-        SizedBox(
-          width: 180,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Enlaces',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const SizedBox(height: 16),
-              _buildFooterLinkDesktop(
-                context,
-                'Inicio',
-                _routeForPublicStore('/tienda'),
-                primaryColor,
-                isEditMode: isEditMode,
-              ),
-              _buildFooterLinkDesktop(
-                context,
-                'Productos',
-                '/productos',
-                primaryColor,
-                isEditMode: isEditMode,
-              ),
-              _buildFooterLinkDesktop(
-                context,
-                'Servicios',
-                _routeForPublicStore('/servicios'),
-                primaryColor,
-                isEditMode: isEditMode,
-              ),
-              _buildFooterLinkDesktop(
-                context,
-                'Contacto',
-                _routeForPublicStore('/tienda/contacto'),
-                primaryColor,
-                isEditMode: isEditMode,
-              ),
-            ],
-          ),
-        ),
-        SizedBox(
-          width: 200,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Información',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const SizedBox(height: 16),
-              _buildFooterLinkDesktop(
-                context,
-                'Sobre Nosotros',
-                '/nosotros',
-                primaryColor,
-                isEditMode: isEditMode,
-              ),
-              _buildFooterLinkDesktop(
-                context,
-                'Términos y Condiciones',
-                '/terminos',
-                primaryColor,
-                isEditMode: isEditMode,
-              ),
-              _buildFooterLinkDesktop(
-                context,
-                'Política de Privacidad',
-                '/privacidad',
-                primaryColor,
-                isEditMode: isEditMode,
-              ),
-              _buildFooterLinkDesktop(
-                context,
-                'Política de Devoluciones',
-                '/devoluciones',
-                primaryColor,
-                isEditMode: isEditMode,
-              ),
-              _buildFooterLinkDesktop(
-                context,
-                'Envíos',
-                '/envios',
-                primaryColor,
-                isEditMode: isEditMode,
-              ),
-            ],
-          ),
-        ),
-      ];
+      // Navigation is editor-owned. When nothing is persisted for this
+      // audience the footer shows no link column at all: a renderer-invented
+      // "Inicio / Productos / Servicios / Contacto" set advertised routes the
+      // owner never placed, and kept advertising them after the owner removed
+      // them. An absent column is honest; a fabricated one is not.
+      return const <Widget>[];
     }
 
     final sectionParents = desktopItems
-        .where(
-          (p) => p.children
-              .where((c) => c.isVisible)
-              .where((c) => c.showOnDesktop)
-              .isNotEmpty,
-        )
+        .where((parent) => _footerNavigableDescendants(
+              parent.children,
+              desktop: true,
+              canNavigate: canNavigate,
+            ).isNotEmpty)
         .toList();
 
     if (sectionParents.isNotEmpty) {
       return sectionParents.map((parent) {
-        final children = parent.children
-            .where((c) => c.isVisible)
-            .where((c) => c.showOnDesktop)
-            .toList();
+        final children = _footerNavigableDescendants(
+          parent.children,
+          desktop: true,
+          canNavigate: canNavigate,
+        );
 
         return SizedBox(
           width: 200,
@@ -5258,7 +5717,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ),
             const SizedBox(height: 16),
             for (final nav in desktopItems)
-              _buildFooterNavLinkDesktop(context, nav, isEditMode: isEditMode),
+              if (canNavigate(nav))
+                _buildFooterNavLinkDesktop(
+                  context,
+                  nav,
+                  isEditMode: isEditMode,
+                ),
           ],
         ),
       ),
@@ -5384,47 +5848,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     );
   }
 
-  Widget _buildFooterLinkDesktop(
-    BuildContext context,
-    String label,
-    String path,
-    Color primaryColor, {
-    bool forceHomeRefresh = false,
-    required bool isEditMode,
-  }) {
-    final isActive = GoRouterState.of(context).matchedLocation == path;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: MouseRegion(
-        onEnter: isEditMode ? null : (_) => _warmDeferredRouteForPath(path),
-        child: InkWell(
-          onTap: isEditMode
-              ? null
-              : () {
-                  _navigateToHref(
-                    context,
-                    path,
-                    forceHomeRefresh: forceHomeRefresh,
-                  );
-                },
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white70,
-                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                ),
-          ),
-        ),
-      ),
-    );
-  }
-
   List<Widget> _buildMobileFooterNavigationSections({
     required BuildContext context,
     required List<WebsiteNavigation> footerNavItems,
     required TextStyle? titleStyle,
     required bool isEditMode,
+    required bool Function(WebsiteNavigation navigation) canNavigate,
   }) {
     final theme = Theme.of(context);
     const dividerColor = Colors.white24;
@@ -5435,74 +5864,28 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         .toList();
 
     if (mobileItems.isEmpty) {
-      // Keep the previous UX when navigation isn't configured.
-      return [
-        Theme(
-          data: theme.copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            title: Text('ENLACES RÁPIDOS', style: titleStyle),
-            iconColor: Colors.white,
-            collapsedIconColor: Colors.white,
-            childrenPadding: const EdgeInsets.only(left: 16, bottom: 16),
-            children: [
-              _buildFooterLinkMobile(
-                  context, 'Inicio', _routeForPublicStore('/tienda'),
-                  isEditMode: isEditMode),
-              _buildFooterLinkMobile(
-                  context, 'Productos', _routeForPublicStore('/productos'),
-                  isEditMode: isEditMode),
-              _buildFooterLinkMobile(
-                context,
-                'Servicios',
-                _routeForPublicStore('/servicios'),
-                isEditMode: isEditMode,
-              ),
-              _buildFooterLinkMobile(
-                  context, 'Contacto', _routeForPublicStore('/tienda/contacto'),
-                  isEditMode: isEditMode),
-            ],
-          ),
-        ),
-        const Divider(color: dividerColor),
-        Theme(
-          data: theme.copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            title: Text('INFORMACIÓN', style: titleStyle),
-            iconColor: Colors.white,
-            collapsedIconColor: Colors.white,
-            childrenPadding: const EdgeInsets.only(left: 16, bottom: 16),
-            children: [
-              _buildFooterLinkMobile(context, 'Sobre Nosotros', '/nosotros',
-                  isEditMode: isEditMode),
-              _buildFooterLinkMobile(
-                  context, 'Términos y Condiciones', '/terminos',
-                  isEditMode: isEditMode),
-              _buildFooterLinkMobile(
-                  context, 'Política de Devolución', '/devoluciones',
-                  isEditMode: isEditMode),
-            ],
-          ),
-        ),
-        const Divider(color: dividerColor),
-      ];
+      // Same contract as desktop: only persisted navigation renders. The
+      // mobile footer therefore drops its accordion entirely rather than
+      // offering fabricated quick links.
+      return const <Widget>[];
     }
 
     final sectionParents = mobileItems
-        .where(
-          (p) => p.children
-              .where((c) => c.isVisible)
-              .where((c) => c.showOnMobile)
-              .isNotEmpty,
-        )
+        .where((parent) => _footerNavigableDescendants(
+              parent.children,
+              desktop: false,
+              canNavigate: canNavigate,
+            ).isNotEmpty)
         .toList();
 
     if (sectionParents.isNotEmpty) {
       final sections = <Widget>[];
       for (final parent in sectionParents) {
-        final children = parent.children
-            .where((c) => c.isVisible)
-            .where((c) => c.showOnMobile)
-            .toList();
+        final children = _footerNavigableDescendants(
+          parent.children,
+          desktop: false,
+          canNavigate: canNavigate,
+        );
 
         sections.add(
           Theme(
@@ -5539,16 +5922,44 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           childrenPadding: const EdgeInsets.only(left: 16, bottom: 16),
           children: [
             for (final nav in mobileItems)
-              _buildFooterNavLinkMobile(
-                context,
-                nav,
-                isEditMode: isEditMode,
-              ),
+              if (canNavigate(nav))
+                _buildFooterNavLinkMobile(
+                  context,
+                  nav,
+                  isEditMode: isEditMode,
+                ),
           ],
         ),
       ),
       const Divider(color: dividerColor),
     ];
+  }
+
+  List<WebsiteNavigation> _footerNavigableDescendants(
+    Iterable<WebsiteNavigation> nodes, {
+    required bool desktop,
+    required bool Function(WebsiteNavigation navigation) canNavigate,
+  }) {
+    final result = <WebsiteNavigation>[];
+
+    void visit(Iterable<WebsiteNavigation> current) {
+      for (final node in current) {
+        final visibleForAudience = node.isVisible &&
+            (desktop ? node.showOnDesktop : node.showOnMobile);
+        if (!visibleForAudience) continue;
+        if (canNavigate(node)) {
+          result.add(node);
+        } else {
+          // Footer columns are one link level deep. Promote published
+          // descendants through a structural unpublished category instead of
+          // rendering the grouping as a broken link or dropping its children.
+          visit(node.children);
+        }
+      }
+    }
+
+    visit(nodes);
+    return result;
   }
 
   Widget _buildFooterNavLinkMobile(
@@ -5678,6 +6089,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required Color textColor,
     required bool isDarkMode,
     double height = 48,
+    double? maxWidth,
     Alignment alignment = Alignment.center,
   }) {
     Widget applyContrast(Widget child) {
@@ -5692,49 +6104,39 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     if (logoUrl.isNotEmpty) {
       return Container(
         height: height,
+        constraints: maxWidth == null
+            ? const BoxConstraints()
+            : BoxConstraints(maxWidth: maxWidth),
         alignment: alignment,
         child: applyContrast(
           Image.network(
             logoUrl,
             fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              // 2. Fallback to Local Asset
-              return Image.asset(
-                'assets/images/vinabike_logo.png',
-                fit: BoxFit.contain,
-                height: height,
-                errorBuilder: (context, error, stackTrace) {
-                  // 3. Fallback to Text
-                  return _buildTextLogo(context, storeName, textColor);
-                },
-              );
-            },
+            // A broken logo URL falls back to this store's own wordmark.
+            // The bundled asset is one specific tenant's logo and must never
+            // stand in for another store's identity.
+            errorBuilder: (context, error, stackTrace) =>
+                _buildTextLogo(context, storeName, textColor),
           ),
         ),
       );
     }
 
-    // 2. Fallback to Local Asset (if no URL)
+    // 2. No configured logo: this store's typographic wordmark.
     return Container(
       height: height,
+      constraints: maxWidth == null
+          ? const BoxConstraints()
+          : BoxConstraints(maxWidth: maxWidth),
       alignment: alignment,
-      child: applyContrast(
-        Image.asset(
-          'assets/images/vinabike_logo.png',
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) {
-            // 3. Fallback to Text
-            return _buildTextLogo(context, storeName, textColor);
-          },
-        ),
-      ),
+      child: applyContrast(_buildTextLogo(context, storeName, textColor)),
     );
   }
 
   Widget _buildTextLogo(
       BuildContext context, String storeName, Color primaryColor) {
     return Text(
-      storeName.isNotEmpty ? storeName.toUpperCase() : 'MI TIENDA',
+      storeName.isNotEmpty ? storeName.toUpperCase() : 'Tienda',
       style: Theme.of(context).textTheme.headlineMedium?.copyWith(
             color: primaryColor,
             fontWeight: FontWeight.bold,
@@ -5749,8 +6151,60 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     bool openInNewTab = false,
     bool forceHomeRefresh = false,
   }) async {
-    final normalized = href.trim();
+    final authored = href.trim();
+    final normalized = WebsiteDestination.normalizeHref(
+      authored,
+      internalOrigins: _storefrontInternalOrigins,
+    );
     if (normalized.isEmpty) return;
+    if (!_allowsPublicHref(normalized)) {
+      debugPrint(
+        '[PublicStoreLayout] Blocked unpublished category destination: '
+        '$normalized',
+      );
+      return;
+    }
+    final authoredUri = Uri.tryParse(authored);
+    final authoredIsAbsoluteHttp = authoredUri != null &&
+        (authoredUri.scheme == 'http' || authoredUri.scheme == 'https');
+    final normalizedUri = Uri.tryParse(normalized);
+    final launchesExternalWindow = authoredIsAbsoluteHttp &&
+        normalizedUri != null &&
+        (normalizedUri.scheme == 'http' || normalizedUri.scheme == 'https');
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final editorMode = editProvider.mode;
+    final isEditMode = editorMode == WebsiteEditorMode.edit;
+    final normalizedTargetPath = normalizedUri?.path.trim().toLowerCase();
+    final isRequestedHomeTarget = const <String>{
+      '/',
+      '/inicio',
+      '/home',
+      '/tienda',
+      '/tienda/',
+      '/tienda/inicio',
+      '/tienda/home',
+    }.contains(normalizedTargetPath);
+    final replacesBrowserDocument =
+        kIsWeb && forceHomeRefresh && isRequestedHomeTarget && !isEditMode;
+    final keepsCurrentPage = openInNewTab ||
+        normalized.startsWith('#') ||
+        PublicStoreLayout._isCurrentLocation(context, normalized);
+    final editorDecision = await WebsiteEditorNavigationGuard.authorize(
+      context,
+      intent: WebsiteEditorNavigationGuard.classifyIntent(
+        openInNewTab: openInNewTab,
+        launchesExternalWindow: launchesExternalWindow,
+        keepsCurrentPage: keepsCurrentPage,
+        replacesBrowserDocument: replacesBrowserDocument,
+      ),
+    );
+    if (!editorDecision.isAllowed) return;
+    if (!context.mounted) return;
+    if (!keepsCurrentPage &&
+        !await PublicStoreLayout.authorizeCheckoutExit(context)) {
+      return;
+    }
+    if (!context.mounted) return;
 
     // Ensure any open mega menu closes before navigation so the configured
     // header surface returns to its normal overlay/solid state.
@@ -5776,34 +6230,54 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     }
 
     if (uuid != null) {
-      // 1) Prefer resolving UUID as a website page id.
+      // A legacy bare UUID is not a canonical destination. It may name a CMS
+      // page **or** a product, so it navigates only when exactly one public
+      // owner of this tenant claims it.
+      //
+      // Both sides are always evaluated. Resolving page-first and returning
+      // early meant a UUID owned by a public page *and* a public product
+      // silently picked the page — an ambiguous reference resolved by
+      // evaluation order rather than refused.
       final websiteService = context.read<WebsiteService>();
-      final tenantProvider = context.read<PublicStoreTenantProvider>();
-      final tenantId = tenantProvider.tenantId;
-
-      // Pages might not be loaded in some boot paths (we always have settings,
-      // but pages are loaded lazily). Load them on demand for UUID links.
-      if (websiteService.pages.isEmpty && tenantId != null) {
-        await websiteService.loadPagesForTenant(tenantId);
+      final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
+      if (tenantId == null || tenantId.trim().isEmpty) {
+        debugPrint(
+          '[PublicStoreLayout] Legacy UUID destination without an active '
+          'tenant is inert: $uuid',
+        );
+        return;
       }
 
-      final page = websiteService.pages.cast<WebsitePage?>().firstWhere(
-            (p) => p?.id == uuid,
+      if (!websiteService.hasAuthoritativePagePublicationForTenant(tenantId)) {
+        await websiteService.loadPagesForTenant(tenantId);
+        if (!context.mounted) return;
+      }
+      // Unknown page authority is fail-closed: without it we cannot prove the
+      // page side is *not* an owner, so we cannot prove uniqueness either.
+      if (!websiteService.hasAuthoritativePagePublicationForTenant(tenantId)) {
+        debugPrint(
+          '[PublicStoreLayout] Legacy UUID destination blocked: page '
+          'publication for this tenant is unknown: $uuid',
+        );
+        return;
+      }
+
+      // Page candidate: only from the authoritative tenant-scoped collection.
+      // The previous `getPageById(uuid)` fallback queried `website_pages` by
+      // id alone, so it could read another tenant's row, and it accepted that
+      // row outright whenever the active tenant was unknown.
+      final ownedPage = websiteService.pages.cast<WebsitePage?>().firstWhere(
+            (p) => p?.id == uuid && p?.tenantId == tenantId,
             orElse: () => null,
           );
+      final pageSlug = ownedPage?.slug.trim() ?? '';
+      final pageIsPublicOwner = ownedPage != null &&
+          ownedPage.isPublished &&
+          pageSlug.isNotEmpty &&
+          _pagePublication.allowsHref(ownedPage.fullPath);
 
-      // If not found in memory, try a direct lookup (covers stale caches).
-      final resolvedPage = page ?? await websiteService.getPageById(uuid);
-      if (!context.mounted) return;
-
-      final slug = (resolvedPage != null &&
-              (tenantId == null || resolvedPage.tenantId == tenantId))
-          ? resolvedPage.slug
-          : null;
-      if (slug != null && slug.trim().isNotEmpty) {
-        final s = slug.trim();
-
-        // Map common system slugs to canonical routes.
+      String? pageHref;
+      if (pageIsPublicOwner) {
         const directSlugs = <String>{
           'productos',
           'contacto',
@@ -5816,35 +6290,71 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           'checkout',
           'cuenta',
         };
-
-        if (s == 'inicio' || s == 'home') {
-          internalHref = '/';
-        } else if (directSlugs.contains(s)) {
-          internalHref = '/$s';
+        if (pageSlug == 'inicio' || pageSlug == 'home') {
+          pageHref = '/';
+        } else if (directSlugs.contains(pageSlug)) {
+          pageHref = '/$pageSlug';
         } else {
-          internalHref = '/pagina/$s';
+          pageHref = '/pagina/$pageSlug';
         }
-      } else {
-        // 2) Fallback: treat UUID as a product id.
-        internalHref = '/productos/$uuid';
       }
+
+      // Product candidate: tenant-scoped and filtered by the same public
+      // visibility policy the storefront catalog uses.
+      final product =
+          await context.read<PublicInventoryService>().getProductById(
+                productId: uuid,
+                tenantId: tenantId,
+                policy: PublicProductVisibilityPolicy.fromSettings(
+                  websiteService.settings,
+                ),
+              );
+      if (!context.mounted) return;
+      final productHref = product == null ? null : publicProductPath(product);
+
+      final owners = <String>[
+        if (pageHref != null) pageHref,
+        if (productHref != null) productHref,
+      ];
+      if (owners.length != 1) {
+        debugPrint(
+          '[PublicStoreLayout] Legacy UUID destination has '
+          '${owners.length} public owners, expected exactly one: $uuid',
+        );
+        return;
+      }
+      internalHref = owners.single;
     }
 
-    // External URLs
-    if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
-      final uri = Uri.tryParse(normalized);
-      if (uri != null) {
-        await launchUrl(
-          uri,
+    // UUID-backed CMS links are classified only after resolving the owning
+    // page. Apply the same publication guard again to the canonical route so
+    // legacy authored references cannot bypass website_pages.is_published.
+    if (!_allowsPublicHref(internalHref)) {
+      debugPrint(
+        '[PublicStoreLayout] Blocked unpublished resolved destination: '
+        '$internalHref',
+      );
+      return;
+    }
+
+    // Preserve an explicitly authored new-tab contract even when the absolute
+    // URL points back to this storefront. Same-store links otherwise continue
+    // below as normalized internal routes so they share guards and history.
+    if (authoredIsAbsoluteHttp && (normalized == authored || openInNewTab)) {
+      if (authoredUri.host.isNotEmpty) {
+        final didLaunch = await launchUrl(
+          authoredUri,
           mode: LaunchMode.platformDefault,
           webOnlyWindowName: openInNewTab ? '_blank' : '_self',
         );
+        if (didLaunch) editorDecision.commit();
       }
       return;
     }
 
     // Anchor links (best-effort on web)
     if (normalized.startsWith('#')) {
+      if (!editorDecision.commit()) return;
       if (kIsWeb) {
         setLocationHash(normalized);
       }
@@ -5880,31 +6390,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // `/tienda`, or vice versa.
     internalHref = _routeForPublicStore(internalHref);
 
-    // Internal navigation
-    final editProvider = context.read<WebsiteEditModeProvider>();
-    final currentUri = GoRouterState.of(context).uri;
-    final isEditMode =
-        editProvider.isEditMode || currentUri.queryParameters['edit'] == 'true';
-    final isPreviewMode = !isEditMode &&
-        (editProvider.isPreviewMode ||
-            currentUri.queryParameters['preview'] == 'true');
-
+    // Internal navigation. The FSM is the only mode owner: every internal
+    // route carries the canonical mode projection, so each history entry
+    // replays its mode as a route command (browser Back/forward included).
     final targetUri = Uri.tryParse(internalHref);
     var target = internalHref;
     if (targetUri != null && targetUri.scheme.isEmpty) {
-      final nextQuery = Map<String, String>.from(targetUri.queryParameters);
-      nextQuery.remove('edit');
-      nextQuery.remove('preview');
-
-      if (isEditMode) {
-        nextQuery['edit'] = 'true';
-      } else if (isPreviewMode) {
-        nextQuery['preview'] = 'true';
-      }
-
-      target = targetUri
-          .replace(queryParameters: nextQuery.isEmpty ? null : nextQuery)
-          .toString();
+      target =
+          projectWebsiteEditorModeOntoUri(targetUri, editorMode).toString();
     }
 
     // Avoid redundant navigation.
@@ -5942,8 +6435,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         final desiredPath = targetPath.isEmpty ? '/' : targetPath;
 
         if (currentPath == desiredPath) {
+          if (!editorDecision.commit()) return;
           web.window.location.reload();
         } else {
+          if (!editorDecision.commit()) return;
           web.window.location.assign(target);
         }
         return;
@@ -6002,8 +6497,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       // postFrameCallback couldn't reliably navigate to the target.
       // Using go() directly is more reliable and handles the browser history
       // correctly on web.
+      if (!editorDecision.commit()) return;
       context.go(target);
     } else {
+      if (!editorDecision.commit()) return;
       context.push(target);
     }
   }
@@ -6171,6 +6668,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     BuildContext context,
     List<WebsiteNavigation> navItems, {
     required bool isEditMode,
+    required bool Function(WebsiteNavigation navigation) canNavigate,
   }) {
     _warmDeferredRouteForPath('/cuenta');
     // IMPORTANT: The bottom-sheet builder gets its own BuildContext. After
@@ -6291,7 +6789,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                 (nav) => _buildMobileNavigationNode(
                                   sheetContext,
                                   nav,
+                                  canNavigate: canNavigate,
                                   onNavigate: (target) {
+                                    if (!canNavigate(target)) return;
                                     Navigator.pop(sheetContext);
                                     final href = _routeForPublicStore(
                                       target.href ?? '/',
@@ -6324,15 +6824,20 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     label: 'Cerrar Sesión',
                     color: colors.error,
                     onTap: () async {
-                      Navigator.pop(sheetContext);
-                      await accountService.signOut();
+                      final signedOut = await PublicStoreLayout.signOutCustomer(
+                        navContext,
+                        accountService,
+                      );
+                      if (!signedOut) return;
+                      if (sheetContext.mounted) {
+                        Navigator.pop(sheetContext);
+                      }
                       if (navContext.mounted) {
                         ScaffoldMessenger.of(navContext).showSnackBar(
                           const SnackBar(
                             content: Text('Sesión cerrada correctamente'),
                           ),
                         );
-                        navContext.go('/');
                       }
                     },
                   ),
@@ -6350,6 +6855,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     BuildContext context,
     WebsiteNavigation navigation, {
     required ValueChanged<WebsiteNavigation> onNavigate,
+    required bool Function(WebsiteNavigation navigation) canNavigate,
     int depth = 0,
   }) {
     final theme = Theme.of(context);
@@ -6403,7 +6909,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         collapsedBackgroundColor: Colors.transparent,
         maintainState: true,
         children: [
-          if (navigation.href?.trim().isNotEmpty == true)
+          if (canNavigate(navigation) &&
+              navigation.href?.trim().isNotEmpty == true)
             _buildMobileMenuItem(
               context,
               icon: Icons.arrow_forward_rounded,
@@ -6417,6 +6924,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               context,
               child,
               onNavigate: onNavigate,
+              canNavigate: canNavigate,
               depth: depth + 1,
             ),
           ),
@@ -6902,1114 +7410,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-enum _EditorCatalogTab { products, categories, featured }
-
-enum _EditorCategoryTab { publication, structure, presentation }
-
-enum _EditorConfigHubTab {
-  // Site
-  siteHub,
-  sitePages,
-  siteNavigation,
-  siteDestinations,
-  siteSettings,
-
-  // E-commerce
-  ecomCatalog,
-  ecomOrders,
-
-  // Reports
-  reportsAnalytics,
-
-  // Config
-  domain,
-  seo,
-  integrations,
-  paymentMethods,
-}
-
-extension on _EditorConfigHubTab {
-  String get title {
-    switch (this) {
-      case _EditorConfigHubTab.siteHub:
-        return 'Sitio web';
-      case _EditorConfigHubTab.sitePages:
-        return 'Páginas';
-      case _EditorConfigHubTab.siteNavigation:
-        return 'Navegación';
-      case _EditorConfigHubTab.siteDestinations:
-        return 'Destinos y enlaces';
-      case _EditorConfigHubTab.siteSettings:
-        return 'Ajustes del sitio';
-      case _EditorConfigHubTab.ecomCatalog:
-        return 'Catálogo web';
-      case _EditorConfigHubTab.ecomOrders:
-        return 'Pedidos online';
-      case _EditorConfigHubTab.reportsAnalytics:
-        return 'Analytics (Google)';
-      case _EditorConfigHubTab.domain:
-        return 'Dominio y URL';
-      case _EditorConfigHubTab.seo:
-        return 'Ajustes del sitio (SEO / contacto)';
-      case _EditorConfigHubTab.integrations:
-        return 'Integraciones (Google Merchant)';
-      case _EditorConfigHubTab.paymentMethods:
-        return 'Métodos de pago';
-    }
-  }
-}
-
-Future<void> _launchUri(Uri uri) async {
-  if (await canLaunchUrl(uri)) {
-    await launchUrl(uri, mode: LaunchMode.platformDefault);
-  }
-}
-
-String? _buildSocialUrl(String handle, String baseUrl) {
-  final trimmed = handle.trim();
-  if (trimmed.isEmpty) {
-    return null;
-  }
-  if (trimmed.startsWith('http')) {
-    return trimmed;
-  }
-  return '$baseUrl${trimmed.replaceAll('@', '')}';
-}
-
-String _sanitizePhone(String input) {
-  final digits = input.replaceAll(RegExp(r'[^0-9]'), '');
-  if (digits.isEmpty) {
-    return '';
-  }
-  if (digits.startsWith('56')) {
-    return digits;
-  }
-  if (digits.length == 9 && digits.startsWith('9')) {
-    return '56$digits';
-  }
-  if (digits.length == 8) {
-    return '56$digits';
-  }
-  return digits;
-}
-
-Color _resolveColor(String raw, Color fallback) {
-  final value = raw.trim();
-  if (value.isEmpty) return fallback;
-
-  Color? parsed;
-  int? intValue;
-
-  String cleaned = value.toLowerCase();
-  if (cleaned.startsWith('color(')) {
-    final inside = cleaned.replaceAll(RegExp(r'color\(|\)'), '');
-    intValue = int.tryParse(inside);
-  }
-
-  intValue ??= int.tryParse(cleaned);
-  if (intValue == null && cleaned.startsWith('0x')) {
-    intValue = int.tryParse(cleaned);
-  }
-  if (intValue == null) {
-    cleaned = cleaned.replaceAll('#', '');
-    intValue = int.tryParse(cleaned, radix: 16);
-    if (intValue != null && cleaned.length <= 6) {
-      intValue = 0xFF000000 | intValue;
-    }
-  }
-
-  if (intValue != null) {
-    parsed = Color(intValue);
-  }
-
-  return parsed ?? fallback;
-}
-
-Map<String, MegaMenuBranchPresentation> _projectMegaMenuBranchPresentations({
-  required Iterable<WebsiteNavigation> branches,
-  required WebsiteCatalogPresentationRegistry registry,
-}) {
-  final projections = <String, MegaMenuBranchPresentation>{};
-  void visit(WebsiteNavigation branch) {
-    final destination = WebsiteDestination.parse(branch.href ?? '');
-    if (destination.kind == WebsiteDestinationKind.category) {
-      final reference = destination.reference?.trim() ?? '';
-      final presentation = reference.isEmpty
-          ? null
-          : registry.forCategory(reference) ??
-              registry.resolveSlug(reference)?.presentation;
-      if (presentation != null) {
-        projections[branch.id] = MegaMenuBranchPresentation(
-          imageUrl: presentation.megaMenuImageUrl,
-          overlay: presentation.megaMenuOverlay,
-          cardOverlay: presentation.megaMenuCardOverlay,
-          overviewWidth: presentation.megaMenuOverviewWidth,
-          contentAlignment: presentation.megaMenuContentAlignment,
-        );
-      }
-    }
-
-    for (final child in branch.children) {
-      visit(child);
-    }
-  }
-
-  for (final branch in branches) {
-    visit(branch);
-  }
-  return Map<String, MegaMenuBranchPresentation>.unmodifiable(projections);
-}
-
-class _PreviewNavAction {
-  final String? id;
-  final String? label;
-  final IconData? icon;
-  final bool isDivider;
-
-  const _PreviewNavAction({
-    required this.id,
-    required this.label,
-    required this.icon,
-  }) : isDivider = false;
-
-  const _PreviewNavAction.divider()
-      : id = null,
-        label = null,
-        icon = null,
-        isDivider = true;
-}
-
-enum _PageNavKind {
-  core,
-  published,
-  draft,
-  legal,
-  system,
-}
-
-class _PageNavTarget {
-  final String key;
-  final String title;
-  final String href;
-  final _PageNavKind kind;
-  final String? subtitle;
-  final bool? isPublished;
-
-  const _PageNavTarget({
-    required this.key,
-    required this.title,
-    required this.href,
-    required this.kind,
-    this.subtitle,
-    this.isPublished,
-  });
-
-  _PageNavTarget copyWith({
-    String? key,
-    String? title,
-    String? href,
-    _PageNavKind? kind,
-    String? subtitle,
-    bool? isPublished,
-  }) {
-    return _PageNavTarget(
-      key: key ?? this.key,
-      title: title ?? this.title,
-      href: href ?? this.href,
-      kind: kind ?? this.kind,
-      subtitle: subtitle ?? this.subtitle,
-      isPublished: isPublished ?? this.isPublished,
-    );
-  }
-}
-
-class _PageNavigatorDialog extends StatefulWidget {
-  const _PageNavigatorDialog({
-    required this.initialSlug,
-    required this.targets,
-    required this.onCopyLink,
-    required this.onOpenNewTab,
-  });
-
-  final String initialSlug;
-  final List<_PageNavTarget> targets;
-  final Future<void> Function() onCopyLink;
-  final Future<void> Function() onOpenNewTab;
-
-  @override
-  State<_PageNavigatorDialog> createState() => _PageNavigatorDialogState();
-}
-
-class _PageNavigatorDialogState extends State<_PageNavigatorDialog> {
-  final TextEditingController _searchController = TextEditingController();
-  String _query = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _searchController.addListener(() {
-      final next = _searchController.text.trim().toLowerCase();
-      if (next == _query) return;
-      setState(() => _query = next);
-    });
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Only used for logic not for UI colors anymore as we hardcode dark theme
-    // final theme = Theme.of(context);
-
-    // Filter items based on search query
-    // The items are already sorted by the caller (Core -> Published -> Draft -> Legal -> System) + Alphabetical
-    final filtered = _query.isEmpty
-        ? widget.targets
-        : widget.targets.where((t) {
-            final hay = '${t.title} ${t.subtitle ?? ''}'.toLowerCase();
-            return hay.contains(_query);
-          }).toList();
-
-    bool isCurrent(_PageNavTarget t) {
-      final currentSlug = widget.initialSlug;
-      if (currentSlug.isEmpty) return t.key == 'home';
-      return t.key == currentSlug;
-    }
-
-    // Dark theme for the editor dialog
-    return Theme(
-      data: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF1E1E1E),
-        dividerColor: Colors.white.withValues(alpha: 0.1),
-        textTheme: const TextTheme(
-          titleMedium: TextStyle(
-              color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-          bodyMedium: TextStyle(color: Colors.white70),
-        ),
-        iconTheme: const IconThemeData(color: Colors.white70),
-      ),
-      child: Scaffold(
-        backgroundColor: const Color(0xFF1E1E1E),
-        appBar: AppBar(
-          backgroundColor: const Color(0xFF1E1E1E),
-          elevation: 0,
-          leading: IconButton(
-            tooltip: 'Cerrar',
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close),
-          ),
-          title: const Text('Ir a página'),
-          centerTitle: true,
-          shape: Border(
-            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-          ),
-          actions: [
-            IconButton(
-              tooltip: 'Copiar enlace',
-              onPressed: widget.onCopyLink,
-              icon: const Icon(Icons.copy, size: 20),
-            ),
-            IconButton(
-              tooltip: 'Abrir en nueva pestaña',
-              onPressed: widget.onOpenNewTab,
-              icon: const Icon(Icons.open_in_new, size: 20),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
-        body: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: TextField(
-                controller: _searchController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
-                  hintText: 'Buscar páginas (título o ruta)',
-                  hintStyle: const TextStyle(color: Colors.white38),
-                  isDense: true,
-                  filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.1),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-            ),
-            Expanded(
-              child: filtered.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No hay resultados',
-                        style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.5)),
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 20),
-                      // Simply use the filtered list which is already sorted
-                      itemCount: filtered.length,
-                      itemBuilder: (context, index) {
-                        final t = filtered[index];
-                        final current = isCurrent(t);
-
-                        return InkWell(
-                          onTap: () => Navigator.of(context).pop(t),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 12),
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: Colors.white.withValues(alpha: 0.05),
-                                ),
-                              ),
-                              color: current
-                                  ? const Color(0xFF00A09D)
-                                      .withValues(alpha: 0.15)
-                                  : Colors.transparent,
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  current
-                                      ? Icons.check_circle
-                                      : Icons.circle_outlined,
-                                  size: 18,
-                                  color: current
-                                      ? const Color(0xFF00A09D)
-                                      : Colors.white38,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        t.title,
-                                        style: TextStyle(
-                                          color: current
-                                              ? const Color(0xFF00A09D)
-                                              : Colors.white,
-                                          fontWeight: current
-                                              ? FontWeight.w600
-                                              : FontWeight.normal,
-                                        ),
-                                      ),
-                                      if (t.subtitle != null)
-                                        Padding(
-                                          padding:
-                                              const EdgeInsets.only(top: 2),
-                                          child: Text(
-                                            t.subtitle!,
-                                            style: TextStyle(
-                                              color: current
-                                                  ? const Color(0xFF00A09D)
-                                                      .withValues(alpha: 0.7)
-                                                  : Colors.white38,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                if (t.isPublished != null)
-                                  Tooltip(
-                                    message: t.isPublished!
-                                        ? 'Publicada'
-                                        : 'Borrador (oculta)',
-                                    child: Icon(
-                                      t.isPublished!
-                                          ? Icons.public
-                                          : Icons.lock_outline,
-                                      size: 16,
-                                      color: t.isPublished!
-                                          ? Colors.greenAccent
-                                              .withValues(alpha: 0.7)
-                                          : Colors.orangeAccent
-                                              .withValues(alpha: 0.7),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Scroll container for the non-sticky layouts.
-///
-/// The sticky header scaffold already manages its own ScrollController.
-/// For solid/transparent layouts, we still want:
-/// - restore scroll position when navigating back
-/// - force scroll-to-top when user clicks "Inicio" / home
-class _PublicStoreScrollView extends StatefulWidget {
-  const _PublicStoreScrollView({
-    super.key,
-    required this.child,
-    this.physics,
-    this.clipBehavior = Clip.hardEdge,
-  });
-
-  final Widget child;
-  final ScrollPhysics? physics;
-  final Clip clipBehavior;
-
-  @override
-  State<_PublicStoreScrollView> createState() => _PublicStoreScrollViewState();
-}
-
-class _PublicStoreScrollViewState extends State<_PublicStoreScrollView> {
-  final ScrollController _scrollController = ScrollController();
-  String? _routeKey;
-  bool _restoredForRoute = false;
-  bool _isRestoringRouteScroll = false;
-  int _routeRestoreGeneration = 0;
-  PublicStoreScrollState? _scrollState;
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollController.addListener(_onScroll);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    final nextScrollState = context.read<PublicStoreScrollState>();
-    if (!identical(_scrollState, nextScrollState)) {
-      _scrollState?.scrollToTopSignal.removeListener(_onScrollToTopSignal);
-      _scrollState = nextScrollState;
-      _scrollState?.scrollToTopSignal.addListener(_onScrollToTopSignal);
-    }
-
-    final uri = GoRouterState.of(context).uri;
-    final nextKey = uri.toString();
-    if (_routeKey != nextKey) {
-      _routeKey = nextKey;
-      _restoredForRoute = false;
-      _routeRestoreGeneration++;
-    }
-
-    if (_restoredForRoute) return;
-    _restoredForRoute = true;
-
-    final key = _routeKey;
-    final path = GoRouterState.of(context).uri.path;
-    final scrollState = _scrollState ?? context.read<PublicStoreScrollState>();
-
-    final shouldScrollToTop =
-        (key != null && scrollState.consumeScrollToTopRequest(key)) ||
-            scrollState.consumeScrollToTopRequestForPath(path);
-
-    if (key != null && shouldScrollToTop) {
-      scrollState.clear(key);
-      _restoreScrollForRoute(targetOffset: 0);
-    } else {
-      _restoreScrollForRoute();
-    }
-  }
-
-  void _onScrollToTopSignal() {
-    if (!mounted) return;
-    final key = _routeKey;
-    if (key == null) return;
-
-    final scrollState = _scrollState;
-    if (scrollState == null) return;
-
-    final path = GoRouterState.of(context).uri.path;
-    final shouldScrollToTop = scrollState.consumeScrollToTopRequest(key) ||
-        scrollState.consumeScrollToTopRequestForPath(path);
-    if (!shouldScrollToTop) return;
-
-    scrollState.clear(key);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (!_scrollController.hasClients) return;
-      if (_scrollController.offset <= 0) return;
-      _scrollController.animateTo(
-        0,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      );
-    });
-  }
-
-  void _restoreScrollForRoute({double? targetOffset}) {
-    final key = _routeKey;
-    if (key == null) return;
-
-    final offset =
-        targetOffset ?? context.read<PublicStoreScrollState>().getOffset(key);
-    final restoreGeneration = _routeRestoreGeneration;
-    _isRestoringRouteScroll = true;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (restoreGeneration != _routeRestoreGeneration) return;
-      if (!_scrollController.hasClients) {
-        _isRestoringRouteScroll = false;
-        return;
-      }
-      final max = _scrollController.position.maxScrollExtent;
-      final clamped = offset.clamp(0.0, max);
-      if ((_scrollController.offset - clamped).abs() >= 1.0) {
-        _scrollController.jumpTo(clamped);
-      }
-      _isRestoringRouteScroll = false;
-    });
-  }
-
-  void _onScroll() {
-    if (_isRestoringRouteScroll) return;
-    final key = _routeKey;
-    if (key == null) return;
-    context
-        .read<PublicStoreScrollState>()
-        .setOffset(key, _scrollController.offset);
-  }
-
-  @override
-  void dispose() {
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
-    _scrollState?.scrollToTopSignal.removeListener(_onScrollToTopSignal);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      controller: _scrollController,
-      // Flutter Web can occasionally fail to repaint after route changes when
-      // a scroll viewport is clipped. Disabling clipping is a pragmatic fix
-      // for the "blank until resize" symptom.
-      clipBehavior: kIsWeb ? Clip.none : widget.clipBehavior,
-      physics: widget.physics,
-      child: widget.child,
-    );
-  }
-}
-
-/// A stateful widget that manages the sticky header that stays fixed at top while scrolling
-class _StickyHeaderScaffold extends StatefulWidget {
-  final String storeName;
-  final String storeDescription;
-  final String logoUrl;
-  final String topBannerText;
-  final String contactPhone;
-  final String contactEmail;
-  final Color primaryColor;
-  final Color accentColor;
-  final String headerColorMode;
-  final bool showTopBanner;
-  final bool headerShadow;
-  final Color headerBgColor;
-  final Color headerMenuSurfaceColor;
-  final Color headerMenuRailColor;
-  final List<WebsiteNavigation> navItems;
-  final bool isEditMode;
-  final bool allowOverlayAtTop;
-  final Widget Function({
-    required BuildContext context,
-    required String storeName,
-    required String storeDescription,
-    required String logoUrl,
-    required String topBannerText,
-    required String contactPhone,
-    required String contactEmail,
-    required Color primaryColor,
-    required Color accentColor,
-    bool isEditMode,
-    String headerStyle,
-    String headerColorMode,
-    bool showTopBanner,
-    bool headerShadow,
-    Color headerBgColor,
-    Color? menuSurfaceColor,
-    Color? menuRailColor,
-    required List<WebsiteNavigation> navItems,
-    bool isOverlay,
-  }) buildHeader;
-  final Widget child;
-  final Widget footer;
-
-  const _StickyHeaderScaffold({
-    super.key,
-    required this.storeName,
-    required this.storeDescription,
-    required this.logoUrl,
-    required this.topBannerText,
-    required this.contactPhone,
-    required this.contactEmail,
-    required this.primaryColor,
-    required this.accentColor,
-    required this.headerColorMode,
-    required this.showTopBanner,
-    required this.headerShadow,
-    required this.headerBgColor,
-    required this.headerMenuSurfaceColor,
-    required this.headerMenuRailColor,
-    required this.navItems,
-    required this.isEditMode,
-    required this.allowOverlayAtTop,
-    required this.buildHeader,
-    required this.child,
-    required this.footer,
-  });
-
-  @override
-  State<_StickyHeaderScaffold> createState() => _StickyHeaderScaffoldState();
-}
-
-class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
-  static const double _fallbackReservedHeaderHeight = 66;
-
-  final ScrollController _scrollController = ScrollController();
-  final ValueNotifier<double> _headerScrollOffset = ValueNotifier<double>(0);
-  final GlobalKey _headerKey = GlobalKey();
-  double _reservedHeaderHeight = _fallbackReservedHeaderHeight;
-  String? _routeKey;
-  bool _restoredForRoute = false;
-  bool _isRestoringRouteScroll = false;
-  int _routeRestoreGeneration = 0;
-  PublicStoreScrollState? _scrollState;
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollController.addListener(_onScroll);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    // Attach once to the shared scroll state to support "scroll to top" even
-    // when the route doesn't change (e.g., clicking the logo while already on
-    // home).
-    final nextScrollState = context.read<PublicStoreScrollState>();
-    if (!identical(_scrollState, nextScrollState)) {
-      _scrollState?.scrollToTopSignal.removeListener(_onScrollToTopSignal);
-      _scrollState = nextScrollState;
-      _scrollState?.scrollToTopSignal.addListener(_onScrollToTopSignal);
-    }
-
-    // Key scroll offset by current route location so going "back" restores where
-    // the user was (most important for long lists like /productos).
-    final uri = GoRouterState.of(context).uri;
-    final nextKey = uri.toString();
-    if (_routeKey != nextKey) {
-      _routeKey = nextKey;
-      _restoredForRoute = false;
-      _routeRestoreGeneration++;
-    }
-
-    if (!_restoredForRoute) {
-      _restoredForRoute = true;
-      final key = _routeKey;
-      final path = GoRouterState.of(context).uri.path;
-      final scrollState =
-          _scrollState ?? context.read<PublicStoreScrollState>();
-      final shouldScrollToTop =
-          (key != null && scrollState.consumeScrollToTopRequest(key)) ||
-              scrollState.consumeScrollToTopRequestForPath(path);
-
-      if (key != null && shouldScrollToTop) {
-        // Explicit home navigation: land at top, don't restore.
-        scrollState.clear(key);
-        _restoreScrollForRoute(targetOffset: 0);
-      } else {
-        _restoreScrollForRoute();
-      }
-    }
-  }
-
-  void _onScrollToTopSignal() {
-    if (!mounted) return;
-    final key = _routeKey;
-    if (key == null) return;
-
-    final scrollState = _scrollState;
-    if (scrollState == null) return;
-
-    final path = GoRouterState.of(context).uri.path;
-    final shouldScrollToTop = scrollState.consumeScrollToTopRequest(key) ||
-        scrollState.consumeScrollToTopRequestForPath(path);
-    if (!shouldScrollToTop) return;
-
-    scrollState.clear(key);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (!_scrollController.hasClients) return;
-      if (_scrollController.offset <= 0) return;
-      _scrollController.animateTo(
-        0,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      );
-    });
-  }
-
-  @override
-  void dispose() {
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
-    _headerScrollOffset.dispose();
-    _scrollState?.scrollToTopSignal.removeListener(_onScrollToTopSignal);
-    super.dispose();
-  }
-
-  void _onScroll() {
-    final offset = _scrollController.offset;
-    // Inner routes use an always-solid header, so they need no scroll-driven
-    // rebuild at all. On the overlay homepage, notify only the header subtree.
-    if (widget.allowOverlayAtTop) {
-      _headerScrollOffset.value = offset;
-    }
-
-    if (!_isRestoringRouteScroll) {
-      final key = _routeKey;
-      if (key == null) return;
-      context.read<PublicStoreScrollState>().setOffset(key, offset);
-    }
-  }
-
-  void _restoreScrollForRoute({double? targetOffset}) {
-    final key = _routeKey;
-    if (key == null) return;
-
-    final offset =
-        targetOffset ?? context.read<PublicStoreScrollState>().getOffset(key);
-    final restoreGeneration = _routeRestoreGeneration;
-    _isRestoringRouteScroll = true;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (restoreGeneration != _routeRestoreGeneration) return;
-      if (!_scrollController.hasClients) {
-        _isRestoringRouteScroll = false;
-        return;
-      }
-
-      final max = _scrollController.position.maxScrollExtent;
-      final clamped = offset.clamp(0.0, max);
-      if ((_scrollController.offset - clamped).abs() >= 1.0) {
-        _scrollController.jumpTo(clamped);
-      }
-      _isRestoringRouteScroll = false;
-    });
-  }
-
-  void _scheduleHeaderMeasurement() {
-    if (widget.allowOverlayAtTop) return;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-
-      final headerContext = _headerKey.currentContext;
-      if (headerContext == null) return;
-
-      final renderBox = headerContext.findRenderObject() as RenderBox?;
-      if (renderBox == null || !renderBox.hasSize) return;
-
-      final measuredHeight = renderBox.size.height;
-      if ((measuredHeight - _reservedHeaderHeight).abs() < 0.5) return;
-
-      setState(() {
-        _reservedHeaderHeight = measuredHeight;
-      });
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant _StickyHeaderScaffold oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.allowOverlayAtTop != widget.allowOverlayAtTop ||
-        oldWidget.showTopBanner != widget.showTopBanner) {
-      _scheduleHeaderMeasurement();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    _scheduleHeaderMeasurement();
-    final allowOverlayAtTop = widget.allowOverlayAtTop;
-
-    return Stack(
-      // On Flutter Web (HTML renderer especially), clipping can create DOM
-      // stacking contexts that end up painting *above* later Stack children.
-      // We keep this Stack unclipped so the sticky header reliably stays on top.
-      clipBehavior: Clip.none,
-      children: [
-        // Main scrollable content
-        // Main scrollable content
-        ScrollConfiguration(
-          behavior: widget.isEditMode
-              ? const _NoDragScrollBehavior()
-              : const MaterialScrollBehavior(),
-          child: SingleChildScrollView(
-            controller: _scrollController,
-            // Avoid clip-induced z-order issues on Web where the scroll viewport
-            // can end up above the sticky header.
-            clipBehavior: kIsWeb ? Clip.none : Clip.hardEdge,
-            child: Column(
-              children: [
-                if (!allowOverlayAtTop) SizedBox(height: _reservedHeaderHeight),
-                widget.child,
-                widget.footer,
-              ],
-            ),
-          ),
-        ),
-        // Floating header
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: ValueListenableBuilder<double>(
-            valueListenable: _headerScrollOffset,
-            builder: (context, scrollOffset, _) {
-              // Calculate header opacity based on scroll (0 = transparent,
-              // 1 = solid). Only this header subtree rebuilds while scrolling.
-              final headerOpacity = allowOverlayAtTop
-                  ? (scrollOffset / 100).clamp(0.0, 1.0)
-                  : 1.0;
-              final isScrolled = allowOverlayAtTop && scrollOffset > 50;
-              final effectiveColorMode = allowOverlayAtTop && isScrolled
-                  ? 'light'
-                  : widget.headerColorMode;
-              final effectiveBgColor = allowOverlayAtTop
-                  ? (isScrolled
-                      ? widget.headerBgColor
-                      : widget.headerBgColor.withValues(alpha: headerOpacity))
-                  : widget.headerBgColor;
-
-              return KeyedSubtree(
-                key: _headerKey,
-                child: widget.buildHeader(
-                  context: context,
-                  storeName: widget.storeName,
-                  storeDescription: widget.storeDescription,
-                  logoUrl: widget.logoUrl,
-                  topBannerText: widget.topBannerText,
-                  contactPhone: widget.contactPhone,
-                  contactEmail: widget.contactEmail,
-                  primaryColor: widget.primaryColor,
-                  accentColor: widget.accentColor,
-                  isEditMode: widget.isEditMode,
-                  headerStyle: 'transparent',
-                  headerColorMode: effectiveColorMode,
-                  showTopBanner: allowOverlayAtTop
-                      ? widget.showTopBanner && !isScrolled
-                      : widget.showTopBanner,
-                  headerShadow: allowOverlayAtTop
-                      ? widget.headerShadow && isScrolled
-                      : widget.headerShadow,
-                  headerBgColor: effectiveBgColor,
-                  menuSurfaceColor: widget.headerMenuSurfaceColor,
-                  menuRailColor: widget.headerMenuRailColor,
-                  navItems: widget.navItems,
-                  isOverlay: allowOverlayAtTop && !isScrolled,
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// CMS mode action without a Material ink feature.
-///
-/// Edit/Preview replaces the editor viewport after activation. A regular
-/// ElevatedButton leaves an ink decoration attached to the old Scaffold for a
-/// few frames, which can try to paint against a detached RenderPadding on
-/// Flutter desktop. This control keeps the same professional interaction and
-/// keyboard semantics without retaining paint state outside its own subtree.
-class _CmsModeButton extends StatefulWidget {
-  const _CmsModeButton({
-    required this.label,
-    required this.onPressed,
-  });
-
-  final String label;
-  final VoidCallback? onPressed;
-
-  @override
-  State<_CmsModeButton> createState() => _CmsModeButtonState();
-}
-
-class _CmsModeButtonState extends State<_CmsModeButton> {
-  bool _hovered = false;
-  bool _pressed = false;
-  bool _focused = false;
-
-  bool get _enabled => widget.onPressed != null;
-
-  void _setPressed(bool value) {
-    if (_pressed == value || !mounted) return;
-    setState(() => _pressed = value);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final backgroundColor = !_enabled
-        ? Colors.white.withValues(alpha: 0.16)
-        : _pressed
-            ? Colors.red.shade800
-            : _hovered
-                ? Colors.red.shade500
-                : Colors.red.shade600;
-
-    return Semantics(
-      button: true,
-      enabled: _enabled,
-      label: widget.label,
-      child: FocusableActionDetector(
-        enabled: _enabled,
-        shortcuts: const <ShortcutActivator, Intent>{
-          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
-          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
-        },
-        actions: <Type, Action<Intent>>{
-          ActivateIntent: CallbackAction<ActivateIntent>(
-            onInvoke: (_) {
-              widget.onPressed?.call();
-              return null;
-            },
-          ),
-        },
-        onShowHoverHighlight: (value) {
-          if (_hovered != value && mounted) {
-            setState(() => _hovered = value);
-          }
-        },
-        onShowFocusHighlight: (value) {
-          if (_focused != value && mounted) {
-            setState(() => _focused = value);
-          }
-        },
-        child: MouseRegion(
-          cursor:
-              _enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.onPressed,
-            onTapDown: _enabled ? (_) => _setPressed(true) : null,
-            onTapUp: _enabled ? (_) => _setPressed(false) : null,
-            onTapCancel: _enabled ? () => _setPressed(false) : null,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
-              curve: Curves.easeOut,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: backgroundColor,
-                borderRadius: BorderRadius.circular(4),
-                border: _focused
-                    ? Border.all(color: Colors.white, width: 1.5)
-                    : null,
-              ),
-              child: Text(
-                widget.label,
-                style: TextStyle(
-                  color: _enabled ? Colors.white : Colors.white54,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NoDragScrollBehavior extends MaterialScrollBehavior {
-  const _NoDragScrollBehavior();
-
-  @override
-  Set<PointerDeviceKind> get dragDevices => {
-        PointerDeviceKind.touch,
-        PointerDeviceKind.stylus,
-        PointerDeviceKind.invertedStylus,
-        PointerDeviceKind.trackpad,
-        PointerDeviceKind.unknown,
-      };
-}
-
-/// Payment badge widget for footer - displays payment method icons
-class _PaymentBadge extends StatelessWidget {
-  final String name;
-  final String imageUrl;
-  final bool isSvg;
-
-  const _PaymentBadge({
-    required this.name,
-    required this.imageUrl,
-    this.isSvg = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // MercadoPago and Redcompra logos render naturally smaller due to aspect ratio,
-    // so we give them size boosts to visually match the other logos.
-    double height = 40;
-    double maxWidth = 100;
-
-    if (name == 'MercadoPago') {
-      height = 60;
-      maxWidth = 150;
-    } else if (name == 'Redcompra') {
-      height = 48;
-      maxWidth = 120;
-    }
-
-    return Tooltip(
-      message: name,
-      child: Container(
-        height: height,
-        constraints: BoxConstraints(maxWidth: maxWidth),
-        child: isSvg
-            ? SvgPicture.network(
-                imageUrl,
-                fit: BoxFit.contain,
-                placeholderBuilder: (_) => const SizedBox.shrink(),
-              )
-            : Image.network(
-                imageUrl,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  return const SizedBox.shrink();
-                },
-              ),
       ),
     );
   }

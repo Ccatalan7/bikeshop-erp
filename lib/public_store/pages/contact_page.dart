@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../providers/public_store_tenant_provider.dart';
+import '../services/public_page_publication.dart';
 import '../theme/public_store_theme.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 
@@ -42,7 +44,11 @@ class _ContactPageState extends State<ContactPage>
   // DISABLED: AutomaticKeepAliveClientMixin causes element activation conflicts
   // during edit/preview mode switches. The performance cost of reloading is acceptable.
   @override
-  bool get wantKeepAlive => false;
+  // Kept alive: the storefront shell keeps ONE stable content anchor
+  // across Public|Preview|Edit, so the old element-activation conflicts
+  // that forced this off no longer exist. Form text, focus and selection
+  // survive mode toggles; route changes still remount legitimately.
+  bool get wantKeepAlive => true;
 
   Future<void> _launchUrl(String url) async {
     final uri = Uri.parse(url);
@@ -107,19 +113,16 @@ class _ContactPageState extends State<ContactPage>
 
     // Get edit mode for key to prevent element reactivation conflicts
     final editProvider = context.watch<WebsiteEditModeProvider>();
-    final modeKey = editProvider.isEditMode
-        ? 'edit'
-        : (editProvider.isPreviewMode ? 'preview' : 'normal');
 
-    // Get all contact info from website_settings (editable in admin)
-    final storeName = websiteService.getSetting('store_name', 'Viñabike');
-    final contactEmail =
-        websiteService.getSetting('contact_email', 'contacto@vinabike.cl');
-    final contactPhone =
-        websiteService.getSetting('contact_phone', '+56 9 9835 7797');
-    final contactAddress = websiteService.getSetting(
-        'contact_address', 'Álvarez 32, Local 17\nViña del Mar, Chile');
-    final whatsappRaw = websiteService.getSetting('whatsapp', '+56998357797');
+    // Contact data is owned by website_settings. An unset field is omitted:
+    // another tenant's real address, phone, mailbox or WhatsApp number must
+    // never appear as this store's default.
+    final storeName = websiteService.getSetting('store_name', '').trim();
+    final contactEmail = websiteService.getSetting('contact_email', '').trim();
+    final contactPhone = websiteService.getSetting('contact_phone', '').trim();
+    final contactAddress =
+        websiteService.getSetting('contact_address', '').trim();
+    final whatsappRaw = websiteService.getSetting('whatsapp', '');
     final whatsappNumber = _sanitizePhone(whatsappRaw);
     final instagramHandle = websiteService.getSetting('instagram', '');
     final facebookHandle = websiteService.getSetting('facebook', '');
@@ -135,9 +138,25 @@ class _ContactPageState extends State<ContactPage>
         'google_maps_url'
       ],
     );
+    // A maps link is only offered when the owner configured one or gave a real
+    // address to search for. Searching Google for an empty query produced a
+    // link that led nowhere.
     final googleMapsUrl = configuredGoogleMapsUrl.isNotEmpty
         ? configuredGoogleMapsUrl
         : _buildMapsSearchUrl(storeName, contactAddress);
+
+    // `/contacto` is owned by its `website_pages` row. The route stays mounted
+    // so Preview and Edit can always reach it, but a draft owner is not a
+    // public page: the storefront shows an explicit unavailable state instead
+    // of publishing content the owner never released.
+    final isEditorContext = editProvider.isInEditorContext;
+    if (!isEditorContext &&
+        !_isPubliclyAvailable(
+          websiteService,
+          context.watch<PublicStoreTenantProvider>().tenantId,
+        )) {
+      return const _ContactUnavailable();
+    }
 
     // Theme colors
     final primaryColorStr =
@@ -162,7 +181,7 @@ class _ContactPageState extends State<ContactPage>
                 children: [
                   // Two column layout: Form + Info
                   MediaQueryLayoutBuilder(
-                    key: ValueKey('contact_form_layout_$modeKey'),
+                    key: const ValueKey('contact_form_layout'),
                     builder: (context, constraints) {
                       final isWide = constraints.maxWidth > 900;
 
@@ -174,7 +193,7 @@ class _ContactPageState extends State<ContactPage>
                             Expanded(
                               flex: 3,
                               child: _buildContactForm(
-                                  contactEmail, primaryColor, modeKey),
+                                  contactEmail, primaryColor),
                             ),
                             const SizedBox(width: 48),
                             // Info Panel
@@ -213,7 +232,7 @@ class _ContactPageState extends State<ContactPage>
                           ),
                           const SizedBox(height: 48),
                           _buildContactForm(
-                              contactEmail, primaryColor, modeKey),
+                              contactEmail, primaryColor),
                         ],
                       );
                     },
@@ -225,6 +244,35 @@ class _ContactPageState extends State<ContactPage>
         ),
       ],
     );
+  }
+
+  /// Publication truth for this route, from its canonical owner.
+  ///
+  /// Uses the same resolver the header, footer and CTA consume, so a draft
+  /// `/contacto` disappears from navigation and from the page itself together
+  /// instead of vanishing from menus while staying reachable and indexable.
+  ///
+  /// Authority comes from `hasAuthoritativePagePublicationForTenant`, not from
+  /// `pages.isNotEmpty`. That earlier heuristic was wrong in both directions:
+  /// a tenant whose authoritative page list is legitimately **empty** looked
+  /// "still loading" forever and stayed public, and a list loaded for another
+  /// tenant would have counted as authority for this one.
+  ///
+  /// Unknown is fail-closed. The public store bootstrap awaits
+  /// `loadPagesForTenant` before this route paints, so an unknown state here
+  /// means the load genuinely failed — and leaking contact data on a failed
+  /// read is worse than showing an unavailable page.
+  bool _isPubliclyAvailable(WebsiteService service, String? tenantId) {
+    final normalizedTenantId = tenantId?.trim() ?? '';
+    if (normalizedTenantId.isEmpty) return false;
+    if (!service.hasAuthoritativePagePublicationForTenant(normalizedTenantId)) {
+      return false;
+    }
+    final publication = PublicPagePublication.resolve(
+      pages: service.pages,
+      isAuthoritative: true,
+    );
+    return publication.isPublishedPath('/contacto');
   }
 
   String _firstNonEmptySetting(WebsiteService service, List<String> keys) {
@@ -283,7 +331,7 @@ class _ContactPageState extends State<ContactPage>
   }
 
   Widget _buildContactForm(
-      String contactEmail, Color primaryColor, String modeKey) {
+      String contactEmail, Color primaryColor) {
     return Container(
       padding: const EdgeInsets.all(40),
       decoration: BoxDecoration(
@@ -333,7 +381,7 @@ class _ContactPageState extends State<ContactPage>
 
             // Email & Phone Row
             MediaQueryLayoutBuilder(
-              key: ValueKey('contact_email_phone_layout_$modeKey'),
+              key: const ValueKey('contact_email_phone_layout'),
               builder: (context, constraints) {
                 if (constraints.maxWidth > 500) {
                   return Row(
@@ -425,7 +473,12 @@ class _ContactPageState extends State<ContactPage>
               width: double.infinity,
               height: 52,
               child: FilledButton(
-                onPressed: _isSending ? null : () => _submitForm(contactEmail),
+                // The form composes a `mailto:` to the store's mailbox. With
+                // no configured address there is nowhere to send it, so the
+                // action is disabled instead of opening a broken draft.
+                onPressed: _isSending || contactEmail.trim().isEmpty
+                    ? null
+                    : () => _submitForm(contactEmail),
                 style: FilledButton.styleFrom(
                   backgroundColor: primaryColor,
                   shape: RoundedRectangleBorder(
@@ -560,8 +613,11 @@ class _ContactPageState extends State<ContactPage>
                 ],
               ),
               const SizedBox(height: 24),
-              _buildContactDetailRow(
-                  Icons.map_outlined, 'Dirección', contactAddress),
+              // Phone and email were already conditional; the address was not,
+              // so an unset address rendered a labelled empty row.
+              if (contactAddress.isNotEmpty)
+                _buildContactDetailRow(
+                    Icons.map_outlined, 'Dirección', contactAddress),
               if (contactPhone.isNotEmpty) const SizedBox(height: 16),
               if (contactPhone.isNotEmpty)
                 _buildContactDetailRow(
@@ -1083,5 +1139,62 @@ class _ContactPageState extends State<ContactPage>
     }
 
     return null;
+  }
+}
+
+/// Shown on the public storefront when `/contacto` has no published owner.
+///
+/// It is a bounded, centered, theme-owned state rather than a blank route: the
+/// visitor learns the page is not available instead of meeting an empty
+/// screen, and no invented contact data leaks while the owner is still
+/// drafting. Preview and Edit never reach this branch.
+class _ContactUnavailable extends StatelessWidget {
+  const _ContactUnavailable();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      container: true,
+      header: true,
+      label: 'Página de contacto no disponible',
+      child: Container(
+        width: double.infinity,
+        color: theme.colorScheme.surface,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 96),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.mark_email_unread_outlined,
+                  size: 40,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Contacto no disponible',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Esta página todavía no está publicada. Vuelve pronto.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

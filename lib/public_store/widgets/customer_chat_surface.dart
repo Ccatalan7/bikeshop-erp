@@ -1,13 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../modules/messaging/models/conversation.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
 import '../services/customer_account_service.dart';
 import 'customer_chat_view.dart';
+import 'public_store_layout.dart';
 
 /// Compact host for the customer account and storefront launcher.
 ///
@@ -166,7 +166,8 @@ class _CustomerChatSurfaceState extends State<CustomerChatSurface> {
           ),
           IconButton(
             tooltip: 'Abrir bandeja',
-            onPressed: () => context.go('/cuenta/chats'),
+            onPressed: () =>
+                PublicStoreLayout.navigateToHref(context, '/cuenta/chats'),
             icon: const Icon(Icons.open_in_full_rounded, size: 19),
           ),
           if (widget.onClose != null)
@@ -186,7 +187,8 @@ class _CustomerChatSurfaceState extends State<CustomerChatSurface> {
       title: 'Inicia sesión para conversar',
       body: 'Tus consultas y su historial quedan vinculados a tu cuenta.',
       actionLabel: 'Iniciar sesión',
-      onPressed: () => context.go('/cuenta/login'),
+      onPressed: () =>
+          PublicStoreLayout.navigateToHref(context, '/cuenta/login'),
     );
   }
 
@@ -202,8 +204,9 @@ class _CustomerChatSurfaceState extends State<CustomerChatSurface> {
           ? 'Reintenta sin salir de esta pantalla.'
           : 'Abre la bandeja para iniciar una consulta con el equipo.',
       actionLabel: _loadFailed ? 'Reintentar' : 'Abrir bandeja',
-      onPressed:
-          _loadFailed ? _loadConversations : () => context.go('/cuenta/chats'),
+      onPressed: _loadFailed
+          ? _loadConversations
+          : () => PublicStoreLayout.navigateToHref(context, '/cuenta/chats'),
     );
   }
 }
