@@ -216,13 +216,15 @@ case "${1:-}" in
     uri="$(vm_uri)"
     [ -n "$uri" ] || { echo "sin VM service en el log" >&2; exit 1; }
     python3 - "$uri" "$filter" <<'PY'
-import json, sys, urllib.parse, urllib.request
+import json, sys, urllib.error, urllib.parse, urllib.request
 uri, filter_text = sys.argv[1].strip().rstrip('/'), sys.argv[2]
 
 def call(name, **params):
     query = urllib.parse.urlencode({k: v for k, v in params.items() if v != ''})
     url = f"{uri}/{name}?{query}" if query else f"{uri}/{name}"
-    with urllib.request.urlopen(url, timeout=40) as response:
+    # La extensión ya acota su propia espera de frame en 3 s: si acá se supera
+    # el margen no es lentitud, es que el build corriendo es viejo.
+    with urllib.request.urlopen(url, timeout=20) as response:
         return json.load(response)
 
 isolate = call('getVM')['result']['isolates'][0]['id']
@@ -234,8 +236,15 @@ try:
                    filter=filter_text)['result']
 except urllib.error.HTTPError as error:
     sys.exit(error.read().decode())
+except TimeoutError:
+    sys.exit('la lectura no volvió en 20 s. El build corriendo es anterior al '
+             'frame acotado: reinicia la sesión (stop && start)')
 for line in payload.get('lines', []):
     print(line)
+if payload.get('forcedFrame'):
+    print('# el engine no entregó frame en 3 s y se dibujó uno a mano: la app '
+          'está ociosa o su ciclo de vida quedó en hidden/paused',
+          file=sys.stderr)
 PY
     ;;
 

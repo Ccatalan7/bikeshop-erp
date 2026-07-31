@@ -187,6 +187,79 @@ leer valores.
 
 ---
 
+## 3.b Recetas: las operaciones de todas las rondas, para copiar y pegar
+
+Esta sección existe porque el 31/07 un agente perdió **media hora** atascado en
+poner la app en oscuro. Tenía los frames bajados y el procedimiento leído; lo
+que faltaba era la secuencia concreta. Un procedimiento sin recetas se paga en
+minutos de tanteo, cada vez y por cada agente.
+
+**Si te atascas en una operación que no está acá, agrégala al terminar.**
+
+### Llegar a un módulo
+
+```bash
+scripts/dev/app_control.sh tap --label "RR.HH."
+scripts/dev/app_control.sh tap --label "Nóminas" --index 0
+```
+
+Si `tap` se queja de varios candidatos, `find --label X` los lista y `--index N`
+desempata. Nunca por coordenada.
+
+### Cambiar a oscuro, y volver
+
+No hay comando: se hace por la UI del módulo de Configuración.
+
+```bash
+scripts/dev/app_control.sh tap --label "Configuración"
+scripts/dev/app_control.sh tap --label "Apariencia"
+scripts/dev/app_control.sh tap --label "Oscuro"      # o "Claro"
+```
+
+**Escribe la preferencia persistida del dueño. Déjala en `Claro` al terminar** —
+la app es suya, no un banco de pruebas.
+
+**Si el toggle se resiste, no insistas a ciegas.** El pase oscuro también se
+verifica sin la UI: `payroll_redesign_dark_host_test.dart` monta las superficies
+en 6 presets × 2 modos y `payroll_visual_tokens_test.dart` verifica capas,
+escalera de elevación y que un sheet no se confunda con el fondo. Para juzgar la
+**composición** contra el frame igual necesitas la captura, pero no te bloquees:
+sigue con un frame que no dependa del oscuro y vuelve después.
+
+### Cambiar de breakpoint
+
+```bash
+P=$(scripts/dev/app_control.sh geometry | sed -n 's/^pid \([0-9]*\).*/\1/p')
+osascript -e "tell application \"System Events\" to tell (first process whose unix id is $P) to set size of front window to {430, 928}"
+```
+
+**430** compacto · **880** tablet · **1180** sidebar expandido · **1672**
+escritorio. Devuélvela como estaba al terminar.
+
+### Comparar una banda del frame contra la app
+
+Los frames anchos vienen en bandas (`-p1`, `-p2`). La app hay que ponerla en el
+mismo estado que la banda —fila abierta, scope correcto— **antes** de capturar,
+si no comparas dos cosas distintas.
+
+```bash
+scripts/dev/app_control.sh tap --key payroll-row-action-tap-Lucas   # abrir la fila
+scripts/dev/app_control.sh shot app.png
+scripts/dev/visual_compare.py side frames/7a-pacific-p2.png app.png cmp.png
+```
+
+### Ciclo tras editar código
+
+```bash
+scripts/dev/native_session.sh reload || scripts/dev/native_session.sh doctor
+```
+
+Si `doctor` dice compilador trabado: `stop && start`, y si `start` se niega por
+un proceso huérfano, ciérralo por su ventana (§1). **Tras un reinicio la app
+vuelve al Inicio: hay que volver a navegar antes de juzgar lo que se ve.**
+
+---
+
 ## 4. Comparar Design contra la app
 
 ### Visual
@@ -339,6 +412,93 @@ dueña de las horas, así que el arreglo real vive en Asistencias, y ese botón
 por accidente y escribió de verdad. Se descartó, la fila quedó diciendo `Horas
 sin cerrar` y sale del cálculo. **Se conservó el hecho que el frame quería
 comunicar; se cambió el mecanismo.** Eso es evaluar, no desobedecer.
+
+---
+
+## 5.c Los errores que ya se cometieron. No los repitas
+
+Cada uno costó tiempo real. Están acá con su **causa**, no con la anécdota,
+porque la causa es lo que se repite. Si cometes uno nuevo, agrégalo.
+
+### «Ya sé por qué falla» — y no lo comprobé
+
+- **La sesión no recargaba.** Vi `screen -ls` diciendo `(Attached)` y concluí
+  que el dueño la tenía tomada. **Falso**: un attach no bloquea nada. Era el
+  compilador incremental trabado, y la app seguía viva respondiendo capturas,
+  así que cada captura mostraba código viejo. **Costó una ronda entera.**
+- **22 tests rojos «por cambios de texto».** Eran 31, y la mayoría no era
+  texto: 7 suites no compilaban por un parámetro nuevo en un servicio
+  compartido, y **tres eran defectos reales** que llevaban días escondidos.
+
+> **La regla:** antes de actuar sobre una causa, compruébala. Lo primero que
+> parece explicarlo casi nunca es lo que pasa, y "arreglar" el síntoma
+> equivocado cuesta más que investigar.
+
+### Diagnosticar con algo que muta
+
+Escribí un `doctor` que, para "comprobar" si el compilador respondía, **pedía un
+reload**. Eso disparaba un segundo reload encima del que ya corría, los dos
+morían, y el doctor reportaba trabado un compilador que él mismo acababa de
+trabar.
+
+> **La regla:** un diagnóstico es de **sólo lectura**. Si para medir algo tienes
+> que moverlo, no estás midiendo.
+
+### Afirmar que un dato falta sin comprobar la fuente
+
+La app decía «el asiento contable no quedó registrada». Se leía
+`expense_payments.payment_account_id`, nulo en los 78 pagos. **El asiento estaba
+completo y cuadrado** en `journal_entries`/`journal_lines`. Esa frase habría
+hecho al dueño desconfiar de una contabilidad sana.
+
+> **La regla:** antes de decir que un dato falta, comprueba que no sea tu
+> lectura la que falla. Las lecturas de producción son autónomas:
+> `scripts/db/query.sh production --sql "…"`.
+
+### Parchar un defecto compartido dentro del módulo
+
+Los avatares en oscuro chocan con el acento de Pacific. Lo arreglé dentro de
+Payroll y el guard de inventario congelado lo rechazó — **con razón**: el choque
+lo tiene cualquier módulo con avatares en ese preset. Parcharlo acá era esconder
+un defecto compartido.
+
+> **La regla:** arregla donde **nace**, no donde duele. Si un guard te frena,
+> probablemente está diciendo algo cierto: piénsalo antes de rodearlo.
+
+### Escribir mientras otro publica
+
+Escribí un `.md` mientras Codex corría su gate local, y apareció como movimiento
+concurrente en su revisión del diff. No costó la publicación, pero pudo.
+
+> **La regla:** comprueba el estado de publicación **antes** de la primera
+> escritura (§ el bloque del handoff). Y la advertencia sin matiz es igual de
+> mala: dejó a otro agente esperando algo que ya no lo afectaba.
+
+### Hacer algo a mano y no escribirlo
+
+Puse la app en oscuro con clics por coordenada, me falló, insistí, y **nunca lo
+documenté**. El agente siguiente perdió media hora exactamente ahí, con los
+frames ya bajados.
+
+> **La regla:** si tuviste que tantear una operación, es candidata a receta
+> (§3.b). Lo que a ti te costó diez minutos, al siguiente le cuesta treinta.
+
+### Dar por implementado lo que sólo está escrito
+
+Tres veces apareció un widget con el diseño correcto de Design que **nadie
+monta**, mientras la pantalla renderiza otra cosa. Verlo en el archivo hace
+creer que el frame está hecho.
+
+> **La regla:** grepea antes (§4). Si sólo aparece su declaración, está muerto:
+> instálalo o bórralo, pero no lo dejes.
+
+### Prometer y detenerse
+
+Cerré un turno diciendo «sigo ahora mismo, no me detengo» y terminé el turno.
+
+> **La regla:** si dices que sigues, sigue. Y si el trabajo es largo, el ledger
+> se escribe **al cerrar cada frame**, no al final: es lo único que sobrevive si
+> el chat se acaba.
 
 ---
 

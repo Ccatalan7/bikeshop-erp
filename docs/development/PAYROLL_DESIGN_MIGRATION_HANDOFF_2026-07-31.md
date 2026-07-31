@@ -57,6 +57,67 @@ autorizaciones · §14.c lo que se le pidió a Design · §15 ledger).
 
 ---
 
+## 0.a Tus primeros 10 minutos
+
+En este orden. No implementes nada antes de terminarlo.
+
+```bash
+# 1 · ¿Puedo escribir? (§ el bloque de arriba)
+git status --porcelain | wc -l && git log --oneline -1
+pgrep -fl "flutter build|run_flutter_test_gate|firebase deploy|fastlane|gradlew"
+
+# 2 · ¿La base está sana? Debe dar 306/306 o más.
+.fvm/flutter_sdk/bin/flutter test $(ls test/widgets/payroll_*.dart test/unit/payroll_*.dart | tr '\n' ' ')
+
+# 3 · ¿La app corre?
+scripts/dev/native_session.sh status || scripts/dev/native_session.sh start
+scripts/dev/app_control.sh tap --label "RR.HH."
+scripts/dev/app_control.sh tap --label "Nóminas" --index 0
+scripts/dev/app_control.sh read --filter "semana"
+```
+
+Si los tres pasan, estás operativo. **Si el paso 2 falla, ése es tu trabajo
+antes que cualquier frame**: sin la base verde no sabes qué rompe cada cambio.
+
+Después: `list_files` en Design → `CHANGELOG.md` del turno → `get_file` del PNG
+→ `visual_compare.py decode` → **míralo**.
+
+## 0.b Cuándo un frame está CERRADO
+
+No es «se ve parecido». Las cinco, o no está cerrado:
+
+1. Comparado contra el **PNG bajado**, no contra el `spec.json` ni de memoria.
+2. Pasó la **compuerta de criterio** (`AGENT_VISUAL_WORKFLOW.md` §5.b), y quedó
+   escrito qué se copió, qué se descartó y qué se agregó, **con su razón**.
+3. Verificado en **claro, oscuro y compacto**. Sólo claro-escritorio no cuenta.
+4. **Batería del módulo en verde** y analyzer del scope limpio.
+5. **Entrada en el ledger** (§15 del plan), escrita al cerrarlo — no al final.
+
+Lo que no alcanzaste a hacer se declara con nombre. Un frame «casi listo» sin
+decir qué le falta es peor que uno no empezado: el siguiente lo da por hecho.
+
+## 0.c Cómo dejas este handoff para el que sigue
+
+**Esto no es opcional: es lo que hace que el sistema funcione la próxima vez.**
+Antes de cerrar tu sesión:
+
+| Actualiza | Con qué |
+|---|---|
+| §2 el estado | Mueve el frame de «sin empezar» a «cerrado», con la decisión que tomaste en una línea |
+| §4 la deuda | Agrega lo que descubriste y no arreglaste, **con dónde nace la corrección** |
+| §3 lo aprendido | Sólo lo que le habría ahorrado tiempo a alguien: una trampa, una preferencia del dueño, un documento que resultó falso |
+| `AGENT_VISUAL_WORKFLOW.md` §3.b | Si tuviste que tantear una operación, conviértela en receta |
+| `AGENT_VISUAL_WORKFLOW.md` §5.c | Si te equivocaste, escribe la **causa** y el costo real |
+
+Escribe la causa, no el síntoma. Fecha lo que corrige algo anterior. **No
+escribas el relato de tu sesión ni lo que ya se ve en git.**
+
+La prueba de que quedó bien: alguien que no estuvo acá abre este archivo y en
+diez minutos está comparando un frame. Si tiene que preguntarte algo, faltó
+escribirlo.
+
+---
+
 ## 0. Lee esto primero, son 3 minutos
 
 | Documento | Para qué |

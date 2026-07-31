@@ -5,6 +5,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
 
 /// Debug-only input channel so an agent can drive the app **without touching
@@ -82,24 +83,32 @@ void registerAgentInputExtensions() {
   // no la está mirando. Sale en texto, así que cuesta una fracción de lo que
   // cuesta una imagen.
   developer.registerExtension('ext.vinabike.input.tree', (_, params) async {
-    // La semántica no se compila si nadie la pidió: hay que encenderla y
-    // esperar un frame para que exista el árbol.
-    final handle = WidgetsBinding.instance.ensureSemantics();
+    final binding = WidgetsBinding.instance;
+    // La semántica no se compila si nadie la pidió: hay que encenderla y que
+    // corra un frame para que el árbol exista.
+    final handle = binding.ensureSemantics();
     try {
-      await WidgetsBinding.instance.endOfFrame;
-      final root =
-          WidgetsBinding.instance.rootElement?.renderObject?.debugSemantics;
+      // Dos frames, no uno. El primero tras encender la semántica publica el
+      // marco —rail, pestañas, toolbar— y deja el contenido del workspace a
+      // medias: con un solo frame, Nóminas devolvía el shell y ni una fila.
+      // Un árbol incompleto es peor que ninguno, porque se lee igual que una
+      // pantalla donde el control no existe.
+      final forced = await _pumpFrames(frames: 2);
+      final root = binding.rootElement?.renderObject?.debugSemantics;
       if (root == null) return _err('sin árbol de semántica');
       final filter = params['filter']?.trim().toLowerCase();
       final lines = <String>[];
       _describeSemantics(root, 0, lines, filter);
-      return _ok({'lines': lines});
+      return _ok({'lines': lines, 'forcedFrame': forced});
     } finally {
       handle.dispose();
     }
   });
 
   developer.registerExtension('ext.vinabike.input.find', (_, params) async {
+    // Sobre layout vigente: un objetivo se busca en el árbol de AHORA, no en el
+    // del último frame que el engine tuvo ganas de entregar.
+    await _pumpFrames(frames: _settleFrames);
     final matches = locateAgentInputTargetsForTesting(
       params['key'],
       params['label'],
@@ -109,12 +118,16 @@ void registerAgentInputExtensions() {
   });
 
   developer.registerExtension('ext.vinabike.input.tapOn', (_, params) async {
+    await _pumpFrames(frames: _settleFrames);
     final result = await tapAgentInputTargetForTesting(
       params,
     );
     if (result['ok'] != true) {
       return _err(result['error']?.toString() ?? 'objetivo no tocable');
     }
+    // Y después del toque, para que su consecuencia exista cuando el agente
+    // pregunte por ella en la llamada siguiente.
+    await _pumpFrames(frames: _settleFrames);
     return _ok({'tapped': result['tapped']});
   });
 
@@ -149,6 +162,11 @@ void registerAgentInputExtensions() {
 }
 
 bool _registered = false;
+
+/// Frames que se corren para dar por asentada una interacción: ~320 ms, que
+/// cubre las transiciones del shell (`PayrollTokens.base` es 200 ms y la de
+/// panel 380 ms se ve empezada, que es lo que hace falta para ubicar).
+const int _settleFrames = 20;
 int _pointer = 7000;
 
 int get _viewId =>
@@ -167,6 +185,51 @@ Offset? _offset(Map<String, String> params) {
 /// interacción— porque el árbol crudo está lleno de nodos de agrupación que no
 /// dicen nada y sólo gastarían contexto. `filter` deja pasar únicamente las
 /// ramas cuyo texto contiene lo buscado, para poder mirar una sola zona.
+/// Corre [frames] frames y devuelve `true` si hubo que dibujarlos a mano.
+///
+/// **Por qué existe.** El engine sólo entrega frames mientras la app está
+/// visible: si el ciclo de vida cae a `hidden` —la ventana tapada por otra, que
+/// es el estado normal cuando el dueño trabaja mientras el agente verifica—
+/// `scheduleFrame()` pasa a ser un no-op y la app queda **congelada, pero
+/// viva**. Dos consecuencias que costaron una ronda cada una el 31/07:
+///
+/// - `read` esperaba `endOfFrame` sin límite y no volvía nunca, mientras `shot`
+///   seguía respondiendo. `_flutter.screenshot` rasteriza el árbol de capas que
+///   ya existe, así que no necesita frame nuevo: la app parecía muerta y no lo
+///   estaba, y parecía viva y no respondía.
+/// - un `tap` marcaba el estado nuevo pero sin frame no había layout nuevo, así
+///   que el control que ese toque acababa de abrir todavía no existía para el
+///   `find` siguiente. Se leyó como «el menú no se expande».
+///
+/// Dibujar el frame a mano es lo mismo que hace el binding de tests, y
+/// `drawFrame` incluye el `flushSemantics`. El timestamp **avanza** en cada
+/// vuelta: sin eso las animaciones no corren y un panel plegado se queda a
+/// medio abrir para siempre.
+Future<bool> _pumpFrames({int frames = 2}) async {
+  final binding = WidgetsBinding.instance;
+  if (binding.framesEnabled) {
+    var arrived = true;
+    for (var i = 0; i < frames && arrived; i++) {
+      await binding.endOfFrame.timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          arrived = false;
+        },
+      );
+    }
+    if (arrived) return false;
+  }
+  // Sólo desde reposo: entrar a la mitad de un frame ajeno sí rompería.
+  if (binding.schedulerPhase != SchedulerPhase.idle) return true;
+  var stamp = binding.currentSystemFrameTimeStamp;
+  for (var i = 0; i < frames; i++) {
+    stamp += const Duration(milliseconds: 16);
+    binding.handleBeginFrame(stamp);
+    binding.handleDrawFrame();
+  }
+  return true;
+}
+
 void _describeSemantics(
   SemanticsNode node,
   int depth,
