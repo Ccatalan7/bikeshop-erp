@@ -306,8 +306,20 @@ class _WriterHintDatabaseService extends DatabaseService {
     String? orderBy,
     bool descending = false,
     int? limit,
+    int? offset,
     bool fetchAll = false,
   }) async {
+    if (table == 'payment_methods') {
+      return const [
+        {
+          'id': 'method-1',
+          'tenant_id': 'tenant-1',
+          'name': 'Transferencia',
+          'account_id': 'cash',
+          'is_active': true,
+        },
+      ];
+    }
     if (table == 'accounts') {
       return const [
         {
@@ -369,8 +381,8 @@ class _WriterHintDatabaseService extends DatabaseService {
     if (failRpc) {
       throw StateError('$functionName rejected');
     }
-    if (functionName == 'register_employee_advance') {
-      return 'advance-1';
+    if (functionName == 'register_employee_advance_v2') {
+      return {'advance_id': 'advance-1'};
     }
     if (functionName == 'revert_payroll_to_draft') {
       return null;

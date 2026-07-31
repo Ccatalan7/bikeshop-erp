@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
+import 'package:uuid/uuid.dart';
 import '../services/payroll_voucher_service.dart';
 import '../services/hr_service.dart';
 import '../models/payroll_voucher.dart';
@@ -25,11 +26,10 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
   PayrollVoucher? _voucher;
   bool _isLoading = true;
   bool _isProcessing = false;
+  final String _paymentOperationKey = const Uuid().v4();
 
   // Dynamic Data
   List<Map<String, dynamic>> _availableMethods = [];
-  Map<String, Employee> _employeeMap = {}; // Cache for profiles
-
   // Selections [lineId] -> methodId
   final Map<String, String> _selectedMethodIds = {};
 
@@ -203,19 +203,28 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
       final splits = _paymentSplitsByLineId[lineId];
       if (splits == null || splits.isEmpty) continue;
 
-      payload[lineId] = splits
-          .where((s) => s.amount > 0)
-          .map((s) => {
-                'kind': s.kind.name,
-                'payment_method_id': s.methodId,
-                'advance_id': s.advanceId,
-                'amount': s.amount,
-                'payment_date': s.paymentDate.toUtc().toIso8601String(),
-                'reference': s.referenceController.text.trim().isEmpty
-                    ? null
-                    : s.referenceController.text.trim(),
-              })
-          .toList();
+      payload[lineId] = splits.where((s) => s.amount > 0).map((s) {
+        if (s.kind == _PayrollMovementKind.advance) {
+          return <String, dynamic>{
+            'kind': 'advance',
+            'advance_id': s.advanceId,
+            'amount': s.amount,
+          };
+        }
+        final method = _availableMethods.firstWhere(
+          (candidate) => candidate['id']?.toString() == s.methodId,
+          orElse: () => const <String, dynamic>{},
+        );
+        final reference = s.referenceController.text.trim();
+        return <String, dynamic>{
+          'kind': 'payment',
+          'payment_method_id': s.methodId,
+          'payment_account_id': method['account_id'],
+          'amount': s.amount,
+          'payment_date': s.paymentDate.toUtc().toIso8601String(),
+          if (reference.isNotEmpty) 'reference': reference,
+        };
+      }).toList();
     }
 
     return payload.isEmpty ? null : payload;
@@ -250,12 +259,6 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
         final methods = results[1] as List<Map<String, dynamic>>;
         final employees = results[2] as List<Employee>;
         final advances = results[3] as List<EmployeeAdvance>;
-
-        // Cache employees for salary account lookup
-        _employeeMap = {
-          for (var e in employees)
-            if (e.id != null) e.id!: e
-        };
 
         // Create a map of updated employee preferences: ID -> preferredPaymentMethodId
         final empPreferences = <String, String>{};
@@ -370,52 +373,12 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
         return;
       }
 
-      // Update lines with payment method selections
-      for (var line in includedLines) {
-        if (line.id == null) continue;
-
-        // Update line logic
-        final em = _employeeMap[line.employeeId];
-
-        final splits =
-            _paymentSplitsByLineId[line.id!] ?? const <_PaymentSplitDraft>[];
-        final paymentSplits = splits
-            .where((split) =>
-                split.kind == _PayrollMovementKind.payment && split.amount > 0)
-            .toList();
-        final primaryMethodId = paymentSplits.isNotEmpty
-            ? (paymentSplits.first.methodId ??
-                _selectedMethodIds[line.id] ??
-                line.paymentMethodId)
-            : (_selectedMethodIds[line.id] ?? line.paymentMethodId);
-
-        // Sync salary account from current profile if available
-        final salaryAccountId = em?.salaryAccountId ?? line.salaryAccountId;
-
-        // Determine method name for legacy string
-        String? methodName = line.paymentMethod;
-        if (primaryMethodId != null) {
-          final m = _availableMethods.firstWhere(
-              (m) => m['id'] == primaryMethodId,
-              orElse: () => {'name': 'transfer'});
-          methodName = m['name'];
-        }
-
-        // Only update if something changed (Method or Account mismatch)
-        if (primaryMethodId != line.paymentMethodId ||
-            salaryAccountId != line.salaryAccountId) {
-          await service.updateLine(line.copyWith(
-            paymentMethodId: primaryMethodId,
-            paymentMethod: methodName,
-            salaryAccountId: salaryAccountId,
-          ));
-        }
-      }
-
       // Process payment
       await service.payVoucher(
         _voucher!.id!,
         paymentSplits: _buildSplitsPayload(includedLines),
+        operationKey: _paymentOperationKey,
+        expectedReconciliationVersion: _voucher!.reconciliationVersion,
       );
 
       if (mounted) {
@@ -514,9 +477,9 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
   Future<Set<int>?> _loadPayrollOpenWeekdays() async {
     try {
       final websiteService = context.read<WebsiteService>();
-      if (websiteService.settings.isEmpty) {
-        await websiteService.loadSettings();
-      }
+      // WebsiteService is app-scoped. Always bind/revalidate the active tenant
+      // before business hours influence a payroll date.
+      await websiteService.loadSettings();
 
       final applyToPayroll =
           websiteService.getSetting('business_hours_apply_payroll', 'true') !=

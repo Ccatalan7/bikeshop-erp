@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/hr_models.dart';
 import '../services/hr_service.dart';
@@ -26,6 +27,7 @@ class _EmployeeAdvanceDialogState extends State<EmployeeAdvanceDialog> {
   DateTime _paidAt = DateTime.now();
   bool _isLoading = true;
   bool _isSaving = false;
+  final String _operationKey = const Uuid().v4();
 
   @override
   void initState() {
@@ -112,6 +114,7 @@ class _EmployeeAdvanceDialogState extends State<EmployeeAdvanceDialog> {
             notes: _notesController.text.trim().isEmpty
                 ? null
                 : _notesController.text.trim(),
+            operationKey: _operationKey,
           );
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -142,7 +145,7 @@ class _EmployeeAdvanceDialogState extends State<EmployeeAdvanceDialog> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    'Registra la salida de dinero ahora. Podrás imputarla a una nómina después.',
+                    'Registra la salida de dinero ahora. Podrás aplicarla a una nómina después.',
                     style: TextStyle(fontSize: 13, color: Colors.grey),
                   ),
                   const SizedBox(height: 16),

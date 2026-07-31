@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import '../../../shared/services/user_management_service.dart';
 import '../../../shared/utils/auth_input_validation.dart';
+import '../../../shared/services/return_navigation.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -1007,7 +1007,10 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           Text(_error!),
           const SizedBox(height: 16),
           ElevatedButton(
-            onPressed: () => context.go('/hr/employees'),
+            onPressed: () => ReturnNavigation.close(
+              context,
+              fallbackRoute: '/hr/employees',
+            ),
             child: const Text('Volver'),
           ),
         ],
@@ -1031,9 +1034,14 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
             child: Row(
               children: [
                 IconButton(
-                  onPressed: () => context.go('/hr/employees'),
+                  onPressed: () => ReturnNavigation.close(
+                    context,
+                    fallbackRoute: '/hr/employees',
+                  ),
                   icon: const Icon(Icons.arrow_back),
-                  tooltip: 'Volver a lista',
+                  tooltip: ReturnNavigation.canReturn(context)
+                      ? 'Volver'
+                      : 'Volver a Trabajadores',
                 ),
                 const SizedBox(width: 8),
                 Text(

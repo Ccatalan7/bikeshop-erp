@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 import '../services/payroll_voucher_service.dart';
 import '../models/payroll_voucher.dart';
 
@@ -19,6 +20,7 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
   DateTimeRange? _dateRange;
   PayrollVoucher? _draftVoucher;
   bool _isLoading = false;
+  final String _saveOperationKey = const Uuid().v4();
   PayrollPeriodMode _periodMode = PayrollPeriodMode.week;
 
   final Map<String, TextEditingController> _hoursControllers = {};
@@ -212,10 +214,16 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
 
       if (_isEditMode) {
         // Update existing voucher
-        await service.updateVoucher(_draftVoucher!);
+        await service.updateVoucher(
+          _draftVoucher!,
+          operationKey: _saveOperationKey,
+        );
       } else {
         // Create new draft
-        await service.saveDraft(_draftVoucher!);
+        await service.saveDraft(
+          _draftVoucher!,
+          operationKey: _saveOperationKey,
+        );
       }
 
       if (mounted) {

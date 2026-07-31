@@ -1,5 +1,168 @@
 enum PayrollVoucherStatus { draft, confirmed, partial, paid, voided }
 
+enum PayrollSettlementEvidenceKind { payment, advance }
+
+enum PayrollSettlementEvidenceSource {
+  manual,
+  bankStatement,
+  cashReconciliation,
+  statementReconciliation,
+  legacy,
+}
+
+/// Auditable evidence for one movement that settled a payroll obligation.
+///
+/// A line may have several entries because a wage can be paid partially and
+/// can combine new money with one or more advance allocations.
+class PayrollSettlementEvidence {
+  const PayrollSettlementEvidence({
+    required this.id,
+    required this.voucherId,
+    required this.lineId,
+    required this.kind,
+    required this.source,
+    required this.amount,
+    this.effectiveDate,
+    this.cashMovementDate,
+    this.recordedAt,
+    this.paymentMethodId,
+    this.paymentMethodLabel,
+    this.paymentAccountId,
+    this.paymentAccountLabel,
+    this.reference,
+    this.notes,
+    this.actorId,
+    this.actorName,
+    this.fundingActorId,
+    this.fundingActorName,
+    this.operationId,
+    this.operationKey,
+    this.statementImportId,
+    this.statementRowId,
+    this.advanceId,
+    this.bankAmount,
+    this.variance,
+    this.varianceDisposition,
+    this.statementTransactionDate,
+    this.statementDescriptionObserved,
+    this.statementDocumentObserved,
+    this.statementPageNumber,
+    this.statementSourceLineStart,
+    this.statementSourceLineEnd,
+    this.statementRowOrdinal,
+  });
+
+  final String id;
+  final String voucherId;
+  final String lineId;
+  final PayrollSettlementEvidenceKind kind;
+  final PayrollSettlementEvidenceSource source;
+  final double amount;
+  final DateTime? effectiveDate;
+  final DateTime? cashMovementDate;
+  final DateTime? recordedAt;
+  final String? paymentMethodId;
+  final String? paymentMethodLabel;
+  final String? paymentAccountId;
+  final String? paymentAccountLabel;
+  final String? reference;
+  final String? notes;
+  final String? actorId;
+  final String? actorName;
+  final String? fundingActorId;
+  final String? fundingActorName;
+  final String? operationId;
+  final String? operationKey;
+  final String? statementImportId;
+  final String? statementRowId;
+  final String? advanceId;
+  final double? bankAmount;
+  final double? variance;
+  final String? varianceDisposition;
+  final DateTime? statementTransactionDate;
+  final String? statementDescriptionObserved;
+  final String? statementDocumentObserved;
+  final int? statementPageNumber;
+  final int? statementSourceLineStart;
+  final int? statementSourceLineEnd;
+  final int? statementRowOrdinal;
+
+  bool get isAdvance => kind == PayrollSettlementEvidenceKind.advance;
+  bool get isFromStatement =>
+      source == PayrollSettlementEvidenceSource.bankStatement ||
+      source == PayrollSettlementEvidenceSource.cashReconciliation ||
+      source == PayrollSettlementEvidenceSource.statementReconciliation;
+  bool get hasObservedStatementMetadata =>
+      source == PayrollSettlementEvidenceSource.bankStatement &&
+      statementRowId?.trim().isNotEmpty == true &&
+      (statementTransactionDate != null ||
+          statementDescriptionObserved?.trim().isNotEmpty == true ||
+          statementDocumentObserved?.trim().isNotEmpty == true ||
+          statementPageNumber != null ||
+          statementSourceLineStart != null ||
+          statementSourceLineEnd != null ||
+          statementRowOrdinal != null);
+
+  factory PayrollSettlementEvidence.fromMap(Map<String, dynamic> map) {
+    DateTime? date(String key) {
+      final value = map[key]?.toString();
+      return value == null ? null : DateTime.tryParse(value);
+    }
+
+    final kindValue = map['evidence_kind']?.toString();
+    final sourceValue = map['source']?.toString();
+    return PayrollSettlementEvidence(
+      id: map['evidence_id'].toString(),
+      voucherId: map['voucher_id'].toString(),
+      lineId: map['line_id'].toString(),
+      kind: kindValue == 'advance'
+          ? PayrollSettlementEvidenceKind.advance
+          : PayrollSettlementEvidenceKind.payment,
+      source: switch (sourceValue) {
+        'bank_statement' => PayrollSettlementEvidenceSource.bankStatement,
+        'cash_reconciliation' =>
+          PayrollSettlementEvidenceSource.cashReconciliation,
+        'statement_reconciliation' =>
+          PayrollSettlementEvidenceSource.statementReconciliation,
+        'manual' => PayrollSettlementEvidenceSource.manual,
+        _ => PayrollSettlementEvidenceSource.legacy,
+      },
+      amount: (map['amount'] as num?)?.toDouble() ?? 0,
+      effectiveDate: date('effective_date'),
+      cashMovementDate: date('cash_movement_date'),
+      recordedAt: date('recorded_at'),
+      paymentMethodId: map['payment_method_id']?.toString(),
+      paymentMethodLabel: map['payment_method_label']?.toString(),
+      paymentAccountId: map['payment_account_id']?.toString(),
+      paymentAccountLabel: map['payment_account_label']?.toString(),
+      reference: map['reference']?.toString(),
+      notes: map['notes']?.toString(),
+      actorId: map['actor_id']?.toString(),
+      actorName: map['actor_name']?.toString(),
+      fundingActorId: map['funding_actor_id']?.toString(),
+      fundingActorName: map['funding_actor_name']?.toString(),
+      operationId: map['operation_id']?.toString(),
+      operationKey: map['operation_key']?.toString(),
+      statementImportId: map['statement_import_id']?.toString(),
+      statementRowId: map['statement_row_id']?.toString(),
+      advanceId: map['advance_id']?.toString(),
+      bankAmount: (map['bank_amount'] as num?)?.toDouble(),
+      variance: (map['variance'] as num?)?.toDouble(),
+      varianceDisposition: map['variance_disposition']?.toString(),
+      statementTransactionDate: date('statement_transaction_date'),
+      statementDescriptionObserved:
+          map['statement_description_observed']?.toString(),
+      statementDocumentObserved: map['statement_document_observed']?.toString(),
+      statementPageNumber: (map['statement_page_number'] as num?)?.toInt(),
+      statementSourceLineStart:
+          (map['statement_source_line_start'] as num?)?.toInt(),
+      statementSourceLineEnd:
+          (map['statement_source_line_end'] as num?)?.toInt(),
+      statementRowOrdinal: (map['statement_row_ordinal'] as num?)?.toInt(),
+    );
+  }
+}
+
 class PayrollVoucher {
   final String? id;
   final String tenantId;
@@ -17,6 +180,7 @@ class PayrollVoucher {
   final String? createdBy;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final int reconciliationVersion;
   final List<PayrollVoucherLine> lines;
 
   const PayrollVoucher({
@@ -36,6 +200,7 @@ class PayrollVoucher {
     this.createdBy,
     required this.createdAt,
     required this.updatedAt,
+    this.reconciliationVersion = 0,
     this.lines = const [],
   });
 
@@ -56,6 +221,7 @@ class PayrollVoucher {
     String? createdBy,
     DateTime? createdAt,
     DateTime? updatedAt,
+    int? reconciliationVersion,
     List<PayrollVoucherLine>? lines,
   }) {
     return PayrollVoucher(
@@ -75,6 +241,8 @@ class PayrollVoucher {
       createdBy: createdBy ?? this.createdBy,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      reconciliationVersion:
+          reconciliationVersion ?? this.reconciliationVersion,
       lines: lines ?? this.lines,
     );
   }
@@ -100,6 +268,8 @@ class PayrollVoucher {
       createdBy: map['created_by'],
       createdAt: DateTime.parse(map['created_at']),
       updatedAt: DateTime.parse(map['updated_at']),
+      reconciliationVersion:
+          (map['reconciliation_version'] as num?)?.toInt() ?? 0,
       lines: (map['lines'] as List<dynamic>?)
               ?.map((x) => PayrollVoucherLine.fromMap(x))
               .toList() ??
@@ -125,8 +295,22 @@ class PayrollVoucher {
       'created_by': createdBy,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'reconciliation_version': reconciliationVersion,
     };
   }
+}
+
+/// "6101-01 · Sueldos" a partir del join de la cuenta. Devuelve null cuando la
+/// línea no tiene cuenta asignada, para que el respaldo lo diga en vez de
+/// mostrar un vacío ambiguo.
+String? _accountLabel(dynamic raw) {
+  if (raw is! Map) return null;
+  final code = raw['code']?.toString().trim() ?? '';
+  final name = raw['name']?.toString().trim() ?? '';
+  if (code.isEmpty && name.isEmpty) return null;
+  if (code.isEmpty) return name;
+  if (name.isEmpty) return code;
+  return '$code · $name';
 }
 
 class PayrollVoucherLine {
@@ -145,6 +329,11 @@ class PayrollVoucherLine {
   final bool isIncluded;
   final String? expenseId;
   final String? salaryAccountId;
+
+  /// Nombre legible de la cuenta de gasto ("6101-01 Sueldos"), resuelto en la
+  /// misma consulta que la línea. Sin esto el respaldo sólo podía mostrar un
+  /// UUID, que no le sirve a nadie para cuadrar con Contabilidad.
+  final String? salaryAccountLabel;
   // New Strict Payment Fields
   final String? paymentMethodId;
   final String? paymentAccountId;
@@ -152,6 +341,7 @@ class PayrollVoucherLine {
   final double advancesApplied;
   final double settledAmount;
   final double balance;
+  final List<PayrollSettlementEvidence> settlementEvidence;
 
   const PayrollVoucherLine({
     this.id,
@@ -169,12 +359,14 @@ class PayrollVoucherLine {
     this.isIncluded = true,
     this.expenseId,
     this.salaryAccountId,
+    this.salaryAccountLabel,
     this.paymentMethodId,
     this.paymentAccountId,
     this.cashPaid = 0,
     this.advancesApplied = 0,
     this.settledAmount = 0,
     double? balance,
+    this.settlementEvidence = const [],
   }) : balance = balance ?? totalAmount;
 
   double get totalHours => workedHours + overtimeHours;
@@ -195,12 +387,14 @@ class PayrollVoucherLine {
     bool? isIncluded,
     String? expenseId,
     String? salaryAccountId,
+    String? salaryAccountLabel,
     String? paymentMethodId,
     String? paymentAccountId,
     double? cashPaid,
     double? advancesApplied,
     double? settledAmount,
     double? balance,
+    List<PayrollSettlementEvidence>? settlementEvidence,
   }) {
     return PayrollVoucherLine(
       id: id ?? this.id,
@@ -218,12 +412,14 @@ class PayrollVoucherLine {
       isIncluded: isIncluded ?? this.isIncluded,
       expenseId: expenseId ?? this.expenseId,
       salaryAccountId: salaryAccountId ?? this.salaryAccountId,
+      salaryAccountLabel: salaryAccountLabel ?? this.salaryAccountLabel,
       paymentMethodId: paymentMethodId ?? this.paymentMethodId,
       paymentAccountId: paymentAccountId ?? this.paymentAccountId,
       cashPaid: cashPaid ?? this.cashPaid,
       advancesApplied: advancesApplied ?? this.advancesApplied,
       settledAmount: settledAmount ?? this.settledAmount,
       balance: balance ?? this.balance,
+      settlementEvidence: settlementEvidence ?? this.settlementEvidence,
     );
   }
 
@@ -244,12 +440,22 @@ class PayrollVoucherLine {
       isIncluded: map['is_included'] ?? true,
       expenseId: map['expense_id'],
       salaryAccountId: map['salary_account_id'],
+      salaryAccountLabel: _accountLabel(map['salary_account']),
       paymentMethodId: map['payment_method_id'],
       paymentAccountId: map['payment_account_id'],
       cashPaid: (map['cash_paid'] as num?)?.toDouble() ?? 0,
       advancesApplied: (map['advances_applied'] as num?)?.toDouble() ?? 0,
       settledAmount: (map['settled_amount'] as num?)?.toDouble() ?? 0,
       balance: (map['balance'] as num?)?.toDouble(),
+      settlementEvidence: (map['settlement_evidence'] as List<dynamic>?)
+              ?.whereType<Map>()
+              .map(
+                (row) => PayrollSettlementEvidence.fromMap(
+                  Map<String, dynamic>.from(row),
+                ),
+              )
+              .toList(growable: false) ??
+          const [],
     );
   }
 
@@ -283,18 +489,25 @@ class EmployeeAdvance {
     required this.amount,
     required this.amountApplied,
     required this.paidAt,
+    DateTime? paidCivilDate,
     required this.status,
     this.paymentMethodId,
     this.paymentAccountId,
     this.reference,
     this.notes,
-  });
+  }) : paidCivilDate = paidCivilDate ?? paidAt;
 
   final String id;
   final String employeeId;
   final double amount;
   final double amountApplied;
   final DateTime paidAt;
+
+  /// Calendar date of the advance in the tenant's authoritative timezone.
+  ///
+  /// Use this for payroll-period eligibility. [paidAt] remains the underlying
+  /// audit instant.
+  final DateTime paidCivilDate;
   final String status;
   final String? paymentMethodId;
   final String? paymentAccountId;
@@ -304,17 +517,71 @@ class EmployeeAdvance {
   double get availableAmount => (amount - amountApplied).clamp(0, amount);
 
   factory EmployeeAdvance.fromMap(Map<String, dynamic> map) {
+    final paidAt = DateTime.parse(map['paid_at'] as String);
+    final paidCivilDateText = map['paid_civil_date']?.toString();
     return EmployeeAdvance(
       id: map['id'] as String,
       employeeId: map['employee_id'] as String,
       amount: (map['amount'] as num).toDouble(),
       amountApplied: (map['amount_applied'] as num?)?.toDouble() ?? 0,
-      paidAt: DateTime.parse(map['paid_at'] as String).toLocal(),
+      paidAt: paidAt,
+      paidCivilDate: paidCivilDateText == null
+          ? null
+          : DateTime.tryParse(paidCivilDateText),
       status: map['status'] as String? ?? 'open',
       paymentMethodId: map['payment_method_id'] as String?,
       paymentAccountId: map['payment_account_id'] as String?,
       reference: map['reference'] as String?,
       notes: map['notes'] as String?,
     );
+  }
+}
+
+/// Una línea del asiento contable real que dejó un pago de sueldo.
+///
+/// Se lee de `journal_lines`, NO del campo `payment_account_id` del pago: ese
+/// campo está nulo en los 78 pagos de sueldo de producción, mientras que el
+/// asiento existe y cuadra en los 78. Presentar el campo como si fuera el
+/// asiento hacía que la app declarara "no quedó registrada" sobre una
+/// contabilidad sana.
+class PayrollJournalLine {
+  const PayrollJournalLine({
+    required this.accountCode,
+    required this.accountName,
+    required this.debit,
+    required this.credit,
+  });
+
+  final String accountCode;
+  final String accountName;
+  final double debit;
+  final double credit;
+
+  bool get isDebit => debit > 0.01;
+
+  factory PayrollJournalLine.fromMap(Map<String, dynamic> map) {
+    return PayrollJournalLine(
+      accountCode: map['account_code']?.toString() ?? '',
+      accountName: map['account_name']?.toString() ?? '',
+      debit: (map['debit_amount'] as num?)?.toDouble() ?? 0,
+      credit: (map['credit_amount'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
+/// El asiento completo de un pago, con su número para poder ir a buscarlo.
+class PayrollJournalEntry {
+  const PayrollJournalEntry({
+    required this.entryNumber,
+    required this.lines,
+  });
+
+  final String entryNumber; // "AC-01910"
+  final List<PayrollJournalLine> lines;
+
+  bool get balances {
+    final debit = lines.fold<double>(0, (s, l) => s + l.debit);
+    final credit = lines.fold<double>(0, (s, l) => s + l.credit);
+    return (debit - credit).abs() < 0.01;
   }
 }

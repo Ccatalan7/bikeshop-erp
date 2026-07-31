@@ -3,17 +3,21 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:uuid/uuid.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/services/current_user_profile_service.dart';
 import '../models/hr_models.dart';
+import '../payroll/surfaces/payroll_generation_surface.dart';
 import '../services/hr_service.dart';
+import '../services/payroll_voucher_service.dart';
 import '../widgets/attendance_week_calendar.dart';
-import '../widgets/payroll_voucher_dialog.dart';
-import '../pages/payroll_list_page.dart';
+import '../widgets/attendance_compact_actions.dart';
 
 enum TimeView { day, week, month, quarter, year }
 
@@ -62,7 +66,6 @@ class _AttendancesPageState extends State<AttendancesPage> {
   Map<String, List<Attendance>> _attendancesByEmployee = {};
   bool _isLoading = true;
   Timer? _refreshTimer;
-  bool _showPayrollHistory = false; // Toggle to show payroll list inline
   String? _handledInitialAttendanceRequestKey;
 
   AttendanceDisplayTimeZone _displayTimeZone = AttendanceDisplayTimeZone.chile;
@@ -438,6 +441,96 @@ class _AttendancesPageState extends State<AttendancesPage> {
     _loadData();
   }
 
+  String _payrollInitials(String name) {
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    if (parts.isEmpty) return '·';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return '${parts.first[0]}${parts[1][0]}'.toUpperCase();
+  }
+
+  Future<void> _openPayrollGeneration() async {
+    final service = context.read<PayrollVoucherService>();
+    final initialWeek = PayrollGenerationWeek.containing(_selectedDate);
+
+    final createdVoucherId = await showGeneralDialog<String>(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: false,
+      barrierLabel: 'Cerrar preparación de nómina',
+      barrierColor: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.46),
+      transitionDuration: const Duration(milliseconds: 180),
+      transitionBuilder: (context, animation, secondaryAnimation, child) =>
+          FadeTransition(
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        ),
+        child: child,
+      ),
+      pageBuilder: (dialogContext, _, __) => PayrollGenerationSurface(
+        initialWeek: initialWeek,
+        onGeneratePreview: (week) async {
+          final voucher = await service.generatePreview(
+            week.start,
+            week.end,
+            periodLabel: '${week.title} · ${week.rangeLabel}',
+          );
+          return PayrollGenerationPreview(
+            week: week,
+            totalAmount: voucher.totalAmount.round(),
+            sourceSnapshotLabel:
+                'Asistencias consultadas · ${DateFormat('dd/MM HH:mm').format(DateTime.now())}',
+            workers: <PayrollGenerationWorkerLine>[
+              for (final line in voucher.lines)
+                PayrollGenerationWorkerLine(
+                  workerId: line.employeeId,
+                  name: line.employeeName,
+                  initials: _payrollInitials(line.employeeName),
+                  hours: line.workedHours,
+                  overtimeHours: line.overtimeHours,
+                  rateAmount: line.hourlyRate.round(),
+                  overtimeRateAmount: line.overtimeRate.round(),
+                  totalAmount: line.totalAmount.round(),
+                ),
+            ],
+          );
+        },
+        createOperationKey: () =>
+            'payroll_draft_from_attendance_${const Uuid().v4()}',
+        onSaveDraft: (request) async {
+          final week = request.preview.week;
+          final voucherId = await service.prepareDraftFromAttendance(
+            week.start,
+            week.end,
+            periodLabel: '${week.title} · ${week.rangeLabel}',
+            operationKey: request.operationKey,
+          );
+          return PayrollGenerationSaveResult(draftId: voucherId);
+        },
+        onClose: () => Navigator.of(dialogContext, rootNavigator: true).pop(),
+        onOpenSavedDraft: (result) => Navigator.of(
+          dialogContext,
+          rootNavigator: true,
+        ).pop(result.draftId),
+      ),
+    );
+
+    if (!mounted || createdVoucherId == null || createdVoucherId.isEmpty) {
+      return;
+    }
+    await context.push(
+      Uri(
+        path: '/hr/payroll',
+        queryParameters: <String, String>{'voucher': createdVoucherId},
+      ).toString(),
+    );
+  }
+
   String _getDateRangeLabel() {
     final DateFormat dayFormat = DateFormat('d MMM');
     final DateFormat monthFormat = DateFormat('MMMM yyyy');
@@ -592,49 +685,27 @@ class _AttendancesPageState extends State<AttendancesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final canAccessPayroll = context
+            .watch<CurrentUserProfileService?>()
+            ?.profile
+            ?.canAccessAccounting ==
+        true;
     return MainLayout(
-      title: _showPayrollHistory ? 'Nóminas' : 'Asistencias',
-      child: _showPayrollHistory
-          ? Column(
-              children: [
-                // Back button bar
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: () =>
-                            setState(() => _showPayrollHistory = false),
-                      ),
-                      const Text(
-                        'Volver a Asistencias',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ],
-                  ),
-                ),
-                const Expanded(child: PayrollListPage()),
-              ],
-            )
-          : Column(
-              children: [
-                _buildToolbar(),
-                Expanded(
-                  child: _isLoading
-                      ? const Center(child: BrandedLoading())
-                      : _buildAttendanceGrid(),
-                ),
-              ],
-            ),
+      title: 'Asistencias',
+      child: Column(
+        children: [
+          _buildToolbar(canAccessPayroll: canAccessPayroll),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: BrandedLoading())
+                : _buildAttendanceGrid(),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildToolbar() {
+  Widget _buildToolbar({required bool canAccessPayroll}) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -720,7 +791,6 @@ class _AttendancesPageState extends State<AttendancesPage> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
@@ -731,39 +801,16 @@ class _AttendancesPageState extends State<AttendancesPage> {
                     ),
                     const SizedBox(width: 8),
                     _buildTimeZoneSelector(compact: true),
-                    // Payroll History (toggle inline view)
-                    IconButton(
-                      icon: const Icon(Icons.history_edu),
-                      tooltip: 'Historial Nóminas',
-                      onPressed: () {
-                        setState(() => _showPayrollHistory = true);
-                      },
-                    ),
-                    // Generate Payroll
-                    Expanded(
-                      child: AppButton(
-                        text: 'Nómina',
-                        onPressed: () {
-                          showDialog(
-                              context: context,
-                              builder: (_) => const PayrollVoucherDialog());
-                        },
-                        icon: Icons.payments,
-                        type: ButtonType.secondary,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: AppButton(
-                        text: 'Nuevo',
-                        onPressed: () {
-                          // TODO: Implement manual entry dialog
-                        },
-                        icon: Icons.add,
-                        type: ButtonType.primary,
-                      ),
-                    ),
                   ],
+                ),
+                const SizedBox(height: 8),
+                AttendanceCompactActions(
+                  canAccessPayroll: canAccessPayroll,
+                  onOpenPayroll: () => context.push('/hr/payroll'),
+                  onGeneratePayroll: _openPayrollGeneration,
+                  onCreateAttendance: () {
+                    // TODO: Implement manual entry dialog
+                  },
                 ),
               ],
             );
@@ -806,26 +853,22 @@ class _AttendancesPageState extends State<AttendancesPage> {
                   const SizedBox(width: 12),
                   _buildTimeZoneSelector(compact: false),
                   const Spacer(),
-                  // Payroll Actions
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.history_edu),
-                    label: const Text('Nóminas'),
-                    onPressed: () {
-                      setState(() => _showPayrollHistory = true);
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  AppButton(
-                    text: 'Generar Nómina',
-                    onPressed: () {
-                      showDialog(
-                          context: context,
-                          builder: (_) => const PayrollVoucherDialog());
-                    },
-                    icon: Icons.payments,
-                    type: ButtonType.secondary,
-                  ),
-                  const SizedBox(width: 8),
+                  if (canAccessPayroll) ...[
+                    // Payroll Actions
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.history_edu),
+                      label: const Text('Nóminas'),
+                      onPressed: () => context.push('/hr/payroll'),
+                    ),
+                    const SizedBox(width: 8),
+                    AppButton(
+                      text: 'Preparar nómina',
+                      onPressed: _openPayrollGeneration,
+                      icon: Icons.payments,
+                      type: ButtonType.secondary,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   AppButton(
                     text: 'Nuevo',
                     onPressed: () {
@@ -1574,6 +1617,7 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).width < 520;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
@@ -1594,7 +1638,7 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
           children: [
             // Header with status workflow
             Container(
-              padding: const EdgeInsets.all(24),
+              padding: EdgeInsets.all(isCompact ? 16 : 24),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.grey[100],
                 borderRadius:
@@ -1628,7 +1672,7 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
             // Content
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.all(isCompact ? 16 : 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1897,64 +1941,63 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
 
             // Footer buttons
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(isCompact ? 12 : 16),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.grey[100],
                 borderRadius:
                     const BorderRadius.vertical(bottom: Radius.circular(12)),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TextButton.icon(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    label: const Text('Eliminar',
-                        style: TextStyle(color: Colors.red)),
-                    onPressed: () {
-                      // Confirm deletion
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('Confirmar eliminación'),
-                          content: const Text(
-                              '¿Está seguro que desea eliminar esta asistencia?'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(ctx).pop(),
-                              child: const Text('Cancelar'),
+              child: isCompact
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text('Descartar'),
+                              ),
                             ),
-                            TextButton(
-                              onPressed: () {
-                                Navigator.of(ctx).pop();
-                                widget.onDelete();
-                              },
-                              child: const Text('Eliminar',
-                                  style: TextStyle(color: Colors.red)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _save,
+                                child: const Text('Guardar'),
+                              ),
                             ),
                           ],
                         ),
-                      );
-                    },
-                  ),
-                  Row(
-                    children: [
-                      OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Descartar'),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: _save,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF714B67),
+                        TextButton.icon(
+                          icon: const Icon(Icons.delete),
+                          label: const Text('Eliminar asistencia'),
+                          onPressed: _confirmDelete,
                         ),
-                        child: const Text('Guardar y cerrar',
-                            style: TextStyle(color: Colors.white)),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton.icon(
+                          icon: const Icon(Icons.delete),
+                          label: const Text('Eliminar'),
+                          onPressed: _confirmDelete,
+                        ),
+                        Row(
+                          children: [
+                            OutlinedButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('Descartar'),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              onPressed: _save,
+                              child: const Text('Guardar y cerrar'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
             ),
           ],
         ),
@@ -1962,24 +2005,66 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
     );
   }
 
+  void _confirmDelete() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Confirmar eliminación'),
+        content: const Text(
+          '¿Está seguro que desea eliminar esta asistencia?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              widget.onDelete();
+            },
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatusWorkflow() {
     final status = widget.attendance.status;
+    final steps = <Widget>[
+      _buildStatusChip(
+        'Por aprobar',
+        status == AttendanceStatus.ongoing ||
+            status == AttendanceStatus.completed,
+      ),
+      _buildStatusChip('Aprobada', status == AttendanceStatus.approved),
+      _buildStatusChip('Rechazado', status == AttendanceStatus.rejected),
+    ];
 
-    return Row(
-      children: [
-        _buildStatusChip(
-            'Por aprobar',
-            status == AttendanceStatus.ongoing ||
-                status == AttendanceStatus.completed),
-        const SizedBox(width: 8),
-        const Icon(Icons.chevron_right, color: Colors.grey),
-        const SizedBox(width: 8),
-        _buildStatusChip('Aprobada', status == AttendanceStatus.approved),
-        const SizedBox(width: 8),
-        const Icon(Icons.chevron_right, color: Colors.grey),
-        const SizedBox(width: 8),
-        _buildStatusChip('Rechazado', status == AttendanceStatus.rejected),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 430) {
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: steps,
+          );
+        }
+        return Row(
+          children: [
+            steps[0],
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right, color: Colors.grey),
+            const SizedBox(width: 8),
+            steps[1],
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right, color: Colors.grey),
+            const SizedBox(width: 8),
+            steps[2],
+          ],
+        );
+      },
     );
   }
 
