@@ -8,7 +8,7 @@ description: Build and deploy the application to Firebase Hosting
 
 | Target | Entry Point | Bundle Size | Deploys To |
 |--------|-------------|-------------|------------|
-| **Public Store** | `lib/main_store.dart` | **~4.1 MB** | vinabike-store.web.app |
+| **Public Store** | `lib/main_store.dart` | **~5.5 MB raw / ~1.56 MB gzip** | vinabike-store.web.app |
 | **ERP Admin** | `lib/main.dart` | ~9.2 MB | project-vinabike.web.app |
 
 **❌ NEVER build the store with `flutter build web` (uses main.dart = 9MB!)** 
@@ -58,7 +58,7 @@ flutter build web --release -t lib/main_store.dart -o build/web_store
 **⚠️ VERIFY after build:**
 ```powershell
 Get-Item build/web_store/main.dart.js | Select-Object Name, @{N='Size(MB)';E={[math]::Round($_.Length/1MB,2)}}
-# MUST be ~4MB! If it's ~9MB, you used the WRONG entry point!
+# Must pass scripts/check_storefront_bundle_budget.sh.
 ```
 
 ### 2.5 Generate Product SEO Snapshots (CRITICAL for Google Merchant)

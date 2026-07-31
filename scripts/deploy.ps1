@@ -54,7 +54,7 @@ flutter build web --release --pwa-strategy=none --dart-define=STORE_PERF_LOGS=$s
 bash ./scripts/check_storefront_bundle_budget.sh build/web_store
 
 Write-Host "Generating SEO snapshots..."
-dart run scripts/generate_product_seo_snapshots.dart --build-dir build/web_store --tenant-id 5443b130-cc28-45af-a420-cd500b288890 --store-url https://vinabike.cl --product-scope published
+dart run scripts/generate_product_seo_snapshots.dart --build-dir build/web_store --tenant-id 5443b130-cc28-45af-a420-cd500b288890 --expected-store-url https://vinabike.cl --product-scope published
 bash ./scripts/write_storefront_release_evidence.sh build/web_store $storeBuildCommit manual manual-powershell $storeBuildDirty
 
 Write-Host "Store bundle size:"

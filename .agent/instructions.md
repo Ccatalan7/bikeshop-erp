@@ -13,3 +13,9 @@ This file contains the Source of Truth for:
 - Deployment Workflows
 
 Load this context at the start of every session.
+
+## Database work
+For any Supabase/database task, read
+`@[docs/development/AGENT_DATABASE_CONTRACT.md]` first. It is the single entry
+point shared by every agent in this repository and routes to the authoritative
+policy and command guides. Do not restate database policy here.

@@ -30,6 +30,37 @@ sha256_file() {
   fi
 }
 
+sha256_text() {
+  if command -v shasum >/dev/null 2>&1; then
+    printf '%s' "$1" | shasum -a 256 | awk '{print $1}'
+  else
+    printf '%s' "$1" | sha256sum | awk '{print $1}'
+  fi
+}
+
+json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '%s' "$value"
+}
+
+# Append one audit line per guarded database invocation. Records identity and
+# outcome only: never SQL text, result values, or credentials.
+journal_append() {
+  local environment="$1" mode="$2" sql_sha="$3" source="$4" format="$5"
+  local max_rows="$6" allow_pii="$7" duration_s="$8" status="$9"
+  printf '{"ts":"%s","environment":"%s","mode":"%s","sql_sha256":"%s","source":"%s","format":"%s","max_rows":%s,"allow_pii":%s,"duration_s":%s,"exit_status":%s}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    "$(json_escape "$environment")" \
+    "$(json_escape "$mode")" \
+    "$sql_sha" \
+    "$(json_escape "$source")" \
+    "$(json_escape "$format")" \
+    "$max_rows" "$allow_pii" "$duration_s" "$status" \
+    >>"$DB_CACHE_DIR/journal.jsonl" 2>/dev/null || true
+}
+
 ensure_docker() {
   require_command docker
   if ! docker info >/dev/null 2>&1 && command -v colima >/dev/null 2>&1; then

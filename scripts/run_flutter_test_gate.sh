@@ -16,7 +16,9 @@ test_status=$?
 set -e
 
 if [[ "$test_status" -eq 0 ]]; then
-  echo '[flutter-test-gate] All Flutter tests passed.'
+  printf '\n[flutter-test-gate] Running browser-only Web Locks tests in Chrome\n'
+  "$flutter_bin" test --platform chrome test/unit/cart_lock_web_test.dart
+  echo '[flutter-test-gate] All Flutter and browser-only tests passed.'
   exit 0
 fi
 

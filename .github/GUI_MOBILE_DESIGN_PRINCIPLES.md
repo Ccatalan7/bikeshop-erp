@@ -701,12 +701,30 @@ Every record must contain these exact fields:
   or email addresses in navigation state; using tooltips as the only
   explanation; or copying the desktop split into an unrelated settings page
   without repeated comparison evidence.
+- **Correction (2026-07-27):** "One section at a time" bounds *what* is shown,
+  never how much care the shown section receives. The first implementation of
+  this record read the entry as a minimalism budget and produced a sparse page:
+  a peer column of explanatory prose consuming a quarter of the desktop
+  workspace, the body capped far below the available width, and panels that
+  rendered as invisible white blocks because the scheme left every
+  `surfaceContainer*` role undeclared. Restating the conditions: the section
+  header and its purpose belong immediately above the body it describes, the
+  ownership note closes the section as a footnote, and the body then uses the
+  remaining workspace width. A desktop navigator may be a persistent grouped
+  rail; below `900px` it recomposes into a scrollable labelled strip. Metrics
+  inside a work-owned section are legitimate when they change that section's
+  decision — the anti-pattern above is a dashboard placed *before* identity
+  work, not figures inside the section that owns them. Verify the rendered
+  screen, not only the widget test.
 - **Reference implementation:** `lib/shared/pages/my_profile_page.dart`,
   `lib/modules/settings/pages/user_management_page.dart`,
   `lib/shared/services/user_management_navigation.dart`, and
   `lib/modules/bikeshop/pages/client_logbook_page.dart`.
 - **Minimum test:** Exercise the profile and user-management routes at
-  `384x824`, `599/600`, `899/900`, and `1440x900`. Prove 48px targets,
+  `384x824`, `599/600`, `899/900`, and `1440x900`. For a profile linked to an
+  active employee, prove its labor sections render, that an unlinked identity
+  never exposes them, and that a failed labor read stays explicit and
+  retryable instead of rendering as an empty week. Prove 48px targets,
   increased text scale, semantics, keyboard/SafeArea behavior, profile-section
   draft preservation, and explicit dirty Back handling. Verify user-management
   access denial performs no overview request; audience/search/selection/scroll

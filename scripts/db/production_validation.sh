@@ -6,7 +6,10 @@ set -euo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
 readonly PRODUCTION_VALIDATION_PROJECT_REF="xzdvtzdqjeyqxnkqprtf"
-readonly PRODUCTION_VALIDATION_CACHE_FORMAT="2-public-acl"
+readonly PRODUCTION_VALIDATION_DIRECT_HOST="db.${PRODUCTION_VALIDATION_PROJECT_REF}.supabase.co"
+readonly PRODUCTION_VALIDATION_DIRECT_PORT="5432"
+readonly PRODUCTION_VALIDATION_CONNECT_TIMEOUT_SECONDS="10"
+readonly PRODUCTION_VALIDATION_CACHE_FORMAT="3-direct-ipv6-public-acl"
 readonly PRODUCTION_VALIDATION_CATALOG_SQL="$DB_ROOT/scripts/db/production_validation_catalog.sql"
 readonly PRODUCTION_VALIDATION_ACL_ROLES_SQL="$DB_ROOT/scripts/db/production_validation_acl_roles.sql"
 readonly PRODUCTION_VALIDATION_ROOT="${VINABIKE_PROD_VALIDATION_ROOT:-$DB_CACHE_DIR/production-validation}"
@@ -275,7 +278,14 @@ production_validation_cleanup_on_exit() {
       ;;
   esac
   production_validation_release_all_locks
-  unset PGPASSWORD PGHOST PGPORT PGDATABASE PGUSER PGOPTIONS
+  unset \
+    PGPASSWORD \
+    PGHOST \
+    PGPORT \
+    PGDATABASE \
+    PGUSER \
+    PGOPTIONS \
+    PGCONNECT_TIMEOUT
   return "$status"
 }
 
@@ -303,7 +313,6 @@ production_validation_try_local_runtime() {
 
 production_validation_guard_production_connection() {
   local linked_ref
-  local connection_ref
 
   [[ -f "$DB_ROOT/supabase/.temp/project-ref" ]] ||
     die "Linked Supabase project identity is unavailable"
@@ -311,17 +320,80 @@ production_validation_guard_production_connection() {
   [[ "$linked_ref" == "$PRODUCTION_VALIDATION_PROJECT_REF" ]] ||
     die "Linked project is not the approved production project"
 
-  configure_remote_pg production
-  connection_ref="${PGUSER#postgres.}"
-  [[ "$connection_ref" == "$PRODUCTION_VALIDATION_PROJECT_REF" ]] ||
-    die "Production connection identity does not match the approved project"
+  PGHOST="$PRODUCTION_VALIDATION_DIRECT_HOST"
+  PGPORT="$PRODUCTION_VALIDATION_DIRECT_PORT"
+  PGDATABASE="postgres"
+  PGUSER="postgres"
+  PGPASSWORD="$(
+    credential_value \
+      'Vinabike ERP Supabase database password' \
+      postgres \
+      SUPABASE_DB_PASSWORD
+  )"
+  PGCONNECT_TIMEOUT="$PRODUCTION_VALIDATION_CONNECT_TIMEOUT_SECONDS"
+  export \
+    PGHOST \
+    PGPORT \
+    PGDATABASE \
+    PGUSER \
+    PGPASSWORD \
+    PGCONNECT_TIMEOUT
+
+  [[ "$PGHOST" == "db.${linked_ref}.supabase.co" ]] ||
+    die "Production validation direct host does not match the approved project"
+  [[ "$PGPORT" == "5432" && "$PGDATABASE" == "postgres" &&
+    "$PGUSER" == "postgres" ]] ||
+    die "Production validation direct connection parameters are invalid"
 
   export PGOPTIONS
   PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=120000 -c search_path=public,extensions,pg_catalog"
+
+  production_validation_verify_direct_connection
+}
+
+production_validation_verify_direct_connection() {
+  local connection_identity
+  local server_address
+  local server_port
+  local database_user
+  local database_name
+
+  connection_identity="$(
+    psql "dbname=postgres" \
+      -XAtq \
+      -F $'\t' \
+      -v ON_ERROR_STOP=1 \
+      -c "select inet_server_addr()::text,
+                 inet_server_port(),
+                 current_user,
+                 current_database()"
+  )"
+  [[ "$(printf '%s\n' "$connection_identity" | wc -l | tr -d '[:space:]')" == "1" ]] ||
+    die "Production direct-connection preflight returned an unexpected result"
+  IFS=$'\t' read -r \
+    server_address \
+    server_port \
+    database_user \
+    database_name \
+    <<<"$connection_identity"
+
+  [[ "$server_address" == *:* ]] ||
+    die "Production direct endpoint did not establish the required IPv6 connection"
+  [[ "$server_port" == "$PRODUCTION_VALIDATION_DIRECT_PORT" ]] ||
+    die "Production direct endpoint reported an unexpected server port"
+  [[ "$database_user" == "postgres" && "$database_name" == "postgres" ]] ||
+    die "Production direct endpoint identity is not the approved database"
 }
 
 production_validation_clear_remote_connection() {
-  unset PGPASSWORD PGHOST PGPORT PGDATABASE PGUSER PGOPTIONS
+  unset \
+    PGPASSWORD \
+    PGHOST \
+    PGPORT \
+    PGDATABASE \
+    PGUSER \
+    PGOPTIONS \
+    PGCONNECT_TIMEOUT
 }
 
 production_validation_fetch_live_identity() {

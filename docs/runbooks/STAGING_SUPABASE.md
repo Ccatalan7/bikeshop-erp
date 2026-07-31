@@ -40,6 +40,14 @@ owner may reactivate it explicitly.
   repository write guard, exact project-identity checks, task-level
   authorization, a reviewed forward and recovery plan, and post-write
   read-back.
+- Hosted reads minimize disclosure by default: a bounded row cap and a
+  rejection of star projections over the tables listed in
+  `scripts/db/sensitive_tables.txt`. Read personal columns by name, and use the
+  documented override only when the task genuinely requires the full row. This
+  limits accidental disclosure into transcripts, logs, and reports; RLS and
+  grants remain the authorization boundary.
+- Every guarded invocation is journaled to ignored local evidence recording
+  identity and outcome only — never SQL text, result values, or credentials.
 - Credentials come only from macOS Keychain, an approved Windows/CI secret
   store, or provider-authenticated tooling. Never print, copy, log, commit, or
   place private credential values in commands that will be reported.

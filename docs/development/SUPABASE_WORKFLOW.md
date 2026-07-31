@@ -21,6 +21,8 @@ which must not be persisted in `.env` or shell startup files.
 
 | Need | Canonical path |
 |---|---|
+| Where an agent starts | `docs/development/AGENT_DATABASE_CONTRACT.md`, then `just db-preflight` |
+| What the wrapper accepts and enforces | `bash scripts/db/query.sh --help` / `just db-help` |
 | Local or hosted SQL read | `scripts/db/query.sh` or the corresponding `just` recipe |
 | Authorized hosted SQL write | `scripts/db/query.sh ... --write` with the exact write confirmation |
 | Local pgTAP | `scripts/db/test.sh` / `just db-test` |
@@ -40,7 +42,15 @@ binary directly for control-plane work either; use `scripts/supabase_cli.sh`.
 
 ## Session preflight
 
-Run once at the start of a database task:
+Run once at the start of a database task, not before every command:
+
+```bash
+just db-preflight
+```
+
+That single recipe runs the CLI version check, the linked-ref assertion, the
+hosted control-plane project list, and `scripts/db/status.sh`. The individual
+commands remain available when a step needs to be inspected on its own:
 
 ```bash
 cd /Users/Claudio/Dev/bikeshop-erp
@@ -164,6 +174,48 @@ Formats are `table`, `csv`, and `json`. Hosted reads run in a read-only
 transaction with a 30-second timeout. The wrapper rejects transaction escape
 statements. Batch related read-only evidence into one query/file where that
 reduces repeated connections and remains reviewable.
+
+Two further defaults apply to hosted reads, and to hosted reads only. The local
+stack holds synthetic data and is unrestricted; a write is already gated by
+explicit confirmation and task authorization.
+
+**Row cap.** A single-statement `SELECT`/`WITH` hosted read returns at most 200
+rows. The cap is announced on stderr, so a truncated result is never mistaken
+for a complete one. Multi-statement input and `--file` are not capped.
+
+```bash
+bash scripts/db/query.sh production --max-rows 2000 \
+  --sql "select id, status from operations where created_at >= now() - interval '7 days'"
+
+bash scripts/db/query.sh production --max-rows 0 \
+  --sql "select count(*) over () from stock_movements"
+```
+
+**Sensitive-column guard.** A star projection (`select *`, `select t.*`) that
+reads `from`/`join` a table listed in `scripts/db/sensitive_tables.txt` is
+rejected. Name the columns the task needs. `count(*)`, aggregates, and explicit
+column lists are unaffected, including on those tables.
+
+```bash
+# rejected: dumps every personal column of every matched customer
+bash scripts/db/query.sh production --sql "select * from customers limit 50"
+
+# correct
+bash scripts/db/query.sh production \
+  --sql "select id, tenant_id, is_active from customers limit 50"
+```
+
+`--allow-pii` overrides the guard when the task genuinely needs the whole row.
+It is recorded in the journal. Keep the result out of committed files and
+reports. Extend `sensitive_tables.txt` whenever a table starts storing personal
+data; the guard limits accidental disclosure and is not an access-control
+boundary, which remains RLS and grants.
+
+**Audit journal.** Every invocation appends one line to `.tmp/db/journal.jsonl`
+with timestamp, environment, read/write mode, SQL SHA-256, source, format, caps,
+duration, and exit status. It never contains SQL text, result values, or
+credentials. It is git-ignored local evidence: cite it when reconstructing what
+a session did against production, and do not treat it as a deliverable.
 
 Useful guarded diagnostics:
 

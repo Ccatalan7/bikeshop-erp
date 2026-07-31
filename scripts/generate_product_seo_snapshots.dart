@@ -1,8 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
+import 'package:crypto/crypto.dart';
+import 'package:vinabike_erp/modules/website/models/website_block_public_visibility.dart';
 import 'package:vinabike_erp/modules/website/models/website_catalog_presentation.dart';
+import 'package:vinabike_erp/modules/website/models/website_seo_settings_aliases.dart';
 import 'package:vinabike_erp/public_store/models/public_commerce_product_projection.dart';
+import 'package:vinabike_erp/public_store/models/public_product_seo_copy.dart';
 
 /// Generates static HTML "SEO snapshots" for product routes.
 ///
@@ -26,21 +31,85 @@ import 'package:vinabike_erp/public_store/models/public_commerce_product_project
 ///   dart run scripts/generate_product_seo_snapshots.dart \
 ///     --build-dir build/web_store \
 ///     --tenant-id 5443b130-cc28-45af-a420-cd500b288890 \
-///     --store-url https://vinabike.cl
+///     --expected-store-url https://vinabike.cl
 void main(List<String> args) async {
-  final parsed = _parseArgs(args);
+  late final Map<String, String> parsed;
+  try {
+    parsed = _parseArgs(args);
+  } on FormatException catch (error) {
+    stderr.writeln('❌ ${error.message}');
+    exitCode = 2;
+    return;
+  }
 
-  final buildDirPath = parsed['build-dir'] ?? 'build/web_store';
-  final tenantId = parsed['tenant-id'];
-  final storeUrl = parsed['store-url'] ?? 'https://vinabike.cl';
+  final buildDirPath = (parsed['build-dir'] ?? 'build/web_store').trim();
+  final tenantId = parsed['tenant-id']?.trim();
+  final publicationEvidencePath = parsed['publication-evidence-file']?.trim();
+  if (parsed.containsKey('store-url')) {
+    stderr.writeln(
+      '❌ --store-url ya no es una fuente de verdad; usa '
+      '--expected-store-url solo como guard de website_settings.store_url',
+    );
+    exitCode = 2;
+    return;
+  }
+  final rawExpectedStoreUrl = (parsed['expected-store-url'] ?? '').trim();
+  final expectedStoreUrl = rawExpectedStoreUrl.isEmpty
+      ? ''
+      : WebsiteSeoSettingsAliases.normalizeHttpsOrigin(rawExpectedStoreUrl);
   final productScope =
       (parsed['product-scope'] ?? 'published').trim().toLowerCase();
   final onlyMerchant = productScope == 'merchant';
 
+  if (buildDirPath.isEmpty) {
+    stderr.writeln('❌ --build-dir no puede estar vacío');
+    exitCode = 2;
+    return;
+  }
   if (tenantId == null || tenantId.isEmpty) {
     stderr.writeln('❌ Missing --tenant-id');
     exitCode = 2;
     return;
+  }
+  if (!_uuidPattern.hasMatch(tenantId)) {
+    stderr.writeln('❌ --tenant-id debe ser un UUID canónico');
+    exitCode = 2;
+    return;
+  }
+  if (productScope != 'published' && productScope != 'merchant') {
+    stderr.writeln(
+      '❌ --product-scope debe ser "published" o "merchant"',
+    );
+    exitCode = 2;
+    return;
+  }
+  if (parsed.containsKey('publication-evidence-file') &&
+      publicationEvidencePath!.isEmpty) {
+    stderr.writeln('❌ --publication-evidence-file no puede estar vacío');
+    exitCode = 2;
+    return;
+  }
+  if (rawExpectedStoreUrl.isNotEmpty && expectedStoreUrl.isEmpty) {
+    stderr.writeln(
+      '❌ --expected-store-url debe ser un origen HTTPS público sin rutas ni parámetros',
+    );
+    exitCode = 2;
+    return;
+  }
+
+  File? publicationEvidenceFile;
+  if (publicationEvidencePath != null) {
+    try {
+      publicationEvidenceFile = prepareSeoPublicationEvidenceOutput(
+        publicationEvidencePath,
+      );
+    } on Object catch (error) {
+      stderr.writeln(
+        '❌ No se puede preparar --publication-evidence-file: $error',
+      );
+      exitCode = 2;
+      return;
+    }
   }
 
   final buildDir = Directory(buildDirPath);
@@ -80,15 +149,53 @@ void main(List<String> args) async {
 
   final baseIndexHtml = await baseIndexFile.readAsString();
 
-  final settings = await _fetchWebsiteSettings(
-    supabaseUrl: supabaseUrl,
-    tenantId: tenantId,
-    serviceRoleKey: serviceRoleKey,
-  );
+  Future<SeoOwnerSourceSnapshot> readSeoOwnerSource() {
+    return _readSeoOwnerSourceSnapshot(
+      supabaseUrl: supabaseUrl,
+      tenantId: tenantId,
+      serviceRoleKey: serviceRoleKey,
+    );
+  }
 
-  final storeName = _getSetting(settings, 'seo_business_name') ??
-      _getSetting(settings, 'store_name') ??
-      'Vinabike';
+  final seoOwnerSource = await fetchConsistentSeoOwnerSourceSnapshot(
+    readOnce: readSeoOwnerSource,
+  );
+  final settings = seoOwnerSource.websiteSettings.values;
+
+  final storeUrl = WebsiteSeoSettingsAliases.normalizeHttpsOrigin(
+    _getSetting(settings, 'store_url') ?? '',
+  );
+  if (storeUrl.isEmpty) {
+    stderr.writeln(
+      '❌ website_settings.store_url debe contener el origen HTTPS canónico',
+    );
+    exitCode = 2;
+    return;
+  }
+  if (expectedStoreUrl.isNotEmpty && expectedStoreUrl != storeUrl) {
+    stderr.writeln(
+      '❌ --expected-store-url no coincide con website_settings.store_url',
+    );
+    exitCode = 2;
+    return;
+  }
+
+  final storeName = _cleanText(
+    _getSetting(settings, 'seo_business_name') ??
+        _getSetting(settings, 'store_name') ??
+        '',
+  );
+  if (storeName.isEmpty) {
+    stderr.writeln(
+      '❌ website_settings.seo_business_name/store_name es obligatorio',
+    );
+    exitCode = 2;
+    return;
+  }
+  final storeLocality = _getSetting(settings, 'seo_address_city') ??
+      _getSetting(settings, 'seo_address_locality') ??
+      '';
+  final contactFacts = SeoContactFacts.fromSettings(settings);
 
   final titleTemplate = _getSetting(settings, 'seo_product_title_template') ??
       '{product_name} | $storeName';
@@ -96,21 +203,16 @@ void main(List<String> args) async {
       _getSetting(settings, 'seo_product_description_template') ??
           '{product_description}';
 
-  final productCandidates = await _fetchProducts(
-    supabaseUrl: supabaseUrl,
-    tenantId: tenantId,
-    serviceRoleKey: serviceRoleKey,
+  // Redirect identity is owned by every published website product, regardless
+  // of the optional snapshot scope. Loading the complete owner set once keeps
+  // a Merchant-only diagnostic build from erasing redirects for ordinary
+  // published products.
+  final publishedProductOwners = seoOwnerSource.publishedProductOwners;
+  final productCandidates = selectSeoSnapshotCandidatesForScope(
+    publishedProducts: publishedProductOwners,
     onlyMerchant: onlyMerchant,
   );
-  final publicAvailability = await _fetchPublicProductAvailability(
-    supabaseUrl: supabaseUrl,
-    tenantId: tenantId,
-    serviceRoleKey: serviceRoleKey,
-    productIds: productCandidates
-        .map((product) => (product['id'] ?? '').toString())
-        .where((id) => id.isNotEmpty)
-        .toList(growable: false),
-  );
+  final publicAvailability = seoOwnerSource.publicAvailability;
   final products = productCandidates
       .where((product) =>
           publicAvailability.containsKey((product['id'] ?? '').toString()))
@@ -122,22 +224,23 @@ void main(List<String> args) async {
       'inventory_qty': quantity,
     };
   }).toList(growable: false);
-  final resolvedBrandNamesById = await _fetchProductBrandNames(
-    supabaseUrl: supabaseUrl,
+  final resolvedBrandNamesById = buildTenantSafeProductBrandNameMap(
+    brandRows: seoOwnerSource.brandRows,
     tenantId: tenantId,
-    serviceRoleKey: serviceRoleKey,
-    brandIds: products
+    requestedBrandIds: publishedProductOwners
         .map((product) => (product['brand_id'] ?? '').toString())
         .where((id) => id.trim().isNotEmpty),
   );
-  final activeCategoryRows = await _fetchActiveProductCategories(
-    supabaseUrl: supabaseUrl,
-    tenantId: tenantId,
-    serviceRoleKey: serviceRoleKey,
-  );
+  final activeCategoryRows = seoOwnerSource.activeCategoryRows;
   final presentationRegistry = WebsiteCatalogPresentationRegistry.decode(
     settings[websiteCatalogPresentationsSettingKey],
   );
+  final catalogPresentation = presentationRegistry.forCatalogRoot(
+        WebsiteCatalogRoot.products,
+      ) ??
+      WebsiteCatalogPresentation.catalogRoot(WebsiteCatalogRoot.products);
+  final catalogIndexable =
+      catalogPresentation.allowIndexing && products.isNotEmpty;
   final categories = buildCanonicalCategorySeoProjections(
     products: products,
     activeCategories: activeCategoryRows,
@@ -148,29 +251,68 @@ void main(List<String> args) async {
   final categoriesById = {
     for (final category in categories) category.categoryId: category,
   };
-  final productUrlAliases = await _fetchProductUrlAliases(
-    supabaseUrl: supabaseUrl,
-    tenantId: tenantId,
-    serviceRoleKey: serviceRoleKey,
+  final activeCategoryPathsById = buildActiveCategoryPathMap(
+    activeCategories: activeCategoryRows,
   );
-  final pages = await _fetchWebsitePages(
-    supabaseUrl: supabaseUrl,
-    tenantId: tenantId,
-    serviceRoleKey: serviceRoleKey,
+  final productUrlAliases = seoOwnerSource.productUrlAliases;
+  final websiteContentSnapshot = seoOwnerSource.websiteContent;
+  final pages = websiteContentSnapshot.pages;
+  final pageBlocks = websiteContentSnapshot.pageBlocks;
+  final dynamicCmsPages = buildPublishedDynamicCmsSeoProjections(
+    pages: pages,
+    pageBlocks: pageBlocks,
+    storeUrl: storeUrl,
+    storeName: storeName,
+    globalDescription: _getSetting(settings, 'seo_meta_description') ??
+        _getSetting(settings, 'meta_description') ??
+        _getSetting(settings, 'store_description') ??
+        '',
+    globalKeywords: _getSetting(settings, 'seo_meta_keywords') ??
+        _getSetting(settings, 'meta_keywords') ??
+        '',
+    globalImageUrl: _getSetting(settings, 'seo_og_image') ??
+        _getSetting(settings, 'logo_url') ??
+        '',
+    contactFacts: contactFacts,
+    settingsUpdatedAt: seoOwnerSource.websiteSettings.updatedAt,
   );
+  final eligibleStaticTrustPagePaths = buildPublishedStaticTrustPagePaths(
+    pages: pages,
+    pageBlocks: pageBlocks,
+  );
+  final publicFallbackPaths = <String>{
+    if (catalogIndexable) '/productos',
+    ...eligibleStaticTrustPagePaths,
+    ...dynamicCmsPages.map((page) => page.canonicalPath),
+  };
   final baseHtml = _buildHomepageHtml(
     baseHtml: baseIndexHtml,
     storeUrl: storeUrl,
     storeName: storeName,
-    pages: pages,
+    globalTitle: _getSetting(settings, 'seo_meta_title') ??
+        _getSetting(settings, 'meta_title') ??
+        storeName,
+    globalDescription: _getSetting(settings, 'seo_meta_description') ??
+        _getSetting(settings, 'meta_description') ??
+        _getSetting(settings, 'store_description') ??
+        '',
+    globalKeywords: _getSetting(settings, 'seo_meta_keywords') ??
+        _getSetting(settings, 'meta_keywords') ??
+        '',
+    globalImageUrl: _getSetting(settings, 'seo_og_image') ??
+        _getSetting(settings, 'logo_url') ??
+        '',
+    publicFallbackPaths: publicFallbackPaths,
   );
   await baseIndexFile.writeAsString(baseHtml);
-  final pageBlocks = await _fetchWebsiteBlocksForPages(
-    supabaseUrl: supabaseUrl,
-    pages: pages,
-    serviceRoleKey: serviceRoleKey,
-  );
 
+  // Redirect identity follows owner publication, not transient catalog
+  // availability. A product can leave the current snapshot/sitemap because it
+  // is out of stock while its old indexed UUID must still 301 to the same
+  // canonical product route.
+  final canonicalPathByProductId = buildSeoProductCanonicalPathLedger(
+    publishedProducts: publishedProductOwners,
+  );
   final outDir = Directory(pathJoin(buildDir.path, 'productos'));
   // This directory is generated output. Recreate it so a product removed from
   // the current public visibility policy cannot survive as a stale soft-404
@@ -181,15 +323,14 @@ void main(List<String> args) async {
   outDir.createSync(recursive: true);
 
   final productHtmlById = <String, String>{};
-  final canonicalPathByProductId = <String, String>{};
   var written = 0;
   for (final product in products) {
-    final canonicalCategory =
-        categoriesById[(product['category_id'] ?? '').toString()];
+    final productCategoryId = (product['category_id'] ?? '').toString().trim();
+    final canonicalCategory = categoriesById[productCategoryId];
     final commerce = projectSeoSnapshotCommerceProduct(
       product,
       resolvedBrandNamesById: resolvedBrandNamesById,
-      categoryPath: canonicalCategory?.fullPath,
+      categoryPath: activeCategoryPathsById[productCategoryId],
     );
     final id = commerce.id;
     if (id.isEmpty) continue;
@@ -200,12 +341,6 @@ void main(List<String> args) async {
     final productCategory = commerce.categoryPath;
     final productSearchTerms = _stringList(product['website_search_terms']);
     final baseProductDescription = _cleanText(commerce.description);
-    final productSearchPhrase =
-        _productLocalSearchPhrase(searchTerms: productSearchTerms);
-    final productDescription = _appendProductSearchPhrase(
-      description: baseProductDescription,
-      searchPhrase: productSearchPhrase,
-    );
 
     final priceNum = commerce.price > 0 ? commerce.price : null;
     final currency = commerce.currency;
@@ -213,44 +348,46 @@ void main(List<String> args) async {
     final imageUrls = commerce.imageUrls;
     final imageUrl = imageUrls.isEmpty ? '' : imageUrls.first;
 
-    final productPath = _publicProductPath(product);
+    final productPath =
+        canonicalPathByProductId[id] ?? _publicProductPath(product);
     final productUrl = _joinUrl(storeUrl, productPath);
-
-    final variables = <String, String>{
-      'store_name': storeName,
-      'product_name': productName,
-      'product_sku': productSku,
-      'product_brand': productBrand,
-      'product_price': priceNum?.toStringAsFixed(0) ?? '',
-      'product_description': productDescription,
-    };
 
     final seoTitleOverride =
         _cleanText((product['website_seo_title'] ?? '').toString());
-    final baseTitle =
-        _truncate(_cleanText(_applyTemplate(titleTemplate, variables)), 120);
-    final title = seoTitleOverride.isNotEmpty
-        ? _truncate(seoTitleOverride, 120)
-        : _buildProductSeoTitle(
-            baseTitle: baseTitle.isNotEmpty ? baseTitle : productName,
-            storeName: storeName,
-            searchPhrase: productSearchPhrase,
-          );
     final seoDescriptionOverride =
         _cleanText((product['website_seo_description'] ?? '').toString());
-    final description = _truncate(
-      seoDescriptionOverride.isNotEmpty
-          ? seoDescriptionOverride
-          : _cleanText(_applyTemplate(descriptionTemplate, variables)),
-      320,
+    final seoCopy = resolvePublicProductSeoCopyFromInput(
+      PublicProductSeoCopyInput(
+        seoTitleOverride: seoTitleOverride,
+        seoDescriptionOverride: seoDescriptionOverride,
+        titleTemplate: titleTemplate,
+        descriptionTemplate: descriptionTemplate,
+        storeName: storeName,
+        locality: storeLocality,
+        searchTerms: productSearchTerms,
+        product: PublicProductSeoProductInput(
+          name: productName,
+          sku: productSku,
+          price: priceNum ?? 0,
+          brand: productBrand,
+          description: baseProductDescription,
+          categoryPath: productCategory,
+        ),
+      ),
     );
+    final fallbackSeoDescription = buildPublicProductSeoDescription(
+      product: commerce,
+      storeName: storeName,
+    );
+    final title = seoCopy.title;
+    final description = seoCopy.description;
 
     final html = _buildProductHtml(
       baseHtml: baseHtml,
       title: title.isNotEmpty ? title : productName,
       description: description.isNotEmpty
           ? description
-          : _truncate(productDescription, 320),
+          : _truncate(fallbackSeoDescription, 320),
       canonicalUrl: productUrl,
       ogImageUrl: imageUrl,
       jsonLdProduct: _buildProductJsonLd(
@@ -262,7 +399,10 @@ void main(List<String> args) async {
       ),
       fallbackHtml: _buildProductFallbackHtml(
         title: productName,
-        description: baseProductDescription,
+        description: baseProductDescription.isNotEmpty
+            ? baseProductDescription
+            : fallbackSeoDescription,
+        storeName: storeName,
         canonicalUrl: productUrl,
         imageUrl: imageUrl,
         productBrand: productBrand,
@@ -297,12 +437,11 @@ void main(List<String> args) async {
       );
     }
     productHtmlById[id] = html;
-    canonicalPathByProductId[id] = productPath;
     written++;
   }
 
-  final redirectAliases = _buildProductRedirectAliases(
-    products: products,
+  final redirectAliases = buildSeoProductRedirectAliases(
+    products: publishedProductOwners,
     aliases: productUrlAliases,
     canonicalPathByProductId: canonicalPathByProductId,
   );
@@ -323,7 +462,7 @@ void main(List<String> args) async {
     );
     aliasSnapshotsWritten++;
   }
-  final firebaseRedirectsWritten = await _writeFirebaseStorefrontRedirects(
+  final firebaseRedirectPlan = await _buildFirebaseStorefrontRedirectPlan(
     firebaseConfigFile: File(parsed['firebase-config'] ?? 'firebase.json'),
     manifestFile: File(
       parsed['redirect-manifest'] ?? 'scripts/generated_product_redirects.json',
@@ -331,24 +470,19 @@ void main(List<String> args) async {
     productRedirects: redirectAliases,
     categoryRedirects: categoryRedirectAliases,
     canonicalPathByProductId: canonicalPathByProductId,
+    expectedPublicDirectory: buildDir.path,
   );
 
   final catalogUrl = _joinUrl(storeUrl, '/productos');
-  final catalogPresentation = presentationRegistry.forCatalogRoot(
-        WebsiteCatalogRoot.products,
-      ) ??
-      WebsiteCatalogPresentation.catalogRoot(WebsiteCatalogRoot.products);
   final catalogTitle = catalogPresentation.seoTitle.trim().isNotEmpty
       ? catalogPresentation.seoTitle.trim()
-      : 'Productos para bicicletas | $storeName Viña del Mar';
+      : 'Productos para bicicletas | $storeName'
+          '${storeLocality.isEmpty ? '' : ' $storeLocality'}';
   final catalogDescription =
       catalogPresentation.seoDescription.trim().isNotEmpty
           ? catalogPresentation.seoDescription.trim()
-          : 'Compra bicicletas, repuestos y accesorios en $storeName. '
-              'Catálogo online con precios en CLP, retiro en tienda y '
-              'despacho en Chile.';
-  final catalogIndexable =
-      catalogPresentation.allowIndexing && products.isNotEmpty;
+          : 'Catálogo de productos publicados por $storeName con precios '
+              'informados en CLP.';
   await File(pathJoin(outDir.path, 'index.html')).writeAsString(
     _buildCategoryHtml(
       baseHtml: baseHtml,
@@ -362,6 +496,7 @@ void main(List<String> args) async {
         storeUrl: storeUrl,
         storeName: storeName,
         catalogUrl: catalogUrl,
+        description: catalogDescription,
         resolvedBrandNamesById: resolvedBrandNamesById,
       ),
       fallbackHtml: _buildCatalogFallbackHtml(
@@ -400,6 +535,7 @@ void main(List<String> args) async {
       fallbackHtml: _buildCategoryFallbackHtml(
         title: category.displayTitle,
         description: _truncate(_cleanText(description), 320),
+        storeName: storeName,
         category: category,
       ),
     );
@@ -439,12 +575,10 @@ void main(List<String> args) async {
 
   stdout.writeln('✅ Product SEO snapshots generated: $written');
   stdout.writeln('✅ Product alias snapshots generated: $aliasSnapshotsWritten');
-  stdout.writeln(
-      '✅ Firebase storefront 301 redirects generated: $firebaseRedirectsWritten');
   stdout.writeln('✅ Category SEO pages generated: $categoryPagesWritten');
   stdout.writeln(
       '✅ Category alias noindex snapshots generated: $categoryAliasPagesWritten');
-  final staticTrustPagesWritten = await _writeStaticTrustPages(
+  final staticTrustPagePaths = await _writeStaticTrustPages(
     buildDir: buildDir,
     baseHtml: baseHtml,
     storeUrl: storeUrl,
@@ -452,19 +586,64 @@ void main(List<String> args) async {
     settings: settings,
     pages: pages,
     pageBlocks: pageBlocks,
+    availablePublicPaths: publicFallbackPaths,
   );
-  stdout
-      .writeln('✅ Trust/policy SEO pages generated: $staticTrustPagesWritten');
+  stdout.writeln(
+      '✅ Trust/policy SEO pages generated: ${staticTrustPagePaths.length}');
+  final dynamicCmsPagesWritten = await _writeStaticDynamicCmsPages(
+    buildDir: buildDir,
+    baseHtml: baseHtml,
+    storeUrl: storeUrl,
+    storeName: storeName,
+    pages: dynamicCmsPages,
+    availablePublicPaths: publicFallbackPaths,
+  );
+  stdout.writeln('✅ Dynamic CMS SEO pages generated: $dynamicCmsPagesWritten');
   await _writeCrawlerFiles(
     buildDir: buildDir,
     storeUrl: storeUrl,
     products: products,
     categories: categories,
-    pages: pages,
+    websitePages: pages,
+    websitePageBlocks: pageBlocks,
+    dynamicCmsPages: dynamicCmsPages,
+    staticTrustPagePaths: staticTrustPagePaths,
     productsCatalogIndexable: catalogIndexable,
     resolvedBrandNamesById: resolvedBrandNamesById,
+    websiteSettingsUpdatedAt: seoOwnerSource.websiteSettings.updatedAt,
+    brandRows: seoOwnerSource.brandRows,
+    activeCategoryRows: activeCategoryRows,
   );
   stdout.writeln('✅ robots.txt and sitemap.xml generated');
+  await validateGeneratedSeoArtifacts(
+    buildDir: buildDir,
+    storeUrl: storeUrl,
+    staticTrustPagePaths: staticTrustPagePaths,
+    expectedLocalBusinessIdentity:
+        buildExpectedLocalBusinessIdentity(settings, storeUrl: storeUrl),
+  );
+  stdout.writeln('✅ Generated SEO artifact contract validated');
+  await assertSeoOwnerSourceSnapshotIsCurrent(
+    expected: seoOwnerSource,
+    readOnce: readSeoOwnerSource,
+  );
+  stdout.writeln('✅ Complete SEO owner-source revision revalidated');
+  if (publicationEvidenceFile != null) {
+    await writeSeoPublicationEvidenceFile(
+      outputFile: publicationEvidenceFile,
+      ownerSourceSha256: seoOwnerSource.ownerSourceSha256,
+      buildInputSha256: seoOwnerSource.buildInputSha256,
+    );
+    stdout.writeln(
+      '✅ Deterministic publication evidence written to '
+      '${publicationEvidenceFile.path}',
+    );
+  }
+  await firebaseRedirectPlan.apply();
+  stdout.writeln(
+    '✅ Firebase storefront 301 redirects generated: '
+    '${firebaseRedirectPlan.redirectCount}',
+  );
 }
 
 // -----------------------------------------------------------------------------
@@ -475,24 +654,33 @@ String _buildHomepageHtml({
   required String baseHtml,
   required String storeUrl,
   required String storeName,
-  required List<Map<String, dynamic>> pages,
+  required String globalTitle,
+  required String globalDescription,
+  required String globalKeywords,
+  required String globalImageUrl,
+  required Set<String> publicFallbackPaths,
 }) {
-  Map<String, dynamic>? homePage;
-  for (final page in pages) {
-    final slug = (page['slug'] ?? '').toString().trim();
-    if (page['is_home'] == true || slug == 'home' || slug == 'inicio') {
-      homePage = page;
-      break;
-    }
-  }
-
-  final title = _cleanText((homePage?['meta_title'] ?? '').toString());
-  final description =
-      _cleanText((homePage?['meta_description'] ?? '').toString());
-  if (title.isEmpty && description.isEmpty) return baseHtml;
+  final title = _cleanText(globalTitle);
+  final description = _cleanText(globalDescription);
+  final keywords = _cleanText(globalKeywords);
+  final imageUrl = _cleanText(globalImageUrl);
+  var html = _rewriteHomepageFallbackLinks(
+    baseHtml: baseHtml,
+    publicPaths: publicFallbackPaths,
+  );
+  html = _replaceLinkHref(html, rel: 'canonical', href: storeUrl);
+  html = _replaceOrInsertMetaName(
+    html,
+    name: 'robots',
+    content: 'index,follow',
+  );
+  html = _replaceOrInsertMetaName(
+    html,
+    name: 'googlebot',
+    content: 'index,follow',
+  );
 
   final effectiveTitle = title.isNotEmpty ? _truncate(title, 120) : storeName;
-  var html = baseHtml;
   html = _replaceTag(
     html,
     RegExp(r'<title>.*?</title>', dotAll: true),
@@ -506,7 +694,13 @@ String _buildHomepageHtml({
       content: _truncate(description, 320),
     );
   }
-  html = _replaceLinkHref(html, rel: 'canonical', href: storeUrl);
+  if (keywords.isNotEmpty) {
+    html = _replaceOrInsertMetaName(
+      html,
+      name: 'keywords',
+      content: keywords,
+    );
+  }
   html = _replaceMetaProperty(html, property: 'og:url', content: storeUrl);
   html = _replaceMetaProperty(
     html,
@@ -518,6 +712,18 @@ String _buildHomepageHtml({
       html,
       property: 'og:description',
       content: _truncate(description, 320),
+    );
+  }
+  if (imageUrl.isNotEmpty) {
+    html = _replaceOrInsertMetaProperty(
+      html,
+      property: 'og:image',
+      content: imageUrl,
+    );
+    html = _replaceOrInsertMetaName(
+      html,
+      name: 'twitter:image',
+      content: imageUrl,
     );
   }
   html = _replaceMetaName(html, name: 'twitter:url', content: storeUrl);
@@ -534,6 +740,84 @@ String _buildHomepageHtml({
     );
   }
   return html;
+}
+
+String buildHomepageSeoHtml({
+  required String baseHtml,
+  required String storeUrl,
+  required String storeName,
+  required String globalTitle,
+  required String globalDescription,
+  String globalKeywords = '',
+  String globalImageUrl = '',
+  Set<String> publicFallbackPaths = const {},
+}) {
+  return _buildHomepageHtml(
+    baseHtml: baseHtml,
+    storeUrl: storeUrl,
+    storeName: storeName,
+    globalTitle: globalTitle,
+    globalDescription: globalDescription,
+    globalKeywords: globalKeywords,
+    globalImageUrl: globalImageUrl,
+    publicFallbackPaths: publicFallbackPaths,
+  );
+}
+
+String _rewriteHomepageFallbackLinks({
+  required String baseHtml,
+  required Set<String> publicPaths,
+}) {
+  final homepageMain = RegExp(
+    r'<main class="storefront-nojs-fallback">.*?</main>',
+    caseSensitive: false,
+    dotAll: true,
+  );
+  final match = homepageMain.firstMatch(baseHtml);
+  if (match == null) return baseHtml;
+
+  var mainHtml = match.group(0)!;
+  final primaryLinks = const <(String, String)>[
+    ('/productos', 'Productos'),
+    ('/servicios', 'Servicios'),
+    ('/contacto', 'Contacto'),
+  ]
+      .where((entry) => publicPaths.contains(entry.$1))
+      .map(
+        (entry) =>
+            '<a href="${_escapeHtml(entry.$1)}">${_escapeHtml(entry.$2)}</a>',
+      )
+      .join('\n          ');
+  final legalLinks = _trustPageDefinitions()
+      .entries
+      .where((entry) => publicPaths.contains('/${entry.key}'))
+      .map(
+        (entry) => '<a href="/${_escapeHtml(entry.key)}">'
+            '${_escapeHtml(entry.value.navLabel)}</a>',
+      )
+      .join('\n          ');
+
+  mainHtml = mainHtml.replaceFirst(
+    RegExp(
+      r'<nav aria-label="Navegación principal">.*?</nav>',
+      caseSensitive: false,
+      dotAll: true,
+    ),
+    '<nav aria-label="Navegación principal">\n'
+    '          $primaryLinks\n'
+    '        </nav>',
+  );
+  mainHtml = mainHtml.replaceFirst(
+    RegExp(
+      r'<footer aria-label="Información legal">.*?</footer>',
+      caseSensitive: false,
+      dotAll: true,
+    ),
+    '<footer aria-label="Información legal">\n'
+    '          $legalLinks\n'
+    '        </footer>',
+  );
+  return baseHtml.replaceFirst(homepageMain, mainHtml);
 }
 
 String _buildProductHtml({
@@ -555,6 +839,16 @@ String _buildProductHtml({
   html = _replaceMetaContent(html, name: 'description', content: description);
 
   html = _replaceLinkHref(html, rel: 'canonical', href: canonicalUrl);
+  html = _replaceOrInsertMetaName(
+    html,
+    name: 'robots',
+    content: 'index,follow',
+  );
+  html = _replaceOrInsertMetaName(
+    html,
+    name: 'googlebot',
+    content: 'index,follow',
+  );
 
   html = _replaceMetaProperty(html,
       property: 'og:type', content: isProduct ? 'product' : 'website');
@@ -605,7 +899,10 @@ String _buildProductHtml({
   }
 
   if (fallbackHtml.isNotEmpty) {
-    html = html.replaceFirst(RegExp(r'</body>'), '$fallbackHtml\n</body>');
+    html = replaceStorefrontNoJsFallback(
+      baseHtml: html,
+      semanticMainHtml: fallbackHtml,
+    );
   }
 
   return html;
@@ -656,6 +953,9 @@ String _buildCategoryHtml({
       name: 'twitter:image',
       content: ogImageUrl,
     );
+  } else {
+    html = _removeMetaProperty(html, property: 'og:image');
+    html = _removeMetaName(html, name: 'twitter:image');
   }
 
   html = _replaceMetaName(html, name: 'twitter:url', content: canonicalUrl);
@@ -671,12 +971,852 @@ String _buildCategoryHtml({
 
   html = html.replaceFirst(RegExp(r'</head>'), '$injection</head>');
   if (fallbackHtml.isNotEmpty) {
-    html = html.replaceFirst(RegExp(r'</body>'), '$fallbackHtml\n</body>');
+    html = replaceStorefrontNoJsFallback(
+      baseHtml: html,
+      semanticMainHtml: fallbackHtml,
+    );
   }
   return html;
 }
 
-Future<int> _writeStaticTrustPages({
+/// Replaces the homepage no-JavaScript document instead of appending a second
+/// `<main>`/`<h1>` to every generated route.
+///
+/// `web/index.html` owns the single `<noscript>` shell and its base styles.
+/// Route snapshots only replace that shell's semantic document. A minimal
+/// standalone `<noscript>` is inserted for fixture/base files that do not yet
+/// contain the storefront shell.
+String replaceStorefrontNoJsFallback({
+  required String baseHtml,
+  required String semanticMainHtml,
+}) {
+  final normalizedMain = semanticMainHtml.trim();
+  if (normalizedMain.isEmpty) return baseHtml;
+
+  final homepageMain = RegExp(
+    r'<main class="storefront-nojs-fallback">.*?</main>',
+    dotAll: true,
+  );
+  if (homepageMain.hasMatch(baseHtml)) {
+    return baseHtml.replaceFirst(homepageMain, normalizedMain);
+  }
+
+  final genericNoScriptMain = RegExp(
+    r'<noscript\b[^>]*>\s*<main\b.*?</main>\s*</noscript>',
+    caseSensitive: false,
+    dotAll: true,
+  );
+  if (genericNoScriptMain.hasMatch(baseHtml)) {
+    return baseHtml.replaceFirst(
+      genericNoScriptMain,
+      '<noscript id="storefront-nojs-fallback">\n'
+      '    $normalizedMain\n'
+      '  </noscript>',
+    );
+  }
+
+  final noJsShellClose = RegExp(
+    r'</noscript>',
+    caseSensitive: false,
+  );
+  if (baseHtml.contains('id="storefront-nojs-fallback"') &&
+      noJsShellClose.hasMatch(baseHtml)) {
+    return baseHtml.replaceFirst(
+      noJsShellClose,
+      '$normalizedMain\n    </noscript>',
+    );
+  }
+
+  final standaloneFallback = '''
+  <noscript id="storefront-nojs-fallback">
+    $normalizedMain
+  </noscript>
+''';
+  return baseHtml.replaceFirst(
+    RegExp(r'</body>', caseSensitive: false),
+    '$standaloneFallback</body>',
+  );
+}
+
+/// Static SEO facts for an editor-owned dynamic CMS page.
+///
+/// The same projection owns both file generation and sitemap eligibility so a
+/// route cannot be advertised before it has meaningful crawlable content.
+class SeoContactFacts {
+  const SeoContactFacts({
+    this.phone = '',
+    this.email = '',
+    this.address = '',
+  });
+
+  factory SeoContactFacts.fromSettings(Map<String, String> settings) {
+    final addressParts = <String>[
+      _getSetting(settings, 'seo_address_street') ??
+          _getSetting(settings, 'contact_address') ??
+          '',
+      _getSetting(settings, 'seo_address_city') ??
+          _getSetting(settings, 'seo_address_locality') ??
+          '',
+      _getSetting(settings, 'seo_address_region') ?? '',
+      _getSetting(settings, 'seo_address_postal') ?? '',
+      _getSetting(settings, 'seo_address_country') ?? '',
+    ].map(_cleanText).where((part) => part.isNotEmpty);
+    final uniqueAddressParts = <String>[];
+    final seen = <String>{};
+    for (final part in addressParts) {
+      if (seen.add(part.toLowerCase())) uniqueAddressParts.add(part);
+    }
+
+    return SeoContactFacts(
+      phone: _cleanText(
+        _getSetting(settings, 'seo_phone') ??
+            _getSetting(settings, 'contact_phone') ??
+            _getSetting(settings, 'business_phone') ??
+            '',
+      ),
+      email: _cleanText(
+        _getSetting(settings, 'seo_email') ??
+            _getSetting(settings, 'contact_email') ??
+            '',
+      ),
+      address: uniqueAddressParts.join(', '),
+    );
+  }
+
+  final String phone;
+  final String email;
+  final String address;
+
+  bool get hasAny =>
+      phone.trim().isNotEmpty ||
+      email.trim().isNotEmpty ||
+      address.trim().isNotEmpty;
+}
+
+/// Content eligibility shared behaviorally with the public Flutter pages.
+///
+/// Titles, labels, images, links and CTA copy are useful presentation, but they
+/// do not constitute a crawlable page by themselves. Structured Features and
+/// FAQ blocks must contain at least one real item; Contacto may additionally
+/// rely on factual phone, email or address values from the canonical settings.
+bool hasMeaningfulDynamicCmsPageContent({
+  required String canonicalPath,
+  required List<Map<String, dynamic>> blocks,
+  SeoContactFacts contactFacts = const SeoContactFacts(),
+}) {
+  if (canonicalPath == '/contacto' && contactFacts.hasAny) return true;
+  return blocks.any(_hasMeaningfulSeoBlockContent);
+}
+
+bool _hasMeaningfulSeoBlockContent(Map<String, dynamic> block) {
+  if (!isWebsiteBlockVisibleOnAnyPublicBreakpoint(block)) return false;
+  final type = (block['block_type'] ?? '').toString().trim().toLowerCase();
+  final rawData = block['block_data'];
+  if (rawData is! Map) return false;
+  final data = Map<String, dynamic>.from(rawData);
+
+  if (type == 'cta') return false;
+  if (type == 'features') {
+    final features = data['features'];
+    if (features is! List) return false;
+    return features.whereType<Map>().any((feature) {
+      final item = Map<String, dynamic>.from(feature);
+      return _cleanText((item['title'] ?? '').toString()).isNotEmpty ||
+          _cleanText((item['description'] ?? '').toString()).isNotEmpty;
+    });
+  }
+  if (type == 'faq') {
+    final items = data['items'];
+    if (items is! List) return false;
+    return items.whereType<Map>().any((item) {
+      final entry = Map<String, dynamic>.from(item);
+      return _cleanText((entry['question'] ?? '').toString()).isNotEmpty &&
+          _cleanText((entry['answer'] ?? '').toString()).isNotEmpty;
+    });
+  }
+  if (type == 'contact') {
+    return _hasFactualContactValue(data);
+  }
+
+  return _semanticBodyFragments(data).isNotEmpty;
+}
+
+bool _hasFactualContactValue(Map<String, dynamic> data) {
+  const factualKeys = <String>{
+    'address',
+    'contactaddress',
+    'email',
+    'contactemail',
+    'phone',
+    'telephone',
+    'contactphone',
+    'whatsapp',
+  };
+  var found = false;
+
+  void visit(dynamic value, {String? fieldName}) {
+    if (found) return;
+    if (value is Map) {
+      for (final entry in value.entries) {
+        visit(entry.value, fieldName: entry.key.toString());
+      }
+      return;
+    }
+    if (value is List) {
+      for (final item in value) {
+        visit(item, fieldName: fieldName);
+      }
+      return;
+    }
+    if (value is! String || fieldName == null) return;
+    final normalizedField =
+        fieldName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    found = factualKeys.contains(normalizedField) &&
+        _cleanText(_policyText(value)).isNotEmpty;
+  }
+
+  visit(data);
+  return found;
+}
+
+List<String> _semanticBodyFragments(Map<String, dynamic> data) {
+  const semanticBodyKeys = <String>{
+    'answer',
+    'body',
+    'caption',
+    'comment',
+    'content',
+    'description',
+    'detail',
+    'details',
+    'html',
+    'quote',
+    'richtext',
+    'subtitle',
+    'text',
+  };
+  final fragments = <String>[];
+  final seen = <String>{};
+
+  void collect(dynamic value, {String? fieldName}) {
+    if (value is Map) {
+      for (final entry in value.entries) {
+        collect(entry.value, fieldName: entry.key.toString());
+      }
+      return;
+    }
+    if (value is List) {
+      for (final item in value) {
+        collect(item, fieldName: fieldName);
+      }
+      return;
+    }
+    if (value is! String || fieldName == null) return;
+    final normalizedField =
+        fieldName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    if (!semanticBodyKeys.contains(normalizedField)) return;
+    final text = _cleanText(_policyText(value));
+    if (text.isEmpty || !seen.add(text.toLowerCase())) return;
+    fragments.add(text);
+  }
+
+  collect(data);
+  return fragments;
+}
+
+class PublishedDynamicCmsSeoProjection {
+  const PublishedDynamicCmsSeoProjection({
+    required this.pageId,
+    required this.canonicalPath,
+    required this.pageTitle,
+    required this.seoTitle,
+    required this.description,
+    required this.keywords,
+    required this.ogImageUrl,
+    required this.bodyHtml,
+    required this.updatedAt,
+  });
+
+  final String pageId;
+  final String canonicalPath;
+  final String pageTitle;
+  final String seoTitle;
+  final String description;
+  final String keywords;
+  final String ogImageUrl;
+  final String bodyHtml;
+  final DateTime? updatedAt;
+}
+
+List<PublishedDynamicCmsSeoProjection> buildPublishedDynamicCmsSeoProjections({
+  required List<Map<String, dynamic>> pages,
+  required Map<String, List<Map<String, dynamic>>> pageBlocks,
+  required String storeUrl,
+  required String storeName,
+  String globalDescription = '',
+  String globalKeywords = '',
+  String globalImageUrl = '',
+  SeoContactFacts contactFacts = const SeoContactFacts(),
+  DateTime? settingsUpdatedAt,
+}) {
+  final projections = <PublishedDynamicCmsSeoProjection>[];
+  final effectiveStoreName = _cleanText(storeName);
+
+  for (final page in pages) {
+    if (page['is_published'] != true) continue;
+    final canonicalPath = _routeForWebsitePage(page);
+    if (canonicalPath == null ||
+        canonicalPath == '/' ||
+        canonicalPath == '/productos' ||
+        websiteStaticTrustPageSlugs.contains(
+          canonicalPath.replaceFirst(RegExp(r'^/'), ''),
+        )) {
+      continue;
+    }
+
+    final pageId = (page['id'] ?? '').toString().trim();
+    if (pageId.isEmpty) continue;
+    final blocks = pageBlocks[pageId] ?? const <Map<String, dynamic>>[];
+    if (!hasMeaningfulDynamicCmsPageContent(
+      canonicalPath: canonicalPath,
+      blocks: blocks,
+      contactFacts: contactFacts,
+    )) {
+      continue;
+    }
+    final bodyHtml = _renderDynamicCmsBlocks(
+      blocks,
+      canonicalPath: canonicalPath,
+      contactFacts: contactFacts,
+    );
+    if (bodyHtml.trim().isEmpty) continue;
+
+    final slug = (page['slug'] ?? '').toString().trim();
+    final configuredPageTitle = _cleanText((page['title'] ?? '').toString());
+    final pageTitle = configuredPageTitle.isNotEmpty
+        ? configuredPageTitle
+        : _humanizeCmsSlug(slug);
+    final configuredSeoTitle =
+        _cleanText((page['meta_title'] ?? '').toString());
+    final seoTitle = configuredSeoTitle.isNotEmpty
+        ? _truncate(configuredSeoTitle, 120)
+        : _truncate(
+            effectiveStoreName.isEmpty
+                ? pageTitle
+                : '$pageTitle | $effectiveStoreName',
+            120,
+          );
+
+    final configuredDescription =
+        _cleanText((page['meta_description'] ?? '').toString());
+    final blockDescription = _dynamicCmsTextFragments(
+      blocks,
+      canonicalPath: canonicalPath,
+      contactFacts: contactFacts,
+    ).join(' ');
+    final effectiveDescription = configuredDescription.isNotEmpty
+        ? configuredDescription
+        : blockDescription.isNotEmpty
+            ? blockDescription
+            : _cleanText(globalDescription).isNotEmpty
+                ? _cleanText(globalDescription)
+                : pageTitle;
+
+    final configuredKeywords =
+        _cleanText((page['meta_keywords'] ?? '').toString());
+    final configuredImage = _cleanText((page['og_image_url'] ?? '').toString());
+    projections.add(
+      PublishedDynamicCmsSeoProjection(
+        pageId: pageId,
+        canonicalPath: canonicalPath,
+        pageTitle: _truncate(pageTitle, 120),
+        seoTitle: seoTitle,
+        description: _truncate(effectiveDescription, 320),
+        keywords: configuredKeywords.isNotEmpty
+            ? configuredKeywords
+            : _cleanText(globalKeywords),
+        ogImageUrl: configuredImage.isNotEmpty
+            ? configuredImage
+            : _cleanText(globalImageUrl),
+        bodyHtml: bodyHtml,
+        updatedAt: maxFactualSeoUpdatedAt([
+          settingsUpdatedAt,
+          _parseDateTime(page['updated_at']),
+          ...blocks
+              .where(isWebsiteBlockVisibleOnAnyPublicBreakpoint)
+              .map((block) => _parseDateTime(block['updated_at'])),
+        ]),
+      ),
+    );
+  }
+
+  projections.sort(
+    (a, b) => a.canonicalPath.compareTo(b.canonicalPath),
+  );
+  return List.unmodifiable(projections);
+}
+
+Future<int> _writeStaticDynamicCmsPages({
+  required Directory buildDir,
+  required String baseHtml,
+  required String storeUrl,
+  required String storeName,
+  required List<PublishedDynamicCmsSeoProjection> pages,
+  required Set<String> availablePublicPaths,
+}) async {
+  final outputDirectory = Directory(pathJoin(buildDir.path, 'pagina'));
+  if (outputDirectory.existsSync()) {
+    outputDirectory.deleteSync(recursive: true);
+  }
+  for (final slug in websiteDynamicDirectPageSlugs) {
+    final outputFile = File(pathJoin(buildDir.path, slug));
+    if (outputFile.existsSync()) outputFile.deleteSync();
+  }
+  if (pages.any((page) => page.canonicalPath.startsWith('/pagina/'))) {
+    outputDirectory.createSync(recursive: true);
+  }
+
+  var written = 0;
+  final writtenPaths = <String>{};
+  for (final page in pages) {
+    final html = buildStaticCmsPageSnapshotHtml(
+      baseHtml: baseHtml,
+      storeUrl: storeUrl,
+      storeName: storeName,
+      page: page,
+      availablePublicPaths: availablePublicPaths,
+    );
+    var outputPath = buildDir.path;
+    for (final segment in page.canonicalPath.substring(1).split('/')) {
+      outputPath = pathJoin(outputPath, segment);
+    }
+    final outputFile = File(outputPath);
+    outputFile.parent.createSync(recursive: true);
+    await outputFile.writeAsString(html);
+    writtenPaths.add(page.canonicalPath);
+    written++;
+  }
+  for (final slug in websiteDynamicDirectPageSlugs) {
+    final canonicalPath = '/$slug';
+    if (writtenPaths.contains(canonicalPath)) continue;
+    await File(pathJoin(buildDir.path, slug)).writeAsString(
+      buildUnavailableStaticCmsPageSnapshotHtml(
+        baseHtml: baseHtml,
+        storeUrl: storeUrl,
+        storeName: storeName,
+        canonicalPath: canonicalPath,
+        pageTitle: slug == 'servicios' ? 'Servicios' : 'Contacto',
+      ),
+    );
+    written++;
+  }
+  return written;
+}
+
+String buildStaticCmsPageSnapshotHtml({
+  required String baseHtml,
+  required String storeUrl,
+  required String storeName,
+  required PublishedDynamicCmsSeoProjection page,
+  required Set<String> availablePublicPaths,
+}) {
+  final canonicalUrl = _joinUrl(storeUrl, page.canonicalPath);
+  final bodyHtml = '''
+  <main id="seo-static-page" class="storefront-nojs-fallback">
+    <div class="seo-static-shell">
+      <header>
+        <p class="seo-eyebrow"><a href="/">${_escapeHtml(storeName)}</a></p>
+        <h1>${_escapeHtml(page.pageTitle)}</h1>
+        <p>${_escapeHtml(page.description)}</p>
+      </header>
+      ${page.bodyHtml}
+      <nav class="seo-page-nav" aria-label="Navegación de la tienda">
+        <a href="/">Inicio</a>
+        ${_dynamicPageNavigationLinks(availablePublicPaths)}
+      </nav>
+    </div>
+  </main>
+''';
+  final jsonLd = jsonEncode({
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    'name': page.pageTitle,
+    'headline': page.seoTitle,
+    'description': page.description,
+    'url': canonicalUrl,
+    'isPartOf': {
+      '@type': 'WebSite',
+      'name': storeName,
+      'url': storeUrl.replaceAll(RegExp(r'/+$'), ''),
+    },
+    if (page.ogImageUrl.isNotEmpty)
+      'primaryImageOfPage': {
+        '@type': 'ImageObject',
+        'url': page.ogImageUrl,
+      },
+  });
+  return _buildStaticTrustPageHtml(
+    baseHtml: baseHtml,
+    title: page.seoTitle,
+    description: page.description,
+    keywords: page.keywords,
+    canonicalUrl: canonicalUrl,
+    ogImageUrl: page.ogImageUrl,
+    bodyHtml: bodyHtml,
+    jsonLd: jsonLd,
+    jsonLdElementId: 'seo-cms-page-jsonld',
+    jsonLdLabel: 'CMS Page',
+  );
+}
+
+String buildUnavailableStaticCmsPageSnapshotHtml({
+  required String baseHtml,
+  required String storeUrl,
+  required String storeName,
+  required String canonicalPath,
+  required String pageTitle,
+}) {
+  final canonicalUrl = _joinUrl(storeUrl, canonicalPath);
+  const description =
+      'Esta sección no tiene una publicación pública disponible en este momento.';
+  final bodyHtml = '''
+  <main id="seo-static-page" class="storefront-nojs-fallback">
+    <div class="seo-static-shell">
+      <header>
+        <p class="seo-eyebrow"><a href="/">${_escapeHtml(storeName)}</a></p>
+        <h1>${_escapeHtml(pageTitle)}</h1>
+        <p>$description</p>
+      </header>
+      <nav class="seo-page-nav" aria-label="Navegación de la tienda">
+        <a href="/">Volver al inicio</a>
+      </nav>
+    </div>
+  </main>
+''';
+
+  return _buildStaticTrustPageHtml(
+    baseHtml: baseHtml,
+    title: _truncate('$pageTitle | $storeName', 120),
+    description: description,
+    keywords: '',
+    canonicalUrl: canonicalUrl,
+    ogImageUrl: '',
+    bodyHtml: bodyHtml,
+    jsonLd: '',
+    allowIndexing: false,
+    jsonLdElementId: 'seo-unavailable-page-jsonld',
+    jsonLdLabel: 'Unavailable Page',
+  );
+}
+
+String _dynamicPageNavigationLinks(Set<String> availablePublicPaths) {
+  return const <(String, String)>[
+    ('/productos', 'Productos'),
+    ('/servicios', 'Servicios'),
+    ('/contacto', 'Contacto'),
+  ]
+      .where((entry) => availablePublicPaths.contains(entry.$1))
+      .map(
+        (entry) =>
+            '<a href="${_escapeHtml(entry.$1)}">${_escapeHtml(entry.$2)}</a>',
+      )
+      .join('\n        ');
+}
+
+String _renderDynamicCmsBlocks(
+  List<Map<String, dynamic>> blocks, {
+  required String canonicalPath,
+  required SeoContactFacts contactFacts,
+}) {
+  final visible = blocks
+      .where(isWebsiteBlockVisibleOnAnyPublicBreakpoint)
+      .toList(growable: false);
+  visible.sort((a, b) =>
+      (_toInt(a['order_index']) ?? 0).compareTo(_toInt(b['order_index']) ?? 0));
+
+  final output = StringBuffer();
+  for (final block in visible) {
+    if (!_hasMeaningfulSeoBlockContent(block)) continue;
+    final type = (block['block_type'] ?? '').toString().trim().toLowerCase();
+    final data = block['block_data'] is Map
+        ? Map<String, dynamic>.from(block['block_data'] as Map)
+        : const <String, dynamic>{};
+    final configuredHeading = _cleanText(
+      (data['title'] ?? data['headline'] ?? data['heading'] ?? '').toString(),
+    );
+
+    if (type == 'features') {
+      final items = (data['features'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .where((item) =>
+              _cleanText((item['title'] ?? '').toString()).isNotEmpty ||
+              _cleanText((item['description'] ?? '').toString()).isNotEmpty)
+          .toList(growable: false);
+      if (items.isEmpty) continue;
+      output.writeln('<section>');
+      if (configuredHeading.isNotEmpty) {
+        output.writeln('<h2>${_escapeHtml(configuredHeading)}</h2>');
+      }
+      output.writeln('<ul>');
+      for (final item in items) {
+        final title = _cleanText((item['title'] ?? '').toString());
+        final description = _cleanText((item['description'] ?? '').toString());
+        output.writeln('<li>');
+        if (title.isNotEmpty) {
+          output.writeln('<strong>${_escapeHtml(title)}</strong>');
+        }
+        if (description.isNotEmpty) {
+          output.writeln('<p>${_escapeHtml(description)}</p>');
+        }
+        output.writeln('</li>');
+      }
+      output
+        ..writeln('</ul>')
+        ..writeln('</section>');
+      continue;
+    }
+
+    if (type == 'faq') {
+      final items = (data['items'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .where((item) =>
+              _cleanText((item['question'] ?? '').toString()).isNotEmpty &&
+              _cleanText((item['answer'] ?? '').toString()).isNotEmpty)
+          .toList(growable: false);
+      if (items.isEmpty) continue;
+      output.writeln('<section>');
+      if (configuredHeading.isNotEmpty) {
+        output.writeln('<h2>${_escapeHtml(configuredHeading)}</h2>');
+      }
+      output.writeln('<dl>');
+      for (final item in items) {
+        output
+          ..writeln(
+            '<dt>${_escapeHtml(_cleanText((item['question'] ?? '').toString()))}</dt>',
+          )
+          ..writeln(
+            '<dd>${_escapeHtml(_cleanText((item['answer'] ?? '').toString()))}</dd>',
+          );
+      }
+      output
+        ..writeln('</dl>')
+        ..writeln('</section>');
+      continue;
+    }
+
+    final fragments = type == 'contact'
+        ? _contactFactStringsFromData(data)
+        : _semanticBodyFragments(data);
+    if (fragments.isEmpty) continue;
+    final heading =
+        configuredHeading.isNotEmpty ? configuredHeading : fragments.first;
+    output.writeln('<section>');
+    if (heading.isNotEmpty) {
+      output.writeln('<h2>${_escapeHtml(heading)}</h2>');
+    }
+    for (final paragraph in fragments) {
+      if (paragraph.toLowerCase() == heading.toLowerCase()) continue;
+      output.writeln('<p>${_escapeHtml(paragraph)}</p>');
+    }
+    output.writeln('</section>');
+  }
+
+  if (canonicalPath == '/contacto' && contactFacts.hasAny) {
+    output
+      ..writeln('<section>')
+      ..writeln('<h2>Información de contacto</h2>')
+      ..writeln('<address>');
+    if (contactFacts.address.isNotEmpty) {
+      output.writeln(
+        '<p>Dirección: ${_escapeHtml(contactFacts.address)}</p>',
+      );
+    }
+    if (contactFacts.phone.isNotEmpty) {
+      output.writeln(
+        '<p>Teléfono: ${_escapeHtml(contactFacts.phone)}</p>',
+      );
+    }
+    if (contactFacts.email.isNotEmpty) {
+      output.writeln(
+        '<p>Email: ${_escapeHtml(contactFacts.email)}</p>',
+      );
+    }
+    output
+      ..writeln('</address>')
+      ..writeln('</section>');
+  }
+  return output.toString();
+}
+
+List<String> _dynamicCmsTextFragments(
+  List<Map<String, dynamic>> blocks, {
+  required String canonicalPath,
+  required SeoContactFacts contactFacts,
+}) {
+  final fragments = <String>[];
+  final seen = <String>{};
+  for (final block in blocks) {
+    if (!isWebsiteBlockVisibleOnAnyPublicBreakpoint(block)) continue;
+    for (final fragment in _dynamicCmsBlockTextFragments(block)) {
+      if (seen.add(fragment.toLowerCase())) fragments.add(fragment);
+    }
+  }
+  if (canonicalPath == '/contacto') {
+    for (final fact in [
+      contactFacts.address,
+      contactFacts.phone,
+      contactFacts.email,
+    ]) {
+      if (fact.isNotEmpty && seen.add(fact.toLowerCase())) {
+        fragments.add(fact);
+      }
+    }
+  }
+  return fragments;
+}
+
+List<String> _dynamicCmsBlockTextFragments(
+  Map<String, dynamic> block,
+) {
+  if (!_hasMeaningfulSeoBlockContent(block)) return const [];
+  final type = (block['block_type'] ?? '').toString().trim().toLowerCase();
+  final rawData = block['block_data'];
+  if (rawData is! Map) return const [];
+  final data = Map<String, dynamic>.from(rawData);
+
+  if (type == 'features') {
+    return (data['features'] as List? ?? const [])
+        .whereType<Map>()
+        .expand((rawItem) {
+      final item = Map<String, dynamic>.from(rawItem);
+      return [
+        _cleanText((item['title'] ?? '').toString()),
+        _cleanText((item['description'] ?? '').toString()),
+      ].where((text) => text.isNotEmpty);
+    }).toList(growable: false);
+  }
+  if (type == 'faq') {
+    return (data['items'] as List? ?? const [])
+        .whereType<Map>()
+        .expand((rawItem) {
+      final item = Map<String, dynamic>.from(rawItem);
+      final question = _cleanText((item['question'] ?? '').toString());
+      final answer = _cleanText((item['answer'] ?? '').toString());
+      return question.isEmpty || answer.isEmpty
+          ? const <String>[]
+          : <String>[question, answer];
+    }).toList(growable: false);
+  }
+  if (type == 'contact') return _contactFactStringsFromData(data);
+  final bodyFragments = _semanticBodyFragments(data);
+  if (bodyFragments.isEmpty) return const [];
+  final heading = _cleanText(
+    (data['title'] ?? data['headline'] ?? data['heading'] ?? '').toString(),
+  );
+  return [
+    if (heading.isNotEmpty) heading,
+    ...bodyFragments,
+  ];
+}
+
+List<String> _contactFactStringsFromData(Map<String, dynamic> data) {
+  const factualKeys = <String>{
+    'address',
+    'contactaddress',
+    'email',
+    'contactemail',
+    'phone',
+    'telephone',
+    'contactphone',
+    'whatsapp',
+  };
+  final facts = <String>[];
+  final seen = <String>{};
+
+  void visit(dynamic value, {String? fieldName}) {
+    if (value is Map) {
+      for (final entry in value.entries) {
+        visit(entry.value, fieldName: entry.key.toString());
+      }
+      return;
+    }
+    if (value is List) {
+      for (final item in value) {
+        visit(item, fieldName: fieldName);
+      }
+      return;
+    }
+    if (value is! String || fieldName == null) return;
+    final normalizedField =
+        fieldName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    if (!factualKeys.contains(normalizedField)) return;
+    final fact = _cleanText(_policyText(value));
+    if (fact.isNotEmpty && seen.add(fact.toLowerCase())) facts.add(fact);
+  }
+
+  visit(data);
+  return facts;
+}
+
+String _humanizeCmsSlug(String slug) {
+  final normalized = _cleanText(
+    slug.replaceAll(RegExp(r'[-_]+'), ' ').replaceAll(RegExp(r'\s+'), ' '),
+  );
+  if (normalized.isEmpty) return 'Página';
+  return '${normalized[0].toUpperCase()}${normalized.substring(1)}';
+}
+
+const websiteStaticTrustPageSlugs = <String>{
+  'nosotros',
+  'terminos',
+  'privacidad',
+  'devoluciones',
+  'envios',
+};
+
+const websiteDynamicDirectPageSlugs = <String>{
+  'servicios',
+  'contacto',
+};
+
+/// Returns only editor-owned trust routes that are currently published.
+///
+/// Publication and meaningful visible content are both required. A missing
+/// block projection cannot become indexable through generated fallback copy.
+Set<String> buildPublishedStaticTrustPagePaths({
+  required List<Map<String, dynamic>> pages,
+  required Map<String, List<Map<String, dynamic>>> pageBlocks,
+}) {
+  return Set.unmodifiable({
+    for (final page in pages)
+      if (_isIndexableStaticTrustPage(page, pageBlocks))
+        '/${(page['slug'] ?? '').toString().trim()}',
+  });
+}
+
+bool hasMeaningfulStaticTrustPageContent(
+  List<Map<String, dynamic>> blocks,
+) {
+  return _renderTrustBlocks(blocks).trim().isNotEmpty;
+}
+
+bool _isIndexableStaticTrustPage(
+  Map<String, dynamic> page,
+  Map<String, List<Map<String, dynamic>>> pageBlocks,
+) {
+  final slug = (page['slug'] ?? '').toString().trim();
+  final pageId = (page['id'] ?? '').toString().trim();
+  return page['is_published'] == true &&
+      websiteStaticTrustPageSlugs.contains(slug) &&
+      pageId.isNotEmpty &&
+      hasMeaningfulStaticTrustPageContent(
+        pageBlocks[pageId] ?? const <Map<String, dynamic>>[],
+      );
+}
+
+Future<Set<String>> _writeStaticTrustPages({
   required Directory buildDir,
   required String baseHtml,
   required String storeUrl,
@@ -684,87 +1824,185 @@ Future<int> _writeStaticTrustPages({
   required Map<String, String> settings,
   required List<Map<String, dynamic>> pages,
   required Map<String, List<Map<String, dynamic>>> pageBlocks,
+  required Set<String> availablePublicPaths,
 }) async {
-  final fallbacks = _trustPageFallbacks(storeName);
-  var written = 0;
+  final definitions = _trustPageDefinitions();
+  final publishedPaths = buildPublishedStaticTrustPagePaths(
+    pages: pages,
+    pageBlocks: pageBlocks,
+  );
 
-  for (final entry in fallbacks.entries) {
+  for (final entry in definitions.entries) {
     final slug = entry.key;
-    final fallback = entry.value;
     final page = _findPageBySlug(pages, slug);
     final blocks = page == null
         ? const <Map<String, dynamic>>[]
         : pageBlocks[(page['id'] ?? '').toString()] ??
             const <Map<String, dynamic>>[];
-
-    final title = _cleanText((page?['title'] ?? '').toString()).isNotEmpty
-        ? _cleanText((page?['title'] ?? '').toString())
-        : fallback.title;
-    final descriptionFromPage =
-        _cleanText((page?['meta_description'] ?? '').toString());
-    final description = _truncate(
-      descriptionFromPage.isNotEmpty
-          ? descriptionFromPage
-          : fallback.description,
-      320,
-    );
-    final canonicalUrl = _joinUrl(storeUrl, '/$slug');
-
-    final bodyHtml = _buildStaticTrustPageBody(
-      slug: slug,
-      title: title,
-      description: description,
-      fallback: fallback,
-      blocks: blocks,
-      settings: settings,
-      storeName: storeName,
-      storeUrl: storeUrl,
-    );
-
-    final html = _buildStaticTrustPageHtml(
+    final html = buildStaticTrustPageSnapshotHtml(
       baseHtml: baseHtml,
-      title: '$title | $storeName',
-      description: description,
-      canonicalUrl: canonicalUrl,
-      bodyHtml: bodyHtml,
-      jsonLd: _buildStaticTrustPageJsonLd(
-        slug: slug,
-        title: title,
-        description: description,
-        pageUrl: canonicalUrl,
-        storeUrl: storeUrl,
-        storeName: storeName,
-        settings: settings,
-      ),
+      slug: slug,
+      storeUrl: storeUrl,
+      storeName: storeName,
+      settings: settings,
+      page: page,
+      blocks: blocks,
+      publishedPaths: publishedPaths,
+      availablePublicPaths: availablePublicPaths,
     );
 
     await File(pathJoin(buildDir.path, slug)).writeAsString(html);
-    written++;
   }
 
-  return written;
+  return publishedPaths;
+}
+
+String buildStaticTrustPageSnapshotHtml({
+  required String baseHtml,
+  required String slug,
+  required String storeUrl,
+  required String storeName,
+  required Map<String, String> settings,
+  required Map<String, dynamic>? page,
+  required List<Map<String, dynamic>> blocks,
+  required Set<String> publishedPaths,
+  required Set<String> availablePublicPaths,
+}) {
+  final definition = _trustPageDefinitions()[slug];
+  if (definition == null) {
+    throw ArgumentError.value(slug, 'slug', 'No es una ruta legal conocida.');
+  }
+  final allowIndexing = publishedPaths.contains('/$slug') &&
+      page?['is_published'] == true &&
+      hasMeaningfulStaticTrustPageContent(blocks);
+  final configuredPageTitle = _cleanText((page?['title'] ?? '').toString());
+  final pageTitle = allowIndexing && configuredPageTitle.isNotEmpty
+      ? configuredPageTitle
+      : definition.title;
+  final configuredTitle = _cleanText((page?['meta_title'] ?? '').toString());
+  final seoTitle = allowIndexing && configuredTitle.isNotEmpty
+      ? _truncate(configuredTitle, 120)
+      : _truncate('$pageTitle | $storeName', 120);
+  final descriptionFromPage =
+      _cleanText((page?['meta_description'] ?? '').toString());
+  final ownerContentSummary = _cleanText(_renderTrustBlocks(blocks));
+  final description = _truncate(
+    !allowIndexing
+        ? 'Esta página no tiene contenido público disponible en este momento.'
+        : descriptionFromPage.isNotEmpty
+            ? descriptionFromPage
+            : ownerContentSummary,
+    320,
+  );
+  final configuredKeywords =
+      _cleanText((page?['meta_keywords'] ?? '').toString());
+  final keywords = allowIndexing && configuredKeywords.isNotEmpty
+      ? configuredKeywords
+      : allowIndexing
+          ? _getSetting(settings, 'seo_meta_keywords') ??
+              _getSetting(settings, 'meta_keywords') ??
+              ''
+          : '';
+  final configuredImage = _cleanText((page?['og_image_url'] ?? '').toString());
+  final ogImageUrl = allowIndexing && configuredImage.isNotEmpty
+      ? configuredImage
+      : allowIndexing
+          ? _getSetting(settings, 'seo_og_image') ??
+              _getSetting(settings, 'logo_url') ??
+              ''
+          : '';
+  final canonicalUrl = _joinUrl(storeUrl, '/$slug');
+  final bodyHtml = _buildStaticTrustPageBody(
+    title: pageTitle,
+    description: description,
+    blocks: blocks,
+    storeName: storeName,
+    allowIndexing: allowIndexing,
+    publishedPaths: publishedPaths,
+    availablePublicPaths: availablePublicPaths,
+  );
+
+  return _buildStaticTrustPageHtml(
+    baseHtml: baseHtml,
+    title: seoTitle,
+    description: description,
+    keywords: keywords,
+    canonicalUrl: canonicalUrl,
+    ogImageUrl: ogImageUrl,
+    bodyHtml: bodyHtml,
+    jsonLd: _buildStaticTrustPageJsonLd(
+      slug: slug,
+      title: pageTitle,
+      description: description,
+      pageUrl: canonicalUrl,
+      storeUrl: storeUrl,
+      storeName: storeName,
+    ),
+    allowIndexing: allowIndexing,
+  );
 }
 
 String _buildStaticTrustPageHtml({
   required String baseHtml,
   required String title,
   required String description,
+  required String keywords,
   required String canonicalUrl,
+  required String ogImageUrl,
   required String bodyHtml,
   required String jsonLd,
+  bool allowIndexing = true,
+  String jsonLdElementId = 'seo-trust-page-jsonld',
+  String jsonLdLabel = 'Trust Page',
 }) {
   var html = baseHtml;
 
   html = _replaceTag(html, RegExp(r'<title>.*?</title>', dotAll: true),
       '<title>${_escapeHtml(title)}</title>');
   html = _replaceMetaContent(html, name: 'title', content: title);
-  html = _replaceMetaContent(html, name: 'description', content: description);
+  html = _replaceOrInsertMetaName(
+    html,
+    name: 'description',
+    content: description,
+  );
+  if (keywords.isNotEmpty) {
+    html = _replaceOrInsertMetaName(
+      html,
+      name: 'keywords',
+      content: keywords,
+    );
+  }
   html = _replaceLinkHref(html, rel: 'canonical', href: canonicalUrl);
+  html = _replaceOrInsertMetaName(
+    html,
+    name: 'robots',
+    content: allowIndexing ? 'index,follow' : 'noindex,follow',
+  );
+  html = _replaceOrInsertMetaName(
+    html,
+    name: 'googlebot',
+    content: allowIndexing ? 'index,follow' : 'noindex,follow',
+  );
   html = _replaceMetaProperty(html, property: 'og:type', content: 'website');
   html = _replaceMetaProperty(html, property: 'og:url', content: canonicalUrl);
   html = _replaceMetaProperty(html, property: 'og:title', content: title);
   html = _replaceMetaProperty(html,
       property: 'og:description', content: description);
+  if (ogImageUrl.isNotEmpty) {
+    html = _replaceOrInsertMetaProperty(
+      html,
+      property: 'og:image',
+      content: ogImageUrl,
+    );
+    html = _replaceOrInsertMetaName(
+      html,
+      name: 'twitter:image',
+      content: ogImageUrl,
+    );
+  } else {
+    html = _removeMetaProperty(html, property: 'og:image');
+    html = _removeMetaName(html, name: 'twitter:image');
+  }
   html = _replaceMetaName(html, name: 'twitter:url', content: canonicalUrl);
   html = _replaceMetaName(html, name: 'twitter:title', content: title);
   html =
@@ -863,98 +2101,69 @@ String _buildStaticTrustPageHtml({
   </style>
 ''';
 
-  final injection =
-      '\n  <!-- JSON-LD Structured Data for Trust Page (generated at deploy) -->\n'
-      '  <script type="application/ld+json" id="seo-trust-page-jsonld">\n'
-      '  $jsonLd\n'
-      '  </script>\n';
+  final injection = jsonLd.trim().isEmpty
+      ? ''
+      : '\n  <!-- JSON-LD Structured Data for $jsonLdLabel (generated at deploy) -->\n'
+          '  <script type="application/ld+json" id="$jsonLdElementId">\n'
+          '  $jsonLd\n'
+          '  </script>\n';
 
   html = html.replaceFirst(RegExp(r'</head>'), '$style$injection</head>');
-  html = html.replaceFirst(RegExp(r'<body>'), '<body>\n$bodyHtml');
-  return html;
+  return replaceStorefrontNoJsFallback(
+    baseHtml: html,
+    semanticMainHtml: bodyHtml,
+  );
 }
 
 String _buildStaticTrustPageBody({
-  required String slug,
   required String title,
   required String description,
-  required _TrustPageFallback fallback,
   required List<Map<String, dynamic>> blocks,
-  required Map<String, String> settings,
   required String storeName,
-  required String storeUrl,
+  required bool allowIndexing,
+  required Set<String> publishedPaths,
+  required Set<String> availablePublicPaths,
 }) {
   final content = _renderTrustBlocks(blocks);
-  final fallbackContent = _paragraphsHtml(fallback.body);
-  final renderedContent = content.trim().isNotEmpty ? content : fallbackContent;
+  final renderedContent = allowIndexing
+      ? content
+      : '''
+      <section>
+        <h2>Contenido no publicado</h2>
+        <p>La tienda todavía no ha publicado información para esta página.</p>
+      </section>
+''';
+  final policyLinks = _trustPageDefinitions()
+      .entries
+      .where((entry) => publishedPaths.contains('/${entry.key}'))
+      .map(
+        (entry) => '<a href="/${_escapeHtml(entry.key)}">'
+            '${_escapeHtml(entry.value.navLabel)}</a>',
+      )
+      .join('\n        ');
 
   return '''
-  <main id="seo-static-page">
+  <main id="seo-static-page" class="storefront-nojs-fallback">
     <div class="seo-static-shell">
       <header>
-        <p class="seo-eyebrow"><a href="${_escapeHtml(_joinUrl(storeUrl, '/'))}">${_escapeHtml(storeName)}</a></p>
+        <p class="seo-eyebrow"><a href="/">${_escapeHtml(storeName)}</a></p>
         <h1>${_escapeHtml(title)}</h1>
         <p>${_escapeHtml(description)}</p>
       </header>
-      ${_businessInfoHtml(settings, storeName)}
       $renderedContent
       <nav class="seo-page-nav" aria-label="Información de la tienda">
-        <a href="/productos">Productos</a>
-        <a href="/contacto">Contacto</a>
-        <a href="/envios">Envíos</a>
-        <a href="/devoluciones">Devoluciones</a>
-        <a href="/terminos">Términos y condiciones</a>
-        <a href="/privacidad">Privacidad</a>
+        <a href="/">Inicio</a>
+        ${availablePublicPaths.contains('/productos') ? '<a href="/productos">Productos</a>' : ''}
+        $policyLinks
       </nav>
     </div>
   </main>
 ''';
 }
 
-String _businessInfoHtml(Map<String, String> settings, String storeName) {
-  final email = _setting(settings, ['contact_email', 'seo_email'],
-      fallback: 'contacto@vinabike.cl');
-  final phone = _setting(settings, ['contact_phone', 'seo_phone'],
-      fallback: '+56998357797');
-  final streetAddress = _setting(settings, ['seo_address_street'],
-      fallback: 'Álvarez 32, Local 17');
-  final addressLocality = _setting(
-      settings, ['seo_address_locality', 'seo_address_city'],
-      fallback: 'Viña del Mar');
-  final addressRegion =
-      _setting(settings, ['seo_address_region'], fallback: 'Valparaíso');
-  final postalCode =
-      _setting(settings, ['seo_address_postal'], fallback: '2520000');
-  final legalName =
-      _setting(settings, ['business_legal_name'], fallback: 'NEWEN SpA');
-  final taxId =
-      _setting(settings, ['business_tax_id'], fallback: '77.541.999-7');
-  final address = _setting(settings, ['contact_address'],
-      fallback:
-          '$streetAddress, $addressLocality, $addressRegion, $postalCode, Chile');
-  final hoursSummary = _parseBusinessHours(settings)?.summary ??
-      'Lunes a viernes de 11:00 a 19:30; sábados de 11:00 a 15:00.';
-
-  return '''
-    <section>
-      <h2>Información de la tienda</h2>
-      <div class="seo-business-grid">
-        <p><strong>Nombre comercial:</strong><br>${_escapeHtml(storeName)}</p>
-        <p><strong>Razón social:</strong><br>${_escapeHtml(legalName)}</p>
-        <p><strong>RUT:</strong><br>${_escapeHtml(taxId)}</p>
-        <p><strong>Dirección:</strong><br>${_escapeHtml(address)}</p>
-        <p><strong>Teléfono y WhatsApp:</strong><br>${_escapeHtml(phone)}</p>
-        <p><strong>Email:</strong><br><a href="mailto:${_escapeHtml(email)}">${_escapeHtml(email)}</a></p>
-        <p><strong>Horario referencial:</strong><br>${_escapeHtml(hoursSummary)}</p>
-        <p><strong>Moneda:</strong><br>Pesos chilenos (CLP). Los precios publicados incluyen IVA cuando corresponde.</p>
-      </div>
-    </section>
-''';
-}
-
 String _renderTrustBlocks(List<Map<String, dynamic>> blocks) {
   final visible = blocks
-      .where((block) => block['is_visible'] != false)
+      .where(isWebsiteBlockVisibleOnAnyPublicBreakpoint)
       .toList(growable: false);
   visible.sort((a, b) =>
       (_toInt(a['order_index']) ?? 0).compareTo(_toInt(b['order_index']) ?? 0));
@@ -977,12 +2186,17 @@ String _renderTrustBlocks(List<Map<String, dynamic>> blocks) {
     }
 
     if (type == 'about' || type == 'contact') {
+      final body = type == 'contact'
+          ? _contactFactStringsFromData(data)
+          : <String>[
+              if (content.isNotEmpty) content,
+              if (content.isEmpty && subtitle.isNotEmpty) subtitle,
+            ];
+      if (body.isEmpty) continue;
       out.writeln('<section>');
       if (title.isNotEmpty) out.writeln('<h2>${_escapeHtml(title)}</h2>');
-      if (content.isNotEmpty) {
-        out.writeln(_paragraphsHtml(content));
-      } else if (subtitle.isNotEmpty) {
-        out.writeln(_paragraphsHtml(subtitle));
+      for (final paragraph in body) {
+        out.writeln(_paragraphsHtml(paragraph));
       }
       out.writeln('</section>');
       continue;
@@ -991,15 +2205,20 @@ String _renderTrustBlocks(List<Map<String, dynamic>> blocks) {
     if (type == 'features') {
       final features = data['features'];
       if (features is! List || features.isEmpty) continue;
+      final meaningfulFeatures = features
+          .whereType<Map>()
+          .map((feature) => Map<String, dynamic>.from(feature))
+          .where((item) =>
+              _policyText(item['title']).isNotEmpty ||
+              _policyText(item['description']).isNotEmpty)
+          .toList(growable: false);
+      if (meaningfulFeatures.isEmpty) continue;
       out.writeln('<section>');
       if (title.isNotEmpty) out.writeln('<h2>${_escapeHtml(title)}</h2>');
       out.writeln('<ul>');
-      for (final feature in features) {
-        if (feature is! Map) continue;
-        final item = Map<String, dynamic>.from(feature);
+      for (final item in meaningfulFeatures) {
         final itemTitle = _policyText(item['title']);
         final itemDescription = _policyText(item['description']);
-        if (itemTitle.isEmpty && itemDescription.isEmpty) continue;
         out.writeln('<li>');
         if (itemTitle.isNotEmpty) {
           out.writeln('<h3>${_escapeHtml(itemTitle)}</h3>');
@@ -1017,30 +2236,38 @@ String _renderTrustBlocks(List<Map<String, dynamic>> blocks) {
     if (type == 'faq') {
       final items = data['items'];
       if (items is! List || items.isEmpty) continue;
+      final meaningfulItems = items
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .where((item) =>
+              _policyText(item['question']).isNotEmpty &&
+              _policyText(item['answer']).isNotEmpty)
+          .toList(growable: false);
+      if (meaningfulItems.isEmpty) continue;
       out.writeln('<section>');
       if (title.isNotEmpty) out.writeln('<h2>${_escapeHtml(title)}</h2>');
       out.writeln('<dl>');
-      for (final item in items) {
-        if (item is! Map) continue;
-        final map = Map<String, dynamic>.from(item);
+      for (final map in meaningfulItems) {
         final question = _policyText(map['question']);
         final answer = _policyText(map['answer']);
-        if (question.isEmpty && answer.isEmpty) continue;
-        if (question.isNotEmpty) {
-          out.writeln('<dt>${_escapeHtml(question)}</dt>');
-        }
-        if (answer.isNotEmpty) out.writeln('<dd>${_escapeHtml(answer)}</dd>');
+        out.writeln('<dt>${_escapeHtml(question)}</dt>');
+        out.writeln('<dd>${_escapeHtml(answer)}</dd>');
       }
       out.writeln('</dl>');
       out.writeln('</section>');
       continue;
     }
 
-    if (title.isNotEmpty || subtitle.isNotEmpty || content.isNotEmpty) {
+    final body = <String>[
+      if (subtitle.isNotEmpty) subtitle,
+      if (content.isNotEmpty) content,
+    ];
+    if (body.isNotEmpty) {
       out.writeln('<section>');
       if (title.isNotEmpty) out.writeln('<h2>${_escapeHtml(title)}</h2>');
-      if (subtitle.isNotEmpty) out.writeln(_paragraphsHtml(subtitle));
-      if (content.isNotEmpty) out.writeln(_paragraphsHtml(content));
+      for (final paragraph in body) {
+        out.writeln(_paragraphsHtml(paragraph));
+      }
       out.writeln('</section>');
     }
   }
@@ -1055,30 +2282,7 @@ String _buildStaticTrustPageJsonLd({
   required String pageUrl,
   required String storeUrl,
   required String storeName,
-  required Map<String, String> settings,
 }) {
-  final email = _setting(settings, ['contact_email', 'seo_email'],
-      fallback: 'contacto@vinabike.cl');
-  final phone = _setting(settings, ['contact_phone', 'seo_phone'],
-      fallback: '+56998357797');
-  final streetAddress = _setting(settings, ['seo_address_street'],
-      fallback: 'Álvarez 32, Local 17');
-  final addressLocality = _setting(
-      settings, ['seo_address_locality', 'seo_address_city'],
-      fallback: 'Viña del Mar');
-  final addressRegion =
-      _setting(settings, ['seo_address_region'], fallback: 'Valparaíso');
-  final postalCode =
-      _setting(settings, ['seo_address_postal'], fallback: '2520000');
-  final legalName =
-      _setting(settings, ['business_legal_name'], fallback: 'NEWEN SpA');
-  final taxId =
-      _setting(settings, ['business_tax_id'], fallback: '77.541.999-7');
-  final instagram = _setting(settings, ['instagram'], fallback: '');
-  final openingHoursSpecification =
-      _parseBusinessHours(settings)?.jsonLdSpecifications ??
-          _defaultOpeningHoursSpecification();
-
   final pageType = switch (slug) {
     'contacto' => 'ContactPage',
     'nosotros' => 'AboutPage',
@@ -1087,52 +2291,15 @@ String _buildStaticTrustPageJsonLd({
 
   final data = <String, dynamic>{
     '@context': 'https://schema.org',
-    '@graph': [
-      {
-        '@type': pageType,
-        'name': title,
-        'description': description,
-        'url': pageUrl,
-        'isPartOf': {
-          '@type': 'WebSite',
-          'name': storeName,
-          'url': storeUrl,
-        },
-      },
-      {
-        '@type': 'LocalBusiness',
-        '@id': _joinUrl(storeUrl, '/#localbusiness'),
-        'name': storeName,
-        'legalName': legalName,
-        'taxID': taxId,
-        'url': storeUrl,
-        'email': email,
-        'telephone': phone,
-        'address': {
-          '@type': 'PostalAddress',
-          'streetAddress': streetAddress,
-          'addressLocality': addressLocality,
-          'addressRegion': addressRegion,
-          'postalCode': postalCode,
-          'addressCountry': 'CL',
-        },
-        'areaServed': {
-          '@type': 'Country',
-          'name': 'Chile',
-        },
-        if (instagram.isNotEmpty) 'sameAs': [instagram],
-        'openingHoursSpecification': openingHoursSpecification,
-        'hasMerchantReturnPolicy': _buildMerchantReturnPolicyJsonLd(storeUrl),
-        'contactPoint': {
-          '@type': 'ContactPoint',
-          'contactType': 'customer support',
-          'email': email,
-          'telephone': phone,
-          'areaServed': 'CL',
-          'availableLanguage': ['es'],
-        },
-      },
-    ],
+    '@type': pageType,
+    'name': title,
+    'description': description,
+    'url': pageUrl,
+    'isPartOf': {
+      '@type': 'WebSite',
+      'name': storeName,
+      'url': storeUrl,
+    },
   };
 
   return jsonEncode(data);
@@ -1149,234 +2316,7 @@ String _paragraphsHtml(String text) {
 }
 
 String _policyText(dynamic value) {
-  return (value ?? '')
-      .toString()
-      .replaceAll('vinabikechile@gmail.com', 'contacto@vinabike.cl')
-      .replaceAll(RegExp(r'[ \t]+'), ' ')
-      .trim();
-}
-
-String _setting(Map<String, String> settings, List<String> keys,
-    {required String fallback}) {
-  for (final key in keys) {
-    final value = settings[key]?.trim();
-    if (value != null && value.isNotEmpty) return value;
-  }
-  return fallback;
-}
-
-class _SeoBusinessHours {
-  const _SeoBusinessHours({
-    required this.summary,
-    required this.jsonLdSpecifications,
-  });
-
-  final String summary;
-  final List<Map<String, dynamic>> jsonLdSpecifications;
-}
-
-class _SeoBusinessHoursPeriod {
-  const _SeoBusinessHoursPeriod({required this.opens, required this.closes});
-
-  final String opens;
-  final String closes;
-
-  String get label => '$opens - $closes';
-}
-
-_SeoBusinessHours? _parseBusinessHours(Map<String, String> settings) {
-  final raw = _setting(
-    settings,
-    ['google_business_regular_hours', 'business_hours_json'],
-    fallback: '',
-  );
-  if (raw.isEmpty) return null;
-
-  try {
-    final decoded = jsonDecode(raw);
-    final root = decoded is Map
-        ? Map<String, dynamic>.from(decoded)
-        : <String, dynamic>{};
-    final data = root['opening_hours'] is Map
-        ? Map<String, dynamic>.from(root['opening_hours'] as Map)
-        : root;
-    final periods = data['periods'] as List<dynamic>? ?? const [];
-    if (periods.isEmpty) return null;
-
-    const dayOrder = [
-      'MONDAY',
-      'TUESDAY',
-      'WEDNESDAY',
-      'THURSDAY',
-      'FRIDAY',
-      'SATURDAY',
-      'SUNDAY',
-    ];
-    const dayLabels = {
-      'MONDAY': 'Lunes',
-      'TUESDAY': 'Martes',
-      'WEDNESDAY': 'Miércoles',
-      'THURSDAY': 'Jueves',
-      'FRIDAY': 'Viernes',
-      'SATURDAY': 'Sábado',
-      'SUNDAY': 'Domingo',
-    };
-    const schemaDayLabels = {
-      'MONDAY': 'Monday',
-      'TUESDAY': 'Tuesday',
-      'WEDNESDAY': 'Wednesday',
-      'THURSDAY': 'Thursday',
-      'FRIDAY': 'Friday',
-      'SATURDAY': 'Saturday',
-      'SUNDAY': 'Sunday',
-    };
-
-    final hoursByDay = {
-      for (final day in dayOrder) day: <_SeoBusinessHoursPeriod>[],
-    };
-
-    for (final rawPeriod in periods) {
-      if (rawPeriod is! Map) continue;
-      final period = Map<String, dynamic>.from(rawPeriod);
-
-      if (period.containsKey('openDay') || period.containsKey('openTime')) {
-        final openDay = period['openDay']?.toString().toUpperCase();
-        if (openDay == null || !hoursByDay.containsKey(openDay)) continue;
-
-        final openTime = _formatBusinessTime(period['openTime']);
-        final closeTime = _formatBusinessTime(period['closeTime']);
-        if (openTime == null || closeTime == null) continue;
-
-        hoursByDay[openDay]!.add(
-          _SeoBusinessHoursPeriod(opens: openTime, closes: closeTime),
-        );
-        continue;
-      }
-
-      final open = period['open'] is Map
-          ? Map<String, dynamic>.from(period['open'] as Map)
-          : null;
-      final close = period['close'] is Map
-          ? Map<String, dynamic>.from(period['close'] as Map)
-          : null;
-      final openDay = _googlePlacesDayToBusinessDay(open?['day']);
-      if (openDay == null || !hoursByDay.containsKey(openDay)) continue;
-
-      final openTime = _formatPlacesTime(open?['time']);
-      final closeTime = _formatPlacesTime(close?['time']);
-      if (openTime == null || closeTime == null) continue;
-
-      hoursByDay[openDay]!.add(
-        _SeoBusinessHoursPeriod(opens: openTime, closes: closeTime),
-      );
-    }
-
-    final daySchedules = <String, String>{
-      for (final day in dayOrder)
-        day: hoursByDay[day]!.isEmpty
-            ? 'Cerrado'
-            : hoursByDay[day]!.map((period) => period.label).join(' / '),
-    };
-
-    final summaryParts = <String>[];
-    var start = 0;
-    while (start < dayOrder.length) {
-      final schedule = daySchedules[dayOrder[start]]!;
-      var end = start;
-
-      while (end + 1 < dayOrder.length &&
-          daySchedules[dayOrder[end + 1]] == schedule) {
-        end++;
-      }
-
-      summaryParts.add(
-        '${_formatSeoDayRange(dayLabels[dayOrder[start]]!, dayLabels[dayOrder[end]]!)}: $schedule',
-      );
-      start = end + 1;
-    }
-
-    final jsonLdSpecifications = <Map<String, dynamic>>[];
-    for (final day in dayOrder) {
-      final schemaDay = schemaDayLabels[day]!;
-      for (final period in hoursByDay[day]!) {
-        jsonLdSpecifications.add({
-          '@type': 'OpeningHoursSpecification',
-          'dayOfWeek': schemaDay,
-          'opens': period.opens,
-          'closes': period.closes,
-        });
-      }
-    }
-
-    if (jsonLdSpecifications.isEmpty) return null;
-
-    return _SeoBusinessHours(
-      summary: summaryParts.join('; '),
-      jsonLdSpecifications: jsonLdSpecifications,
-    );
-  } catch (_) {
-    return null;
-  }
-}
-
-List<Map<String, dynamic>> _defaultOpeningHoursSpecification() {
-  return [
-    {
-      '@type': 'OpeningHoursSpecification',
-      'dayOfWeek': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-      'opens': '11:00',
-      'closes': '19:30',
-    },
-    {
-      '@type': 'OpeningHoursSpecification',
-      'dayOfWeek': 'Saturday',
-      'opens': '11:00',
-      'closes': '15:00',
-    },
-  ];
-}
-
-String _formatSeoDayRange(String start, String end) {
-  if (start == end) return start;
-  if (start == 'Lunes' && end == 'Domingo') return 'Todos los días';
-  return '$start a $end';
-}
-
-String? _googlePlacesDayToBusinessDay(dynamic rawDay) {
-  final day = rawDay is num ? rawDay.toInt() : int.tryParse('$rawDay');
-  return switch (day) {
-    0 => 'SUNDAY',
-    1 => 'MONDAY',
-    2 => 'TUESDAY',
-    3 => 'WEDNESDAY',
-    4 => 'THURSDAY',
-    5 => 'FRIDAY',
-    6 => 'SATURDAY',
-    _ => null,
-  };
-}
-
-String? _formatBusinessTime(dynamic rawTime) {
-  if (rawTime is String) return _formatPlacesTime(rawTime);
-  if (rawTime is! Map) return null;
-
-  final time = Map<String, dynamic>.from(rawTime);
-  final hours = (time['hours'] as num?)?.toInt() ?? 0;
-  final minutes = (time['minutes'] as num?)?.toInt() ?? 0;
-
-  return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
-}
-
-String? _formatPlacesTime(dynamic rawTime) {
-  final digits = rawTime?.toString().trim();
-  if (digits == null || digits.isEmpty) return null;
-  if (digits.contains(':')) return digits;
-  if (digits.length < 3) return null;
-
-  final padded = digits.padLeft(4, '0');
-  final hours = padded.substring(0, 2);
-  final minutes = padded.substring(2, 4);
-  return '$hours:$minutes';
+  return (value ?? '').toString().replaceAll(RegExp(r'[ \t]+'), ' ').trim();
 }
 
 Map<String, dynamic>? _findPageBySlug(
@@ -1389,56 +2329,27 @@ Map<String, dynamic>? _findPageBySlug(
   return null;
 }
 
-Map<String, _TrustPageFallback> _trustPageFallbacks(String storeName) {
-  return {
-    'servicios': _TrustPageFallback(
-      title: 'Servicios de Taller',
-      description:
-          'Mantención y reparación de bicicletas en Viña del Mar con diagnóstico y presupuesto antes de realizar el trabajo.',
-      body:
-          '$storeName presta servicios de mantención y reparación de bicicletas en Álvarez 32, Local 17, Viña del Mar. Evaluamos cada bicicleta y confirmamos alcance, precio y plazo antes de ejecutar trabajos no autorizados. Para coordinar una evaluación escribe a contacto@vinabike.cl o llama al +56 9 9835 7797.',
-    ),
-    'contacto': _TrustPageFallback(
-      title: 'Contacto',
-      description:
-          'Contacta a $storeName en Viña del Mar: dirección, teléfono, email, WhatsApp y horarios de atención.',
-      body:
-          'Estamos ubicados en Álvarez 32, Local 17, Viña del Mar. Puedes escribirnos a contacto@vinabike.cl o llamarnos al +56 9 9835 7797 para consultas sobre productos, pedidos, garantías y servicio técnico.',
-    ),
-    'nosotros': _TrustPageFallback(
+Map<String, _TrustPageDefinition> _trustPageDefinitions() {
+  return const {
+    'nosotros': _TrustPageDefinition(
       title: 'Sobre Nosotros',
-      description:
-          'Conoce $storeName, tienda y taller de bicicletas en Viña del Mar.',
-      body:
-          '$storeName es el nombre comercial de NEWEN SpA, RUT 77.541.999-7, con domicilio en Álvarez 32, Local 17, Viña del Mar. Vendemos bicicletas, repuestos y accesorios, y realizamos mantenciones y reparaciones.',
+      navLabel: 'Nosotros',
     ),
-    'terminos': _TrustPageFallback(
-      title: 'Términos y Condiciones',
-      description:
-          'Condiciones de compra, pago, disponibilidad, garantías y uso del sitio de $storeName.',
-      body:
-          'Este sitio es operado por NEWEN SpA, RUT 77.541.999-7, bajo el nombre comercial Viñabike. Los precios se publican en pesos chilenos (CLP) e incluyen los impuestos informados. Antes de confirmar mostramos productos, despacho y total; la compra se confirma una vez validado el pago y el stock reservado.',
-    ),
-    'privacidad': _TrustPageFallback(
-      title: 'Política de Privacidad',
-      description:
-          'Información sobre tratamiento de datos personales de clientes de $storeName.',
-      body:
-          'Usamos los datos personales entregados por clientes para procesar pedidos, coordinar entregas, responder consultas y entregar soporte. No vendemos datos personales a terceros.',
-    ),
-    'devoluciones': _TrustPageFallback(
-      title: 'Política de Devoluciones',
-      description:
-          'Condiciones de devolución, retracto, cambios y reembolsos para compras en $storeName.',
-      body:
-          'En compras a distancia puedes ejercer el retracto dentro de 10 días desde la recepción, antes de usar el producto y devolviéndolo en buen estado. Si no recibes confirmación escrita, el plazo legal puede extenderse a 90 días. La garantía legal se mantiene y una oferta o liquidación no la elimina. Para iniciar el proceso escribe a ventas@vinabike.cl con tu número de pedido.',
-    ),
-    'envios': _TrustPageFallback(
+    'envios': _TrustPageDefinition(
       title: 'Información de Envíos',
-      description:
-          'Opciones de despacho, retiro en tienda, plazos y costos de envío para compras en $storeName.',
-      body:
-          'Despachamos a Chile continental en 3 a 12 días hábiles: \$6.990 hasta \$29.999; \$8.990 entre \$30.000 y \$79.999; \$11.990 entre \$80.000 y \$149.999; y \$14.990 desde \$150.000. El checkout muestra y suma el costo exacto antes de pagar. El retiro en Álvarez 32, Local 17, Viña del Mar no tiene costo.',
+      navLabel: 'Envíos',
+    ),
+    'devoluciones': _TrustPageDefinition(
+      title: 'Política de Devoluciones',
+      navLabel: 'Devoluciones',
+    ),
+    'terminos': _TrustPageDefinition(
+      title: 'Términos y Condiciones',
+      navLabel: 'Términos y condiciones',
+    ),
+    'privacidad': _TrustPageDefinition(
+      title: 'Política de Privacidad',
+      navLabel: 'Privacidad',
     ),
   };
 }
@@ -1477,7 +2388,6 @@ String? _buildProductJsonLd({
       if (commerce.price > 0) 'price': commerce.formattedPrice,
       'availability': commerce.availability.schemaValue,
       'itemCondition': 'https://schema.org/NewCondition',
-      'hasMerchantReturnPolicy': _buildMerchantReturnPolicyJsonLd(storeUrl),
       'seller': {
         '@type': 'Organization',
         'name': storeName,
@@ -1508,22 +2418,6 @@ String? _buildProductJsonLd({
   };
 
   return jsonEncode(data);
-}
-
-Map<String, dynamic> _buildMerchantReturnPolicyJsonLd(String storeUrl) {
-  return {
-    '@type': 'MerchantReturnPolicy',
-    'applicableCountry': 'CL',
-    'returnPolicyCategory':
-        'https://schema.org/MerchantReturnFiniteReturnWindow',
-    'merchantReturnDays': 10,
-    'returnMethod': [
-      'https://schema.org/ReturnByMail',
-      'https://schema.org/ReturnInStore',
-    ],
-    'returnFees': 'https://schema.org/ReturnFeesCustomerResponsibility',
-    'url': _joinUrl(storeUrl, '/devoluciones'),
-  };
 }
 
 String _buildCategoryJsonLd({
@@ -1577,6 +2471,7 @@ String _buildCatalogJsonLd({
   required String storeUrl,
   required String storeName,
   required String catalogUrl,
+  required String description,
   required Map<String, String> resolvedBrandNamesById,
 }) {
   final visibleProducts = products.take(24).toList(growable: false);
@@ -1587,8 +2482,7 @@ String _buildCatalogJsonLd({
         '@type': 'CollectionPage',
         'name': 'Productos para bicicletas en $storeName',
         'url': catalogUrl,
-        'description':
-            'Catálogo online de bicicletas, repuestos y accesorios en Viña del Mar.',
+        'description': description,
       },
       _buildBreadcrumbListJsonLd(
         storeUrl: storeUrl,
@@ -1624,9 +2518,16 @@ Map<String, dynamic> _buildBreadcrumbListJsonLd({
   required String storeUrl,
   required List<(String, String)> items,
 }) {
-  final baseUrl = storeUrl.startsWith('http')
-      ? _urlOrigin(storeUrl)
-      : 'https://vinabike.cl';
+  final baseUrl = WebsiteSeoSettingsAliases.normalizeHttpsOrigin(
+    _urlOrigin(storeUrl),
+  );
+  if (baseUrl.isEmpty) {
+    throw ArgumentError.value(
+      storeUrl,
+      'storeUrl',
+      'Debe ser un origen HTTPS público.',
+    );
+  }
 
   return {
     '@type': 'BreadcrumbList',
@@ -1654,7 +2555,44 @@ String _urlOrigin(String url) {
 // Supabase REST
 // -----------------------------------------------------------------------------
 
-Future<Map<String, String>> _fetchWebsiteSettings({
+class SeoWebsiteSettingsSource {
+  SeoWebsiteSettingsSource.fromRows(Iterable<Map<String, dynamic>> sourceRows)
+      : rows = List<Map<String, dynamic>>.unmodifiable(
+          sourceRows
+              .map((row) => Map<String, dynamic>.unmodifiable(row))
+              .toList(growable: false)
+            ..sort((a, b) {
+              final byKey = (a['key'] ?? '')
+                  .toString()
+                  .compareTo((b['key'] ?? '').toString());
+              if (byKey != 0) return byKey;
+              return _canonicalSeoSourceJson(a)
+                  .compareTo(_canonicalSeoSourceJson(b));
+            }),
+        ) {
+    final nextValues = <String, String>{};
+    for (final row in rows) {
+      final key = (row['key'] ?? '').toString().trim();
+      if (key.isEmpty) continue;
+      if (nextValues.containsKey(key)) {
+        throw StateError(
+          'website_settings devolvió más de un owner para la clave $key.',
+        );
+      }
+      nextValues[key] = (row['value'] ?? '').toString();
+    }
+    values = Map<String, String>.unmodifiable(nextValues);
+  }
+
+  final List<Map<String, dynamic>> rows;
+  late final Map<String, String> values;
+
+  DateTime? get updatedAt => maxFactualSeoUpdatedAt(
+        rows.map((row) => _parseDateTime(row['updated_at'])),
+      );
+}
+
+Future<SeoWebsiteSettingsSource> _fetchWebsiteSettingsSource({
   required String supabaseUrl,
   required String tenantId,
   required String serviceRoleKey,
@@ -1662,7 +2600,8 @@ Future<Map<String, String>> _fetchWebsiteSettings({
   final url = Uri.parse(
     '$supabaseUrl/rest/v1/website_settings'
     '?tenant_id=eq.$tenantId'
-    '&select=key,value',
+    '&select=key,value,updated_at'
+    '&order=key.asc',
   );
 
   final response = await _httpGet(
@@ -1673,58 +2612,102 @@ Future<Map<String, String>> _fetchWebsiteSettings({
   );
 
   final decoded = jsonDecode(response) as List<dynamic>;
-  final settings = <String, String>{};
-  for (final row in decoded) {
-    final map = row as Map<String, dynamic>;
-    final k = (map['key'] ?? '').toString();
-    final v = (map['value'] ?? '').toString();
-    if (k.isNotEmpty) settings[k] = v;
-  }
-  return settings;
+  return SeoWebsiteSettingsSource.fromRows(
+    decoded.map((row) => Map<String, dynamic>.from(row as Map)),
+  );
 }
 
-Future<List<Map<String, dynamic>>> _fetchProducts({
+typedef SeoSnapshotProductPageLoader = Future<List<Map<String, dynamic>>>
+    Function(Uri uri);
+
+Uri buildSeoSnapshotProductPageUri({
+  required String supabaseUrl,
+  required String tenantId,
+  required bool onlyMerchant,
+  required int pageSize,
+  String? afterId,
+}) {
+  return Uri.parse('$supabaseUrl/rest/v1/products').replace(
+    queryParameters: {
+      'tenant_id': 'eq.$tenantId',
+      if (onlyMerchant) 'is_google_merchant': 'eq.true',
+      'is_active': 'eq.true',
+      'is_published': 'eq.true',
+      'show_on_website': 'eq.true',
+      'product_type': 'eq.product',
+      'select':
+          'id,name,description,website_description,website_name,website_price,website_image_url,website_image_url_optimized,website_image_urls,website_seo_title,website_seo_description,website_search_terms,website_merchant_title,website_merchant_description,website_merchant_gtin,website_merchant_mpn,website_merchant_brand,website_google_product_category,is_google_merchant,price,price_currency,sku,gtin,barcode,image_url,image_url_optimized,image_urls,brand_id,brand,category_id,category_name,stock_quantity,inventory_qty,track_stock,is_set,product_type,is_active,is_published,show_on_website,updated_at,created_at',
+      'order': 'id.asc',
+      if (afterId?.trim().isNotEmpty == true) 'id': 'gt.${afterId!.trim()}',
+      'limit': pageSize.toString(),
+    },
+  );
+}
+
+Future<List<Map<String, dynamic>>> fetchSeoSnapshotProductCandidates({
   required String supabaseUrl,
   required String tenantId,
   required String serviceRoleKey,
   required bool onlyMerchant,
+  int pageSize = 1000,
+  SeoSnapshotProductPageLoader? pageLoader,
 }) async {
   // Keep this aligned with the public storefront surface, not only the much
   // smaller Google Merchant subset. Merchant can still be requested explicitly
   // with `--product-scope merchant` for debugging feed-specific issues.
-  const pageSize = 1000;
   final products = <Map<String, dynamic>>[];
+  String? afterId;
+  final loadPage = pageLoader ??
+      (Uri uri) async {
+        final response = await _httpGet(
+          uri,
+          headers: {
+            'apikey': serviceRoleKey,
+          },
+        );
+        return (jsonDecode(response) as List<dynamic>)
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .toList(growable: false);
+      };
 
-  for (var offset = 0;; offset += pageSize) {
-    final url = Uri.parse(
-      '$supabaseUrl/rest/v1/products'
-      '?tenant_id=eq.$tenantId'
-      '${onlyMerchant ? '&is_google_merchant=eq.true' : ''}'
-      '&is_active=eq.true'
-      '&is_published=eq.true'
-      '&show_on_website=eq.true'
-      '&product_type=eq.product'
-      '&select=id,name,description,website_description,website_name,website_price,website_image_url,website_image_url_optimized,website_image_urls,website_seo_title,website_seo_description,website_search_terms,website_merchant_title,website_merchant_description,website_merchant_gtin,website_merchant_mpn,website_merchant_brand,website_google_product_category,price,price_currency,sku,gtin,barcode,image_url,image_url_optimized,image_urls,brand_id,brand,category_id,category_name,stock_quantity,inventory_qty,track_stock,is_set,product_type,updated_at,created_at'
-      '&limit=$pageSize'
-      '&offset=$offset',
+  while (true) {
+    final url = buildSeoSnapshotProductPageUri(
+      supabaseUrl: supabaseUrl,
+      tenantId: tenantId,
+      onlyMerchant: onlyMerchant,
+      pageSize: pageSize,
+      afterId: afterId,
     );
+    final page = await loadPage(url);
+    products.addAll(page);
+    if (page.length < pageSize) break;
 
-    final response = await _httpGet(
-      url,
-      headers: {
-        'apikey': serviceRoleKey,
-      },
-    );
-
-    final decoded = jsonDecode(response) as List<dynamic>;
-    products.addAll(decoded.map((e) => (e as Map<String, dynamic>)));
-    if (decoded.length < pageSize) break;
+    final nextAfterId = (page.last['id'] ?? '').toString().trim();
+    if (nextAfterId.isEmpty || nextAfterId == afterId) {
+      throw StateError(
+        'La paginación SEO no pudo avanzar después de '
+        '${afterId ?? 'la primera página'}.',
+      );
+    }
+    afterId = nextAfterId;
   }
 
   return products;
 }
 
-Future<Map<String, String>> _fetchProductBrandNames({
+List<Map<String, dynamic>> selectSeoSnapshotCandidatesForScope({
+  required Iterable<Map<String, dynamic>> publishedProducts,
+  required bool onlyMerchant,
+}) {
+  final selected = onlyMerchant
+      ? publishedProducts.where(
+          (product) => product['is_google_merchant'] == true,
+        )
+      : publishedProducts;
+  return List.unmodifiable(selected);
+}
+
+Future<List<Map<String, dynamic>>> _fetchProductBrandRows({
   required String supabaseUrl,
   required String tenantId,
   required String serviceRoleKey,
@@ -1735,11 +2718,11 @@ Future<Map<String, String>> _fetchProductBrandNames({
       .where((id) => id.isNotEmpty)
       .toSet()
       .toList(growable: false);
-  if (requestedIds.isEmpty) return const {};
+  if (requestedIds.isEmpty) return const [];
 
   // Keep REST URLs bounded even when a large catalog references many brands.
   const batchSize = 200;
-  final namesById = <String, String>{};
+  final rows = <Map<String, dynamic>>[];
   for (var start = 0; start < requestedIds.length; start += batchSize) {
     final end = start + batchSize < requestedIds.length
         ? start + batchSize
@@ -1747,13 +2730,14 @@ Future<Map<String, String>> _fetchProductBrandNames({
     final batch = requestedIds.sublist(start, end);
     final url = Uri.parse('$supabaseUrl/rest/v1/product_brands').replace(
       queryParameters: {
-        'select': 'id,name,tenant_id,is_active',
+        'select': 'id,name,tenant_id,is_active,updated_at',
         'id': 'in.(${batch.join(',')})',
         // Brands may be shared (tenant_id NULL) or owned by this tenant.
         // Service-role snapshot generation must never resolve another
         // tenant's brand even if an invalid foreign ID reaches a product row.
         'or': '(tenant_id.eq.$tenantId,tenant_id.is.null)',
         'is_active': 'eq.true',
+        'order': 'id.asc',
         'limit': batch.length.toString(),
       },
     );
@@ -1764,18 +2748,17 @@ Future<Map<String, String>> _fetchProductBrandNames({
       },
     );
     final decoded = jsonDecode(response) as List<dynamic>;
-    namesById.addAll(
-      buildTenantSafeProductBrandNameMap(
-        brandRows: decoded
-            .map((row) => Map<String, dynamic>.from(row as Map))
-            .toList(growable: false),
-        tenantId: tenantId,
-        requestedBrandIds: batch,
-      ),
+    rows.addAll(
+      decoded.map((row) => Map<String, dynamic>.from(row as Map)),
     );
   }
 
-  return Map.unmodifiable(namesById);
+  rows.sort(
+    (a, b) => (a['id'] ?? '').toString().compareTo(
+          (b['id'] ?? '').toString(),
+        ),
+  );
+  return List.unmodifiable(rows);
 }
 
 Future<List<Map<String, dynamic>>> _fetchActiveProductCategories({
@@ -1884,72 +2867,572 @@ Future<List<Map<String, dynamic>>> _fetchProductUrlAliases({
   return aliases;
 }
 
-Future<List<Map<String, dynamic>>> _fetchWebsitePages({
+typedef SeoSnapshotWebsitePageLoader = Future<List<Map<String, dynamic>>>
+    Function(Uri uri);
+
+Uri buildSeoSnapshotWebsitePageUri({
+  required String supabaseUrl,
+  required String tenantId,
+  required int pageSize,
+  String? afterId,
+}) {
+  return Uri.parse('$supabaseUrl/rest/v1/website_pages').replace(
+    queryParameters: {
+      'tenant_id': 'eq.$tenantId',
+      'is_published': 'eq.true',
+      'select': 'id,slug,title,meta_title,meta_description,meta_keywords,'
+          'og_image_url,is_published,is_home,updated_at',
+      'order': 'id.asc',
+      if (afterId?.trim().isNotEmpty == true) 'id': 'gt.${afterId!.trim()}',
+      'limit': pageSize.toString(),
+    },
+  );
+}
+
+Future<List<Map<String, dynamic>>> fetchSeoSnapshotPublishedWebsitePages({
+  required String supabaseUrl,
+  required String tenantId,
+  required String serviceRoleKey,
+  int pageSize = 500,
+  SeoSnapshotWebsitePageLoader? pageLoader,
+}) async {
+  if (pageSize <= 0) {
+    throw ArgumentError.value(pageSize, 'pageSize', 'Debe ser mayor que cero.');
+  }
+  final pages = <Map<String, dynamic>>[];
+  String? afterId;
+  final loadPage = pageLoader ??
+      (Uri uri) async {
+        final response = await _httpGet(
+          uri,
+          headers: {
+            'apikey': serviceRoleKey,
+          },
+        );
+        return (jsonDecode(response) as List<dynamic>)
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .toList(growable: false);
+      };
+
+  while (true) {
+    final uri = buildSeoSnapshotWebsitePageUri(
+      supabaseUrl: supabaseUrl,
+      tenantId: tenantId,
+      pageSize: pageSize,
+      afterId: afterId,
+    );
+    final page = await loadPage(uri);
+    pages.addAll(page);
+    if (page.length < pageSize) break;
+
+    final nextAfterId = (page.last['id'] ?? '').toString().trim();
+    if (nextAfterId.isEmpty || nextAfterId == afterId) {
+      throw StateError(
+        'La paginación de páginas SEO no pudo avanzar después de '
+        '${afterId ?? 'la primera página'}.',
+      );
+    }
+    afterId = nextAfterId;
+  }
+
+  return List.unmodifiable(pages);
+}
+
+Uri buildSeoSnapshotWebsiteBlockPageUri({
+  required String supabaseUrl,
+  required List<String> pageIds,
+  required int pageSize,
+  String? afterId,
+}) {
+  return Uri.parse('$supabaseUrl/rest/v1/website_blocks').replace(
+    queryParameters: {
+      'page_id': 'in.(${pageIds.join(',')})',
+      'is_visible': 'eq.true',
+      'select':
+          'id,page_id,block_type,block_data,order_index,is_visible,updated_at',
+      'order': 'id.asc',
+      if (afterId?.trim().isNotEmpty == true) 'id': 'gt.${afterId!.trim()}',
+      'limit': pageSize.toString(),
+    },
+  );
+}
+
+Future<Map<String, List<Map<String, dynamic>>>>
+    fetchSeoSnapshotWebsiteBlocksForPages({
+  required String supabaseUrl,
+  required List<Map<String, dynamic>> pages,
+  required String serviceRoleKey,
+  int pageSize = 1000,
+  int pageIdBatchSize = 100,
+  SeoSnapshotWebsitePageLoader? pageLoader,
+}) async {
+  if (pageSize <= 0) {
+    throw ArgumentError.value(pageSize, 'pageSize', 'Debe ser mayor que cero.');
+  }
+  if (pageIdBatchSize <= 0) {
+    throw ArgumentError.value(
+      pageIdBatchSize,
+      'pageIdBatchSize',
+      'Debe ser mayor que cero.',
+    );
+  }
+  final pageIds = pages
+      .map((page) => (page['id'] ?? '').toString().trim())
+      .where((id) => id.isNotEmpty)
+      .toSet()
+      .toList(growable: false)
+    ..sort();
+  if (pageIds.isEmpty) return {};
+
+  final loadPage = pageLoader ??
+      (Uri uri) async {
+        final response = await _httpGet(
+          uri,
+          headers: {
+            'apikey': serviceRoleKey,
+          },
+        );
+        return (jsonDecode(response) as List<dynamic>)
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .toList(growable: false);
+      };
+  final byPage = <String, List<Map<String, dynamic>>>{};
+
+  for (var start = 0; start < pageIds.length; start += pageIdBatchSize) {
+    final end = min(start + pageIdBatchSize, pageIds.length);
+    final batch = pageIds.sublist(start, end);
+    String? afterId;
+
+    while (true) {
+      final uri = buildSeoSnapshotWebsiteBlockPageUri(
+        supabaseUrl: supabaseUrl,
+        pageIds: batch,
+        pageSize: pageSize,
+        afterId: afterId,
+      );
+      final page = await loadPage(uri);
+      for (final block in page) {
+        final pageId = (block['page_id'] ?? '').toString().trim();
+        if (pageId.isEmpty || !batch.contains(pageId)) continue;
+        byPage.putIfAbsent(pageId, () => <Map<String, dynamic>>[]).add(block);
+      }
+      if (page.length < pageSize) break;
+
+      final nextAfterId = (page.last['id'] ?? '').toString().trim();
+      if (nextAfterId.isEmpty || nextAfterId == afterId) {
+        throw StateError(
+          'La paginación de bloques SEO no pudo avanzar después de '
+          '${afterId ?? 'la primera página'} para el lote iniciado en '
+          '${batch.first}.',
+        );
+      }
+      afterId = nextAfterId;
+    }
+  }
+
+  for (final blocks in byPage.values) {
+    blocks.sort((a, b) {
+      final order = (_toInt(a['order_index']) ?? 0)
+          .compareTo(_toInt(b['order_index']) ?? 0);
+      if (order != 0) return order;
+      return (a['id'] ?? '').toString().compareTo(
+            (b['id'] ?? '').toString(),
+          );
+    });
+  }
+
+  return Map<String, List<Map<String, dynamic>>>.unmodifiable({
+    for (final entry in byPage.entries)
+      entry.key: List<Map<String, dynamic>>.unmodifiable(entry.value),
+  });
+}
+
+class SeoWebsiteContentSnapshot {
+  SeoWebsiteContentSnapshot({
+    required this.pages,
+    required this.pageBlocks,
+  }) : revision = _canonicalSeoSourceJson({
+          'pages': pages,
+          'pageBlocks': pageBlocks,
+        });
+
+  final List<Map<String, dynamic>> pages;
+  final Map<String, List<Map<String, dynamic>>> pageBlocks;
+  final String revision;
+}
+
+/// Reads the website page and block owners twice and accepts the projection
+/// only when both reads describe the same revision.
+///
+/// PostgREST requests cannot share a transaction snapshot. This optimistic
+/// read/CAS guard therefore fails the release instead of mixing a page row from
+/// one editor save with blocks from another.
+Future<SeoWebsiteContentSnapshot> fetchConsistentSeoWebsiteContentSnapshot({
+  required String supabaseUrl,
+  required String tenantId,
+  required String serviceRoleKey,
+  SeoSnapshotWebsitePageLoader? pageLoader,
+  SeoSnapshotWebsitePageLoader? blockPageLoader,
+}) async {
+  Future<SeoWebsiteContentSnapshot> readOnce() async {
+    final pages = await fetchSeoSnapshotPublishedWebsitePages(
+      supabaseUrl: supabaseUrl,
+      tenantId: tenantId,
+      serviceRoleKey: serviceRoleKey,
+      pageLoader: pageLoader,
+    );
+    final blocks = await fetchSeoSnapshotWebsiteBlocksForPages(
+      supabaseUrl: supabaseUrl,
+      pages: pages,
+      serviceRoleKey: serviceRoleKey,
+      pageLoader: blockPageLoader,
+    );
+    return SeoWebsiteContentSnapshot(pages: pages, pageBlocks: blocks);
+  }
+
+  final first = await readOnce();
+  final second = await readOnce();
+  if (first.revision != second.revision) {
+    throw StateError(
+      'Las páginas o bloques del sitio cambiaron durante la lectura SEO. '
+      'Se abortó para no publicar un snapshot mezclado; reintenta con la '
+      'revisión estable.',
+    );
+  }
+  return second;
+}
+
+Future<void> assertSeoWebsiteContentSnapshotIsCurrent({
+  required SeoWebsiteContentSnapshot expected,
+  required String supabaseUrl,
+  required String tenantId,
+  required String serviceRoleKey,
+  SeoSnapshotWebsitePageLoader? pageLoader,
+  SeoSnapshotWebsitePageLoader? blockPageLoader,
+}) async {
+  final current = await fetchConsistentSeoWebsiteContentSnapshot(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
+    pageLoader: pageLoader,
+    blockPageLoader: blockPageLoader,
+  );
+  if (current.revision != expected.revision) {
+    throw StateError(
+      'Las páginas o bloques del sitio cambiaron mientras se generaban los '
+      'artefactos SEO. No se aplicaron redirects; vuelve a generar desde la '
+      'revisión actual.',
+    );
+  }
+}
+
+class SeoOwnerSourceSnapshot {
+  SeoOwnerSourceSnapshot({
+    required this.websiteSettings,
+    required this.publishedProductOwners,
+    required this.publicAvailability,
+    required this.brandRows,
+    required this.activeCategoryRows,
+    required this.productUrlAliases,
+    required this.websiteContent,
+  }) {
+    final editorialProjection = <String, dynamic>{
+      'websiteSettings': _sortedSeoSourceRowRevisions(websiteSettings.rows),
+      'publishedProductOwners': _sortedSeoSourceRowRevisions(
+        publishedProductOwners.map(_withoutTransientProductStock),
+      ),
+      'brandRows': _sortedSeoSourceRowRevisions(brandRows),
+      'activeCategoryRows': _sortedSeoSourceRowRevisions(activeCategoryRows),
+      'productUrlAliases': _sortedSeoSourceRowRevisions(productUrlAliases),
+      'websitePages': _sortedSeoSourceRowRevisions(websiteContent.pages),
+      'websitePageBlocks': {
+        for (final pageId in websiteContent.pageBlocks.keys.toList()..sort())
+          pageId: _sortedSeoSourceRowRevisions(
+            websiteContent.pageBlocks[pageId]!,
+          ),
+      },
+    };
+    final buildProjection = <String, dynamic>{
+      ...editorialProjection,
+      // The complete build input deliberately retains both the canonical
+      // public-availability projection and stock facts embedded in product
+      // rows. A stock transition must invalidate the optimistic build CAS even
+      // though it is not a new editorial owner revision.
+      'publishedProductOwners':
+          _sortedSeoSourceRowRevisions(publishedProductOwners),
+      'publicAvailability': publicAvailability,
+    };
+    ownerSourceRevision = _canonicalSeoSourceJson(editorialProjection);
+    revision = _canonicalSeoSourceJson(buildProjection);
+    ownerSourceSha256 = _sha256Hex(ownerSourceRevision);
+    buildInputSha256 = _sha256Hex(revision);
+  }
+
+  final SeoWebsiteSettingsSource websiteSettings;
+  final List<Map<String, dynamic>> publishedProductOwners;
+  final Map<String, int> publicAvailability;
+  final List<Map<String, dynamic>> brandRows;
+  final List<Map<String, dynamic>> activeCategoryRows;
+  final List<Map<String, dynamic>> productUrlAliases;
+  final SeoWebsiteContentSnapshot websiteContent;
+  late final String ownerSourceRevision;
+  late final String revision;
+  late final String ownerSourceSha256;
+  late final String buildInputSha256;
+}
+
+typedef SeoOwnerSourceSnapshotLoader = Future<SeoOwnerSourceSnapshot>
+    Function();
+
+/// PostgREST cannot give this multi-owner build one transaction snapshot.
+///
+/// Read every owner twice and accept the release input only when both complete
+/// source revisions match. This prevents settings, catalog, availability,
+/// brands, categories, aliases, presentations, pages, and blocks from being
+/// combined across different editor/inventory revisions.
+Future<SeoOwnerSourceSnapshot> fetchConsistentSeoOwnerSourceSnapshot({
+  required SeoOwnerSourceSnapshotLoader readOnce,
+}) async {
+  final first = await readOnce();
+  final second = await readOnce();
+  if (first.revision != second.revision) {
+    throw StateError(
+      'Las fuentes del sitio cambiaron durante la lectura SEO. Se abortó para '
+      'no publicar una mezcla de settings, catálogo, stock, marcas, '
+      'categorías, aliases, páginas o bloques.',
+    );
+  }
+  return second;
+}
+
+Future<void> assertSeoOwnerSourceSnapshotIsCurrent({
+  required SeoOwnerSourceSnapshot expected,
+  required SeoOwnerSourceSnapshotLoader readOnce,
+}) async {
+  final current = await fetchConsistentSeoOwnerSourceSnapshot(
+    readOnce: readOnce,
+  );
+  if (current.revision != expected.revision) {
+    throw StateError(
+      'Una fuente del sitio cambió mientras se generaban los artefactos SEO. '
+      'No se aplicaron redirects; vuelve a generar desde la revisión actual.',
+    );
+  }
+}
+
+Future<SeoOwnerSourceSnapshot> _readSeoOwnerSourceSnapshot({
   required String supabaseUrl,
   required String tenantId,
   required String serviceRoleKey,
 }) async {
-  final url = Uri.parse(
-    '$supabaseUrl/rest/v1/website_pages'
-    '?tenant_id=eq.$tenantId'
-    '&is_published=eq.true'
-    '&select=id,slug,title,meta_title,meta_description,is_home,updated_at'
-    '&limit=500',
+  final websiteSettings = await _fetchWebsiteSettingsSource(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
   );
-
-  final response = await _httpGet(
-    url,
-    headers: {
-      'apikey': serviceRoleKey,
-    },
+  final publishedProductOwners = await fetchSeoSnapshotProductCandidates(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
+    onlyMerchant: false,
   );
-
-  final decoded = jsonDecode(response) as List<dynamic>;
-  return decoded.map((e) => (e as Map<String, dynamic>)).toList();
-}
-
-Future<Map<String, List<Map<String, dynamic>>>> _fetchWebsiteBlocksForPages({
-  required String supabaseUrl,
-  required List<Map<String, dynamic>> pages,
-  required String serviceRoleKey,
-}) async {
-  final pageIds = pages
-      .map((page) => (page['id'] ?? '').toString().trim())
+  final productIds = publishedProductOwners
+      .map((product) => (product['id'] ?? '').toString().trim())
       .where((id) => id.isNotEmpty)
       .toList(growable: false);
-  if (pageIds.isEmpty) return {};
-
-  final pageFilter = pageIds.map(Uri.encodeComponent).join(',');
-  final url = Uri.parse(
-    '$supabaseUrl/rest/v1/website_blocks'
-    '?page_id=in.($pageFilter)'
-    '&is_visible=eq.true'
-    '&select=page_id,block_type,block_data,order_index,is_visible'
-    '&order=order_index.asc',
+  final publicAvailability = await _fetchPublicProductAvailability(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
+    productIds: productIds,
+  );
+  final brandRows = await _fetchProductBrandRows(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
+    brandIds: publishedProductOwners
+        .map((product) => (product['brand_id'] ?? '').toString())
+        .where((id) => id.trim().isNotEmpty),
+  );
+  final activeCategoryRows = await _fetchActiveProductCategories(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
+  );
+  final productUrlAliases = await _fetchProductUrlAliases(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
+  );
+  final pages = await fetchSeoSnapshotPublishedWebsitePages(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
+  );
+  final pageBlocks = await fetchSeoSnapshotWebsiteBlocksForPages(
+    supabaseUrl: supabaseUrl,
+    pages: pages,
+    serviceRoleKey: serviceRoleKey,
   );
 
-  final response = await _httpGet(
-    url,
-    headers: {
-      'apikey': serviceRoleKey,
-    },
+  return SeoOwnerSourceSnapshot(
+    websiteSettings: websiteSettings,
+    publishedProductOwners: List.unmodifiable(publishedProductOwners),
+    publicAvailability: Map.unmodifiable(publicAvailability),
+    brandRows: List.unmodifiable(brandRows),
+    activeCategoryRows: List.unmodifiable(activeCategoryRows),
+    productUrlAliases: List.unmodifiable(productUrlAliases),
+    websiteContent: SeoWebsiteContentSnapshot(
+      pages: pages,
+      pageBlocks: pageBlocks,
+    ),
   );
+}
 
-  final decoded = jsonDecode(response) as List<dynamic>;
-  final byPage = <String, List<Map<String, dynamic>>>{};
-  for (final item in decoded) {
-    final block = item as Map<String, dynamic>;
-    final pageId = (block['page_id'] ?? '').toString();
-    if (pageId.isEmpty) continue;
-    byPage.putIfAbsent(pageId, () => <Map<String, dynamic>>[]).add(block);
+List<String> _sortedSeoSourceRowRevisions(
+  Iterable<Map<String, dynamic>> rows,
+) {
+  final revisions = rows.map(_canonicalSeoSourceJson).toList(growable: false)
+    ..sort();
+  return revisions;
+}
+
+const Set<String> _transientProductStockKeys = {
+  'stock_quantity',
+  'inventory_qty',
+  // Product stock updates advance the shared row timestamp. Keeping it in the
+  // editorial projection would make an inventory-only movement look like a
+  // content revision even after both quantity fields were removed.
+  'updated_at',
+};
+
+Map<String, dynamic> _withoutTransientProductStock(
+  Map<String, dynamic> row,
+) {
+  return <String, dynamic>{
+    for (final entry in row.entries)
+      if (!_transientProductStockKeys.contains(entry.key))
+        entry.key: entry.value,
+  };
+}
+
+String _canonicalSeoSourceJson(dynamic value) {
+  dynamic canonicalize(dynamic node) {
+    if (node is Map) {
+      final keys = node.keys.map((key) => key.toString()).toList()..sort();
+      return <String, dynamic>{
+        for (final key in keys) key: canonicalize(node[key]),
+      };
+    }
+    if (node is List) return node.map(canonicalize).toList(growable: false);
+    return node;
   }
 
-  for (final blocks in byPage.values) {
-    blocks.sort((a, b) => (_toInt(a['order_index']) ?? 0)
-        .compareTo(_toInt(b['order_index']) ?? 0));
+  return jsonEncode(canonicalize(value));
+}
+
+String _sha256Hex(String canonicalJson) {
+  return sha256.convert(utf8.encode(canonicalJson)).toString();
+}
+
+final RegExp _sha256Pattern = RegExp(r'^[0-9a-f]{64}$');
+final RegExp _uuidPattern = RegExp(
+  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-'
+  r'[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+);
+
+/// Resolves and clears a previous generated evidence file before any remote
+/// reads. A failed build therefore cannot leave stale hashes that look like
+/// evidence from the failed invocation.
+///
+/// Existing unrelated files and symbolic links fail closed instead of being
+/// overwritten.
+File prepareSeoPublicationEvidenceOutput(String path) {
+  final trimmed = path.trim();
+  if (trimmed.isEmpty) {
+    throw const FormatException('El path de evidencia está vacío.');
+  }
+  final outputFile = File(trimmed);
+  final type = FileSystemEntity.typeSync(
+    outputFile.path,
+    followLinks: false,
+  );
+  if (type == FileSystemEntityType.directory ||
+      type == FileSystemEntityType.link) {
+    throw FileSystemException(
+      'El path de evidencia debe ser un archivo regular.',
+      outputFile.path,
+    );
+  }
+  if (type == FileSystemEntityType.file) {
+    final dynamic existing;
+    try {
+      existing = jsonDecode(outputFile.readAsStringSync());
+    } on FormatException {
+      throw const FormatException(
+        'El archivo existente no es evidencia de publicación reemplazable.',
+      );
+    }
+    if (existing is! Map ||
+        existing.keys.map((key) => key.toString()).toSet().difference(
+          const {'owner_source_sha256', 'build_input_sha256'},
+        ).isNotEmpty ||
+        existing.length != 2 ||
+        !_sha256Pattern.hasMatch(
+          (existing['owner_source_sha256'] ?? '').toString(),
+        ) ||
+        !_sha256Pattern.hasMatch(
+          (existing['build_input_sha256'] ?? '').toString(),
+        )) {
+      throw const FormatException(
+        'El archivo existente no es evidencia de publicación reemplazable.',
+      );
+    }
+    outputFile.deleteSync();
+  }
+  return outputFile;
+}
+
+/// Writes only the two deterministic source digests consumed by the release
+/// manifest. No tenant data, credentials, revision payloads, or timestamps are
+/// exposed.
+Future<void> writeSeoPublicationEvidenceFile({
+  required File outputFile,
+  required String ownerSourceSha256,
+  required String buildInputSha256,
+}) async {
+  if (!_sha256Pattern.hasMatch(ownerSourceSha256) ||
+      !_sha256Pattern.hasMatch(buildInputSha256)) {
+    throw const FormatException(
+      'La evidencia de publicación requiere dos SHA-256 canónicos.',
+    );
   }
 
-  return byPage;
+  const encoder = JsonEncoder.withIndent('  ');
+  final contents = '${encoder.convert({
+        'owner_source_sha256': ownerSourceSha256,
+        'build_input_sha256': buildInputSha256,
+      })}\n';
+  outputFile.parent.createSync(recursive: true);
+  final temporaryFile = File(
+    '${outputFile.path}.tmp-$pid-${DateTime.now().microsecondsSinceEpoch}',
+  );
+  try {
+    await temporaryFile.writeAsString(contents, flush: true);
+    if (outputFile.existsSync()) {
+      await outputFile.delete();
+    }
+    await temporaryFile.rename(outputFile.path);
+    if (await outputFile.readAsString() != contents) {
+      throw StateError(
+        'La evidencia escrita no coincide con la proyección determinista.',
+      );
+    }
+  } finally {
+    if (temporaryFile.existsSync()) {
+      temporaryFile.deleteSync();
+    }
+  }
 }
 
 Future<String> _httpGet(Uri url, {required Map<String, String> headers}) async {
@@ -2004,14 +3487,6 @@ String? _getSetting(Map<String, String> settings, String key) {
 // Helpers
 // -----------------------------------------------------------------------------
 
-String _applyTemplate(String template, Map<String, String> variables) {
-  var out = template;
-  for (final entry in variables.entries) {
-    out = out.replaceAll('{${entry.key}}', entry.value);
-  }
-  return out;
-}
-
 String _truncate(String text, int maxLen) {
   final t = text.trim();
   if (t.length <= maxLen) return t;
@@ -2044,92 +3519,10 @@ List<String> _stringList(dynamic value) {
       .toList(growable: false);
 }
 
-String _productLocalSearchPhrase({
-  required List<String> searchTerms,
-}) {
-  // Search terms are an explicit product-owned website field. Do not infer
-  // wheel size, material, component family, or any other SEO attribute from a
-  // product title/category string: those guesses can contradict the visible
-  // landing page and Merchant facts.
-  return searchTerms.isEmpty ? '' : _cleanText(searchTerms.first);
-}
-
-String _appendProductSearchPhrase({
-  required String description,
-  required String searchPhrase,
-}) {
-  final cleanDescription = _cleanText(description);
-  if (searchPhrase.isEmpty) return cleanDescription;
-
-  final normalizedDescription = _normalizeSearchText(cleanDescription);
-  final normalizedPhrase = _normalizeSearchText(searchPhrase);
-  if (normalizedDescription.contains(normalizedPhrase)) {
-    return cleanDescription;
-  }
-
-  return _cleanText(
-    '$cleanDescription Ideal si buscas $searchPhrase, con compra online, '
-    'retiro en tienda y asesoría especializada.',
-  );
-}
-
-String _buildProductSeoTitle({
-  required String baseTitle,
-  required String storeName,
-  required String searchPhrase,
-}) {
-  final cleanStoreName = _cleanText(storeName);
-  final storeSuffix =
-      cleanStoreName.isEmpty ? 'Viña del Mar' : '$cleanStoreName Viña del Mar';
-  var root = _cleanText(baseTitle);
-
-  if (cleanStoreName.isNotEmpty) {
-    root = root.replaceFirst(
-      RegExp(r'\s*\|\s*' + RegExp.escape(cleanStoreName) + r'\s*$',
-          caseSensitive: false),
-      '',
-    );
-  }
-
-  final normalizedRoot = _normalizeSearchText(root);
-  final shortPhrase = _shortProductSearchPhrase(searchPhrase);
-  final shouldPrefix = shortPhrase.isNotEmpty &&
-      !_titleAlreadyTargetsPhrase(normalizedRoot, searchPhrase);
-  final separatorLength = shouldPrefix ? ' -  | '.length : ' | '.length;
-  final availableRootLength =
-      120 - storeSuffix.length - separatorLength - shortPhrase.length;
-  final rootLimit = availableRootLength < 24 ? 24 : availableRootLength;
-  final fittedRoot = _truncate(root, rootLimit);
-  final rawTitle = shouldPrefix
-      ? '$shortPhrase - $fittedRoot | $storeSuffix'
-      : '$fittedRoot | $storeSuffix';
-
-  return _truncate(_cleanText(rawTitle), 120);
-}
-
-bool _titleAlreadyTargetsPhrase(String normalizedTitle, String searchPhrase) {
-  final wheelSize = _extractWheelSize(searchPhrase);
-  if (wheelSize.isNotEmpty) {
-    return normalizedTitle.contains('aro ${_normalizeWheelSize(wheelSize)}');
-  }
-
-  final normalizedPhrase = _normalizeSearchText(searchPhrase)
-      .replaceAll(' para bicicleta en vina del mar', '');
-  return normalizedPhrase.isNotEmpty &&
-      normalizedTitle.contains(normalizedPhrase);
-}
-
-String _shortProductSearchPhrase(String searchPhrase) {
-  if (searchPhrase.isEmpty) return '';
-  final shortened = _cleanText(searchPhrase)
-      .replaceAll(' para bicicleta en Viña del Mar', ' Viña del Mar');
-  if (shortened.isEmpty) return '';
-  return '${shortened[0].toUpperCase()}${shortened.substring(1)}';
-}
-
 String _buildProductFallbackHtml({
   required String title,
   required String description,
+  required String storeName,
   required String canonicalUrl,
   required String imageUrl,
   required String productBrand,
@@ -2156,21 +3549,18 @@ String _buildProductFallbackHtml({
       description.trim().isEmpty ? '' : '<p>${_escapeHtml(description)}</p>';
 
   return '''
-  <noscript id="seo-product-fallback">
-    <main>
-      <article>
-        <h1>${_escapeHtml(title)}</h1>
-        $descriptionHtml
-        $imageHtml
-        <ul>
-          ${details.map((item) => '<li>${_escapeHtml(item)}</li>').join('\n          ')}
-        </ul>
-        <p>Retiro en tienda y atención especializada para bicicletas en Viña del Mar.</p>
-        <p><a href="${_escapeHtml(canonicalUrl)}">Ver producto en Viñabike</a></p>
-        <p><a href="/productos">Ver más productos de bicicleta</a></p>
-      </article>
-    </main>
-  </noscript>''';
+  <main id="seo-product-fallback" class="storefront-nojs-fallback">
+    <article>
+      <h1>${_escapeHtml(title)}</h1>
+      $descriptionHtml
+      $imageHtml
+      <ul>
+        ${details.map((item) => '<li>${_escapeHtml(item)}</li>').join('\n        ')}
+      </ul>
+      <p><a href="${_escapeHtml(canonicalUrl)}">Ver producto en ${_escapeHtml(storeName)}</a></p>
+      <p><a href="/productos">Ver más productos de bicicleta</a></p>
+    </article>
+  </main>''';
 }
 
 String _buildCategorySeoTitle({
@@ -2205,6 +3595,7 @@ String _buildCategorySeoDescription({
 String _buildCategoryFallbackHtml({
   required String title,
   required String description,
+  required String storeName,
   required SeoCategoryProjection category,
 }) {
   final items = category.products.take(24).map((product) {
@@ -2213,16 +3604,14 @@ String _buildCategoryFallbackHtml({
   }).join('\n          ');
 
   return '''
-  <noscript id="seo-category-fallback">
-    <main>
-      <h1>${_escapeHtml(title)}</h1>
-      <p>${_escapeHtml(description)}</p>
-      <ul>
-          $items
-      </ul>
-      <p><a href="/productos">Ver catálogo completo de Viñabike</a></p>
-    </main>
-  </noscript>''';
+  <main id="seo-category-fallback" class="storefront-nojs-fallback">
+    <h1>${_escapeHtml(title)}</h1>
+    <p>${_escapeHtml(description)}</p>
+    <ul>
+        $items
+    </ul>
+    <p><a href="/productos">Ver catálogo completo de ${_escapeHtml(storeName)}</a></p>
+  </main>''';
 }
 
 String _buildCatalogFallbackHtml({
@@ -2240,56 +3629,40 @@ String _buildCatalogFallbackHtml({
   }).join('\n          ');
 
   return '''
-  <noscript id="seo-catalog-fallback">
-    <main>
-      <h1>${_escapeHtml(title)}</h1>
-      <p>${_escapeHtml(description)}</p>
-      <ul>
-          $items
-      </ul>
-      <p><a href="/contacto">Consulta productos y disponibilidad con Viñabike</a></p>
-    </main>
-  </noscript>''';
+  <main id="seo-catalog-fallback" class="storefront-nojs-fallback">
+    <h1>${_escapeHtml(title)}</h1>
+    <p>${_escapeHtml(description)}</p>
+    <ul>
+        $items
+    </ul>
+    <p><a href="/productos">Ver catálogo completo</a></p>
+  </main>''';
 }
 
-String _extractWheelSize(String text) {
-  final normalized = _normalizeSearchText(text);
-  final patterns = <RegExp>[
-    RegExp(r'\baro\s*(700c?|29|28|27[.,]?5|26|24|20|18|16|14|12)\b'),
-    RegExp(r'\b(700c?|29|28|27[.,]?5|26|24|20|18|16|14|12)\s*(?:x|×)\b'),
-  ];
+/// Builds the exact active catalog-category path projection used by product
+/// metadata.
+///
+/// Product metadata and collection publication have deliberately different
+/// eligibility rules: a product keeps the factual path of its exact active
+/// category even when that category is a hidden descendant, while only
+/// `show_on_website` categories may produce collection pages. Inactive rows
+/// are excluded rather than leaking a stale catalog path into a snapshot.
+Map<String, String> buildActiveCategoryPathMap({
+  required List<Map<String, dynamic>> activeCategories,
+}) {
+  final pathsById = <String, String>{};
+  for (final row in activeCategories) {
+    final categoryId = (row['id'] ?? '').toString().trim();
+    if (categoryId.isEmpty || row['is_active'] != true) continue;
 
-  for (final pattern in patterns) {
-    final match = pattern.firstMatch(normalized);
-    if (match == null) continue;
-    return _normalizeWheelSize(match.group(1) ?? '');
+    final fullPath = _cleanText((row['full_path'] ?? '').toString());
+    final categoryName = _cleanText((row['name'] ?? '').toString());
+    final categoryPath = fullPath.isNotEmpty ? fullPath : categoryName;
+    if (categoryPath.isNotEmpty) {
+      pathsById[categoryId] = categoryPath;
+    }
   }
-  return '';
-}
-
-String _normalizeWheelSize(String size) {
-  final normalized = size.toLowerCase().replaceAll(',', '.').trim();
-  if (normalized == '700') return '700c';
-  if (normalized == '27.5') return '27.5';
-  return normalized.replaceAll(RegExp(r'[^0-9a-z.]'), '');
-}
-
-String _normalizeSearchText(String text) {
-  var normalized = text.toLowerCase();
-  const replacements = {
-    'á': 'a',
-    'é': 'e',
-    'í': 'i',
-    'ó': 'o',
-    'ú': 'u',
-    'ü': 'u',
-    'ñ': 'n',
-  };
-  replacements
-      .forEach((from, to) => normalized = normalized.replaceAll(from, to));
-  normalized = normalized.replaceAll('×', 'x');
-  normalized = normalized.replaceAll(RegExp(r'\s+'), ' ');
-  return normalized.trim();
+  return Map.unmodifiable(pathsById);
 }
 
 /// Builds crawler category pages from the same stable category IDs, saved
@@ -2368,6 +3741,7 @@ List<SeoCategoryProjection> buildCanonicalCategorySeoProjections({
         SeoCategoryProductProjection(
           name: productName,
           url: _joinUrl(storeUrl, productPath),
+          updatedAt: _parseDateTime(product['updated_at']),
         ),
       );
     }
@@ -2421,6 +3795,7 @@ List<SeoCategoryProjection> buildCanonicalCategorySeoProjections({
                 : categoryImageUrl,
         allowIndexing: presentation.allowIndexing,
         sortOrder: _toInt(row['sort_order']) ?? 0,
+        updatedAt: _parseDateTime(row['updated_at']),
         products: List.unmodifiable(categoryProducts),
       ),
     );
@@ -2521,65 +3896,96 @@ Future<void> _writeCrawlerFiles({
   required String storeUrl,
   required List<Map<String, dynamic>> products,
   required List<SeoCategoryProjection> categories,
-  required List<Map<String, dynamic>> pages,
+  required List<Map<String, dynamic>> websitePages,
+  required Map<String, List<Map<String, dynamic>>> websitePageBlocks,
+  required List<PublishedDynamicCmsSeoProjection> dynamicCmsPages,
+  required Set<String> staticTrustPagePaths,
   required bool productsCatalogIndexable,
   required Map<String, String> resolvedBrandNamesById,
+  required DateTime? websiteSettingsUpdatedAt,
+  required List<Map<String, dynamic>> brandRows,
+  required List<Map<String, dynamic>> activeCategoryRows,
 }) async {
   final normalizedStoreUrl = storeUrl.replaceAll(RegExp(r'/+$'), '');
-  final now = DateTime.now().toUtc();
-  const generatedStaticRoutes = <String>{
-    '/',
-    '/productos',
-    '/servicios',
-    '/contacto',
-    '/nosotros',
-    '/terminos',
-    '/privacidad',
-    '/devoluciones',
-    '/envios',
-  };
-  final urls = <String, _SitemapUrl>{};
+  final urls = <String, SeoSitemapUrl>{};
+  final brandUpdatedAtById = <String, DateTime?>{
+    for (final row in brandRows)
+      (row['id'] ?? '').toString().trim(): _parseDateTime(row['updated_at']),
+  }..remove('');
+  final categoryUpdatedAtById = <String, DateTime?>{
+    for (final row in activeCategoryRows)
+      (row['id'] ?? '').toString().trim(): _parseDateTime(row['updated_at']),
+  }..remove('');
 
   void addUrl(
     String path, {
     DateTime? lastmod,
     String? changefreq,
     String? priority,
-    List<_SitemapImage> images = const [],
+    List<SeoSitemapImage> images = const [],
   }) {
     if (!isIndexableStorefrontPathForSitemap(path)) return;
     final normalizedPath =
         path == '/' ? '/' : '/${path.replaceAll(RegExp(r'^/+|/+$'), '')}';
-    urls[normalizedPath] = _SitemapUrl(
+    urls[normalizedPath] = SeoSitemapUrl(
       loc: _joinUrl(normalizedStoreUrl, normalizedPath),
-      lastmod: lastmod ?? now,
+      lastmod: lastmod,
       changefreq: changefreq,
       priority: priority,
       images: images,
     );
   }
 
-  addUrl('/', changefreq: 'weekly', priority: '1.0');
+  addUrl(
+    '/',
+    lastmod: _websitePageUpdatedAtForPath(
+      websitePages,
+      websitePageBlocks,
+      '/',
+      additionalContributors: [websiteSettingsUpdatedAt],
+    ),
+    changefreq: 'weekly',
+    priority: '1.0',
+  );
   if (productsCatalogIndexable) {
-    addUrl('/productos', changefreq: 'daily', priority: '0.9');
-  }
-  addUrl('/servicios', changefreq: 'monthly', priority: '0.7');
-  addUrl('/contacto', changefreq: 'monthly', priority: '0.6');
-  addUrl('/nosotros', changefreq: 'monthly', priority: '0.5');
-  addUrl('/terminos', changefreq: 'yearly', priority: '0.3');
-  addUrl('/privacidad', changefreq: 'yearly', priority: '0.3');
-  addUrl('/devoluciones', changefreq: 'yearly', priority: '0.3');
-  addUrl('/envios', changefreq: 'yearly', priority: '0.3');
-
-  for (final page in pages) {
-    final route = _routeForWebsitePage(page);
-    if (route == null) continue;
-    if (generatedStaticRoutes.contains(route)) continue;
     addUrl(
-      route,
-      lastmod: _parseDateTime(page['updated_at']),
-      changefreq: route == '/' ? 'weekly' : 'monthly',
-      priority: route == '/' ? '1.0' : '0.5',
+      '/productos',
+      lastmod: maxFactualSeoUpdatedAt(
+        [
+          websiteSettingsUpdatedAt,
+          ...products.map((product) => _parseDateTime(product['updated_at'])),
+          ...brandRows.map((row) => _parseDateTime(row['updated_at'])),
+          ...activeCategoryRows.map((row) => _parseDateTime(row['updated_at'])),
+        ],
+      ),
+      changefreq: 'daily',
+      priority: '0.9',
+    );
+  }
+  for (final path in staticTrustPagePaths) {
+    addUrl(
+      path,
+      lastmod: _websitePageUpdatedAtForPath(
+        websitePages,
+        websitePageBlocks,
+        path,
+        additionalContributors: [websiteSettingsUpdatedAt],
+      ),
+      changefreq: path == '/nosotros' ? 'monthly' : 'yearly',
+      priority: path == '/nosotros' ? '0.5' : '0.3',
+    );
+  }
+
+  for (final page in dynamicCmsPages) {
+    addUrl(
+      page.canonicalPath,
+      lastmod: page.updatedAt,
+      changefreq: 'monthly',
+      priority: page.canonicalPath == '/servicios'
+          ? '0.7'
+          : page.canonicalPath == '/contacto'
+              ? '0.6'
+              : '0.5',
     );
   }
 
@@ -2593,12 +3999,17 @@ Future<void> _writeCrawlerFiles({
     final productName = _cleanText(commerce.title);
     addUrl(
       productPath,
-      lastmod: now,
+      lastmod: maxFactualSeoUpdatedAt([
+        websiteSettingsUpdatedAt,
+        _parseDateTime(product['updated_at']),
+        brandUpdatedAtById[(product['brand_id'] ?? '').toString().trim()],
+        categoryUpdatedAtById[(product['category_id'] ?? '').toString().trim()],
+      ]),
       changefreq: 'weekly',
       priority: '0.8',
       images: commerce.imageUrls
           .map(
-            (url) => _SitemapImage(
+            (url) => SeoSitemapImage(
               loc: url,
               title: productName,
             ),
@@ -2611,6 +4022,11 @@ Future<void> _writeCrawlerFiles({
     if (!category.allowIndexing) continue;
     addUrl(
       category.canonicalPath,
+      lastmod: maxFactualSeoUpdatedAt([
+        websiteSettingsUpdatedAt,
+        category.updatedAt,
+        ...category.products.map((product) => product.updatedAt),
+      ]),
       changefreq: 'weekly',
       priority: '0.7',
     );
@@ -2618,17 +4034,67 @@ Future<void> _writeCrawlerFiles({
 
   final sorted = urls.values.toList()..sort((a, b) => a.loc.compareTo(b.loc));
 
+  await File(pathJoin(buildDir.path, 'sitemap.xml'))
+      .writeAsString(buildSeoSitemapXml(sorted));
+
+  final robots = '''
+User-agent: *
+Allow: /
+
+Disallow: /cuenta/
+Disallow: /pedido/
+
+Sitemap: $normalizedStoreUrl/sitemap.xml
+''';
+
+  await File(pathJoin(buildDir.path, 'robots.txt')).writeAsString(robots);
+}
+
+DateTime? _websitePageUpdatedAtForPath(
+  List<Map<String, dynamic>> pages,
+  Map<String, List<Map<String, dynamic>>> pageBlocks,
+  String path, {
+  Iterable<DateTime?> additionalContributors = const [],
+}) {
+  for (final page in pages) {
+    if (_routeForWebsitePage(page) == path) {
+      final pageId = (page['id'] ?? '').toString().trim();
+      return maxFactualSeoUpdatedAt([
+        ...additionalContributors,
+        _parseDateTime(page['updated_at']),
+        ...?pageBlocks[pageId]
+            ?.where(isWebsiteBlockVisibleOnAnyPublicBreakpoint)
+            .map((block) => _parseDateTime(block['updated_at'])),
+      ]);
+    }
+  }
+  return maxFactualSeoUpdatedAt(additionalContributors);
+}
+
+DateTime? maxFactualSeoUpdatedAt(Iterable<DateTime?> values) {
+  DateTime? latest;
+  for (final value in values) {
+    if (value != null && (latest == null || value.isAfter(latest))) {
+      latest = value;
+    }
+  }
+  return latest;
+}
+
+String buildSeoSitemapXml(Iterable<SeoSitemapUrl> urls) {
   final sitemap = StringBuffer()
     ..writeln('<?xml version="1.0" encoding="UTF-8"?>')
     ..writeln(
       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
       'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">',
     );
-  for (final url in sorted) {
+  for (final url in urls) {
     sitemap
       ..writeln('  <url>')
-      ..writeln('    <loc>${_escapeXml(url.loc)}</loc>')
-      ..writeln('    <lastmod>${_formatDate(url.lastmod)}</lastmod>');
+      ..writeln('    <loc>${_escapeXml(url.loc)}</loc>');
+    if (url.lastmod != null) {
+      sitemap.writeln('    <lastmod>${_formatDate(url.lastmod!)}</lastmod>');
+    }
     for (final image in url.images) {
       sitemap
         ..writeln('    <image:image>')
@@ -2649,21 +4115,331 @@ Future<void> _writeCrawlerFiles({
     sitemap.writeln('  </url>');
   }
   sitemap.writeln('</urlset>');
+  return sitemap.toString();
+}
 
-  await File(pathJoin(buildDir.path, 'sitemap.xml'))
-      .writeAsString(sitemap.toString());
+/// Fails the deploy-time generator when its final files violate the crawler
+/// contract. This validates the artifacts that Firebase will receive, not just
+/// the Dart builders that produced them.
+Future<void> validateGeneratedSeoArtifacts({
+  required Directory buildDir,
+  required String storeUrl,
+  required Set<String> staticTrustPagePaths,
+  Map<String, String>? expectedLocalBusinessIdentity,
+}) async {
+  final files = <String, File>{};
+  const unownedReturnPolicyType = 'Merchant' 'ReturnPolicy';
 
-  final robots = '''
-User-agent: *
-Allow: /
+  void addFile(File file) {
+    if (file.existsSync()) files[file.absolute.path] = file;
+  }
 
-Disallow: /cuenta/
-Disallow: /pedido/
+  void addDirectory(String relativePath) {
+    final directory = Directory(pathJoin(buildDir.path, relativePath));
+    if (!directory.existsSync()) return;
+    for (final entity in directory.listSync(recursive: true)) {
+      if (entity is File) addFile(entity);
+    }
+  }
 
-Sitemap: $normalizedStoreUrl/sitemap.xml
-''';
+  addFile(File(pathJoin(buildDir.path, 'index.html')));
+  addDirectory('productos');
+  addDirectory('pagina');
+  for (final slug in _trustPageDefinitions().keys) {
+    addFile(File(pathJoin(buildDir.path, slug)));
+  }
 
-  await File(pathJoin(buildDir.path, 'robots.txt')).writeAsString(robots);
+  final failures = <String>[];
+  final normalizedStoreUrl = storeUrl.replaceAll(RegExp(r'/+$'), '');
+  final normalizedStoreOrigin = _urlOrigin(normalizedStoreUrl);
+  final sitemapFile = File(pathJoin(buildDir.path, 'sitemap.xml'));
+  String? sitemap;
+  final sitemapEntries = <(String, String, File)>[];
+  if (!sitemapFile.existsSync()) {
+    failures.add('/sitemap.xml no existe.');
+  } else {
+    sitemap = await sitemapFile.readAsString();
+    if (!sitemap.contains('<urlset ') || !sitemap.contains('</urlset>')) {
+      failures.add('/sitemap.xml no contiene un urlset completo.');
+    }
+    for (final match in RegExp(r'<loc>(.*?)</loc>').allMatches(sitemap)) {
+      final value = _unescapeXml(match.group(1)!.trim());
+      final uri = Uri.tryParse(value);
+      if (uri == null ||
+          !uri.hasScheme ||
+          _urlOrigin(value) != normalizedStoreOrigin ||
+          uri.hasQuery ||
+          uri.hasFragment) {
+        failures.add('sitemap.xml contiene una URL fuera del owner: $value.');
+        continue;
+      }
+      final encodedPath = value.substring(normalizedStoreOrigin.length);
+      final path = encodedPath.isEmpty ? '/' : encodedPath;
+      final file = _snapshotFileForPublicPath(buildDir, path);
+      if (!file.existsSync()) {
+        failures.add('$path aparece en sitemap.xml sin snapshot generado.');
+        continue;
+      }
+      addFile(file);
+      sitemapEntries.add((value, path, file));
+    }
+  }
+
+  for (final file in files.values) {
+    final html = await file.readAsString();
+    if (!RegExp(r'<html\b', caseSensitive: false).hasMatch(html)) continue;
+    final relativePath =
+        file.absolute.path.substring(buildDir.absolute.path.length);
+    final h1Count =
+        RegExp(r'<h1\b', caseSensitive: false).allMatches(html).length;
+    final mainCount =
+        RegExp(r'<main\b', caseSensitive: false).allMatches(html).length;
+    if (h1Count != 1) {
+      failures.add('$relativePath contiene $h1Count elementos h1.');
+    }
+    if (mainCount != 1) {
+      failures.add('$relativePath contiene $mainCount elementos main.');
+    }
+    if (html.contains(unownedReturnPolicyType)) {
+      failures.add(
+        '$relativePath contiene $unownedReturnPolicyType sin dueño.',
+      );
+    }
+
+    final localBusinessNodes = <Map<dynamic, dynamic>>[];
+    final jsonLdScripts = RegExp(
+      r'<script[^>]+type="application/ld\+json"[^>]*>(.*?)</script>',
+      caseSensitive: false,
+      dotAll: true,
+    ).allMatches(html);
+    if (jsonLdScripts.isEmpty) {
+      failures.add('$relativePath no contiene JSON-LD.');
+    }
+    for (final script in jsonLdScripts) {
+      try {
+        final decoded = jsonDecode(script.group(1)!.trim());
+        localBusinessNodes.addAll(
+          _schemaNodesByType(decoded, 'LocalBusiness'),
+        );
+      } catch (error) {
+        failures.add('$relativePath contiene JSON-LD inválido: $error');
+      }
+    }
+    if (localBusinessNodes.length != 1) {
+      failures.add(
+        '$relativePath contiene ${localBusinessNodes.length} nodos '
+        'LocalBusiness.',
+      );
+    } else if (expectedLocalBusinessIdentity != null) {
+      final localBusiness = localBusinessNodes.single;
+      for (final entry in expectedLocalBusinessIdentity.entries) {
+        final actual = _readNestedJsonValue(localBusiness, entry.key);
+        if (actual != entry.value) {
+          failures.add(
+            '$relativePath declara LocalBusiness.${entry.key}=$actual; '
+            'esperaba ${entry.value}.',
+          );
+        }
+      }
+    }
+
+    final semanticMain = RegExp(
+      r'<main\b[^>]*>.*?</main>',
+      caseSensitive: false,
+      dotAll: true,
+    ).firstMatch(html)?.group(0);
+    if (semanticMain != null) {
+      for (final link in RegExp(
+        r'href="([^"#?]+)"',
+        caseSensitive: false,
+      ).allMatches(semanticMain)) {
+        final href = _unescapeXml(link.group(1)!.trim());
+        final String? linkedPath;
+        if (href.startsWith('/')) {
+          linkedPath = href;
+        } else {
+          final uri = Uri.tryParse(href);
+          final sameOwner = uri != null &&
+              uri.hasScheme &&
+              _urlOrigin(href) == normalizedStoreOrigin &&
+              !uri.hasQuery &&
+              !uri.hasFragment;
+          if (!sameOwner) {
+            linkedPath = null;
+          } else {
+            final encodedPath = href.substring(normalizedStoreOrigin.length);
+            linkedPath = encodedPath.isEmpty ? '/' : encodedPath;
+          }
+        }
+        if (linkedPath == null) continue;
+        final linkedFile = _snapshotFileForPublicPath(buildDir, linkedPath);
+        if (!linkedFile.existsSync()) {
+          failures.add(
+            '$relativePath enlaza $linkedPath sin snapshot generado.',
+          );
+        }
+      }
+    }
+  }
+
+  if (sitemap != null) {
+    for (final entry in sitemapEntries) {
+      final html = await entry.$3.readAsString();
+      final canonical = _readHtmlCanonical(html);
+      if (canonical != entry.$1) {
+        failures.add(
+          '${entry.$2} declara canonical=$canonical; '
+          'sitemap.xml declara ${entry.$1}.',
+        );
+      }
+      final robots = _readHtmlMetaContent(html, 'robots');
+      if (robots != 'index,follow') {
+        failures.add(
+          '${entry.$2} aparece en sitemap.xml con robots=$robots.',
+        );
+      }
+    }
+    for (final entry in _trustPageDefinitions().entries) {
+      final path = '/${entry.key}';
+      final expected = staticTrustPagePaths.contains(path);
+      final sitemapContains = sitemap
+          .contains('<loc>${_escapeXml('$normalizedStoreUrl$path')}</loc>');
+      if (sitemapContains != expected) {
+        failures.add(
+          '$path ${expected ? 'falta en' : 'aparece indebidamente en'} '
+          'sitemap.xml.',
+        );
+      }
+    }
+  }
+
+  for (final entry in _trustPageDefinitions().entries) {
+    final path = '/${entry.key}';
+    final file = File(pathJoin(buildDir.path, entry.key));
+    if (!file.existsSync()) {
+      failures.add('$path no tiene snapshot neutral/indexable.');
+      continue;
+    }
+    final html = await file.readAsString();
+    final expectedIndexable = staticTrustPagePaths.contains(path);
+    final robots = _readHtmlMetaContent(html, 'robots');
+    final expectedRobots =
+        expectedIndexable ? 'index,follow' : 'noindex,follow';
+    if (robots != expectedRobots) {
+      failures.add('$path declara robots=$robots; esperaba $expectedRobots.');
+    }
+    final canonical = _readHtmlCanonical(html);
+    final expectedCanonical = '$normalizedStoreUrl$path';
+    if (canonical != expectedCanonical) {
+      failures.add(
+        '$path declara canonical=$canonical; esperaba $expectedCanonical.',
+      );
+    }
+
+    final legalLinks = RegExp(
+      r'href="/(nosotros|envios|devoluciones|terminos|privacidad)"',
+      caseSensitive: false,
+    ).allMatches(html);
+    for (final match in legalLinks) {
+      final linkedPath = '/${match.group(1)!.toLowerCase()}';
+      if (!staticTrustPagePaths.contains(linkedPath)) {
+        failures.add('$path enlaza la ruta legal no publicada $linkedPath.');
+      }
+    }
+  }
+
+  if (failures.isNotEmpty) {
+    throw StateError(
+      'Falló el contrato de artefactos SEO:\n- ${failures.join('\n- ')}',
+    );
+  }
+}
+
+Map<String, String> buildExpectedLocalBusinessIdentity(
+  Map<String, String> settings, {
+  required String storeUrl,
+}) {
+  return Map.unmodifiable({
+    'name': _cleanText(
+      _getSetting(settings, 'seo_business_name') ??
+          _getSetting(settings, 'store_name') ??
+          '',
+    ),
+    'legalName': _cleanText(
+      _getSetting(settings, 'business_legal_name') ?? '',
+    ),
+    'taxID': _cleanText(_getSetting(settings, 'business_tax_id') ?? ''),
+    'telephone': _cleanText(
+      _getSetting(settings, 'seo_phone') ??
+          _getSetting(settings, 'contact_phone') ??
+          '',
+    ),
+    'email': _cleanText(
+      _getSetting(settings, 'seo_email') ??
+          _getSetting(settings, 'contact_email') ??
+          '',
+    ),
+    'url': storeUrl.replaceAll(RegExp(r'/+$'), ''),
+    'address.addressLocality': _cleanText(
+      _getSetting(settings, 'seo_address_city') ??
+          _getSetting(settings, 'seo_address_locality') ??
+          '',
+    ),
+    'address.addressRegion':
+        _cleanText(_getSetting(settings, 'seo_address_region') ?? ''),
+    'address.postalCode':
+        _cleanText(_getSetting(settings, 'seo_address_postal') ?? ''),
+    'address.addressCountry':
+        _cleanText(_getSetting(settings, 'seo_address_country') ?? ''),
+  });
+}
+
+List<Map<dynamic, dynamic>> _schemaNodesByType(
+  dynamic node,
+  String expectedType,
+) {
+  final matches = <Map<dynamic, dynamic>>[];
+  void visit(dynamic value) {
+    if (value is List) {
+      for (final child in value) {
+        visit(child);
+      }
+      return;
+    }
+    if (value is! Map) return;
+    if (value['@type'] == expectedType) matches.add(value);
+    for (final child in value.values) {
+      visit(child);
+    }
+  }
+
+  visit(node);
+  return matches;
+}
+
+String _readNestedJsonValue(Map<dynamic, dynamic> object, String dottedPath) {
+  dynamic current = object;
+  for (final segment in dottedPath.split('.')) {
+    if (current is! Map || !current.containsKey(segment)) return '';
+    current = current[segment];
+  }
+  return current?.toString() ?? '';
+}
+
+String? _readHtmlMetaContent(String html, String name) {
+  final match = RegExp(
+    '<meta[^>]+name="${RegExp.escape(name)}"[^>]+content="([^"]*)"[^>]*>',
+    caseSensitive: false,
+  ).firstMatch(html);
+  return match?.group(1);
+}
+
+String? _readHtmlCanonical(String html) {
+  final match = RegExp(
+    r'<link[^>]+rel="canonical"[^>]+href="([^"]*)"[^>]*>',
+    caseSensitive: false,
+  ).firstMatch(html);
+  return match?.group(1);
 }
 
 /// Sitemap inputs are public canonical paths only.
@@ -2738,27 +4514,57 @@ String _escapeXml(String text) {
       .replaceAll("'", '&apos;');
 }
 
-class _SitemapUrl {
+String _unescapeXml(String text) {
+  return text
+      .replaceAll('&quot;', '"')
+      .replaceAll('&apos;', "'")
+      .replaceAll('&gt;', '>')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&amp;', '&');
+}
+
+File _snapshotFileForPublicPath(Directory buildDir, String publicPath) {
+  final normalized = publicPath == '/'
+      ? '/'
+      : '/${publicPath.replaceAll(RegExp(r'^/+|/+$'), '')}';
+  if (normalized == '/') {
+    return File(pathJoin(buildDir.path, 'index.html'));
+  }
+  if (normalized == '/productos') {
+    return File(pathJoin(pathJoin(buildDir.path, 'productos'), 'index.html'));
+  }
+
+  var outputPath = buildDir.path;
+  for (final segment in normalized.substring(1).split('/')) {
+    if (segment.isEmpty || segment == '.' || segment == '..') {
+      return File(pathJoin(buildDir.path, '.invalid-public-path'));
+    }
+    outputPath = pathJoin(outputPath, segment);
+  }
+  return File(outputPath);
+}
+
+class SeoSitemapUrl {
   final String loc;
-  final DateTime lastmod;
+  final DateTime? lastmod;
   final String? changefreq;
   final String? priority;
-  final List<_SitemapImage> images;
+  final List<SeoSitemapImage> images;
 
-  const _SitemapUrl({
+  const SeoSitemapUrl({
     required this.loc,
-    required this.lastmod,
+    this.lastmod,
     this.changefreq,
     this.priority,
     this.images = const [],
   });
 }
 
-class _SitemapImage {
+class SeoSitemapImage {
   final String loc;
   final String title;
 
-  const _SitemapImage({
+  const SeoSitemapImage({
     required this.loc,
     required this.title,
   });
@@ -2779,6 +4585,7 @@ class SeoCategoryProjection {
   final String socialImageUrl;
   final bool allowIndexing;
   final int sortOrder;
+  final DateTime? updatedAt;
   final List<SeoCategoryProductProjection> products;
 
   const SeoCategoryProjection({
@@ -2796,6 +4603,7 @@ class SeoCategoryProjection {
     required this.socialImageUrl,
     required this.allowIndexing,
     required this.sortOrder,
+    required this.updatedAt,
     required this.products,
   });
 
@@ -2805,15 +4613,17 @@ class SeoCategoryProjection {
 class SeoCategoryProductProjection {
   final String name;
   final String url;
+  final DateTime? updatedAt;
 
   const SeoCategoryProductProjection({
     required this.name,
     required this.url,
+    this.updatedAt,
   });
 }
 
-class _ProductRedirectAlias {
-  const _ProductRedirectAlias({
+class SeoProductRedirectAlias {
+  const SeoProductRedirectAlias({
     required this.productId,
     required this.aliasPath,
   });
@@ -2840,15 +4650,13 @@ class SeoCategoryRouteAliasProjection {
   final String canonicalPath;
 }
 
-class _TrustPageFallback {
+class _TrustPageDefinition {
   final String title;
-  final String description;
-  final String body;
+  final String navLabel;
 
-  const _TrustPageFallback({
+  const _TrustPageDefinition({
     required this.title,
-    required this.description,
-    required this.body,
+    required this.navLabel,
   });
 }
 
@@ -2890,15 +4698,47 @@ String _buildLegacyProductRedirectHtml({
   <meta http-equiv="refresh" content="0; url=$escapedUrl">
   <script>window.location.replace($encodedUrl);</script>
 ''';
-  return html.replaceFirst(closingHead, '$redirectMarkup$closingHead');
+  var redirectHtml = _replaceOrInsertMetaName(
+    html,
+    name: 'robots',
+    content: 'noindex,follow',
+  );
+  redirectHtml = _replaceOrInsertMetaName(
+    redirectHtml,
+    name: 'googlebot',
+    content: 'noindex,follow',
+  );
+  return redirectHtml.replaceFirst(
+    closingHead,
+    '$redirectMarkup$closingHead',
+  );
 }
 
-List<_ProductRedirectAlias> _buildProductRedirectAliases({
+Map<String, String> buildSeoProductCanonicalPathLedger({
+  required Iterable<Map<String, dynamic>> publishedProducts,
+}) {
+  final canonicalPathByProductId = <String, String>{};
+  for (final product in publishedProducts) {
+    if (product['is_active'] != true ||
+        product['is_published'] != true ||
+        product['show_on_website'] != true) {
+      continue;
+    }
+    final productId = (product['id'] ?? '').toString().trim();
+    if (productId.isEmpty) continue;
+    final canonicalPath = _publicProductPath(product);
+    if (canonicalPath == '/productos') continue;
+    canonicalPathByProductId[productId] = canonicalPath;
+  }
+  return Map.unmodifiable(canonicalPathByProductId);
+}
+
+List<SeoProductRedirectAlias> buildSeoProductRedirectAliases({
   required List<Map<String, dynamic>> products,
   required List<Map<String, dynamic>> aliases,
   required Map<String, String> canonicalPathByProductId,
 }) {
-  final redirectsBySource = <String, _ProductRedirectAlias>{};
+  final redirectsBySource = <String, SeoProductRedirectAlias>{};
 
   void add(String productId, String aliasPath) {
     final canonicalPath = canonicalPathByProductId[productId];
@@ -2910,7 +4750,7 @@ List<_ProductRedirectAlias> _buildProductRedirectAliases({
     }
     redirectsBySource.putIfAbsent(
       normalizedAlias,
-      () => _ProductRedirectAlias(
+      () => SeoProductRedirectAlias(
         productId: productId,
         aliasPath: normalizedAlias,
       ),
@@ -2964,27 +4804,21 @@ List<SeoCategoryRouteAliasProjection>
     }
 
     for (final alias in presentation.slugAliases) {
-      for (final services in const [false, true]) {
-        final root = services ? 'servicios' : 'productos';
-        final aliasPath = _normalizePublicPath(
-          '/$root/categoria/$alias',
-        );
-        final canonicalPath = publicCategoryPath(
-          presentation: presentation,
-          services: services,
-        );
-        if (aliasPath.isEmpty || aliasPath == canonicalPath) continue;
-        redirects.add(
-          SeoCategoryRouteAliasProjection(
-            categoryId: categoryId,
-            name: name,
-            description: _cleanText((row['description'] ?? '').toString()),
-            imageUrl: (row['image_url'] ?? '').toString().trim(),
-            aliasPath: aliasPath,
-            canonicalPath: canonicalPath,
-          ),
-        );
-      }
+      final aliasPath = _normalizePublicPath('/productos/categoria/$alias');
+      final canonicalPath = publicCategoryPath(
+        presentation: presentation,
+      );
+      if (aliasPath.isEmpty || aliasPath == canonicalPath) continue;
+      redirects.add(
+        SeoCategoryRouteAliasProjection(
+          categoryId: categoryId,
+          name: name,
+          description: _cleanText((row['description'] ?? '').toString()),
+          imageUrl: (row['image_url'] ?? '').toString().trim(),
+          aliasPath: aliasPath,
+          canonicalPath: canonicalPath,
+        ),
+      );
     }
   }
   redirects.sort((a, b) => a.aliasPath.compareTo(b.aliasPath));
@@ -3016,117 +4850,429 @@ Future<void> _writeRedirectSnapshot({
   );
 }
 
-Future<int> _writeFirebaseStorefrontRedirects({
+Future<SeoFirebaseRedirectWritePlan> _buildFirebaseStorefrontRedirectPlan({
   required File firebaseConfigFile,
   required File manifestFile,
-  required List<_ProductRedirectAlias> productRedirects,
+  required List<SeoProductRedirectAlias> productRedirects,
   required List<SeoCategoryRouteAliasProjection> categoryRedirects,
   required Map<String, String> canonicalPathByProductId,
-}) async {
-  if (!firebaseConfigFile.existsSync()) return 0;
+  required String expectedPublicDirectory,
+}) {
+  return buildFirebaseStorefrontRedirectPlan(
+    firebaseConfigFile: firebaseConfigFile,
+    manifestFile: manifestFile,
+    productRedirects: productRedirects,
+    categoryRedirects: categoryRedirects,
+    canonicalPathByProductId: canonicalPathByProductId,
+    expectedPublicDirectory: expectedPublicDirectory,
+  );
+}
 
-  final generatedProductRedirects = productRedirects
-      .map((redirect) {
-        // The old published product URLs used /productos/<uuid>. Keep
-        // /producto/* and ERP-mounted aliases available through generated HTML
-        // and the runtime alias resolver without consuming Firebase's finite
-        // exact-redirect rule budget.
-        if (!redirect.aliasPath.startsWith('/productos/')) return null;
-        final destination = canonicalPathByProductId[redirect.productId];
-        if (destination == null || destination == redirect.aliasPath) {
-          return null;
-        }
-        return <String, dynamic>{
-          'source': redirect.aliasPath,
-          'destination': destination,
-          'type': 301,
-        };
-      })
-      .whereType<Map<String, dynamic>>()
-      .toList(growable: false);
-  final generatedCategoryRedirects = categoryRedirects
-      .map(
-        (redirect) => <String, dynamic>{
-          'source': redirect.aliasPath,
-          'destination': redirect.canonicalPath,
-          'type': 301,
-        },
-      )
-      .toList(growable: false);
-  final generatedBySource = <String, Map<String, dynamic>>{};
-  for (final redirect in [
-    ...generatedProductRedirects,
-    ...generatedCategoryRedirects,
-  ]) {
-    generatedBySource[redirect['source'].toString()] = redirect;
+Future<SeoFirebaseRedirectWritePlan> buildFirebaseStorefrontRedirectPlan({
+  required File firebaseConfigFile,
+  required File manifestFile,
+  required List<SeoProductRedirectAlias> productRedirects,
+  required List<SeoCategoryRouteAliasProjection> categoryRedirects,
+  required Map<String, String> canonicalPathByProductId,
+  required String expectedPublicDirectory,
+}) async {
+  if (!firebaseConfigFile.existsSync()) {
+    throw StateError(
+      'No existe la configuración Firebase requerida: '
+      '${firebaseConfigFile.path}.',
+    );
   }
+
+  final generatedBySource = <String, Map<String, dynamic>>{};
+
+  void addGenerated(Map<String, dynamic> candidate) {
+    final redirect = _validatedExactRedirect(
+      candidate,
+      owner: 'redirect generado',
+    );
+    final source = redirect['source']! as String;
+    final previous = generatedBySource[source];
+    if (previous != null && !_sameRedirect(previous, redirect)) {
+      throw StateError(
+        'Dos owners SEO intentan publicar destinos distintos para $source.',
+      );
+    }
+    generatedBySource[source] = redirect;
+  }
+
+  for (final redirect in productRedirects) {
+    // Exact Firebase rules are reserved for old public /productos/* URLs.
+    if (!redirect.aliasPath.startsWith('/productos/')) continue;
+    final destination = canonicalPathByProductId[redirect.productId];
+    if (destination == null) {
+      throw StateError(
+        'El alias ${redirect.aliasPath} no tiene un destino canónico vigente.',
+      );
+    }
+    if (destination == redirect.aliasPath) continue;
+    addGenerated({
+      'source': redirect.aliasPath,
+      'destination': destination,
+      'type': 301,
+    });
+  }
+  for (final redirect in categoryRedirects) {
+    addGenerated({
+      'source': redirect.aliasPath,
+      'destination': redirect.canonicalPath,
+      'type': 301,
+    });
+  }
+
   final generated = generatedBySource.values.toList(growable: false)
     ..sort(
       (a, b) => a['source'].toString().compareTo(b['source'].toString()),
     );
+  final generatedSources = generatedBySource.keys.toSet();
+  for (final redirect in generated) {
+    if (generatedSources.contains(redirect['destination'])) {
+      throw StateError(
+        'El redirect ${redirect['source']} apunta a otro alias '
+        '${redirect['destination']}; los destinos deben ser canónicos.',
+      );
+    }
+  }
 
-  final previousSources = <String>{};
+  final previousBySource = <String, Map<String, dynamic>>{};
   if (manifestFile.existsSync()) {
     try {
       final previous = jsonDecode(await manifestFile.readAsString());
-      if (previous is Map && previous['redirects'] is List) {
-        for (final item in previous['redirects'] as List) {
-          if (item is Map && item['source'] != null) {
-            previousSources.add(item['source'].toString());
-          }
-        }
+      if (previous is! Map ||
+          previous.keys.map((key) => key.toString()).toSet().difference(
+            const {'generatedAt', 'redirects'},
+          ).isNotEmpty ||
+          previous.length != 2 ||
+          DateTime.tryParse((previous['generatedAt'] ?? '').toString()) ==
+              null ||
+          previous['redirects'] is! List) {
+        throw const FormatException(
+          'Se esperaba {generatedAt, redirects} con tipos válidos.',
+        );
       }
-    } catch (_) {
-      // A malformed generated manifest must not block a storefront build.
+      for (final item in previous['redirects'] as List) {
+        if (item is! Map) {
+          throw const FormatException(
+            'Cada redirect del manifiesto debe ser un objeto.',
+          );
+        }
+        final redirect = _validatedExactRedirect(
+          Map<String, dynamic>.from(item),
+          owner: 'manifiesto anterior',
+        );
+        final source = redirect['source']! as String;
+        if (previousBySource.containsKey(source)) {
+          throw FormatException(
+            'El manifiesto contiene dos entradas para $source.',
+          );
+        }
+        previousBySource[source] = redirect;
+      }
+    } catch (error) {
+      throw FormatException(
+        'El manifiesto de redirects generado es inválido y no puede '
+        'reconciliarse de forma segura: $error',
+        manifestFile.path,
+      );
     }
   }
 
-  final config = Map<String, dynamic>.from(
-      jsonDecode(await firebaseConfigFile.readAsString()));
+  final dynamic decodedConfig;
+  try {
+    decodedConfig = jsonDecode(await firebaseConfigFile.readAsString());
+  } catch (error) {
+    throw FormatException(
+      'firebase.json no contiene JSON válido: $error',
+      firebaseConfigFile.path,
+    );
+  }
+  if (decodedConfig is! Map) {
+    throw FormatException(
+      'firebase.json debe contener un objeto raíz.',
+      firebaseConfigFile.path,
+    );
+  }
+  final config = Map<String, dynamic>.from(decodedConfig);
   final hosting = config['hosting'];
-  if (hosting is! List) return 0;
-
-  Map<String, dynamic>? storeHosting;
-  for (final entry in hosting) {
-    if (entry is Map && entry['target'] == 'store') {
-      storeHosting = Map<String, dynamic>.from(entry);
-      hosting[hosting.indexOf(entry)] = storeHosting;
-      break;
-    }
+  if (hosting is! List || hosting.any((entry) => entry is! Map)) {
+    throw FormatException(
+      'firebase.json debe declarar hosting como una lista de objetos.',
+      firebaseConfigFile.path,
+    );
   }
-  if (storeHosting == null) return 0;
+
+  final storeIndexes = <int>[];
+  for (var index = 0; index < hosting.length; index++) {
+    final entry = hosting[index] as Map;
+    if (entry['target'] == 'store') storeIndexes.add(index);
+  }
+  if (storeIndexes.length != 1) {
+    throw StateError(
+      'firebase.json debe contener exactamente un hosting target "store"; '
+      'encontrados: ${storeIndexes.length}.',
+    );
+  }
+  final storeIndex = storeIndexes.single;
+  final storeHosting =
+      Map<String, dynamic>.from(hosting[storeIndex] as Map<dynamic, dynamic>);
+  hosting[storeIndex] = storeHosting;
+
+  final configuredPublic = (storeHosting['public'] ?? '').toString().trim();
+  if (configuredPublic.isEmpty ||
+      Directory(configuredPublic).absolute.path !=
+          Directory(expectedPublicDirectory).absolute.path) {
+    throw StateError(
+      'El target store publica "$configuredPublic", pero los snapshots fueron '
+      'generados en "$expectedPublicDirectory".',
+    );
+  }
+
+  final existingRaw = storeHosting['redirects'];
+  if (existingRaw != null && existingRaw is! List) {
+    throw FormatException(
+      'hosting[target=store].redirects debe ser una lista.',
+      firebaseConfigFile.path,
+    );
+  }
+  final existingBySource = <String, Map<String, dynamic>>{};
+  for (final item in (existingRaw as List? ?? const [])) {
+    if (item is! Map) {
+      throw FormatException(
+        'Cada redirect de hosting[target=store] debe ser un objeto.',
+        firebaseConfigFile.path,
+      );
+    }
+    final redirect = _validatedExactRedirect(
+      Map<String, dynamic>.from(item),
+      owner: 'firebase.json',
+    );
+    final source = redirect['source']! as String;
+    if (existingBySource.containsKey(source)) {
+      throw StateError(
+        'firebase.json contiene dos redirects para $source.',
+      );
+    }
+    existingBySource[source] = redirect;
+  }
 
   final retained = <Map<String, dynamic>>[];
-  final existing = storeHosting['redirects'];
-  if (existing is List) {
-    for (final item in existing) {
-      if (item is! Map) continue;
-      final redirect = Map<String, dynamic>.from(item);
-      if (!previousSources.contains(redirect['source']?.toString())) {
-        retained.add(redirect);
+  for (final entry in existingBySource.entries) {
+    final previous = previousBySource[entry.key];
+    if (previous != null) {
+      if (!_sameRedirect(previous, entry.value)) {
+        throw StateError(
+          'firebase.json diverge del manifiesto anterior en ${entry.key}; '
+          'no es seguro sobrescribirlo.',
+        );
       }
+      continue;
+    }
+    if (generatedBySource.containsKey(entry.key)) {
+      throw StateError(
+        'El redirect manual ${entry.key} colisiona con uno generado.',
+      );
+    }
+    retained.add(entry.value);
+  }
+  for (final source in previousBySource.keys) {
+    if (!existingBySource.containsKey(source)) {
+      throw StateError(
+        'El manifiesto anterior declara $source, pero firebase.json no lo '
+        'contiene. Repara la divergencia antes de regenerar.',
+      );
     }
   }
-  storeHosting['redirects'] = [...retained, ...generated];
+  retained.sort(
+    (a, b) => a['source'].toString().compareTo(b['source'].toString()),
+  );
+  final finalRedirects = [...retained, ...generated];
+  storeHosting['redirects'] = finalRedirects;
 
   const encoder = JsonEncoder.withIndent('  ');
-  await firebaseConfigFile.writeAsString('${encoder.convert(config)}\n');
-  manifestFile.parent.createSync(recursive: true);
-  await manifestFile.writeAsString(
-    '${encoder.convert({
-          'generatedAt': DateTime.now().toUtc().toIso8601String(),
-          'redirects': generated,
-        })}\n',
+  final manifest = {
+    'generatedAt': DateTime.now().toUtc().toIso8601String(),
+    'redirects': generated,
+  };
+  final manifestContents = '${encoder.convert(manifest)}\n';
+  final decodedManifest = jsonDecode(manifestContents) as Map<String, dynamic>;
+  if (!_sameRedirectList(
+    decodedManifest['redirects'] as List,
+    generated,
+  )) {
+    throw StateError(
+        'El manifiesto serializado no coincide con los redirects.');
+  }
+
+  return SeoFirebaseRedirectWritePlan(
+    firebaseConfigFile: firebaseConfigFile,
+    manifestFile: manifestFile,
+    firebaseConfigContents: '${encoder.convert(config)}\n',
+    manifestContents: manifestContents,
+    redirectCount: generated.length,
   );
-  return generated.length;
+}
+
+Map<String, dynamic> _validatedExactRedirect(
+  Map<String, dynamic> value, {
+  required String owner,
+}) {
+  const expectedKeys = {'source', 'destination', 'type'};
+  final keys = value.keys.toSet();
+  if (keys.length != expectedKeys.length || !keys.containsAll(expectedKeys)) {
+    throw FormatException(
+      '$owner debe contener exactamente source, destination y type.',
+    );
+  }
+  final source = value['source'];
+  final destination = value['destination'];
+  final type = value['type'];
+  if (source is! String ||
+      destination is! String ||
+      type != 301 ||
+      !_isStrictPublicRedirectPath(source) ||
+      !_isStrictPublicRedirectPath(destination) ||
+      source == destination) {
+    throw FormatException(
+      '$owner contiene un source/destination/type inválido: $value.',
+    );
+  }
+  return {
+    'source': source,
+    'destination': destination,
+    'type': 301,
+  };
+}
+
+bool _isStrictPublicRedirectPath(String value) {
+  final trimmed = value.trim();
+  final uri = Uri.tryParse(trimmed);
+  if (uri == null ||
+      trimmed != value ||
+      !trimmed.startsWith('/') ||
+      trimmed.startsWith('//') ||
+      uri.hasScheme ||
+      uri.host.isNotEmpty ||
+      uri.hasQuery ||
+      uri.hasFragment ||
+      uri.path == '/' ||
+      uri.path.endsWith('/') ||
+      RegExp(r'[*{}]').hasMatch(trimmed)) {
+    return false;
+  }
+  try {
+    for (final rawSegment in uri.path.substring(1).split('/')) {
+      final segment = Uri.decodeComponent(rawSegment);
+      if (segment.isEmpty || segment == '.' || segment == '..') return false;
+    }
+  } on FormatException {
+    return false;
+  }
+  return true;
+}
+
+bool _sameRedirect(Map<String, dynamic> a, Map<String, dynamic> b) {
+  return a['source'] == b['source'] &&
+      a['destination'] == b['destination'] &&
+      a['type'] == b['type'];
+}
+
+bool _sameRedirectList(
+  List<dynamic> a,
+  List<Map<String, dynamic>> b,
+) {
+  if (a.length != b.length) return false;
+  for (var index = 0; index < a.length; index++) {
+    final left = a[index];
+    if (left is! Map ||
+        !_sameRedirect(Map<String, dynamic>.from(left), b[index])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+class SeoFirebaseRedirectWritePlan {
+  const SeoFirebaseRedirectWritePlan({
+    required this.firebaseConfigFile,
+    required this.manifestFile,
+    required this.firebaseConfigContents,
+    required this.manifestContents,
+    required this.redirectCount,
+  });
+  final File firebaseConfigFile;
+  final File manifestFile;
+  final String firebaseConfigContents;
+  final String manifestContents;
+  final int redirectCount;
+
+  Future<void> apply() async {
+    final configFile = firebaseConfigFile;
+    final redirectsFile = manifestFile;
+    final originalConfig = await configFile.readAsString();
+    final manifestExisted = redirectsFile.existsSync();
+    final originalManifest =
+        manifestExisted ? await redirectsFile.readAsString() : null;
+    redirectsFile.parent.createSync(recursive: true);
+    final suffix = DateTime.now().microsecondsSinceEpoch;
+    final configTemp = File('${configFile.path}.seo-$suffix.tmp');
+    final manifestTemp = File('${redirectsFile.path}.seo-$suffix.tmp');
+    try {
+      await configTemp.writeAsString(firebaseConfigContents, flush: true);
+      await manifestTemp.writeAsString(manifestContents, flush: true);
+      await configTemp.rename(configFile.path);
+      await manifestTemp.rename(redirectsFile.path);
+      if (await configFile.readAsString() != firebaseConfigContents ||
+          await redirectsFile.readAsString() != manifestContents) {
+        throw StateError(
+          'La verificación posterior de redirects no coincide con el plan.',
+        );
+      }
+    } catch (_) {
+      await configFile.writeAsString(originalConfig, flush: true);
+      if (originalManifest != null) {
+        await redirectsFile.writeAsString(originalManifest, flush: true);
+      } else if (!manifestExisted && redirectsFile.existsSync()) {
+        await redirectsFile.delete();
+      }
+      rethrow;
+    } finally {
+      if (configTemp.existsSync()) configTemp.deleteSync();
+      if (manifestTemp.existsSync()) manifestTemp.deleteSync();
+    }
+  }
 }
 
 String _normalizePublicPath(String value) {
   final trimmed = value.trim();
   if (trimmed.isEmpty) return '';
-  final path = Uri.tryParse(trimmed)?.path ?? trimmed;
+  final uri = Uri.tryParse(trimmed);
+  if (uri == null ||
+      uri.hasScheme ||
+      uri.host.isNotEmpty ||
+      uri.hasQuery ||
+      uri.hasFragment ||
+      !trimmed.startsWith('/') ||
+      trimmed.startsWith('//')) {
+    return '';
+  }
+  final path = uri.path;
   if (path.isEmpty) return '';
-  return path == '/' ? '/' : '/${path.replaceAll(RegExp(r'^/+|/+$'), '')}';
+  final normalized =
+      path == '/' ? '/' : '/${path.replaceAll(RegExp(r'^/+|/+$'), '')}';
+  if (normalized == '/') return normalized;
+  try {
+    for (final rawSegment in normalized.substring(1).split('/')) {
+      final segment = Uri.decodeComponent(rawSegment);
+      if (segment.isEmpty || segment == '.' || segment == '..') return '';
+    }
+  } on FormatException {
+    return '';
+  }
+  return normalized;
 }
 
 String _replaceTag(String html, RegExp pattern, String replacement) {
@@ -3156,6 +5302,14 @@ String _replaceMetaName(String html,
   return html;
 }
 
+String _removeMetaName(String html, {required String name}) {
+  final re = RegExp(
+    r'\s*<meta\s+name="' + RegExp.escape(name) + r'"\s+content="[^"]*"\s*/?>',
+    caseSensitive: false,
+  );
+  return html.replaceAll(re, '');
+}
+
 String _replaceOrInsertMetaName(String html,
     {required String name, required String content}) {
   final esc = _escapeHtml(content);
@@ -3174,7 +5328,10 @@ String _replaceOrInsertMetaName(String html,
     );
   }
 
-  return html;
+  return html.replaceFirst(
+    RegExp(r'</head>'),
+    '  <meta name="$name" content="$esc">\n</head>',
+  );
 }
 
 String _replaceMetaProperty(String html,
@@ -3187,6 +5344,16 @@ String _replaceMetaProperty(String html,
     return html.replaceAll(re, '<meta property="$property" content="$esc">');
   }
   return html;
+}
+
+String _removeMetaProperty(String html, {required String property}) {
+  final re = RegExp(
+    r'\s*<meta\s+property="' +
+        RegExp.escape(property) +
+        r'"\s+content="[^"]*"\s*/?>',
+    caseSensitive: false,
+  );
+  return html.replaceAll(re, '');
 }
 
 String _replaceOrInsertMetaProperty(String html,
@@ -3223,16 +5390,34 @@ String _replaceLinkHref(String html,
 }
 
 Map<String, String> _parseArgs(List<String> args) {
+  const supported = {
+    'build-dir',
+    'tenant-id',
+    'store-url',
+    'expected-store-url',
+    'product-scope',
+    'publication-evidence-file',
+  };
   final out = <String, String>{};
   for (var i = 0; i < args.length; i++) {
     final arg = args[i];
-    if (!arg.startsWith('--')) continue;
+    if (!arg.startsWith('--') || arg.length == 2) {
+      throw FormatException('Argumento inesperado: $arg');
+    }
     final key = arg.substring(2);
+    if (!supported.contains(key)) {
+      throw FormatException('Argumento no soportado: --$key');
+    }
+    if (out.containsKey(key)) {
+      throw FormatException('Argumento duplicado: --$key');
+    }
 
     final next = (i + 1) < args.length ? args[i + 1] : null;
     if (next == null || next.startsWith('--')) {
-      out[key] = 'true';
-      continue;
+      throw FormatException('--$key requiere un valor explícito');
+    }
+    if (next.trim().isEmpty) {
+      throw FormatException('--$key no puede estar vacío');
     }
 
     out[key] = next;

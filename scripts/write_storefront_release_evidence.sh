@@ -1,11 +1,29 @@
 #!/bin/bash
 set -euo pipefail
 
+# Positional arguments 1-5 preserve the original interface. Optional
+# publication arguments 6-9 override their environment equivalents:
+#
+#   6 / STOREFRONT_PUBLICATION_REQUEST_ID
+#   7 / STOREFRONT_PUBLICATION_OWNER_REVISION
+#   8 / STOREFRONT_OWNER_SOURCE_SHA256
+#   9 / STOREFRONT_BUILD_INPUT_SHA256
+#
+# A code-push or manual build omits all four and records `publication: null`.
+if [ "$#" -gt 9 ]; then
+    echo "Too many arguments for storefront release evidence." >&2
+    exit 64
+fi
+
 BUILD_DIR="${1:-build/web_store}"
 COMMIT="${2:-unknown}"
 RUN_ID="${3:-manual}"
 SOURCE="${4:-manual}"
 DIRTY="${5:-false}"
+REQUEST_ID="${6:-${STOREFRONT_PUBLICATION_REQUEST_ID:-}}"
+OWNER_REVISION="${7:-${STOREFRONT_PUBLICATION_OWNER_REVISION:-}}"
+OWNER_SOURCE_SHA256="${8:-${STOREFRONT_OWNER_SOURCE_SHA256:-}}"
+BUILD_INPUT_SHA256="${9:-${STOREFRONT_BUILD_INPUT_SHA256:-}}"
 
 if [ ! -d "$BUILD_DIR" ]; then
     echo "Storefront build directory not found: $BUILD_DIR" >&2
@@ -22,19 +40,69 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 127
 fi
 
+PUBLICATION_JSON="null"
+if [ -z "$REQUEST_ID" ]; then
+    if [ -n "$OWNER_REVISION" ] ||
+       [ -n "$OWNER_SOURCE_SHA256" ] ||
+       [ -n "$BUILD_INPUT_SHA256" ]; then
+        echo "Publication metadata requires a request_id." >&2
+        exit 64
+    fi
+else
+    if ! [[ "$REQUEST_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$ ]]; then
+        echo "Publication request_id must be a canonical RFC UUID." >&2
+        exit 64
+    fi
+    if ! [[ "$OWNER_REVISION" =~ ^[1-9][0-9]*$ ]]; then
+        echo "Publication owner_revision must be a positive integer." >&2
+        exit 64
+    fi
+    if ! [[ "$OWNER_SOURCE_SHA256" =~ ^[0-9a-fA-F]{64}$ ]]; then
+        echo "Publication owner_source_sha256 must be a SHA-256 digest." >&2
+        exit 64
+    fi
+    if ! [[ "$BUILD_INPUT_SHA256" =~ ^[0-9a-fA-F]{64}$ ]]; then
+        echo "Publication build_input_sha256 must be a SHA-256 digest." >&2
+        exit 64
+    fi
+
+    REQUEST_ID=$(printf '%s' "$REQUEST_ID" | tr '[:upper:]' '[:lower:]')
+    OWNER_SOURCE_SHA256=$(
+        printf '%s' "$OWNER_SOURCE_SHA256" | tr '[:upper:]' '[:lower:]'
+    )
+    BUILD_INPUT_SHA256=$(
+        printf '%s' "$BUILD_INPUT_SHA256" | tr '[:upper:]' '[:lower:]'
+    )
+    PUBLICATION_JSON=$(
+        jq -cn \
+            --arg request_id "$REQUEST_ID" \
+            --argjson owner_revision "$OWNER_REVISION" \
+            --arg owner_source_sha256 "$OWNER_SOURCE_SHA256" \
+            --arg build_input_sha256 "$BUILD_INPUT_SHA256" \
+            '{
+              request_id: $request_id,
+              owner_revision: $owner_revision,
+              owner_source_sha256: $owner_source_sha256,
+              build_input_sha256: $build_input_sha256
+            }'
+    )
+fi
+
 jq -n \
     --arg commit "$COMMIT" \
     --arg run "$RUN_ID" \
     --arg built_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --arg source "$SOURCE" \
     --argjson dirty "$DIRTY" \
+    --argjson publication "$PUBLICATION_JSON" \
     '{
       commit: $commit,
       run: $run,
       built_at: $built_at,
       target: "store",
       source: $source,
-      dirty: $dirty
+      dirty: $dirty,
+      publication: $publication
     }' \
     > "$BUILD_DIR/release.json"
 

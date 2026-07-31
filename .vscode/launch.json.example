@@ -24,6 +24,53 @@
       ]
     },
     {
+      "name": "🐞 Debug Vinabike Store (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "program": "lib/main_store.dart",
+      "deviceId": "chrome",
+      "preLaunchTask": "🧪 Check Vinabike Store debug port",
+      "toolArgs": [
+        "--web-hostname=127.0.0.1",
+        "--web-port=54332",
+        "--web-launch-url=http://localhost:54332/?debug_session=vinabike",
+        "--web-header=Cache-Control=no-store",
+        "--web-header=Pragma=no-cache",
+        "--web-browser-flag=--disable-background-timer-throttling",
+        "--web-browser-flag=--disable-backgrounding-occluded-windows",
+        "--web-browser-flag=--disable-renderer-backgrounding",
+        "--dart-define=STORE_PERF_LOGS=true",
+        "--dart-define=PUBLIC_STORE_IGNORE_AUTH=true",
+        "--dart-define=PUBLIC_STORE_TENANT_ID=5443b130-cc28-45af-a420-cd500b288890",
+        "--dart-define=PUBLIC_STORE_SUBDOMAIN=vinabike"
+      ]
+    },
+    {
+      "name": "🧪 Debug Vinabike Store (Chrome • Reset State)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "program": "lib/main_store.dart",
+      "deviceId": "chrome",
+      "preLaunchTask": "🧪 Check Vinabike Store debug port",
+      "toolArgs": [
+        "--web-hostname=127.0.0.1",
+        "--web-port=54332",
+        "--web-launch-url=http://localhost:54332/?debug_session=vinabike-reset",
+        "--web-header=Cache-Control=no-store",
+        "--web-header=Pragma=no-cache",
+        "--web-browser-flag=--disable-background-timer-throttling",
+        "--web-browser-flag=--disable-backgrounding-occluded-windows",
+        "--web-browser-flag=--disable-renderer-backgrounding",
+        "--dart-define=STORE_PERF_LOGS=true",
+        "--dart-define=PUBLIC_STORE_IGNORE_AUTH=true",
+        "--dart-define=PUBLIC_STORE_TENANT_ID=5443b130-cc28-45af-a420-cd500b288890",
+        "--dart-define=PUBLIC_STORE_SUBDOMAIN=vinabike",
+        "--dart-define=PUBLIC_STORE_DEBUG_RESET_LOCAL_STATE=true"
+      ]
+    },
+    {
       "name": "🪟 Flutter: Run (Windows)",
       "request": "launch",
       "type": "dart",

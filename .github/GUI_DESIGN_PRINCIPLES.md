@@ -1,5 +1,72 @@
 # GUI Design Principles — Viñabike ERP
 
+## Where visual values come from (read this before writing any)
+
+This guide owns the **reasoning**: hierarchy, density, composition, when a
+control is the right one. It does not own the **numbers**.
+
+Every visual value shipped in this repository — colour, radius, shadow, border,
+spacing, font, height — is read from a Claude Design file with the **`DesignSync`**
+tool, which returns literal values. Two consequences, both binding:
+
+- **Estimating is prohibited.** Reproducing a value from a screenshot of the
+  Design window, or picking one that looks right, is a defect regardless of how
+  good the result looks. A value that cannot be read is reported as unreadable;
+  anything that must ship unsourced is marked at its line in the code.
+- **Shared controls already exist.** Selects, popovers, menus, inputs, sheets,
+  dialogs, date pickers, tables and chips are defined in
+  `GUÍA GENERAL Viñabike - Componentes` under component ids (`S-05`, `O-02`,
+  `I-01`…), each with its limits and anti-patterns. Look the control up before
+  writing one, and bind its values to theme roles — that guide bans literal hex
+  in widgets. A module's own screens get their own Design canvas.
+
+The mechanics, including how to grep a 260 KB canvas without loading it into
+context, are in
+[`../docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`](../docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md).
+
+## Las palabras son parte del diseño
+
+El dueño de este ERP es el dueño del taller, no un contador ni un
+desarrollador. Una etiqueta que él no entiende es un defecto, del mismo tipo
+que un contraste insuficiente.
+
+**Prohibido en la UI** (todas corregidas ya una vez; no vuelvan):
+
+| No | Sí | Por qué |
+|---|---|---|
+| `imputar` / `imputación` | `aplicar` | En chileno es acusar a alguien de un delito |
+| `comprometer semana` | `confirmar semana` | Suena a poner algo en riesgo; el RPC ya se llama `confirm_*` |
+| `obligaciones` | `sueldos por pagar` | Jerga contable |
+| `GANADO` | `TOTAL` | Un sueldo no se "gana" como un premio |
+| `DINERO NUEVO` | `A PAGAR` | Nombra lo que la columna contiene |
+| `huella …4821` | `termina en …4821` | Jerga técnica |
+| `MANUAL 100%` | `TÚ LO DECIDISTE` | Un porcentaje que no mide nada |
+
+**Se quedan**: `cartola`, `conciliación`, `anticipo`, `nómina`. No son jerga —
+son las palabras correctas en Chile y las que usa el dueño.
+
+Tres reglas que generan el resto:
+
+- **Nombra la acción por lo que hace, no por su categoría contable.** Si el
+  botón dispara `confirm_payroll_voucher_v2`, se llama "Confirmar", no
+  "Comprometer".
+- **Un verbo por intención.** `Pagar` para efectivo y para transferencia: desde
+  el lado del operador es el mismo acto. Lo que cambia (qué evidencia queda) se
+  explica dentro del flujo, no en el rótulo del botón.
+- **Nunca un número que finge ser una medición.** Un `61%` que en realidad es
+  una heurística de nombre × monto × fecha afirma una precisión que nadie
+  midió, e invita a aprobar por umbral. Se dice en palabras lo que el sistema
+  honestamente sabe.
+
+### Un estado se deriva del PORQUÉ, no de un número
+
+`balance == 0` no significa "pagado": puede significar que no había nada que
+pagar. La app llegó a mostrar `Pagado` en verde sobre alguien que entró a una
+semana sin horas — afirmando un pago que nunca ocurrió.
+
+Antes de mapear un valor a un estado, pregunta qué lo produjo. Dos causas
+distintas con el mismo número son dos estados distintos.
+
 ## Product design posture
 
 Viñabike ERP must feel contemporary, professional, operationally efficient,
@@ -45,6 +112,68 @@ widgets do not override these guides. Their literal colors, radii, shadows,
 dimensions, dialogs, cards, or navigation structures are not visual precedent.
 A shared component is reusable only while it still satisfies the current
 guidance. Legacy consistency is not approval.
+
+### Current visual north star: Payroll is a language, not a template
+
+The rebuilt Payroll experience rendered by `/hr/payroll` is the current
+approved runtime reference for Viñabike's product-wide visual character and
+quality bar. Future UI refactors must feel like the same product through the
+relationships it demonstrates:
+
+- a deep navy identity/chrome layer against a cool neutral work canvas;
+- a deliberate ladder of white, sunken, selected, bordered, and raised
+  surfaces instead of either flat white or card walls;
+- restrained cyan/blue interaction accents and quiet semantic success,
+  warning, danger, information, and neutral treatments;
+- the typographic relationship currently expressed by Poppins for identity and
+  headings, IBM Plex Sans for operational reading, and IBM Plex Mono with
+  tabular figures for codes and comparable numbers;
+- compact but calm density, crisp hierarchy, modest geometry, restrained
+  depth, and one unmistakable action hierarchy; and
+- polished selected, hover, focus, disabled, loading, and transition states.
+
+These relationships must move into shared theme and component roles as the
+application is modernized. Do not make other modules import feature-owned
+`PayrollTokens` or copy its literal values indefinitely.
+
+Payroll is **not** a universal layout, shell, or widget template. Its week
+strip, table, column proportions, block arrangement, navigation placement,
+right rail, headers, disclosures, and payment sequence apply only where the
+task independently justifies them. Current integration artifacts are also not
+precedent: duplicated shell/module branding, a light tool island inside dark
+chrome, fixed proportions that compress status and action, or any literal
+handoff element that conflicts with the real host must be corrected rather
+than propagated.
+
+### Creative freedom grounded by operational truth
+
+A redesign may start from first principles and discard the legacy visual
+composition completely. Inspecting the current application is mandatory, but
+its purpose is to learn the operator's workflow, business states, canonical
+commands, permissions, navigation and return paths, real data extremes,
+platform capabilities, responsive hosts, and ownership of global chrome. It
+is not a requirement to restyle the existing screen or preserve its component
+tree.
+
+Before visual exploration, separate design inputs into three classes:
+
+1. **Mandatory domain and UX invariants:** workflow sequence, state truth,
+   permissions, canonical actions, persistence, return behavior, and shell
+   ownership.
+2. **Proven behavioral primitives:** adaptive `min`/`max`/`flex` sizing,
+   accessible targets, overlay geometry, state preservation, keyboard/touch
+   behavior, and other patterns validated in the real app.
+3. **Optional implementation suggestions:** existing widgets, packages, and
+   compositions that may be replaced when a better design preserves the first
+   two classes.
+
+A proven component contributes its behavior and lessons; it does not
+automatically prescribe its current appearance. Design remains free to
+recompose, restyle, or replace it. Conversely, creative freedom does not permit
+duplicating a shell-owned logo, workspace control, navigation surface, or
+global tool merely because a standalone concept needed one. Record shell
+ownership before drawing the module, then design the module around the real
+workflow with its own most effective information architecture.
 
 ## 1. Design the task, not a favorite pattern
 
@@ -113,6 +242,158 @@ The theme should provide coherent roles for concepts such as:
 The exact hues belong to the theme, not to feature code or prose guidance.
 Exceptions are limited to theme/token definitions, explicitly editor-owned or
 data-driven content, and external interoperability formats.
+
+### Global token cascade and component ownership
+
+The visual system must make a product-wide change a single owned edit, not a
+search-and-replace across features. Every reusable visual decision follows this
+cascade:
+
+1. **Foundation values:** the private palette, type families, spacing scale,
+   geometry, depth, and motion values.
+2. **Semantic roles:** purpose and host relationships such as
+   `actionPrimaryOnSurface`, `actionPrimaryOnShell`, `selectionAccent`,
+   `focusRing`, `surfaceSunken`, `inkMuted`, and the semantic status families.
+3. **Component roles:** the button, field, search, selector, chip, notice,
+   menu, popover, dialog, table, and pane treatments that consume semantic
+   roles.
+4. **Canonical components:** shared implementations that expose behavior and
+   variants without accepting arbitrary visual overrides from a feature.
+
+Name tokens by meaning, never by their current hue or by a module:
+`actionPrimaryOnShell`, not `cyanButton` or `payrollBlue`. Cyan on navy and
+blue on a light surface may be two intentional contrast roles even when both
+communicate a primary action. If the product later changes the first role to
+orange, every component using that role must update through the central theme
+without modifying feature code. The change must not recolor success, warning,
+information, selection, or focus unless those independent roles are also
+deliberately changed.
+
+Feature code must not bypass the cascade with literal colors, copied token
+values, local `ButtonStyle`/`InputDecoration` families, or imports from another
+feature's theme. A new visual variant requires a demonstrated semantic or
+interaction distinction; preference is not a new role.
+
+Every global token or component-role change must be reviewed in the visual
+catalog across light/dark hosts, compact/comfortable density, pointer/touch,
+all supported interaction states, and contrast requirements. Representative
+goldens protect the relationship; they do not freeze the current hue forever.
+
+The root resolver's minimum component family includes actions, fields/search,
+chips and selection controls, tables/cards/lists, dialogs/sheets/menus,
+searchable dropdowns, snackbars/banners, date/time pickers, tooltips, tabs,
+segmented controls, badges, sliders, scrollbars and adaptive navigation.
+Adding only a `ColorScheme` is incomplete: every family must be mapped to the
+resolved roles for all persisted presets in light and dark mode. A resolver
+test proves the mapping; a rendered host test must still open representative
+overlays because nested shell themes can leak after token-only tests pass.
+
+The application palette preference follows the same ownership rule.
+`AppearanceService` owns selection and persistence, while the root
+`MaterialApp` resolves the selected preset into the complete semantic theme and
+its component roles. `MainLayout`, the workspace chrome, right toolbar, and
+feature surfaces are consumers; none may maintain a competing palette. The
+existing sidebar palettes are migration input, not a permanent sidebar-only
+boundary. A Slack-like preset may change the shell and interaction personality
+product-wide, but it must preserve semantic distinctions, contrast, and the
+single component anatomy defined by this system.
+
+Global utility chrome must still use the correct semantic surface family. The
+desktop right toolbar is a content utility rail, not a continuation of the
+navigation canvas: it consumes the application neutral surface ladder, spans
+the full height available below the workspace strip regardless of icon count,
+and adapts that same role through palette-aware light and dark themes. In light
+mode both the collapsed rail and expanded utility panel use the root
+near-white `surface`; container tones belong inside the tool content, not
+across the whole toolbar. Dark mode may use adjacent palette-derived container
+levels to preserve layer contrast. Shell accent roles may style selection and
+focus, but must not repaint the rail as a navigation column.
+
+The detailed component hierarchy, foundation kit, selection matrix, stability
+contract, and migration order live in
+`docs/architecture/universal-ui-component-system.md`.
+
+#### A scheme must actually define the roles features consume
+
+"Consume theme roles" is only correct guidance while the theme defines them.
+Material 3 silently resolves an undeclared role to a coarser one — in Flutter,
+every `surfaceContainer*` role falls back to `surface` and `onSurfaceVariant`
+falls back to `onSurface`. A `ColorScheme` that declares only primary,
+secondary, surface and error therefore renders every panel in the application
+at exactly the canvas colour and every secondary label at full text weight.
+The result is the sterile extreme this guide forbids, produced by feature code
+that followed the rule correctly.
+
+When a surface looks flat, undifferentiated, or hierarchy-free, inspect the
+resolved scheme before redesigning the feature. Declare the neutral ladder
+(surface, the container steps, dim/bright), the secondary text role, both
+outline roles, and the container/inverse roles centrally, and verify a rendered
+screen rather than the analyzer. Never repair a collapsed role with a literal
+colour inside a feature.
+
+#### A chromatic shell must contain the outer application theme
+
+A dark or chromatic shell mounted inside a light or dark application theme is
+a complete theme boundary, not a partial `ColorScheme.copyWith`. It owns every
+surface/container step, text and icon role, outline, selection, focus, disabled
+and semantic status container used by its descendants. It also owns the
+component themes for fields/search, navigation rows, mode selectors, buttons,
+toggles and disclosures. Otherwise any new control can silently inherit a
+white light-mode fill or an unrelated graphite dark-mode role.
+
+Shell controls consume those scoped semantic/component roles; they do not
+repair leakage with local `fillColor`, borders or literal colours. The same
+resolved component-theme builder must serve the expanded sidebar, compact
+drawer and palette-aware tool chrome so there is no second partial palette
+path. Overlays that are application surfaces — menus, dialogs, sheets and
+popovers — deliberately resolve the outer application theme instead of
+accidentally capturing the shell theme.
+
+The minimum regression crosses every supported palette with both global light
+and dark hosts. It renders the real compact header, drawer, mode selector,
+search field, navigation/tool selection, badges, pinned actions and scrim; a
+token-only comparison cannot prove this boundary. It asserts that resolved
+roles and interactive states remain palette-owned and contrast-safe, and that
+switching the outer mode does not recolour an already-mounted shell.
+`ThemeMode.system` must be resolved from the platform brightness outside the
+nested shell theme, otherwise the shell's deliberately dark `Theme` can make
+the entire application report dark mode even on a light system. Selected
+controls, status badges and the scrim consume explicit semantic roles; do not
+recreate those states with a feature-local alpha or literal colour.
+
+The compact application header accepts semantic content — title, context line
+and the shell-owned search contract — rather than an arbitrary pre-styled
+widget. A module must not build a `Text`, `Column` or `TextField` from its
+content `Theme` and inject it onto chromatic chrome; explicit styles bypass
+inherited defaults and reintroduce dark text or light fills. The shell owns
+title typography, search anatomy, contrast and focus while the module owns the
+query and callbacks.
+
+Appearance mode is an explicit three-state preference: system, light and dark.
+Do not project it into a binary switch derived from effective brightness,
+because touching that switch silently destroys the saved `system` intent. The
+control shows all three states, while effective brightness remains a separate
+resolved value.
+
+#### Do not dilute a semantic role with alpha
+
+A role already encodes its intended weight. `outlineVariant` *is* the hairline
+colour; writing `outlineVariant.withValues(alpha: 0.2)` does not make a
+boundary "more subtle", it makes the surface depend on the role's exact
+luminance. Those multipliers accumulate silently: this repository reached
+roughly 160 of them, every one calibrated while the role resolved to near
+black. Correcting the scheme then erased them all at once and a 1500-row
+product table rendered as a single undivided block.
+
+Use the role directly for the thing it names. Reach for alpha only when the
+element is genuinely secondary to another boundary in the same composition, and
+never for the primary separator between records. When a whole family of call
+sites already dilutes a role, recalibrating that role centrally is the fix —
+not adding another multiplier at the call site.
+
+Record separation is load-bearing, not decoration: a table exists so rows can
+be scanned and compared. Verify a long list at real density after any change to
+outline, divider, or surface roles.
 
 ### Purposeful color, not color quotas
 
@@ -232,6 +513,44 @@ Back, close, and cancel return to the exact origin, not automatically to the
 canonical list of the entity that was visited. Cross-module navigation must
 carry return context. Save may close or remain in place according to the
 workflow, but its behavior must be explicit and consistent.
+
+### The return contract is a mechanism, not an intention
+
+This rule was documented long before it was followed, and stating it again is
+not what makes it hold. It was broken the same way every time, so recognise the
+shape rather than the principle.
+
+A routed detail is reachable from its own list, a dashboard card, a search
+result, a related record, or another module. Closing it with
+`context.go('<some list route>')` is not navigating back. `go` **replaces** the
+location: it discards the history entry the host occupied and disposes that
+route along with its query, filters, scope, selection, expanded rows and scroll
+offset. The operator lands on a freshly built list and has to reconstruct the
+work they were doing. This is the single cause behind "Back sent me to the
+employee list", "my search was lost", and "it jumped to page one".
+
+Consequences that follow from the same cause:
+
+- open a detail with `push`, never `go`, whenever the host must survive;
+- close it through `ReturnNavigation.close(context, fallbackRoute: …)` in
+  `lib/shared/services/return_navigation.dart`, which pops the real history
+  entry and uses the fallback only when a deep link left nothing to return to;
+- a `referrer`/`returnTo` query parameter reconstructs a *route*, not a *state*.
+  It is a deep-link fallback, never the primary return path;
+- keep list state with the list owner, so a preserved route is enough to
+  restore it. Do not rebuild it from a child or from visible labels;
+- a back arrow that carries an explicit destination label ("Volver al inicio")
+  is a navigation link, not a return. Declare it at the call site with a
+  `// return-contract: explicit-destination` comment so the choice stays
+  deliberate.
+
+The regression that must exist:
+`test/unit/navigation_return_contract_test.dart` fails when a back affordance is
+wired to a fixed route. Extract non-trivial handlers into a named method so the
+guard can see the affordance clearly. When you fix a context-loss bug, also add
+the interaction test that would have caught it: open the host, apply a query or
+filter, enter the detail, return, and assert the query, selection and scroll
+survived.
 
 ERP routes keep `MainLayout` as the stable operational shell unless a documented
 boundary truly requires another host. Do not mount nested top-level scaffolds,
@@ -441,6 +760,23 @@ Use `anchorRect` and `overlayBox.size` together. Do not calculate the trigger in
 screen/global coordinates and position its child in a route-local or nested
 overlay coordinate system.
 
+The root zoom scope is also the sole owner of display scale. Desktop scale is a
+user-controlled application preference, not a route generation or feature
+classification. A module must never force itself to `1.0` merely because it is
+new, switch the application scale when its workspace becomes active, or add a
+second inverse `Transform.scale`. Those approaches leave navigator overlays,
+scroll extents, hit testing, or shared chrome in another coordinate space and
+make the same application change size while the operator moves between tasks.
+
+Design and test rebuilt surfaces at the supported desktop scales, especially
+the configured `0.8` baseline and `1.0`, without rewriting their typography or
+geometry at runtime. Responsive composition uses the unzoomed viewport owner;
+scale and density remain separate decisions. Compact widths below `900px` keep
+an applied scale of `1.0` so declared touch targets retain their physical size.
+Regressions must switch between old and rebuilt workspaces without remounting
+route state and must open dialogs, sheets, and popovers through the same root
+scale.
+
 ### Mandatory regression gate
 
 Analyzer success and a screenshot are not sufficient for an anchored surface.
@@ -525,6 +861,13 @@ Before approving UI work, confirm:
 
 - [ ] The result is contemporary and intentional without becoming playful or
       sterile.
+- [ ] The result belongs to the Payroll-derived Viñabike visual language and
+      quality bar without copying Payroll's layout or feature widgets.
+- [ ] The composition was designed from the module's real operating loop, and
+      legacy UI was inspected for domain/UX truth rather than used as its
+      visual base.
+- [ ] Global brand, workspace navigation, and tool chrome each have one owner
+      and are not duplicated inside the module.
 - [ ] Feature code uses shared visual roles rather than literal palette choices.
 - [ ] Color, typography, surface tone, spacing, depth, and motion form one
       coherent hierarchy.

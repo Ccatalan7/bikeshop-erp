@@ -13,6 +13,49 @@ mode="${1:-reuse}"
 schema="$DB_ROOT/supabase/sql/core_schema.sql"
 hash_file="$DB_CACHE_DIR/core-schema.sha256"
 schema_inputs_manifest="$DB_CACHE_DIR/core-schema-inputs.sha256"
+ensure_local_lock_dir="$DB_CACHE_DIR/ensure-local.lock"
+ensure_local_lock_owner="$ensure_local_lock_dir/owner"
+ensure_local_lock_held=false
+
+ensure_local_release_lock() {
+  if [[ "$ensure_local_lock_held" == true &&
+    -f "$ensure_local_lock_owner" &&
+    "$(<"$ensure_local_lock_owner")" == "$$" ]]; then
+    rm -f "$ensure_local_lock_owner"
+    rmdir "$ensure_local_lock_dir" 2>/dev/null || true
+  fi
+  ensure_local_lock_held=false
+}
+
+ensure_local_acquire_lock() {
+  local deadline=$((SECONDS + 120))
+  local owner_pid=""
+
+  while ! mkdir "$ensure_local_lock_dir" 2>/dev/null; do
+    if [[ -f "$ensure_local_lock_owner" ]]; then
+      owner_pid="$(<"$ensure_local_lock_owner")"
+      if [[ "$owner_pid" =~ ^[0-9]+$ ]] &&
+        ! kill -0 "$owner_pid" 2>/dev/null; then
+        rm -f "$ensure_local_lock_owner"
+        rmdir "$ensure_local_lock_dir" 2>/dev/null || true
+        continue
+      fi
+    fi
+    ((SECONDS < deadline)) ||
+      die "Timed out waiting for the local schema rebuild lock"
+    sleep 0.2
+  done
+
+  printf '%s\n' "$$" >"$ensure_local_lock_owner"
+  ensure_local_lock_held=true
+}
+
+mkdir -p "$DB_CACHE_DIR"
+ensure_local_acquire_lock
+trap ensure_local_release_lock EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 {
   printf '%s  %s\n' "$(sha256_file "$schema")" "${schema#"$DB_ROOT/"}"

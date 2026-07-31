@@ -1,5 +1,9 @@
 # Auto-deploy the public storefront when ecommerce commits land
 name: Deploy Storefront to Firebase Hosting
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+      && format('Storefront publication · {0}', inputs.request_id)
+      || format('Storefront push · {0}', github.sha) }}
 
 on:
   push:
@@ -18,18 +22,72 @@ on:
       - "scripts/check_storefront_bundle_budget.sh"
       - "scripts/sync_seo_index.sh"
       - "scripts/write_storefront_release_evidence.sh"
+      - "scripts/releases/storefront_publication_workflow.mjs"
+      - "scripts/releases/storefront_publication_workflow.test.mjs"
       - ".firebaserc"
       - ".github/workflows/firebase-hosting-store.yml"
   workflow_dispatch:
+    inputs:
+      request_id:
+        description: Durable storefront publication request UUID
+        required: true
+        type: string
 
 jobs:
+  publication_context:
+    runs-on: ubuntu-latest
+    environment: Production
+    outputs:
+      is_publication: ${{ steps.begin.outputs.is_publication || steps.push.outputs.is_publication }}
+      should_run: ${{ steps.begin.outputs.should_run || steps.push.outputs.should_run }}
+      reason: ${{ steps.begin.outputs.reason }}
+      request_id: ${{ steps.begin.outputs.request_id }}
+      attempt_id: ${{ steps.begin.outputs.attempt_id }}
+      lease_fence: ${{ steps.begin.outputs.lease_fence }}
+      requested_revision: ${{ steps.begin.outputs.requested_revision }}
+      expected_firebase_origin: ${{ steps.begin.outputs.expected_firebase_origin || steps.push.outputs.expected_firebase_origin }}
+      expected_store_origin: ${{ steps.begin.outputs.expected_store_origin || steps.push.outputs.expected_store_origin }}
+    steps:
+      - name: Use code-push publication context
+        id: push
+        if: github.event_name == 'push'
+        run: |
+          echo "is_publication=false" >> "$GITHUB_OUTPUT"
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+          echo "expected_firebase_origin=https://vinabike-store.web.app" >> "$GITHUB_OUTPUT"
+          echo "expected_store_origin=https://vinabike.cl" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        if: github.event_name == 'workflow_dispatch'
+
+      - name: Bind durable publication request
+        id: begin
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          SUPABASE_URL: https://xzdvtzdqjeyqxnkqprtf.supabase.co
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          PUBLICATION_REQUEST_ID: ${{ inputs.request_id }}
+        run: node scripts/releases/storefront_publication_workflow.mjs begin
+
   integrity:
+    needs: publication_context
+    if: needs.publication_context.outputs.should_run == 'true'
     uses: ./.github/workflows/erp-integrity-gate.yml
 
   build_and_deploy:
-    needs: integrity
+    needs:
+      - publication_context
+      - integrity
+    if: >-
+      ${{
+        needs.publication_context.outputs.should_run == 'true' &&
+        needs.integrity.result == 'success'
+      }}
     runs-on: ubuntu-latest
     environment: Production
+    outputs:
+      publication_completed: ${{ steps.complete_publication.outputs.completed }}
+      publication_terminal: ${{ steps.seal_publication.outputs.terminal }}
     concurrency:
       group: production-store-${{ github.ref }}
       cancel-in-progress: false
@@ -58,25 +116,31 @@ jobs:
             -t lib/main_store.dart -o build/web_store
           bash scripts/check_storefront_bundle_budget.sh build/web_store
 
+      - name: Revalidate SEO owner revision after build
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: bash scripts/sync_seo_index.sh --check
+
       - name: Generate SEO snapshots, sitemap, and product redirects
         env:
+          IS_PUBLICATION: ${{ needs.publication_context.outputs.is_publication }}
+          PUBLICATION_EVIDENCE_FILE: ${{ runner.temp }}/storefront-publication-evidence.json
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           SUPABASE_URL: https://xzdvtzdqjeyqxnkqprtf.supabase.co
         run: |
-          dart run scripts/generate_product_seo_snapshots.dart \
-            --build-dir build/web_store \
-            --tenant-id 5443b130-cc28-45af-a420-cd500b288890 \
-            --store-url https://vinabike.cl \
+          generator_args=(
+            --build-dir build/web_store
+            --tenant-id 5443b130-cc28-45af-a420-cd500b288890
+            --expected-store-url https://vinabike.cl
             --product-scope published
-
-      - name: Seal storefront release evidence
-        run: |
-          bash scripts/write_storefront_release_evidence.sh \
-            build/web_store \
-            "${{ github.sha }}" \
-            "${{ github.run_id }}" \
-            github-actions \
-            false
+          )
+          if [ "$IS_PUBLICATION" = "true" ]; then
+            generator_args+=(
+              --publication-evidence-file "$PUBLICATION_EVIDENCE_FILE"
+            )
+          fi
+          dart run scripts/generate_product_seo_snapshots.dart \
+            "${generator_args[@]}"
 
       - name: Verify generated crawler assets and redirects
         run: |
@@ -84,7 +148,56 @@ jobs:
           test -s build/web_store/robots.txt
           node -e "const f=require('./firebase.json'); const s=f.hosting.find(x=>x.target==='store'); if (!s.redirects?.length) process.exit(1)"
 
+      - name: Seal durable publication revision
+        id: seal_publication
+        if: needs.publication_context.outputs.is_publication == 'true'
+        env:
+          SUPABASE_URL: https://xzdvtzdqjeyqxnkqprtf.supabase.co
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          PUBLICATION_REQUEST_ID: ${{ needs.publication_context.outputs.request_id }}
+          PUBLICATION_ATTEMPT_ID: ${{ needs.publication_context.outputs.attempt_id }}
+          PUBLICATION_LEASE_FENCE: ${{ needs.publication_context.outputs.lease_fence }}
+          PUBLICATION_REQUESTED_REVISION: ${{ needs.publication_context.outputs.requested_revision }}
+          PUBLICATION_EVIDENCE_FILE: ${{ runner.temp }}/storefront-publication-evidence.json
+        run: node scripts/releases/storefront_publication_workflow.mjs seal
+
+      - name: Write storefront release evidence
+        if: >-
+          ${{
+            needs.publication_context.outputs.is_publication != 'true' ||
+            steps.seal_publication.outputs.deploy == 'true'
+          }}
+        env:
+          IS_PUBLICATION: ${{ needs.publication_context.outputs.is_publication }}
+          PUBLICATION_REQUEST_ID: ${{ needs.publication_context.outputs.request_id }}
+          PUBLICATION_REQUESTED_REVISION: ${{ needs.publication_context.outputs.requested_revision }}
+          OWNER_SOURCE_SHA256: ${{ steps.seal_publication.outputs.owner_source_sha256 }}
+          BUILD_INPUT_SHA256: ${{ steps.seal_publication.outputs.build_input_sha256 }}
+        run: |
+          release_args=(
+            build/web_store
+            "${{ github.sha }}"
+            "${{ github.run_id }}"
+            github-actions
+            false
+          )
+          if [ "$IS_PUBLICATION" = "true" ]; then
+            release_args+=(
+              "$PUBLICATION_REQUEST_ID"
+              "$PUBLICATION_REQUESTED_REVISION"
+              "$OWNER_SOURCE_SHA256"
+              "$BUILD_INPUT_SHA256"
+            )
+          fi
+          bash scripts/write_storefront_release_evidence.sh \
+            "${release_args[@]}"
+
       - name: Retain storefront release evidence
+        if: >-
+          ${{
+            needs.publication_context.outputs.is_publication != 'true' ||
+            steps.seal_publication.outputs.deploy == 'true'
+          }}
         uses: actions/upload-artifact@v4
         with:
           name: store-release-evidence-${{ github.sha }}
@@ -95,6 +208,11 @@ jobs:
           retention-days: 30
 
       - name: Deploy store target
+        if: >-
+          ${{
+            needs.publication_context.outputs.is_publication != 'true' ||
+            steps.seal_publication.outputs.deploy == 'true'
+          }}
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
@@ -103,33 +221,78 @@ jobs:
           target: store
           projectId: project-vinabike
 
-      - name: Verify exact live storefront commit
-        run: |
-          expected_commit="${{ github.sha }}"
-          for release_url in \
-            "https://vinabike-store.web.app/release.json" \
-            "https://vinabike.cl/release.json"; do
-            verified=false
-            for attempt in $(seq 1 10); do
-              live_commit=$(
-                curl --fail --silent --show-error \
-                  -H 'Cache-Control: no-cache' \
-                  "${release_url}?commit=${expected_commit}&attempt=${attempt}" \
-                  | jq -r '.commit // empty'
-              ) || live_commit=""
+      - name: Verify exact release evidence on both live origins
+        id: verify_release
+        if: >-
+          ${{
+            needs.publication_context.outputs.is_publication != 'true' ||
+            steps.seal_publication.outputs.deploy == 'true'
+          }}
+        env:
+          IS_PUBLICATION: ${{ needs.publication_context.outputs.is_publication }}
+          RELEASE_FILE: build/web_store/release.json
+          EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_FIREBASE_ORIGIN: ${{ needs.publication_context.outputs.expected_firebase_origin }}
+          EXPECTED_STORE_ORIGIN: ${{ needs.publication_context.outputs.expected_store_origin }}
+          PUBLICATION_REQUEST_ID: ${{ needs.publication_context.outputs.request_id }}
+          PUBLICATION_REQUESTED_REVISION: ${{ needs.publication_context.outputs.requested_revision }}
+          OWNER_SOURCE_SHA256: ${{ steps.seal_publication.outputs.owner_source_sha256 }}
+          BUILD_INPUT_SHA256: ${{ steps.seal_publication.outputs.build_input_sha256 }}
+        run: node scripts/releases/storefront_publication_workflow.mjs verify
 
-              if [ "$live_commit" = "$expected_commit" ]; then
-                echo "Verified $release_url at $expected_commit"
-                verified=true
-                break
-              fi
+      - name: Complete durable publication
+        id: complete_publication
+        if: >-
+          ${{
+            success() &&
+            needs.publication_context.outputs.is_publication == 'true' &&
+            steps.seal_publication.outputs.deploy == 'true'
+          }}
+        env:
+          SUPABASE_URL: https://xzdvtzdqjeyqxnkqprtf.supabase.co
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          PUBLICATION_REQUEST_ID: ${{ needs.publication_context.outputs.request_id }}
+          PUBLICATION_ATTEMPT_ID: ${{ needs.publication_context.outputs.attempt_id }}
+          PUBLICATION_LEASE_FENCE: ${{ needs.publication_context.outputs.lease_fence }}
+          PUBLICATION_REQUESTED_REVISION: ${{ needs.publication_context.outputs.requested_revision }}
+          OWNER_SOURCE_SHA256: ${{ steps.seal_publication.outputs.owner_source_sha256 }}
+          RELEASE_MANIFEST_SHA256: ${{ steps.verify_release.outputs.release_manifest_sha256 }}
+          RELEASE_BUILT_AT: ${{ steps.verify_release.outputs.release_built_at }}
+          PRIMARY_VERIFIED: ${{ steps.verify_release.outputs.primary_verified }}
+          CUSTOM_VERIFIED: ${{ steps.verify_release.outputs.custom_verified }}
+        run: >-
+          node scripts/releases/storefront_publication_workflow.mjs
+          complete-success
 
-              echo "Waiting for $release_url (attempt $attempt/10, live=${live_commit:-unavailable})"
-              sleep 3
-            done
+  publication_finalize:
+    needs:
+      - publication_context
+      - integrity
+      - build_and_deploy
+    if: >-
+      ${{
+        always() &&
+        needs.publication_context.result == 'success' &&
+        needs.publication_context.outputs.is_publication == 'true' &&
+        needs.publication_context.outputs.should_run == 'true' &&
+        needs.build_and_deploy.outputs.publication_completed != 'true' &&
+        needs.build_and_deploy.outputs.publication_terminal != 'true'
+      }}
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
 
-            if [ "$verified" != true ]; then
-              echo "Live storefront did not converge to $expected_commit at $release_url" >&2
-              exit 1
-            fi
-          done
+      - name: Finalize incomplete publication as failure
+        env:
+          SUPABASE_URL: https://xzdvtzdqjeyqxnkqprtf.supabase.co
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          PUBLICATION_REQUEST_ID: ${{ needs.publication_context.outputs.request_id }}
+          PUBLICATION_ATTEMPT_ID: ${{ needs.publication_context.outputs.attempt_id }}
+          PUBLICATION_LEASE_FENCE: ${{ needs.publication_context.outputs.lease_fence }}
+          INTEGRITY_RESULT: ${{ needs.integrity.result }}
+          BUILD_RESULT: ${{ needs.build_and_deploy.result }}
+        run: >-
+          node scripts/releases/storefront_publication_workflow.mjs
+          finalize-failure

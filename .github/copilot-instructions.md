@@ -6,6 +6,63 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 
 ---
 
+# Este documento es el padre, y se mantiene vivo (CRITICAL)
+
+`.github/copilot-instructions.md` es la fuente de verdad del repositorio. Todo
+lo demás cuelga de acá. **Si un proceso descrito acá resulta equivocado o
+mejorable, se corrige acá** — no se rodea, no se documenta la excepción en otro
+archivo, no se deja "para después".
+
+## Cada iteración que descubre algo, lo escribe
+
+Cuando una ronda de trabajo produce un aprendizaje que le habría ahorrado
+tiempo a quien venga después, **ese aprendizaje se escribe antes de cerrar la
+ronda**. No al final del proyecto, no "cuando haya tiempo": en la misma tarea.
+
+Cuenta como aprendizaje digno de escribirse:
+
+- **Herramientas y funciones**: una trampa que costó una ronda, un flag que
+  cambia el resultado, una forma más barata de hacer lo mismo, un bug del
+  herramental propio.
+- **Preferencias del dueño**: cómo quiere que se le hable, qué palabras
+  rechaza, qué decisiones quiere tomar él y cuáles delega.
+- **Contratos que resultaron falsos**: un documento que afirmaba algo que la
+  realidad desmintió. Se corrige el documento **y se fecha la corrección**, para
+  que nadie vuelva a confiar en la versión vieja.
+- **Reglas de dominio** que sólo aparecen al chocar con datos reales.
+
+NO cuenta, y ensucia: el relato de una sesión, un cambio ya visible en el
+código o en git, o una conclusión que todavía no se verificó.
+
+## Dónde va cada aprendizaje
+
+| Lo que aprendiste | Documento |
+|---|---|
+| Proceso general, autonomía, definición de terminado | **este archivo** |
+| Lenguaje de la UI, estados, jerarquía, composición | `.github/GUI_DESIGN_PRINCIPLES.md` |
+| Móvil, tablet, adaptativo | `.github/GUI_MOBILE_DESIGN_PRINCIPLES.md` |
+| Cómo leer Design, handoffs, componentes | `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md` |
+| Correr la app, clics, capturas, sesión nativa | `docs/development/AGENT_MACOS_APP_CONTROL.md` |
+| SQL, lecturas, escrituras, verificación de datos | `docs/development/AGENT_DATABASE_CONTRACT.md` |
+| Paletas, claro/oscuro, roles semánticos | `docs/architecture/appearance-palette-contract.md` |
+| Componentes compartidos y su adopción | `docs/architecture/universal-ui-component-system.md` |
+| Una superficie de negocio cambió | `docs/architecture/canonical-ui-surfaces.md` |
+| Colaboración entre agentes | `docs/development/CODEX_CLAUDE_COLLABORATION.md` |
+
+Si el aprendizaje no calza en ninguno, va acá — y si acá crece demasiado, se
+extrae a un documento propio **con su puntero desde acá**.
+
+## Cómo se escribe
+
+- **La causa, no sólo el síntoma.** "`screen -ls` devuelve 1 aunque existan
+  sesiones, y bajo `pipefail` eso mata el detector" sirve; "arreglado el hot
+  reload" no le sirve a nadie.
+- **Fechado cuando corrige algo anterior**, para que la contradicción sea
+  legible en vez de confusa.
+- **Con el costo real**, cuando lo hubo: "esto costó una ronda completa" es lo
+  que hace que el siguiente lo lea.
+- **Apuntando de vuelta acá** cuando toca el proceso general.
+
 # Agent Autonomy And End-To-End Ownership (CRITICAL)
 
 Agents own the complete technical outcome of an implementation. A finished task
@@ -132,6 +189,45 @@ other integrations:
   production credentials when the provider supports it. Never silently replace
   a production credential or revoke an existing one before mapping consumers
   and proving the replacement.
+
+## Agent-Driven App Verification (macOS, iOS Simulator, Design)
+
+The fast verification loop is the **native macOS debug session**, not the
+browser. An agent owns it end to end — start it, hot reload in 2-5 s, click and
+type in the running app, screenshot the exact rendered frame, and read the
+Claude **Design** window — with versioned tooling:
+
+- `scripts/dev/native_session.sh` — session lifecycle (`start`, `reload`,
+  `restart`, `status`, `errors`, `stop`). One session at a time; it refuses to
+  create a second and never pattern-kills Flutter/Dart.
+- `scripts/dev/app_control.sh` — `shot` (the engine's own frame via the Dart VM
+  service), `click`/`scroll`/`drag`/`type`/`key` in those same frame
+  coordinates, `window`, `geometry`.
+- `scripts/dev/design_window.sh` — capture the Design window (`shot`, `scroll`,
+  `pages`). **Not a source of values**: visual values come from `DesignSync`
+  (see below). Use this only for what the 256 KiB file cap truncates, or to
+  confirm a built result. Read-only: typing into Design or sending a message
+  there needs explicit permission, and it never captures the full screen
+  because the desktop holds unrelated private windows.
+
+`docs/development/AGENT_MACOS_APP_CONTROL.md` is mandatory reading before using
+them. It encodes the traps that each cost a full verification round: piping
+`flutter run` into `tee` silently disables its single-key commands, `screen`
+needs `-p 0` for keystrokes to land, targeting the app by process name drives an
+installed old build instead of the debug one, and macOS requires **both**
+Accessibility entries (`Claude` and the lowercase `claude` helper that actually
+runs the agent shell). Phone layouts are verified in the iOS Simulator through
+the same runbook.
+
+Design is the authority for the looking; Code owns layout adaptation,
+information architecture, wording, UX and logic, and reports every deliberate
+deviation. How to obtain the authoritative mockups and detect a new Design turn
+is specified in `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`; palette and
+light/dark resolution is specified in
+`docs/architecture/appearance-palette-contract.md`.
+
+The browser contract below still applies when the browser itself is the thing
+under test, or for the public store.
 
 ## Codex Browser Testing Contract (CRITICAL)
 
@@ -387,11 +483,34 @@ reuse the same business rules, commands, permissions, and persistent effects.
 The two GUI guides own the detailed visual, touch, breakpoint, navigation,
 accessibility, and verification recipes; do not duplicate them here.
 
+The authoritative visual source for a redesign is the Claude Design project,
+read through `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`; every palette,
+brightness and semantic role resolves through the cascade in
+`docs/architecture/appearance-palette-contract.md`. Neither may be replaced by
+local literals or a feature-private theme.
+
+**How that source is read is not optional.** Every visual value — colour,
+radius, shadow, border, spacing, font, height — is obtained from a Design file
+with the **`DesignSync`** tool, which returns literal values. Reproducing a
+value from a screenshot of the Design window, or estimating one, is prohibited;
+an unreadable value is reported as such, never replaced with a plausible
+number, and anything that must ship unsourced is marked at its line in the
+code.
+
+Shared controls come from the page **`GUÍA GENERAL Viñabike - Componentes`**,
+implemented under their component id (`S-05`, `O-02`, `I-01`…) with values bound
+to theme roles — that guide's own first rule is that a widget may not contain a
+literal hex. A module's screens are designed on their own Design canvas rather
+than by editing the shared guide.
+
 ## Verification Expectations
 
 When a task changes UI, UX, integrations, build behavior, routing, auth, notifications, messaging, files, printing/PDFs, scanning, or platform-specific plugins:
 
-1. Verify the macOS desktop path first when available.
+1. Verify the macOS desktop path first when available, using the native
+   session and app control described in
+   `docs/development/AGENT_MACOS_APP_CONTROL.md` (hot reload, real clicks,
+   frame screenshots) rather than a browser rebuild.
 2. Identify which other supported surfaces are affected: Windows, iOS, Android, ERP web, public store web.
 3. Run or document the relevant cross-platform checks for those surfaces.
 4. If a platform cannot be tested in the current environment, say so explicitly and keep the implementation structured so that platform can be tested cleanly later.
@@ -1393,6 +1512,9 @@ Validation rule for every queue item below: use the debug-only `Prueba rápida` 
 
 Supabase policy and commands are intentionally centralized:
 
+- `docs/development/AGENT_DATABASE_CONTRACT.md` is the shared entry point for
+  every agent. It routes to the documents below and states the autonomy
+  boundary; it never duplicates their content.
 - `docs/runbooks/STAGING_SUPABASE.md` is authoritative for environment use,
   production validation, write safety, and valid human handoffs.
 - `docs/development/SUPABASE_WORKFLOW.md` is authoritative for current
@@ -2483,13 +2605,13 @@ not a deployment path.
 
 **⚠️⚠️⚠️ THE PUBLIC STORE AND ERP USE DIFFERENT ENTRY POINTS! ⚠️⚠️⚠️**
 
-**IF YOU BUILD THE STORE WRONG, IT WILL BE 9MB INSTEAD OF 4MB = SLOW LOAD TIMES!**
+**IF YOU BUILD THE STORE WRONG, IT WILL PULL THE ERP BUNDLE AND CREATE A LARGE REGRESSION.**
 
 ## The Two Builds (MEMORIZE THIS!)
 
 | Target | Entry Point | Bundle Size | Firebase URL |
 |--------|-------------|-------------|--------------|
-| **PUBLIC STORE** | `lib/main_store.dart` | **~4.1 MB** ✅ | `vinabike-store.web.app` |
+| **PUBLIC STORE** | `lib/main_store.dart` | **~5.5 MB raw / ~1.56 MB gzip** ✅ | `vinabike-store.web.app` |
 | **ERP ADMIN** | `lib/main.dart` | ~9.2 MB | `project-vinabike.web.app` |
 
 ## ✅ CORRECT Build Commands
@@ -2521,7 +2643,7 @@ flutter build web --release --web-renderer html -t lib/main_store.dart
 After building the store, ALWAYS verify the bundle size:
 ```bash
 ls -lh build/web_store/main.dart.js
-# ✅ CORRECT: ~4.1MB
+# ✅ CORRECT: within scripts/check_storefront_bundle_budget.sh
 # ❌ WRONG:  ~9.2MB (you used wrong entry point!)
 ```
 
@@ -2543,7 +2665,7 @@ See `.agent/workflows/deploy_to_firebase.md` for the complete deployment steps i
 
 | Scenario | Bundle Size | Mobile Load (4G) | User Experience |
 |----------|-------------|------------------|-----------------|
-| ✅ Correct build (`main_store.dart`) | 4.1 MB | ~2-3 seconds | Fast, happy users |
+| ✅ Correct build (`main_store.dart`) | Within the measured budget | Fast path | Store-only code |
 | ❌ Wrong build (`main.dart`) | 9.2 MB | ~6-8 seconds | Slow, frustrated users |
 
 **The wrong build includes ALL ERP modules (accounting, HR, inventory management, etc.) that public store visitors DON'T NEED!**
@@ -2567,7 +2689,7 @@ See `.agent/workflows/deploy_to_firebase.md` for the complete deployment steps i
 
 | Build | Expected Size | Bloated Size | Status |
 |-------|---------------|--------------|--------|
-| **Store** (`main_store.dart`) | **~4.1 MB** | 10-11 MB | ❌ BROKEN if > 5MB |
+| **Store** (`main_store.dart`) | **~5.5 MB raw / ~1.56 MB gzip** | 10-11 MB | Run the measured budget gate |
 | **ERP** (`main.dart`) | **~5.2 MB** | 9+ MB | ⚠️ Check if > 6MB |
 
 ## 🚨 BANNED PACKAGES (DO NOT IMPORT IN STORE-REACHABLE CODE!)
@@ -2633,7 +2755,7 @@ lib/public_store/pages/*.dart                               ← All store pages
    ```bash
    flutter build web --release -t lib/main_store.dart -o build/web_test
    ls -lh build/web_test/main.dart.js
-   # Must be ~4.1MB, not higher!
+   # Must pass scripts/check_storefront_bundle_budget.sh.
    ```
 4. ✅ **Consider alternatives:**
    - Can you use a web-only solution (CSS, JS)?
@@ -2685,7 +2807,7 @@ flutter build web --release -t lib/main_store.dart -o build/web_check
 ls -lh build/web_check/main.dart.js
 
 # Expected output:
-# -rw-r--r--  4.1M  main.dart.js  ✅ GOOD
+# main.dart.js within the measured raw+gzip budgets  ✅ GOOD
 # -rw-r--r--  10.8M main.dart.js  ❌ REGRESSION! Find and remove heavy import
 ```
 
@@ -2722,8 +2844,9 @@ If bundle size suddenly increases:
 1. ⛔ **NEVER** use `google_fonts` package - use CSS `font-family` instead
 2. ⛔ **NEVER** import ERP barrels in store code
 3. ✅ **ALWAYS** check bundle size after modifying website/store code
-4. ✅ **ALWAYS** verify store is ~4.1MB before deploying
-5. 🔍 **INVESTIGATE** immediately if bundle exceeds 5MB
+4. ✅ **ALWAYS** run `scripts/check_storefront_bundle_budget.sh`
+5. 🔍 **INVESTIGATE** a gate failure or a sudden bundle jump; raise a budget
+   deliberately when reviewed functionality legitimately needs the runway
 
 ---
 
@@ -2901,11 +3024,11 @@ scripts/supabase_cli.sh functions deploy google-merchant-feed --project-ref xzdv
 Build snapshots/sitemap and deploy the public store:
 
 ```bash
-flutter build web --release --pwa-strategy=none -t lib/main_store.dart -o build/web_store
-dart run scripts/generate_product_seo_snapshots.dart \
+fvm flutter build web --release --pwa-strategy=none -t lib/main_store.dart -o build/web_store
+fvm dart run scripts/generate_product_seo_snapshots.dart \
   --build-dir build/web_store \
   --tenant-id 5443b130-cc28-45af-a420-cd500b288890 \
-  --store-url https://vinabike.cl \
+  --expected-store-url https://vinabike.cl \
   --product-scope published
 firebase deploy --only hosting:store
 ```
@@ -4332,7 +4455,10 @@ Blocks become clickable via EditableBlockRenderer
          ↓
 Selected block shows in "Editar" tab with field editors
          ↓
-User saves → WebsiteService.saveBlocks()
+User saves → PersistentEditorShell invokes WebsiteSaveCoordinator
+         ↓
+WebsiteSaveCoordinator persists each confirmed bucket; page blocks use the
+transactional replace_page_blocks RPC
 ```
 
 ### Edit Modes
@@ -4966,13 +5092,13 @@ template.
 | `lib/public_store/widgets/public_store_layout.dart` | Main layout with edit button & panel integration |
 | `lib/modules/website/widgets/website_editor_panel.dart` | Side panel editor (6600 lines) |
 | `lib/modules/website/providers/website_edit_mode_provider.dart` | Edit state management |
-| `lib/modules/website/widgets/editable_block_renderer.dart` | **CRITICAL:** Makes blocks clickable/selectable/resizable in edit mode. Contains all `_buildEditable*` methods |
+| `lib/modules/website/widgets/editable_block_renderer.dart` | **CRITICAL:** Adds editor chrome and typed edit bindings; all 24 families delegate to the shared content renderer (no `_buildEditable*` remains) |
 | `lib/public_store/pages/public_home_page.dart` | Home page with full editing support |
-| `lib/public_store/pages/dynamic_website_page.dart` | Other pages (READ-ONLY, no editing yet) |
+| `lib/public_store/pages/dynamic_website_page.dart` | Dynamic CMS pages with shared Edit/Preview/Public page composition |
 | `lib/modules/website/models/website_block_type.dart` | Block type enum |
 | `lib/modules/website/models/website_block_definition.dart` | Field schema definitions |
 | `lib/modules/website/models/website_block_registry.dart` | Block registration & defaults |
-| `lib/modules/website/widgets/website_block_renderer.dart` | Renders blocks (read-only, for public view) |
+| `lib/modules/website/widgets/website_block_renderer.dart` | Pure shared block content used by `PageComposition`; Edit adds chrome outside it |
 | `lib/modules/website/widgets/inline_editable_text.dart` | Inline text editing widget (V1) |
 | `lib/modules/website/widgets/inline_editable_text_v2.dart` | Inline text editing widget (V2 with formatting) |
 | `lib/modules/website/widgets/inline_editable_image.dart` | Inline image editing/upload widget |
@@ -5869,6 +5995,22 @@ The Payroll system automates:
 1. Salary calculations based on attendance/hours worked
 2. Expense creation for each employee payment
 3. Journal entry generation for proper accounting
+
+## Canonical Payroll Lifecycle
+
+- `draft`: a weekly calculation prepared from Attendance; it has not recognized
+  accounting obligations.
+- `confirmed`: the immutable weekly snapshot has been **committed** and its
+  obligations recognized. Product copy is `Comprometer semana`; the SQL
+  `confirm_*` name remains only for compatibility.
+- `partial` and `paid`: server-derived settlement states. They are refreshed by
+  payments and advances; the UI must not add a second `Confirmar semana`
+  command after commitment.
+- Attendance owns hours and canonical labor rates. Payroll generation reviews
+  their projection; it must not expose a second client-side editor.
+- When reconciliation touches a draft, it must list that draft explicitly,
+  require commitment intent and return the committed voucher IDs in the
+  immutable receipt before representing any money as applied.
 
 ## Database Tables
 

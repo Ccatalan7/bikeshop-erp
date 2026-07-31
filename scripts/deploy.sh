@@ -115,7 +115,7 @@ fi
 
 echo "Generating SEO snapshots..."
 SUPABASE_SECRET_KEY="$SUPABASE_SECRET_KEY_FOR_SNAPSHOTS" \
-    "$DART_BIN" run scripts/generate_product_seo_snapshots.dart --build-dir build/web_store --tenant-id 5443b130-cc28-45af-a420-cd500b288890 --store-url https://vinabike.cl --product-scope published
+    "$DART_BIN" run scripts/generate_product_seo_snapshots.dart --build-dir build/web_store --tenant-id 5443b130-cc28-45af-a420-cd500b288890 --expected-store-url https://vinabike.cl --product-scope published
 
 bash ./scripts/write_storefront_release_evidence.sh \
     build/web_store "$STORE_BUILD_COMMIT" manual manual-shell "$STORE_BUILD_DIRTY"

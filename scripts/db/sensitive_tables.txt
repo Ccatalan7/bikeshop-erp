@@ -1,0 +1,35 @@
+# Tables whose rows carry personal or credential-bearing data.
+#
+# scripts/db/query.sh rejects a star projection (select *) that reads FROM or
+# JOINs any table listed here on a hosted environment. Name the columns you
+# actually need, or pass --allow-pii when the task genuinely requires the full
+# row. The guard does not apply to the local stack, which holds only synthetic
+# data.
+#
+# This list is a disclosure guard, not an access-control boundary. RLS and
+# grants remain the real authorization mechanism.
+#
+# Derived from public columns matching email / phone / rut / tax_id / address /
+# name / birth / password / token / secret / iban / card. Keep it sorted and
+# extend it whenever a new table starts storing personal data.
+#
+# One bare table name per line; comments and blank lines are ignored.
+
+companies
+company_bank_accounts
+customer_addresses
+customers
+email_accounts
+employee_portal_accounts
+employees
+google_oauth_connections
+online_order_official_documents
+online_orders
+payroll_beneficiary_aliases
+suppliers
+transactional_email_outbox
+transactional_email_settings
+transactional_email_suppressions
+user_invitations
+users_profiles
+whatsapp_channels
