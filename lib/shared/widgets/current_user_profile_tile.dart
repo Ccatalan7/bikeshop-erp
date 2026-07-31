@@ -30,19 +30,26 @@ class CurrentUserProfileTile extends StatelessWidget {
         color: selected
             ? colors.primary.withValues(alpha: 0.10)
             : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(compact ? 6 : 10),
         child: InkWell(
           key: const ValueKey('erp-profile-navigation-tile'),
           onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(compact ? 6 : 10),
+          splashFactory: NoSplash.splashFactory,
+          hoverColor: colors.onSurface.withValues(alpha: 0.07),
+          focusColor: colors.onSurface.withValues(alpha: 0.08),
+          mouseCursor: SystemMouseCursors.click,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 56),
+            constraints: BoxConstraints(minHeight: compact ? 42 : 56),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 8 : 10,
+                vertical: compact ? 5 : 8,
+              ),
               child: Row(
                 children: [
-                  _NavigationAvatar(profile: profile),
-                  const SizedBox(width: 11),
+                  _NavigationAvatar(profile: profile, compact: compact),
+                  SizedBox(width: compact ? 8 : 11),
                   Expanded(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -52,15 +59,15 @@ class CurrentUserProfileTile extends StatelessWidget {
                           profile?.displayName ?? 'Mi perfil',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: selected
-                                        ? colors.primary
-                                        : colors.onSurface,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                          style: (compact
+                                  ? Theme.of(context).textTheme.bodySmall
+                                  : Theme.of(context).textTheme.bodyMedium)
+                              ?.copyWith(
+                            color: selected ? colors.primary : colors.onSurface,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                        const SizedBox(height: 2),
+                        SizedBox(height: compact ? 1 : 2),
                         Text(
                           profile?.email ?? 'Cuenta y seguridad',
                           maxLines: 1,
@@ -68,6 +75,7 @@ class CurrentUserProfileTile extends StatelessWidget {
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: colors.onSurfaceVariant,
+                                    fontSize: compact ? 10 : null,
                                   ),
                         ),
                       ],
@@ -76,7 +84,7 @@ class CurrentUserProfileTile extends StatelessWidget {
                   const SizedBox(width: 4),
                   Icon(
                     Icons.chevron_right,
-                    size: 20,
+                    size: compact ? 16 : 20,
                     color: selected ? colors.primary : colors.onSurfaceVariant,
                   ),
                 ],
@@ -90,27 +98,32 @@ class CurrentUserProfileTile extends StatelessWidget {
 }
 
 class _NavigationAvatar extends StatelessWidget {
-  const _NavigationAvatar({required this.profile});
+  const _NavigationAvatar({
+    required this.profile,
+    required this.compact,
+  });
 
   final CurrentUserProfile? profile;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final diameter = compact ? 28.0 : 36.0;
     final fallback = CircleAvatar(
-      radius: 18,
+      radius: diameter / 2,
       backgroundColor: colors.primaryContainer,
       child: profile == null
           ? Icon(
               Icons.person_outline,
-              size: 20,
+              size: compact ? 16 : 20,
               color: colors.onPrimaryContainer,
             )
           : Text(
               profile!.initials,
               style: TextStyle(
                 color: colors.onPrimaryContainer,
-                fontSize: 12,
+                fontSize: compact ? 10 : 12,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -121,8 +134,8 @@ class _NavigationAvatar extends StatelessWidget {
     return ClipOval(
       child: Image.network(
         photoUrl,
-        width: 36,
-        height: 36,
+        width: diameter,
+        height: diameter,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => fallback,
       ),

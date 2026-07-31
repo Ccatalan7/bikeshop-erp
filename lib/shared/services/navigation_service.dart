@@ -21,12 +21,20 @@ const List<String> defaultModuleOrder = [
   'debug',
 ];
 
+/// Density of the persistent desktop navigation chrome.
+///
+/// `expanded` is the resizable 200–400px sidebar; `rail` is the ~56px icon
+/// rail whose children open in an anchored flyout. Hidden is not a mode: it is
+/// the existing temporary visibility toggle layered on top of either mode.
+enum NavigationChromeMode { expanded, rail }
+
 /// Service to manage navigation drawer visibility state
 /// This allows universal expand/collapse functionality across all pages
 class NavigationService extends ChangeNotifier {
   static const String _drawerVisibleKey = 'navigation_drawer_visible';
   static const String _drawerWidthKey = 'navigation_drawer_width';
   static const String _moduleOrderKey = 'navigation_module_order';
+  static const String _chromeModeKey = 'navigation_chrome_mode';
   static const double _minDrawerWidth = 200.0;
   static const double _maxDrawerWidth = 400.0;
   static const double _defaultDrawerWidth = 280.0;
@@ -37,6 +45,7 @@ class NavigationService extends ChangeNotifier {
   bool _isResizing = false;
   List<String> _moduleOrder = List.from(defaultModuleOrder);
   bool _isReorderMode = false;
+  NavigationChromeMode _preferredChromeMode = NavigationChromeMode.expanded;
 
   bool get isDrawerVisible => _isDrawerVisible;
   bool get isInitialized => _isInitialized;
@@ -44,6 +53,10 @@ class NavigationService extends ChangeNotifier {
   bool get isResizing => _isResizing;
   List<String> get moduleOrder => List.unmodifiable(_moduleOrder);
   bool get isReorderMode => _isReorderMode;
+
+  /// The user's default chrome density for new workspaces. A workspace may
+  /// carry its own runtime override in [Workspace.chromeModeOverride].
+  NavigationChromeMode get preferredChromeMode => _preferredChromeMode;
 
   // Expanded section state
   String? _expandedSection;
@@ -57,6 +70,9 @@ class NavigationService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       _isDrawerVisible = prefs.getBool(_drawerVisibleKey) ?? true;
       _drawerWidth = prefs.getDouble(_drawerWidthKey) ?? _defaultDrawerWidth;
+      _preferredChromeMode = prefs.getString(_chromeModeKey) == 'rail'
+          ? NavigationChromeMode.rail
+          : NavigationChromeMode.expanded;
 
       // Load module order
       final orderJson = prefs.getString(_moduleOrderKey);
@@ -235,6 +251,20 @@ class NavigationService extends ChangeNotifier {
       await prefs.setBool(_drawerVisibleKey, false);
     } catch (e) {
       debugPrint('Error saving navigation state: $e');
+    }
+  }
+
+  /// Persist the default chrome density used by new workspaces.
+  Future<void> setPreferredChromeMode(NavigationChromeMode mode) async {
+    if (_preferredChromeMode == mode) return;
+    _preferredChromeMode = mode;
+    notifyListeners();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_chromeModeKey, mode.name);
+    } catch (e) {
+      debugPrint('Error saving navigation chrome mode: $e');
     }
   }
 

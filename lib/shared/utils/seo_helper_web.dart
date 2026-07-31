@@ -8,6 +8,7 @@ void updateSeoImpl({
   String? keywords,
   String? canonicalUrl,
   String? robots,
+  String ogType = 'website',
 }) {
   // Update Browser Title
   SystemChrome.setApplicationSwitcherDescription(
@@ -22,16 +23,26 @@ void updateSeoImpl({
   _updateMeta('description', description);
   _updateMeta('keywords', keywords);
   _updateMeta('robots', robots);
+  _updateMeta('googlebot', robots);
   _updateCanonicalLink(canonicalUrl);
 
   // Open Graph Data
   _updateMetaProperty('og:title', title);
   _updateMetaProperty('og:description', description);
   _updateMetaProperty('og:image', imageUrl);
+  _updateMetaProperty('og:url', canonicalUrl);
+  _updateMetaProperty('og:type', ogType);
   // Twitter Cards
   _updateMeta('twitter:title', title);
   _updateMeta('twitter:description', description);
   _updateMeta('twitter:image', imageUrl);
+  _updateMeta('twitter:url', canonicalUrl);
+  _updateMeta(
+    'twitter:card',
+    imageUrl == null || imageUrl.trim().isEmpty
+        ? 'summary'
+        : 'summary_large_image',
+  );
 }
 
 void _updateCanonicalLink(String? url) {

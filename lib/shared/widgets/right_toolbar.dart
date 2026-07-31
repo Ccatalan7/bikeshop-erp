@@ -10,8 +10,10 @@ import '../../modules/settings/services/appearance_service.dart';
 import '../services/notification_service.dart';
 import '../services/query_performance_service.dart';
 import '../services/desktop_update_service.dart';
+import '../services/current_user_profile_service.dart';
 import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
+import '../themes/vinabike_theme_roles.dart';
 import 'calculator_panel.dart';
 import 'notifications_panel.dart';
 import 'query_performance_gauge.dart';
@@ -232,16 +234,18 @@ class _RightToolbarState extends State<RightToolbar> {
     ChatProvider chatProvider, {
     required double iconSize,
     required Color iconColor,
+    required Color badgeBorderColor,
   }) {
     final badgeCount = _toolBadgeCount(tool, chatProvider);
     final badgeLabel = badgeCount > 99 ? '99+' : '$badgeCount';
+    final roles = VinabikeThemeRoles.maybeOf(context);
     final badgeColor =
         tool == ToolbarTool.messages || tool == ToolbarTool.supplierMessages
-            ? const Color(0xFF16A34A)
+            ? roles?.success.accent ?? theme.colorScheme.tertiary
             : theme.colorScheme.error;
     final badgeTextColor =
         tool == ToolbarTool.messages || tool == ToolbarTool.supplierMessages
-            ? Colors.white
+            ? roles?.success.onAccent ?? theme.colorScheme.onTertiary
             : theme.colorScheme.onError;
 
     return Stack(
@@ -264,7 +268,7 @@ class _RightToolbarState extends State<RightToolbar> {
                 color: badgeColor,
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(
-                  color: theme.colorScheme.surface,
+                  color: badgeBorderColor,
                   width: 1.5,
                 ),
                 boxShadow: [
@@ -291,20 +295,18 @@ class _RightToolbarState extends State<RightToolbar> {
     );
   }
 
-  List<ToolbarTool> _visibleTools(RightToolbarService toolbarService) {
-    return ToolbarTool.values.where((tool) {
-      if (tool == ToolbarTool.performance) {
-        return QueryPerformanceService.isEnabled &&
-            toolbarService.isGaugePinned;
-      }
-      return true;
-    }).toList(growable: false);
-  }
-
   @override
   Widget build(BuildContext context) {
     final toolbarService = context.watch<RightToolbarService>();
-    final activeTool = toolbarService.activeTool;
+    final profileService = context.watch<CurrentUserProfileService?>();
+    final canManageHr = profileService != null &&
+        !profileService.isLoading &&
+        profileService.loadIssue == null &&
+        profileService.profile?.canManageUsers == true;
+    final requestedTool = toolbarService.activeTool;
+    final activeTool = requestedTool == ToolbarTool.kiosk && !canManageHr
+        ? null
+        : requestedTool;
 
     if (widget.presentation == RightToolbarPresentation.compactWorkspace) {
       if (activeTool == null || !activeTool.toolbarPresentation.opensPanel) {
@@ -314,25 +316,20 @@ class _RightToolbarState extends State<RightToolbar> {
     }
 
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final desktopUpdateService = context.watch<DesktopUpdateService>();
     final chatProvider = context.watch<ChatProvider>();
     final appearanceService = context.watch<AppearanceService>();
-    final visibleTools = _visibleTools(toolbarService);
-    final useToolbarPalette = appearanceService.messagingUsesSidebarPalette;
+    final visibleTools = resolveVisibleToolbarTools(
+      canManageHr: canManageHr,
+      performanceEnabled: QueryPerformanceService.isEnabled,
+      performancePinned: toolbarService.isGaugePinned,
+    );
     final blurEnabled = appearanceService.rightToolbarBlurEnabled;
-    final sidebarPalette = appearanceService.sidebarPalette;
-    final stripTheme = useToolbarPalette
-        ? buildSidebarPaletteTheme(theme, sidebarPalette)
-        : theme;
-
-    final barBorder =
-        isDark ? const Color(0xFF2E2E2E) : const Color(0xFFDDE0E4);
-    final activeBg = useToolbarPalette
-        ? sidebarPalette.accent.withValues(alpha: 0.16)
-        : isDark
-            ? theme.colorScheme.primary.withValues(alpha: 0.2)
-            : theme.colorScheme.primary.withValues(alpha: 0.1);
+    final isDark = theme.brightness == Brightness.dark;
+    final railSurface = isDark
+        ? theme.colorScheme.surfaceContainerLow
+        : theme.colorScheme.surface;
+    final railEdge = theme.colorScheme.outlineVariant;
 
     final bool isExpanded = activeTool != null;
     final effectiveMaxWidth = _effectiveMaxWidth(context);
@@ -340,73 +337,72 @@ class _RightToolbarState extends State<RightToolbar> {
         ? _expandedWidth.clamp(_minWidth, effectiveMaxWidth).toDouble()
         : _collapsedWidth;
 
-    return Stack(
-      children: [
-        AnimatedContainer(
-          duration:
-              _isResizing ? Duration.zero : const Duration(milliseconds: 250),
-          curve: Curves.easeInOut,
-          width: currentWidth,
-          child: isExpanded
+    return AnimatedContainer(
+      duration: _isResizing ? Duration.zero : const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      width: currentWidth,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          isExpanded
               ? _buildExpanded(
                   theme,
-                  isDark,
                   activeTool,
                   visibleTools,
                   chatProvider,
                   desktopUpdateService,
                   appearanceService,
+                  railSurface: railSurface,
+                  railEdge: railEdge,
                 )
               : RightToolbarGlassSurface(
-                  tint: useToolbarPalette ? sidebarPalette.background : null,
+                  key: const ValueKey('right-toolbar-collapsed-surface'),
+                  tint: railSurface,
                   blurEnabled: blurEnabled,
                   border: Border(
                     left: BorderSide(
-                      color: (useToolbarPalette
-                              ? sidebarPalette.border
-                              : barBorder)
-                          .withValues(alpha: 0.72),
+                      color: railEdge,
                       width: 1,
                     ),
                   ),
                   child: _buildCollapsed(
-                    stripTheme,
-                    activeBg,
+                    theme,
+                    railSurface,
                     visibleTools,
                     chatProvider,
                     desktopUpdateService,
                   ),
                 ),
-        ),
-        // Resize handle (left edge, only when expanded)
-        if (isExpanded)
-          Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: 8,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.resizeColumn,
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onHorizontalDragStart: (_) =>
-                    setState(() => _isResizing = true),
-                onHorizontalDragUpdate: (details) {
-                  setState(() {
-                    _expandedWidth = (_expandedWidth - details.delta.dx)
-                        .clamp(_minWidth, effectiveMaxWidth)
-                        .toDouble();
-                  });
-                },
-                onHorizontalDragEnd: (_) {
-                  setState(() => _isResizing = false);
-                  _saveWidth();
-                },
-                child: Container(color: Colors.transparent),
+          // Resize handle (left edge, only when expanded)
+          if (isExpanded)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 8,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.resizeColumn,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragStart: (_) =>
+                      setState(() => _isResizing = true),
+                  onHorizontalDragUpdate: (details) {
+                    setState(() {
+                      _expandedWidth = (_expandedWidth - details.delta.dx)
+                          .clamp(_minWidth, effectiveMaxWidth)
+                          .toDouble();
+                    });
+                  },
+                  onHorizontalDragEnd: (_) {
+                    setState(() => _isResizing = false);
+                    _saveWidth();
+                  },
+                  child: Container(color: Colors.transparent),
+                ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -475,7 +471,7 @@ class _RightToolbarState extends State<RightToolbar> {
   /// Narrow icon column (collapsed state)
   Widget _buildCollapsed(
     ThemeData theme,
-    Color activeBg,
+    Color railSurface,
     List<ToolbarTool> visibleTools,
     ChatProvider chatProvider,
     DesktopUpdateService desktopUpdateService,
@@ -486,7 +482,10 @@ class _RightToolbarState extends State<RightToolbar> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (desktopUpdateService.hasDismissedReadyUpdate)
-            _buildDismissedUpdateIcon(theme, desktopUpdateService),
+            _buildDismissedUpdateIcon(
+              theme,
+              desktopUpdateService,
+            ),
           // Tool icons
           for (final tool in visibleTools)
             Tooltip(
@@ -498,6 +497,9 @@ class _RightToolbarState extends State<RightToolbar> {
                 child: InkWell(
                   onTap: () => _selectTool(tool),
                   borderRadius: BorderRadius.circular(8),
+                  hoverColor:
+                      theme.colorScheme.onSurface.withValues(alpha: 0.06),
+                  focusColor: theme.colorScheme.primary.withValues(alpha: 0.12),
                   child: Container(
                     width: 40,
                     height: 40,
@@ -513,8 +515,8 @@ class _RightToolbarState extends State<RightToolbar> {
                       tool,
                       chatProvider,
                       iconSize: 22,
-                      iconColor:
-                          theme.colorScheme.onSurface.withValues(alpha: 0.65),
+                      iconColor: theme.colorScheme.onSurfaceVariant,
+                      badgeBorderColor: railSurface,
                     ),
                   ),
                 ),
@@ -528,32 +530,18 @@ class _RightToolbarState extends State<RightToolbar> {
   /// Expanded panel with mini icon rail + header + tool content
   Widget _buildExpanded(
     ThemeData theme,
-    bool isDark,
     ToolbarTool tool,
     List<ToolbarTool> visibleTools,
     ChatProvider chatProvider,
     DesktopUpdateService desktopUpdateService,
-    AppearanceService appearanceService,
-  ) {
-    final useToolbarPalette = appearanceService.messagingUsesSidebarPalette;
-    final palette = appearanceService.sidebarPalette;
-    final railTheme =
-        useToolbarPalette ? buildSidebarPaletteTheme(theme, palette) : theme;
-    final railBorder = useToolbarPalette
-        ? palette.border
-        : isDark
-            ? const Color(0xFF2E2E2E)
-            : const Color(0xFFDDE0E4);
-    final useSidebarPalette = (tool == ToolbarTool.messages ||
-            tool == ToolbarTool.supplierMessages) &&
-        appearanceService.messagingUsesSidebarPalette;
-    final panelTheme =
-        useSidebarPalette ? buildSidebarPaletteTheme(theme, palette) : theme;
-    final panelBorderColor = useSidebarPalette
-        ? palette.border
-        : isDark
-            ? const Color(0xFF2E2E2E)
-            : const Color(0xFFDDE0E4);
+    AppearanceService appearanceService, {
+    required Color railSurface,
+    required Color railEdge,
+  }) {
+    final panelBorderColor = theme.colorScheme.outlineVariant;
+    final panelSurface = theme.brightness == Brightness.dark
+        ? theme.colorScheme.surfaceContainerHigh
+        : theme.colorScheme.surface;
 
     final panelContent = Column(
       children: [
@@ -569,16 +557,17 @@ class _RightToolbarState extends State<RightToolbar> {
           child: Row(
             children: [
               _buildToolIcon(
-                panelTheme,
+                theme,
                 tool,
                 chatProvider,
                 iconSize: 18,
-                iconColor: panelTheme.colorScheme.primary,
+                iconColor: theme.colorScheme.primary,
+                badgeBorderColor: panelSurface,
               ),
               const SizedBox(width: 8),
               Text(
                 tool.toolbarPresentation.title,
-                style: panelTheme.textTheme.titleSmall?.copyWith(
+                style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -596,8 +585,7 @@ class _RightToolbarState extends State<RightToolbar> {
                       child: Icon(
                         Icons.push_pin_outlined,
                         size: 18,
-                        color: panelTheme.colorScheme.onSurface
-                            .withValues(alpha: 0.6),
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -612,8 +600,7 @@ class _RightToolbarState extends State<RightToolbar> {
                     child: Icon(
                       Icons.close,
                       size: 18,
-                      color: panelTheme.colorScheme.onSurface
-                          .withValues(alpha: 0.6),
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -631,90 +618,89 @@ class _RightToolbarState extends State<RightToolbar> {
       children: [
         // Panel area first (left), mini rail on right edge
         Expanded(
-          child: Theme(
-            data: panelTheme,
-            child: RightToolbarGlassSurface(
-              tint: useSidebarPalette ? palette.background : null,
-              blurEnabled: appearanceService.rightToolbarBlurEnabled,
-              border: Border(
-                left: BorderSide(
-                  color: panelBorderColor.withValues(alpha: 0.72),
-                  width: 1,
-                ),
-              ),
-              child: panelContent,
-            ),
-          ),
-        ),
-        // Mini icon rail — right edge, always visible to switch tools
-        Theme(
-          data: railTheme,
           child: RightToolbarGlassSurface(
-            tint: useToolbarPalette ? palette.background : null,
+            key: const ValueKey('right-toolbar-panel-surface'),
+            tint: panelSurface,
             blurEnabled: appearanceService.rightToolbarBlurEnabled,
             border: Border(
               left: BorderSide(
-                color: railBorder.withValues(alpha: 0.72),
+                color: panelBorderColor,
                 width: 1,
               ),
             ),
-            child: SizedBox(
-              width: _collapsedWidth,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (desktopUpdateService.hasDismissedReadyUpdate)
-                      _buildDismissedUpdateIcon(
-                        railTheme,
-                        desktopUpdateService,
-                      ),
-                    for (final t in visibleTools)
-                      Tooltip(
-                        message: t.toolbarPresentation.title,
-                        preferBelow: false,
-                        waitDuration: const Duration(milliseconds: 300),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () => _selectTool(t),
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              width: 40,
-                              height: 40,
-                              margin: const EdgeInsets.symmetric(
-                                vertical: 4,
-                                horizontal: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: t == tool
-                                    ? railTheme.colorScheme.primary.withValues(
-                                        alpha: useToolbarPalette
-                                            ? 0.16
-                                            : isDark
-                                                ? 0.25
-                                                : 0.12,
-                                      )
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: _buildToolIcon(
-                                railTheme,
-                                t,
-                                chatProvider,
-                                iconSize: 20,
-                                iconColor: t == tool
-                                    ? railTheme.colorScheme.primary
-                                    : railTheme.colorScheme.onSurface
-                                        .withValues(alpha: 0.55),
-                              ),
+            child: panelContent,
+          ),
+        ),
+        // Mini icon rail — right edge, always visible to switch tools
+        RightToolbarGlassSurface(
+          key: const ValueKey('right-toolbar-expanded-rail-surface'),
+          tint: railSurface,
+          blurEnabled: appearanceService.rightToolbarBlurEnabled,
+          border: Border(
+            left: BorderSide(
+              color: railEdge,
+              width: 1,
+            ),
+          ),
+          child: SizedBox(
+            width: _collapsedWidth,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (desktopUpdateService.hasDismissedReadyUpdate)
+                    _buildDismissedUpdateIcon(
+                      theme,
+                      desktopUpdateService,
+                    ),
+                  for (final t in visibleTools)
+                    Tooltip(
+                      message: t.toolbarPresentation.title,
+                      preferBelow: false,
+                      waitDuration: const Duration(milliseconds: 300),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => _selectTool(t),
+                          borderRadius: BorderRadius.circular(8),
+                          hoverColor: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.06),
+                          focusColor:
+                              theme.colorScheme.primary.withValues(alpha: 0.12),
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            margin: const EdgeInsets.symmetric(
+                              vertical: 4,
+                              horizontal: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: t == tool
+                                  ? theme.colorScheme.primaryContainer
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(8),
+                              border: t == tool
+                                  ? Border.all(
+                                      color: theme.colorScheme.primary,
+                                    )
+                                  : null,
+                            ),
+                            child: _buildToolIcon(
+                              theme,
+                              t,
+                              chatProvider,
+                              iconSize: 20,
+                              iconColor: t == tool
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.onSurfaceVariant,
+                              badgeBorderColor: railSurface,
                             ),
                           ),
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -727,6 +713,8 @@ class _RightToolbarState extends State<RightToolbar> {
     ThemeData theme,
     DesktopUpdateService desktopUpdateService,
   ) {
+    final accent = theme.colorScheme.primary;
+    final boundary = theme.colorScheme.surfaceContainerLow;
     return Tooltip(
       message: 'Actualizacion lista',
       preferBelow: false,
@@ -741,10 +729,10 @@ class _RightToolbarState extends State<RightToolbar> {
             height: 40,
             margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+              color: accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: theme.colorScheme.primary.withValues(alpha: 0.22),
+                color: accent.withValues(alpha: 0.32),
               ),
             ),
             child: Stack(
@@ -754,7 +742,7 @@ class _RightToolbarState extends State<RightToolbar> {
                 Icon(
                   Icons.system_update_alt_rounded,
                   size: 21,
-                  color: theme.colorScheme.primary,
+                  color: accent,
                 ),
                 Positioned(
                   right: 6,
@@ -763,10 +751,10 @@ class _RightToolbarState extends State<RightToolbar> {
                     width: 7,
                     height: 7,
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primary,
+                      color: accent,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: theme.colorScheme.surface,
+                        color: boundary,
                         width: 1.5,
                       ),
                     ),

@@ -133,3 +133,20 @@ extension ToolbarToolPresentationLookup on ToolbarTool {
     return presentation!;
   }
 }
+
+/// One permission and availability projection shared by the desktop rail and
+/// compact tool launcher. A hidden tool must never reappear merely because the
+/// shell crossed a responsive breakpoint.
+List<ToolbarTool> resolveVisibleToolbarTools({
+  required bool canManageHr,
+  required bool performanceEnabled,
+  required bool performancePinned,
+}) {
+  return ToolbarTool.values.where((tool) {
+    if (tool == ToolbarTool.kiosk) return canManageHr;
+    if (tool == ToolbarTool.performance) {
+      return performanceEnabled && performancePinned;
+    }
+    return true;
+  }).toList(growable: false);
+}

@@ -63,3 +63,11 @@ String? getSessionStorageValue(String key) {
 void setSessionStorageValue(String key, String value) {
   // No-op on non-web platforms
 }
+
+String? getSessionStorageValueStrict(String key) {
+  throw UnsupportedError('sessionStorage is available only on web.');
+}
+
+void setSessionStorageValueStrict(String key, String value) {
+  throw UnsupportedError('sessionStorage is available only on web.');
+}

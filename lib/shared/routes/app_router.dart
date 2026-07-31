@@ -1,14 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../widgets/main_layout.dart';
+import '../widgets/erp_authorization_gate.dart';
 import '../pages/auth_callback_page.dart';
 import '../pages/app_link_landing_page.dart';
 import '../../modules/mail/pages/mail_inbox_page.dart' as mail;
 import '../../modules/storage/pages/storage_page.dart' as storage;
 import '../../public_store/widgets/persistent_editor_shell.dart';
+import '../../public_store/widgets/storefront_navigation_guard_scope.dart';
 import '../services/auth_service.dart';
 // ERP / Admin Modules (Deferred to reduce initial bundle size)
 import 'erp_routes_barrel.dart' deferred as erp
@@ -76,6 +80,8 @@ import 'erp_routes_barrel.dart' deferred as erp
         POSReceiptPage,
         PageManagementPage,
         PaymentMethodsSettingsPage,
+        PayrollRedesignRoute,
+        PayrollReconciliationPage,
         MetaSettingsPage,
         WhatsAppSettingsPage,
         PaymentDetailPage,
@@ -154,11 +160,13 @@ import '../../public_store/pages/customer_chat_list_page.dart';
 import '../../public_store/pages/customer_chat_hub_page.dart';
 import '../../public_store/pages/customer_chat_detail_page.dart';
 import '../../public_store/pages/customer_dashboard_page.dart';
+import '../../public_store/widgets/erp_mounted_storefront_scope_boundary.dart';
 import '../../public_store/widgets/public_store_layout.dart';
 import '../../public_store/utils/product_url.dart';
-import '../../public_store/utils/public_store_tenant_resolver.dart';
+import '../../public_store/services/public_inventory_service.dart';
 import '../../public_store/services/public_store_scroll_state.dart';
 import '../../modules/website/services/website_service.dart';
+import '../../modules/website/widgets/website_editor_navigation_guard.dart';
 import '../utils/mercadopago_reference.dart';
 
 String invitationTokenFromUri(Uri uri) {
@@ -249,83 +257,60 @@ Page<dynamic> _buildShellPage(
 ) {
   return NoTransitionPage<void>(
     key: ValueKey<String>(key),
-    child: child,
+    child: StorefrontNavigationGuardScope.pageSwitch(child: child),
   );
 }
 
-class _PublicStoreShell extends StatefulWidget {
+class _PublicStoreShell extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
   final String currentPath;
+  final AuthService authService;
 
   const _PublicStoreShell({
     required this.navigationShell,
     required this.currentPath,
+    required this.authService,
   });
 
-  @override
-  State<_PublicStoreShell> createState() => _PublicStoreShellState();
-}
-
-class _PublicStoreShellState extends State<_PublicStoreShell> {
-  bool _storeDataLoadStarted = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _ensureStoreDataLoaded();
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant _PublicStoreShell oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!_storeDataLoadStarted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _ensureStoreDataLoaded();
-      });
-    }
-  }
-
-  Future<String?> _resolveStoreTenantId() async {
-    return resolvePublicStoreTenantId(
-      context,
-      allowAuthenticatedFallback: true,
-    );
-  }
-
-  Future<void> _ensureStoreDataLoaded() async {
-    if (_storeDataLoadStarted) return;
-    _storeDataLoadStarted = true;
-
-    final tenantId = await _resolveStoreTenantId();
-    if (!mounted) return;
-    if (tenantId == null || tenantId.isEmpty) {
-      _storeDataLoadStarted = false;
-      return;
-    }
-
+  Future<void> _loadStoreData(
+    BuildContext context,
+    String tenantId,
+  ) async {
     final websiteService = context.read<WebsiteService>();
+    final inventoryService = context.read<PublicInventoryService>();
     websiteService.preloadPublicStoreFromSynchronousCache(tenantId);
-    await websiteService.loadPublicStoreDataUnified(
+    final websiteLoad = websiteService.loadPublicStoreDataUnified(
       tenantId,
       forceRefresh: true,
     );
+    unawaited(
+      websiteLoad.catchError((Object error) {
+        debugPrint('⚠️ [ERP Store Shell] Website load failed: $error');
+      }),
+    );
+
+    // The ERP-mounted editor has no PublicStoreBootstrap. Await the same
+    // publication boundary here so its first visible menu cannot appear empty
+    // merely because the category cache has not been populated yet.
+    await inventoryService.getCategoriesForTenant(tenantId: tenantId);
   }
 
   @override
   Widget build(BuildContext context) {
     final disablePageViewScrolling =
-        widget.currentPath.startsWith('/tienda/cuenta/mensajes/') ||
-            widget.currentPath.startsWith('/tienda/cuenta/chats/');
+        currentPath.startsWith('/tienda/cuenta/mensajes/') ||
+            currentPath.startsWith('/tienda/cuenta/chats/');
 
-    return PersistentEditorShell(
-      child: _EnsurePublicStoreScrollState(
-        child: PublicStoreLayout(
-          enablePageViewScrolling: !disablePageViewScrolling,
-          child: widget.navigationShell,
+    return ErpMountedStorefrontScopeBoundary(
+      authService: authService,
+      onTenantReady: (tenantId) => _loadStoreData(context, tenantId),
+      child: PersistentEditorShell(
+        child: _EnsurePublicStoreScrollState(
+          child: PublicStoreLayout(
+            enablePageViewScrolling: !disablePageViewScrolling,
+            backNavigationIntent: WebsiteEditorNavigationIntent.leaveEditor,
+            child: navigationShell,
+          ),
         ),
       ),
     );
@@ -904,6 +889,7 @@ class AppRouter {
               return _PublicStoreShell(
                 navigationShell: navigationShell,
                 currentPath: state.uri.path,
+                authService: authService,
               );
             },
             branches: [
@@ -1413,7 +1399,12 @@ class AppRouter {
           pageBuilder: (context, state) => _buildPageWithNoTransition(
             context,
             state,
-            const PublicStoreWrapper(child: CheckoutPage()),
+            PublicStoreWrapper(
+              child: ErpMountedStorefrontScopeBoundary(
+                authService: authService,
+                child: const CheckoutPage(),
+              ),
+            ),
           ),
         ),
 
@@ -2711,7 +2702,10 @@ class AppRouter {
             context,
             state,
             erp.loadLibrary(),
-            () => erp.EmployeeListPage(),
+            () => ErpAuthorizationGate(
+              area: ErpAuthorizationArea.hrManagement,
+              authorizedBuilder: (_) => erp.EmployeeListPage(),
+            ),
           ),
         ),
         GoRoute(
@@ -2720,8 +2714,12 @@ class AppRouter {
             context,
             state,
             erp.loadLibrary(),
-            () =>
-                erp.EmployeeDetailPage(employeeId: state.pathParameters['id']!),
+            () => ErpAuthorizationGate(
+              area: ErpAuthorizationArea.hrManagement,
+              authorizedBuilder: (_) => erp.EmployeeDetailPage(
+                employeeId: state.pathParameters['id']!,
+              ),
+            ),
           ),
         ),
         GoRoute(
@@ -2730,7 +2728,10 @@ class AppRouter {
             context,
             state,
             erp.loadLibrary(),
-            () => erp.ShiftPlanningPage(),
+            () => ErpAuthorizationGate(
+              area: ErpAuthorizationArea.hrManagement,
+              authorizedBuilder: (_) => erp.ShiftPlanningPage(),
+            ),
           ),
         ),
         GoRoute(
@@ -2739,13 +2740,16 @@ class AppRouter {
             context,
             state,
             erp.loadLibrary(),
-            () => erp.AttendancesPage(
-              initialView: state.uri.queryParameters['view'],
-              initialDate:
-                  DateTime.tryParse(state.uri.queryParameters['date'] ?? ''),
-              initialEmployeeId: state.uri.queryParameters['employeeId'],
-              initialAttendanceId: state.uri.queryParameters['attendanceId'],
-              initialOpenRequestId: state.uri.queryParameters['openRequest'],
+            () => ErpAuthorizationGate(
+              area: ErpAuthorizationArea.hrManagement,
+              authorizedBuilder: (_) => erp.AttendancesPage(
+                initialView: state.uri.queryParameters['view'],
+                initialDate:
+                    DateTime.tryParse(state.uri.queryParameters['date'] ?? ''),
+                initialEmployeeId: state.uri.queryParameters['employeeId'],
+                initialAttendanceId: state.uri.queryParameters['attendanceId'],
+                initialOpenRequestId: state.uri.queryParameters['openRequest'],
+              ),
             ),
           ),
         ),
@@ -2755,8 +2759,12 @@ class AppRouter {
             context,
             state,
             erp.loadLibrary(),
-            () => MainLayout(
-              child: erp.KioskModePage(embedded: true),
+            () => ErpAuthorizationGate(
+              area: ErpAuthorizationArea.hrManagement,
+              authorizedBuilder: (_) =>
+                  // A deferred class cannot participate in a const expression.
+                  // ignore: prefer_const_constructors
+                  MainLayout(child: erp.KioskModePage(embedded: true)),
             ),
           ),
         ),
@@ -2766,7 +2774,10 @@ class AppRouter {
             context,
             state,
             erp.loadLibrary(),
-            () => erp.MedicalLeavesPage(),
+            () => ErpAuthorizationGate(
+              area: ErpAuthorizationArea.hrManagement,
+              authorizedBuilder: (_) => erp.MedicalLeavesPage(),
+            ),
           ),
         ),
         GoRoute(
@@ -2774,20 +2785,47 @@ class AppRouter {
           pageBuilder: (context, state) => _buildPageWithNoTransition(
             context,
             state,
-            const MainLayout(
-              title: 'Contratos',
-              child: Center(child: Text('Próximamente')),
+            ErpAuthorizationGate(
+              area: ErpAuthorizationArea.hrManagement,
+              authorizedBuilder: (_) => const MainLayout(
+                title: 'Contratos',
+                child: Center(child: Text('Próximamente')),
+              ),
             ),
           ),
         ),
         GoRoute(
           path: '/hr/payroll',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            const MainLayout(
-              title: 'Liquidaciones',
-              child: Center(child: Text('Próximamente')),
+            erp.loadLibrary(),
+            () => ErpAuthorizationGate(
+              area: ErpAuthorizationArea.payroll,
+              authorizedBuilder: (_) =>
+                  // A deferred class cannot participate in a const expression.
+                  // ignore: prefer_const_constructors
+                  erp.PayrollRedesignRoute(
+                initialVoucherId: state.uri.queryParameters['voucher'],
+              ),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/hr/payroll/reconcile',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => ErpAuthorizationGate(
+              area: ErpAuthorizationArea.payroll,
+              authorizedBuilder: (_) =>
+                  // A deferred class cannot participate in a const expression.
+                  // ignore: prefer_const_constructors
+                  MainLayout(
+                title: 'Conciliar nóminas',
+                child: erp.PayrollReconciliationPage(),
+              ),
             ),
           ),
         ),

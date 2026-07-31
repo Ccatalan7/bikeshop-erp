@@ -158,3 +158,15 @@ void setSessionStorageValue(String key, String value) {
     // Ignore errors
   }
 }
+
+/// Strict sessionStorage access for durability boundaries.
+///
+/// Checkout must distinguish an absent value from a browser storage failure;
+/// callers perform their own exact write/read verification.
+String? getSessionStorageValueStrict(String key) {
+  return web.window.sessionStorage.getItem(key);
+}
+
+void setSessionStorageValueStrict(String key, String value) {
+  web.window.sessionStorage.setItem(key, value);
+}

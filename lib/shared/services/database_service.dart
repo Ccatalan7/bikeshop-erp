@@ -73,6 +73,11 @@ class DatabaseService extends ChangeNotifier {
     String? orderBy,
     bool descending = false,
     int? limit,
+
+    /// Fila desde la que empezar. Con [limit] forma una página real, así una
+    /// lista larga puede traer "los siguientes N" en vez de subir el tope y
+    /// recargar todo de nuevo.
+    int? offset,
     bool fetchAll = false, // New parameter to fetch all records with pagination
   }) async {
     final stopwatch = Stopwatch()..start();
@@ -125,8 +130,10 @@ class DatabaseService extends ChangeNotifier {
         query = query.order(orderBy, ascending: !descending);
       }
 
-      // Handle LIMIT
-      if (limit != null) {
+      // Handle LIMIT / OFFSET
+      if (offset != null && offset > 0 && limit != null) {
+        query = query.range(offset, offset + limit - 1);
+      } else if (limit != null) {
         query = query.limit(limit);
       }
 

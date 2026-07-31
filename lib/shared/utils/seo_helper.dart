@@ -10,6 +10,7 @@ class SeoHelper {
     String? keywords,
     String? canonicalUrl,
     String? robots,
+    String ogType = 'website',
   }) {
     updateSeoImpl(
       title: title,
@@ -18,6 +19,7 @@ class SeoHelper {
       keywords: keywords,
       canonicalUrl: canonicalUrl,
       robots: robots,
+      ogType: ogType,
     );
   }
 }
@@ -58,12 +60,60 @@ bool isCatalogSeoManagedPath(String rawPath) {
       path.startsWith('/servicios/categoria/');
 }
 
+/// The catalog namespace comes from the route, never from a secondary filter.
+///
+/// In particular, `/productos/...?type=service` still belongs to the product
+/// catalog for canonical and withdrawn-route purposes.
+String storefrontCatalogRootPath(String rawPath) {
+  final path = normalizeStorefrontSeoPath(rawPath);
+  if (path == '/servicios' || path.startsWith('/servicios/')) {
+    return '/servicios';
+  }
+  return '/productos';
+}
+
+/// Resolves a catalog selection without letting transient filter state change
+/// the route namespace that owns the current page.
+///
+/// A root selection deliberately ignores [publishedCategoryPath]. This guards
+/// withdrawn collection redirects from accidentally reusing the presentation
+/// of a secondary `type=service` filter and crossing from `/productos` into
+/// `/servicios`.
+String storefrontCatalogSelectionPath({
+  required String currentPath,
+  required bool hasSelectedCategory,
+  String? publishedCategoryPath,
+}) {
+  final candidate = publishedCategoryPath?.trim() ?? '';
+  if (hasSelectedCategory && candidate.isNotEmpty) {
+    return normalizeStorefrontSeoPath(candidate);
+  }
+  return storefrontCatalogRootPath(currentPath);
+}
+
 bool isProductDetailSeoManagedPath(String rawPath) {
   final path = normalizeStorefrontSeoPath(rawPath);
   return path.startsWith('/producto/') ||
       path.startsWith('/shop/') ||
       (path.startsWith('/productos/') &&
           !path.startsWith('/productos/categoria/'));
+}
+
+bool isStaticPolicySeoManagedPath(String rawPath) {
+  final path = normalizeStorefrontSeoPath(rawPath);
+  return const {
+    '/nosotros',
+    '/envios',
+    '/devoluciones',
+    '/terminos',
+    '/privacidad',
+  }.contains(path);
+}
+
+bool isDynamicWebsitePageSeoManagedPath(String rawPath) {
+  final path = normalizeStorefrontSeoPath(rawPath);
+  if (!path.startsWith('/pagina/')) return false;
+  return path.substring('/pagina/'.length).trim().isNotEmpty;
 }
 
 /// System-owned indexation policy for public-store application routes.
@@ -79,8 +129,14 @@ StorefrontSeoRouteProjection projectStorefrontSeoRoute(
   bool ownerAllowsIndexing = true,
   bool ownerIsPublished = true,
   bool hasEligibleContent = true,
+  String? unavailableCanonicalPath,
 }) {
-  final canonicalPath = normalizeStorefrontSeoPath(uri.path);
+  final currentPath = normalizeStorefrontSeoPath(uri.path);
+  final fallbackCanonicalPath = unavailableCanonicalPath?.trim() ?? '';
+  final canonicalPath = (!ownerIsPublished || !hasEligibleContent) &&
+          fallbackCanonicalPath.isNotEmpty
+      ? normalizeStorefrontSeoPath(fallbackCanonicalPath)
+      : currentPath;
 
   const transientCatalogKeys = <String>{
     'q',
@@ -123,10 +179,11 @@ StorefrontSeoRouteProjection projectStorefrontSeoRoute(
   );
   final hasPrivateMode = uri.queryParameters['preview'] == 'true' ||
       uri.queryParameters['edit'] == 'true';
-  final isTransactionalOrPrivate = canonicalPath == '/carrito' ||
-      canonicalPath == '/checkout' ||
-      canonicalPath.startsWith('/cuenta') ||
-      canonicalPath.startsWith('/pedido');
+  final isTransactionalOrPrivate = currentPath == '/carrito' ||
+      currentPath == '/checkout' ||
+      currentPath == '/auth/callback' ||
+      currentPath.startsWith('/cuenta') ||
+      currentPath.startsWith('/pedido');
   final noIndex = isErpMounted ||
       hasPrivateMode ||
       hasTransientCatalogState ||

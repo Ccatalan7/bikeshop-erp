@@ -17,6 +17,7 @@ import 'shared/services/chat_notification_gate.dart';
 import 'shared/services/erp_notification_gate.dart';
 
 import 'shared/themes/app_theme.dart';
+import 'shared/themes/workspace_chrome_theme.dart';
 import 'shared/services/auth_service.dart';
 import 'shared/services/database_service.dart';
 import 'shared/services/inventory_service.dart';
@@ -25,10 +26,12 @@ import 'shared/services/navigation_service.dart';
 import 'shared/services/tenant_service.dart';
 import 'shared/models/current_user_profile.dart';
 import 'shared/services/current_user_profile_service.dart';
+import 'shared/services/employee_self_service_service.dart';
 import 'shared/services/user_management_service.dart';
 import 'shared/services/workspace_manager.dart';
 import 'shared/config/supabase_config.dart';
 import 'shared/widgets/workspace_tab_bar.dart';
+import 'shared/widgets/workspace_shell_scope.dart';
 import 'shared/utils/web_url.dart';
 import 'shared/utils/notification_deep_link.dart';
 import 'shared/utils/trusted_meta_notification_url.dart';
@@ -70,6 +73,8 @@ import 'modules/mail/providers/email_provider.dart';
 import 'modules/mail/providers/mail_account_manager.dart';
 import 'public_store/services/customer_account_service.dart';
 import 'public_store/services/address_autocomplete_service.dart';
+import 'public_store/services/checkout_exit_guard.dart';
+import 'public_store/services/checkout_session_store.dart';
 import 'public_store/services/public_inventory_service.dart';
 import 'shared/routes/app_router.dart';
 import 'shared/services/data_preload_service.dart';
@@ -98,6 +103,7 @@ import 'shared/widgets/query_performance_gauge.dart';
 import 'public_router_app.dart';
 import 'shared/services/deep_link_handler.dart';
 import 'shared/services/route_share_service.dart';
+import 'dev/agent_input.dart';
 
 // Custom scroll behavior to prevent browser navigation gestures on trackpad
 class AppScrollBehavior extends MaterialScrollBehavior {
@@ -165,6 +171,10 @@ Future<void> main() async {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     _logTiming('FLUTTER_BINDING');
+
+    // Debug-only: lets an agent drive the app through synthetic pointer events
+    // instead of moving the owner's real cursor. No-op outside debug.
+    registerAgentInputExtensions();
 
     // Use clean URLs (no hash #) for web
     usePathUrlStrategy();
@@ -354,6 +364,18 @@ class VinabikeApp extends StatelessWidget {
             return service;
           },
         ),
+        ChangeNotifierProxyProvider<CurrentUserProfileService,
+            EmployeeSelfServiceService>(
+          lazy: true,
+          create: (_) => EmployeeSelfServiceService(),
+          update: (_, currentUserProfile, selfService) {
+            final service = selfService ?? EmployeeSelfServiceService();
+            unawaited(
+              service.synchronize(profile: currentUserProfile.profile),
+            );
+            return service;
+          },
+        ),
         ProxyProvider<TenantService, FinancialProjectionRefreshCoordinator>(
           create: (_) => FinancialProjectionRefreshCoordinator(
             realtimeTransport: SupabaseFinancialProjectionRealtimeTransport(
@@ -374,7 +396,20 @@ class VinabikeApp extends StatelessWidget {
           dispose: (_, coordinator) => coordinator.dispose(),
         ),
         ChangeNotifierProvider(create: (_) => PaymentMethodService()),
-        ChangeNotifierProvider(create: (_) => AppearanceService()),
+        ChangeNotifierProxyProvider2<AuthService, TenantService,
+            AppearanceService>(
+          create: (_) => AppearanceService(),
+          update: (_, authService, tenantService, appearanceService) {
+            final service = appearanceService ?? AppearanceService();
+            unawaited(
+              service.synchronize(
+                userId: authService.currentUser?.id,
+                resolveTenantId: tenantService.getTenantId,
+              ),
+            );
+            return service;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => WindowZoomService()),
         ChangeNotifierProvider(create: (_) => RightToolbarService()),
         ChangeNotifierProvider(create: (_) => AIAssistantContextService()),
@@ -515,6 +550,8 @@ class VinabikeApp extends StatelessWidget {
 
         // Public store services
         ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => CheckoutExitGuard()),
+        Provider(create: (_) => CheckoutSessionStore.platform()),
         ChangeNotifierProxyProvider2<UserManagementService, TenantService,
             ChatProvider>(
           create: (context) => ChatProvider(
@@ -617,6 +654,8 @@ class VinabikeApp extends StatelessWidget {
 
           // CRITICAL: Use context.watch() to rebuild when auth state changes
           final authService = context.watch<AuthService>();
+          final currentUserProfileService =
+              context.watch<CurrentUserProfileService>();
           final appearanceService = context.watch<AppearanceService>();
 
           // PUBLIC STORE: Wait for tenant detection, then render app
@@ -697,13 +736,20 @@ class VinabikeApp extends StatelessWidget {
           // Initialize data preload service (preloads critical data after auth)
           // SKIP on public store AND for non-staff users - they don't need ERP data
           final dataPreloadService = context.read<DataPreloadService>();
+          final preloadAuthorityTenantId =
+              currentUserProfileService.profile?.tenantId;
           final shouldPreload = !isPublicStoreHost &&
-              !dataPreloadService.hasPreloaded &&
               authService.isAuthenticated &&
               !authService.isWorkerPortalAuthUser &&
               !authService.isWorker &&
               authService.isStaffProfileLoaded &&
-              authService.isStaff; // Only preload for actual staff
+              authService.isStaff &&
+              !currentUserProfileService.isLoading &&
+              currentUserProfileService.loadIssue == null &&
+              preloadAuthorityTenantId != null &&
+              (!dataPreloadService.hasPreloaded ||
+                  dataPreloadService.authorityTenantId !=
+                      preloadAuthorityTenantId);
 
           if (shouldPreload) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -712,7 +758,7 @@ class VinabikeApp extends StatelessWidget {
                 categoryService: context.read<CategoryService>(),
                 brandService: context.read<BrandService>(),
                 purchaseService: context.read<PurchaseService>(),
-                hrService: context.read<HRService>(),
+                authorityTenantId: preloadAuthorityTenantId,
                 taskService: context.read<TaskService>(),
                 isPublicStore: isPublicStoreHost, // Disable on public store
               );
@@ -784,8 +830,17 @@ class VinabikeApp extends StatelessWidget {
 
           return MaterialApp(
             title: 'Vinabike',
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
+            // Canonical authenticated ERP theme owner. Public store and
+            // unauthenticated router hosts retain their separate theme
+            // boundaries.
+            theme: AppTheme.resolve(
+              preset: appearanceService.appearancePreset,
+              brightness: Brightness.light,
+            ),
+            darkTheme: AppTheme.resolve(
+              preset: appearanceService.appearancePreset,
+              brightness: Brightness.dark,
+            ),
             themeMode: appearanceService.themeMode,
             scrollBehavior: AppScrollBehavior(),
             debugShowCheckedModeBanner: false,
@@ -822,35 +877,17 @@ class VinabikeApp extends StatelessWidget {
                     );
                   }
 
-                  // Desktop keeps the multitasking tab strip. Compact surfaces
-                  // retain the same workspace stack but recover that vertical
-                  // space and expose extra workspaces from the main drawer.
                   return Scaffold(
                     body: Stack(
                       children: [
                         SafeArea(
                           bottom:
                               false, // Only add top padding for iOS status bar
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final compact =
-                                  ResponsiveViewport.usesCompactShell(context);
-                              return Column(
-                                children: [
-                                  compact
-                                      ? const SizedBox.shrink()
-                                      : const WorkspaceTabBar(),
-                                  Expanded(
-                                    child: _WorkspaceShell(
-                                      key: const ValueKey(
-                                        'authenticated-workspace-shell',
-                                      ),
-                                      authService: authService,
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
+                          child: _WorkspaceShell(
+                            key: const ValueKey(
+                              'authenticated-workspace-shell',
+                            ),
+                            authService: authService,
                           ),
                         ),
                         const QueryPerformanceGauge(),
@@ -1668,93 +1705,162 @@ class _WorkspaceShellState extends State<_WorkspaceShell> {
     debugLabel: 'authenticated-workspace-stack',
   );
 
-  Widget _buildWorkspaceStack() {
-    return Selector<WorkspaceManager, (int, String)>(
-      key: _workspaceStackKey,
-      selector: (_, workspaceManager) => (
-        workspaceManager.activeStackIndex,
-        workspaceManager.workspaceStackSignature,
-      ),
-      builder: (context, data, _) {
-        final workspaceManager = context.read<WorkspaceManager>();
-        return IndexedStack(
-          index: data.$1,
-          sizing: StackFit.expand,
-          children: workspaceManager.workspaceStackOrder.map((workspace) {
-            if (!workspace.isHydrated) {
-              return SizedBox.shrink(
-                key: ValueKey('dormant-${workspace.id}'),
+  Widget _buildWorkspaceStack({required double topInset}) {
+    return WorkspaceShellScope(
+      topInset: topInset,
+      child: Selector<WorkspaceManager, (int, String)>(
+        key: _workspaceStackKey,
+        selector: (_, workspaceManager) => (
+          workspaceManager.activeStackIndex,
+          workspaceManager.workspaceStackSignature,
+        ),
+        builder: (context, data, _) {
+          final workspaceManager = context.read<WorkspaceManager>();
+          return IndexedStack(
+            index: data.$1,
+            sizing: StackFit.expand,
+            children: workspaceManager.workspaceStackOrder.map((workspace) {
+              if (!workspace.isHydrated) {
+                return SizedBox.shrink(
+                  key: ValueKey('dormant-${workspace.id}'),
+                );
+              }
+              return _WorkspaceRouterView(
+                key: ValueKey(workspace.id),
+                workspace: workspace,
+                authService: widget.authService,
               );
-            }
-            return _WorkspaceRouterView(
-              key: ValueKey(workspace.id),
-              workspace: workspace,
-              authService: widget.authService,
-            );
-          }).toList(),
-        );
-      },
+            }).toList(),
+          );
+        },
+      ),
     );
+  }
+
+  double _activeNavigationWidth(
+    NavigationService navigationService,
+    WorkspaceManager workspaceManager,
+  ) {
+    final workspace = workspaceManager.activeWorkspace;
+    if (workspace != null &&
+        !workspaceRouteUsesAppNavigation(workspace.currentRoute)) {
+      return 0;
+    }
+    final isPinned = workspace?.isPinned ?? false;
+    final isVisible = !isPinned &&
+        (workspace?.isDrawerVisible ?? navigationService.isDrawerVisible);
+    if (!isVisible) return 0;
+
+    final mode =
+        workspace?.chromeModeOverride ?? navigationService.preferredChromeMode;
+    return mode == NavigationChromeMode.rail
+        ? WorkspaceShellScope.navigationRailWidth
+        : (workspace?.drawerWidth ?? navigationService.drawerWidth);
   }
 
   @override
   Widget build(BuildContext context) {
     final appearanceService = context.watch<AppearanceService>();
     final activeTool = context.watch<RightToolbarService>().activeTool;
+    final navigationService = context.watch<NavigationService>();
+    final workspaceManager = context.watch<WorkspaceManager>();
+    final theme = Theme.of(context);
+    final chrome = WorkspaceChromeTheme.resolveFromTheme(
+      theme,
+      fallback: WorkspaceChromeTheme.resolve(
+        palette: appearanceService.sidebarPalette,
+        brightness: theme.brightness,
+      ),
+    );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = ResponsiveViewport.usesCompactShell(context);
-        final toolbar = compact
-            ? RightToolbar.compactWorkspace(key: _toolbarKey)
-            : RightToolbar(key: _toolbarKey);
+    return WorkspaceChromeStyle(
+      data: chrome,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = ResponsiveViewport.usesCompactShell(context);
 
-        if (compact) {
-          final hasCompactTool =
-              activeTool != null && activeTool != ToolbarTool.newJob;
+          if (compact) {
+            final toolbar = RightToolbar.compactWorkspace(key: _toolbarKey);
+            final hasCompactTool =
+                activeTool != null && activeTool != ToolbarTool.newJob;
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                _buildWorkspaceStack(topInset: 0),
+                Positioned.fill(
+                  child: Offstage(
+                    offstage: !hasCompactTool,
+                    child: toolbar,
+                  ),
+                ),
+              ],
+            );
+          }
+
+          const topInset = WorkspaceShellScope.workspaceBarHeight;
+          final navigationWidth = _activeNavigationWidth(
+            navigationService,
+            workspaceManager,
+          );
+          final isResizing =
+              workspaceManager.activeWorkspace?.isResizingDrawer ??
+                  navigationService.isResizing;
+          final toolbar = Padding(
+            padding: const EdgeInsets.only(top: topInset),
+            child: RightToolbar(key: _toolbarKey),
+          );
+          final workspaceStack = _buildWorkspaceStack(topInset: topInset);
+
+          late final Widget workspaceAndTools;
+          if (!appearanceService.rightToolbarOverContent) {
+            workspaceAndTools = Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: workspaceStack),
+                toolbar,
+              ],
+            );
+          } else {
+            workspaceAndTools = Stack(
+              children: [
+                Positioned.fill(
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                      right: RightToolbar.collapsedWidth,
+                    ),
+                    child: workspaceStack,
+                  ),
+                ),
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: toolbar,
+                ),
+              ],
+            );
+          }
+
           return Stack(
             fit: StackFit.expand,
             children: [
-              _buildWorkspaceStack(),
-              Positioned.fill(
-                child: Offstage(
-                  offstage: !hasCompactTool,
-                  child: toolbar,
-                ),
+              workspaceAndTools,
+              AnimatedPositioned(
+                key: const ValueKey('workspace-tab-bar-placement'),
+                duration: isResizing
+                    ? Duration.zero
+                    : const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                left: navigationWidth,
+                top: 0,
+                right: 0,
+                height: topInset,
+                child: const WorkspaceTabBar(),
               ),
             ],
           );
-        }
-
-        if (!appearanceService.rightToolbarOverContent) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: _buildWorkspaceStack()),
-              toolbar,
-            ],
-          );
-        }
-
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: Padding(
-                padding: const EdgeInsets.only(
-                  right: RightToolbar.collapsedWidth,
-                ),
-                child: _buildWorkspaceStack(),
-              ),
-            ),
-            Positioned(
-              top: 0,
-              right: 0,
-              bottom: 0,
-              child: toolbar,
-            ),
-          ],
-        );
-      },
+        },
+      ),
     );
   }
 }

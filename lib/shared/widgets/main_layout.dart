@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../services/auth_service.dart';
+import '../services/current_user_profile_service.dart';
 import '../services/current_user_profile_navigation.dart';
 import '../services/navigation_service.dart';
 import '../services/query_performance_service.dart';
@@ -11,6 +12,7 @@ import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
 import '../services/window_zoom_service.dart';
 import '../services/notification_service.dart';
+import '../themes/workspace_chrome_theme.dart';
 import '../utils/responsive_viewport.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
@@ -18,6 +20,7 @@ import '../../modules/mail/providers/mail_account_manager.dart';
 import 'expandable_menu_item.dart';
 import 'toolbar_tool_presentation.dart';
 import 'current_user_profile_tile.dart';
+import 'workspace_shell_scope.dart';
 
 const List<MenuSubItem> _accountingMenuItems = [
   MenuSubItem(
@@ -336,6 +339,7 @@ String _getTitleFromRoute(String route) {
     '/hr/employees': 'Trabajadores',
     '/hr/planning': 'Planificación',
     '/hr/attendances': 'Asistencias',
+    '/hr/payroll': 'Nóminas',
     '/website': 'Sitio Web',
     '/website/product-visibility': 'Visibilidad de productos',
     '/website/orders': 'Órdenes / Notificaciones',
@@ -377,7 +381,7 @@ extension StringExtension on String {
   }
 }
 
-const List<MenuSubItem> _hrMenuItems = [
+const List<MenuSubItem> _hrManagementMenuItems = [
   MenuSubItem(
     icon: Icons.people_outlined,
     title: 'Trabajadores',
@@ -408,14 +412,69 @@ const List<MenuSubItem> _hrMenuItems = [
     title: 'Contratos',
     route: '/hr/contracts',
   ),
-  MenuSubItem(
-    icon: Icons.attach_money_outlined,
-    title: 'Liquidaciones',
-    route: '/hr/payroll',
-  ),
+];
+
+const MenuSubItem _hrPayrollMenuItem = MenuSubItem(
+  icon: Icons.attach_money_outlined,
+  title: 'Nóminas',
+  route: '/hr/payroll',
+);
+
+const List<MenuSubItem> _hrMenuItems = [
+  ..._hrManagementMenuItems,
+  _hrPayrollMenuItem,
 ];
 
 const String _hrSectionKey = 'hr';
+
+List<MenuSubItem> _visibleHrMenuItems(
+  CurrentUserProfileService profileService,
+) {
+  final profile = profileService.profile;
+  if (profileService.isLoading ||
+      profileService.loadIssue != null ||
+      profile == null) {
+    return const [];
+  }
+  return [
+    if (profile.canManageUsers) ..._hrManagementMenuItems,
+    if (profile.canAccessAccounting) _hrPayrollMenuItem,
+  ];
+}
+
+void _reorderVisibleModules(
+  NavigationService navigationService,
+  List<String> visibleOrder,
+  int oldIndex,
+  int newIndex,
+) {
+  if (oldIndex < 0 ||
+      oldIndex >= visibleOrder.length ||
+      newIndex < 0 ||
+      newIndex > visibleOrder.length) {
+    return;
+  }
+
+  var insertionIndex = newIndex;
+  if (oldIndex < insertionIndex) insertionIndex -= 1;
+  final movedKey = visibleOrder[oldIndex];
+  final remaining = List<String>.from(visibleOrder)..removeAt(oldIndex);
+  insertionIndex = insertionIndex.clamp(0, remaining.length);
+  if (insertionIndex == oldIndex || remaining.isEmpty) return;
+
+  final fullOrder = navigationService.moduleOrder;
+  final oldFullIndex = fullOrder.indexOf(movedKey);
+  if (oldFullIndex == -1) return;
+
+  final int newFullIndex;
+  if (insertionIndex < remaining.length) {
+    newFullIndex = fullOrder.indexOf(remaining[insertionIndex]);
+  } else {
+    newFullIndex = fullOrder.indexOf(remaining.last) + 1;
+  }
+  if (newFullIndex < 0) return;
+  navigationService.reorderModules(oldFullIndex, newFullIndex);
+}
 
 const List<MenuSubItem> _chatMenuItems = [
   MenuSubItem(
@@ -502,17 +561,6 @@ const Map<String, String> _darkSidebarVinabikeLogoAssets = {
   'pacific': 'assets/images/vinabike_logo_dark_pacific.png',
 };
 
-ThemeData _sidebarPaletteTheme(
-  ThemeData baseTheme,
-  SidebarPaletteOption palette,
-) {
-  return buildSidebarPaletteTheme(baseTheme, palette);
-}
-
-BoxDecoration _sidebarPaletteDecoration(SidebarPaletteOption palette) {
-  return buildSidebarPaletteDecoration(palette);
-}
-
 bool _shouldUseDarkVinabikeLogo(ThemeData theme, String? logoUrl) {
   if (logoUrl == null || logoUrl.isEmpty) return false;
   if (theme.colorScheme.surface.computeLuminance() > 0.35) return false;
@@ -586,16 +634,243 @@ const List<MenuSubItem> _debugMenuItems = [
 
 const String _debugSectionKey = 'debug';
 
+/// One destination of the single navigation model.
+///
+/// The expanded sidebar, the compact icon rail and the mobile drawer all
+/// consume this same resolved list: destinations, permissions, order and
+/// badges are decided once, never per-surface.
+@immutable
+class AppDestinationModule {
+  const AppDestinationModule({
+    required this.key,
+    required this.title,
+    required this.icon,
+    required this.activeIcon,
+    required this.items,
+    this.isSingleItem = false,
+    this.enabled = true,
+    this.badgeCount = 0,
+    this.subItemBadgeCounts = const <String, int>{},
+    this.resolveRoute,
+    this.badgeTapRoute,
+  });
+
+  final String key;
+  final String title;
+  final IconData icon;
+  final IconData activeIcon;
+  final List<MenuSubItem> items;
+  final bool isSingleItem;
+  final bool enabled;
+  final int badgeCount;
+  final Map<String, int> subItemBadgeCounts;
+
+  /// Optional late route resolution (e.g. the newest online-order alert).
+  final String Function(String route)? resolveRoute;
+
+  /// Canonical destination of the badge itself. The model owns this action:
+  /// sidebar, rail and drawer all consume the same resolved route.
+  final String? badgeTapRoute;
+
+  bool matchesLocation(String location) =>
+      _moduleMatchesLocation(location, items);
+
+  /// The badge's durable action, resolved through [resolveRoute]. `null`
+  /// when the module has no badge action or nothing pending.
+  String? get resolvedBadgeRoute {
+    final route = badgeTapRoute;
+    if (route == null || badgeCount <= 0) return null;
+    return resolveRoute?.call(route) ?? route;
+  }
+}
+
+bool _moduleMatchesLocation(String location, List<MenuSubItem> items) {
+  final locationPath = _routePath(location);
+  for (final item in items) {
+    if (item.isHeader) continue;
+    final routePath = _routePath(item.route);
+    if (locationPath == routePath || locationPath.startsWith('$routePath/')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Resolves the user-ordered, permission-filtered module list.
+///
+/// Must be called from a `build` method: it subscribes to the services that
+/// own order, permissions and badge counts.
+List<AppDestinationModule> resolveOrderedAppModules(BuildContext context) {
+  final navigationService = context.watch<NavigationService>();
+  final chatProvider = context.watch<ChatProvider>();
+  final visibleHrItems = _visibleHrMenuItems(
+    context.watch<CurrentUserProfileService>(),
+  );
+
+  final byKey = <String, AppDestinationModule>{
+    'accounting': const AppDestinationModule(
+      key: 'accounting',
+      title: 'Contabilidad',
+      icon: Icons.account_balance_outlined,
+      activeIcon: Icons.account_balance,
+      items: _accountingMenuItems,
+    ),
+    'tax_reports': const AppDestinationModule(
+      key: 'tax_reports',
+      title: 'Impuestos',
+      icon: Icons.receipt_long_outlined,
+      activeIcon: Icons.receipt_long,
+      items: _taxReportsMenuItems,
+    ),
+    'chat': AppDestinationModule(
+      key: 'chat',
+      title: 'Mensajería',
+      icon: Icons.chat_outlined,
+      activeIcon: Icons.chat,
+      items: _chatMenuItems,
+      isSingleItem: true,
+      badgeCount: chatProvider.totalUnreadCount,
+    ),
+    'storage': const AppDestinationModule(
+      key: 'storage',
+      title: 'Archivos',
+      icon: Icons.folder_open_outlined,
+      activeIcon: Icons.folder,
+      items: _storageMenuItems,
+      isSingleItem: true,
+    ),
+    'customers': const AppDestinationModule(
+      key: 'customers',
+      title: 'Clientes',
+      icon: Icons.people_outline,
+      activeIcon: Icons.people,
+      items: _customersMenuItems,
+    ),
+    'workshop': const AppDestinationModule(
+      key: 'workshop',
+      title: 'Taller',
+      icon: Icons.pedal_bike_outlined,
+      activeIcon: Icons.pedal_bike,
+      items: _workshopMenuItems,
+    ),
+    'smart_features': const AppDestinationModule(
+      key: 'smart_features',
+      title: 'Smart Features',
+      icon: Icons.lightbulb_outlined,
+      activeIcon: Icons.lightbulb,
+      items: _smartFeaturesMenuItems,
+    ),
+    'inventory': const AppDestinationModule(
+      key: 'inventory',
+      title: 'Inventario',
+      icon: Icons.inventory_2_outlined,
+      activeIcon: Icons.inventory_2,
+      items: _inventoryMenuItems,
+    ),
+    'sales': const AppDestinationModule(
+      key: 'sales',
+      title: 'Ventas',
+      icon: Icons.receipt_long_outlined,
+      activeIcon: Icons.receipt_long,
+      items: _salesMenuItems,
+    ),
+    'purchases': const AppDestinationModule(
+      key: 'purchases',
+      title: 'Compras',
+      icon: Icons.shopping_cart_outlined,
+      activeIcon: Icons.shopping_cart,
+      items: _purchasesMenuItems,
+    ),
+    'pos': const AppDestinationModule(
+      key: 'pos',
+      title: 'POS',
+      icon: Icons.point_of_sale_outlined,
+      activeIcon: Icons.point_of_sale,
+      items: _posMenuItems,
+    ),
+    if (visibleHrItems.isNotEmpty)
+      'hr': AppDestinationModule(
+        key: 'hr',
+        title: 'RR.HH.',
+        icon: Icons.badge_outlined,
+        activeIcon: Icons.badge,
+        items: visibleHrItems,
+      ),
+    'tools': const AppDestinationModule(
+      key: 'tools',
+      title: 'Herramientas',
+      icon: Icons.build_circle_outlined,
+      activeIcon: Icons.build_circle,
+      items: _toolsMenuItems,
+    ),
+    'debug': const AppDestinationModule(
+      key: 'debug',
+      title: 'Debug',
+      icon: Icons.bug_report_outlined,
+      activeIcon: Icons.bug_report,
+      items: _debugMenuItems,
+    ),
+  };
+
+  return [
+    for (final moduleKey in navigationService.moduleOrder)
+      if (byKey[moduleKey] case final module?) module,
+  ];
+}
+
+/// Resolves the fixed destinations that close the model (Sitio Web, Correo).
+///
+/// Callers must rebuild on [NotificationService.onlineOrderAlertCount] and
+/// [MailAccountManager.instance]; this resolver only reads current values.
+List<AppDestinationModule> resolveFixedAppModules(
+  BuildContext context, {
+  required String currentLocation,
+}) {
+  final onlineOrderAlerts = NotificationService().onlineOrderAlertCount.value;
+  final visibleOrderAlerts =
+      currentLocation.startsWith('/website/orders') ? 0 : onlineOrderAlerts;
+
+  return [
+    AppDestinationModule(
+      key: _websiteSectionKey,
+      title: 'Sitio Web',
+      icon: Icons.web_outlined,
+      activeIcon: Icons.web,
+      items: _websiteMenuItems,
+      badgeCount: visibleOrderAlerts,
+      subItemBadgeCounts: {'/website/orders': visibleOrderAlerts},
+      resolveRoute: _resolveWebsiteMenuRoute,
+      badgeTapRoute: '/website/orders',
+    ),
+    AppDestinationModule(
+      key: 'mail',
+      title: 'Correo',
+      icon: Icons.email_outlined,
+      activeIcon: Icons.email,
+      items: const [
+        MenuSubItem(icon: Icons.email, title: 'Correo', route: '/mail'),
+      ],
+      isSingleItem: true,
+      badgeCount: MailAccountManager.instance.unreadCount,
+    ),
+  ];
+}
+
 /// Shows the sidebar options menu with live-updating zoom controls
-void _showSidebarOptionsMenu(
-    BuildContext context, NavigationService navigationService) {
-  final RenderBox button = context.findRenderObject() as RenderBox;
+void _showSidebarOptionsMenu({
+  required BuildContext anchorContext,
+  required BuildContext overlayContext,
+  required NavigationService navigationService,
+}) {
+  final RenderBox button = anchorContext.findRenderObject() as RenderBox;
+  final navigator = Navigator.of(overlayContext, rootNavigator: true);
   final RenderBox overlay =
-      Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
+      navigator.overlay!.context.findRenderObject() as RenderBox;
   final buttonPosition = button.localToGlobal(Offset.zero, ancestor: overlay);
 
   showDialog(
-    context: context,
+    context: overlayContext,
+    useRootNavigator: true,
     barrierColor: Colors.transparent,
     builder: (dialogContext) {
       return Stack(
@@ -641,6 +916,7 @@ class _SidebarOptionsPanel extends StatelessWidget {
         final zoomPercent = (zoomService.scale * 100).round();
 
         return Material(
+          key: const ValueKey('sidebar-options-overlay'),
           elevation: 8,
           borderRadius: BorderRadius.circular(8),
           color: theme.colorScheme.surface,
@@ -656,21 +932,10 @@ class _SidebarOptionsPanel extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Dark mode toggle
-                _OptionTile(
-                  icon: appearanceService.themeMode == ThemeMode.dark
-                      ? Icons.light_mode
-                      : Icons.dark_mode,
-                  label: appearanceService.themeMode == ThemeMode.dark
-                      ? 'Modo claro'
-                      : 'Modo oscuro',
-                  onTap: () {
-                    final newMode =
-                        appearanceService.themeMode == ThemeMode.dark
-                            ? ThemeMode.light
-                            : ThemeMode.dark;
-                    appearanceService.setThemeMode(newMode);
-                  },
+                _ThemeModeSelector(
+                  mode: appearanceService.themeMode,
+                  onChanged: appearanceService.setThemeMode,
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
                 ),
                 Divider(
                     height: 1,
@@ -684,6 +949,23 @@ class _SidebarOptionsPanel extends StatelessWidget {
                   label: 'Paleta en mensajería y barra derecha',
                   value: appearanceService.messagingUsesSidebarPalette,
                   onChanged: appearanceService.setMessagingUsesSidebarPalette,
+                ),
+                AnimatedBuilder(
+                  animation: navigationService,
+                  builder: (context, _) {
+                    return _OptionSwitchTile(
+                      icon: Icons.view_sidebar_outlined,
+                      label: 'Menú compacto por defecto',
+                      value: navigationService.preferredChromeMode ==
+                          NavigationChromeMode.rail,
+                      onChanged: (compact) =>
+                          navigationService.setPreferredChromeMode(
+                        compact
+                            ? NavigationChromeMode.rail
+                            : NavigationChromeMode.expanded,
+                      ),
+                    );
+                  },
                 ),
                 Divider(
                     height: 1,
@@ -1039,11 +1321,41 @@ class _SidebarPalettePreview extends StatelessWidget {
 class MainLayoutCompactHeader {
   const MainLayoutCompactHeader({
     required this.title,
+    this.contextLine,
+    this.search,
     this.actions = const <Widget>[],
   });
 
-  final Widget title;
+  /// Semantic title owned by the compact shell.
+  ///
+  /// Feature pages provide content, never a pre-styled widget from their
+  /// surface theme. This keeps light content colors from leaking onto the
+  /// chromatic workspace header.
+  final String title;
+  final String? contextLine;
+  final MainLayoutCompactSearch? search;
   final List<Widget> actions;
+}
+
+@immutable
+class MainLayoutCompactSearch {
+  const MainLayoutCompactSearch({
+    required this.controller,
+    required this.onChanged,
+    this.fieldKey,
+    this.hintText = 'Buscar…',
+    this.autofocus = false,
+    this.textInputAction = TextInputAction.search,
+    this.onClear,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final Key? fieldKey;
+  final String hintText;
+  final bool autofocus;
+  final TextInputAction textInputAction;
+  final VoidCallback? onClear;
 }
 
 class MainLayout extends StatefulWidget {
@@ -1067,10 +1379,132 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout> {
+  final ValueNotifier<bool> _compactDrawerToolsMode = ValueNotifier(false);
+  final GlobalKey _routedContentKey = GlobalKey(
+    debugLabel: 'main-layout-routed-content',
+  );
+
+  Widget _buildRoutedContent() {
+    return KeyedSubtree(
+      key: _routedContentKey,
+      child: widget.body ?? widget.child ?? const SizedBox.shrink(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _compactDrawerToolsMode.dispose();
+    super.dispose();
+  }
+
+  Widget _buildCompactTitle(
+    BuildContext context,
+    WorkspaceChromeStyleData chrome,
+  ) {
+    final header = widget.compactHeader;
+    final search = header?.search;
+    if (search != null) {
+      final textTheme = Theme.of(context).textTheme;
+      final fieldBorder = OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: chrome.edge),
+      );
+      return SizedBox(
+        height: 40,
+        child: TextField(
+          key: search.fieldKey,
+          controller: search.controller,
+          autofocus: search.autofocus,
+          textInputAction: search.textInputAction,
+          cursorColor: chrome.accent,
+          style: textTheme.bodyMedium?.copyWith(
+            color: chrome.foreground,
+            fontWeight: FontWeight.w600,
+          ),
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: chrome.raised,
+            hintText: search.hintText,
+            hintStyle: textTheme.bodyMedium?.copyWith(
+              color: chrome.mutedForeground,
+            ),
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              size: 19,
+              color: chrome.mutedForeground,
+            ),
+            suffixIcon: search.controller.text.isEmpty || search.onClear == null
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.clear_rounded, size: 18),
+                    color: chrome.foreground,
+                    tooltip: 'Limpiar búsqueda',
+                    onPressed: search.onClear,
+                  ),
+            border: fieldBorder,
+            enabledBorder: fieldBorder,
+            focusedBorder: fieldBorder.copyWith(
+              borderSide: BorderSide(color: chrome.accent, width: 1.5),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 9,
+            ),
+          ),
+          onChanged: search.onChanged,
+        ),
+      );
+    }
+
+    final contextLine = header?.contextLine?.trim();
+    final title = header?.title ?? widget.title ?? 'Viñabike ERP';
+    if (contextLine == null || contextLine.isEmpty) {
+      return Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: chrome.foreground,
+              fontWeight: FontWeight.w700,
+            ),
+      );
+    }
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: chrome.foreground,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        Text(
+          contextLine,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: chrome.mutedForeground,
+                fontFamily: 'monospace',
+                fontSize: 10.5,
+                fontWeight: FontWeight.w500,
+              ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = ResponsiveViewport.widthOf(context);
     final showSidebar = screenWidth >= ResponsiveViewport.desktopMin;
+    final workspaceTopInset = WorkspaceShellScope.topInsetOf(context);
+    final workspaceChrome = WorkspaceChromeStyle.maybeOf(context);
     final navigationService = Provider.of<NavigationService>(context);
     final workspaceManager = Provider.of<WorkspaceManager>(context);
     final scopedWorkspace = _maybeWorkspaceOf(context);
@@ -1084,11 +1518,28 @@ class _MainLayoutState extends State<MainLayout> {
         workspaceState?.drawerWidth ?? navigationService.drawerWidth;
     final isResizingDrawer =
         workspaceState?.isResizingDrawer ?? navigationService.isResizing;
+    // Tri-state chrome: expanded sidebar, compact icon rail, or temporarily
+    // hidden. The workspace runtime override wins; new workspaces follow the
+    // user preference. Pinned workspaces keep their no-chrome restriction.
+    final chromeMode = workspaceState?.chromeModeOverride ??
+        navigationService.preferredChromeMode;
+    final isRailChrome =
+        isDrawerVisible && chromeMode == NavigationChromeMode.rail;
+    final navChromeWidth = !isDrawerVisible
+        ? 0.0
+        : isRailChrome
+            ? AppNavigationRail.railWidth
+            : drawerWidth;
+    final routedContent = _buildRoutedContent();
 
     if (showSidebar) {
       // Desktop layout with collapsible sidebar
       return Scaffold(
         body: Row(
+          // The shell fills the viewport height. Without this the row centres
+          // its children on the cross axis, which vertically centres any route
+          // whose content is shorter than the window.
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Collapsible Sidebar with smart animation
             // No animation during resize for instant tracking
@@ -1098,124 +1549,142 @@ class _MainLayoutState extends State<MainLayout> {
                   ? Duration.zero
                   : const Duration(milliseconds: 250),
               curve: Curves.easeInOut,
-              width: isDrawerVisible ? drawerWidth : 0,
+              width: navChromeWidth,
               child: isDrawerVisible
                   ? Consumer<AppearanceService>(
                       builder: (context, appearanceService, _) {
                         final palette = appearanceService.sidebarPalette;
-                        final sidebarTheme =
-                            _sidebarPaletteTheme(Theme.of(context), palette);
+                        final chrome = workspaceChrome ??
+                            WorkspaceChromeTheme.resolve(
+                              palette: palette,
+                              brightness: Theme.of(context).brightness,
+                            );
+                        final sidebar = isRailChrome
+                            ? const AppNavigationRail()
+                            : Theme(
+                                data: WorkspaceChromeTheme.sidebarTheme(
+                                  Theme.of(context),
+                                  chrome,
+                                ),
+                                child: AppSidebar(
+                                  overlayContext: context,
+                                ),
+                              );
 
-                        return Theme(
-                          data: sidebarTheme,
-                          child: Container(
-                            decoration: _sidebarPaletteDecoration(palette),
-                            child: const AppSidebar(),
-                          ),
+                        return Container(
+                          decoration:
+                              WorkspaceChromeTheme.sidebarDecoration(chrome),
+                          child: sidebar,
                         );
                       },
                     )
                   : const SizedBox.shrink(),
             ),
+            // Shell divider. It is a sibling of the content rather than a
+            // border on it, because a border painted on the content box stops
+            // wherever that content ends and reads as a clipped half-line on
+            // any route shorter than the viewport.
+            if (isDrawerVisible)
+              Container(
+                width: 1,
+                color: workspaceChrome?.edge ?? Theme.of(context).dividerColor,
+              ),
             Expanded(
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
-                    child: Stack(
-                      children: [
-                        // Main content with border (no app bar)
-                        Container(
-                          decoration: isDrawerVisible
-                              ? BoxDecoration(
-                                  border: Border(
-                                    left: BorderSide(
-                                      color: Theme.of(context).dividerColor,
-                                      width: 1,
-                                    ),
+                    child: Padding(
+                      padding: EdgeInsets.only(top: workspaceTopInset),
+                      child: Stack(
+                        children: [
+                          // Main content (no app bar)
+                          routedContent,
+                          // Invisible resize handle on left edge (12px wide).
+                          // Only the expanded sidebar is resizable; the rail
+                          // has one fixed width.
+                          if (isDrawerVisible && !isRailChrome)
+                            Positioned(
+                              left: 0,
+                              top: 0,
+                              bottom: 0,
+                              width: 12,
+                              child: MouseRegion(
+                                cursor: SystemMouseCursors.resizeColumn,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.translucent,
+                                  onHorizontalDragStart: (details) {
+                                    if (workspaceState != null) {
+                                      workspaceManager
+                                          .startWorkspaceDrawerResize(
+                                              workspaceState.id);
+                                    } else {
+                                      navigationService.startResizing();
+                                    }
+                                  },
+                                  onHorizontalDragUpdate: (details) {
+                                    if (workspaceState != null) {
+                                      workspaceManager
+                                          .updateWorkspaceDrawerWidth(
+                                        workspaceState.id,
+                                        workspaceState.drawerWidth +
+                                            details.delta.dx,
+                                      );
+                                    } else {
+                                      navigationService.updateDrawerWidth(
+                                        navigationService.drawerWidth +
+                                            details.delta.dx,
+                                      );
+                                    }
+                                  },
+                                  onHorizontalDragEnd: (details) {
+                                    if (workspaceState != null) {
+                                      workspaceManager
+                                          .stopWorkspaceDrawerResize(
+                                              workspaceState.id);
+                                    } else {
+                                      navigationService.stopResizing();
+                                    }
+                                  },
+                                  child: Container(
+                                    color: Colors.transparent,
                                   ),
-                                )
-                              : null,
-                          child: widget.body ?? widget.child,
-                        ),
-                        // Invisible resize handle on left edge (12px wide)
-                        if (isDrawerVisible)
-                          Positioned(
-                            left: 0,
-                            top: 0,
-                            bottom: 0,
-                            width: 12,
-                            child: MouseRegion(
-                              cursor: SystemMouseCursors.resizeColumn,
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.translucent,
-                                onHorizontalDragStart: (details) {
-                                  if (workspaceState != null) {
-                                    workspaceManager.startWorkspaceDrawerResize(
-                                        workspaceState.id);
-                                  } else {
-                                    navigationService.startResizing();
-                                  }
-                                },
-                                onHorizontalDragUpdate: (details) {
-                                  if (workspaceState != null) {
-                                    workspaceManager.updateWorkspaceDrawerWidth(
-                                      workspaceState.id,
-                                      workspaceState.drawerWidth +
-                                          details.delta.dx,
-                                    );
-                                  } else {
-                                    navigationService.updateDrawerWidth(
-                                      navigationService.drawerWidth +
-                                          details.delta.dx,
-                                    );
-                                  }
-                                },
-                                onHorizontalDragEnd: (details) {
-                                  if (workspaceState != null) {
-                                    workspaceManager.stopWorkspaceDrawerResize(
-                                        workspaceState.id);
-                                  } else {
-                                    navigationService.stopResizing();
-                                  }
-                                },
-                                child: Container(
-                                  color: Colors.transparent,
                                 ),
                               ),
                             ),
-                          ),
-                        // Small toggle button (bottom-left, only when drawer is hidden)
-                        if (!isDrawerVisible && !isPinnedWorkspace)
-                          Positioned(
-                            left: 8,
-                            bottom: 8,
-                            child: Material(
-                              elevation: 4,
-                              borderRadius: BorderRadius.circular(20),
-                              child: InkWell(
-                                onTap: () {
-                                  if (workspaceState != null) {
-                                    workspaceManager
-                                        .showWorkspaceDrawer(workspaceState.id);
-                                  } else {
-                                    navigationService.showDrawer();
-                                  }
-                                },
+                          // Small toggle button (bottom-left, only when drawer is hidden)
+                          if (!isDrawerVisible && !isPinnedWorkspace)
+                            Positioned(
+                              left: 8,
+                              bottom: 8,
+                              child: Material(
+                                elevation: 4,
                                 borderRadius: BorderRadius.circular(20),
-                                child: Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        Theme.of(context).colorScheme.surface,
-                                    borderRadius: BorderRadius.circular(20),
+                                child: InkWell(
+                                  onTap: () {
+                                    if (workspaceState != null) {
+                                      workspaceManager.showWorkspaceDrawer(
+                                          workspaceState.id);
+                                    } else {
+                                      navigationService.showDrawer();
+                                    }
+                                  },
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          Theme.of(context).colorScheme.surface,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: const Icon(Icons.menu, size: 20),
                                   ),
-                                  child: const Icon(Icons.menu, size: 20),
                                 ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -1227,53 +1696,462 @@ class _MainLayoutState extends State<MainLayout> {
         ),
       );
     } else {
-      // Mobile layout with drawer
+      // Compact shell (<900): MainLayout is the single owner of application
+      // chrome. Feature pages contribute only title/context and their local
+      // scope surface; they never mount a second Scaffold or AppBar.
+      final compactChrome = workspaceChrome ??
+          WorkspaceChromeTheme.resolve(
+            palette: context.watch<AppearanceService>().sidebarPalette,
+            brightness: Theme.of(context).brightness,
+          );
       return Scaffold(
         appBar: AppBar(
+          key: const ValueKey('main-layout-compact-header'),
           automaticallyImplyLeading: false,
+          toolbarHeight: 56,
+          leadingWidth: 56,
+          titleSpacing: 0,
           leading: widget.onBackPressed != null
               ? IconButton(
                   icon: const Icon(Icons.arrow_back),
                   onPressed: widget.onBackPressed,
                   tooltip: 'Volver',
-                  color: Theme.of(context).colorScheme.onSurface,
+                  color: compactChrome.foreground,
                 )
               : isPinnedWorkspace
                   ? null
                   : Builder(
                       builder: (context) => IconButton(
+                        key: const ValueKey('main-layout-mobile-menu'),
                         icon: const Icon(Icons.menu),
-                        onPressed: () => Scaffold.of(context).openDrawer(),
+                        onPressed: () {
+                          _compactDrawerToolsMode.value = false;
+                          Scaffold.of(context).openDrawer();
+                        },
                         tooltip: 'Abrir menú principal',
-                        color: Theme.of(context).colorScheme.onSurface,
+                        color: compactChrome.foreground,
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size(48, 48),
+                          side: BorderSide(color: compactChrome.edge),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
                       ),
                     ),
-          title: widget.compactHeader?.title ??
-              Text(
-                widget.title ?? 'Vinabike ERP',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-          backgroundColor: Theme.of(context).colorScheme.surface,
+          title: _buildCompactTitle(context, compactChrome),
+          backgroundColor: compactChrome.canvas,
+          foregroundColor: compactChrome.foreground,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
           elevation: 0,
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1.0),
             child: Container(
-              color: Theme.of(context).dividerColor,
+              color: compactChrome.edge,
               height: 1.0,
             ),
           ),
           iconTheme: IconThemeData(
-            color: Theme.of(context).colorScheme.onSurface,
+            color: compactChrome.foreground,
           ),
-          actions: widget.compactHeader?.actions ?? const <Widget>[],
+          actions: [
+            ...?widget.compactHeader?.actions,
+            _CompactShellActions(
+              chrome: compactChrome,
+              drawerToolsMode: _compactDrawerToolsMode,
+            ),
+          ],
         ),
-        drawer: isPinnedWorkspace ? null : const AppDrawer(),
-        body: widget.body ?? widget.child,
+        drawer: isPinnedWorkspace
+            ? null
+            : AppDrawer(
+                toolsModeController: _compactDrawerToolsMode,
+              ),
+        drawerScrimColor:
+            Theme.of(context).colorScheme.scrim.withValues(alpha: 0.36),
+        body: routedContent,
       );
     }
+  }
+}
+
+class _ThemeModeSelector extends StatelessWidget {
+  const _ThemeModeSelector({
+    required this.mode,
+    required this.onChanged,
+    required this.padding,
+  });
+
+  final ThemeMode mode;
+  final ValueChanged<ThemeMode> onChanged;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      label: 'Tema de la aplicación',
+      child: Padding(
+        padding: padding,
+        child: SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<ThemeMode>(
+            key: const ValueKey('theme-mode-selector'),
+            segments: const <ButtonSegment<ThemeMode>>[
+              ButtonSegment<ThemeMode>(
+                value: ThemeMode.system,
+                icon: Icon(Icons.brightness_auto_outlined, size: 17),
+                label: Text(
+                  'Sistema',
+                  key: ValueKey('theme-mode-system'),
+                ),
+                tooltip: 'Seguir apariencia del sistema',
+              ),
+              ButtonSegment<ThemeMode>(
+                value: ThemeMode.light,
+                icon: Icon(Icons.light_mode_outlined, size: 17),
+                label: Text(
+                  'Claro',
+                  key: ValueKey('theme-mode-light'),
+                ),
+                tooltip: 'Usar siempre modo claro',
+              ),
+              ButtonSegment<ThemeMode>(
+                value: ThemeMode.dark,
+                icon: Icon(Icons.dark_mode_outlined, size: 17),
+                label: Text(
+                  'Oscuro',
+                  key: ValueKey('theme-mode-dark'),
+                ),
+                tooltip: 'Usar siempre modo oscuro',
+              ),
+            ],
+            selected: <ThemeMode>{mode},
+            showSelectedIcon: false,
+            onSelectionChanged: (selection) {
+              if (selection.isEmpty) return;
+              onChanged(selection.single);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactShellActions extends StatelessWidget {
+  const _CompactShellActions({
+    required this.chrome,
+    required this.drawerToolsMode,
+  });
+
+  final WorkspaceChromeStyleData chrome;
+  final ValueNotifier<bool> drawerToolsMode;
+
+  Future<void> _showWorkspaceTasks(BuildContext context) async {
+    final manager = context.read<WorkspaceManager>();
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return ListenableBuilder(
+          listenable: manager,
+          builder: (context, _) {
+            final workspaces = manager.workspaces;
+            final activeId = manager.activeWorkspace?.id;
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
+                    child: Text(
+                      'Tareas abiertas',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.only(bottom: 16),
+                      itemCount: workspaces.length,
+                      itemBuilder: (context, index) {
+                        final workspace = workspaces[index];
+                        final selected = workspace.id == activeId;
+                        return ListTile(
+                          key: ValueKey('compact-workspace-${workspace.id}'),
+                          minTileHeight: 56,
+                          selected: selected,
+                          leading: Icon(
+                            selected
+                                ? Icons.check_circle_rounded
+                                : Icons.radio_button_unchecked_rounded,
+                          ),
+                          title: Text(
+                            workspace.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle:
+                              workspace.currentRoute == workspace.initialRoute
+                                  ? null
+                                  : Text(
+                                      getRouteTitle(workspace.currentRoute),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                          trailing: workspaces.length <= 1
+                              ? null
+                              : IconButton(
+                                  onPressed: () async {
+                                    final closed =
+                                        await manager.requestCloseWorkspaceById(
+                                            workspace.id);
+                                    if (closed &&
+                                        sheetContext.mounted &&
+                                        manager.workspaces.length <= 1) {
+                                      Navigator.pop(sheetContext);
+                                    }
+                                  },
+                                  icon:
+                                      const Icon(Icons.close_rounded, size: 20),
+                                  tooltip: 'Cerrar ${workspace.title}',
+                                ),
+                          onTap: () {
+                            manager.switchToWorkspaceById(workspace.id);
+                            Navigator.pop(sheetContext);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showActivity(BuildContext context) async {
+    final toolbar = context.read<RightToolbarService>();
+    final notificationCount =
+        NotificationService().unreadNotificationsCount.value;
+    final messageCount = context.read<ChatProvider>().totalUnreadCount;
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        Widget row({
+          required ToolbarTool tool,
+          required String title,
+          required String subtitle,
+          required IconData icon,
+          required int count,
+        }) {
+          return ListTile(
+            key: ValueKey('compact-activity-${tool.name}'),
+            minTileHeight: 58,
+            leading: Icon(icon),
+            title: Text(title),
+            subtitle: Text(subtitle),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (count > 0) _CompactCountBadge(count: count),
+                const SizedBox(width: 6),
+                const Icon(Icons.chevron_right_rounded),
+              ],
+            ),
+            onTap: () {
+              Navigator.pop(sheetContext);
+              toolbar.openTool(tool);
+            },
+          );
+        }
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
+              child: Text(
+                'Actividad',
+                style: Theme.of(sheetContext)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ),
+            row(
+              tool: ToolbarTool.notifications,
+              title: 'Notificaciones',
+              subtitle: notificationCount == 0
+                  ? 'No hay novedades pendientes'
+                  : '$notificationCount sin revisar',
+              icon: Icons.notifications_outlined,
+              count: notificationCount,
+            ),
+            row(
+              tool: ToolbarTool.messages,
+              title: 'Mensajería',
+              subtitle: messageCount == 0
+                  ? 'No hay conversaciones pendientes'
+                  : '$messageCount sin leer',
+              icon: Icons.chat_bubble_outline,
+              count: messageCount,
+            ),
+            ListTile(
+              key: const ValueKey('compact-activity-open-tools'),
+              minTileHeight: 58,
+              leading: const Icon(Icons.grid_view_rounded),
+              title: const Text('Todas las herramientas'),
+              subtitle: const Text('Archivos, gastos, tareas y utilidades'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                drawerToolsMode.value = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!context.mounted) return;
+                  Scaffold.maybeOf(context)?.openDrawer();
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final manager = context.watch<WorkspaceManager>();
+    final chatCount = context.watch<ChatProvider>().totalUnreadCount;
+    return ValueListenableBuilder<int>(
+      valueListenable: NotificationService().unreadNotificationsCount,
+      builder: (context, notificationCount, _) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (manager.workspaces.length >= 2)
+              _CompactHeaderAction(
+                key: const ValueKey('main-layout-mobile-workspaces'),
+                chrome: chrome,
+                icon: Icons.layers_outlined,
+                count: manager.workspaces.length,
+                tooltip: 'Tareas abiertas',
+                onPressed: () => _showWorkspaceTasks(context),
+              ),
+            _CompactHeaderAction(
+              key: const ValueKey('main-layout-mobile-activity'),
+              chrome: chrome,
+              icon: Icons.notifications_none_rounded,
+              count: chatCount + notificationCount,
+              tooltip: 'Actividad',
+              onPressed: () => _showActivity(context),
+            ),
+            const SizedBox(width: 4),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _CompactHeaderAction extends StatelessWidget {
+  const _CompactHeaderAction({
+    required this.chrome,
+    required this.icon,
+    required this.count,
+    required this.tooltip,
+    required this.onPressed,
+    super.key,
+  });
+
+  final WorkspaceChromeStyleData chrome;
+  final IconData icon;
+  final int count;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: IconButton(
+              tooltip: tooltip,
+              onPressed: onPressed,
+              color: chrome.foreground,
+              icon: Icon(icon, size: 21),
+            ),
+          ),
+          if (count > 0)
+            Positioned(
+              right: 3,
+              top: 3,
+              child: IgnorePointer(
+                child: _CompactCountBadge(
+                  count: count,
+                  background: chrome.attention,
+                  foreground: chrome.onAttention,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactCountBadge extends StatelessWidget {
+  const _CompactCountBadge({
+    required this.count,
+    this.background,
+    this.foreground,
+  });
+
+  final int count;
+  final Color? background;
+  final Color? foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      constraints: const BoxConstraints(minWidth: 18, minHeight: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: background ?? theme.colorScheme.primary,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: foreground ?? theme.colorScheme.onPrimary,
+          fontWeight: FontWeight.w800,
+          fontSize: 9.5,
+        ),
+      ),
+    );
   }
 }
 
@@ -1293,7 +2171,17 @@ Future<void> _handleLogout(BuildContext context) async {
 }
 
 class AppSidebar extends StatefulWidget {
-  const AppSidebar({super.key});
+  const AppSidebar({
+    required this.overlayContext,
+    super.key,
+  });
+
+  /// Context above the chromatic sidebar [Theme].
+  ///
+  /// Flutter captures every [InheritedTheme] between an overlay trigger and
+  /// the target navigator. Sidebar dialogs therefore open from this root
+  /// content context while anchor geometry still comes from the real button.
+  final BuildContext overlayContext;
 
   @override
   State<AppSidebar> createState() => _AppSidebarState();
@@ -1303,188 +2191,34 @@ class _AppSidebarState extends State<AppSidebar> {
   // Local state for last location to detect changes
   String? _lastLocation;
 
-  // Module configuration for reordering
-  Widget _buildModuleWidget(String moduleKey, String currentLocation,
-      String? expandedSection, NavigationService navService) {
-    switch (moduleKey) {
-      case 'accounting':
-        return ExpandableMenuItem(
-          key: ValueKey(moduleKey),
-          icon: Icons.account_balance_outlined,
-          activeIcon: Icons.account_balance,
-          title: 'Contabilidad',
-          currentLocation: currentLocation,
-          subItems: _accountingMenuItems,
-          isExpanded: expandedSection == _accountingSectionKey,
-          onExpansionChanged: (expand) =>
-              _handleExpansionChange(_accountingSectionKey, expand, navService),
-        );
-      case 'tax_reports':
-        return ExpandableMenuItem(
-          key: ValueKey(moduleKey),
-          icon: Icons.receipt_long_outlined,
-          activeIcon: Icons.receipt_long,
-          title: 'Impuestos',
-          currentLocation: currentLocation,
-          subItems: _taxReportsMenuItems,
-          isExpanded: expandedSection == _taxReportsSectionKey,
-          onExpansionChanged: (expand) =>
-              _handleExpansionChange(_taxReportsSectionKey, expand, navService),
-        );
-      case 'chat':
-        return Consumer<ChatProvider>(
-          builder: (context, chatProvider, _) {
-            return ExpandableMenuItem(
-              key: ValueKey(moduleKey),
-              icon: Icons.chat_outlined,
-              activeIcon: Icons.chat,
-              title: 'Mensajería',
-              currentLocation: currentLocation,
-              subItems: _chatMenuItems,
-              isExpanded: expandedSection == _chatSectionKey,
-              onExpansionChanged: (expand) =>
-                  _handleExpansionChange(_chatSectionKey, expand, navService),
-              isSingleItem: true,
-              badgeCount: chatProvider.totalUnreadCount,
-            );
-          },
-        );
-      case 'storage':
-        return ExpandableMenuItem(
-          key: ValueKey(moduleKey),
-          icon: Icons.folder_open_outlined,
-          activeIcon: Icons.folder,
-          title: 'Archivos',
-          currentLocation: currentLocation,
-          subItems: _storageMenuItems,
-          isExpanded: expandedSection == _storageSectionKey,
-          onExpansionChanged: (expand) =>
-              _handleExpansionChange(_storageSectionKey, expand, navService),
-          isSingleItem: true,
-        );
-      case 'customers':
-        return ExpandableMenuItem(
-          key: ValueKey(moduleKey),
-          icon: Icons.people_outline,
-          activeIcon: Icons.people,
-          title: 'Clientes',
-          currentLocation: currentLocation,
-          subItems: _customersMenuItems,
-          isExpanded: expandedSection == _customersSectionKey,
-          onExpansionChanged: (expand) =>
-              _handleExpansionChange(_customersSectionKey, expand, navService),
-        );
-      case 'workshop':
-        return ExpandableMenuItem(
-          key: ValueKey(moduleKey),
-          icon: Icons.pedal_bike_outlined,
-          activeIcon: Icons.pedal_bike,
-          title: 'Taller',
-          currentLocation: currentLocation,
-          subItems: _workshopMenuItems,
-          isExpanded: expandedSection == _workshopSectionKey,
-          onExpansionChanged: (expand) =>
-              _handleExpansionChange(_workshopSectionKey, expand, navService),
-        );
-      case 'smart_features':
-        return ExpandableMenuItem(
-          key: ValueKey(moduleKey),
-          icon: Icons.lightbulb_outlined,
-          activeIcon: Icons.lightbulb,
-          title: 'Smart Features',
-          currentLocation: currentLocation,
-          subItems: _smartFeaturesMenuItems,
-          isExpanded: expandedSection == _smartFeaturesSectionKey,
-          onExpansionChanged: (expand) => _handleExpansionChange(
-              _smartFeaturesSectionKey, expand, navService),
-        );
-      case 'inventory':
-        return ExpandableMenuItem(
-          key: ValueKey(moduleKey),
-          icon: Icons.inventory_2_outlined,
-          activeIcon: Icons.inventory_2,
-          title: 'Inventario',
-          currentLocation: currentLocation,
-          subItems: _inventoryMenuItems,
-          isExpanded: expandedSection == _inventorySectionKey,
-          onExpansionChanged: (expand) =>
-              _handleExpansionChange(_inventorySectionKey, expand, navService),
-        );
-      case 'sales':
-        return ExpandableMenuItem(
-          key: ValueKey(moduleKey),
-          icon: Icons.receipt_long_outlined,
-          activeIcon: Icons.receipt_long,
-          title: 'Ventas',
-          currentLocation: currentLocation,
-          subItems: _salesMenuItems,
-          isExpanded: expandedSection == _salesSectionKey,
-          onExpansionChanged: (expand) =>
-              _handleExpansionChange(_salesSectionKey, expand, navService),
-        );
-      case 'purchases':
-        return ExpandableMenuItem(
-          key: ValueKey(moduleKey),
-          icon: Icons.shopping_cart_outlined,
-          activeIcon: Icons.shopping_cart,
-          title: 'Compras',
-          currentLocation: currentLocation,
-          subItems: _purchasesMenuItems,
-          isExpanded: expandedSection == _purchasesSectionKey,
-          onExpansionChanged: (expand) =>
-              _handleExpansionChange(_purchasesSectionKey, expand, navService),
-        );
-      case 'pos':
-        return ExpandableMenuItem(
-          key: ValueKey(moduleKey),
-          icon: Icons.point_of_sale_outlined,
-          activeIcon: Icons.point_of_sale,
-          title: 'POS',
-          currentLocation: currentLocation,
-          subItems: _posMenuItems,
-          isExpanded: expandedSection == _posSectionKey,
-          onExpansionChanged: (expand) =>
-              _handleExpansionChange(_posSectionKey, expand, navService),
-        );
-      case 'hr':
-        return ExpandableMenuItem(
-          key: ValueKey(moduleKey),
-          icon: Icons.badge_outlined,
-          activeIcon: Icons.badge,
-          title: 'RR.HH.',
-          currentLocation: currentLocation,
-          subItems: _hrMenuItems,
-          isExpanded: expandedSection == _hrSectionKey,
-          onExpansionChanged: (expand) =>
-              _handleExpansionChange(_hrSectionKey, expand, navService),
-        );
-      case 'tools':
-        return ExpandableMenuItem(
-          key: ValueKey(moduleKey),
-          icon: Icons.build_circle_outlined,
-          activeIcon: Icons.build_circle,
-          title: 'Herramientas',
-          currentLocation: currentLocation,
-          subItems: _toolsMenuItems,
-          isExpanded: expandedSection == _toolsSectionKey,
-          onExpansionChanged: (expand) =>
-              _handleExpansionChange(_toolsSectionKey, expand, navService),
-        );
-      case 'debug':
-        return ExpandableMenuItem(
-          key: ValueKey(moduleKey),
-          icon: Icons.bug_report_outlined,
-          activeIcon: Icons.bug_report,
-          title: 'Debug',
-          currentLocation: currentLocation,
-          subItems: _debugMenuItems,
-          isExpanded: expandedSection == _debugSectionKey,
-          onExpansionChanged: (expand) =>
-              _handleExpansionChange(_debugSectionKey, expand, navService),
-        );
-      default:
-        return const SizedBox.shrink();
-    }
+  /// Renders one destination of the shared model as an expanded-sidebar item.
+  Widget _buildModuleWidget(
+    AppDestinationModule module,
+    String currentLocation,
+    String? expandedSection,
+    NavigationService navService,
+  ) {
+    return ExpandableMenuItem(
+      key: ValueKey(module.key),
+      icon: module.icon,
+      activeIcon: module.activeIcon,
+      title: module.title,
+      currentLocation: currentLocation,
+      subItems: module.items,
+      isExpanded: expandedSection == module.key,
+      isSingleItem: module.isSingleItem,
+      enabled: module.enabled,
+      badgeCount: module.badgeCount,
+      subItemBadgeCounts: module.subItemBadgeCounts,
+      onExpansionChanged: (expand) =>
+          _handleExpansionChange(module.key, expand, navService),
+      onBadgeTap: module.resolvedBadgeRoute == null
+          ? null
+          : () => context.go(module.resolvedBadgeRoute!),
+      onNavigate: module.resolveRoute == null
+          ? null
+          : (route) => context.go(module.resolveRoute!(route)),
+    );
   }
 
   @override
@@ -1555,6 +2289,15 @@ class _AppSidebarState extends State<AppSidebar> {
     if (_matchesLocation(location, _accountingMenuItems)) {
       return _accountingSectionKey;
     }
+    if (_matchesLocation(location, _taxReportsMenuItems)) {
+      return _taxReportsSectionKey;
+    }
+    if (_matchesLocation(location, _chatMenuItems)) {
+      return _chatSectionKey;
+    }
+    if (_matchesLocation(location, _toolsMenuItems)) {
+      return _toolsSectionKey;
+    }
     if (_matchesLocation(location, _customersMenuItems)) {
       return _customersSectionKey;
     }
@@ -1623,8 +2366,8 @@ class _AppSidebarState extends State<AppSidebar> {
         children: [
           // Company Header
           Container(
-            height: 64,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 11),
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
@@ -1644,10 +2387,11 @@ class _AppSidebarState extends State<AppSidebar> {
                   child: Row(
                     children: [
                       if (appearanceService.hasCustomLogo)
-                        // Show custom logo
-                        Expanded(
+                        SizedBox(
+                          width: 86,
+                          height: 25,
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            padding: const EdgeInsets.symmetric(vertical: 2),
                             child: _buildAdaptiveCompanyLogo(
                               context: context,
                               appearanceService: appearanceService,
@@ -1674,21 +2418,25 @@ class _AppSidebarState extends State<AppSidebar> {
           Expanded(
             child: Consumer<NavigationService>(
               builder: (context, navigationService, _) {
-                final moduleOrder = navigationService.moduleOrder;
+                final orderedModules = resolveOrderedAppModules(context);
                 final isReorderMode = navigationService.isReorderMode;
 
                 if (isReorderMode) {
                   // Reorder mode: Show ReorderableListView
                   return ReorderableListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 5),
                     buildDefaultDragHandles: false,
-                    itemCount:
-                        moduleOrder.length + 2, // +2 for dashboard and divider
+                    itemCount: orderedModules.length +
+                        2, // +2 for dashboard and divider
                     onReorder: (oldIndex, newIndex) {
                       // Adjust for dashboard item (index 0) and divider (index 1)
                       if (oldIndex < 2 || newIndex < 2) return;
-                      navigationService.reorderModules(
-                          oldIndex - 2, newIndex - 2);
+                      _reorderVisibleModules(
+                        navigationService,
+                        [for (final module in orderedModules) module.key],
+                        oldIndex - 2,
+                        newIndex - 2,
+                      );
                     },
                     itemBuilder: (context, index) {
                       if (index == 0) {
@@ -1719,9 +2467,9 @@ class _AppSidebarState extends State<AppSidebar> {
                       }
                       // Module items
                       final moduleIndex = index - 2;
-                      final moduleKey = moduleOrder[moduleIndex];
+                      final module = orderedModules[moduleIndex];
                       return ReorderableDragStartListener(
-                        key: ValueKey(moduleKey),
+                        key: ValueKey(module.key),
                         index: index,
                         child: Container(
                           decoration: BoxDecoration(
@@ -1748,10 +2496,11 @@ class _AppSidebarState extends State<AppSidebar> {
                               ),
                               Expanded(
                                 child: _buildModuleWidget(
-                                    moduleKey,
-                                    currentLocation,
-                                    navigationService.expandedSection,
-                                    navigationService),
+                                  module,
+                                  currentLocation,
+                                  navigationService.expandedSection,
+                                  navigationService,
+                                ),
                               ),
                             ],
                           ),
@@ -1763,7 +2512,7 @@ class _AppSidebarState extends State<AppSidebar> {
 
                 // Normal mode: Regular ListView
                 return ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  padding: const EdgeInsets.symmetric(vertical: 5),
                   children: [
                     // Dashboard
                     _buildSidebarItem(
@@ -1781,8 +2530,8 @@ class _AppSidebarState extends State<AppSidebar> {
                     _buildSectionDivider(context),
 
                     // Render modules in custom order
-                    ...moduleOrder.map((moduleKey) => _buildModuleWidget(
-                        moduleKey,
+                    ...orderedModules.map((module) => _buildModuleWidget(
+                        module,
                         currentLocation,
                         navigationService.expandedSection,
                         navigationService)),
@@ -1790,60 +2539,26 @@ class _AppSidebarState extends State<AppSidebar> {
                     const SizedBox(height: 8),
                     _buildSectionDivider(context),
 
-                    // Website Module
-                    ValueListenableBuilder<int>(
-                      valueListenable:
-                          NotificationService().onlineOrderAlertCount,
-                      builder: (context, onlineOrderAlerts, _) {
-                        final visibleOrderAlerts =
-                            currentLocation.startsWith('/website/orders')
-                                ? 0
-                                : onlineOrderAlerts;
-
-                        return ExpandableMenuItem(
-                          icon: Icons.web_outlined,
-                          activeIcon: Icons.web,
-                          title: 'Sitio Web',
-                          currentLocation: currentLocation,
-                          subItems: _websiteMenuItems,
-                          isExpanded: navigationService.expandedSection ==
-                              _websiteSectionKey,
-                          onExpansionChanged: (expand) =>
-                              _handleExpansionChange(
-                            _websiteSectionKey,
-                            expand,
-                            navigationService,
-                          ),
-                          enabled: true,
-                          badgeCount: visibleOrderAlerts,
-                          subItemBadgeCounts: {
-                            '/website/orders': visibleOrderAlerts,
-                          },
-                          onBadgeTap: visibleOrderAlerts > 0
-                              ? () => context.go(
-                                    _resolveWebsiteMenuRoute('/website/orders'),
-                                  )
-                              : null,
-                          onNavigate: (route) {
-                            context.go(_resolveWebsiteMenuRoute(route));
-                          },
-                        );
-                      },
-                    ),
-
-                    // Correo
+                    // Fixed destinations shared with rail and drawer.
                     AnimatedBuilder(
-                      animation: MailAccountManager.instance,
+                      animation: Listenable.merge([
+                        NotificationService().onlineOrderAlertCount,
+                        MailAccountManager.instance,
+                      ]),
                       builder: (context, _) {
-                        return _buildSidebarItem(
-                          context,
-                          icon: Icons.email_outlined,
-                          activeIcon: Icons.email,
-                          title: 'Correo',
-                          route: '/mail',
-                          currentLocation: currentLocation,
-                          enabled: true,
-                          badgeCount: MailAccountManager.instance.unreadCount,
+                        return Column(
+                          children: [
+                            for (final module in resolveFixedAppModules(
+                              context,
+                              currentLocation: currentLocation,
+                            ))
+                              _buildModuleWidget(
+                                module,
+                                currentLocation,
+                                navigationService.expandedSection,
+                                navigationService,
+                              ),
+                          ],
                         );
                       },
                     ),
@@ -1888,6 +2603,7 @@ class _AppSidebarState extends State<AppSidebar> {
               children: [
                 CurrentUserProfileTile(
                   selected: currentLocation == '/profile',
+                  compact: true,
                   onTap: () => CurrentUserProfileNavigation.open(context),
                 ),
 
@@ -1905,7 +2621,7 @@ class _AppSidebarState extends State<AppSidebar> {
                 // Logout
                 Container(
                   margin:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
@@ -1913,7 +2629,7 @@ class _AppSidebarState extends State<AppSidebar> {
                       onTap: () => _handleLogout(context),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
+                            horizontal: 9, vertical: 7),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -1921,15 +2637,15 @@ class _AppSidebarState extends State<AppSidebar> {
                           children: [
                             Icon(
                               Icons.logout_outlined,
-                              size: 20,
+                              size: 16,
                               color: theme.colorScheme.onSurface
                                   .withValues(alpha: 0.7),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 9),
                             Expanded(
                               child: Text(
                                 'Cerrar Sesión',
-                                style: theme.textTheme.bodyMedium?.copyWith(
+                                style: theme.textTheme.bodySmall?.copyWith(
                                   color: theme.colorScheme.onSurface
                                       .withValues(alpha: 0.7),
                                 ),
@@ -1946,8 +2662,7 @@ class _AppSidebarState extends State<AppSidebar> {
                 Consumer<NavigationService>(
                   builder: (context, navigationService, _) {
                     return Container(
-                      padding: const EdgeInsets.only(
-                          left: 8, right: 8, top: 8, bottom: 8),
+                      padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
                       child: Row(
                         children: [
                           // 3-dot menu button
@@ -1967,10 +2682,49 @@ class _AppSidebarState extends State<AppSidebar> {
                             tooltip: 'Opciones',
                             onPressed: () {
                               _showSidebarOptionsMenu(
-                                  context, navigationService);
+                                anchorContext: context,
+                                overlayContext: widget.overlayContext,
+                                navigationService: navigationService,
+                              );
                             },
                           ),
                           const Spacer(),
+                          // Compact-to-rail button (middle chrome state)
+                          IconButton(
+                            icon: const Icon(
+                              Icons.keyboard_double_arrow_left,
+                              size: 18,
+                            ),
+                            iconSize: 18,
+                            padding: const EdgeInsets.all(8),
+                            constraints: const BoxConstraints(
+                              minWidth: 32,
+                              minHeight: 32,
+                            ),
+                            tooltip: 'Compactar menú',
+                            onPressed: () {
+                              final scopedWorkspace =
+                                  _maybeWorkspaceOf(context);
+                              if (scopedWorkspace != null) {
+                                context
+                                    .read<WorkspaceManager>()
+                                    .setWorkspaceChromeMode(
+                                      scopedWorkspace.id,
+                                      NavigationChromeMode.rail,
+                                    );
+                              } else {
+                                navigationService.setPreferredChromeMode(
+                                  NavigationChromeMode.rail,
+                                );
+                              }
+                            },
+                            style: IconButton.styleFrom(
+                              backgroundColor: theme.colorScheme.surface,
+                              foregroundColor: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.6),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
                           // Hide navigation button
                           IconButton(
                             icon: const Icon(Icons.chevron_left, size: 18),
@@ -2033,11 +2787,15 @@ class _AppSidebarState extends State<AppSidebar> {
     final theme = Theme.of(context);
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(8),
+          mouseCursor:
+              enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+          borderRadius: BorderRadius.circular(6),
+          hoverColor: theme.colorScheme.primary.withValues(alpha: 0.08),
+          focusColor: theme.colorScheme.primary.withValues(alpha: 0.12),
           onTap: enabled
               ? () {
                   if (!isSelected) {
@@ -2058,29 +2816,38 @@ class _AppSidebarState extends State<AppSidebar> {
                 }
               : null,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            constraints: const BoxConstraints(minHeight: 30),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(6),
               color: isSelected
-                  ? theme.primaryColor.withValues(alpha: 0.1)
+                  ? theme.primaryColor.withValues(alpha: 0.13)
                   : Colors.transparent,
+              border: isSelected
+                  ? Border(
+                      left: BorderSide(
+                        color: theme.colorScheme.primary,
+                        width: 2,
+                      ),
+                    )
+                  : null,
             ),
             child: Row(
               children: [
                 Icon(
                   isSelected ? activeIcon : icon,
-                  size: 20,
+                  size: 16,
                   color: enabled
                       ? (isSelected
                           ? theme.primaryColor
                           : theme.colorScheme.onSurface.withValues(alpha: 0.7))
                       : theme.disabledColor,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 9),
                 Expanded(
                   child: Text(
                     title,
-                    style: theme.textTheme.bodyMedium?.copyWith(
+                    style: theme.textTheme.bodySmall?.copyWith(
                       fontWeight:
                           isSelected ? FontWeight.w600 : FontWeight.normal,
                       color: enabled
@@ -2147,12 +2914,14 @@ class _AppSidebarState extends State<AppSidebar> {
               'Vinabike',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w600,
+                height: 1,
               ),
             ),
             Text(
               'ERP Sistema',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                height: 1,
               ),
             ),
           ],
@@ -2173,8 +2942,481 @@ class _AppSidebarState extends State<AppSidebar> {
   }
 }
 
+/// Compact icon rail: the middle state of the tri-state desktop chrome.
+///
+/// It consumes exactly the same destination model as the expanded sidebar and
+/// the mobile drawer ([resolveOrderedAppModules] / [resolveFixedAppModules]).
+/// Multi-destination modules open an anchored flyout; every trigger keeps a
+/// tooltip, a semantic label and an explicit selected state.
+class AppNavigationRail extends StatelessWidget {
+  const AppNavigationRail({super.key});
+
+  static const double railWidth = WorkspaceShellScope.navigationRailWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final chrome = WorkspaceChromeStyle.maybeOf(context) ??
+        WorkspaceChromeStyleData.vinabike;
+    String currentLocation = '';
+    try {
+      if (GoRouter.maybeOf(context) != null) {
+        currentLocation = GoRouterState.of(context).uri.path;
+      }
+    } catch (_) {
+      currentLocation = '';
+    }
+
+    final orderedModules = resolveOrderedAppModules(context);
+    final profile = context.watch<CurrentUserProfileService>().profile;
+    final initials = () {
+      final name = profile?.displayName.trim() ?? '';
+      if (name.isEmpty) return 'V';
+      final parts =
+          name.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+      if (parts.length == 1) return parts.first[0].toUpperCase();
+      return (parts.first[0] + parts[1][0]).toUpperCase();
+    }();
+
+    return AnimatedBuilder(
+      animation: Listenable.merge([
+        NotificationService().onlineOrderAlertCount,
+        MailAccountManager.instance,
+      ]),
+      builder: (context, _) {
+        final fixedModules = resolveFixedAppModules(
+          context,
+          currentLocation: currentLocation,
+        );
+
+        return Container(
+          width: railWidth,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: <Color>[chrome.canvas, chrome.raised],
+            ),
+          ),
+          child: Column(
+            children: [
+              Tooltip(
+                message: 'Inicio',
+                child: Semantics(
+                  button: true,
+                  label: 'Inicio',
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => context.go('/dashboard'),
+                      mouseCursor: SystemMouseCursors.click,
+                      borderRadius: BorderRadius.circular(9),
+                      hoverColor: chrome.foreground.withValues(alpha: 0.10),
+                      focusColor: chrome.foreground.withValues(alpha: 0.14),
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: chrome.accent,
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'V',
+                          style:
+                              Theme.of(context).textTheme.titleSmall?.copyWith(
+                                    color: chrome.onAccent,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 9),
+              Container(width: 24, height: 1, color: chrome.edge),
+              const SizedBox(height: 9),
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    for (final module in [...orderedModules, ...fixedModules])
+                      _RailModuleDestination(
+                        key: ValueKey('rail-${module.key}'),
+                        module: module,
+                        currentLocation: currentLocation,
+                      ),
+                  ],
+                ),
+              ),
+              Container(width: 24, height: 1, color: chrome.edge),
+              const SizedBox(height: 8),
+              _RailDestination(
+                title: 'Configuración',
+                icon: Icons.settings_outlined,
+                activeIcon: Icons.settings,
+                selected: currentLocation.startsWith('/settings'),
+                onTap: () => context.go('/settings'),
+              ),
+              _RailDestination(
+                title: 'Cerrar sesión',
+                icon: Icons.logout_outlined,
+                activeIcon: Icons.logout_outlined,
+                selected: false,
+                onTap: () => _handleLogout(context),
+              ),
+              _RailDestination(
+                title: 'Expandir menú',
+                icon: Icons.keyboard_double_arrow_right,
+                activeIcon: Icons.keyboard_double_arrow_right,
+                selected: false,
+                onTap: () => _expandChrome(context),
+              ),
+              _RailDestination(
+                title: 'Ocultar menú',
+                icon: Icons.chevron_left,
+                activeIcon: Icons.chevron_left,
+                selected: false,
+                onTap: () => _hideChrome(context),
+              ),
+              const SizedBox(height: 6),
+              Tooltip(
+                message: 'Mi perfil',
+                child: Semantics(
+                  button: true,
+                  label: 'Mi perfil',
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      onTap: () => CurrentUserProfileNavigation.open(context),
+                      mouseCursor: SystemMouseCursors.click,
+                      customBorder: const CircleBorder(),
+                      hoverColor: chrome.foreground.withValues(alpha: 0.10),
+                      focusColor: chrome.foreground.withValues(alpha: 0.14),
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: chrome.raised,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: chrome.accent.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          initials,
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: chrome.accent,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _expandChrome(BuildContext context) {
+    final scopedWorkspace = _maybeWorkspaceOf(context);
+    if (scopedWorkspace != null) {
+      context.read<WorkspaceManager>().setWorkspaceChromeMode(
+            scopedWorkspace.id,
+            NavigationChromeMode.expanded,
+          );
+    } else {
+      context
+          .read<NavigationService>()
+          .setPreferredChromeMode(NavigationChromeMode.expanded);
+    }
+  }
+
+  void _hideChrome(BuildContext context) {
+    final scopedWorkspace = _maybeWorkspaceOf(context);
+    if (scopedWorkspace != null) {
+      context.read<WorkspaceManager>().hideWorkspaceDrawer(scopedWorkspace.id);
+    } else {
+      context.read<NavigationService>().hideDrawer();
+    }
+  }
+}
+
+/// One rail module trigger. Single-destination modules navigate directly;
+/// multi-destination modules open their children in an anchored flyout.
+class _RailModuleDestination extends StatefulWidget {
+  const _RailModuleDestination({
+    super.key,
+    required this.module,
+    required this.currentLocation,
+  });
+
+  final AppDestinationModule module;
+  final String currentLocation;
+
+  @override
+  State<_RailModuleDestination> createState() => _RailModuleDestinationState();
+}
+
+class _RailModuleDestinationState extends State<_RailModuleDestination> {
+  final MenuController _menuController = MenuController();
+
+  void _navigate(String route) {
+    final resolved = widget.module.resolveRoute?.call(route) ?? route;
+    context.go(resolved);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final module = widget.module;
+    final selected = module.matchesLocation(widget.currentLocation);
+    final navigableItems =
+        module.items.where((item) => !item.isHeader).toList(growable: false);
+    final isDirect = module.isSingleItem || navigableItems.length == 1;
+
+    if (isDirect) {
+      return _RailDestination(
+        title: module.title,
+        icon: module.icon,
+        activeIcon: module.activeIcon,
+        selected: selected,
+        enabled: module.enabled,
+        badgeCount: module.badgeCount,
+        onTap: navigableItems.isEmpty
+            ? null
+            : () => _navigate(navigableItems.first.route),
+      );
+    }
+
+    final theme = Theme.of(context);
+    return MenuAnchor(
+      controller: _menuController,
+      consumeOutsideTap: true,
+      style: const MenuStyle(
+        minimumSize: WidgetStatePropertyAll(Size(230, 0)),
+      ),
+      menuChildren: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+          child: Text(
+            module.title,
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        // The badge's durable action, shared with sidebar and drawer through
+        // the destination model.
+        if (module.resolvedBadgeRoute != null)
+          MenuItemButton(
+            leadingIcon:
+                const Icon(Icons.notifications_active_outlined, size: 18),
+            onPressed: () => context.go(module.resolvedBadgeRoute!),
+            child: Text(
+              'Ver ${module.badgeCount} '
+              '${module.badgeCount == 1 ? 'pendiente' : 'pendientes'}',
+            ),
+          ),
+        for (final item in module.items)
+          if (item.isHeader)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+              child: Text(
+                item.title,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            )
+          else
+            MenuItemButton(
+              leadingIcon: Icon(item.icon, size: 18),
+              trailingIcon: (module.subItemBadgeCounts[item.route] ?? 0) > 0
+                  ? _RailBadge(
+                      count: module.subItemBadgeCounts[item.route]!,
+                    )
+                  : null,
+              onPressed: () => _navigate(item.route),
+              child: Text(item.title),
+            ),
+      ],
+      builder: (context, controller, _) {
+        return _RailDestination(
+          title: module.title,
+          icon: module.icon,
+          activeIcon: module.activeIcon,
+          selected: selected,
+          enabled: module.enabled,
+          badgeCount: module.badgeCount,
+          expanded: controller.isOpen,
+          onTap: () {
+            if (controller.isOpen) {
+              controller.close();
+            } else {
+              controller.open();
+            }
+          },
+        );
+      },
+    );
+  }
+}
+
+class _RailDestination extends StatelessWidget {
+  const _RailDestination({
+    required this.title,
+    required this.icon,
+    required this.activeIcon,
+    required this.selected,
+    required this.onTap,
+    this.enabled = true,
+    this.badgeCount = 0,
+    this.expanded,
+  });
+
+  final String title;
+  final IconData icon;
+  final IconData activeIcon;
+  final bool selected;
+  final VoidCallback? onTap;
+  final bool enabled;
+  final int badgeCount;
+
+  /// Whether this trigger's flyout is open (null when it has none).
+  final bool? expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final chrome = WorkspaceChromeStyle.maybeOf(context) ??
+        WorkspaceChromeStyleData.vinabike;
+    final iconColor = !enabled
+        ? chrome.mutedForeground.withValues(alpha: 0.45)
+        : selected
+            ? chrome.accent
+            : chrome.mutedForeground;
+
+    return Tooltip(
+      message: title,
+      waitDuration: const Duration(milliseconds: 350),
+      child: Semantics(
+        button: true,
+        selected: selected,
+        expanded: expanded,
+        label: title + (badgeCount > 0 ? ', $badgeCount pendientes' : ''),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: enabled ? onTap : null,
+            canRequestFocus: enabled && onTap != null,
+            mouseCursor:
+                enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+            hoverColor: chrome.foreground.withValues(alpha: 0.08),
+            focusColor: chrome.foreground.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              width: AppNavigationRail.railWidth,
+              height: 40,
+              child: Center(
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: selected ? chrome.raised : Colors.transparent,
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(
+                          color: selected ? chrome.accent : chrome.edge,
+                        ),
+                        boxShadow: selected
+                            ? <BoxShadow>[
+                                BoxShadow(
+                                  color: chrome.accent.withValues(alpha: 0.10),
+                                  spreadRadius: 3,
+                                  blurRadius: 0,
+                                ),
+                              ]
+                            : null,
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(selected ? activeIcon : icon,
+                          size: 17, color: iconColor),
+                    ),
+                    if (badgeCount > 0)
+                      Positioned(
+                        top: -3,
+                        right: -3,
+                        child: Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            color: chrome.attention,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: chrome.canvas,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RailBadge extends StatelessWidget {
+  const _RailBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      constraints: const BoxConstraints(minWidth: 16, minHeight: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onPrimary,
+          fontWeight: FontWeight.w800,
+          fontSize: 9.5,
+        ),
+      ),
+    );
+  }
+}
+
 class AppDrawer extends StatefulWidget {
-  const AppDrawer({super.key});
+  const AppDrawer({
+    super.key,
+    this.toolsModeController,
+  });
+
+  final ValueNotifier<bool>? toolsModeController;
 
   @override
   State<AppDrawer> createState() => _AppDrawerState();
@@ -2185,6 +3427,51 @@ enum _AppDrawerMode { navigation, tools }
 class _AppDrawerState extends State<AppDrawer> {
   String? _expandedSection;
   _AppDrawerMode _mode = _AppDrawerMode.navigation;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _mode = widget.toolsModeController?.value == true
+        ? _AppDrawerMode.tools
+        : _AppDrawerMode.navigation;
+    widget.toolsModeController?.addListener(_syncExternalMode);
+  }
+
+  @override
+  void didUpdateWidget(covariant AppDrawer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.toolsModeController == widget.toolsModeController) return;
+    oldWidget.toolsModeController?.removeListener(_syncExternalMode);
+    widget.toolsModeController?.addListener(_syncExternalMode);
+    _syncExternalMode();
+  }
+
+  @override
+  void dispose() {
+    widget.toolsModeController?.removeListener(_syncExternalMode);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _syncExternalMode() {
+    final nextMode = widget.toolsModeController?.value == true
+        ? _AppDrawerMode.tools
+        : _AppDrawerMode.navigation;
+    if (!mounted || nextMode == _mode) return;
+    setState(() => _mode = nextMode);
+  }
+
+  void _selectMode(_AppDrawerMode mode) {
+    final controller = widget.toolsModeController;
+    final usesTools = mode == _AppDrawerMode.tools;
+    if (controller != null && controller.value != usesTools) {
+      controller.value = usesTools;
+      return;
+    }
+    if (_mode != mode) setState(() => _mode = mode);
+  }
 
   void _handleExpansionChange(String sectionKey, bool isExpanded) {
     setState(() {
@@ -2223,8 +3510,11 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 
   /// Shows a bottom sheet with reorderable module list
-  void _showReorderSheet(BuildContext context) {
-    final navigationService = context.read<NavigationService>();
+  void _showReorderSheet(BuildContext overlayContext) {
+    final navigationService = overlayContext.read<NavigationService>();
+    final canSeeHr = _visibleHrMenuItems(
+      overlayContext.read<CurrentUserProfileService>(),
+    ).isNotEmpty;
 
     // Module key to display name and icon mapping
     const moduleInfo = <String, (String, IconData)>{
@@ -2243,9 +3533,10 @@ class _AppDrawerState extends State<AppDrawer> {
     };
 
     showModalBottomSheet(
-      context: context,
+      context: overlayContext,
+      useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: Theme.of(overlayContext).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -2253,10 +3544,12 @@ class _AppDrawerState extends State<AppDrawer> {
         return StatefulBuilder(
           builder: (context, setSheetState) {
             // Get a mutable copy of the order
-            final moduleOrder =
-                List<String>.from(navigationService.moduleOrder);
+            final moduleOrder = navigationService.moduleOrder
+                .where((moduleKey) => moduleKey != 'hr' || canSeeHr)
+                .toList(growable: false);
 
             return DraggableScrollableSheet(
+              key: const ValueKey('mobile-reorder-sheet'),
               initialChildSize: 0.7,
               minChildSize: 0.5,
               maxChildSize: 0.9,
@@ -2325,13 +3618,16 @@ class _AppDrawerState extends State<AppDrawer> {
                       child: ReorderableListView.builder(
                         itemCount: moduleOrder.length,
                         onReorder: (oldIndex, newIndex) {
+                          _reorderVisibleModules(
+                            navigationService,
+                            moduleOrder,
+                            oldIndex,
+                            newIndex,
+                          );
                           setSheetState(() {
-                            if (oldIndex < newIndex) newIndex -= 1;
-                            final item = moduleOrder.removeAt(oldIndex);
-                            moduleOrder.insert(newIndex, item);
+                            // NavigationService updates synchronously. Rebuild
+                            // this sheet from its authoritative order.
                           });
-                          // Persist the change
-                          navigationService.reorderModules(oldIndex, newIndex);
                         },
                         itemBuilder: (context, index) {
                           final key = moduleOrder[index];
@@ -2385,81 +3681,37 @@ class _AppDrawerState extends State<AppDrawer> {
 
   Widget _buildCompactDrawerHeader(BuildContext context) {
     final theme = Theme.of(context);
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        height: 68,
-        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
-            ),
+    return Container(
+      key: const ValueKey('mobile-drawer-identity'),
+      padding: const EdgeInsets.fromLTRB(4, 4, 6, 4),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: theme.colorScheme.outlineVariant,
           ),
         ),
-        child: Consumer<AppearanceService>(
-          builder: (context, appearanceService, _) {
-            return Row(
-              children: [
-                InkWell(
-                  key: const ValueKey('mobile-drawer-home'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _handleMobileNavigation(context, '/dashboard', 'Dashboard');
-                  },
-                  borderRadius: BorderRadius.circular(10),
-                  child: SizedBox(
-                    width: 48,
-                    height: 48,
-                    child: Padding(
-                      padding: const EdgeInsets.all(7),
-                      child: _buildAdaptiveCompanyLogo(
-                        context: context,
-                        appearanceService: appearanceService,
-                        fallbackBuilder: (_) => Icon(
-                          appearanceService.homeIcon,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Vinabike ERP',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      Text(
-                        _mode == _AppDrawerMode.navigation
-                            ? 'Navegación'
-                            : 'Herramientas rápidas',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded),
-                  tooltip: 'Cerrar menú',
-                ),
-              ],
-            );
-          },
-        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: CurrentUserProfileTile(
+              compact: true,
+              onTap: () {
+                Navigator.pop(context);
+                CurrentUserProfileNavigation.open(context);
+              },
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('mobile-drawer-close'),
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close_rounded),
+            tooltip: 'Cerrar menú',
+            style: IconButton.styleFrom(
+              minimumSize: const Size(48, 48),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2469,11 +3721,14 @@ class _AppDrawerState extends State<AppDrawer> {
     return Container(
       key: const ValueKey('mobile-drawer-mode-switch'),
       height: 56,
-      margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-      padding: const EdgeInsets.all(4),
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+      // The border also consumes layout space. Three vertical pixels keep the
+      // visual control at 56 while preserving a real 48px target per mode.
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(12),
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       child: Row(
         children: [
@@ -2509,31 +3764,124 @@ class _AppDrawerState extends State<AppDrawer> {
       label: 'Modo $label',
       child: InkWell(
         key: ValueKey('mobile-drawer-mode-${mode.name}'),
-        onTap: () => setState(() => _mode = mode),
-        borderRadius: BorderRadius.circular(9),
+        onTap: () => _selectMode(mode),
+        borderRadius: BorderRadius.circular(6),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: selected
-                ? Color.alphaBlend(
-                    theme.colorScheme.primary.withValues(alpha: 0.1),
-                    theme.colorScheme.surface,
-                  )
+                ? theme.colorScheme.primaryContainer
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: BorderRadius.circular(6),
           ),
           child: Text(
             label,
             style: theme.textTheme.labelLarge?.copyWith(
               color: selected
-                  ? theme.colorScheme.primary
+                  ? theme.colorScheme.onPrimaryContainer
                   : theme.colorScheme.onSurfaceVariant,
               fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildCompactNavigationSearch(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
+      child: SizedBox(
+        height: 48,
+        child: TextField(
+          key: const ValueKey('mobile-drawer-search'),
+          controller: _searchController,
+          textInputAction: TextInputAction.search,
+          style: theme.textTheme.bodyMedium,
+          decoration: InputDecoration(
+            hintText: 'Buscar módulo o página',
+            prefixIcon: const Icon(Icons.search_rounded, size: 20),
+            suffixIcon: _searchQuery.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Limpiar búsqueda',
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _searchQuery = '');
+                    },
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                  ),
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+          onChanged: (value) => setState(() => _searchQuery = value.trim()),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactSearchResults(
+    BuildContext context, {
+    required List<AppDestinationModule> modules,
+    required List<AppDestinationModule> fixedModules,
+  }) {
+    final normalizedQuery = _searchQuery.toLowerCase();
+    final results =
+        <({String label, String module, String route, IconData icon})>[
+      (
+        label: 'Inicio',
+        module: 'Inicio',
+        route: '/dashboard',
+        icon: Icons.dashboard_outlined,
+      ),
+      for (final module in [...modules, ...fixedModules])
+        for (final item in module.items)
+          if (!item.isHeader)
+            (
+              label: item.title,
+              module: module.title,
+              route: module.resolveRoute?.call(item.route) ?? item.route,
+              icon: item.icon,
+            ),
+    ].where((result) {
+      return result.label.toLowerCase().contains(normalizedQuery) ||
+          result.module.toLowerCase().contains(normalizedQuery);
+    }).toList(growable: false);
+
+    if (results.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'No encontramos módulos o páginas para “$_searchQuery”.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      key: const ValueKey('mobile-drawer-search-results'),
+      padding: const EdgeInsets.only(bottom: 12),
+      itemCount: results.length,
+      itemBuilder: (context, index) {
+        final result = results[index];
+        return ListTile(
+          minTileHeight: 52,
+          leading: Icon(result.icon, size: 20),
+          title: Text(result.label),
+          subtitle: Text('${result.module} › ${result.label}'),
+          trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+          onTap: () {
+            Navigator.pop(context);
+            _handleMobileNavigation(context, result.route, result.label);
+          },
+        );
+      },
     );
   }
 
@@ -2584,16 +3932,22 @@ class _AppDrawerState extends State<AppDrawer> {
     );
   }
 
-  Widget _buildCompactToolsMode(BuildContext context) {
+  Widget _buildCompactToolsMode(
+    BuildContext context, {
+    required BuildContext overlayContext,
+  }) {
     final toolbarService = context.watch<RightToolbarService>();
     final chatProvider = context.watch<ChatProvider>();
-    final visibleTools = ToolbarTool.values.where((tool) {
-      if (tool == ToolbarTool.performance) {
-        return QueryPerformanceService.isEnabled &&
-            toolbarService.isGaugePinned;
-      }
-      return true;
-    }).toList(growable: false);
+    final profileService = context.watch<CurrentUserProfileService?>();
+    final canManageHr = profileService != null &&
+        !profileService.isLoading &&
+        profileService.loadIssue == null &&
+        profileService.profile?.canManageUsers == true;
+    final visibleTools = resolveVisibleToolbarTools(
+      canManageHr: canManageHr,
+      performanceEnabled: QueryPerformanceService.isEnabled,
+      performancePinned: toolbarService.isGaugePinned,
+    );
 
     return ValueListenableBuilder<int>(
       valueListenable: NotificationService().unreadNotificationsCount,
@@ -2644,6 +3998,40 @@ class _AppDrawerState extends State<AppDrawer> {
             );
           }
         }
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 5),
+            child: Text(
+              'APARIENCIA',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.55,
+                  ),
+            ),
+          ),
+        );
+        widgets.add(
+          Consumer<AppearanceService>(
+            builder: (context, appearance, _) => _ThemeModeSelector(
+              mode: appearance.themeMode,
+              onChanged: appearance.setThemeMode,
+              padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+            ),
+          ),
+        );
+        widgets.add(
+          ListTile(
+            minTileHeight: 52,
+            leading: const Icon(Icons.swap_vert_rounded),
+            title: const Text('Reordenar módulos'),
+            trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+            // Open from the app context above the drawer's chromatic Theme.
+            // Otherwise showModalBottomSheet captures the shell ColorScheme and
+            // paints a navy application overlay.
+            onTap: () => _showReorderSheet(overlayContext),
+          ),
+        );
         widgets.add(const SizedBox(height: 16));
         return Column(
           key: const ValueKey('mobile-drawer-tools-mode'),
@@ -2695,17 +4083,18 @@ class _AppDrawerState extends State<AppDrawer> {
         minLeadingWidth: 32,
         minVerticalPadding: 4,
         selected: selected,
-        selectedTileColor: theme.colorScheme.primary.withValues(alpha: 0.075),
+        selectedTileColor: theme.colorScheme.primaryContainer,
         leading: Icon(
           presentation.icon,
           size: 21,
           color: selected
-              ? theme.colorScheme.primary
+              ? theme.colorScheme.onPrimaryContainer
               : theme.colorScheme.onSurfaceVariant,
         ),
         title: Text(
           presentation.title,
           style: theme.textTheme.bodyMedium?.copyWith(
+            color: selected ? theme.colorScheme.onPrimaryContainer : null,
             fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
           ),
         ),
@@ -2763,442 +4152,179 @@ class _AppDrawerState extends State<AppDrawer> {
     } catch (e) {
       currentLocation = '';
     }
+    final modules = resolveOrderedAppModules(context);
+    final fixedModules = resolveFixedAppModules(
+      context,
+      currentLocation: currentLocation,
+    );
+    _expandedSection ??= [...modules, ...fixedModules]
+        .where((module) => module.matchesLocation(currentLocation))
+        .map((module) => module.key)
+        .firstOrNull;
 
-    return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          _buildCompactDrawerHeader(context),
-          _buildDrawerModeSwitch(context),
-          if (_mode == _AppDrawerMode.navigation) ...[
-            _buildCompactWorkspaceAccess(context),
+    final appTheme = Theme.of(context);
+    final appearance = context.watch<AppearanceService>();
+    final chrome = WorkspaceChromeStyle.maybeOf(context) ??
+        WorkspaceChromeTheme.resolveFromTheme(
+          appTheme,
+          fallback: WorkspaceChromeTheme.resolve(
+            palette: appearance.sidebarPalette,
+            brightness: appTheme.brightness,
+          ),
+        );
+    final width =
+        (MediaQuery.sizeOf(context).width - 62).clamp(280.0, 348.0).toDouble();
 
-            // Dashboard
-            ExpandableMenuItem(
-              icon: Icons.dashboard_outlined,
-              activeIcon: Icons.dashboard,
-              title: 'Dashboard',
-              subItems: const [
-                MenuSubItem(
-                    icon: Icons.dashboard,
-                    title: 'Dashboard',
-                    route: '/dashboard')
-              ],
+    return Theme(
+      data: WorkspaceChromeTheme.sidebarTheme(appTheme, chrome),
+      child: Builder(
+        builder: (drawerContext) {
+          Widget destination(AppDestinationModule module) {
+            return ExpandableMenuItem(
+              key: ValueKey('drawer-${module.key}'),
+              icon: module.icon,
+              activeIcon: module.activeIcon,
+              title: module.title,
+              subItems: module.items,
               currentLocation: currentLocation,
-              isSingleItem: true,
-              onNavigate: (route) {
-                Navigator.pop(context);
-                _handleMobileNavigation(context, route, 'Dashboard');
-              },
-            ),
-
-            const Divider(),
-
-            // Core Modules
-            _Helper.buildSectionHeader(context, 'MÓDULOS PRINCIPALES'),
-
-            // Mensajería (Chat)
-            Consumer<ChatProvider>(
-              builder: (context, chatProvider, child) {
-                return ExpandableMenuItem(
-                  icon: Icons.chat_bubble_outline,
-                  activeIcon: Icons.chat_bubble,
-                  title: 'Mensajería',
-                  subItems: const [
-                    MenuSubItem(
-                        icon: Icons.chat, title: 'Mensajería', route: '/chat')
-                  ],
-                  currentLocation: currentLocation,
-                  isSingleItem: true,
-                  badgeCount: chatProvider.totalUnreadCount,
-                  onNavigate: (route) {
-                    Navigator.pop(context);
-                    _handleMobileNavigation(context, route, 'Mensajería');
-                  },
-                );
-              },
-            ),
-
-            ExpandableMenuItem(
-              icon: Icons.folder_open_outlined,
-              activeIcon: Icons.folder,
-              title: 'Archivos',
-              subItems: _storageMenuItems,
-              currentLocation: currentLocation,
-              isSingleItem: true,
-              onNavigate: (route) {
-                Navigator.pop(context);
-                _handleMobileNavigation(context, route, 'Archivos');
-              },
-            ),
-
-            ExpandableMenuItem(
-              icon: Icons.account_balance_outlined,
-              activeIcon: Icons.account_balance,
-              title: 'Contabilidad',
-              subItems: _accountingMenuItems,
-              currentLocation: currentLocation,
-              isExpanded: _expandedSection == 'accounting',
+              isSingleItem: module.isSingleItem,
+              enabled: module.enabled,
+              compactTouch: true,
+              badgeCount: module.badgeCount,
+              subItemBadgeCounts: module.subItemBadgeCounts,
+              isExpanded: _expandedSection == module.key,
               onExpansionChanged: (expand) =>
-                  _handleExpansionChange('accounting', expand),
-              onNavigate: (route) {
-                Navigator.pop(context);
-                _handleMobileNavigation(context, route, 'Contabilidad');
-              },
-            ),
-
-            ExpandableMenuItem(
-              icon: Icons.people_outline,
-              activeIcon: Icons.people,
-              title: 'Clientes',
-              subItems: _customersMenuItems,
-              currentLocation: currentLocation,
-              isExpanded: _expandedSection == 'customers',
-              onExpansionChanged: (expand) =>
-                  _handleExpansionChange('customers', expand),
-              onNavigate: (route) {
-                Navigator.pop(context);
-                _handleMobileNavigation(context, route, 'Clientes');
-              },
-            ),
-
-            ExpandableMenuItem(
-              icon: Icons.pedal_bike_outlined,
-              activeIcon: Icons.pedal_bike,
-              title: 'Taller',
-              subItems: _workshopMenuItems,
-              currentLocation: currentLocation,
-              isExpanded: _expandedSection == 'workshop',
-              onExpansionChanged: (expand) =>
-                  _handleExpansionChange('workshop', expand),
-              onNavigate: (route) {
-                Navigator.pop(context);
-                _handleMobileNavigation(context, route, 'Taller');
-              },
-            ),
-
-            ExpandableMenuItem(
-              icon: Icons.lightbulb_outlined,
-              activeIcon: Icons.lightbulb,
-              title: 'Smart Features',
-              subItems: _smartFeaturesMenuItems,
-              currentLocation: currentLocation,
-              isExpanded: _expandedSection == 'smart_features',
-              onExpansionChanged: (expand) =>
-                  _handleExpansionChange('smart_features', expand),
-              onNavigate: (route) {
-                Navigator.pop(context);
-                _handleMobileNavigation(context, route, 'Smart Features');
-              },
-            ),
-
-            ExpandableMenuItem(
-              icon: Icons.inventory_2_outlined,
-              activeIcon: Icons.inventory_2,
-              title: 'Inventario',
-              subItems: _inventoryMenuItems,
-              currentLocation: currentLocation,
-              isExpanded: _expandedSection == 'inventory',
-              onExpansionChanged: (expand) =>
-                  _handleExpansionChange('inventory', expand),
-              onNavigate: (route) {
-                Navigator.pop(context);
-                _handleMobileNavigation(context, route, 'Inventario');
-              },
-            ),
-
-            ExpandableMenuItem(
-              icon: Icons.receipt_long_outlined,
-              activeIcon: Icons.receipt_long,
-              title: 'Ventas',
-              subItems: _salesMenuItems,
-              currentLocation: currentLocation,
-              isExpanded: _expandedSection == 'sales',
-              onExpansionChanged: (expand) =>
-                  _handleExpansionChange('sales', expand),
-              onNavigate: (route) {
-                Navigator.pop(context);
-                _handleMobileNavigation(context, route, 'Ventas');
-              },
-            ),
-
-            ExpandableMenuItem(
-              icon: Icons.shopping_cart_outlined,
-              activeIcon: Icons.shopping_cart,
-              title: 'Compras',
-              subItems: _purchasesMenuItems,
-              currentLocation: currentLocation,
-              isExpanded: _expandedSection == 'purchases',
-              onExpansionChanged: (expand) =>
-                  _handleExpansionChange('purchases', expand),
-              onNavigate: (route) {
-                Navigator.pop(context);
-                _handleMobileNavigation(context, route, 'Compras');
-              },
-            ),
-
-            ExpandableMenuItem(
-              icon: Icons.point_of_sale_outlined,
-              activeIcon: Icons.point_of_sale,
-              title: 'POS',
-              subItems: _posMenuItems,
-              currentLocation: currentLocation,
-              isExpanded: _expandedSection == 'pos',
-              onExpansionChanged: (expand) =>
-                  _handleExpansionChange('pos', expand),
-              onNavigate: (route) {
-                Navigator.pop(context);
-                _handleMobileNavigation(context, route, 'POS');
-              },
-            ),
-
-            ExpandableMenuItem(
-              icon: Icons.people_outline,
-              activeIcon: Icons.people,
-              title: 'RR.HH.',
-              subItems: _hrMenuItems,
-              currentLocation: currentLocation,
-              isExpanded: _expandedSection == 'hr',
-              onExpansionChanged: (expand) =>
-                  _handleExpansionChange('hr', expand),
-              onNavigate: (route) {
-                Navigator.pop(context);
-                _handleMobileNavigation(context, route, 'RR.HH.');
-              },
-            ),
-
-            const Divider(),
-
-            // Tools (WebView Modules)
-            _Helper.buildSectionHeader(context, 'HERRAMIENTAS'),
-
-            ExpandableMenuItem(
-              icon: Icons.build_circle_outlined,
-              activeIcon: Icons.build_circle,
-              title: 'Herramientas Web',
-              subItems: _toolsMenuItems,
-              currentLocation: currentLocation,
-              isExpanded: _expandedSection == 'tools',
-              onExpansionChanged: (expand) =>
-                  _handleExpansionChange('tools', expand),
-              onNavigate: (route) {
-                Navigator.pop(context);
-                _handleMobileNavigation(context, route, 'Herramientas');
-              },
-            ),
-
-            const Divider(),
-
-            // Secondary Modules
-            _Helper.buildSectionHeader(context, 'OTROS MÓDULOS'),
-
-            ExpandableMenuItem(
-              icon: Icons.build_outlined,
-              activeIcon: Icons.build,
-              title: 'Mantención',
-              subItems: const [
-                MenuSubItem(
-                    icon: Icons.build,
-                    title: 'Mantención',
-                    route: '/maintenance')
-              ],
-              currentLocation: currentLocation,
-              isSingleItem: true,
-              enabled: false,
-              onNavigate: (_) {},
-            ),
-
-            ExpandableMenuItem(
-              icon: Icons.analytics_outlined,
-              activeIcon: Icons.analytics,
-              title: 'Análisis',
-              subItems: const [
-                MenuSubItem(
-                    icon: Icons.analytics,
-                    title: 'Análisis',
-                    route: '/analytics')
-              ],
-              currentLocation: currentLocation,
-              isSingleItem: true,
-              enabled: false,
-              onNavigate: (_) {},
-            ),
-
-            // Sitio Web module - ADDED for mobile access
-            ValueListenableBuilder<int>(
-              valueListenable: NotificationService().onlineOrderAlertCount,
-              builder: (context, onlineOrderAlerts, _) {
-                final visibleOrderAlerts =
-                    currentLocation.startsWith('/website/orders')
-                        ? 0
-                        : onlineOrderAlerts;
-
-                return ExpandableMenuItem(
-                  icon: Icons.web_outlined,
-                  activeIcon: Icons.web,
-                  title: 'Sitio Web',
-                  subItems: _websiteMenuItems,
-                  currentLocation: currentLocation,
-                  isExpanded: _expandedSection == _websiteSectionKey,
-                  onExpansionChanged: (expand) =>
-                      _handleExpansionChange(_websiteSectionKey, expand),
-                  enabled: true,
-                  badgeCount: visibleOrderAlerts,
-                  subItemBadgeCounts: {
-                    '/website/orders': visibleOrderAlerts,
-                  },
-                  onBadgeTap: visibleOrderAlerts > 0
-                      ? () {
-                          final resolvedRoute =
-                              _resolveWebsiteMenuRoute('/website/orders');
-                          Navigator.pop(context);
-                          _handleMobileNavigation(
-                            context,
-                            resolvedRoute,
-                            _getTitleFromRoute(resolvedRoute),
-                          );
-                        }
-                      : null,
-                  onNavigate: (route) {
-                    final resolvedRoute = _resolveWebsiteMenuRoute(route);
-                    Navigator.pop(context);
-                    _handleMobileNavigation(context, resolvedRoute,
-                        _getTitleFromRoute(resolvedRoute));
-                  },
-                );
-              },
-            ),
-
-            // Correo
-            AnimatedBuilder(
-              animation: MailAccountManager.instance,
-              builder: (context, _) {
-                return ExpandableMenuItem(
-                  icon: Icons.email_outlined,
-                  activeIcon: Icons.email,
-                  title: 'Correo',
-                  subItems: const [
-                    MenuSubItem(
-                        icon: Icons.email, title: 'Correo', route: '/mail')
-                  ],
-                  currentLocation: currentLocation,
-                  isSingleItem: true,
-                  enabled: true,
-                  badgeCount: MailAccountManager.instance.unreadCount,
-                  onNavigate: (route) {
-                    Navigator.pop(context);
-                    _handleMobileNavigation(context, route, 'Correo');
-                  },
-                );
-              },
-            ),
-
-            const Divider(),
-
-            // Mobile Options Panel (Dark Mode, Zoom, Reorder)
-            _Helper.buildSectionHeader(context, 'OPCIONES'),
-
-            // Dark Mode Toggle
-            Consumer<AppearanceService>(
-              builder: (context, appearanceService, _) {
-                final isDark = appearanceService.themeMode == ThemeMode.dark;
-                return ListTile(
-                  leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-                  title: Text(isDark ? 'Modo claro' : 'Modo oscuro'),
-                  trailing: Switch(
-                    value: isDark,
-                    onChanged: (value) {
-                      appearanceService.setThemeMode(
-                          value ? ThemeMode.dark : ThemeMode.light);
+                  _handleExpansionChange(module.key, expand),
+              onBadgeTap: module.resolvedBadgeRoute == null
+                  ? null
+                  : () {
+                      final route = module.resolvedBadgeRoute!;
+                      Navigator.pop(drawerContext);
+                      _handleMobileNavigation(
+                        drawerContext,
+                        route,
+                        module.title,
+                      );
                     },
-                  ),
-                  onTap: () {
-                    final newMode = isDark ? ThemeMode.light : ThemeMode.dark;
-                    appearanceService.setThemeMode(newMode);
-                  },
+              onNavigate: (route) {
+                final resolved = module.resolveRoute?.call(route) ?? route;
+                Navigator.pop(drawerContext);
+                _handleMobileNavigation(
+                  drawerContext,
+                  resolved,
+                  module.title,
                 );
               },
-            ),
+              onCurrentTap: () => Navigator.pop(drawerContext),
+            );
+          }
 
-            Consumer<AppearanceService>(
-              builder: (context, appearanceService, _) {
-                return ListTile(
-                  leading: const Icon(Icons.chat_bubble_outline),
-                  title: const Text('Paleta en mensajería y barra derecha'),
-                  trailing: Switch(
-                    value: appearanceService.messagingUsesSidebarPalette,
-                    onChanged: appearanceService.setMessagingUsesSidebarPalette,
-                  ),
-                  onTap: () {
-                    appearanceService.setMessagingUsesSidebarPalette(
-                      !appearanceService.messagingUsesSidebarPalette,
+          Widget navigationList() {
+            if (_searchQuery.isNotEmpty) {
+              return _buildCompactSearchResults(
+                drawerContext,
+                modules: modules,
+                fixedModules: fixedModules,
+              );
+            }
+            return ListView(
+              key: const ValueKey('mobile-drawer-navigation-mode'),
+              padding: const EdgeInsets.only(bottom: 12),
+              children: [
+                _buildCompactWorkspaceAccess(drawerContext),
+                ExpandableMenuItem(
+                  key: const ValueKey('drawer-dashboard'),
+                  icon: Icons.dashboard_outlined,
+                  activeIcon: Icons.dashboard,
+                  title: 'Inicio',
+                  subItems: const [
+                    MenuSubItem(
+                      icon: Icons.dashboard,
+                      title: 'Inicio',
+                      route: '/dashboard',
+                    ),
+                  ],
+                  currentLocation: currentLocation,
+                  isSingleItem: true,
+                  compactTouch: true,
+                  onNavigate: (route) {
+                    Navigator.pop(drawerContext);
+                    _handleMobileNavigation(
+                      drawerContext,
+                      route,
+                      'Inicio',
                     );
                   },
-                );
-              },
-            ),
-
-            // Reorder Modules - Opens bottom sheet with drag-to-reorder
-            ListTile(
-              leading: const Icon(Icons.swap_vert),
-              title: const Text('Reordenar módulos'),
-              onTap: () => _showReorderSheet(context),
-            ),
-
-            const Divider(),
-
-            CurrentUserProfileTile(
-              compact: true,
-              selected: currentLocation == '/profile',
-              onTap: () {
-                Navigator.pop(context);
-                CurrentUserProfileNavigation.open(context);
-              },
-            ),
-
-            // Settings
-            ExpandableMenuItem(
-              icon: Icons.settings_outlined,
-              activeIcon: Icons.settings,
-              title: 'Configuración',
-              subItems: const [
-                MenuSubItem(
-                    icon: Icons.settings,
-                    title: 'Configuración',
-                    route: '/settings')
+                  onCurrentTap: () => Navigator.pop(drawerContext),
+                ),
+                for (final module in modules) destination(module),
+                if (fixedModules.isNotEmpty)
+                  Divider(color: chrome.edge, height: 12),
+                for (final module in fixedModules) destination(module),
               ],
-              currentLocation: currentLocation,
-              isSingleItem: true,
-              enabled: true, // Enabled!
-              onNavigate: (route) {
-                Navigator.pop(context);
-                _handleMobileNavigation(context, route, 'Configuración');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.logout_outlined),
-              title: const Text('Cerrar sesión'),
-              onTap: () => _handleLogout(context),
-            ),
-            const SizedBox(height: 16),
-          ] else
-            _buildCompactToolsMode(context),
-        ],
-      ),
-    );
-  }
-}
+            );
+          }
 
-class _Helper {
-  static Widget buildSectionHeader(BuildContext context, String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
+          return Drawer(
+            key: const ValueKey('main-layout-mobile-drawer'),
+            width: width,
+            elevation: 0,
+            backgroundColor: chrome.canvas,
+            surfaceTintColor: Colors.transparent,
+            shape: const RoundedRectangleBorder(),
+            child: SafeArea(
+              child: Column(
+                children: [
+                  _buildCompactDrawerHeader(drawerContext),
+                  _buildDrawerModeSwitch(drawerContext),
+                  if (_mode == _AppDrawerMode.navigation)
+                    _buildCompactNavigationSearch(drawerContext),
+                  Expanded(
+                    child: _mode == _AppDrawerMode.navigation
+                        ? navigationList()
+                        : SingleChildScrollView(
+                            child: _buildCompactToolsMode(
+                              drawerContext,
+                              overlayContext: context,
+                            ),
+                          ),
+                  ),
+                  Container(
+                    key: const ValueKey('mobile-drawer-footer'),
+                    decoration: BoxDecoration(
+                      border: Border(top: BorderSide(color: chrome.edge)),
+                    ),
+                    child: Column(
+                      children: [
+                        ListTile(
+                          minTileHeight: 52,
+                          leading: const Icon(Icons.settings_outlined),
+                          title: const Text('Configuración'),
+                          trailing:
+                              const Icon(Icons.chevron_right_rounded, size: 20),
+                          onTap: () {
+                            Navigator.pop(drawerContext);
+                            _handleMobileNavigation(
+                              drawerContext,
+                              '/settings',
+                              'Configuración',
+                            );
+                          },
+                        ),
+                        ListTile(
+                          minTileHeight: 52,
+                          leading: const Icon(Icons.logout_outlined),
+                          title: const Text('Cerrar sesión'),
+                          onTap: () => _handleLogout(drawerContext),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
+          );
+        },
       ),
     );
   }

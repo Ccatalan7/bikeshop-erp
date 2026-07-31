@@ -124,8 +124,9 @@ class _BrandedLoadingState extends State<BrandedLoading>
             width: widget.size,
             height: widget.size,
             fit: BoxFit.contain,
-            placeholder: (context, url) =>
-                const SizedBox.shrink(), // Don't show spinner while loading
+            // A remote logo is decoration, not the loading state itself. Keep a
+            // visible progress affordance while its bytes are still in flight.
+            placeholder: (context, url) => _buildFallbackIndicator(),
             errorWidget: (context, url, error) => _buildFallbackIndicator(),
           ),
         ),
@@ -156,6 +157,7 @@ class _BrandedLoadingState extends State<BrandedLoading>
 
   Widget _buildFallbackIndicator() {
     return SizedBox(
+      key: const ValueKey('branded-loading-fallback'),
       width: widget.size,
       height: widget.size,
       child: Padding(

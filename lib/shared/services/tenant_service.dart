@@ -55,6 +55,11 @@ class TenantService extends ChangeNotifier {
   String? get _currentUserId =>
       _currentUserIdOverride?.call() ?? _supabase?.auth.currentUser?.id;
 
+  /// Current auth user id (or null when signed out). Exposed for capability
+  /// fingerprints that must bind a cached authorization to the exact
+  /// identity that produced it.
+  String? get currentAuthUserId => _currentUserId;
+
   /// Get the current user's tenant_id from user_profiles table
   /// This is the single source of truth for tenant_id
   ///
@@ -182,6 +187,16 @@ class TenantService extends ChangeNotifier {
     _cachedUserId = null;
     _cachedUserRole = null;
     _cachedUserPermissions = null;
+  }
+
+  /// True when the profile cache holds a RESULT (even "no tenant") for the
+  /// current auth user. A transient lookup failure never stamps the cache,
+  /// so capability consumers can distinguish a durable denial (resolved,
+  /// no authority) from an unresolved transient failure that must suspend
+  /// and retry instead of denying.
+  bool get hasResolvedProfileForCurrentUser {
+    final userId = _currentUserId;
+    return userId != null && _cachedUserId == userId;
   }
 
   /// Get the current user's tenant_id (synchronous - from cache)

@@ -5,6 +5,7 @@ void updateSeoImpl({
   String? keywords,
   String? canonicalUrl,
   String? robots,
+  String ogType = 'website',
 }) {
   // No-op on non-web platforms (mobile/desktop app)
   // Flutter handles the title via Title widget or SystemChrome,

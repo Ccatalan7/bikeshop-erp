@@ -189,6 +189,13 @@ class CurrentUserProfile {
       role == 'manager' ||
       permissions['manage_users'] == true;
 
+  bool get canAccessAccounting =>
+      role == 'owner' ||
+      role == 'admin' ||
+      role == 'manager' ||
+      role == 'accountant' ||
+      permissions['access_accounting'] == true;
+
   String get initials {
     final words = displayName
         .split(RegExp(r'\s+'))

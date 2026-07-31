@@ -12,8 +12,10 @@ extension type WindowExtension(JSObject _) implements JSObject {
   external JSPromise? get flutterInjectedPreloadedData;
 }
 
-/// Web implementation - Tries to read the Promise from window
-Future<Map<String, dynamic>?> getPreloadedStoreDataImpl() async {
+/// Web implementation - reads the raw tenant envelope from the JS Promise.
+///
+/// Ownership and payload validation stay in the platform-neutral facade.
+Future<Object?> getPreloadedStoreDataImpl() async {
   try {
     final promise = window.flutterInjectedPreloadedData;
 
@@ -41,7 +43,7 @@ Future<Map<String, dynamic>?> getPreloadedStoreDataImpl() async {
       // We can use a helper to stringify and parse back to be 100% safe about types
       // or manually convert. Stringify is safest for complex nested maps.
       final jsonString = _stringify(result);
-      return json.decode(jsonString) as Map<String, dynamic>;
+      return json.decode(jsonString);
     }
 
     return null;

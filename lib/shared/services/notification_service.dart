@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'chat_notification_gate.dart';
+import 'erp_employee_directory_service.dart';
 import 'erp_notification_gate.dart';
 import 'mail_notification_gate.dart';
 import 'tenant_service.dart';
@@ -74,6 +75,7 @@ class NotificationService {
   NotificationService._internal();
 
   final _supabase = Supabase.instance.client;
+  final _employeeDirectory = ErpEmployeeDirectoryService();
   final _localNotifications = FlutterLocalNotificationsPlugin();
   AudioPlayer? _audioPlayer;
 
@@ -766,6 +768,7 @@ class NotificationService {
     unreadNotificationsCount.value = 0;
     _activeConversations.clear();
     _senderNames.clear();
+    _employeeDirectory.clear();
     _lastHandledNotificationId = null;
   }
 
@@ -1672,31 +1675,25 @@ class NotificationService {
         // Attempt to fetch if we have a senderId (senderId = auth.users.id)
         if (senderId != 'unknown_sender') {
           try {
-            // Get user_profile to find employee_id
-            final userProfile = await _supabase
-                .from('user_profiles')
-                .select('employee_id')
-                .eq('user_id', senderId)
-                .maybeSingle()
-                .timeout(const Duration(seconds: 2));
-
-            if (userProfile != null && userProfile['employee_id'] != null) {
-              // Get employee name
-              final employee = await _supabase
-                  .from('employees')
-                  .select('first_name, last_name')
-                  .eq('id', userProfile['employee_id'])
-                  .maybeSingle()
-                  .timeout(const Duration(seconds: 2));
-
-              if (employee != null) {
-                senderName =
-                    '${employee['first_name']} ${employee['last_name']}'.trim();
-                _senderNames[senderId] = senderName;
-              }
+            final authorityTenantId = _notificationScopeTenantId;
+            final employee = authorityTenantId == null
+                ? null
+                : await _employeeDirectory
+                    .findByUserId(
+                      senderId,
+                      authorityTenantId: authorityTenantId,
+                    )
+                    .timeout(const Duration(seconds: 2));
+            if (employee != null) {
+              senderName = employee.fullName;
+              _senderNames[senderId] = senderName;
             }
           } catch (e) {
-            debugPrint('Error fetching sender name: $e');
+            // The historical actor-name helper is intentionally not executable
+            // by authenticated clients. If an inactive link has left the
+            // current directory, retain the generic server-supplied title
+            // instead of reopening employee or profile tables.
+            debugPrint('Sender name is unavailable (${e.runtimeType})');
           }
         }
         // Final fallback

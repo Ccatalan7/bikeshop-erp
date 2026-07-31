@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../services/right_toolbar_service.dart';
 import '../services/smart_screenshot_service.dart';
 import '../services/workspace_manager.dart';
+import 'workspace_shell_scope.dart';
 
 class SmartScreenshotButton extends StatelessWidget {
   const SmartScreenshotButton({super.key});
@@ -13,15 +14,21 @@ class SmartScreenshotButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final chrome = WorkspaceChromeStyle.maybeOf(context);
 
     return IconButton(
       visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: chrome == null
+          ? null
+          : const BoxConstraints.tightFor(width: 28, height: 28),
       tooltip: 'Capturas',
       onPressed: () => _showScreenshotDialog(context),
       icon: Icon(
         Icons.screenshot_monitor_outlined,
         size: 20,
-        color: theme.colorScheme.onSurface.withValues(alpha: 0.76),
+        color: chrome?.mutedForeground ??
+            theme.colorScheme.onSurface.withValues(alpha: 0.76),
       ),
     );
   }

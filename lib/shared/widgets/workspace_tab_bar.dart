@@ -5,8 +5,19 @@ import '../services/workspace_manager.dart';
 import 'quick_ui_settings_button.dart';
 import 'share_workspace_link_button.dart';
 import 'smart_screenshot_button.dart';
+import 'workspace_shell_scope.dart';
 
-/// Tab bar UI for switching between workspaces
+/// Global navy workspace strip (40px).
+///
+/// The strip paints on `colorScheme.primary` and styles its own tabs with
+/// explicit on-navy colors — deliberately NOT with an inherited [Theme]
+/// override, because popup menus, dialogs and tooltips capture the inherited
+/// themes of their trigger context and would drag the navy palette into every
+/// overlay. The chrome tool buttons keep the base theme on a light pill.
+///
+/// A module may extend the block downward by rendering [ModuleCommandBar] at
+/// the very top of its body; the strip's 1px bottom border then reads as the
+/// block's internal hairline. That extension is opt-in per module.
 class WorkspaceTabBar extends StatefulWidget {
   const WorkspaceTabBar({super.key});
 
@@ -18,8 +29,8 @@ class _WorkspaceTabBarState extends State<WorkspaceTabBar> {
   String? _draggingWorkspaceId;
   int? _hoveringWorkspaceIndex;
 
-  static const double _regularTabWidth = 184;
-  static const double _pinnedTabWidth = 176;
+  static const double _regularTabWidth = 152;
+  static const double _pinnedTabWidth = 144;
   static const double _trailingDropWidth = 24;
 
   void _startDrag(String workspaceId) {
@@ -140,7 +151,8 @@ class _WorkspaceTabBarState extends State<WorkspaceTabBar> {
   @override
   Widget build(BuildContext context) {
     final workspaceManager = context.watch<WorkspaceManager>();
-    final theme = Theme.of(context);
+    final chrome = WorkspaceChromeStyle.maybeOf(context) ??
+        WorkspaceChromeStyleData.vinabike;
     final displayedWorkspaces =
         _displayedWorkspaces(workspaceManager.workspaces);
     final placements = _placementsFor(displayedWorkspaces);
@@ -160,12 +172,13 @@ class _WorkspaceTabBarState extends State<WorkspaceTabBar> {
     }
 
     return Container(
-      height: 40,
+      key: const ValueKey('workspace-tab-bar-surface'),
+      height: WorkspaceShellScope.workspaceBarHeight,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: chrome.canvas,
         border: Border(
           bottom: BorderSide(
-            color: theme.dividerColor,
+            color: chrome.edge,
             width: 1,
           ),
         ),
@@ -276,28 +289,131 @@ class _WorkspaceTabBarState extends State<WorkspaceTabBar> {
               ),
             ),
           ),
-          const _WorkspaceNavigationControls(),
-          const ShareWorkspaceLinkButton(),
-          const SmartScreenshotButton(),
-          // New tab button with dropdown menu
-          if (workspaceManager.workspaces.length <
-              WorkspaceManager.maxWorkspaces)
-            const _NewTabDropdown(),
-
-          const QuickUiSettingsButton(),
-
-          // Tab counter
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(
-              '${workspaceManager.workspaces.length}/${WorkspaceManager.maxWorkspaces}',
-              style: TextStyle(
-                fontSize: 12,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+          Container(
+            key: const ValueKey('workspace-chrome-actions'),
+            height: 32,
+            margin: const EdgeInsets.fromLTRB(6, 4, 8, 4),
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            decoration: BoxDecoration(
+              color: chrome.raised.withValues(alpha: 0.48),
+              border: Border.all(color: chrome.edge),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const _WorkspaceNavigationControls(),
+                const ShareWorkspaceLinkButton(),
+                const SmartScreenshotButton(),
+                if (workspaceManager.workspaces.length <
+                    WorkspaceManager.maxWorkspaces)
+                  const _NewTabDropdown(),
+                const QuickUiSettingsButton(),
+                Padding(
+                  padding: const EdgeInsets.only(left: 3, right: 7),
+                  child: Text(
+                    '${workspaceManager.workspaces.length}/${WorkspaceManager.maxWorkspaces}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      height: 1,
+                      color: chrome.mutedForeground,
+                      fontFeatures: const <FontFeature>[
+                        FontFeature.tabularFigures(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Opt-in 44px module command surface.
+///
+/// A module that wants the navy block to extend below the global tab strip
+/// renders this at the very top of its body: same navy, and the strip's 1px
+/// bottom border becomes the block's internal hairline. Modules that keep
+/// their own headers simply don't render it — it is never universal chrome,
+/// and a module using it must not paint a second navy header below.
+class ModuleCommandBar extends StatelessWidget {
+  const ModuleCommandBar({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+  });
+
+  /// Height of the command surface.
+  static const double height = 44;
+
+  final String title;
+  final String? subtitle;
+
+  /// Optional module-owned command cluster, rendered on the right.
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final chrome = WorkspaceChromeStyle.maybeOf(context) ??
+        WorkspaceChromeStyleData.vinabike;
+
+    return Semantics(
+      container: true,
+      header: true,
+      label: 'Módulo $title',
+      child: Container(
+        height: height,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: chrome.canvas,
+          border: Border(
+            bottom: BorderSide(color: chrome.edge, width: 1),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: chrome.foreground,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                  ),
+                  if (subtitle?.trim().isNotEmpty == true) ...[
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        subtitle!.trim(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: chrome.mutedForeground,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (trailing != null) ...[
+              const SizedBox(width: 12),
+              trailing!,
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -333,125 +449,199 @@ class _WorkspaceTab extends StatefulWidget {
 
 class _WorkspaceTabState extends State<_WorkspaceTab> {
   bool _isHovered = false;
+  bool _isFocused = false;
+  late final FocusNode _focusNode = FocusNode(
+    debugLabel: 'workspace-tab-${widget.workspace.id}',
+  );
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final chrome = WorkspaceChromeStyle.maybeOf(context) ??
+        WorkspaceChromeStyleData.vinabike;
     final theme = Theme.of(context);
-    final textColor = widget.isActive
-        ? theme.colorScheme.primary
-        : theme.colorScheme.onSurface;
-    final showTabTools = _isHovered || widget.isActive;
+    final active = widget.isActive;
+    final showTabTools = _isHovered || _isFocused || active;
     final showPinControl = showTabTools || widget.workspace.isPinned;
-    final pinColor = widget.workspace.isPinned
-        ? theme.colorScheme.primary
-        : theme.colorScheme.onSurfaceVariant;
-    final tabColor = widget.isActive
-        ? Color.alphaBlend(
-            theme.colorScheme.primary.withValues(alpha: 0.05),
-            theme.colorScheme.surface,
-          )
-        : _isHovered
-            ? theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.55)
-            : Colors.transparent;
+    final pinColor =
+        widget.workspace.isPinned ? chrome.accent : chrome.mutedForeground;
+    final tabWidth = widget.workspace.isPinned
+        ? _WorkspaceTabBarState._pinnedTabWidth
+        : _WorkspaceTabBarState._regularTabWidth;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
+    return Semantics(
+      button: true,
+      selected: active,
+      label: 'Espacio de trabajo ${widget.workspace.title}',
+      hint: 'Presiona Enter para abrir',
+      child: InkWell(
+        key: ValueKey<String>(
+          'workspace-tab-control-${widget.workspace.id}',
+        ),
+        focusNode: _focusNode,
+        canRequestFocus: !widget.isDragging,
+        mouseCursor: SystemMouseCursors.click,
         onTap: widget.onTap,
+        onHover: (hovered) => setState(() => _isHovered = hovered),
+        onFocusChange: (focused) => setState(() => _isFocused = focused),
+        overlayColor: const WidgetStatePropertyAll<Color>(Colors.transparent),
         child: AnimatedOpacity(
           duration: const Duration(milliseconds: 120),
           opacity: widget.isDragging ? 0.58 : 1,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
-            width: widget.workspace.isPinned ? 176 : 184,
-            height: 40,
-            decoration: BoxDecoration(
-              color: tabColor,
-              border: Border(
-                bottom: BorderSide(
-                  color: widget.isActive
-                      ? theme.colorScheme.primary
-                      : Colors.transparent,
-                  width: 2,
+          child: SizedBox(
+            width: tabWidth,
+            height: WorkspaceShellScope.workspaceBarHeight,
+            child: Align(
+              alignment: Alignment.bottomLeft,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                height: active ? 32 : 30,
+                width: tabWidth - 2,
+                margin: const EdgeInsets.only(right: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: active
+                    ? BoxDecoration(
+                        color: chrome.raised,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          topRight: Radius.circular(8),
+                        ),
+                        border: Border(
+                          top: BorderSide(
+                            color: _isFocused ? chrome.accent : chrome.edge,
+                          ),
+                          left: BorderSide(
+                            color: _isFocused ? chrome.accent : chrome.edge,
+                          ),
+                          right: BorderSide(
+                            color: _isFocused ? chrome.accent : chrome.edge,
+                          ),
+                        ),
+                      )
+                    : BoxDecoration(
+                        color: _isFocused
+                            ? chrome.accent.withValues(alpha: 0.12)
+                            : _isHovered
+                                ? chrome.raised.withValues(alpha: 0.58)
+                                : Colors.transparent,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          topRight: Radius.circular(8),
+                        ),
+                        border: _isFocused
+                            ? Border.all(color: chrome.accent)
+                            : null,
+                      ),
+                child: Row(
+                  children: [
+                    if (active) ...[
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: chrome.accent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    if (showTabTools)
+                      Draggable<String>(
+                        data: widget.workspace.id,
+                        onDragStarted: widget.onDragStarted,
+                        onDragEnd: (_) => widget.onDragEnded(),
+                        feedback: _WorkspaceDragPreview(
+                          title: widget.workspace.title,
+                          isPinned: widget.workspace.isPinned,
+                        ),
+                        childWhenDragging: Opacity(
+                          opacity: 0.35,
+                          child: _WorkspaceDragHandle(color: pinColor),
+                        ),
+                        child: Tooltip(
+                          message: 'Arrastrar ${widget.workspace.title}',
+                          child: _WorkspaceDragHandle(
+                            color: chrome.mutedForeground,
+                          ),
+                        ),
+                      ),
+                    if (showPinControl)
+                      Tooltip(
+                        message: widget.workspace.isPinned
+                            ? 'Desfijar ${widget.workspace.title}'
+                            : 'Fijar ${widget.workspace.title}',
+                        child: Semantics(
+                          key: ValueKey<String>(
+                            'workspace-tab-pin-${widget.workspace.id}',
+                          ),
+                          button: true,
+                          label: widget.workspace.isPinned
+                              ? 'Desfijar ${widget.workspace.title}'
+                              : 'Fijar ${widget.workspace.title}',
+                          child: InkWell(
+                            onTap: widget.onTogglePin,
+                            borderRadius: BorderRadius.circular(12),
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: Icon(
+                                widget.workspace.isPinned
+                                    ? Icons.push_pin
+                                    : Icons.push_pin_outlined,
+                                size: 11,
+                                color: pinColor,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    Expanded(
+                      child: Text(
+                        widget.workspace.title,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontSize: 11.5,
+                          height: 1.2,
+                          color: active
+                              ? chrome.foreground
+                              : chrome.mutedForeground,
+                          fontWeight:
+                              active ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                    if (widget.onClose != null && showTabTools)
+                      Tooltip(
+                        message: 'Cerrar ${widget.workspace.title}',
+                        child: Semantics(
+                          key: ValueKey<String>(
+                            'workspace-tab-close-${widget.workspace.id}',
+                          ),
+                          button: true,
+                          label: 'Cerrar ${widget.workspace.title}',
+                          child: InkWell(
+                            onTap: widget.onClose,
+                            borderRadius: BorderRadius.circular(12),
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: Icon(
+                                Icons.close,
+                                size: 12,
+                                color: chrome.mutedForeground,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: [
-                  if (showTabTools)
-                    Draggable<String>(
-                      data: widget.workspace.id,
-                      onDragStarted: widget.onDragStarted,
-                      onDragEnd: (_) => widget.onDragEnded(),
-                      feedback: _WorkspaceDragPreview(
-                        title: widget.workspace.title,
-                        isPinned: widget.workspace.isPinned,
-                      ),
-                      childWhenDragging: Opacity(
-                        opacity: 0.35,
-                        child: _WorkspaceDragHandle(color: pinColor),
-                      ),
-                      child: _WorkspaceDragHandle(
-                        color: theme.colorScheme.onSurfaceVariant
-                            .withValues(alpha: 0.7),
-                      ),
-                    ),
-                  if (showPinControl)
-                    InkWell(
-                      onTap: widget.onTogglePin,
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: Icon(
-                          widget.workspace.isPinned
-                              ? Icons.push_pin
-                              : Icons.push_pin_outlined,
-                          size: 14,
-                          color: pinColor,
-                        ),
-                      ),
-                    ),
-                  if (widget.workspace.isPinned && !showTabTools)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: Container(
-                        width: 1,
-                        height: 16,
-                        color:
-                            theme.colorScheme.primary.withValues(alpha: 0.35),
-                      ),
-                    ),
-                  Expanded(
-                    child: Text(
-                      widget.workspace.title,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: textColor,
-                        fontWeight: widget.isActive
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                  ),
-                  if (widget.onClose != null && showTabTools)
-                    InkWell(
-                      onTap: widget.onClose,
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(
-                          Icons.close,
-                          size: 14,
-                          color: textColor,
-                        ),
-                      ),
-                    ),
-                ],
               ),
             ),
           ),
@@ -503,6 +693,8 @@ class _WorkspaceTabDropTargetState extends State<_WorkspaceTabDropTarget> {
         );
       },
       builder: (context, candidateData, rejectedData) {
+        final chrome = WorkspaceChromeStyle.maybeOf(context) ??
+            WorkspaceChromeStyleData.vinabike;
         final isHovered = candidateData.any((id) => id != widget.workspaceId);
         return Stack(
           children: [
@@ -515,7 +707,7 @@ class _WorkspaceTabDropTargetState extends State<_WorkspaceTabDropTarget> {
                 duration: const Duration(milliseconds: 120),
                 width: isHovered ? 2 : 0,
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
+                  color: chrome.accent,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
@@ -574,6 +766,8 @@ class _WorkspaceDropSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final chrome = WorkspaceChromeStyle.maybeOf(context) ??
+        WorkspaceChromeStyleData.vinabike;
     return SizedBox(
       width: 24,
       height: 40,
@@ -584,7 +778,7 @@ class _WorkspaceDropSlot extends StatelessWidget {
           width: isActive ? 2 : 0,
           height: 24,
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary,
+            color: chrome.accent,
             borderRadius: BorderRadius.circular(999),
           ),
         ),
@@ -701,15 +895,16 @@ class _WorkspaceNavigationControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final workspaceManager = context.watch<WorkspaceManager>();
     final workspace = workspaceManager.activeWorkspace;
-    final theme = Theme.of(context);
+    final chrome = WorkspaceChromeStyle.maybeOf(context) ??
+        WorkspaceChromeStyleData.vinabike;
 
     return Container(
       height: 28,
       margin: const EdgeInsets.only(right: 4),
       decoration: BoxDecoration(
-        border: Border.all(color: theme.dividerColor),
-        borderRadius: BorderRadius.circular(8),
-        color: theme.colorScheme.surface,
+        border: Border.all(color: chrome.edge),
+        borderRadius: BorderRadius.circular(7),
+        color: chrome.canvas.withValues(alpha: 0.28),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -723,7 +918,7 @@ class _WorkspaceNavigationControls extends StatelessWidget {
           Container(
             width: 1,
             height: 16,
-            color: theme.dividerColor,
+            color: chrome.edge,
           ),
           _WorkspaceNavButton(
             icon: Icons.arrow_forward,
@@ -752,11 +947,14 @@ class _WorkspaceNavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final chrome = WorkspaceChromeStyle.maybeOf(context) ??
+        WorkspaceChromeStyleData.vinabike;
 
     return Tooltip(
       message: tooltip,
       child: InkWell(
+        mouseCursor:
+            enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
         onTap: enabled ? onPressed : null,
         borderRadius: BorderRadius.circular(7),
         child: SizedBox(
@@ -766,8 +964,8 @@ class _WorkspaceNavButton extends StatelessWidget {
             icon,
             size: 15,
             color: enabled
-                ? theme.colorScheme.onSurface
-                : theme.disabledColor.withValues(alpha: 0.55),
+                ? chrome.foreground
+                : chrome.mutedForeground.withValues(alpha: 0.42),
           ),
         ),
       ),
@@ -788,16 +986,19 @@ class _NewTabDropdownState extends State<_NewTabDropdown> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final chrome = WorkspaceChromeStyle.maybeOf(context) ??
+        WorkspaceChromeStyleData.vinabike;
 
     return PopupMenuButton<Map<String, String>>(
       key: _menuKey,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 28, height: 28),
       icon: Icon(
         Icons.add,
         size: 18,
-        color: theme.colorScheme.onSurface,
+        color: chrome.foreground,
       ),
-      tooltip: 'New tab',
+      tooltip: 'Nuevo espacio de trabajo',
       offset: const Offset(0, 40),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),

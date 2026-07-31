@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../services/route_share_service.dart';
 import '../services/workspace_manager.dart';
+import 'workspace_shell_scope.dart';
 
 class ShareWorkspaceLinkButton extends StatelessWidget {
   const ShareWorkspaceLinkButton({super.key});
@@ -11,13 +12,19 @@ class ShareWorkspaceLinkButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final chrome = WorkspaceChromeStyle.maybeOf(context);
 
     return IconButton(
       tooltip: 'Copiar enlace de página',
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: chrome == null
+          ? null
+          : const BoxConstraints.tightFor(width: 28, height: 28),
       icon: Icon(
         Icons.ios_share_outlined,
         size: 18,
-        color: theme.colorScheme.onSurface,
+        color: chrome?.mutedForeground ?? theme.colorScheme.onSurface,
       ),
       onPressed: () => _copyCurrentLink(context),
     );

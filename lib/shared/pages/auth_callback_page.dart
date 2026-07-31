@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../../modules/website/models/website_editor_oauth_intent.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -159,38 +161,47 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
       debugPrint('⚠️ [AuthCallback] Session refresh failed');
     }
 
-    // If this callback came from the store editor flow, request returning to
-    // edit mode (PublicStoreLayout already consumes this flag).
-    if (kIsWeb) {
-      try {
-        final flag = web.window.localStorage
-            .getItem(AuthCallbackPage.webReturnToEditorKey);
-        debugPrint(
-          '🧩 [AuthCallback] Editor return requested=${flag == 'true'}',
-        );
-        // Keep the flag for PublicStoreLayout to consume & clear.
-      } catch (_) {
-        debugPrint('⚠️ [AuthCallback] Editor return lookup failed');
-      }
-    }
-
     if (!mounted) return;
 
-    // Prefer returning to the exact route where OAuth was initiated.
+    // ONE typed intent controls the whole editor return. The callback must
+    // VALIDATE AND CLAIM it BEFORE navigating anywhere: a return that
+    // cannot prove its issuer (legacy/malformed/expired/replayed, or a
+    // different signed-in identity) consumes the intent fail-closed and
+    // never follows the stored path. The stored path itself is sanitized
+    // WITHOUT editor mode flags — entering Edit is decided by the
+    // capability gate, never by a URL from storage.
     if (kIsWeb) {
       try {
-        final returnPath = web.window.localStorage
-            .getItem(AuthCallbackPage.webReturnToPathKey);
-        if (returnPath != null && returnPath.startsWith('/')) {
-          // Clear it to avoid loops.
-          web.window.localStorage
-              .removeItem(AuthCallbackPage.webReturnToPathKey);
-          debugPrint('🧩 [AuthCallback] Returning to stored application path');
-          context.go(returnPath);
-          return;
+        // Legacy loose flags are consumed unconditionally: no second owner.
+        web.window.localStorage.removeItem('google_oauth_return_to_editor');
+        web.window.localStorage.removeItem('google_oauth_return_path');
+        web.window.localStorage.removeItem('google_oauth_open_integrations');
+        web.window.localStorage.removeItem('google_oauth_return_issuer');
+
+        final raw = web.window.localStorage
+            .getItem(WebsiteEditorOAuthIntentGate.storageKey);
+        if (raw != null) {
+          final intent = WebsiteEditorOAuthIntentGate.validateForCallback(
+            raw,
+            currentIdentity: Supabase.instance.client.auth.currentUser?.id,
+            nowMs: DateTime.now().millisecondsSinceEpoch,
+          );
+          if (intent == null) {
+            web.window.localStorage
+                .removeItem(WebsiteEditorOAuthIntentGate.storageKey);
+            debugPrint('⛔ [AuthCallback] OAuth intent cannot be proven; '
+                'consumed fail-closed');
+          } else {
+            // Follow ONLY the sanitized internal path (never edit/preview);
+            // the storefront consumer performs the one-shot take.
+            debugPrint('🧩 [AuthCallback] Valid OAuth intent; returning to '
+                'sanitized path');
+            context.go(intent.returnPath);
+            return;
+          }
         }
       } catch (_) {
-        debugPrint('⚠️ [AuthCallback] Return path lookup failed');
+        debugPrint('⚠️ [AuthCallback] OAuth intent handling failed');
       }
     }
 

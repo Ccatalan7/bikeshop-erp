@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../modules/settings/services/appearance_service.dart';
 import '../services/notification_service.dart';
+import 'workspace_shell_scope.dart';
 
 class QuickUiSettingsButton extends StatelessWidget {
   const QuickUiSettingsButton({super.key});
@@ -12,17 +13,23 @@ class QuickUiSettingsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final chrome = WorkspaceChromeStyle.maybeOf(context);
 
     return Tooltip(
       message: 'Configuración rápida',
       child: IconButton(
         visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+        constraints: chrome == null
+            ? null
+            : const BoxConstraints.tightFor(width: 28, height: 28),
         tooltip: 'Configuración rápida',
         onPressed: () => _showQuickSettings(context),
         icon: Icon(
           Icons.settings_outlined,
           size: 20,
-          color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
+          color: chrome?.mutedForeground ??
+              theme.colorScheme.onSurface.withValues(alpha: 0.72),
         ),
       ),
     );

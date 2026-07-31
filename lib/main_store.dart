@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'public_store/providers/cart_provider.dart';
 import 'public_store/providers/public_store_tenant_provider.dart';
 import 'public_store/routes/public_store_router.dart';
+import 'public_store/services/checkout_exit_guard.dart';
 import 'public_store/services/public_store_scroll_state.dart';
 import 'public_store/services/customer_account_service.dart';
 import 'public_store/services/public_inventory_service.dart';
@@ -225,6 +226,7 @@ class PublicStoreApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => WebsiteEditModeProvider()),
         ChangeNotifierProvider(create: (_) => PublicInventoryService()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => CheckoutExitGuard()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProxyProvider<PublicStoreTenantProvider,
             CustomerAccountService>(

@@ -7,13 +7,16 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
 
 import '../models/current_user_profile.dart';
+import '../models/employee_self_service.dart';
 import '../services/auth_service.dart';
 import '../services/current_user_profile_service.dart';
+import '../services/employee_self_service_service.dart';
 import '../services/self_password_service.dart';
 import '../services/tenant_service.dart';
 import '../services/user_management_navigation.dart';
 import '../services/workspace_manager.dart';
 import '../utils/auth_input_validation.dart';
+import '../utils/chilean_utils.dart';
 import '../utils/responsive_breakpoints.dart';
 import '../utils/responsive_viewport.dart';
 import '../widgets/branded_loading.dart';
@@ -85,12 +88,20 @@ class _MyProfilePageState extends State<MyProfilePage> {
     );
   }
 
-  Future<void> _refresh({bool force = true}) {
+  Future<void> _refresh({bool force = true}) async {
     final authService = context.read<AuthService>();
+    final profileService = context.read<CurrentUserProfileService>();
     final user = authService.currentUser;
-    return context.read<CurrentUserProfileService>().synchronize(
-          identity: user == null ? null : CurrentUserIdentity.fromUser(user),
-          resolveTenantId: context.read<TenantService>().getTenantId,
+    await profileService.synchronize(
+      identity: user == null ? null : CurrentUserIdentity.fromUser(user),
+      resolveTenantId: context.read<TenantService>().getTenantId,
+      force: force,
+    );
+    if (!mounted) return;
+    // The labor read model is a separate scope; an explicit refresh of the
+    // profile must refresh it too rather than leave a stale week behind.
+    await context.read<EmployeeSelfServiceService>().synchronize(
+          profile: profileService.profile,
           force: force,
         );
   }
@@ -147,13 +158,7 @@ class _MyProfilePageState extends State<MyProfilePage> {
         title: 'Mi perfil',
         onBackPressed: canPop ? _attemptBack : null,
         compactHeader: MainLayoutCompactHeader(
-          title: Text(
-            'Mi perfil',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          title: 'Mi perfil',
           actions: [
             IconButton(
               key: const ValueKey('erp-profile-refresh-compact'),
@@ -539,9 +544,12 @@ class MyProfileContentState extends State<MyProfileContent> {
       top: false,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final pagePadding =
-              constraints.maxWidth >= ResponsiveBreakpoints.phoneMaxExclusive
-                  ? 24.0
+          final desktop =
+              constraints.maxWidth >= ResponsiveBreakpoints.desktopMin;
+          final pagePadding = desktop
+              ? 28.0
+              : constraints.maxWidth >= ResponsiveBreakpoints.phoneMaxExclusive
+                  ? 22.0
                   : 14.0;
 
           return Stack(
@@ -563,8 +571,7 @@ class MyProfileContentState extends State<MyProfileContent> {
                   child: _ProfileDetailsWorkspace(
                     profile: profile,
                     service: service,
-                    desktopLayout: constraints.maxWidth >=
-                        ResponsiveBreakpoints.desktopMin,
+                    desktopLayout: desktop,
                     selectedSection: _selectedSection,
                     onSectionSelected: _goToSection,
                     showPageTitle:
@@ -622,29 +629,231 @@ class MyProfileContentState extends State<MyProfileContent> {
 }
 
 enum _ProfileSectionId {
+  shifts,
+  attendance,
+  payroll,
   personal,
   employment,
   access,
   security,
 }
 
+enum _ProfileSectionGroup { work, account }
+
+extension on _ProfileSectionGroup {
+  String get label => switch (this) {
+        _ProfileSectionGroup.work => 'Mi trabajo',
+        _ProfileSectionGroup.account => 'Mi cuenta',
+      };
+}
+
 extension on _ProfileSectionId {
   String get label => switch (this) {
+        _ProfileSectionId.shifts => 'Turnos',
+        _ProfileSectionId.attendance => 'Asistencia',
+        _ProfileSectionId.payroll => 'Horas y nómina',
         _ProfileSectionId.personal => 'Datos personales',
         _ProfileSectionId.employment => 'Vínculo laboral',
         _ProfileSectionId.access => 'Acceso',
         _ProfileSectionId.security => 'Seguridad',
       };
+
+  IconData get icon => switch (this) {
+        _ProfileSectionId.shifts => Icons.calendar_month_outlined,
+        _ProfileSectionId.attendance => Icons.schedule_outlined,
+        _ProfileSectionId.payroll => Icons.payments_outlined,
+        _ProfileSectionId.personal => Icons.person_outline,
+        _ProfileSectionId.employment => Icons.badge_outlined,
+        _ProfileSectionId.access => Icons.key_outlined,
+        _ProfileSectionId.security => Icons.lock_outline,
+      };
+
+  _ProfileSectionGroup get group => switch (this) {
+        _ProfileSectionId.shifts ||
+        _ProfileSectionId.attendance ||
+        _ProfileSectionId.payroll =>
+          _ProfileSectionGroup.work,
+        _ => _ProfileSectionGroup.account,
+      };
+
+  /// Labor sections exist only for an identity with a linked employee record.
+  bool get requiresEmployee => group == _ProfileSectionGroup.work;
 }
 
-class _ProfileSectionNavigation extends StatelessWidget {
-  const _ProfileSectionNavigation({
+/// Sections available to [profile], in navigation order.
+List<_ProfileSectionId> _visibleSections(CurrentUserProfile profile) {
+  final linked = profile.employee != null;
+  return [
+    for (final section in _ProfileSectionId.values)
+      if (linked || !section.requiresEmployee) section,
+  ];
+}
+
+/// Persistent grouped rail used once the workspace has desktop width.
+class _ProfileSectionRail extends StatelessWidget {
+  const _ProfileSectionRail({
+    required this.sections,
     required this.selected,
     required this.onSelected,
   });
 
+  final List<_ProfileSectionId> sections;
   final _ProfileSectionId selected;
   final ValueChanged<_ProfileSectionId> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final groups = <_ProfileSectionGroup, List<_ProfileSectionId>>{};
+    for (final section in sections) {
+      groups.putIfAbsent(section.group, () => []).add(section);
+    }
+
+    return Semantics(
+      container: true,
+      label: 'Secciones de Mi perfil',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final group in groups.entries) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Text(
+                group.key.label.toUpperCase(),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                    ),
+              ),
+            ),
+            for (final section in group.value)
+              _ProfileRailItem(
+                section: section,
+                selected: section == selected,
+                onTap: () => onSelected(section),
+              ),
+            if (group.key != groups.keys.last) const SizedBox(height: 22),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileRailItem extends StatelessWidget {
+  const _ProfileRailItem({
+    required this.section,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _ProfileSectionId section;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final foreground =
+        selected ? colors.onSecondaryContainer : colors.onSurface;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'Sección ${section.label}',
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 2),
+        child: Material(
+          color: selected ? colors.secondaryContainer : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: ValueKey('erp-profile-section-nav-${section.name}'),
+            onTap: onTap,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 11,
+                ),
+                child: ExcludeSemantics(
+                  child: Row(
+                    children: [
+                      Icon(
+                        section.icon,
+                        size: 19,
+                        color: selected ? foreground : colors.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 11),
+                      Expanded(
+                        child: Text(
+                          section.label,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: foreground,
+                                    fontWeight: selected
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                    height: 1.2,
+                                  ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact navigator: one scrollable row of labelled sections.
+class _ProfileSectionStrip extends StatefulWidget {
+  const _ProfileSectionStrip({
+    required this.sections,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final List<_ProfileSectionId> sections;
+  final _ProfileSectionId selected;
+  final ValueChanged<_ProfileSectionId> onSelected;
+
+  @override
+  State<_ProfileSectionStrip> createState() => _ProfileSectionStripState();
+}
+
+class _ProfileSectionStripState extends State<_ProfileSectionStrip> {
+  final _controller = ScrollController();
+  final _itemKeys = <_ProfileSectionId, GlobalKey>{};
+
+  @override
+  void didUpdateWidget(covariant _ProfileSectionStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selected != widget.selected) _revealSelected();
+  }
+
+  void _revealSelected() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final key = _itemKeys[widget.selected];
+      final context = key?.currentContext;
+      if (context == null || !mounted) return;
+      Scrollable.ensureVisible(
+        context,
+        alignment: 0.5,
+        duration: MediaQuery.disableAnimationsOf(this.context)
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -654,48 +863,43 @@ class _ProfileSectionNavigation extends StatelessWidget {
       label: 'Secciones de Mi perfil',
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: colors.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(16),
+          border: Border(
+            bottom: BorderSide(color: colors.outlineVariant),
+          ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final columns =
-                  constraints.maxWidth < ResponsiveBreakpoints.phoneMaxExclusive
-                      ? 2
-                      : 4;
-              const gap = 4.0;
-              final itemWidth =
-                  (constraints.maxWidth - (columns - 1) * gap) / columns;
-              return Wrap(
-                spacing: gap,
-                runSpacing: gap,
-                children: [
-                  for (final section in _ProfileSectionId.values)
-                    SizedBox(
-                      width: itemWidth,
-                      child: _ProfileSectionButton(
-                        section: section,
-                        selected: section == selected,
-                        onTap: () => onSelected(section),
-                      ),
-                    ),
-                ],
-              );
-            },
+        child: SingleChildScrollView(
+          controller: _controller,
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: Row(
+            children: [
+              for (final section in widget.sections)
+                _ProfileStripItem(
+                  key: _itemKeys.putIfAbsent(section, GlobalKey.new),
+                  section: section,
+                  selected: section == widget.selected,
+                  onTap: () => widget.onSelected(section),
+                ),
+            ],
           ),
         ),
       ),
     );
   }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 }
 
-class _ProfileSectionButton extends StatelessWidget {
-  const _ProfileSectionButton({
+class _ProfileStripItem extends StatelessWidget {
+  const _ProfileStripItem({
     required this.section,
     required this.selected,
     required this.onTap,
+    super.key,
   });
 
   final _ProfileSectionId section;
@@ -709,54 +913,47 @@ class _ProfileSectionButton extends StatelessWidget {
       button: true,
       selected: selected,
       label: 'Sección ${section.label}',
-      child: Material(
-        color: selected
-            ? Color.alphaBlend(
-                colors.primary.withValues(alpha: 0.1),
-                colors.surfaceContainerLow,
-              )
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          key: ValueKey('erp-profile-section-nav-${section.name}'),
-          onTap: onTap,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 56),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ExcludeSemantics(
-                    child: Text(
-                      section.label,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: selected
-                                ? colors.primary
-                                : colors.onSurfaceVariant,
-                            fontWeight:
-                                selected ? FontWeight.w700 : FontWeight.w600,
-                            height: 1.15,
-                          ),
+      child: InkWell(
+        key: ValueKey('erp-profile-section-nav-${section.name}'),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: ExcludeSemantics(
+              // Intrinsic width bounds the column inside the horizontal
+              // scroller so the indicator can span exactly the label.
+              child: IntrinsicWidth(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 14, 0, 9),
+                      child: Text(
+                        section.label,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: selected
+                                  ? colors.primary
+                                  : colors.onSurfaceVariant,
+                              fontWeight:
+                                  selected ? FontWeight.w700 : FontWeight.w600,
+                            ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  AnimatedContainer(
-                    duration: MediaQuery.disableAnimationsOf(context)
-                        ? Duration.zero
-                        : const Duration(milliseconds: 140),
-                    width: selected ? 24 : 0,
-                    height: 2,
-                    decoration: BoxDecoration(
-                      color: colors.primary,
-                      borderRadius: BorderRadius.circular(2),
+                    Container(
+                      height: 2.5,
+                      decoration: BoxDecoration(
+                        color: selected ? colors.primary : Colors.transparent,
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(2),
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -827,89 +1024,309 @@ class _ProfileDetailsWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1280),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (showPageTitle) ...[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Mi perfil',
-                          style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          'Identidad, vínculo, acceso y seguridad de tu cuenta.',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    key: const ValueKey('erp-profile-refresh-desktop'),
-                    tooltip: 'Actualizar perfil',
-                    onPressed: dirty || service.isSaving ? null : onRefresh,
-                    icon: const Icon(Icons.refresh),
-                  ),
+    final sections = _visibleSections(profile);
+    final activeSection =
+        sections.contains(selectedSection) ? selectedSection : sections.first;
+    final body = _ProfileSelectedSection(
+      profile: profile,
+      service: service,
+      desktopLayout: desktopLayout,
+      section: activeSection,
+      trailing: desktopLayout
+          ? IconButton(
+              key: const ValueKey('erp-profile-refresh-desktop'),
+              tooltip: 'Actualizar perfil',
+              onPressed: dirty || service.isSaving ? null : onRefresh,
+              icon: const Icon(Icons.refresh),
+            )
+          : null,
+      editingDisplayName: editingDisplayName,
+      editingContact: editingContact,
+      displayNameController: displayNameController,
+      displayNameFocus: displayNameFocus,
+      displayNameFormKey: displayNameFormKey,
+      displayNameSaveError: displayNameSaveError,
+      contactFormKey: contactFormKey,
+      phoneController: phoneController,
+      addressController: addressController,
+      cityController: cityController,
+      emergencyNameController: emergencyNameController,
+      emergencyPhoneController: emergencyPhoneController,
+      contactSaveError: contactSaveError,
+      onBeginDisplayNameEdit: onBeginDisplayNameEdit,
+      onBeginContactEdit: onBeginContactEdit,
+      onCancelEditing: onCancelEditing,
+      onSaveDisplayName: onSaveDisplayName,
+      onSaveContact: onSaveContact,
+    );
+
+    // Desktop pairs one persistent rail with a workspace that keeps the full
+    // remaining width. The rail carries the identity summary, so no
+    // full-width identity card competes with the section the operator opened.
+    if (desktopLayout) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 248,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ProfileRailIdentity(profile: profile),
+                const SizedBox(height: 22),
+                _ProfileSectionRail(
+                  sections: sections,
+                  selected: activeSection,
+                  onSelected: onSectionSelected,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 36),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (showStaleNotice) ...[
+                  _StaleProfileNotice(onRetry: onRefresh),
+                  const SizedBox(height: 16),
                 ],
+                body,
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showPageTitle) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  'Mi perfil',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
+                      ),
+                ),
               ),
-              const SizedBox(height: 16),
+              IconButton(
+                key: const ValueKey('erp-profile-refresh-desktop'),
+                tooltip: 'Actualizar perfil',
+                onPressed: dirty || service.isSaving ? null : onRefresh,
+                icon: const Icon(Icons.refresh),
+              ),
             ],
-            if (showStaleNotice) ...[
-              _StaleProfileNotice(onRetry: onRefresh),
-              const SizedBox(height: 14),
-            ],
-            _ProfileIdentityHeader(profile: profile),
-            const SizedBox(height: 14),
-            _ProfileSectionNavigation(
-              selected: selectedSection,
-              onSelected: onSectionSelected,
-            ),
-            const SizedBox(height: 24),
-            _ProfileSelectedSection(
-              profile: profile,
-              service: service,
-              desktopLayout: desktopLayout,
-              section: selectedSection,
-              editingDisplayName: editingDisplayName,
-              editingContact: editingContact,
-              displayNameController: displayNameController,
-              displayNameFocus: displayNameFocus,
-              displayNameFormKey: displayNameFormKey,
-              displayNameSaveError: displayNameSaveError,
-              contactFormKey: contactFormKey,
-              phoneController: phoneController,
-              addressController: addressController,
-              cityController: cityController,
-              emergencyNameController: emergencyNameController,
-              emergencyPhoneController: emergencyPhoneController,
-              contactSaveError: contactSaveError,
-              onBeginDisplayNameEdit: onBeginDisplayNameEdit,
-              onBeginContactEdit: onBeginContactEdit,
-              onCancelEditing: onCancelEditing,
-              onSaveDisplayName: onSaveDisplayName,
-              onSaveContact: onSaveContact,
-            ),
-          ],
+          ),
+          const SizedBox(height: 14),
+        ],
+        if (showStaleNotice) ...[
+          _StaleProfileNotice(onRetry: onRefresh),
+          const SizedBox(height: 14),
+        ],
+        _ProfileIdentityHeader(profile: profile),
+        const SizedBox(height: 18),
+        _ProfileSectionStrip(
+          sections: sections,
+          selected: activeSection,
+          onSelected: onSectionSelected,
         ),
+        const SizedBox(height: 22),
+        body,
+      ],
+    );
+  }
+}
+
+/// Identity summary at the head of the desktop rail.
+///
+/// It replaces the former full-width identity card: the same facts, one
+/// column narrower, and no band of chrome between the operator and the
+/// section they opened.
+class _ProfileRailIdentity extends StatelessWidget {
+  const _ProfileRailIdentity({required this.profile});
+
+  final CurrentUserProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final employee = profile.employee;
+    return Semantics(
+      key: const ValueKey('erp-profile-identity-header'),
+      container: true,
+      label: '${profile.displayName}, ${profile.email}, '
+          '${_roleLabel(profile.role)}, ${profile.tenantName}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _ProfileAvatar(profile: profile, radius: 23),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      profile.displayName,
+                      key: const ValueKey('erp-profile-display-name'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            height: 1.15,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      employee?.jobTitle ?? _roleLabel(profile.role),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 13),
+          Text(
+            profile.email,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 6),
+          _InlineStatus(
+            icon: profile.emailVerified
+                ? Icons.verified_outlined
+                : Icons.warning_amber_outlined,
+            label: profile.emailVerified
+                ? 'Correo verificado'
+                : 'Correo sin verificar',
+            isWarning: !profile.emailVerified,
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: colors.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  profile.tenantName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  employee == null
+                      ? '${_roleLabel(profile.role)} · sin ficha'
+                      : '${_roleLabel(profile.role)} · ${employee.employeeNumber}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+/// How much of the content column one panel claims.
+enum _PanelSpan { full, main, aside, half }
+
+class _PanelSlot {
+  const _PanelSlot(this.child, {this.span = _PanelSpan.full});
+
+  final Widget child;
+  final _PanelSpan span;
+}
+
+/// Arranges a section's panels across the available width.
+///
+/// Below `1040px` of content width every panel is a full row, which is the
+/// only readable option on tablet and phone. Above it, `main`/`aside` and
+/// paired `half` panels share a row so a wide workspace carries related
+/// panels side by side instead of one tall centred column.
+class _SectionBody extends StatelessWidget {
+  const _SectionBody({required this.slots});
+
+  final List<_PanelSlot> slots;
+
+  static const _gap = 18.0;
+  static const _twoColumnMin = 1040.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final twoColumns = width >= _twoColumnMin;
+        // A single readable measure for prose-shaped panels on any width.
+        final singleWidth = width > 900 ? 900.0 : width;
+
+        if (!twoColumns) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var index = 0; index < slots.length; index++) ...[
+                if (index > 0) const SizedBox(height: _gap),
+                SizedBox(
+                  width: slots[index].span == _PanelSpan.full
+                      ? width
+                      : singleWidth,
+                  child: slots[index].child,
+                ),
+              ],
+            ],
+          );
+        }
+
+        final mainWidth = (width - _gap) * 0.58;
+        final asideWidth = width - _gap - mainWidth;
+        final halfWidth = (width - _gap) / 2;
+
+        return Wrap(
+          spacing: _gap,
+          runSpacing: _gap,
+          children: [
+            for (final slot in slots)
+              SizedBox(
+                width: switch (slot.span) {
+                  _PanelSpan.full => width,
+                  _PanelSpan.main => mainWidth,
+                  _PanelSpan.aside => asideWidth,
+                  _PanelSpan.half => halfWidth,
+                },
+                child: slot.child,
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -929,18 +1346,29 @@ class _ProfileIdentityHeader extends StatelessWidget {
           '${profile.displayName}, ${profile.email}, ${_roleLabel(profile.role)}, ${profile.tenantName}',
       child: Container(
         decoration: BoxDecoration(
-          color: colors.surfaceContainerLow,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color.alphaBlend(
+                colors.primary.withValues(alpha: 0.06),
+                colors.surfaceContainerLow,
+              ),
+              colors.surfaceContainerLow,
+            ],
+          ),
           borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colors.outlineVariant),
         ),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final roomy = constraints.maxWidth >= 720;
             final identity = Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _ProfileAvatar(profile: profile, radius: 22),
-                const SizedBox(width: 13),
+                _ProfileAvatar(profile: profile, radius: 26),
+                const SizedBox(width: 15),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -950,12 +1378,14 @@ class _ProfileIdentityHeader extends StatelessWidget {
                         key: const ValueKey('erp-profile-display-name'),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              height: 1.12,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.12,
+                                  letterSpacing: -0.4,
+                                ),
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 5),
                       Wrap(
                         crossAxisAlignment: WrapCrossAlignment.center,
                         spacing: 9,
@@ -1083,8 +1513,10 @@ class _ProfileSelectedSection extends StatelessWidget {
     required this.onCancelEditing,
     required this.onSaveDisplayName,
     required this.onSaveContact,
+    this.trailing,
   });
 
+  final Widget? trailing;
   final CurrentUserProfile profile;
   final CurrentUserProfileService service;
   final bool desktopLayout;
@@ -1115,6 +1547,27 @@ class _ProfileSelectedSection extends StatelessWidget {
     late final Widget content;
 
     switch (section) {
+      case _ProfileSectionId.shifts:
+        description =
+            'Tus turnos planificados, tu horario base y tus solicitudes de cambio.';
+        ownership =
+            'La planificación la publica tu jefatura. Aquí ves lo asignado y el estado de lo que solicitaste.';
+        content = const _WorkShiftsSection();
+        break;
+      case _ProfileSectionId.attendance:
+        description =
+            'Tus marcajes de la semana y la diferencia con lo planificado.';
+        ownership =
+            'Los marcajes provienen del control de asistencia. Su corrección la realiza RR.HH.';
+        content = const _WorkAttendanceSection();
+        break;
+      case _ProfileSectionId.payroll:
+        description =
+            'Tus horas liquidadas y el estado de pago de cada período.';
+        ownership =
+            'Las liquidaciones las emite RR.HH. Esta vista muestra únicamente tus propias líneas.';
+        content = const _WorkPayrollSection();
+        break;
       case _ProfileSectionId.personal:
         description = profile.employee == null
             ? 'Qué nombre puedes mostrar en el ERP y cuál es tu identidad de acceso.'
@@ -1162,7 +1615,14 @@ class _ProfileSelectedSection extends StatelessWidget {
         description = 'Cómo cambiar tu contraseña y cerrar las demás sesiones.';
         ownership =
             'La verificación y el cierre se ejecutan sobre tu identidad autenticada.';
-        content = _SecurityDetails(profile: profile, service: service);
+        content = _SectionBody(
+          slots: [
+            _PanelSlot(
+              _SecurityDetails(profile: profile, service: service),
+              span: _PanelSpan.main,
+            ),
+          ],
+        );
         break;
     }
 
@@ -1172,6 +1632,7 @@ class _ProfileSelectedSection extends StatelessWidget {
       desktopLayout: desktopLayout,
       description: description,
       ownership: ownership,
+      trailing: trailing,
       child: content,
     );
   }
@@ -1184,6 +1645,7 @@ class _ProfileSectionWorkspace extends StatelessWidget {
     required this.description,
     required this.ownership,
     required this.child,
+    this.trailing,
     super.key,
   });
 
@@ -1192,79 +1654,1240 @@ class _ProfileSectionWorkspace extends StatelessWidget {
   final String description;
   final String ownership;
   final Widget child;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final contextCopy = KeyedSubtree(
+    final header = KeyedSubtree(
       key: const ValueKey('erp-profile-section-context'),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            section.label,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  section.label,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
+                      ),
                 ),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            description,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colors.onSurfaceVariant,
-                  height: 1.4,
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                        height: 1.45,
+                      ),
                 ),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            ownership,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colors.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                  height: 1.4,
-                ),
-          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 16),
+            trailing!,
+          ],
         ],
-      ),
-    );
-    final boundedContent = KeyedSubtree(
-      key: const ValueKey('erp-profile-section-content'),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720),
-        child: child,
       ),
     );
 
     return Semantics(
       container: true,
       label: 'Sección ${section.label} seleccionada',
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (!desktopLayout) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                contextCopy,
-                const SizedBox(height: 22),
-                boundedContent,
-              ],
-            );
-          }
-
-          return Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          const SizedBox(height: 20),
+          KeyedSubtree(
+            key: const ValueKey('erp-profile-section-content'),
+            child: child,
+          ),
+          const SizedBox(height: 16),
+          // Ownership stays a closing footnote so it explains the section
+          // without competing with the operator's actual work.
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(width: 250, child: contextCopy),
-              const SizedBox(width: 44),
+              Icon(
+                Icons.info_outline,
+                size: 15,
+                color: colors.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
               Expanded(
-                child: Align(
-                  alignment: Alignment.topLeft,
-                  child: boundedContent,
+                child: Text(
+                  ownership,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                        height: 1.45,
+                      ),
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The one panel primitive used by every profile section.
+///
+/// Grouping comes from tone, spacing and a single hairline boundary rather
+/// than a card per field, so a section reads as one surface.
+class _ProfilePanel extends StatelessWidget {
+  const _ProfilePanel({
+    required this.child,
+    this.title,
+    this.subtitle,
+    this.trailing,
+    this.padded = true,
+    super.key,
+  });
+
+  static const padding = EdgeInsets.all(20);
+
+  final Widget child;
+  final String? title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  /// Set to `false` when the child paints its own insets, such as a tile that
+  /// needs its tap target to reach the panel edges.
+  final bool padded;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final heading = title;
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      padding: padded ? padding : EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (heading != null) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        heading,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          subtitle!,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: colors.onSurfaceVariant,
+                                    height: 1.4,
+                                  ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: 12),
+                  trailing!,
+                ],
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+/// Resolves the labor read model and renders loading, unavailable, unlinked
+/// and loaded states as first-class compositions.
+class _SelfServiceScope extends StatelessWidget {
+  const _SelfServiceScope({required this.builder});
+
+  final Widget Function(
+    BuildContext context,
+    EmployeeSelfServiceService service,
+    EmployeeSelfServiceSnapshot snapshot,
+  ) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    final service = context.watch<EmployeeSelfServiceService>();
+    final snapshot = service.snapshot;
+
+    if (snapshot == null && service.isLoading) {
+      return const _ProfilePanel(
+        key: ValueKey('erp-profile-work-loading'),
+        child: _WorkSkeleton(),
+      );
+    }
+    if (snapshot == null) {
+      final profile = context.read<CurrentUserProfileService>().profile;
+      final notLinked = service.issue == EmployeeSelfServiceIssue.notLinked;
+      return _ProfilePanel(
+        key: const ValueKey('erp-profile-work-unavailable'),
+        child: _WorkMessage(
+          icon: notLinked ? Icons.link_off_outlined : Icons.cloud_off_outlined,
+          title: notLinked
+              ? 'Sin ficha de trabajador vinculada'
+              : 'No pudimos cargar tu información laboral',
+          message: notLinked
+              ? 'Los turnos, la asistencia y la nómina requieren que un administrador vincule tu cuenta con una ficha existente.'
+              : 'Revisa tu conexión y vuelve a intentarlo. No se muestra información parcial.',
+          actionLabel: notLinked ? null : 'Reintentar',
+          onAction: notLinked
+              ? null
+              : () => service.synchronize(profile: profile, force: true),
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        builder(context, service, snapshot),
+        if (service.isLoading)
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: LinearProgressIndicator(minHeight: 2),
+          ),
+      ],
+    );
+  }
+}
+
+class _WorkShiftsSection extends StatelessWidget {
+  const _WorkShiftsSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return _SelfServiceScope(
+      builder: (context, service, snapshot) {
+        final shifts = snapshot.myShifts
+            .where((shift) => !shift.isCancelled)
+            .toList(growable: false);
+        return KeyedSubtree(
+          key: const ValueKey('erp-profile-work-shifts'),
+          child: _SectionBody(
+            slots: [
+              _PanelSlot(_WeekNavigator(service: service)),
+              _PanelSlot(
+                _ProfilePanel(
+                  title: 'Mis turnos',
+                  subtitle: shifts.isEmpty
+                      ? 'Sin turnos asignados en esta semana'
+                      : '${shifts.length} ${shifts.length == 1 ? 'turno' : 'turnos'} · '
+                          '${_formatDuration(snapshot.plannedDuration)} planificadas',
+                  child: shifts.isEmpty
+                      ? const _WorkMessage(
+                          icon: Icons.event_available_outlined,
+                          title: 'Semana sin turnos',
+                          message:
+                              'Cuando tu jefatura publique la planificación de esta semana, aparecerá aquí.',
+                          compact: true,
+                        )
+                      : _ShiftList(shifts: shifts),
+                ),
+                span: _PanelSpan.main,
+              ),
+              _PanelSlot(
+                _ProfilePanel(
+                  title: 'Horario base',
+                  subtitle: snapshot.defaultShiftBlocks.isEmpty
+                      ? null
+                      : 'Tu disponibilidad habitual.',
+                  child: snapshot.defaultShiftBlocks.isEmpty
+                      ? const _WorkMessage(
+                          icon: Icons.event_repeat_outlined,
+                          title: 'Sin horario base',
+                          message:
+                              'RR.HH. puede configurar tu disponibilidad habitual para generar la planificación.',
+                          compact: true,
+                        )
+                      : _DefaultBlocksView(
+                          blocks: snapshot.defaultShiftBlocks,
+                        ),
+                ),
+                span: _PanelSpan.aside,
+              ),
+              if (snapshot.changeRequests.isNotEmpty)
+                _PanelSlot(
+                  _ProfilePanel(
+                    title: 'Solicitudes de cambio',
+                    subtitle: snapshot.pendingRequestCount == 0
+                        ? 'Sin solicitudes pendientes de respuesta.'
+                        : '${snapshot.pendingRequestCount} pendiente(s) de respuesta.',
+                    child: _ChangeRequestList(
+                      requests: snapshot.changeRequests,
+                    ),
+                  ),
+                ),
+              if (snapshot.teamShifts.isNotEmpty)
+                _PanelSlot(
+                  _WorkDisclosure(
+                    label: 'Cobertura del equipo esta semana',
+                    summary: '${snapshot.teamShifts.length} turnos publicados',
+                    child: _ShiftList(
+                      shifts: snapshot.teamShifts,
+                      showEmployee: true,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _WorkAttendanceSection extends StatelessWidget {
+  const _WorkAttendanceSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return _SelfServiceScope(
+      builder: (context, service, snapshot) {
+        final variance = snapshot.varianceDuration;
+        return KeyedSubtree(
+          key: const ValueKey('erp-profile-work-attendance'),
+          child: _SectionBody(
+            slots: [
+              _PanelSlot(_WeekNavigator(service: service)),
+              _PanelSlot(
+                _ProfilePanel(
+                  child: _FigureRow(
+                    figures: [
+                      _FigureData(
+                        label: 'Planificado',
+                        value: _formatDuration(snapshot.plannedDuration),
+                      ),
+                      _FigureData(
+                        label: 'Trabajado',
+                        value: _formatDuration(snapshot.workedDuration),
+                      ),
+                      _FigureData(
+                        label: 'Diferencia',
+                        value: _formatSignedDuration(variance),
+                        tone: variance.inMinutes.abs() < 15
+                            ? _FigureTone.neutral
+                            : variance.isNegative
+                                ? _FigureTone.warning
+                                : _FigureTone.positive,
+                      ),
+                      _FigureData(
+                        label: 'Marcajes',
+                        value: '${snapshot.attendances.length}',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              _PanelSlot(
+                _ProfilePanel(
+                  title: 'Marcajes de la semana',
+                  subtitle: snapshot.ongoingAttendance == null
+                      ? null
+                      : 'Tienes una jornada en curso sin marcaje de salida.',
+                  child: snapshot.attendances.isEmpty
+                      ? const _WorkMessage(
+                          icon: Icons.schedule_outlined,
+                          title: 'Sin marcajes registrados',
+                          message:
+                              'Los marcajes de entrada y salida de esta semana aparecerán aquí.',
+                          compact: true,
+                        )
+                      : _AttendanceList(attendances: snapshot.attendances),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _WorkPayrollSection extends StatelessWidget {
+  const _WorkPayrollSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return _SelfServiceScope(
+      builder: (context, service, snapshot) {
+        final lines = snapshot.payrollLines;
+        final latest = snapshot.latestPayrollLine;
+        if (latest == null) {
+          return const _ProfilePanel(
+            key: ValueKey('erp-profile-work-payroll'),
+            child: _WorkMessage(
+              icon: Icons.payments_outlined,
+              title: 'Sin liquidaciones emitidas',
+              message:
+                  'Cuando RR.HH. emita una liquidación que te incluya, verás aquí tus horas y el estado de pago.',
+              compact: true,
+            ),
           );
-        },
+        }
+
+        return KeyedSubtree(
+          key: const ValueKey('erp-profile-work-payroll'),
+          child: _SectionBody(
+            slots: [
+              _PanelSlot(
+                _ProfilePanel(
+                  title: 'Último período liquidado',
+                  subtitle: _payrollPeriodLabel(latest),
+                  trailing: _StatusMark(
+                    label: _payrollStatusLabel(latest.status),
+                    tone: latest.isSettled
+                        ? _FigureTone.positive
+                        : _FigureTone.neutral,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _FigureRow(
+                        figures: [
+                          _FigureData(
+                            label: 'Horas',
+                            value: _formatHours(latest.workedHours),
+                          ),
+                          _FigureData(
+                            label: 'Extras',
+                            value: _formatHours(latest.overtimeHours),
+                          ),
+                          _FigureData(
+                            label: 'Total',
+                            value:
+                                ChileanUtils.formatCurrency(latest.totalAmount),
+                            emphasized: true,
+                          ),
+                        ],
+                      ),
+                      if (latest.paidAt != null ||
+                          latest.paymentMethodName != null) ...[
+                        const SizedBox(height: 16),
+                        _DefinitionGrid(
+                          items: [
+                            if (latest.paidAt != null)
+                              _DefinitionData(
+                                label: 'Fecha de pago',
+                                value: ChileanUtils.formatDate(
+                                  employeeSelfServiceLocalTime(
+                                    latest.paidAt!,
+                                    snapshot.timezone,
+                                  ),
+                                ),
+                              ),
+                            if (latest.paymentMethodName != null)
+                              _DefinitionData(
+                                label: 'Medio de pago',
+                                value: _paymentMethodLabel(
+                                  latest.paymentMethodName!,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                span: _PanelSpan.main,
+              ),
+              if (lines.length > 1)
+                _PanelSlot(
+                  _ProfilePanel(
+                    title: 'Historial',
+                    subtitle: 'Períodos de los últimos 12 meses.',
+                    child: _PayrollList(lines: lines.skip(1).toList()),
+                  ),
+                  span: _PanelSpan.aside,
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Week stepper shared by the shift and attendance sections.
+class _WeekNavigator extends StatelessWidget {
+  const _WeekNavigator({required this.service});
+
+  final EmployeeSelfServiceService service;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final profile = context.read<CurrentUserProfileService>().profile;
+    final start = service.weekStart;
+    final end = start.add(const Duration(days: 6));
+    final busy = service.isLoading;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      child: Row(
+        children: [
+          IconButton(
+            key: const ValueKey('erp-profile-week-previous'),
+            tooltip: 'Semana anterior',
+            onPressed:
+                busy ? null : () => service.shiftWeek(-1, profile: profile),
+            icon: const Icon(Icons.chevron_left),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          ),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _weekRangeLabel(start, end),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                Text(
+                  service.isCurrentWeek ? 'Semana actual' : 'Otra semana',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          if (!service.isCurrentWeek)
+            TextButton(
+              key: const ValueKey('erp-profile-week-today'),
+              onPressed: busy
+                  ? null
+                  : () => service.selectCurrentWeek(profile: profile),
+              style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+              child: const Text('Hoy'),
+            ),
+          IconButton(
+            key: const ValueKey('erp-profile-week-next'),
+            tooltip: 'Semana siguiente',
+            onPressed:
+                busy ? null : () => service.shiftWeek(1, profile: profile),
+            icon: const Icon(Icons.chevron_right),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShiftList extends StatelessWidget {
+  const _ShiftList({required this.shifts, this.showEmployee = false});
+
+  final List<SelfPlannedShift> shifts;
+  final bool showEmployee;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final sorted = [...shifts]..sort((a, b) => a.startAt.compareTo(b.startAt));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < sorted.length; index++)
+          Builder(
+            builder: (context) {
+              final shift = sorted[index];
+              final start = employeeSelfServiceLocalTime(
+                shift.startAt,
+                shift.timezone,
+              );
+              final end = employeeSelfServiceLocalTime(
+                shift.endAt,
+                shift.timezone,
+              );
+              final detail = [
+                if (showEmployee && shift.employeeName != null)
+                  shift.employeeName!,
+                if (shift.roleName != null) shift.roleName!,
+                if (shift.title != null) shift.title!,
+              ].join(' · ');
+
+              return _DayRow(
+                first: index == 0,
+                day: start,
+                leading: _formatTimeRange(start, end),
+                detail: detail.isEmpty ? null : detail,
+                trailing: Text(
+                  _formatDuration(shift.plannedDurationInWeek),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                badge:
+                    shift.status == 'published' || shift.status == 'completed'
+                        ? null
+                        : _shiftStatusLabel(shift.status),
+              );
+            },
+          ),
+      ],
+    );
+  }
+}
+
+class _AttendanceList extends StatelessWidget {
+  const _AttendanceList({required this.attendances});
+
+  final List<SelfAttendance> attendances;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < attendances.length; index++)
+          Builder(
+            builder: (context) {
+              final attendance = attendances[index];
+              final checkIn = employeeSelfServiceLocalTime(
+                attendance.checkIn,
+                attendance.timezone,
+              );
+              final checkOut = attendance.checkOut == null
+                  ? null
+                  : employeeSelfServiceLocalTime(
+                      attendance.checkOut!,
+                      attendance.timezone,
+                    );
+              final range = checkOut == null
+                  ? '${_formatTime(checkIn)} — en curso'
+                  : _formatTimeRange(checkIn, checkOut);
+              final detail = attendance.breakMinutes > 0
+                  ? 'Colación ${attendance.breakMinutes} min'
+                  : null;
+
+              return _DayRow(
+                first: index == 0,
+                day: checkIn,
+                leading: range,
+                detail: detail,
+                trailing: Text(
+                  attendance.isOngoing
+                      ? '—'
+                      : _formatDuration(
+                          attendance.contributesToWorkedDuration
+                              ? attendance.workedDurationInWeek
+                              : attendance.effectiveDuration,
+                        ),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                badge: switch (attendance.status) {
+                  'approved' => null,
+                  'completed' => null,
+                  'rejected' => 'Rechazado',
+                  _ => 'En curso',
+                },
+              );
+            },
+          ),
+      ],
+    );
+  }
+}
+
+class _PayrollList extends StatelessWidget {
+  const _PayrollList({required this.lines});
+
+  final List<SelfPayrollLine> lines;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < lines.length; index++)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            decoration: index == 0
+                ? null
+                : BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: colors.outlineVariant),
+                    ),
+                  ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _payrollPeriodLabel(lines[index]),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${_formatHours(lines[index].workedHours)} · '
+                        '${_payrollStatusLabel(lines[index].status)}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  ChileanUtils.formatCurrency(lines[index].totalAmount),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ChangeRequestList extends StatelessWidget {
+  const _ChangeRequestList({required this.requests});
+
+  final List<SelfShiftChangeRequest> requests;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < requests.length; index++)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            decoration: index == 0
+                ? null
+                : BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: colors.outlineVariant),
+                    ),
+                  ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _requestTypeLabel(requests[index].requestType),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _requestDetail(requests[index]),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                              height: 1.4,
+                            ),
+                      ),
+                      if (requests[index].managerNote != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Respuesta: ${requests[index].managerNote}',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: colors.onSurfaceVariant,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                _StatusMark(
+                  label: _requestStatusLabel(requests[index].status),
+                  tone: switch (requests[index].status) {
+                    'approved' => _FigureTone.positive,
+                    'rejected' => _FigureTone.warning,
+                    _ => _FigureTone.neutral,
+                  },
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _DefaultBlocksView extends StatelessWidget {
+  const _DefaultBlocksView({required this.blocks});
+
+  final List<SelfDefaultShiftBlock> blocks;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final byDay = <int, List<SelfDefaultShiftBlock>>{};
+    for (final block in blocks) {
+      byDay.putIfAbsent(block.dayOfWeek, () => []).add(block);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var day = 1; day <= 7; day++)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 92,
+                  child: Text(
+                    _weekdayName(day),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: byDay.containsKey(day)
+                              ? colors.onSurface
+                              : colors.onSurfaceVariant,
+                          fontWeight: byDay.containsKey(day)
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    byDay[day] == null
+                        ? 'Libre'
+                        : byDay[day]!
+                            .map(
+                              (block) => '${_trimTime(block.startTime)} – '
+                                  '${_trimTime(block.endTime)}',
+                            )
+                            .join('  ·  '),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: byDay.containsKey(day)
+                          ? colors.onSurface
+                          : colors.onSurfaceVariant,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// One dated row: the day is printed once per date, then each entry lines up
+/// under a shared time column so a week can be scanned vertically.
+class _DayRow extends StatelessWidget {
+  const _DayRow({
+    required this.first,
+    required this.day,
+    required this.leading,
+    required this.trailing,
+    this.detail,
+    this.badge,
+  });
+
+  final bool first;
+  final DateTime day;
+  final String leading;
+  final Widget trailing;
+  final String? detail;
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final isToday = _isSameDate(day, DateTime.now());
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: first
+          ? null
+          : BoxDecoration(
+              border: Border(top: BorderSide(color: colors.outlineVariant)),
+            ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 62,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _shortWeekday(day),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color:
+                            isToday ? colors.primary : colors.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                      ),
+                ),
+                Text(
+                  '${day.day}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: isToday ? colors.primary : colors.onSurface,
+                        fontWeight: FontWeight.w700,
+                        height: 1.05,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        leading,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontFeatures: const [
+                            FontFeature.tabularFigures(),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (badge != null) ...[
+                      const SizedBox(width: 8),
+                      _StatusMark(label: badge!, tone: _FigureTone.neutral),
+                    ],
+                  ],
+                ),
+                if (detail != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    detail!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          trailing,
+        ],
+      ),
+    );
+  }
+}
+
+enum _FigureTone { neutral, positive, warning }
+
+class _FigureData {
+  const _FigureData({
+    required this.label,
+    required this.value,
+    this.tone = _FigureTone.neutral,
+    this.emphasized = false,
+  });
+
+  final String label;
+  final String value;
+  final _FigureTone tone;
+  final bool emphasized;
+}
+
+/// Comparable figures in one aligned row, separated by hairlines instead of
+/// one coloured card per metric.
+class _FigureRow extends StatelessWidget {
+  const _FigureRow({required this.figures});
+
+  final List<_FigureData> figures;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth < 420 ? 2 : figures.length;
+        const gap = 18.0;
+        final width = (constraints.maxWidth - (columns - 1) * gap) / columns;
+
+        return Wrap(
+          spacing: gap,
+          runSpacing: 18,
+          children: [
+            for (var index = 0; index < figures.length; index++)
+              SizedBox(
+                width: width,
+                child: Container(
+                  padding: EdgeInsets.only(left: index % columns == 0 ? 0 : 14),
+                  decoration: index % columns == 0
+                      ? null
+                      : BoxDecoration(
+                          border: Border(
+                            left: BorderSide(color: colors.outlineVariant),
+                          ),
+                        ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        figures[index].label,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        figures[index].value,
+                        style: (figures[index].emphasized
+                                ? Theme.of(context).textTheme.titleLarge
+                                : Theme.of(context).textTheme.titleMedium)
+                            ?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          height: 1.1,
+                          color: switch (figures[index].tone) {
+                            _FigureTone.positive => colors.tertiary,
+                            _FigureTone.warning => colors.error,
+                            _FigureTone.neutral => colors.onSurface,
+                          },
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// A quiet state marker: text plus tone, never a coloured pill wall.
+class _StatusMark extends StatelessWidget {
+  const _StatusMark({required this.label, required this.tone});
+
+  final String label;
+  final _FigureTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final color = switch (tone) {
+      _FigureTone.positive => colors.tertiary,
+      _FigureTone.warning => colors.error,
+      _FigureTone.neutral => colors.onSurfaceVariant,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+      ),
+    );
+  }
+}
+
+class _WorkDisclosure extends StatelessWidget {
+  const _WorkDisclosure({
+    required this.label,
+    required this.summary,
+    required this.child,
+  });
+
+  final String label;
+  final String summary;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+          controlAffinity: ListTileControlAffinity.trailing,
+          title: Text(
+            label,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          subtitle: Text(
+            summary,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+          ),
+          children: [child],
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkMessage extends StatelessWidget {
+  const _WorkMessage({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+    this.compact = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: compact ? 10 : 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 22, color: colors.onSurfaceVariant),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      message,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: colors.onSurfaceVariant,
+                            height: 1.45,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.only(left: 35),
+              child: TextButton(
+                onPressed: onAction,
+                style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                child: Text(actionLabel!),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkSkeleton extends StatelessWidget {
+  const _WorkSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    Widget bar(double width, double height) => Container(
+          width: width,
+          height: height,
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(6),
+          ),
+        );
+
+    return Semantics(
+      label: 'Cargando tu información laboral',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          bar(180, 16),
+          bar(double.infinity, 42),
+          bar(double.infinity, 42),
+          bar(220, 42),
+        ],
       ),
     );
   }
@@ -1318,21 +2941,32 @@ class _PersonalDetails extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (profile.employee == null) {
-      return _DisplayNameEditor(
-        profile: profile,
-        service: service,
-        editing: editingDisplayName,
-        controller: displayNameController,
-        focusNode: displayNameFocus,
-        formKey: displayNameFormKey,
-        saveError: displayNameSaveError,
-        onEdit: onBeginDisplayNameEdit,
-        onCancel: onCancelEditing,
-        onSave: onSaveDisplayName,
+      return _SectionBody(
+        slots: [
+          _PanelSlot(
+            _ProfilePanel(
+              title: 'Identidad de acceso',
+              child: _DisplayNameEditor(
+                profile: profile,
+                service: service,
+                editing: editingDisplayName,
+                controller: displayNameController,
+                focusNode: displayNameFocus,
+                formKey: displayNameFormKey,
+                saveError: displayNameSaveError,
+                onEdit: onBeginDisplayNameEdit,
+                onCancel: onCancelEditing,
+                onSave: onSaveDisplayName,
+              ),
+            ),
+            span: _PanelSpan.main,
+          ),
+        ],
       );
     }
 
-    return _EmployeeContactEditor(
+    final employee = profile.employee!;
+    final editor = _EmployeeContactEditor(
       profile: profile,
       service: service,
       editing: editingContact,
@@ -1346,6 +2980,72 @@ class _PersonalDetails extends StatelessWidget {
       onEdit: onBeginContactEdit,
       onCancel: onCancelEditing,
       onSave: onSaveContact,
+    );
+
+    // The active form is one uninterrupted task and stays a single column.
+    // At rest the same data reads better as two purpose-owned panels.
+    if (editingContact) {
+      return _SectionBody(
+        slots: [
+          _PanelSlot(
+            _ProfilePanel(title: 'Editar mis datos', child: editor),
+            span: _PanelSpan.main,
+          ),
+        ],
+      );
+    }
+
+    return _SectionBody(
+      slots: [
+        _PanelSlot(
+          _ProfilePanel(
+            title: 'Contacto',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _DefinitionGrid(
+                  items: [
+                    _DefinitionData(
+                      label: 'Teléfono',
+                      value: employee.phone ?? 'Sin informar',
+                    ),
+                    _DefinitionData(
+                      label: 'Ciudad',
+                      value: employee.city ?? 'Sin informar',
+                    ),
+                    _DefinitionData(
+                      label: 'Dirección',
+                      value: employee.address ?? 'Sin informar',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                editor,
+              ],
+            ),
+          ),
+          span: _PanelSpan.main,
+        ),
+        _PanelSlot(
+          _ProfilePanel(
+            title: 'Contacto de emergencia',
+            subtitle: 'A quién avisamos si ocurre algo durante tu jornada.',
+            child: _DefinitionGrid(
+              items: [
+                _DefinitionData(
+                  label: 'Nombre',
+                  value: employee.emergencyContactName ?? 'Sin informar',
+                ),
+                _DefinitionData(
+                  label: 'Teléfono',
+                  value: employee.emergencyContactPhone ?? 'Sin informar',
+                ),
+              ],
+            ),
+          ),
+          span: _PanelSpan.aside,
+        ),
+      ],
     );
   }
 }
@@ -1502,52 +3202,26 @@ class _EmployeeContactEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final employee = profile.employee!;
     if (!editing) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _DefinitionGrid(
-            items: [
-              _DefinitionData(
-                label: 'Teléfono',
-                value: employee.phone ?? 'Sin informar',
-              ),
-              _DefinitionData(
-                label: 'Ciudad',
-                value: employee.city ?? 'Sin informar',
-              ),
-              _DefinitionData(
-                label: 'Dirección',
-                value: employee.address ?? 'Sin informar',
-              ),
-              _DefinitionData(
-                label: 'Contacto de emergencia',
-                value: employee.emergencyContactName ?? 'Sin informar',
-                supporting: employee.emergencyContactPhone,
-              ),
-            ],
+      // The values themselves are rendered by the purpose-owned panels; this
+      // editor contributes only the command that opens the form.
+      if (!profile.canEditEmployeeContact) {
+        return const _InlineNotice(
+          message:
+              'La edición está disponible únicamente para trabajadores activos.',
+        );
+      }
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: FilledButton.tonalIcon(
+          key: const ValueKey('erp-profile-edit-contact'),
+          onPressed: service.isSaving ? null : onEdit,
+          icon: const Icon(Icons.edit_outlined),
+          label: const Text('Editar datos personales'),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(48, 48),
           ),
-          const SizedBox(height: 16),
-          if (profile.canEditEmployeeContact)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton.tonalIcon(
-                key: const ValueKey('erp-profile-edit-contact'),
-                onPressed: service.isSaving ? null : onEdit,
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('Editar datos personales'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(48, 48),
-                ),
-              ),
-            )
-          else
-            const _InlineNotice(
-              message:
-                  'La edición está disponible únicamente para trabajadores activos.',
-            ),
-        ],
+        ),
       );
     }
 
@@ -1771,91 +3445,125 @@ class _EmploymentDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final employee = profile.employee;
     if (employee == null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const _InlineNotice(
-            key: ValueKey('erp-profile-unlinked-employee'),
-            title: 'Cuenta sin ficha de trabajador',
-            message:
-                'Tu acceso al ERP funciona de forma independiente, pero los datos laborales requieren que un administrador vincule esta cuenta con una ficha existente.',
-          ),
-          if (profile.canManageUsers) ...[
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => UserManagementNavigation.open(
-                  context,
-                  audience: UserManagementAudience.staff,
-                  target: UserManagementTarget.user,
-                  targetId: profile.userId,
-                ),
-                icon: const Icon(Icons.manage_accounts_outlined),
-                label: const Text(
-                  'Administrar vínculo en Usuarios y roles',
-                ),
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(48, 48),
-                ),
+      return _SectionBody(
+        slots: [
+          _PanelSlot(
+            _ProfilePanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const _InlineNotice(
+                    key: ValueKey('erp-profile-unlinked-employee'),
+                    title: 'Cuenta sin ficha de trabajador',
+                    message:
+                        'Tu acceso al ERP funciona de forma independiente, pero los datos laborales requieren que un administrador vincule esta cuenta con una ficha existente.',
+                  ),
+                  if (profile.canManageUsers) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () => UserManagementNavigation.open(
+                          context,
+                          audience: UserManagementAudience.staff,
+                          target: UserManagementTarget.user,
+                          targetId: profile.userId,
+                        ),
+                        icon: const Icon(Icons.manage_accounts_outlined),
+                        label: const Text(
+                          'Administrar vínculo en Usuarios y roles',
+                        ),
+                        style: TextButton.styleFrom(
+                          minimumSize: const Size(48, 48),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-          ],
+            span: _PanelSpan.main,
+          ),
         ],
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const _InlineNotice(
-          key: ValueKey('erp-profile-linked-employee'),
-          title: 'Ficha laboral vinculada',
-          message:
-              'La identidad legal, el cargo, el departamento, el estado y la remuneración son administrados por RR.HH. o un responsable autorizado.',
-          positive: true,
-        ),
-        const SizedBox(height: 18),
-        _DefinitionGrid(
-          items: [
-            _DefinitionData(label: 'Nombre legal', value: employee.fullName),
-            _DefinitionData(
-              label: 'N.º de trabajador',
-              value: employee.employeeNumber,
-            ),
-            _DefinitionData(
-              label: 'RUT',
-              value: employee.rut ?? 'Sin informar',
-            ),
-            _DefinitionData(
-              label: 'Correo laboral',
-              value: employee.email ?? 'Sin informar',
-            ),
-            _DefinitionData(label: 'Cargo', value: employee.jobTitle),
-            _DefinitionData(
-              label: 'Departamento',
-              value: employee.departmentName ?? 'Sin asignar',
-            ),
-            _DefinitionData(
-              label: 'Estado',
-              value: _employeeStatusLabel(employee.status),
-            ),
-          ],
-        ),
-        if (profile.canManageUsers) ...[
-          const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () => context.push('/hr/employees/${employee.id}'),
-              icon: const Icon(Icons.open_in_new),
-              label: const Text('Abrir ficha de trabajador en RR.HH.'),
-              style: TextButton.styleFrom(
-                minimumSize: const Size(48, 48),
-              ),
+    return _SectionBody(
+      slots: [
+        _PanelSlot(
+          _ProfilePanel(
+            title: 'Ficha de trabajador',
+            subtitle: 'Tu identidad laboral dentro de ${profile.tenantName}.',
+            child: _DefinitionGrid(
+              items: [
+                _DefinitionData(
+                  label: 'Nombre legal',
+                  value: employee.fullName,
+                ),
+                _DefinitionData(
+                  label: 'N.º de trabajador',
+                  value: employee.employeeNumber,
+                ),
+                _DefinitionData(
+                  label: 'RUT',
+                  value: employee.rut ?? 'Sin informar',
+                ),
+                _DefinitionData(
+                  label: 'Correo laboral',
+                  value: employee.email ?? 'Sin informar',
+                ),
+              ],
             ),
           ),
-        ],
+          span: _PanelSpan.main,
+        ),
+        _PanelSlot(
+          _ProfilePanel(
+            title: 'Puesto',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _DefinitionGrid(
+                  items: [
+                    _DefinitionData(label: 'Cargo', value: employee.jobTitle),
+                    _DefinitionData(
+                      label: 'Departamento',
+                      value: employee.departmentName ?? 'Sin asignar',
+                    ),
+                    _DefinitionData(
+                      label: 'Estado',
+                      value: _employeeStatusLabel(employee.status),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const _InlineNotice(
+                  key: ValueKey('erp-profile-linked-employee'),
+                  title: 'Ficha laboral vinculada',
+                  message:
+                      'La identidad legal, el cargo, el estado y la remuneración los administra RR.HH.',
+                  positive: true,
+                ),
+                if (profile.canManageUsers) ...[
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () =>
+                          context.push('/hr/employees/${employee.id}'),
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('Abrir ficha en RR.HH.'),
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(48, 48),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          span: _PanelSpan.aside,
+        ),
       ],
     );
   }
@@ -1890,53 +3598,66 @@ class _AccessDetails extends StatelessWidget {
       ..sort((a, b) => a.value.compareTo(b.value));
     final groups = _groupPermissions(granted);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _DefinitionGrid(
-          items: [
-            _DefinitionData(label: 'Negocio', value: profile.tenantName),
-            _DefinitionData(
-              label: 'Subdominio',
-              value: profile.tenantSubdomain ?? 'Sin subdominio',
+    return _SectionBody(
+      slots: [
+        _PanelSlot(
+          _ProfilePanel(
+            title: 'Contexto de acceso',
+            child: _DefinitionGrid(
+              items: [
+                _DefinitionData(label: 'Negocio', value: profile.tenantName),
+                _DefinitionData(
+                  label: 'Subdominio',
+                  value: profile.tenantSubdomain ?? 'Sin subdominio',
+                ),
+                _DefinitionData(label: 'Rol', value: _roleLabel(profile.role)),
+              ],
             ),
-            _DefinitionData(label: 'Rol', value: _roleLabel(profile.role)),
-          ],
-        ),
-        const SizedBox(height: 18),
-        Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            key: const ValueKey('erp-profile-permissions-disclosure'),
-            tilePadding: EdgeInsets.zero,
-            childrenPadding: const EdgeInsets.only(bottom: 8),
-            controlAffinity: ListTileControlAffinity.trailing,
-            title: Text(
-              granted.isEmpty
-                  ? 'Permisos activos'
-                  : 'Permisos activos (${granted.length})',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            subtitle: Text(
-              granted.isEmpty
-                  ? 'No hay permisos adicionales asignados.'
-                  : 'Abre el detalle para revisar qué acciones están habilitadas.',
-            ),
-            children: [
-              if (granted.isEmpty)
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text('Sin permisos adicionales asignados.'),
-                  ),
-                )
-              else
-                _PermissionGroups(groups: groups),
-            ],
           ),
+          span: _PanelSpan.aside,
+        ),
+        _PanelSlot(
+          _ProfilePanel(
+            padded: false,
+            child: Theme(
+              data:
+                  Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                key: const ValueKey('erp-profile-permissions-disclosure'),
+                initiallyExpanded: granted.isNotEmpty,
+                tilePadding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                controlAffinity: ListTileControlAffinity.trailing,
+                title: Text(
+                  granted.isEmpty
+                      ? 'Permisos activos'
+                      : 'Permisos activos (${granted.length})',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                subtitle: Text(
+                  granted.isEmpty
+                      ? 'No hay permisos adicionales asignados.'
+                      : 'Qué acciones están habilitadas para tu rol.',
+                ),
+                children: [
+                  if (granted.isEmpty)
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text('Sin permisos adicionales asignados.'),
+                      ),
+                    )
+                  else
+                    _PermissionGroups(groups: groups),
+                ],
+              ),
+            ),
+          ),
+          span: _PanelSpan.main,
         ),
       ],
     );
@@ -2037,9 +3758,10 @@ class _SecurityDetails extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.outlineVariant),
       ),
-      padding: const EdgeInsets.all(20),
+      padding: _ProfilePanel.padding,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact =
@@ -2140,16 +3862,21 @@ class _DefinitionGrid extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final item in items) _DefinitionItem(data: item),
+        for (var index = 0; index < items.length; index++)
+          _DefinitionItem(
+            data: items[index],
+            last: index == items.length - 1,
+          ),
       ],
     );
   }
 }
 
 class _DefinitionItem extends StatelessWidget {
-  const _DefinitionItem({required this.data});
+  const _DefinitionItem({required this.data, this.last = false});
 
   final _DefinitionData data;
+  final bool last;
 
   @override
   Widget build(BuildContext context) {
@@ -2180,15 +3907,15 @@ class _DefinitionItem extends StatelessWidget {
           ],
         );
         return Container(
-          constraints: BoxConstraints(minHeight: horizontal ? 58 : 66),
+          constraints: BoxConstraints(minHeight: horizontal ? 54 : 62),
           padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor.withValues(alpha: 0.58),
-              ),
-            ),
-          ),
+          decoration: last
+              ? null
+              : BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: colors.outlineVariant),
+                  ),
+                ),
           child: horizontal
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -2281,8 +4008,8 @@ class _InlineNotice extends StatelessWidget {
     final accent = positive ? colors.tertiary : colors.onSurfaceVariant;
     return Container(
       decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
+        color: colors.surfaceContainer,
+        borderRadius: BorderRadius.circular(12),
       ),
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -2393,6 +4120,7 @@ class _InlineNoticeWithAction extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Wrap(
         alignment: WrapAlignment.spaceBetween,
@@ -3114,4 +4842,161 @@ String _employeeStatusLabel(String status) {
     'on_leave' => 'Con licencia',
     _ => status,
   };
+}
+
+const _weekdayNames = <String>[
+  'Lunes',
+  'Martes',
+  'Miércoles',
+  'Jueves',
+  'Viernes',
+  'Sábado',
+  'Domingo',
+];
+
+const _shortWeekdayNames = <String>[
+  'LUN',
+  'MAR',
+  'MIÉ',
+  'JUE',
+  'VIE',
+  'SÁB',
+  'DOM',
+];
+
+const _monthNames = <String>[
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+];
+
+/// ISO weekday name, `1` = Monday.
+String _weekdayName(int dayOfWeek) => _weekdayNames[(dayOfWeek - 1) % 7];
+
+String _shortWeekday(DateTime date) =>
+    _shortWeekdayNames[(date.weekday - 1) % 7];
+
+bool _isSameDate(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+String _weekRangeLabel(DateTime start, DateTime end) {
+  if (start.month == end.month) {
+    return '${start.day} – ${end.day} de ${_monthNames[end.month - 1]}';
+  }
+  return '${start.day} de ${_monthNames[start.month - 1]} – '
+      '${end.day} de ${_monthNames[end.month - 1]}';
+}
+
+String _two(int value) => value.toString().padLeft(2, '0');
+
+String _formatTime(DateTime value) =>
+    '${_two(value.hour)}:${_two(value.minute)}';
+
+String _formatTimeRange(DateTime start, DateTime end) =>
+    '${_formatTime(start)} – ${_formatTime(end)}';
+
+/// `HH:MM` from a Postgres `time` value such as `09:00:00`.
+String _trimTime(String value) {
+  final parts = value.split(':');
+  if (parts.length < 2) return value;
+  return '${parts[0].padLeft(2, '0')}:${parts[1]}';
+}
+
+String _formatDuration(Duration value) {
+  final minutes = value.inMinutes.abs();
+  final hours = minutes ~/ 60;
+  final rest = minutes % 60;
+  if (hours == 0) return '$rest min';
+  if (rest == 0) return '$hours h';
+  return '$hours h $rest min';
+}
+
+String _formatSignedDuration(Duration value) {
+  if (value.inMinutes == 0) return 'Sin diferencia';
+  final sign = value.isNegative ? '−' : '+';
+  return '$sign${_formatDuration(value)}';
+}
+
+String _formatHours(double hours) {
+  return _formatDuration(Duration(minutes: (hours * 60).round()));
+}
+
+String _shiftStatusLabel(String status) {
+  return switch (status) {
+    'draft' => 'Borrador',
+    'published' => 'Publicado',
+    'completed' => 'Completado',
+    'cancelled' => 'Cancelado',
+    _ => status,
+  };
+}
+
+String _payrollStatusLabel(String status) {
+  return switch (status) {
+    'draft' => 'Borrador',
+    'confirmed' => 'Confirmada',
+    'partial' => 'Pago parcial',
+    'paid' => 'Pagada',
+    _ => status,
+  };
+}
+
+String _payrollPeriodLabel(SelfPayrollLine line) {
+  final label = line.periodLabel;
+  if (label != null && label.isNotEmpty) return label;
+  return '${ChileanUtils.formatDate(line.periodStart)} – '
+      '${ChileanUtils.formatDate(line.periodEnd)}';
+}
+
+String _paymentMethodLabel(String value) {
+  return switch (value) {
+    'transfer' => 'Transferencia',
+    'cash' => 'Efectivo',
+    'check' => 'Cheque',
+    _ => value,
+  };
+}
+
+String _requestTypeLabel(String value) {
+  return switch (value) {
+    'create' => 'Nuevo turno solicitado',
+    'update' => 'Cambio de turno',
+    'delete' => 'Liberar turno',
+    'availability' => 'Cambio de disponibilidad',
+    _ => value,
+  };
+}
+
+String _requestStatusLabel(String value) {
+  return switch (value) {
+    'pending' => 'Pendiente',
+    'approved' => 'Aprobada',
+    'rejected' => 'Rechazada',
+    'cancelled' => 'Cancelada',
+    _ => value,
+  };
+}
+
+String _requestDetail(SelfShiftChangeRequest request) {
+  final start = request.requestedStartAt;
+  final end = request.requestedEndAt;
+  final created = 'Enviada el ${ChileanUtils.formatDate(
+    employeeSelfServiceLocalTime(request.createdAt, request.timezone),
+  )}';
+  if (start == null || end == null) {
+    return request.workerNote ?? created;
+  }
+  final localStart = employeeSelfServiceLocalTime(start, request.timezone);
+  final localEnd = employeeSelfServiceLocalTime(end, request.timezone);
+  return '${ChileanUtils.formatDate(localStart)} · '
+      '${_formatTimeRange(localStart, localEnd)} — $created';
 }

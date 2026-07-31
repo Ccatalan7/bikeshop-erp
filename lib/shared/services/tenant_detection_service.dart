@@ -48,6 +48,16 @@ class TenantDetectionService {
     '192.168.12.169': '5443b130-cc28-45af-a420-cd500b288890',
   };
 
+  /// Hosts that the tenant detector already knows resolve to [tenantId].
+  ///
+  /// Public navigation and destination audits use this exact ownership map so
+  /// Firebase/custom-domain aliases cannot bypass category publication rules.
+  static Iterable<String> knownHostsForTenant(String tenantId) sync* {
+    for (final entry in _knownDomainTenants.entries) {
+      if (entry.value == tenantId) yield entry.key;
+    }
+  }
+
   /// Extract subdomain from current URL
   ///
   /// Examples:

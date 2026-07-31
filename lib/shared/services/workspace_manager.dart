@@ -8,6 +8,8 @@ import '../utils/web_url.dart';
 
 import 'package:go_router/go_router.dart';
 
+import 'navigation_service.dart' show NavigationChromeMode;
+
 const double workspaceMinDrawerWidth = 200.0;
 const double workspaceMaxDrawerWidth = 400.0;
 const double workspaceDefaultDrawerWidth = 280.0;
@@ -62,6 +64,18 @@ String? resolveInitialWorkspaceRoute(String? browserUrl) {
 
 String workspaceRoutePath(String route) {
   return Uri.tryParse(route)?.path ?? route.split('?').first;
+}
+
+/// Whether an authenticated workspace route composes the global application
+/// navigation beside its content.
+///
+/// The ERP-mounted storefront/editor is deliberately full-bleed: it owns its
+/// contextual command bar and canvas, but still participates in workspace
+/// tabs and the right toolbar. Reserving the ordinary drawer width for it
+/// creates an empty strip because no `MainLayout` exists on these routes.
+bool workspaceRouteUsesAppNavigation(String route) {
+  final path = workspaceRoutePath(route);
+  return path != '/tienda' && !path.startsWith('/tienda/');
 }
 
 /// Returns the durable identity of an ERP workspace route.
@@ -239,6 +253,8 @@ String getRouteTitle(String path) {
     '/hr/attendances': 'Asistencias',
     '/hr/kiosk': 'Modo Kiosko',
     '/hr/medical-leaves': 'Licencias Médicas',
+    '/hr/payroll': 'Nóminas',
+    '/hr/payroll/reconcile': 'Conciliar nóminas',
 
     // Website
     '/website': 'Sitio Web',
@@ -360,6 +376,11 @@ class Workspace {
   double drawerWidth;
   bool isResizingDrawer;
   bool isPinned;
+
+  /// Runtime chrome-density override for this workspace only. `null` means
+  /// "follow the user's preferred mode". Never persisted: a workspace opens
+  /// with the user's preference and may diverge only by explicit action.
+  NavigationChromeMode? chromeModeOverride;
   String? pinnedRouteRoot;
   final List<String> routeHistory;
   int routeHistoryIndex;
@@ -1134,6 +1155,19 @@ class WorkspaceManager extends ChangeNotifier {
 
   void hideWorkspaceDrawer(String workspaceId) =>
       setWorkspaceDrawerVisible(workspaceId, false);
+
+  /// Sets this workspace's chrome density. `null` returns the workspace to
+  /// the user's preferred mode. Presentation-only state: it never persists
+  /// and never mutates the user preference.
+  void setWorkspaceChromeMode(
+    String workspaceId,
+    NavigationChromeMode? mode,
+  ) {
+    final workspace = workspaceById(workspaceId);
+    if (workspace == null || workspace.chromeModeOverride == mode) return;
+    workspace.chromeModeOverride = mode;
+    notifyListeners();
+  }
 
   void startWorkspaceDrawerResize(String workspaceId) {
     final workspace = workspaceById(workspaceId);
