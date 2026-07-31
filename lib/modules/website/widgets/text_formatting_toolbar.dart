@@ -177,13 +177,13 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
   bool get _allowMinimalControls => widget.preset != TextToolbarPreset.textOnly;
 
   bool get _allowBasicControls =>
-    widget.preset == TextToolbarPreset.basic ||
-    widget.preset == TextToolbarPreset.full;
+      widget.preset == TextToolbarPreset.basic ||
+      widget.preset == TextToolbarPreset.full;
 
   bool get _allowLink => widget.preset == TextToolbarPreset.full;
 
   bool get _allowAdvancedOptions =>
-    widget.preset == TextToolbarPreset.full && widget.showAdvancedOptions;
+      widget.preset == TextToolbarPreset.full && widget.showAdvancedOptions;
 
   @override
   Widget build(BuildContext context) {

@@ -1,3 +1,4 @@
+import 'website_block_geometry.dart';
 import 'website_block_type.dart';
 
 enum WebsiteBlockControlMode {
@@ -58,6 +59,8 @@ class WebsiteBlockCapabilityProfile {
     required this.saveMode,
     required this.hasExplicitEditableRenderer,
     required this.capabilities,
+    this.heightBehavior = WebsitePageBlockHeightBehavior.minimum,
+    this.usesSharedContentRendererInEdit = false,
     this.gaps = const <WebsiteEditorGap>{},
   });
 
@@ -66,10 +69,13 @@ class WebsiteBlockCapabilityProfile {
   final WebsiteBlockSaveMode saveMode;
   final bool hasExplicitEditableRenderer;
   final Set<WebsiteEditorCapability> capabilities;
+  final WebsitePageBlockHeightBehavior heightBehavior;
+  final bool usesSharedContentRendererInEdit;
   final Set<WebsiteEditorGap> gaps;
 
-  bool get needsEditableRendererWork =>
-      !hasExplicitEditableRenderer && type != WebsiteBlockType.footer;
+  bool get usesLegacyDedicatedRenderer => hasExplicitEditableRenderer;
+
+  bool get needsEditableRendererWork => usesLegacyDedicatedRenderer;
 
   bool get hasMixedSaveSemantics => saveMode == WebsiteBlockSaveMode.mixed;
 
@@ -88,7 +94,9 @@ class WebsiteBlockCapabilityRegistry {
       type: WebsiteBlockType.hero,
       controlMode: WebsiteBlockControlMode.hybrid,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      heightBehavior: WebsitePageBlockHeightBehavior.exact,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
@@ -104,7 +112,9 @@ class WebsiteBlockCapabilityRegistry {
       type: WebsiteBlockType.carousel,
       controlMode: WebsiteBlockControlMode.custom,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      heightBehavior: WebsitePageBlockHeightBehavior.exact,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
@@ -124,7 +134,9 @@ class WebsiteBlockCapabilityRegistry {
       type: WebsiteBlockType.canvas,
       controlMode: WebsiteBlockControlMode.custom,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      heightBehavior: WebsitePageBlockHeightBehavior.exact,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
@@ -147,7 +159,9 @@ class WebsiteBlockCapabilityRegistry {
       type: WebsiteBlockType.text,
       controlMode: WebsiteBlockControlMode.hybrid,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      heightBehavior: WebsitePageBlockHeightBehavior.intrinsic,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
@@ -160,7 +174,9 @@ class WebsiteBlockCapabilityRegistry {
       type: WebsiteBlockType.button,
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      heightBehavior: WebsitePageBlockHeightBehavior.intrinsic,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
@@ -173,10 +189,11 @@ class WebsiteBlockCapabilityRegistry {
       type: WebsiteBlockType.divider,
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      heightBehavior: WebsitePageBlockHeightBehavior.intrinsic,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
-        WebsiteEditorCapability.inlineEditing,
         WebsiteEditorCapability.themeTokens,
       },
     ),
@@ -185,37 +202,34 @@ class WebsiteBlockCapabilityRegistry {
       controlMode: WebsiteBlockControlMode.custom,
       saveMode: WebsiteBlockSaveMode.staged,
       hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.productData,
         WebsiteEditorCapability.linkAction,
         WebsiteEditorCapability.themeTokens,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.missingExplicitEditableRenderer,
-      },
     ),
     WebsiteBlockType.services: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.services,
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
         WebsiteEditorCapability.inlineText,
         WebsiteEditorCapability.repeater,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.nonPersistedTextFormatting,
-        WebsiteEditorGap.missingActionModel,
-      },
+      gaps: <WebsiteEditorGap>{WebsiteEditorGap.missingActionModel},
     ),
     WebsiteBlockType.about: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.about,
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
@@ -229,39 +243,36 @@ class WebsiteBlockCapabilityRegistry {
       type: WebsiteBlockType.testimonials,
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
         WebsiteEditorCapability.inlineText,
         WebsiteEditorCapability.repeater,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.nonPersistedTextFormatting,
-        WebsiteEditorGap.shallowRepeater,
-      },
+      gaps: <WebsiteEditorGap>{WebsiteEditorGap.shallowRepeater},
     ),
     WebsiteBlockType.features: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.features,
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
         WebsiteEditorCapability.inlineText,
         WebsiteEditorCapability.repeater,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.nonPersistedTextFormatting,
-        WebsiteEditorGap.missingActionModel,
-      },
+      gaps: <WebsiteEditorGap>{WebsiteEditorGap.missingActionModel},
     ),
     WebsiteBlockType.cta: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.cta,
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
@@ -269,6 +280,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.formattedText,
         WebsiteEditorCapability.linkAction,
         WebsiteEditorCapability.coverMedia,
+        WebsiteEditorCapability.responsiveFocalPoint,
       },
       gaps: <WebsiteEditorGap>{},
     ),
@@ -276,7 +288,8 @@ class WebsiteBlockCapabilityRegistry {
       type: WebsiteBlockType.gallery,
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
@@ -292,38 +305,36 @@ class WebsiteBlockCapabilityRegistry {
       type: WebsiteBlockType.contact,
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
         WebsiteEditorCapability.inlineText,
+        WebsiteEditorCapability.linkAction,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.nonPersistedTextFormatting,
-        WebsiteEditorGap.missingActionModel,
-      },
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.faq: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.faq,
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
         WebsiteEditorCapability.inlineText,
         WebsiteEditorCapability.repeater,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.nonPersistedTextFormatting,
-        WebsiteEditorGap.shallowRepeater,
-      },
+      gaps: <WebsiteEditorGap>{WebsiteEditorGap.shallowRepeater},
     ),
     WebsiteBlockType.pricing: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.pricing,
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
@@ -331,16 +342,14 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.repeater,
         WebsiteEditorCapability.linkAction,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.nonPersistedTextFormatting,
-        WebsiteEditorGap.shallowRepeater,
-      },
+      gaps: <WebsiteEditorGap>{WebsiteEditorGap.shallowRepeater},
     ),
     WebsiteBlockType.team: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.team,
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
@@ -348,16 +357,14 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.inlineMedia,
         WebsiteEditorCapability.repeater,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.nonPersistedTextFormatting,
-        WebsiteEditorGap.shallowRepeater,
-      },
+      gaps: <WebsiteEditorGap>{WebsiteEditorGap.shallowRepeater},
     ),
     WebsiteBlockType.stats: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.stats,
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
-      hasExplicitEditableRenderer: true,
+      hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineEditing,
@@ -365,16 +372,15 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.repeater,
         WebsiteEditorCapability.animation,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.nonPersistedTextFormatting,
-        WebsiteEditorGap.missingActionModel,
-      },
+      gaps: <WebsiteEditorGap>{WebsiteEditorGap.missingActionModel},
     ),
     WebsiteBlockType.footer: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.footer,
       controlMode: WebsiteBlockControlMode.specialElement,
       saveMode: WebsiteBlockSaveMode.staged,
       hasExplicitEditableRenderer: false,
+      heightBehavior: WebsitePageBlockHeightBehavior.intrinsic,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.structuredList,
@@ -390,6 +396,7 @@ class WebsiteBlockCapabilityRegistry {
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
       hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineText,
@@ -398,7 +405,6 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.repeater,
       },
       gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.missingExplicitEditableRenderer,
         WebsiteEditorGap.nonPersistedTextFormatting,
       },
     ),
@@ -407,14 +413,13 @@ class WebsiteBlockCapabilityRegistry {
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
       hasExplicitEditableRenderer: false,
+      heightBehavior: WebsitePageBlockHeightBehavior.exact,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineText,
         WebsiteEditorCapability.linkAction,
         WebsiteEditorCapability.coverMedia,
-      },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.missingExplicitEditableRenderer,
       },
     ),
     WebsiteBlockType.partnersBanner: WebsiteBlockCapabilityProfile(
@@ -422,6 +427,7 @@ class WebsiteBlockCapabilityRegistry {
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
       hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineText,
@@ -430,7 +436,6 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.responsiveFocalPoint,
       },
       gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.missingExplicitEditableRenderer,
         WebsiteEditorGap.nonPersistedTextFormatting,
       },
     ),
@@ -439,6 +444,7 @@ class WebsiteBlockCapabilityRegistry {
       controlMode: WebsiteBlockControlMode.genericSchema,
       saveMode: WebsiteBlockSaveMode.staged,
       hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.inlineText,
@@ -446,22 +452,19 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.linkAction,
         WebsiteEditorCapability.repeater,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.missingExplicitEditableRenderer,
-      },
     ),
     WebsiteBlockType.googleReviews: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.googleReviews,
       controlMode: WebsiteBlockControlMode.custom,
       saveMode: WebsiteBlockSaveMode.operationalImmediate,
       hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
       capabilities: <WebsiteEditorCapability>{
         WebsiteEditorCapability.sidePanelEditing,
         WebsiteEditorCapability.externalSync,
         WebsiteEditorCapability.repeater,
       },
       gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.missingExplicitEditableRenderer,
         WebsiteEditorGap.incompleteThemeConsumption,
       },
     ),
@@ -489,6 +492,16 @@ class WebsiteBlockCapabilityRegistry {
 
   static List<WebsiteBlockType> blockTypesNeedingRendererWork() => all
       .where((profile) => profile.needsEditableRendererWork)
+      .map((profile) => profile.type)
+      .toList();
+
+  static List<WebsiteBlockType> typesUsingSharedContentRendererInEdit() => all
+      .where((profile) => profile.usesSharedContentRendererInEdit)
+      .map((profile) => profile.type)
+      .toList();
+
+  static List<WebsiteBlockType> typesUsingLegacyDedicatedRenderer() => all
+      .where((profile) => profile.usesLegacyDedicatedRenderer)
       .map((profile) => profile.type)
       .toList();
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'text_formatting_toolbar.dart';
+import 'website_text_block_content.dart';
 
 /// Enhanced inline editable text widget with formatting toolbar.
 /// When in edit mode, clicking on text shows a formatting toolbar
@@ -20,6 +21,9 @@ class InlineEditableTextV2 extends StatefulWidget {
   final String? fieldKey; // Unique key to identify this field
   final double? maxWidth; // Optional max width constraint for the text box
   final TextToolbarPreset toolbarPreset;
+  final bool allowWidthResize;
+  final EdgeInsetsGeometry editorPadding;
+  final String Function(String value)? displayTransform;
 
   const InlineEditableTextV2({
     super.key,
@@ -36,6 +40,9 @@ class InlineEditableTextV2 extends StatefulWidget {
     this.fieldKey,
     this.maxWidth,
     this.toolbarPreset = TextToolbarPreset.full,
+    this.allowWidthResize = true,
+    this.editorPadding = const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    this.displayTransform,
   });
 
   @override
@@ -114,7 +121,7 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
         _requestToolbarRebuild();
       }
     }
-    if (oldWidget.maxWidth != widget.maxWidth && _currentWidth == null) {
+    if (oldWidget.maxWidth != widget.maxWidth && !_isResizing) {
       _currentWidth = widget.maxWidth;
     }
   }
@@ -346,55 +353,62 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
         onExit: (_) => setState(() => _isHovered = false),
         child: GestureDetector(
           onTap: _isEditing ? null : _startEditing,
-          child: AnimatedContainer(
+          child: Stack(
             key: _targetKey,
-            duration: const Duration(milliseconds: 150),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: _isEditing
-                    ? const Color(0xFF00A09D)
-                    : _isHovered
-                        ? const Color(0xFF00A09D).withValues(alpha: 0.5)
-                        : Colors.transparent,
-                width: _isEditing ? 2 : 1,
+            children: [
+              Padding(
+                padding: widget.editorPadding,
+                child: _isEditing ? _buildEditField() : _buildDisplayText(),
               ),
-              borderRadius: BorderRadius.circular(4),
-              // NO background color - keep transparent
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: _isEditing ? _buildEditField() : _buildDisplayText(),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: _isEditing
+                            ? const Color(0xFF00A09D)
+                            : _isHovered
+                                ? const Color(0xFF00A09D).withValues(alpha: 0.5)
+                                : Colors.transparent,
+                        width: _isEditing ? 2 : 1,
+                      ),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
 
     // If we have a width constraint or are editing, wrap with resize capability
-    if (_currentWidth != null || _isEditing) {
-      Widget content = Center(
-        child: SizedBox(
-          width: _currentWidth,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              textContainer,
-              // Left resize handle
-              if (_isEditing)
-                Positioned(
-                  left: -6,
-                  top: 0,
-                  bottom: 0,
-                  child: _buildResizeHandle(isLeft: true),
-                ),
-              // Right resize handle
-              if (_isEditing)
-                Positioned(
-                  right: -6,
-                  top: 0,
-                  bottom: 0,
-                  child: _buildResizeHandle(isLeft: false),
-                ),
-            ],
-          ),
+    if (widget.allowWidthResize && (_currentWidth != null || _isEditing)) {
+      Widget content = WebsiteTextWidthFrame(
+        maxWidth: _currentWidth,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            textContainer,
+            // Left resize handle
+            if (_isEditing)
+              Positioned(
+                left: -6,
+                top: 0,
+                bottom: 0,
+                child: _buildResizeHandle(isLeft: true),
+              ),
+            // Right resize handle
+            if (_isEditing)
+              Positioned(
+                right: -6,
+                top: 0,
+                bottom: 0,
+                child: _buildResizeHandle(isLeft: false),
+              ),
+          ],
         ),
       );
 
@@ -579,9 +593,12 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
   }
 
   Widget _buildDisplayText() {
-    final displayText = widget.text.isEmpty
+    final rawDisplayText = widget.text.isEmpty
         ? (widget.placeholder ?? 'Haz clic para editar')
         : widget.text;
+    final displayText = widget.text.isEmpty
+        ? rawDisplayText
+        : (widget.displayTransform?.call(rawDisplayText) ?? rawDisplayText);
 
     return Stack(
       children: [

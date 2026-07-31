@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/website_editor_capability.dart';
 import '../services/website_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../models/website_catalog_query.dart';
 import '../models/website_page_models.dart';
 import '../models/website_destination.dart';
@@ -313,6 +315,31 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
 
   Future<void> _confirmDeleteLink(WebsiteNavigation link) async {
     final service = context.read<WebsiteService>();
+    // Owner + identity context captured BEFORE the dialog/RPC: the target
+    // tenant is the LINK's owner (never re-resolved after the dialog, where
+    // a B/idA switch could turn already_absent into a false success while
+    // A's link stays published), and the guard requires the same identity
+    // epoch/user and active tenant pre AND post request.
+    TenantService tenantService;
+    try {
+      tenantService = context.read<TenantService>();
+    } catch (_) {
+      tenantService = TenantService();
+    }
+    final ownerTenantId = link.tenantId;
+    final requestEpoch = service.identityEpoch;
+    final requestIdentity = service.editorCapabilityRequestIdentity;
+    void writeGuard() {
+      if (service.identityEpoch != requestEpoch ||
+          service.editorCapabilityRequestIdentity != requestIdentity ||
+          (tenantService.currentTenantId != null &&
+              tenantService.currentTenantId != ownerTenantId)) {
+        throw const WebsiteEditorWriteSupersededException(
+          'La sesión cambió durante la eliminación.',
+        );
+      }
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -335,12 +362,32 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
 
     if (confirmed == true) {
       try {
-        await service.deleteNavigation(link.id);
+        // Authority-bound delete against the OWNER tenant captured before
+        // the dialog: a stale grant raises 42501 (typed server rejection)
+        // instead of silently deleting zero rows, and the guard supersedes
+        // the command on any identity change during confirmation or the
+        // request. Local state refreshes only after a VALID outcome.
+        writeGuard();
+        await service.deleteNavigationForTenant(
+          link.id,
+          ownerTenantId,
+          writeGuard: writeGuard,
+        );
         _loadNavigation();
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Enlace eliminado')),
+          );
+        }
+      } on WebsiteEditorWriteSupersededException {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'La sesión cambió; el enlace no se modificó.',
+              ),
+            ),
           );
         }
       } catch (e) {

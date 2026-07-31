@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// Wrapper widget that handles the "first click selects, second click navigates" pattern.
-/// 
+///
 /// In edit mode:
 /// - First click: Selects the element (calls onSelect)
 /// - Second click (when already selected): Executes the action (calls onAction)
-/// 
+///
 /// In preview/normal mode:
 /// - Single click executes the action immediately
 class EditModeClickHandler extends StatefulWidget {
@@ -37,14 +37,14 @@ class EditModeClickHandler extends StatefulWidget {
 
 class _EditModeClickHandlerState extends State<EditModeClickHandler> {
   bool _isHovered = false;
-  
+
   // Track if this element was tapped recently (for second-click detection)
   static String? _lastTappedElementId;
   static DateTime? _lastTappedTime;
-  
+
   // Generate a unique ID for this widget instance
   late final String _elementId;
-  
+
   @override
   void initState() {
     super.initState();
@@ -57,14 +57,14 @@ class _EditModeClickHandlerState extends State<EditModeClickHandler> {
       widget.onAction?.call();
       return;
     }
-    
+
     // Edit mode - check if this is a second tap on the same element
     final now = DateTime.now();
-    final isSecondTap = widget.isSelected && 
+    final isSecondTap = widget.isSelected &&
         _lastTappedElementId == _elementId &&
         _lastTappedTime != null &&
         now.difference(_lastTappedTime!).inMilliseconds < 500;
-    
+
     if (isSecondTap) {
       // Second tap - execute action
       widget.onAction?.call();
@@ -104,9 +104,9 @@ class _EditModeClickHandlerState extends State<EditModeClickHandler> {
               duration: const Duration(milliseconds: 150),
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: widget.isSelected 
+                  color: widget.isSelected
                       ? const Color(0xFF00A09D)
-                      : _isHovered 
+                      : _isHovered
                           ? const Color(0xFF00A09D).withValues(alpha: 0.5)
                           : Colors.transparent,
                   width: widget.isSelected ? 2 : 1,
@@ -115,7 +115,7 @@ class _EditModeClickHandlerState extends State<EditModeClickHandler> {
               ),
               child: widget.child,
             ),
-            
+
             // Edit hint badge
             if (widget.showEditHint && _isHovered && !widget.isSelected)
               Positioned(
@@ -153,7 +153,7 @@ class _EditModeClickHandlerState extends State<EditModeClickHandler> {
                   ),
                 ),
               ),
-            
+
             // Selected indicator with "click again to navigate" hint
             if (widget.isSelected && widget.onAction != null)
               Positioned(
@@ -226,7 +226,7 @@ class _EditModeButtonState extends State<EditModeButton> {
       widget.onNavigate?.call();
       return;
     }
-    
+
     // Edit mode
     if (widget.isSelected && !_wasJustSelected) {
       // Already selected and not just selected - navigate
@@ -257,25 +257,25 @@ class _EditModeButtonState extends State<EditModeButton> {
           duration: const Duration(milliseconds: 100),
           decoration: widget.isEditMode
               ? BoxDecoration(
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: widget.isSelected 
-                  ? const Color(0xFF00A09D)
-                  : _isHovered 
-                      ? const Color(0xFF00A09D).withValues(alpha: 0.4)
-                      : Colors.transparent,
-              width: widget.isSelected ? 2 : 1,
-            ),
-            color: _isHovered && !widget.isSelected
-                ? const Color(0xFF00A09D).withValues(alpha: 0.1)
-                : null,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: widget.isSelected
+                        ? const Color(0xFF00A09D)
+                        : _isHovered
+                            ? const Color(0xFF00A09D).withValues(alpha: 0.4)
+                            : Colors.transparent,
+                    width: widget.isSelected ? 2 : 1,
+                  ),
+                  color: _isHovered && !widget.isSelected
+                      ? const Color(0xFF00A09D).withValues(alpha: 0.1)
+                      : null,
                 )
               : null,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
               widget.child,
-              
+
               // Edit label on hover (edit mode only)
               if (widget.isEditMode && _isHovered && widget.editLabel != null)
                 Positioned(
@@ -374,9 +374,9 @@ class _EditableMenuItemState extends State<EditableMenuItem> {
       widget.onNavigate?.call();
       return;
     }
-    
+
     _tapCount++;
-    
+
     if (_tapCount == 1) {
       // First tap - select
       widget.onSelect?.call();
@@ -430,20 +430,20 @@ class _EditableMenuItemState extends State<EditableMenuItem> {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: widget.isEditMode
               ? BoxDecoration(
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: widget.isSelected || _isEditing
-                  ? const Color(0xFF00A09D)
-                  : _isHovered 
-                      ? const Color(0xFF00A09D).withValues(alpha: 0.4)
-                      : Colors.transparent,
-              width: widget.isSelected ? 2 : 1,
-            ),
-            color: _isEditing
-                ? Colors.white.withValues(alpha: 0.95)
-                : _isHovered 
-                    ? const Color(0xFF00A09D).withValues(alpha: 0.1)
-                    : null,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: widget.isSelected || _isEditing
+                        ? const Color(0xFF00A09D)
+                        : _isHovered
+                            ? const Color(0xFF00A09D).withValues(alpha: 0.4)
+                            : Colors.transparent,
+                    width: widget.isSelected ? 2 : 1,
+                  ),
+                  color: _isEditing
+                      ? Colors.white.withValues(alpha: 0.95)
+                      : _isHovered
+                          ? const Color(0xFF00A09D).withValues(alpha: 0.1)
+                          : null,
                 )
               : null,
           child: _isEditing

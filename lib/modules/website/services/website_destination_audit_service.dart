@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../shared/services/tenant_detection_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/website_catalog_presentation.dart';
 import '../models/website_catalog_query.dart';
@@ -163,6 +164,10 @@ class WebsiteDestinationAuditService {
   static const _linkKeys = {
     'ctalink',
     'buttonlink',
+    'viewalllink',
+    'mapurl',
+    'instagram',
+    'linkedin',
     'link',
     'href',
     'to',
@@ -199,10 +204,18 @@ class WebsiteDestinationAuditService {
           .eq('tenant_id', tenantId),
       _client
           .from('website_settings')
-          .select('value')
+          .select('key,value')
           .eq('tenant_id', tenantId)
-          .eq('key', websiteCatalogPresentationsSettingKey)
-          .maybeSingle(),
+          .inFilter('key', const [
+        websiteCatalogPresentationsSettingKey,
+        'store_url',
+        'seo_canonical_url',
+      ]),
+      _client
+          .from('tenants')
+          .select('subdomain,custom_domain')
+          .eq('id', tenantId)
+          .limit(1),
     ]);
 
     final pages = _maps(responses[0]);
@@ -210,11 +223,28 @@ class WebsiteDestinationAuditService {
     final navigation = _maps(responses[2]);
     final categories = _maps(responses[3]);
     final products = _maps(responses[4]);
-    final presentationRow = responses[5] is Map
-        ? Map<String, dynamic>.from(responses[5] as Map)
-        : null;
+    final websiteSettings = _maps(responses[5]);
+    final tenantRows = _maps(responses[6]);
+    final tenant = tenantRows.firstOrNull ?? const <String, dynamic>{};
+    final settingsByKey = <String, Map<String, dynamic>>{
+      for (final row in websiteSettings)
+        if (_text(row['key']).isNotEmpty) _text(row['key']): row,
+    };
     final presentationRegistry = WebsiteCatalogPresentationRegistry.decode(
-      presentationRow?['value']?.toString(),
+      settingsByKey[websiteCatalogPresentationsSettingKey]?['value']
+          ?.toString(),
+    );
+    final storefrontOrigins = WebsiteDestination.resolveInternalOrigins(
+      configuredUrls: [
+        _text(settingsByKey['store_url']?['value']),
+        _text(settingsByKey['seo_canonical_url']?['value']),
+      ],
+      ownedHosts: [
+        _text(tenant['custom_domain']),
+        if (_text(tenant['subdomain']).isNotEmpty)
+          '${_text(tenant['subdomain'])}.bikeshop-erp.app',
+        ...TenantDetectionService.knownHostsForTenant(tenantId),
+      ],
     );
 
     final pageById = <String, Map<String, dynamic>>{
@@ -229,6 +259,18 @@ class WebsiteDestinationAuditService {
       for (final category in categories)
         if (_text(category['id']).isNotEmpty) _text(category['id']): category,
     };
+    final categoryIdsBySlug = <String, Set<String>>{};
+    for (final category in categories) {
+      final categoryId = _text(category['id']);
+      if (categoryId.isEmpty) continue;
+      for (final slug in <String>{
+        websiteCategorySlug(_text(category['name'])),
+        websiteCategorySlug(_text(category['full_path'])),
+      }) {
+        if (slug.isEmpty) continue;
+        categoryIdsBySlug.putIfAbsent(slug, () => <String>{}).add(categoryId);
+      }
+    }
     final productByToken = <String, Map<String, dynamic>>{};
     for (final product in products) {
       final id = _text(product['id']);
@@ -248,7 +290,10 @@ class WebsiteDestinationAuditService {
       String? pageName,
       String? navigationLocation,
     }) {
-      final href = WebsiteDestination.normalizeHref(rawHref);
+      final href = WebsiteDestination.normalizeHref(
+        rawHref,
+        internalOrigins: storefrontOrigins,
+      );
       if (href.isEmpty) return;
       final builder = usages.putIfAbsent(href, () => _UsageBuilder(href));
       builder.usageCount += 1;
@@ -293,12 +338,16 @@ class WebsiteDestinationAuditService {
     }
 
     final items = usages.values.map((usage) {
-      final destination = WebsiteDestination.parse(usage.href);
+      final destination = WebsiteDestination.parse(
+        usage.href,
+        internalOrigins: storefrontOrigins,
+      );
       return _resolveItem(
         destination: destination,
         usage: usage,
         pageBySlug: pageBySlug,
         categoryById: categoryById,
+        categoryIdsBySlug: categoryIdsBySlug,
         presentationRegistry: presentationRegistry,
         productByToken: productByToken,
         categoryProductCounts: categoryProductCounts,
@@ -347,6 +396,7 @@ class WebsiteDestinationAuditService {
     required _UsageBuilder usage,
     required Map<String, Map<String, dynamic>> pageBySlug,
     required Map<String, Map<String, dynamic>> categoryById,
+    required Map<String, Set<String>> categoryIdsBySlug,
     required WebsiteCatalogPresentationRegistry presentationRegistry,
     required Map<String, Map<String, dynamic>> productByToken,
     required WebsiteCategoryProductCounts categoryProductCounts,
@@ -393,6 +443,13 @@ class WebsiteDestinationAuditService {
           final resolution =
               presentationRegistry.resolveSlug(destination.reference ?? '');
           category = categoryById[resolution?.presentation.ownerId];
+        }
+        if (category == null) {
+          final slug = websiteCategorySlug(destination.reference ?? '');
+          final matches = categoryIdsBySlug[slug];
+          if (matches != null && matches.length == 1) {
+            category = categoryById[matches.single];
+          }
         }
         if (category == null) {
           health = WebsiteDestinationHealth.broken;

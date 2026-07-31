@@ -120,5 +120,6 @@ OnlineOrder onlineOrderFromPublicAccessResponse(
     'created_at': createdAt,
     'updated_at': updatedAt,
     'online_order_items': items,
+    'storefront_identity': envelope['storefront'],
   });
 }

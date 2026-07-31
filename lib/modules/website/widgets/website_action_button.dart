@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../models/website_action.dart';
 
+typedef WebsiteActionLabelPresenter = Widget Function(
+  BuildContext context,
+  WebsiteActionValue action,
+  TextStyle? textStyle,
+);
+
 /// Canonical storefront renderer for every navigational website action.
 ///
 /// It intentionally sets only semantic colors. Shape, padding, minimum size,
@@ -16,6 +22,7 @@ class WebsiteActionButton extends StatelessWidget {
     this.outlineColor,
     this.textStyle,
     this.style,
+    this.labelPresenter,
     this.uppercase = false,
     this.expand = false,
   });
@@ -27,13 +34,20 @@ class WebsiteActionButton extends StatelessWidget {
   final Color? outlineColor;
   final TextStyle? textStyle;
   final ButtonStyle? style;
+  final WebsiteActionLabelPresenter? labelPresenter;
   final bool uppercase;
   final bool expand;
 
   @override
   Widget build(BuildContext context) {
     final label = uppercase ? action.label.toUpperCase() : action.label;
-    final child = Text(label, style: textStyle);
+    final presentedAction = uppercase ? action.copyWith(label: label) : action;
+    final child = labelPresenter?.call(
+          context,
+          presentedAction,
+          textStyle,
+        ) ??
+        Text(label, style: textStyle);
     final button = switch (action.variant) {
       WebsiteActionVariant.outline => OutlinedButton(
           onPressed: onPressed,

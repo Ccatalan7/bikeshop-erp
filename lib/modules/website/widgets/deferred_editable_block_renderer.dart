@@ -6,9 +6,12 @@ import 'editable_block_renderer.dart' deferred as editable;
 
 class DeferredEditableBlockRenderer {
   static Future<void>? _loadFuture;
+  static bool _isLoaded = false;
 
   static Future<void> preload() {
-    _loadFuture ??= editable.loadLibrary();
+    _loadFuture ??= editable.loadLibrary().then((_) {
+      _isLoaded = true;
+    });
     return _loadFuture!;
   }
 
@@ -27,6 +30,7 @@ class DeferredEditableBlockRenderer {
     void Function(String route)? onNavigate,
     bool isVisible = true,
     String? tenantId,
+    Widget? contentOverride,
   }) {
     // If the type is not recognized, loading the editor library is pointless.
     final normalised = blockType.trim().toLowerCase();
@@ -36,10 +40,28 @@ class DeferredEditableBlockRenderer {
       return const SizedBox.shrink();
     }
 
-    _loadFuture ??= editable.loadLibrary();
+    if (_isLoaded) {
+      return editable.EditableBlockRenderer.build(
+        context: context,
+        blockId: blockId,
+        blockType: blockType,
+        data: data,
+        primaryColor: primaryColor,
+        accentColor: accentColor,
+        featuredProducts: featuredProducts,
+        headingFont: headingFont,
+        bodyFont: bodyFont,
+        headingSize: headingSize,
+        bodySize: bodySize,
+        onNavigate: onNavigate,
+        isVisible: isVisible,
+        tenantId: tenantId,
+        contentOverride: contentOverride,
+      );
+    }
 
     return FutureBuilder<void>(
-      future: _loadFuture,
+      future: preload(),
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           // Keep layout stable while editor code loads.
@@ -79,6 +101,7 @@ class DeferredEditableBlockRenderer {
           onNavigate: onNavigate,
           isVisible: isVisible,
           tenantId: tenantId,
+          contentOverride: contentOverride,
         );
       },
     );

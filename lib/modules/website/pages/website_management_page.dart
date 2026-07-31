@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/widgets/asset_pdf_preview_dialog.dart';
+import '../providers/website_edit_mode_provider.dart';
 import '../services/website_service.dart';
 import '../widgets/website_admin_ui.dart';
+import '../widgets/website_editor_navigation_guard.dart';
 
 /// Operational hub for the public website and online store.
 class WebsiteManagementPage extends StatefulWidget {
@@ -52,6 +54,22 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
     }
   }
 
+  Future<void> _openInlineStore({required bool preview}) async {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final currentSlug = editProvider.currentPageSlug?.trim().toLowerCase();
+    final keepsCurrentDocument =
+        currentSlug == 'inicio' || currentSlug == 'home';
+    final editorDecision = await WebsiteEditorNavigationGuard.authorize(
+      context,
+      intent: keepsCurrentDocument
+          ? WebsiteEditorNavigationIntent.samePage
+          : WebsiteEditorNavigationIntent.switchPage,
+    );
+    if (!editorDecision.isAllowed || !mounted) return;
+    if (!editorDecision.commit()) return;
+    context.go('/tienda?${preview ? 'preview' : 'edit'}=true');
+  }
+
   Future<void> _openManual() {
     return showAssetPdfPreviewDialog(
       context,
@@ -76,7 +94,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
           icon: const Icon(Icons.help_outline_rounded, size: 19),
         ),
         OutlinedButton.icon(
-          onPressed: () => context.go('/tienda?preview=true'),
+          onPressed: () => _openInlineStore(preview: true),
           icon: const Icon(Icons.visibility_outlined, size: 18),
           label: const Text('Vista previa'),
         ),
@@ -91,7 +109,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _EditorSpotlight(
-              onOpen: () => context.go('/tienda?edit=true'),
+              onOpen: () => _openInlineStore(preview: false),
             ),
             const SizedBox(height: 18),
             Consumer<WebsiteService>(

@@ -556,7 +556,7 @@ class _BannerFormDialogState extends State<_BannerFormDialog> {
     try {
       final service = context.read<WebsiteService>();
       final tenantService = context.read<TenantService>();
-      
+
       final tenantId = await tenantService.getTenantId();
       if (tenantId == null) {
         throw Exception('No tenant found. Please log in again.');

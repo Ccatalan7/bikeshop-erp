@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
+import '../../../shared/services/return_navigation.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -255,7 +255,10 @@ Respondemos consultas de Lunes a Viernes, 9:00 a 18:00 hrs.
               if (!widget.embedded) ...[
                 IconButton(
                   icon: const Icon(Icons.arrow_back),
-                  onPressed: () => context.go('/website'),
+                  onPressed: () => ReturnNavigation.close(
+                    context,
+                    fallbackRoute: '/website',
+                  ),
                 ),
                 const SizedBox(width: 8),
               ],

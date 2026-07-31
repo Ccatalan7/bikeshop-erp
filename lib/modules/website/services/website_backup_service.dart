@@ -37,7 +37,7 @@ class WebsiteBackup {
 /// Service for managing website backups
 class WebsiteBackupService extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
-  
+
   List<WebsiteBackup> _backups = [];
   bool _isLoading = false;
   String? _error;
@@ -82,7 +82,7 @@ class WebsiteBackupService extends ChangeNotifier {
   }) async {
     try {
       debugPrint('📦 Creating website backup: $name');
-      
+
       final response = await _supabase.rpc(
         'create_website_backup',
         params: {
@@ -94,10 +94,10 @@ class WebsiteBackupService extends ChangeNotifier {
 
       final backupId = response as String?;
       debugPrint('✅ Backup created: $backupId');
-      
+
       // Reload backups list
       await loadBackups();
-      
+
       return backupId;
     } catch (e) {
       _error = 'Error creating backup: $e';
@@ -112,7 +112,7 @@ class WebsiteBackupService extends ChangeNotifier {
       {bool createSafetyBackup = true}) async {
     try {
       debugPrint('🔄 Restoring backup: $backupId');
-      
+
       final response = await _supabase.rpc(
         'restore_website_backup',
         params: {
@@ -122,13 +122,13 @@ class WebsiteBackupService extends ChangeNotifier {
       );
 
       final success = response as bool? ?? false;
-      
+
       if (success) {
         debugPrint('✅ Backup restored successfully');
         // Reload backups list (will include auto-backup if created)
         await loadBackups();
       }
-      
+
       return success;
     } catch (e) {
       _error = 'Error restoring backup: $e';
@@ -145,7 +145,7 @@ class WebsiteBackupService extends ChangeNotifier {
 
       _backups.removeWhere((b) => b.id == backupId);
       notifyListeners();
-      
+
       debugPrint('🗑️ Backup deleted: $backupId');
       return true;
     } catch (e) {

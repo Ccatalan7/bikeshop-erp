@@ -371,6 +371,71 @@ class WebsiteSetting {
   }
 }
 
+class StorefrontIdentitySnapshot {
+  const StorefrontIdentitySnapshot({
+    this.schemaVersion = 1,
+    required this.displayName,
+    this.legalName,
+    this.tagline,
+    this.logoUrl,
+    this.supportEmail,
+    this.supportPhone,
+  });
+
+  const StorefrontIdentitySnapshot.fallback()
+      : schemaVersion = 1,
+        displayName = 'Tienda',
+        legalName = null,
+        tagline = null,
+        logoUrl = null,
+        supportEmail = null,
+        supportPhone = null;
+
+  final int schemaVersion;
+  final String displayName;
+  final String? legalName;
+  final String? tagline;
+  final String? logoUrl;
+  final String? supportEmail;
+  final String? supportPhone;
+
+  factory StorefrontIdentitySnapshot.fromJson(Object? value) {
+    if (value is! Map) {
+      return const StorefrontIdentitySnapshot.fallback();
+    }
+    final json = Map<String, dynamic>.from(value);
+    if (json['schemaVersion'] != 1) {
+      return const StorefrontIdentitySnapshot.fallback();
+    }
+
+    String? clean(String key) {
+      final normalized = json[key]?.toString().trim() ?? '';
+      return normalized.isEmpty ? null : normalized;
+    }
+
+    return StorefrontIdentitySnapshot(
+      displayName: clean('displayName') ?? 'Tienda',
+      legalName: clean('legalName'),
+      tagline: clean('tagline'),
+      logoUrl: clean('logoUrl'),
+      supportEmail: clean('supportEmail'),
+      supportPhone: clean('supportPhone'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'schemaVersion': schemaVersion,
+      'displayName': displayName,
+      if (legalName != null) 'legalName': legalName,
+      if (tagline != null) 'tagline': tagline,
+      if (logoUrl != null) 'logoUrl': logoUrl,
+      if (supportEmail != null) 'supportEmail': supportEmail,
+      if (supportPhone != null) 'supportPhone': supportPhone,
+    };
+  }
+}
+
 class OnlineOrder {
   final String id;
   final String tenantId;
@@ -438,6 +503,7 @@ class OnlineOrder {
   final DateTime updatedAt;
 
   final List<OnlineOrderItem> items;
+  final StorefrontIdentitySnapshot storefrontIdentity;
 
   OnlineOrder({
     required this.id,
@@ -493,6 +559,7 @@ class OnlineOrder {
     required this.createdAt,
     required this.updatedAt,
     this.items = const [],
+    this.storefrontIdentity = const StorefrontIdentitySnapshot.fallback(),
   });
 
   factory OnlineOrder.fromJson(Map<String, dynamic> json) {
@@ -581,6 +648,9 @@ class OnlineOrder {
                   OnlineOrderItem.fromJson(item as Map<String, dynamic>))
               .toList() ??
           [],
+      storefrontIdentity: StorefrontIdentitySnapshot.fromJson(
+        json['storefront_identity'],
+      ),
     );
   }
 
@@ -641,6 +711,7 @@ class OnlineOrder {
       'notes': notes,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'storefront_identity': storefrontIdentity.toJson(),
     };
   }
 
@@ -698,6 +769,7 @@ class OnlineOrder {
     DateTime? createdAt,
     DateTime? updatedAt,
     List<OnlineOrderItem>? items,
+    StorefrontIdentitySnapshot? storefrontIdentity,
   }) {
     return OnlineOrder(
       id: id ?? this.id,
@@ -764,6 +836,7 @@ class OnlineOrder {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       items: items ?? this.items,
+      storefrontIdentity: storefrontIdentity ?? this.storefrontIdentity,
     );
   }
 

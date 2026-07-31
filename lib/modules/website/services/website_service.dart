@@ -8,11 +8,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import '../models/website_block_document_sanitizer.dart';
+import '../models/website_editor_capability.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
 import '../models/website_action.dart';
 import '../models/website_catalog_presentation.dart';
 import '../models/website_models.dart';
+import '../models/website_seo_settings_aliases.dart';
 import '../models/public_order_access.dart';
 import '../models/public_shipping_quote.dart';
 import '../models/online_order_correction.dart';
@@ -22,47 +25,50 @@ import '../../../shared/models/product_tax_treatment.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/web_data_bridge.dart';
 
+part 'website_service_support.dart';
+part 'website_page_snapshot_cache.dart';
+
 const String _publicStoreCacheNamespace = 'website_public_v2';
 final RegExp _sensitivePublicWebsiteSettingKey = RegExp(
   r'(access[_-]?token|refresh[_-]?token|secret|password|private|credential|api[_-]?key)',
   caseSensitive: false,
 );
 
-@visibleForTesting
-bool isPublicWebsiteSettingCacheSafe(String key) {
-  return !_sensitivePublicWebsiteSettingKey.hasMatch(key.trim());
-}
-
-@visibleForTesting
-Map<String, dynamic> filterPublicWebsiteSettingsForCache(
-  Map<String, dynamic> settings,
-) {
-  return <String, dynamic>{
-    for (final entry in settings.entries)
-      if (isPublicWebsiteSettingCacheSafe(entry.key)) entry.key: entry.value,
-  };
-}
-
-String _publicStoreCacheKey(String kind, String tenantId) =>
-    '${_publicStoreCacheNamespace}_${kind}_$tenantId';
-
-class WebsiteEditorSaveResult {
-  final String? pageId;
-  final String? pageSlug;
-  final List<Map<String, dynamic>> freshBlocks;
-
-  const WebsiteEditorSaveResult({
-    required this.pageId,
-    required this.pageSlug,
-    required this.freshBlocks,
-  });
-}
+/// Re-validation hook a save installs for the duration of one command:
+/// invoked immediately before EVERY internal mutable request of a composite
+/// operation (and therefore after any preceding read). Throws when the
+/// saving authority is no longer current.
+typedef WebsiteEditorWriteGuard = void Function();
 
 /// Service for managing website content, banners, featured products, and online orders
 class WebsiteService extends ChangeNotifier {
-  final SupabaseClient _supabase = Supabase.instance.client;
-  final TenantService _tenantService = TenantService();
-  final http.Client _httpClient = http.Client();
+  WebsiteService({
+    SupabaseClient? supabase,
+    TenantService? tenantService,
+    http.Client? httpClient,
+    WebsitePreloadedStoreDataLoader? preloadedStoreDataLoader,
+  })  : _supabase = supabase ?? Supabase.instance.client,
+        _tenantService = tenantService ?? TenantService(),
+        _httpClient = httpClient ?? http.Client(),
+        _preloadedStoreDataLoader = preloadedStoreDataLoader ??
+            ((expectedTenantId) => WebDataBridge.getPreloadedStoreData(
+                  expectedTenantId: expectedTenantId,
+                )) {
+    // The standalone storefront (main_store.dart) provides no TenantService
+    // and nothing rebuilds on auth events by itself, so this service owns
+    // that lifecycle: subscribe the identity owner idempotently and relay
+    // each auth/cache notification as one rebuild trigger plus one CMS
+    // origin revalidation. Every `watch<WebsiteService>` consumer then
+    // re-evaluates the editor-entry lease on the next frame (logout or a
+    // user switch revokes editor context without any other interaction).
+    _tenantService.initialize();
+    _tenantService.addListener(_onTenantIdentityChanged);
+  }
+
+  final SupabaseClient _supabase;
+  final TenantService _tenantService;
+  final http.Client _httpClient;
+  final WebsitePreloadedStoreDataLoader _preloadedStoreDataLoader;
   final Set<String> _legacyPublicCacheEvictionStarted = <String>{};
 
   // Perf logs are enabled in debug, or in release via:
@@ -121,6 +127,148 @@ class WebsiteService extends ChangeNotifier {
       rawMap,
     );
 
+    dynamic cloneValue(dynamic value) {
+      if (value is Map) {
+        return value.map(
+          (key, nested) => MapEntry(key.toString(), cloneValue(nested)),
+        );
+      }
+      if (value is List) return value.map(cloneValue).toList();
+      return value;
+    }
+
+    void syncCollectionAliases(
+      String canonicalKey,
+      List<String> aliases,
+    ) {
+      Object? source;
+      if (rawMap.containsKey(canonicalKey)) {
+        source = rawMap[canonicalKey];
+      } else {
+        for (final alias in aliases) {
+          if (rawMap.containsKey(alias)) {
+            source = rawMap[alias];
+            break;
+          }
+        }
+      }
+      if (source is! List) return;
+      final next = cloneValue(source);
+      normalized[canonicalKey] = next;
+      for (final alias in aliases) {
+        normalized[alias] = cloneValue(next);
+      }
+    }
+
+    void syncScalarAliases(
+      String canonicalKey,
+      List<String> aliases,
+    ) {
+      Object? source;
+      var found = false;
+      if (rawMap.containsKey(canonicalKey)) {
+        source = rawMap[canonicalKey];
+        found = true;
+      } else {
+        for (final alias in aliases) {
+          if (rawMap.containsKey(alias)) {
+            source = rawMap[alias];
+            found = true;
+            break;
+          }
+        }
+      }
+      if (!found) return;
+      normalized[canonicalKey] = cloneValue(source);
+      for (final alias in aliases) {
+        normalized[alias] = cloneValue(source);
+      }
+    }
+
+    void syncCollectionItemAliases(
+      String collectionKey,
+      Map<String, List<String>> fieldAliases, {
+      List<String> collectionAliases = const [],
+    }) {
+      final rawItems = normalized[collectionKey];
+      if (rawItems is! List) return;
+      final next = <dynamic>[];
+      for (final rawItem in rawItems) {
+        if (rawItem is! Map) {
+          next.add(cloneValue(rawItem));
+          continue;
+        }
+        final item = Map<String, dynamic>.from(rawItem);
+        for (final entry in fieldAliases.entries) {
+          Object? source;
+          var found = false;
+          if (item.containsKey(entry.key)) {
+            source = item[entry.key];
+            found = true;
+          } else {
+            for (final alias in entry.value) {
+              if (item.containsKey(alias)) {
+                source = item[alias];
+                found = true;
+                break;
+              }
+            }
+          }
+          if (!found) continue;
+          item[entry.key] = cloneValue(source);
+          for (final alias in entry.value) {
+            item[alias] = cloneValue(source);
+          }
+        }
+        next.add(item);
+      }
+      normalized[collectionKey] = next;
+      for (final alias in collectionAliases) {
+        normalized[alias] = cloneValue(next);
+      }
+    }
+
+    // Canonical collection presence wins even when it is intentionally empty.
+    // This must happen before defaults can hide a legacy-only persisted list.
+    final collectionType = blockTypeRaw.trim().toLowerCase();
+    if (collectionType == 'features') {
+      syncCollectionAliases('features', const ['items']);
+    } else if (collectionType == 'services') {
+      syncCollectionAliases('services', const ['items']);
+    } else if (collectionType == 'testimonials') {
+      syncCollectionAliases('testimonials', const ['items']);
+      syncCollectionItemAliases(
+        'testimonials',
+        const {
+          'comment': ['quote', 'text'],
+        },
+        collectionAliases: const ['items'],
+      );
+    } else if (collectionType == 'pricing') {
+      syncCollectionAliases('plans', const ['items']);
+      syncCollectionItemAliases(
+        'plans',
+        const {
+          'ctaText': ['buttonText'],
+          'ctaLink': ['buttonLink'],
+          'highlighted': ['isFeatured'],
+        },
+        collectionAliases: const ['items'],
+      );
+    } else if (collectionType == 'team') {
+      syncScalarAliases('description', const ['subtitle']);
+      syncCollectionAliases('members', const ['team', 'items']);
+      syncCollectionItemAliases(
+        'members',
+        const {
+          'avatarUrl': ['image'],
+        },
+        collectionAliases: const ['team', 'items'],
+      );
+    } else if (collectionType == 'stats') {
+      syncCollectionAliases('metrics', const ['stats', 'items']);
+    }
+
     // Schema version convention (noop-first; enables safe future migrations)
     normalized['schemaVersion'] =
         (normalized['schemaVersion'] as int?) ?? _currentBlockSchemaVersion;
@@ -159,6 +307,8 @@ class WebsiteService extends ChangeNotifier {
         resolutionData,
         labelKeys: labelKeys,
         hrefKeys: hrefKeys,
+        variantKeys:
+            variantKey == null ? const ['actionVariant'] : [variantKey],
         defaultLabel: defaultLabel,
         defaultHref: defaultHref,
         defaultVariant: variantKey == null
@@ -428,10 +578,26 @@ class WebsiteService extends ChangeNotifier {
         defaultLabel: 'Seleccionar',
         variantKey: 'actionVariant',
       );
+      if (normalized['plans'] is List) {
+        normalized['items'] = cloneValue(normalized['plans']);
+      }
     }
 
-    return normalized;
+    return sanitizeWebsiteBlockDataForPersistence(
+      blockType: rawTypeLower,
+      data: normalized,
+    );
   }
+
+  @visibleForTesting
+  Map<String, dynamic> normalizeBlockDataForTesting({
+    required String blockType,
+    required Object? blockData,
+  }) =>
+      _normalizeBlockData(
+        blockTypeRaw: blockType,
+        rawBlockData: blockData,
+      );
 
   List<Map<String, dynamic>> _normalizeBlocksList(
     List<Map<String, dynamic>> blocks,
@@ -478,7 +644,16 @@ class WebsiteService extends ChangeNotifier {
   bool _notifyScheduled = false;
   bool _hasLoadedForTenant =
       false; // Track if loadBlocksForTenant completed (even with no blocks)
-  bool _isLoadingForTenant = false; // Prevent concurrent loads
+  bool _hasLoadedPublicStoreDataForTenant = false;
+
+  String? _boundTenantId;
+  String? _settingsProjectionTenantId;
+  int _tenantScopeGeneration = 0;
+  _WebsiteScopedLoad<void>? _publicStoreLoad;
+  _WebsiteScopedLoad<List<Map<String, dynamic>>>? _blocksLoad;
+  _WebsiteScopedLoad<Map<String, String>>? _settingsLoad;
+  final Map<String, _WebsiteScopedLoad<void>> _pageLoadsByTenant = {};
+  _WebsiteScopedLoad<bool>? _navigationLoad;
 
   // Realtime subscriptions
   RealtimeChannel? _ordersChannel;
@@ -547,6 +722,99 @@ class WebsiteService extends ChangeNotifier {
   String? get ordersLoadError => _ordersLoadError;
   String? get ordersEnrichmentWarning => _ordersEnrichmentWarning;
   bool get hasLoadedForTenant => _hasLoadedForTenant;
+  bool hasSettingsForTenant(String tenantId) {
+    final normalizedTenantId = tenantId.trim();
+    return normalizedTenantId.isNotEmpty &&
+        _boundTenantId == normalizedTenantId &&
+        _settingsProjectionTenantId == normalizedTenantId;
+  }
+
+  _WebsiteTenantScopeLease _bindTenantScope(String tenantId) {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty) {
+      throw ArgumentError.value(tenantId, 'tenantId', 'No puede estar vacío.');
+    }
+
+    if (_boundTenantId != normalizedTenantId) {
+      _boundTenantId = normalizedTenantId;
+      _tenantScopeGeneration++;
+      _clearTenantOwnedProjections();
+    }
+
+    return _WebsiteTenantScopeLease(
+      tenantId: normalizedTenantId,
+      generation: _tenantScopeGeneration,
+    );
+  }
+
+  bool _ownsTenantScope(_WebsiteTenantScopeLease lease) {
+    return _boundTenantId == lease.tenantId &&
+        _tenantScopeGeneration == lease.generation;
+  }
+
+  _WebsiteTenantScopeLease? _leaseForBoundTenant(String tenantId) {
+    final normalizedTenantId = tenantId.trim();
+    if (normalizedTenantId.isEmpty || _boundTenantId != normalizedTenantId) {
+      return null;
+    }
+    return _WebsiteTenantScopeLease(
+      tenantId: normalizedTenantId,
+      generation: _tenantScopeGeneration,
+    );
+  }
+
+  bool isTenantProjectionActive(String tenantId) {
+    return _leaseForBoundTenant(tenantId) != null;
+  }
+
+  bool _sameTenantScope(
+    _WebsiteTenantScopeLease first,
+    _WebsiteTenantScopeLease second,
+  ) {
+    return first.tenantId == second.tenantId &&
+        first.generation == second.generation;
+  }
+
+  void _clearTenantOwnedProjections() {
+    _banners = [];
+    _featuredProducts = [];
+    _contents = [];
+    _settings = {};
+    _themePresets = [];
+    _orders = [];
+    _blocks = [];
+    _pages = [];
+    _navigation = [];
+
+    _hasLoadedForTenant = false;
+    _hasLoadedPublicStoreDataForTenant = false;
+    _settingsProjectionTenantId = null;
+    _authoritativePagesTenantId = null;
+    _hasAuthoritativePagePublication = false;
+    _hasLoadedNavigationForTenant = false;
+    _loadedNavigationTenantId = null;
+
+    _publicStoreLoad = null;
+    _blocksLoad = null;
+    _settingsLoad = null;
+    _pageLoadsByTenant.clear();
+    _navigationLoad = null;
+
+    _isLoading = false;
+    _error = null;
+    _ordersLoadError = null;
+    _ordersEnrichmentWarning = null;
+
+    final ordersChannel = _ordersChannel;
+    _ordersChannel = null;
+    if (ordersChannel != null) {
+      unawaited(ordersChannel.unsubscribe());
+    }
+
+    // A blank projection is safer than rendering the previous tenant while
+    // the new tenant's cache/origin request is in flight.
+    _safeNotifyListeners();
+  }
 
   /// Safe version of notifyListeners that checks disposal state
   void _safeNotifyListeners() {
@@ -590,10 +858,11 @@ class WebsiteService extends ChangeNotifier {
     String tenantId, {
     bool forceRefresh = false,
   }) async {
-    final swTotal = Stopwatch()..start();
+    final lease = _bindTenantScope(tenantId);
 
-    // Prevent duplicate loads (unless explicitly forced by user "home refresh")
-    if (_hasLoadedForTenant && !forceRefresh) {
+    // Preserve the zero-I/O happy path, but only after the requested tenant is
+    // bound and any prior tenant projection has been cleared.
+    if (_hasLoadedPublicStoreDataForTenant && !forceRefresh) {
       if (_perfLogsEnabled) {
         debugPrint(
             '⏱️ [PublicStorePerf] loadPublicStoreDataUnified skipped (already loaded)');
@@ -601,51 +870,122 @@ class WebsiteService extends ChangeNotifier {
       return;
     }
 
+    final existing = _publicStoreLoad;
+    if (existing != null && _sameTenantScope(existing.lease, lease)) {
+      await existing.future;
+      return;
+    }
+
+    final load = _loadPublicStoreDataUnifiedWithinScope(
+      lease,
+      forceRefresh: forceRefresh,
+    );
+    final scopedLoad = _WebsiteScopedLoad<void>(lease: lease, future: load);
+    _publicStoreLoad = scopedLoad;
+    try {
+      await load;
+    } finally {
+      if (identical(_publicStoreLoad, scopedLoad)) {
+        _publicStoreLoad = null;
+      }
+    }
+  }
+
+  Map<String, dynamic>? _validatedPublicStorePayload(
+    Object? candidate,
+    _WebsiteTenantScopeLease lease, {
+    required String source,
+  }) {
+    if (!_ownsTenantScope(lease) || candidate is! Map) return null;
+
+    final payload = Map<String, dynamic>.from(candidate);
+    final payloadTenantId = payload['tenant_id']?.toString().trim() ?? '';
+    if (payloadTenantId != lease.tenantId ||
+        payload['settings'] is! Map ||
+        payload['blocks'] is! List) {
+      debugPrint(
+        '⚠️ [WebsiteService] Rejected $source public-store payload: '
+        'tenant identity or shape mismatch.',
+      );
+      return null;
+    }
+
+    return payload;
+  }
+
+  Future<void> _loadPublicStoreDataUnifiedWithinScope(
+    _WebsiteTenantScopeLease lease, {
+    required bool forceRefresh,
+  }) async {
+    final swTotal = Stopwatch()..start();
+    final tenantId = lease.tenantId;
+    if (!_ownsTenantScope(lease)) return;
+
+    // The unified payload owns fast settings and home blocks, but page-level
+    // SEO remains editor-owned by website_pages. Load that small public list in
+    // parallel so hydration cannot replace deploy-time metadata with generic
+    // fallbacks on Home, Contact, or another dedicated public route.
+    if (forceRefresh ||
+        _pages.isEmpty ||
+        _authoritativePagesTenantId != tenantId) {
+      // The public wrapper owns best-effort error handling; it binds
+      // synchronously to this same lease before the first await.
+      unawaited(loadPagesForTenant(tenantId));
+    }
+
     // If we already have recent cached settings+blocks, skip immediate network refresh.
     // This is especially important on mobile where TLS/DNS can cost ~1s.
     if (!forceRefresh && _hasFreshPublicStoreCache(tenantId)) {
-      // Ensure navigation is available too (sync cache first, then background refresh).
-      _loadNavigationFromSynchronousCacheInternal(tenantId, notify: false);
-      if (hasVisibleHeaderNavigation) {
-        // Fire-and-forget refresh: navigation changes are rare, but we still
-        // want the header/footer to be correct when settings+blocks are fresh.
-        unawaited(
-          loadNavigationForTenant(
-            tenantId,
+      final settingsLoaded = _loadSettingsFromSynchronousCacheInternal(
+        lease,
+        notify: false,
+        parseThemePresets: false,
+      );
+      final blocksLoaded = _loadBlocksFromSynchronousCacheInternal(
+        lease,
+        notify: false,
+      );
+
+      // A refresh timestamp without both payloads is not a usable fast path.
+      if (!settingsLoaded || !blocksLoaded || !_ownsTenantScope(lease)) {
+        if (_perfLogsEnabled) {
+          debugPrint(
+              '⚠️ [PublicStorePerf] Fresh cache marker had an incomplete payload');
+        }
+      } else {
+        // Ensure navigation is available too (sync cache first, then background refresh).
+        _loadNavigationFromSynchronousCacheInternal(lease, notify: false);
+        if (hasVisibleHeaderNavigation) {
+          // Fire-and-forget refresh: navigation changes are rare, but we still
+          // want the header/footer to be correct when settings+blocks are fresh.
+          unawaited(
+            _loadNavigationForTenantWithinScope(
+              lease,
+              notify: true,
+              forceRefresh: true,
+            ),
+          );
+        } else {
+          await _loadNavigationForTenantWithinScope(
+            lease,
             notify: true,
             forceRefresh: true,
-          ),
-        );
-      } else {
-        await loadNavigationForTenant(
-          tenantId,
-          notify: true,
-          forceRefresh: true,
-        );
-      }
+          );
+        }
 
-      _hasLoadedForTenant = true;
-      if (_perfLogsEnabled) {
-        debugPrint(
-            '⏱️ [PublicStorePerf] loadPublicStoreDataUnified skipped (fresh local cache)');
-        debugPrint(
-            '⏱️ [PublicStorePerf] Total loadPublicStoreDataUnified: ${swTotal.elapsedMilliseconds}ms (source=LOCAL_CACHE_FRESH)');
+        if (!_ownsTenantScope(lease)) return;
+        _hasLoadedForTenant = true;
+        _hasLoadedPublicStoreDataForTenant = true;
+        _safeNotifyListeners();
+        if (_perfLogsEnabled) {
+          debugPrint(
+              '⏱️ [PublicStorePerf] loadPublicStoreDataUnified skipped (fresh local cache)');
+          debugPrint(
+              '⏱️ [PublicStorePerf] Total loadPublicStoreDataUnified: ${swTotal.elapsedMilliseconds}ms (source=LOCAL_CACHE_FRESH)');
+        }
+        return;
       }
-      return;
     }
-
-    if (_isLoadingForTenant) {
-      if (_perfLogsEnabled) {
-        debugPrint(
-            '⏱️ [PublicStorePerf] loadPublicStoreDataUnified waiting (already loading)');
-      }
-      while (_isLoadingForTenant && !_hasLoadedForTenant) {
-        await Future.delayed(const Duration(milliseconds: 50));
-      }
-      return;
-    }
-
-    _isLoadingForTenant = true;
 
     try {
       if (_perfLogsEnabled) {
@@ -665,15 +1005,23 @@ class WebsiteService extends ChangeNotifier {
       if (!forceRefresh) {
         try {
           final swPrefetch = Stopwatch()..start();
-          final preloaded = await WebDataBridge.getPreloadedStoreData();
+          final preloaded = await _preloadedStoreDataLoader(tenantId);
+          if (!_ownsTenantScope(lease)) return;
           if (preloaded != null) {
-            response = preloaded;
-            source = 'PREFETCH_JS';
-            if (_perfLogsEnabled) {
-              debugPrint(
-                  '⏱️ [PublicStorePerf] Source=$source step=${swPrefetch.elapsedMilliseconds}ms');
+            response = _validatedPublicStorePayload(
+              preloaded,
+              lease,
+              source: 'PREFETCH_JS',
+            );
+            if (response != null) {
+              source = 'PREFETCH_JS';
+              if (_perfLogsEnabled) {
+                debugPrint(
+                    '⏱️ [PublicStorePerf] Source=$source step=${swPrefetch.elapsedMilliseconds}ms');
+              }
             }
-          } else {
+          }
+          if (response == null) {
             if (_perfLogsEnabled) {
               debugPrint(
                   '⏱️ [PublicStorePerf] Prefetch miss: ${swPrefetch.elapsedMilliseconds}ms');
@@ -692,16 +1040,24 @@ class WebsiteService extends ChangeNotifier {
         try {
           final swEdge = Stopwatch()..start();
           final cacheResponse = await _tryEdgeCache(tenantId);
+          if (!_ownsTenantScope(lease)) return;
           if (cacheResponse != null) {
-            response = cacheResponse;
-            source = cacheResponse['_cache'] == 'HIT'
-                ? 'EDGE_CACHE_HIT'
-                : 'EDGE_CACHE_MISS';
-            if (_perfLogsEnabled) {
-              debugPrint(
-                  '⏱️ [PublicStorePerf] Source=$source step=${swEdge.elapsedMilliseconds}ms');
+            response = _validatedPublicStorePayload(
+              cacheResponse,
+              lease,
+              source: 'EDGE_CACHE',
+            );
+            if (response != null) {
+              source = cacheResponse['_cache'] == 'HIT'
+                  ? 'EDGE_CACHE_HIT'
+                  : 'EDGE_CACHE_MISS';
+              if (_perfLogsEnabled) {
+                debugPrint(
+                    '⏱️ [PublicStorePerf] Source=$source step=${swEdge.elapsedMilliseconds}ms');
+              }
             }
-          } else {
+          }
+          if (response == null) {
             if (_perfLogsEnabled) {
               debugPrint(
                   '⏱️ [PublicStorePerf] Edge cache miss/null: ${swEdge.elapsedMilliseconds}ms');
@@ -717,8 +1073,19 @@ class WebsiteService extends ChangeNotifier {
       // Fallback to direct Supabase RPC if edge cache fails
       if (response == null) {
         final swRpc = Stopwatch()..start();
-        response = await _supabase
+        final directResponse = await _supabase
             .rpc('get_public_store_data', params: {'p_tenant_id': tenantId});
+        if (!_ownsTenantScope(lease)) return;
+        response = _validatedPublicStorePayload(
+          directResponse,
+          lease,
+          source: 'SUPABASE_DIRECT',
+        );
+        if (response == null) {
+          throw StateError(
+            'La proyección pública no declaró el tenant solicitado.',
+          );
+        }
         source = 'SUPABASE_DIRECT';
 
         if (_perfLogsEnabled) {
@@ -730,119 +1097,127 @@ class WebsiteService extends ChangeNotifier {
       // debugPrint(
       //     '⏱️ [WebsiteService] Data loaded ($source): ${sw.elapsedMilliseconds}ms');
 
-      if (response != null) {
-        // Parse settings/blocks.
-        // NOTE: On the public store we don't need theme presets, so avoid
-        // decoding them here (saves work on the UI isolate).
-        final settingsData = filterPublicWebsiteSettingsForCache(
-          response['settings'] is Map
-              ? Map<String, dynamic>.from(response['settings'] as Map)
-              : const <String, dynamic>{},
-        );
-        final blocksData = response['blocks'] as List? ?? [];
+      // Parse settings/blocks.
+      // NOTE: On the public store we don't need theme presets, so avoid
+      // decoding them here (saves work on the UI isolate).
+      final settingsData = filterPublicWebsiteSettingsForCache(
+        response['settings'] is Map
+            ? Map<String, dynamic>.from(response['settings'] as Map)
+            : const <String, dynamic>{},
+      );
+      final blocksData = response['blocks'] as List? ?? [];
 
-        // If we already rendered from sync cache and the network returns the
-        // exact same payload, avoid triggering a full rebuild.
-        final prefs = _prefs;
-        final cachedSettingsJson = prefs?.getString(
-          _publicStoreCacheKey('settings', tenantId),
-        );
-        final cachedBlocksJson = prefs?.getString(
-          _publicStoreCacheKey('blocks', tenantId),
-        );
-        final hasExistingData = _settings.isNotEmpty || _blocks.isNotEmpty;
+      // If we already rendered from sync cache and the network returns the
+      // exact same payload, avoid triggering a full rebuild.
+      final prefs = _prefs;
+      final cachedSettingsJson = prefs?.getString(
+        _publicStoreCacheKey('settings', tenantId),
+      );
+      final cachedBlocksJson = prefs?.getString(
+        _publicStoreCacheKey('blocks', tenantId),
+      );
+      final hasExistingData = _settings.isNotEmpty || _blocks.isNotEmpty;
 
-        bool isSameAsCache = false;
-        if (cachedSettingsJson != null && cachedBlocksJson != null) {
-          try {
-            final newSettingsJson = jsonEncode(settingsData);
-            final newBlocksJson = jsonEncode(blocksData);
-            isSameAsCache = hasExistingData &&
-                cachedSettingsJson == newSettingsJson &&
-                cachedBlocksJson == newBlocksJson;
-          } catch (_) {
-            // If encoding fails for any reason, just treat as changed.
-            isSameAsCache = false;
-          }
+      bool isSameAsCache = false;
+      if (cachedSettingsJson != null && cachedBlocksJson != null) {
+        try {
+          final newSettingsJson = jsonEncode(settingsData);
+          final newBlocksJson = jsonEncode(blocksData);
+          isSameAsCache = hasExistingData &&
+              cachedSettingsJson == newSettingsJson &&
+              cachedBlocksJson == newBlocksJson;
+        } catch (_) {
+          // If encoding fails for any reason, just treat as changed.
+          isSameAsCache = false;
         }
+      }
 
-        if (isSameAsCache) {
-          // Even if settings/blocks haven't changed, we still need navigation.
-          // Load from cache instantly and refresh in background when we already
-          // have usable header navigation; otherwise wait for one real fetch.
-          _loadNavigationFromSynchronousCacheInternal(tenantId, notify: false);
-          if (hasVisibleHeaderNavigation) {
-            unawaited(
-              loadNavigationForTenant(
-                tenantId,
-                notify: true,
-                forceRefresh: true,
-              ),
-            );
-          } else {
-            await loadNavigationForTenant(
-              tenantId,
-              notify: true,
-              forceRefresh: true,
-            );
-          }
-
-          await _persistPublicStoreLastRefresh(tenantId);
-          _hasLoadedForTenant = true;
-          _isLoadingForTenant = false;
-
-          if (_perfLogsEnabled) {
-            debugPrint(
-                '⏱️ [PublicStorePerf] Network payload matches cache; skipping notify');
-            debugPrint(
-                '⏱️ [PublicStorePerf] Total loadPublicStoreDataUnified: ${swTotal.elapsedMilliseconds}ms (source=$source)');
-          }
-          return;
-        }
-
-        _settings =
-            settingsData.map((k, v) => MapEntry(k, v?.toString() ?? ''));
-
-        _blocks = List<Map<String, dynamic>>.from(blocksData);
-
-        if (_perfLogsEnabled) {
-          debugPrint('⏱️ [PublicStorePerf] Parsed data: '
-              '${_settings.length} settings, ${_blocks.length} blocks');
-        }
-
-        // Persist caches and refresh time BEFORE we log completion.
-        // This makes the next app launch able to skip the edge-cache call.
-        await _persistSettingsToLocalCache(tenantId, settingsData);
-        await _persistBlocksToLocalCache(tenantId, _blocks);
-        await _persistPublicStoreLastRefresh(tenantId);
-
-        // Navigation is NOT included in get_public_store_data yet, so load it
-        // separately. Do not block settings/blocks completion if a usable
-        // header is already present from cache or bootstrap preflight.
+      if (isSameAsCache) {
+        // Even if settings/blocks haven't changed, we still need navigation.
+        // Load from cache instantly and refresh in background when we already
+        // have usable header navigation; otherwise wait for one real fetch.
+        _loadNavigationFromSynchronousCacheInternal(lease, notify: false);
         if (hasVisibleHeaderNavigation) {
           unawaited(
-            loadNavigationForTenant(
-              tenantId,
+            _loadNavigationForTenantWithinScope(
+              lease,
               notify: true,
               forceRefresh: true,
             ),
           );
         } else {
-          await loadNavigationForTenant(
-            tenantId,
-            notify: false,
+          await _loadNavigationForTenantWithinScope(
+            lease,
+            notify: true,
             forceRefresh: true,
           );
         }
 
+        if (!_ownsTenantScope(lease)) return;
+        await _persistPublicStoreLastRefresh(lease);
+        if (!_ownsTenantScope(lease)) return;
+        _hasLoadedForTenant = true;
+        _hasLoadedPublicStoreDataForTenant = true;
+
         if (_perfLogsEnabled) {
-          debugPrint('✅ [WebsiteService] Load complete ($source): '
-              '${_settings.length} settings, ${_blocks.length} blocks');
+          debugPrint(
+              '⏱️ [PublicStorePerf] Network payload matches cache; skipping notify');
+          debugPrint(
+              '⏱️ [PublicStorePerf] Total loadPublicStoreDataUnified: ${swTotal.elapsedMilliseconds}ms (source=$source)');
         }
+        return;
       }
 
+      _settings = settingsData.map((k, v) => MapEntry(k, v?.toString() ?? ''));
+      _settingsProjectionTenantId = tenantId;
+
+      _blocks = _normalizeBlocksList(
+        blocksData
+            .whereType<Map>()
+            .map((block) => Map<String, dynamic>.from(block))
+            .toList(growable: false),
+      );
+
+      if (_perfLogsEnabled) {
+        debugPrint('⏱️ [PublicStorePerf] Parsed data: '
+            '${_settings.length} settings, ${_blocks.length} blocks');
+      }
+
+      // Persist caches and refresh time BEFORE we log completion.
+      // This makes the next app launch able to skip the edge-cache call.
+      await _persistSettingsToLocalCache(lease, settingsData);
+      await _persistBlocksToLocalCache(lease, _blocks);
+      await _persistPublicStoreLastRefresh(lease);
+      if (!_ownsTenantScope(lease)) return;
+
+      // Navigation is NOT included in get_public_store_data yet, so load it
+      // separately. Do not block settings/blocks completion if a usable
+      // header is already present from cache or bootstrap preflight.
+      if (hasVisibleHeaderNavigation) {
+        unawaited(
+          _loadNavigationForTenantWithinScope(
+            lease,
+            notify: true,
+            forceRefresh: true,
+          ),
+        );
+      } else {
+        await _loadNavigationForTenantWithinScope(
+          lease,
+          notify: false,
+          forceRefresh: true,
+        );
+      }
+
+      if (!_ownsTenantScope(lease)) return;
+      if (_perfLogsEnabled) {
+        debugPrint('✅ [WebsiteService] Load complete ($source): '
+            '${_settings.length} settings, ${_blocks.length} blocks');
+      }
+
+      if (!_ownsTenantScope(lease)) return;
       _hasLoadedForTenant = true;
-      _isLoadingForTenant = false;
+      _hasLoadedPublicStoreDataForTenant = true;
       _safeNotifyListeners();
 
       if (_perfLogsEnabled) {
@@ -850,9 +1225,9 @@ class WebsiteService extends ChangeNotifier {
             '⏱️ [PublicStorePerf] Total loadPublicStoreDataUnified: ${swTotal.elapsedMilliseconds}ms (source=$source)');
       }
     } catch (e) {
+      if (!_ownsTenantScope(lease)) return;
       debugPrint(
           '⚠️ [WebsiteService] All methods failed, falling back to separate queries: $e');
-      _isLoadingForTenant = false;
 
       if (_perfLogsEnabled) {
         debugPrint(
@@ -861,14 +1236,18 @@ class WebsiteService extends ChangeNotifier {
 
       // Fallback to separate queries if RPC doesn't exist yet
       await Future.wait([
-        loadSettingsForTenant(tenantId),
-        loadBlocksForTenant(tenantId),
-        loadNavigationForTenant(
-          tenantId,
+        _loadSettingsForTenantWithinScope(lease),
+        _loadBlocksForTenantWithinScope(lease),
+        _loadNavigationForTenantWithinScope(
+          lease,
           notify: false,
           forceRefresh: true,
         ),
       ]);
+      if (!_ownsTenantScope(lease)) return;
+      _hasLoadedForTenant = true;
+      _hasLoadedPublicStoreDataForTenant = true;
+      _safeNotifyListeners();
     }
   }
 
@@ -933,11 +1312,15 @@ class WebsiteService extends ChangeNotifier {
     return DateTime.now().difference(lastRefresh) < maxAge;
   }
 
-  Future<void> _persistPublicStoreLastRefresh(String tenantId) async {
+  Future<void> _persistPublicStoreLastRefresh(
+    _WebsiteTenantScopeLease lease,
+  ) async {
+    if (!_ownsTenantScope(lease)) return;
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
+      if (!_ownsTenantScope(lease)) return;
       _prefs = prefs;
-      final key = _publicStoreCacheKey('last_refresh', tenantId);
+      final key = _publicStoreCacheKey('last_refresh', lease.tenantId);
       await prefs.setInt(key, DateTime.now().millisecondsSinceEpoch);
     } catch (_) {
       // Ignore cache write errors
@@ -947,25 +1330,27 @@ class WebsiteService extends ChangeNotifier {
   /// Loads BOTH settings + blocks from the synchronous cache and notifies once.
   /// This reduces boot-time rebuild churn (helps avoid skipped frames).
   bool preloadPublicStoreFromSynchronousCache(String tenantId) {
+    final lease = _bindTenantScope(tenantId);
+
     // Paint a bounded stale snapshot immediately. The bootstrap always starts
     // a direct origin revalidation when this returns true, so retention never
     // becomes freshness authority.
-    if (!_hasRetainedPublicStoreCache(tenantId)) {
+    if (!_hasRetainedPublicStoreCache(lease.tenantId)) {
       return false;
     }
 
     final settingsLoaded = _loadSettingsFromSynchronousCacheInternal(
-      tenantId,
+      lease,
       notify: false,
       parseThemePresets: false,
     );
     final blocksLoaded = _loadBlocksFromSynchronousCacheInternal(
-      tenantId,
+      lease,
       notify: false,
     );
 
     final navLoaded = _loadNavigationFromSynchronousCacheInternal(
-      tenantId,
+      lease,
       notify: false,
     );
 
@@ -989,15 +1374,17 @@ class WebsiteService extends ChangeNotifier {
   /// Try to load settings from synchronous cache (0ms wait)
   /// Returns true if settings were successfully loaded
   bool loadSettingsFromSynchronousCache(String tenantId) {
-    return _loadSettingsFromSynchronousCacheInternal(tenantId, notify: true);
+    final lease = _bindTenantScope(tenantId);
+    return _loadSettingsFromSynchronousCacheInternal(lease, notify: true);
   }
 
   bool _loadSettingsFromSynchronousCacheInternal(
-    String tenantId, {
+    _WebsiteTenantScopeLease lease, {
     required bool notify,
     bool parseThemePresets = true,
   }) {
-    if (_prefs == null) return false;
+    if (_prefs == null || !_ownsTenantScope(lease)) return false;
+    final tenantId = lease.tenantId;
     _evictLegacyPublicStoreCache(tenantId);
 
     try {
@@ -1012,8 +1399,10 @@ class WebsiteService extends ChangeNotifier {
         if (settingsData.length != decoded.length) {
           unawaited(_prefs!.setString(cacheKey, jsonEncode(settingsData)));
         }
+        if (!_ownsTenantScope(lease)) return false;
         _settings =
             settingsData.map((k, v) => MapEntry(k, v?.toString() ?? ''));
+        _settingsProjectionTenantId = tenantId;
         if (parseThemePresets) {
           _themePresets = _parseThemePresets(_settings['theme_presets']);
         }
@@ -1034,14 +1423,16 @@ class WebsiteService extends ChangeNotifier {
   /// Try to load blocks from synchronous cache (0ms wait)
   /// Returns true if blocks were successfully loaded
   bool loadBlocksFromSynchronousCache(String tenantId) {
-    return _loadBlocksFromSynchronousCacheInternal(tenantId, notify: true);
+    final lease = _bindTenantScope(tenantId);
+    return _loadBlocksFromSynchronousCacheInternal(lease, notify: true);
   }
 
   bool _loadBlocksFromSynchronousCacheInternal(
-    String tenantId, {
+    _WebsiteTenantScopeLease lease, {
     required bool notify,
   }) {
-    if (_prefs == null) return false;
+    if (_prefs == null || !_ownsTenantScope(lease)) return false;
+    final tenantId = lease.tenantId;
     _evictLegacyPublicStoreCache(tenantId);
 
     try {
@@ -1050,8 +1441,12 @@ class WebsiteService extends ChangeNotifier {
 
       if (cachedJson != null) {
         final blocksData = jsonDecode(cachedJson) as List<dynamic>;
-        _blocks = List<Map<String, dynamic>>.from(
-          blocksData.map((e) => Map<String, dynamic>.from(e as Map)),
+        if (!_ownsTenantScope(lease)) return false;
+        _blocks = _normalizeBlocksList(
+          blocksData
+              .whereType<Map>()
+              .map((block) => Map<String, dynamic>.from(block))
+              .toList(growable: false),
         );
 
         if (notify) {
@@ -1069,15 +1464,18 @@ class WebsiteService extends ChangeNotifier {
   /// Load settings from local device cache (SharedPreferences)
   /// Returns true if settings were successfully loaded
   Future<bool> loadSettingsFromLocalCache(String tenantId) async {
+    final lease = _bindTenantScope(tenantId);
+
     // If we have sync cache, try that first
     if (_prefs != null) {
-      return loadSettingsFromSynchronousCache(tenantId);
+      return _loadSettingsFromSynchronousCacheInternal(lease, notify: true);
     }
 
     try {
       final prefs = await SharedPreferences.getInstance();
       _prefs = prefs; // Store for future sync access
-      return loadSettingsFromSynchronousCache(tenantId);
+      if (!_ownsTenantScope(lease)) return false;
+      return _loadSettingsFromSynchronousCacheInternal(lease, notify: true);
     } catch (e) {
       debugPrint('⚠️ [WebsiteService] Failed to load local cache: $e');
     }
@@ -1085,11 +1483,15 @@ class WebsiteService extends ChangeNotifier {
   }
 
   Future<void> _persistSettingsToLocalCache(
-      String tenantId, Map<String, dynamic> settingsData) async {
+    _WebsiteTenantScopeLease lease,
+    Map<String, dynamic> settingsData,
+  ) async {
+    if (!_ownsTenantScope(lease)) return;
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
+      if (!_ownsTenantScope(lease)) return;
       _prefs = prefs;
-      final cacheKey = _publicStoreCacheKey('settings', tenantId);
+      final cacheKey = _publicStoreCacheKey('settings', lease.tenantId);
       final publicSettings = filterPublicWebsiteSettingsForCache(settingsData);
       await prefs.setString(cacheKey, jsonEncode(publicSettings));
     } catch (e) {
@@ -1098,11 +1500,15 @@ class WebsiteService extends ChangeNotifier {
   }
 
   Future<void> _persistBlocksToLocalCache(
-      String tenantId, List<Map<String, dynamic>> blocks) async {
+    _WebsiteTenantScopeLease lease,
+    List<Map<String, dynamic>> blocks,
+  ) async {
+    if (!_ownsTenantScope(lease)) return;
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
+      if (!_ownsTenantScope(lease)) return;
       _prefs = prefs;
-      final cacheKey = _publicStoreCacheKey('blocks', tenantId);
+      final cacheKey = _publicStoreCacheKey('blocks', lease.tenantId);
       await prefs.setString(cacheKey, jsonEncode(blocks));
     } catch (e) {
       // Ignore cache write errors
@@ -1162,13 +1568,24 @@ class WebsiteService extends ChangeNotifier {
 
   @Deprecated('Use loadBlocks() and filter for block_type="hero" instead')
   Future<void> loadBanners() async {
-    _isLoading = true;
-    _error = null;
-    if (!_isInitializing) _safeNotifyListeners();
+    _WebsiteTenantScopeLease? lease;
 
     try {
-      final response =
-          await _supabase.from('website_banners').select().order('order_index');
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found');
+      }
+      lease = _bindTenantScope(tenantId);
+      _isLoading = true;
+      _error = null;
+      if (!_isInitializing) _safeNotifyListeners();
+
+      final response = await _supabase
+          .from('website_banners')
+          .select()
+          .eq('tenant_id', tenantId)
+          .order('order_index');
+      if (!_ownsTenantScope(lease)) return;
 
       _banners = (response as List)
           .map((json) => WebsiteBanner.fromJson(json))
@@ -1176,11 +1593,15 @@ class WebsiteService extends ChangeNotifier {
 
       _error = null;
     } catch (e) {
-      _error = 'Error al cargar banners: $e';
-      debugPrint(_error);
+      if (lease == null || _ownsTenantScope(lease)) {
+        _error = 'Error al cargar banners: $e';
+        debugPrint(_error);
+      }
     } finally {
-      _isLoading = false;
-      _safeNotifyListeners();
+      if (lease == null || _ownsTenantScope(lease)) {
+        _isLoading = false;
+        _safeNotifyListeners();
+      }
     }
   }
 
@@ -1208,7 +1629,7 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
-  @Deprecated('Use deleteBlock() instead')
+  @Deprecated('Use the page-block editor and saveBlocks() instead')
   Future<void> deleteBanner(String id) async {
     try {
       await _supabase.from('website_banners').delete().eq('id', id);
@@ -1248,9 +1669,7 @@ class WebsiteService extends ChangeNotifier {
   /// This ensures the editor doesn't mix blocks from all pages
   Future<void> loadBlocks() async {
     debugPrint('[WebsiteService] loadBlocks started');
-    _isLoading = true;
-    _error = null;
-    if (!_isInitializing) _safeNotifyListeners();
+    _WebsiteTenantScopeLease? lease;
 
     try {
       // Get current tenant_id
@@ -1260,10 +1679,15 @@ class WebsiteService extends ChangeNotifier {
       if (tenantId == null) {
         throw Exception('No tenant_id found');
       }
+      lease = _bindTenantScope(tenantId);
+      _isLoading = true;
+      _error = null;
+      if (!_isInitializing) _safeNotifyListeners();
 
       // First, find the home page ID
       String? homePageId;
-      await loadPages(); // Ensure pages are loaded
+      await _loadPagesForTenantWithinScope(lease); // Ensure pages are loaded
+      if (!_ownsTenantScope(lease)) return;
       final homePage = _pages.firstWhere(
         (p) => p.isHome && p.isPublished,
         orElse: () => _pages.isNotEmpty
@@ -1281,6 +1705,7 @@ class WebsiteService extends ChangeNotifier {
           .eq('tenant_id', tenantId) // ✅ Filter by tenant
           .eq('page_id', homePageId) // ✅ Filter by HOME PAGE ONLY
           .order('order_index', ascending: true);
+      if (!_ownsTenantScope(lease)) return;
       debugPrint(
           '[WebsiteService] Query complete, got ${(response as List).length} blocks');
 
@@ -1293,13 +1718,17 @@ class WebsiteService extends ChangeNotifier {
       _hasLoadedForTenant = true; // Also mark as loaded for ERP preview mode
       _error = null;
     } catch (e) {
-      _error = 'Error al cargar bloques: $e';
-      debugPrint(_error);
-      _hasLoadedForTenant = true; // Mark loaded even on error
+      if (lease == null || _ownsTenantScope(lease)) {
+        _error = 'Error al cargar bloques: $e';
+        debugPrint(_error);
+        _hasLoadedForTenant = true; // Mark loaded even on error
+      }
     } finally {
-      _isLoading = false;
-      debugPrint('[WebsiteService] loadBlocks complete');
-      _safeNotifyListeners();
+      if (lease == null || _ownsTenantScope(lease)) {
+        _isLoading = false;
+        debugPrint('[WebsiteService] loadBlocks complete');
+        _safeNotifyListeners();
+      }
     }
   }
 
@@ -1311,26 +1740,49 @@ class WebsiteService extends ChangeNotifier {
 
   Future<List<Map<String, dynamic>>> loadBlocksForTenant(
       String tenantId) async {
-    final sw = Stopwatch()..start();
+    final lease = _bindTenantScope(tenantId);
 
-    // Prevent duplicate loads - check BOTH flags
+    // A cache hit is valid only after binding has proved that `_blocks`
+    // belongs to this exact tenant generation.
     if (_hasLoadedForTenant) {
       debugPrint(
           '[WebsiteService] Already loaded for tenant, returning cached blocks: ${_blocks.length}');
       return _blocks;
     }
 
-    // Prevent concurrent loads
-    if (_isLoadingForTenant) {
-      debugPrint('[WebsiteService] Already loading, waiting...');
-      // Wait for the other load to complete
-      while (_isLoadingForTenant && !_hasLoadedForTenant) {
-        await Future.delayed(const Duration(milliseconds: 50));
-      }
-      return _blocks;
+    return _loadBlocksForTenantWithinScope(lease);
+  }
+
+  Future<List<Map<String, dynamic>>> _loadBlocksForTenantWithinScope(
+    _WebsiteTenantScopeLease lease,
+  ) async {
+    if (!_ownsTenantScope(lease)) return const [];
+
+    final existing = _blocksLoad;
+    if (existing != null && _sameTenantScope(existing.lease, lease)) {
+      return existing.future;
     }
 
-    _isLoadingForTenant = true;
+    final load = _loadBlocksForTenantFromOrigin(lease);
+    final scopedLoad = _WebsiteScopedLoad<List<Map<String, dynamic>>>(
+      lease: lease,
+      future: load,
+    );
+    _blocksLoad = scopedLoad;
+    try {
+      return await load;
+    } finally {
+      if (identical(_blocksLoad, scopedLoad)) {
+        _blocksLoad = null;
+      }
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadBlocksForTenantFromOrigin(
+    _WebsiteTenantScopeLease lease,
+  ) async {
+    final sw = Stopwatch()..start();
+    final tenantId = lease.tenantId;
 
     try {
       debugPrint('[WebsiteService] Loading blocks for tenant: $tenantId');
@@ -1343,6 +1795,7 @@ class WebsiteService extends ChangeNotifier {
           .eq('is_home', true)
           .eq('is_published', true)
           .limit(1);
+      if (!_ownsTenantScope(lease)) return const [];
 
       debugPrint(
           '⏱️ [WebsiteService] Pages+Blocks JOIN query: ${sw.elapsedMilliseconds}ms');
@@ -1366,6 +1819,7 @@ class WebsiteService extends ChangeNotifier {
             .eq('is_published', true)
             .order('created_at', ascending: true)
             .limit(1);
+        if (!_ownsTenantScope(lease)) return const [];
 
         if ((firstPageWithBlocks as List).isNotEmpty) {
           final blocks =
@@ -1376,9 +1830,11 @@ class WebsiteService extends ChangeNotifier {
 
       if (data.isEmpty) {
         debugPrint('[WebsiteService] No blocks found for tenant $tenantId');
+        if (!_ownsTenantScope(lease)) return const [];
+        _blocks = [];
         _hasLoadedForTenant = true;
         _safeNotifyListeners();
-        return [];
+        return _blocks;
       }
 
       // Sort by order_index
@@ -1391,108 +1847,54 @@ class WebsiteService extends ChangeNotifier {
 
       // Cache the blocks for reuse (normalized)
       final normalizedBlocks = _normalizeBlocksList(data);
+      if (!_ownsTenantScope(lease)) return const [];
       _blocks = normalizedBlocks;
       _hasLoadedForTenant = true;
       _safeNotifyListeners();
 
       return normalizedBlocks;
     } catch (e) {
+      if (!_ownsTenantScope(lease)) return const [];
       debugPrint('[WebsiteService] Error loading blocks for tenant: $e');
       _hasLoadedForTenant = true; // Mark as loaded even on error
       _safeNotifyListeners();
-      return [];
+      return const [];
     }
   }
 
   Future<void> saveBlocks(List<Map<String, dynamic>> blocks,
       {String? tenantId}) async {
     try {
-      // Get tenant_id for multi-tenant isolation
       final effectiveTenantId = tenantId ?? await _tenantService.getTenantId();
       if (effectiveTenantId == null) {
         throw Exception('No tenant ID found');
       }
+      final homePage = await getHomePageForTenant(
+            effectiveTenantId,
+            rethrowErrors: true,
+          ) ??
+          await createPage(
+            WebsitePage(
+              id: '',
+              tenantId: effectiveTenantId,
+              slug: 'home',
+              title: 'Inicio',
+              isPublished: true,
+              isHome: true,
+              isSystem: true,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ),
+            tenantId: effectiveTenantId,
+          );
 
-      // Find the home page for this tenant (required for page_id)
-      String? homePageId;
-      final pagesResponse = await _supabase
-          .from('website_pages')
-          .select('id')
-          .eq('tenant_id', effectiveTenantId)
-          .eq('is_home', true)
-          .limit(1);
-
-      if ((pagesResponse as List).isNotEmpty) {
-        homePageId = pagesResponse[0]['id']?.toString();
-      }
-
-      // If no home page found, create one
-      if (homePageId == null) {
-        debugPrint('[WebsiteService] No home page found, creating one...');
-        final newPageResponse = await _supabase
-            .from('website_pages')
-            .insert({
-              'tenant_id': effectiveTenantId,
-              'slug': 'home',
-              'title': 'Inicio',
-              'is_home': true,
-              'is_published': true,
-              'is_system': true,
-            })
-            .select('id')
-            .single();
-        homePageId = newPageResponse['id']?.toString();
-        debugPrint('[WebsiteService] Created home page with id: $homePageId');
-      }
-
-      // Delete existing blocks FOR THIS TENANT'S HOME PAGE ONLY
-      await _supabase
-          .from('website_blocks')
-          .delete()
-          .eq('tenant_id', effectiveTenantId)
-          .eq('page_id', homePageId!);
-
-      // Insert new blocks
-      if (blocks.isNotEmpty) {
-        final blocksToInsert = blocks.asMap().entries.map((entry) {
-          final index = entry.key;
-          final block = entry.value;
-
-          // Accept both legacy snake_case keys and new camelCase keys
-          final blockTypeRaw =
-              (block['type'] ?? block['block_type'] ?? '').toString().trim();
-          final rawBlockData = block['data'] ?? block['block_data'] ?? {};
-          final normalizedBlockData = blockTypeRaw.isNotEmpty
-              ? _normalizeBlockData(
-                  blockTypeRaw: blockTypeRaw,
-                  rawBlockData: rawBlockData,
-                )
-              : (rawBlockData is Map
-                  ? Map<String, dynamic>.from(rawBlockData)
-                  : <String, dynamic>{});
-          final isVisible = block['isVisible'] ?? block['is_visible'] ?? true;
-          final orderIndex =
-              block['order_index'] ?? block['sort_order'] ?? index;
-
-          return {
-            'id': block['id'],
-            'tenant_id': effectiveTenantId, // ✅ Add tenant_id for RLS
-            'page_id': homePageId, // ✅ Add page_id for proper loading
-            'block_type': blockTypeRaw,
-            'block_data': normalizedBlockData,
-            'is_visible': isVisible,
-            'order_index': orderIndex,
-            'updated_at': DateTime.now().toIso8601String(),
-          };
-        }).toList();
-
-        await _supabase.from('website_blocks').insert(blocksToInsert);
-      }
-
-      // Content changed; invalidate any cached page snapshots.
-      WebsiteService.clearPageCache();
-
-      await loadBlocks();
+      _blocks = await replacePageBlocks(
+        tenantId: effectiveTenantId,
+        pageId: homePage.id,
+        blocks: blocks,
+      );
+      _hasLoadedForTenant = true;
+      _safeNotifyListeners();
     } catch (e) {
       _error = 'Error al guardar bloques: $e';
       debugPrint(_error);
@@ -1501,16 +1903,84 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
-  Future<void> deleteBlock(String id) async {
+  /// Canonical page-block persistence operation.
+  ///
+  /// PostgreSQL validates the entire payload before the scoped DELETE and
+  /// performs DELETE + INSERT in one transaction. The returned rows are the
+  /// database-confirmed document and therefore require no fallible readback.
+  Future<List<Map<String, dynamic>>> replacePageBlocks({
+    required String tenantId,
+    required String pageId,
+    required List<Map<String, dynamic>> blocks,
+    WebsiteEditorWriteGuard? writeGuard,
+  }) async {
+    final lease = _leaseForBoundTenant(tenantId);
     try {
-      await _supabase.from('website_blocks').delete().eq('id', id);
+      writeGuard?.call();
+      final payload = blocks.map((block) {
+        final blockType =
+            (block['type'] ?? block['block_type'] ?? '').toString().trim();
+        final rawBlockData = block['data'] ?? block['block_data'] ?? {};
+        final normalizedBlockData = blockType.isNotEmpty
+            ? _normalizeBlockData(
+                blockTypeRaw: blockType,
+                rawBlockData: rawBlockData,
+              )
+            : (rawBlockData is Map
+                ? Map<String, dynamic>.from(rawBlockData)
+                : <String, dynamic>{});
+        final id = block['id']?.toString().trim() ?? '';
 
+        return <String, dynamic>{
+          if (id.isNotEmpty) 'id': id,
+          'block_type': blockType,
+          'block_data': normalizedBlockData,
+          'is_visible': block['isVisible'] ?? block['is_visible'] ?? true,
+        };
+      }).toList(growable: false);
+
+      final response = await _supabase.rpc(
+        'replace_page_blocks',
+        params: {
+          'p_tenant_id': tenantId,
+          'p_page_id': pageId,
+          'p_blocks': payload,
+        },
+      );
+      // Post-response guard BEFORE any parse/cache/publication: A's late
+      // result may be durable server-side but never touches B locally.
+      writeGuard?.call();
+      if (response is! List) {
+        throw StateError(
+          'replace_page_blocks devolvió una respuesta no válida.',
+        );
+      }
+
+      final rows = response
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList(growable: false);
+      rows.sort(
+        (left, right) =>
+            ((left['order_index'] as num?)?.toInt() ?? 0).compareTo(
+          (right['order_index'] as num?)?.toInt() ?? 0,
+        ),
+      );
+      final normalized = _normalizeBlocksList(rows);
       WebsiteService.clearPageCache();
-      await loadBlocks();
+      return normalized;
     } catch (e) {
-      _error = 'Error al eliminar bloque: $e';
-      debugPrint(_error);
-      _safeNotifyListeners();
+      // A late failure (5xx/network/malformed) after an identity change
+      // reclassifies as SUPERSEDED before any error publication.
+      if (e is! WebsiteEditorWriteSupersededException) {
+        writeGuard?.call();
+      }
+      if (e is! WebsiteEditorWriteSupersededException &&
+          lease != null &&
+          _ownsTenantScope(lease)) {
+        _error = 'Error al reemplazar bloques de página: $e';
+        debugPrint(_error);
+        _safeNotifyListeners();
+      }
       rethrow;
     }
   }
@@ -1520,15 +1990,24 @@ class WebsiteService extends ChangeNotifier {
   // ============================================================================
 
   Future<void> loadFeaturedProducts() async {
-    _isLoading = true;
-    _error = null;
-    if (!_isInitializing) _safeNotifyListeners();
+    _WebsiteTenantScopeLease? lease;
 
     try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found');
+      }
+      lease = _bindTenantScope(tenantId);
+      _isLoading = true;
+      _error = null;
+      if (!_isInitializing) _safeNotifyListeners();
+
       final response = await _supabase
           .from('featured_products')
           .select()
+          .eq('tenant_id', tenantId)
           .order('order_index');
+      if (!_ownsTenantScope(lease)) return;
 
       _featuredProducts = (response as List)
           .map((json) => FeaturedProduct.fromJson(json))
@@ -1536,11 +2015,15 @@ class WebsiteService extends ChangeNotifier {
 
       _error = null;
     } catch (e) {
-      _error = 'Error al cargar productos destacados: $e';
-      debugPrint(_error);
+      if (lease == null || _ownsTenantScope(lease)) {
+        _error = 'Error al cargar productos destacados: $e';
+        debugPrint(_error);
+      }
     } finally {
-      _isLoading = false;
-      _safeNotifyListeners();
+      if (lease == null || _ownsTenantScope(lease)) {
+        _isLoading = false;
+        _safeNotifyListeners();
+      }
     }
   }
 
@@ -1548,12 +2031,14 @@ class WebsiteService extends ChangeNotifier {
   /// This method does NOT require authentication
   Future<List<FeaturedProduct>> loadFeaturedProductsForTenant(
       String tenantId) async {
+    final lease = _bindTenantScope(tenantId);
     try {
       final response = await _supabase
           .from('featured_products')
           .select()
-          .eq('tenant_id', tenantId)
+          .eq('tenant_id', lease.tenantId)
           .order('order_index');
+      if (!_ownsTenantScope(lease)) return const [];
 
       final products = (response as List)
           .map((json) => FeaturedProduct.fromJson(json))
@@ -1564,7 +2049,7 @@ class WebsiteService extends ChangeNotifier {
 
       return products;
     } catch (e) {
-      return [];
+      return const [];
     }
   }
 
@@ -1635,12 +2120,23 @@ class WebsiteService extends ChangeNotifier {
   // ============================================================================
 
   Future<void> loadContents() async {
-    _isLoading = true;
-    _error = null;
-    if (!_isInitializing) _safeNotifyListeners();
+    _WebsiteTenantScopeLease? lease;
 
     try {
-      final response = await _supabase.from('website_content').select();
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found');
+      }
+      lease = _bindTenantScope(tenantId);
+      _isLoading = true;
+      _error = null;
+      if (!_isInitializing) _safeNotifyListeners();
+
+      final response = await _supabase
+          .from('website_content')
+          .select()
+          .eq('tenant_id', tenantId);
+      if (!_ownsTenantScope(lease)) return;
 
       _contents = (response as List)
           .map((json) => WebsiteContent.fromJson(json))
@@ -1648,11 +2144,15 @@ class WebsiteService extends ChangeNotifier {
 
       _error = null;
     } catch (e) {
-      _error = 'Error al cargar contenido: $e';
-      debugPrint(_error);
+      if (lease == null || _ownsTenantScope(lease)) {
+        _error = 'Error al cargar contenido: $e';
+        debugPrint(_error);
+      }
     } finally {
-      _isLoading = false;
-      _safeNotifyListeners();
+      if (lease == null || _ownsTenantScope(lease)) {
+        _isLoading = false;
+        _safeNotifyListeners();
+      }
     }
   }
 
@@ -1692,88 +2192,113 @@ class WebsiteService extends ChangeNotifier {
   // ============================================================================
 
   Future<void> loadSettings() async {
-    _isLoading = true;
-    _error = null;
-    if (!_isInitializing) _safeNotifyListeners();
+    _WebsiteTenantScopeLease? lease;
 
     try {
       final tenantId = await _tenantService.getTenantId();
       if (tenantId == null) {
         throw Exception('No tenant ID available');
       }
-
-      final response = await _supabase
-          .from('website_settings')
-          .select()
-          .eq('tenant_id', tenantId);
-
-      _settings = {};
-      for (final row in response as List) {
-        _settings[row['key'] as String] = row['value'] as String? ?? '';
-      }
-
-      // Normalize address/contact SEO keys for runtime consistency.
-      // This fixes legacy values like "Chile, Chile" without requiring a manual save.
-      final normalized =
-          _normalizeWebsiteSettingsForSeoConsistency(const <String, dynamic>{});
-      for (final entry in normalized.entries) {
-        _settings[entry.key] = entry.value?.toString() ?? '';
-      }
-
-      _themePresets = _parseThemePresets(_settings['theme_presets']);
-
+      lease = _bindTenantScope(tenantId);
+      _isLoading = true;
       _error = null;
+      if (!_isInitializing) _safeNotifyListeners();
+
+      await _loadSettingsForTenantWithinScope(lease);
+      if (_ownsTenantScope(lease)) _error = null;
     } catch (e) {
-      _error = 'Error al cargar configuración: $e';
-      debugPrint(_error);
+      if (lease == null || _ownsTenantScope(lease)) {
+        _error = 'Error al cargar configuración: $e';
+        debugPrint(_error);
+      }
     } finally {
-      _isLoading = false;
-      _safeNotifyListeners();
+      if (lease == null || _ownsTenantScope(lease)) {
+        _isLoading = false;
+        _safeNotifyListeners();
+      }
     }
   }
 
   /// Load settings for a specific tenant (used by public store for anonymous visitors)
   /// This method does NOT require authentication
-  Future<Map<String, String>> loadSettingsForTenant(String tenantId) async {
-    final sw = Stopwatch()..start();
+  Future<Map<String, String>> loadSettingsForTenant(
+    String tenantId, {
+    bool rethrowErrors = false,
+  }) async {
+    final lease = _bindTenantScope(tenantId);
     try {
-      final response = await _supabase
-          .from('website_settings')
-          .select()
-          .eq('tenant_id', tenantId);
-
-      debugPrint(
-          '⏱️ [WebsiteService] Settings query: ${sw.elapsedMilliseconds}ms');
-
-      final settings = <String, String>{};
-      for (final row in response as List) {
-        settings[row['key'] as String] = row['value'] as String? ?? '';
-      }
-
-      // Apply the same normalization as the editor path so public store/footer
-      // doesn’t show duplicated country tokens like "Chile, Chile".
-      // _normalizeWebsiteSettingsForSeoConsistency overlays `_settings`, so
-      // temporarily point `_settings` at this tenant's map to compute correctly.
-      _settings = {...settings};
-      final normalizedForTenant = _normalizeWebsiteSettingsForSeoConsistency(
-        const <String, dynamic>{},
-      );
-      for (final entry in normalizedForTenant.entries) {
-        settings[entry.key] = entry.value?.toString() ?? '';
-      }
-
-      // Also update internal state so getSetting() works
-      _settings = settings;
-      _themePresets = _parseThemePresets(_settings['theme_presets']);
-
-      debugPrint(
-          '⏱️ [WebsiteService] Settings total: ${sw.elapsedMilliseconds}ms (${settings.length} settings)');
-      return settings;
+      return await _loadSettingsForTenantWithinScope(lease);
     } catch (e) {
-      debugPrint(
-          '⏱️ [WebsiteService] Settings ERROR: ${sw.elapsedMilliseconds}ms - $e');
-      return {};
+      if (!_ownsTenantScope(lease)) return const {};
+      debugPrint('⏱️ [WebsiteService] Settings ERROR: $e');
+      if (rethrowErrors) rethrow;
+      return const {};
     }
+  }
+
+  Future<Map<String, String>> _loadSettingsForTenantWithinScope(
+    _WebsiteTenantScopeLease lease,
+  ) async {
+    if (!_ownsTenantScope(lease)) return const {};
+
+    final existing = _settingsLoad;
+    if (existing != null && _sameTenantScope(existing.lease, lease)) {
+      return existing.future;
+    }
+
+    final load = _loadSettingsForTenantFromOrigin(lease);
+    final scopedLoad = _WebsiteScopedLoad<Map<String, String>>(
+      lease: lease,
+      future: load,
+    );
+    _settingsLoad = scopedLoad;
+    try {
+      return await load;
+    } finally {
+      if (identical(_settingsLoad, scopedLoad)) {
+        _settingsLoad = null;
+      }
+    }
+  }
+
+  Future<Map<String, String>> _loadSettingsForTenantFromOrigin(
+    _WebsiteTenantScopeLease lease,
+  ) async {
+    final sw = Stopwatch()..start();
+    final tenantId = lease.tenantId;
+    final response = await _supabase
+        .from('website_settings')
+        .select()
+        .eq('tenant_id', tenantId);
+    if (!_ownsTenantScope(lease)) return const {};
+
+    debugPrint(
+        '⏱️ [WebsiteService] Settings query: ${sw.elapsedMilliseconds}ms');
+
+    final settings = <String, String>{};
+    for (final row in response as List) {
+      settings[row['key'] as String] = row['value'] as String? ?? '';
+    }
+
+    // Apply the same normalization as the editor path without temporarily
+    // assigning this response to global state. A stale response therefore has
+    // no write window, even while aliases are being computed.
+    final normalizedForTenant = _normalizeWebsiteSettingsForSeoConsistency(
+      const <String, dynamic>{},
+      baseSettings: settings,
+    );
+    for (final entry in normalizedForTenant.entries) {
+      settings[entry.key] = entry.value?.toString() ?? '';
+    }
+
+    if (!_ownsTenantScope(lease)) return const {};
+    _settings = settings;
+    _settingsProjectionTenantId = tenantId;
+    _themePresets = _parseThemePresets(_settings['theme_presets']);
+
+    debugPrint(
+        '⏱️ [WebsiteService] Settings total: ${sw.elapsedMilliseconds}ms (${settings.length} settings)');
+    return settings;
   }
 
   Future<void> saveSetting(String key, String value) async {
@@ -1787,6 +2312,24 @@ class WebsiteService extends ChangeNotifier {
   Future<void> saveSettings(Map<String, String> settings) async {
     await _upsertSettings(
       settings,
+      errorContext: 'Error al guardar configuraciones',
+    );
+  }
+
+  /// Tenant-explicit settings write used by the Website Builder save command.
+  ///
+  /// The editor can be mounted under the public-store host, so its detected
+  /// tenant must remain explicit throughout the whole save instead of being
+  /// resolved independently for every bucket.
+  Future<void> saveSettingsForTenant(
+    String tenantId,
+    Map<String, String> settings, {
+    WebsiteEditorWriteGuard? writeGuard,
+  }) async {
+    await _upsertSettings(
+      settings,
+      tenantId: tenantId,
+      writeGuard: writeGuard,
       errorContext: 'Error al guardar configuraciones',
     );
   }
@@ -1983,14 +2526,13 @@ class WebsiteService extends ChangeNotifier {
       {'theme_presets': encoded},
       errorContext: errorContext,
     );
-
-    _settings['theme_presets'] = encoded;
-    _themePresets = presets;
   }
 
   Future<void> _upsertSettings(
     Map<String, dynamic> values, {
+    String? tenantId,
     required String errorContext,
+    WebsiteEditorWriteGuard? writeGuard,
   }) async {
     if (values.isEmpty) {
       debugPrint(
@@ -1998,102 +2540,119 @@ class WebsiteService extends ChangeNotifier {
       return;
     }
 
-    // ----------------------------------------------------------------------
-    // SINGLE SOURCE OF TRUTH (Editor → DB → Public Store + index.html)
-    //
-    // The editor UI can edit some fields through different panels (SEO page,
-    // footer/contact panel, etc). Historically we stored both `seo_*` keys and
-    // legacy `contact_*` / `meta_*` keys for backwards compatibility.
-    //
-    // If we allow these to drift, the public store (runtime) and the deployed
-    // `web/index.html` (generated by scripts/sync_seo_index.sh) can disagree.
-    //
-    // This normalization keeps the keys in sync at the point of persistence.
-    // ----------------------------------------------------------------------
-    values = _normalizeWebsiteSettingsForSeoConsistency(values);
-
+    _WebsiteTenantScopeLease? lease;
+    final hasExplicitTenant = tenantId != null;
     try {
-      final tenantId = await _tenantService.getTenantId();
+      tenantId ??= await _tenantService.getTenantId();
       debugPrint(
           '💾 [WebsiteService] _upsertSettings: tenantId=$tenantId, ${values.length} settings to save');
       if (tenantId == null) {
         throw Exception('No tenant ID available');
       }
+      lease = hasExplicitTenant
+          ? _leaseForBoundTenant(tenantId)
+          : _bindTenantScope(tenantId);
+
+      // --------------------------------------------------------------------
+      // SINGLE SOURCE OF TRUTH (Editor → DB → Public Store + index.html)
+      //
+      // An explicit editor save must never rebind a service that has already
+      // switched to another tenant. Use the active projection only when its
+      // lease still matches; otherwise obtain a tenant-scoped normalization
+      // baseline without publishing it locally.
+      // --------------------------------------------------------------------
+      Map<String, String> normalizationBaseline;
+      if (lease != null &&
+          _ownsTenantScope(lease) &&
+          _settingsProjectionTenantId == tenantId) {
+        normalizationBaseline = Map<String, String>.from(_settings);
+      } else {
+        final existingRows = await _supabase
+            .from('website_settings')
+            .select('key,value')
+            .eq('tenant_id', tenantId);
+        normalizationBaseline = <String, String>{
+          for (final rawRow in existingRows as List)
+            if (rawRow is Map && rawRow['key'] != null)
+              rawRow['key'].toString(): rawRow['value']?.toString() ?? '',
+        };
+      }
+      values = _normalizeWebsiteSettingsForSeoConsistency(
+        values,
+        baseSettings: normalizationBaseline,
+      );
 
       final timestamp = DateTime.now().toIso8601String();
-
-      // Update or insert each setting individually
-      for (final entry in values.entries) {
-        final key = entry.key;
-        final value = entry.value?.toString() ?? '';
-
-        // Optimistic cache update (fixes UI reverting old value after save)
-        _settings[key] = value;
-
-        debugPrint(
-            '💾 [WebsiteService] Upserting setting: $key = $value for tenant $tenantId');
-        try {
-          // Try UPDATE first (most common case after initial setup)
-          final updateResult = await _supabase
-              .from('website_settings')
-              .update({
-                'value': value,
-                'updated_at': timestamp,
-              })
-              .eq('tenant_id', tenantId)
-              .eq('key', key)
-              .select();
-          debugPrint(
-              '✅ [WebsiteService] Updated ${entry.key}: ${updateResult.length} rows affected');
-
-          // If no rows were updated, insert new row
-          if (updateResult.isEmpty) {
-            await _supabase.from('website_settings').insert({
-              'key': entry.key,
-              'value': entry.value?.toString() ?? '',
+      final normalizedValues = <String, String>{
+        for (final entry in values.entries)
+          entry.key: entry.value?.toString() ?? '',
+      };
+      final rows = normalizedValues.entries
+          .map(
+            (entry) => <String, dynamic>{
               'tenant_id': tenantId,
+              'key': entry.key,
+              'value': entry.value,
               'updated_at': timestamp,
-            });
-          }
-        } catch (e) {
-          debugPrint('⚠️ Error upserting setting ${entry.key}: $e');
-          // If INSERT fails due to conflict, try UPDATE again (race condition)
-          if (e.toString().contains('409') ||
-              e.toString().contains('Conflict')) {
-            await _supabase
-                .from('website_settings')
-                .update({
-                  'value': entry.value?.toString() ?? '',
-                  'updated_at': timestamp,
-                })
-                .eq('tenant_id', tenantId)
-                .eq('key', entry.key);
-          } else {
-            rethrow;
-          }
-        }
-      }
+            },
+          )
+          .toList(growable: false);
 
-      await loadSettings();
+      // Re-validate the saving authority AFTER the baseline read and
+      // immediately BEFORE the mutable statement.
+      writeGuard?.call();
+      // `website_settings_tenant_key_unique` makes this one PostgreSQL
+      // statement. Either every normalized owner value is persisted or none
+      // is; a failed request can no longer leave the public site half old and
+      // half new.
+      await _supabase
+          .from('website_settings')
+          .upsert(rows, onConflict: 'tenant_id,key');
+      // Re-validate AFTER the response, BEFORE any local projection: A's
+      // durable write may exist server-side, but B's projection/drafts stay
+      // completely untouched when the authority moved mid-flight.
+      writeGuard?.call();
+      if (lease == null || !_ownsTenantScope(lease)) return;
+
+      // Commit the local projection only after the database statement
+      // succeeds. This prevents a failed save from presenting unsaved values
+      // as canonical editor state.
+      _settings.addAll(normalizedValues);
+      _settingsProjectionTenantId = tenantId;
+
+      if (writeGuard == null) {
+        await _loadSettingsForTenantWithinScope(lease);
+      }
+      // Under a save guard the projection uses the CONFIRMED values above:
+      // a readback could publish during another unguarded await.
     } catch (e) {
-      _error = '$errorContext: $e';
-      debugPrint(_error);
-      _safeNotifyListeners();
+      // A late failure after an identity change reclassifies as SUPERSEDED
+      // before any error publication; a SUPERSEDED write never publishes
+      // into (nor notifies) the NEW session's projection.
+      if (e is! WebsiteEditorWriteSupersededException) {
+        writeGuard?.call();
+      }
+      if (e is! WebsiteEditorWriteSupersededException &&
+          lease != null &&
+          _ownsTenantScope(lease)) {
+        _error = '$errorContext: $e';
+        debugPrint(_error);
+        _safeNotifyListeners();
+      }
       rethrow;
     }
   }
 
   Map<String, dynamic> _normalizeWebsiteSettingsForSeoConsistency(
-    Map<String, dynamic> raw,
-  ) {
+    Map<String, dynamic> raw, {
+    Map<String, String>? baseSettings,
+  }) {
     // Convert pending updates to string values (this table stores strings).
-    final pending = <String, String>{
-      for (final entry in raw.entries) entry.key: entry.value?.toString() ?? '',
-    };
+    final pending = WebsiteSeoSettingsAliases.normalize(raw);
 
     // Overlay pending on the in-memory settings to compute an effective view.
     final effective = <String, String>{
-      ..._settings,
+      ...(baseSettings ?? _settings),
       ...pending,
     };
 
@@ -2105,24 +2664,39 @@ class WebsiteService extends ChangeNotifier {
       return '';
     }
 
+    String explicitOrEffective(List<String> keys) {
+      for (final key in keys) {
+        if (pending.containsKey(key)) return pending[key]!.trim();
+      }
+      return firstNonEmpty(keys);
+    }
+
+    bool hasExplicitUpdate(List<String> keys) => keys.any(pending.containsKey);
+
     // 1) Email: keep `seo_email` and `contact_email` in sync.
-    final email = firstNonEmpty(['seo_email', 'contact_email']);
-    if (email.isNotEmpty) {
+    const emailKeys = ['seo_email', 'contact_email'];
+    final email = explicitOrEffective(emailKeys);
+    if (email.isNotEmpty || hasExplicitUpdate(emailKeys)) {
       pending['seo_email'] = email;
       pending['contact_email'] = email;
     }
 
     // 2) Phone: keep `seo_phone` and `contact_phone` in sync.
-    final phone = firstNonEmpty(['seo_phone', 'contact_phone']);
-    if (phone.isNotEmpty) {
+    const phoneKeys = ['seo_phone', 'contact_phone'];
+    final phone = explicitOrEffective(phoneKeys);
+    if (phone.isNotEmpty || hasExplicitUpdate(phoneKeys)) {
       pending['seo_phone'] = phone;
       pending['contact_phone'] = phone;
     }
 
     // 3) Business name: keep `store_name` and `seo_business_name` in sync.
-    final businessName =
-        firstNonEmpty(['seo_business_name', 'store_name', 'meta_site_name']);
-    if (businessName.isNotEmpty) {
+    const businessNameKeys = [
+      'seo_business_name',
+      'store_name',
+      'meta_site_name',
+    ];
+    final businessName = explicitOrEffective(businessNameKeys);
+    if (businessName.isNotEmpty || hasExplicitUpdate(businessNameKeys)) {
       pending['store_name'] = businessName;
       pending['seo_business_name'] = businessName;
     }
@@ -2348,17 +2922,19 @@ class WebsiteService extends ChangeNotifier {
   // ============================================================================
 
   Future<void> loadOrders() async {
-    _isLoading = true;
-    _error = null;
-    _ordersLoadError = null;
-    _ordersEnrichmentWarning = null;
-    if (!_isInitializing) _safeNotifyListeners();
+    _WebsiteTenantScopeLease? lease;
 
     try {
       final tenantId = await _tenantService.getTenantId();
       if (tenantId == null) {
         throw Exception('No tenant_id found for current user');
       }
+      lease = _bindTenantScope(tenantId);
+      _isLoading = true;
+      _error = null;
+      _ordersLoadError = null;
+      _ordersEnrichmentWarning = null;
+      if (!_isInitializing) _safeNotifyListeners();
 
       // Load orders with items in a SINGLE query (no N+1 problem)
       // Limit to recent 100 orders for performance - use pagination for full list
@@ -2371,22 +2947,27 @@ class WebsiteService extends ChangeNotifier {
           .eq('tenant_id', tenantId)
           .order('created_at', ascending: false)
           .limit(100);
+      if (!_ownsTenantScope(lease)) return;
 
       final loadedOrders =
           (response as List).map((json) => OnlineOrder.fromJson(json)).toList();
       final ordersWithProducts =
           await _attachProductContextToOrders(loadedOrders, tenantId);
+      if (!_ownsTenantScope(lease)) return;
       // Payment-processing metadata is an operational enrichment, not the
       // authoritative order list. Keep the base orders visible if that
       // projection is temporarily unavailable (for example during a staged
       // backend rollout) and tell the operator exactly what is incomplete.
       _orders = ordersWithProducts;
       try {
-        _orders = await _attachPaymentProcessingToOrders(
+        final enrichedOrders = await _attachPaymentProcessingToOrders(
           ordersWithProducts,
           tenantId,
         );
+        if (!_ownsTenantScope(lease)) return;
+        _orders = enrichedOrders;
       } catch (enrichmentError) {
+        if (!_ownsTenantScope(lease)) return;
         _ordersEnrichmentWarning =
             'Los pedidos están cargados, pero el estado operativo de algunos '
             'pagos no está disponible. Actualiza nuevamente en unos minutos.';
@@ -2398,14 +2979,18 @@ class WebsiteService extends ChangeNotifier {
 
       _error = null;
     } catch (e) {
-      _error = 'Error al cargar pedidos online: $e';
-      _ordersLoadError =
-          'No se pudieron cargar los pedidos. Revisa la conexión o los permisos '
-          'y vuelve a intentarlo.';
-      debugPrint(_error);
+      if (lease == null || _ownsTenantScope(lease)) {
+        _error = 'Error al cargar pedidos online: $e';
+        _ordersLoadError =
+            'No se pudieron cargar los pedidos. Revisa la conexión o los permisos '
+            'y vuelve a intentarlo.';
+        debugPrint(_error);
+      }
     } finally {
-      _isLoading = false;
-      _safeNotifyListeners();
+      if (lease == null || _ownsTenantScope(lease)) {
+        _isLoading = false;
+        _safeNotifyListeners();
+      }
     }
   }
 
@@ -3119,28 +3704,15 @@ class WebsiteService extends ChangeNotifier {
         .where((id) => id.isNotEmpty)
         .toSet()
         .toList(growable: false);
-    final now = DateTime.now().toUtc().toIso8601String();
 
     try {
-      await _supabase.from('product_categories').update({
-        'show_on_website': false,
-        'updated_at': now,
-      }).eq('tenant_id', tenantId);
-      if (selected.isNotEmpty) {
-        const chunkSize = 200;
-        for (var start = 0; start < selected.length; start += chunkSize) {
-          final chunk =
-              selected.skip(start).take(chunkSize).toList(growable: false);
-          await _supabase
-              .from('product_categories')
-              .update({
-                'show_on_website': true,
-                'updated_at': now,
-              })
-              .eq('tenant_id', tenantId)
-              .inFilter('id', chunk);
-        }
-      }
+      await _supabase.rpc(
+        'replace_website_category_visibility',
+        params: {
+          'p_tenant_id': tenantId,
+          'p_visible_category_ids': selected,
+        },
+      );
       _safeNotifyListeners();
     } catch (error) {
       _error = 'Error al actualizar categorías públicas: $error';
@@ -3294,9 +3866,15 @@ class WebsiteService extends ChangeNotifier {
 
   List<WebsitePage> _pages = [];
   List<WebsiteNavigation> _navigation = [];
+  String? _authoritativePagesTenantId;
+  bool _hasAuthoritativePagePublication = false;
 
   List<WebsitePage> get pages => _pages;
   List<WebsiteNavigation> get navigation => _navigation;
+
+  bool hasAuthoritativePagePublicationForTenant(String tenantId) =>
+      _hasAuthoritativePagePublication &&
+      _authoritativePagesTenantId == tenantId;
 
   /// Load all pages for the current tenant (requires authentication)
   Future<void> loadPages() async {
@@ -3315,26 +3893,73 @@ class WebsiteService extends ChangeNotifier {
 
   /// Load all pages for a specific tenant (public - no auth required)
   /// Used by public store for anonymous visitors
-  Future<void> loadPagesForTenant(String tenantId) async {
+  Future<void> loadPagesForTenant(
+    String tenantId, {
+    bool rethrowErrors = false,
+  }) async {
+    final lease = _bindTenantScope(tenantId);
+
     try {
-      final response = await _supabase
-          .from('website_pages')
-          .select()
-          .eq('tenant_id', tenantId)
-          .order('is_home', ascending: false)
-          .order('title', ascending: true);
-
-      _pages =
-          (response as List).map((json) => WebsitePage.fromJson(json)).toList();
-
-      debugPrint(
-          '[WebsiteService] Loaded ${_pages.length} pages for tenant $tenantId');
-
-      _safeNotifyListeners();
+      await _loadPagesForTenantWithinScope(lease);
     } catch (e) {
+      if (!_ownsTenantScope(lease)) return;
       _error = 'Error al cargar páginas: $e';
+      if (_authoritativePagesTenantId == lease.tenantId ||
+          _authoritativePagesTenantId == null) {
+        _hasAuthoritativePagePublication = false;
+      }
       debugPrint(_error);
+      _safeNotifyListeners();
+      if (rethrowErrors) rethrow;
     }
+  }
+
+  Future<void> _loadPagesForTenantWithinScope(
+    _WebsiteTenantScopeLease lease,
+  ) async {
+    if (!_ownsTenantScope(lease)) return;
+
+    final existing = _pageLoadsByTenant[lease.tenantId];
+    if (existing != null && _sameTenantScope(existing.lease, lease)) {
+      await existing.future;
+      return;
+    }
+
+    final load = _loadPagesForTenantFromOrigin(lease);
+    final scopedLoad = _WebsiteScopedLoad<void>(lease: lease, future: load);
+    _pageLoadsByTenant[lease.tenantId] = scopedLoad;
+    try {
+      await load;
+    } finally {
+      if (identical(_pageLoadsByTenant[lease.tenantId], scopedLoad)) {
+        _pageLoadsByTenant.remove(lease.tenantId);
+      }
+    }
+  }
+
+  Future<void> _loadPagesForTenantFromOrigin(
+    _WebsiteTenantScopeLease lease,
+  ) async {
+    final tenantId = lease.tenantId;
+    final response = await _supabase
+        .from('website_pages')
+        .select()
+        .eq('tenant_id', tenantId)
+        .order('is_home', ascending: false)
+        .order('title', ascending: true);
+    if (!_ownsTenantScope(lease)) return;
+
+    final pages =
+        (response as List).map((json) => WebsitePage.fromJson(json)).toList();
+    if (!_ownsTenantScope(lease)) return;
+    _pages = pages;
+    _authoritativePagesTenantId = tenantId;
+    _hasAuthoritativePagePublication = true;
+
+    debugPrint(
+        '[WebsiteService] Loaded ${_pages.length} pages for tenant $tenantId');
+
+    _safeNotifyListeners();
   }
 
   /// Get a page by ID
@@ -3356,10 +3981,34 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
+  Future<WebsitePage?> getPageByIdForTenant(
+    String pageId,
+    String tenantId, {
+    bool rethrowErrors = false,
+  }) async {
+    try {
+      final response = await _supabase
+          .from('website_pages')
+          .select()
+          .eq('tenant_id', tenantId)
+          .eq('id', pageId)
+          .maybeSingle();
+      return response == null ? null : WebsitePage.fromJson(response);
+    } catch (e) {
+      debugPrint('Error getting tenant page by ID: $e');
+      if (rethrowErrors) rethrow;
+      return null;
+    }
+  }
+
   /// Get a page by slug
   /// If [tenantId] is provided, uses that instead of the current user's tenant
   /// (useful for public store where visitors may not be logged in)
-  Future<WebsitePage?> getPageBySlug(String slug, {String? tenantId}) async {
+  Future<WebsitePage?> getPageBySlug(
+    String slug, {
+    String? tenantId,
+    bool rethrowErrors = false,
+  }) async {
     try {
       final effectiveTenantId = tenantId ?? await _tenantService.getTenantId();
       if (effectiveTenantId == null) return null;
@@ -3377,16 +4026,23 @@ class WebsiteService extends ChangeNotifier {
       return null;
     } catch (e) {
       debugPrint('Error getting page by slug: $e');
+      if (rethrowErrors) rethrow;
       return null;
     }
   }
 
   /// Get the home page for the current tenant
   Future<WebsitePage?> getHomePage() async {
-    try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) return null;
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) return null;
+    return getHomePageForTenant(tenantId);
+  }
 
+  Future<WebsitePage?> getHomePageForTenant(
+    String tenantId, {
+    bool rethrowErrors = false,
+  }) async {
+    try {
       final response = await _supabase
           .from('website_pages')
           .select()
@@ -3400,61 +4056,97 @@ class WebsiteService extends ChangeNotifier {
       return null;
     } catch (e) {
       debugPrint('Error getting home page: $e');
+      if (rethrowErrors) rethrow;
       return null;
     }
   }
 
   /// Create a new page
-  Future<WebsitePage> createPage(WebsitePage page) async {
+  Future<WebsitePage> createPage(
+    WebsitePage page, {
+    String? tenantId,
+  }) async {
+    _WebsiteTenantScopeLease? lease;
+    final hasExplicitTenant = tenantId != null;
     try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
+      final effectiveTenantId = tenantId ?? await _tenantService.getTenantId();
+      if (effectiveTenantId == null) {
         throw Exception('No tenant_id found');
       }
+      if (page.tenantId.trim().isNotEmpty &&
+          page.tenantId != effectiveTenantId) {
+        throw StateError('La página no pertenece al tenant del guardado.');
+      }
+      lease = hasExplicitTenant
+          ? _leaseForBoundTenant(effectiveTenantId)
+          : _bindTenantScope(effectiveTenantId);
 
       final data = page.toInsertJson();
-      data['tenant_id'] = tenantId;
+      data['tenant_id'] = effectiveTenantId;
 
       final response =
           await _supabase.from('website_pages').insert(data).select().single();
 
       final newPage = WebsitePage.fromJson(response);
-      _pages.add(newPage);
       WebsiteService.clearPageCache();
-      _safeNotifyListeners();
+      if (lease != null && _ownsTenantScope(lease)) {
+        _pages.add(newPage);
+        _safeNotifyListeners();
+      }
 
       return newPage;
     } catch (e) {
-      _error = 'Error al crear página: $e';
-      debugPrint(_error);
+      if (lease != null && _ownsTenantScope(lease)) {
+        _error = 'Error al crear página: $e';
+        debugPrint(_error);
+      }
       rethrow;
     }
   }
 
   /// Update an existing page
-  Future<WebsitePage> updatePage(WebsitePage page) async {
+  Future<WebsitePage> updatePage(
+    WebsitePage page, {
+    WebsiteEditorWriteGuard? writeGuard,
+  }) async {
+    final lease = _leaseForBoundTenant(page.tenantId);
     try {
+      writeGuard?.call();
       final response = await _supabase
           .from('website_pages')
           .update(page.toUpdateJson())
           .eq('id', page.id)
+          .eq('tenant_id', page.tenantId)
           .select()
           .single();
+      // Post-response guard: never project A's result into B locally.
+      writeGuard?.call();
 
       final updatedPage = WebsitePage.fromJson(response);
 
       // Update local cache
-      final index = _pages.indexWhere((p) => p.id == page.id);
-      if (index >= 0) {
-        _pages[index] = updatedPage;
+      if (lease != null && _ownsTenantScope(lease)) {
+        final index = _pages.indexWhere((p) => p.id == page.id);
+        if (index >= 0) {
+          _pages[index] = updatedPage;
+        }
+        _safeNotifyListeners();
       }
       WebsiteService.clearPageCache();
-      _safeNotifyListeners();
 
       return updatedPage;
     } catch (e) {
-      _error = 'Error al actualizar página: $e';
-      debugPrint(_error);
+      // A late failure after an identity change reclassifies as SUPERSEDED
+      // before any error publication.
+      if (e is! WebsiteEditorWriteSupersededException) {
+        writeGuard?.call();
+      }
+      if (e is! WebsiteEditorWriteSupersededException &&
+          lease != null &&
+          _ownsTenantScope(lease)) {
+        _error = 'Error al actualizar página: $e';
+        debugPrint(_error);
+      }
       rethrow;
     }
   }
@@ -3538,613 +4230,90 @@ class WebsiteService extends ChangeNotifier {
 
   /// Save blocks for a specific page
   Future<void> saveBlocksForPage(
-      String pageId, List<Map<String, dynamic>> blocks,
-      {String? tenantId}) async {
-    try {
-      final effectiveTenantId = tenantId ?? await _tenantService.getTenantId();
-      if (effectiveTenantId == null) {
-        throw Exception('No tenant ID found');
-      }
-
-      // Delete existing blocks FOR THIS PAGE ONLY
-      await _supabase
-          .from('website_blocks')
-          .delete()
-          .eq('tenant_id', effectiveTenantId)
-          .eq('page_id', pageId);
-
-      // Insert new blocks
-      if (blocks.isNotEmpty) {
-        final blocksToInsert = blocks.asMap().entries.map((entry) {
-          final index = entry.key;
-          final block = entry.value;
-
-          final blockTypeRaw =
-              (block['type'] ?? block['block_type'] ?? '').toString().trim();
-          final rawBlockData = block['data'] ?? block['block_data'] ?? {};
-          final normalizedBlockData = blockTypeRaw.isNotEmpty
-              ? _normalizeBlockData(
-                  blockTypeRaw: blockTypeRaw,
-                  rawBlockData: rawBlockData,
-                )
-              : (rawBlockData is Map
-                  ? Map<String, dynamic>.from(rawBlockData)
-                  : <String, dynamic>{});
-
-          return {
-            'id': block['id'],
-            'tenant_id': effectiveTenantId,
-            'page_id': pageId,
-            'block_type': blockTypeRaw,
-            'block_data': normalizedBlockData,
-            'is_visible': block['isVisible'] ?? block['is_visible'] ?? true,
-            'order_index': index,
-            'updated_at': DateTime.now().toIso8601String(),
-          };
-        }).toList();
-
-        await _supabase.from('website_blocks').insert(blocksToInsert);
-      }
-
-      // Content changed; invalidate any cached page snapshots.
-      WebsiteService.clearPageCache();
-
-      _safeNotifyListeners();
-    } catch (e) {
-      _error = 'Error al guardar bloques de página: $e';
-      debugPrint(_error);
-      rethrow;
-    }
-  }
-
-  // ==========================================================================
-  // EDITOR SAVE PIPELINE (Shared by PublicStoreLayout + PersistentEditorShell)
-  // ==========================================================================
-
-  Future<WebsiteEditorSaveResult> saveEditorChanges({
-    required String tenantId,
-    required List<Map<String, dynamic>> editorBlocks,
-    Map<String, String>? pendingSiteSettings,
-    required Map<String, String> pendingHeaderSettings,
-    required Map<String, String> pendingFooterSettings,
-    required Map<String, String> pendingThemeSettings,
-    Map<String, String>? pendingFooterNavLabels,
-    Map<String, NavLinkType>? pendingFooterNavLinkTypes,
-    Map<String, String?>? pendingFooterNavLinkValues,
-    Map<String, bool>? pendingFooterNavOpenInNewTab,
-    Map<String, WebsiteNavigation>? pendingFooterNavItems,
-    Map<String, WebsiteNavigation>? pendingFooterNavCreates,
-    Set<String>? pendingFooterNavDeletes,
-    Map<String, Map<String, String>>? pendingPageSeo,
-    List<String>? pendingFooterSectionOrder,
-    Map<String, List<String>>? pendingFooterLinkOrder,
-    Map<String, bool>? pendingCategoryVisibility,
-    String? pageId,
-    String? pageSlug,
+    String pageId,
+    List<Map<String, dynamic>> blocks, {
+    String? tenantId,
   }) async {
-    // Save category visibility changes first
-    if (pendingCategoryVisibility != null &&
-        pendingCategoryVisibility.isNotEmpty) {
-      debugPrint(
-          '📁 [WebsiteService] Saving ${pendingCategoryVisibility.length} category visibility changes');
-      for (final entry in pendingCategoryVisibility.entries) {
-        try {
-          await _supabase
-              .from('product_categories')
-              .update({'show_on_website': entry.value})
-              .eq('id', entry.key)
-              .eq('tenant_id', tenantId);
-          debugPrint(
-              '✅ [WebsiteService] Category ${entry.key} show_on_website = ${entry.value}');
-        } catch (e) {
-          debugPrint(
-              '❌ [WebsiteService] Failed to update category visibility: $e');
-        }
-      }
+    final effectiveTenantId = tenantId ?? await _tenantService.getTenantId();
+    if (effectiveTenantId == null) {
+      throw Exception('No tenant ID found');
     }
 
-    // Save generic site-wide settings first (if any)
-    if (pendingSiteSettings != null && pendingSiteSettings.isNotEmpty) {
-      await saveSettings(pendingSiteSettings);
-    }
-
-    // Save header/theme settings first (if any)
-    if (pendingHeaderSettings.isNotEmpty) {
-      await saveSettings(pendingHeaderSettings);
-    }
-    if (pendingFooterSettings.isNotEmpty) {
-      await saveSettings(pendingFooterSettings);
-    }
-    if (pendingThemeSettings.isNotEmpty) {
-      await saveSettings(pendingThemeSettings);
-    }
-
-    // Save pending page-level SEO (meta title/description)
-    if (pendingPageSeo != null && pendingPageSeo.isNotEmpty) {
-      for (final entry in pendingPageSeo.entries) {
-        final routeKey = entry.key.trim();
-        if (routeKey.isEmpty) continue;
-
-        final metaTitle = entry.value['meta_title'] ?? '';
-        final metaDescription = entry.value['meta_description'] ?? '';
-
-        // IMPORTANT:
-        // The deployed `web/index.html` SEO (what Google sees) is generated by
-        // `scripts/sync_seo_index.sh`, which reads from `website_settings`.
-        // For the home page we mirror page SEO into the site-wide keys.
-        if (routeKey == 'inicio') {
-          await saveSettings({
-            'seo_meta_title': metaTitle,
-            'seo_meta_description': metaDescription,
-            // Legacy keys (used by older UI + as fallbacks in the sync script)
-            'meta_title': metaTitle,
-            'meta_description': metaDescription,
-          });
-        }
-
-        // Prefer updating website_pages when the page exists; otherwise fall back
-        // to legacy website_settings keys for special routes.
-        final existing = await getPageBySlug(routeKey, tenantId: tenantId);
-        if (existing != null) {
-          await updatePage(
-            existing.copyWith(
-              metaTitle: metaTitle,
-              metaDescription: metaDescription,
-            ),
-          );
-        } else {
-          await saveSettings({
-            'seo_${routeKey}_title': metaTitle,
-            'seo_${routeKey}_description': metaDescription,
-          });
-        }
-      }
-    }
-
-    final createdFooterNavIds = <String, String>{};
-
-    // Delete staged footer navigation items before creating/reordering.
-    if (pendingFooterNavDeletes != null && pendingFooterNavDeletes.isNotEmpty) {
-      for (final navId in pendingFooterNavDeletes) {
-        await deleteNavigation(navId);
-      }
-    }
-
-    // Create draft footer navigation items, resolving draft parent IDs first.
-    if (pendingFooterNavCreates != null && pendingFooterNavCreates.isNotEmpty) {
-      final remaining =
-          Map<String, WebsiteNavigation>.from(pendingFooterNavCreates);
-
-      while (remaining.isNotEmpty) {
-        var createdAny = false;
-
-        for (final entry in remaining.entries.toList()) {
-          final draftId = entry.key;
-          final staged = pendingFooterNavItems?[draftId] ?? entry.value;
-          final parentId = staged.parentId;
-          final parentIsDraft =
-              parentId != null && pendingFooterNavCreates.containsKey(parentId);
-
-          if (parentIsDraft && !createdFooterNavIds.containsKey(parentId)) {
-            continue;
-          }
-
-          var nextLinkValue = staged.linkValue;
-          if (pendingFooterNavLinkValues?.containsKey(draftId) ?? false) {
-            nextLinkValue = pendingFooterNavLinkValues?[draftId];
-          }
-
-          final created = await createNavigation(
-            WebsiteNavigation(
-              id: '',
-              tenantId: tenantId,
-              menuLocation: staged.menuLocation,
-              label: pendingFooterNavLabels?[draftId] ?? staged.label,
-              icon: staged.icon,
-              linkType: pendingFooterNavLinkTypes?[draftId] ?? staged.linkType,
-              linkValue: nextLinkValue,
-              openInNewTab:
-                  pendingFooterNavOpenInNewTab?[draftId] ?? staged.openInNewTab,
-              parentId: parentId == null
-                  ? null
-                  : (createdFooterNavIds[parentId] ?? parentId),
-              orderIndex: staged.orderIndex,
-              isVisible: staged.isVisible,
-              showOnDesktop: staged.showOnDesktop,
-              showOnMobile: staged.showOnMobile,
-              cssClass: staged.cssClass,
-              highlight: staged.highlight,
-              createdAt: staged.createdAt,
-              updatedAt: DateTime.now(),
-            ),
-          );
-
-          createdFooterNavIds[draftId] = created.id;
-          remaining.remove(draftId);
-          createdAny = true;
-        }
-
-        if (!createdAny) {
-          throw StateError(
-            'No se pudo resolver la jerarquía de navegación pendiente.',
-          );
-        }
-      }
-    }
-
-    String resolveFooterNavId(String id) => createdFooterNavIds[id] ?? id;
-
-    // Save pending footer navigation order after draft IDs have been resolved.
-    if (pendingFooterSectionOrder != null &&
-        pendingFooterSectionOrder.isNotEmpty) {
-      await reorderNavigationIds(
-        pendingFooterSectionOrder.map(resolveFooterNavId).toList(),
-      );
-    }
-    if (pendingFooterLinkOrder != null && pendingFooterLinkOrder.isNotEmpty) {
-      for (final entry in pendingFooterLinkOrder.entries) {
-        await reorderNavigationIds(
-          entry.value.map(resolveFooterNavId).toList(),
-        );
-      }
-    }
-
-    // Save pending footer navigation item edits.
-    final hasNavLabelEdits =
-        pendingFooterNavLabels != null && pendingFooterNavLabels.isNotEmpty;
-    final hasNavTypeEdits = pendingFooterNavLinkTypes != null &&
-        pendingFooterNavLinkTypes.isNotEmpty;
-    final hasNavValueEdits = pendingFooterNavLinkValues != null &&
-        pendingFooterNavLinkValues.isNotEmpty;
-    final hasNavTabEdits = pendingFooterNavOpenInNewTab != null &&
-        pendingFooterNavOpenInNewTab.isNotEmpty;
-    final hasNavItemEdits =
-        pendingFooterNavItems != null && pendingFooterNavItems.isNotEmpty;
-
-    if (hasNavLabelEdits ||
-        hasNavTypeEdits ||
-        hasNavValueEdits ||
-        hasNavTabEdits ||
-        hasNavItemEdits) {
-      final ids = <String>{
-        ...?pendingFooterNavLabels?.keys,
-        ...?pendingFooterNavLinkTypes?.keys,
-        ...?pendingFooterNavLinkValues?.keys,
-        ...?pendingFooterNavOpenInNewTab?.keys,
-        ...?pendingFooterNavItems?.keys,
-      };
-
-      for (final navId in ids) {
-        if ((pendingFooterNavDeletes?.contains(navId) ?? false) ||
-            (pendingFooterNavCreates?.containsKey(navId) ?? false)) {
-          continue;
-        }
-
-        WebsiteNavigation? existing;
-        final localIndex = _navigation.indexWhere((n) => n.id == navId);
-        if (localIndex >= 0) {
-          existing = _navigation[localIndex];
-        } else {
-          try {
-            final row = await _supabase
-                .from('website_navigation')
-                .select()
-                .eq('id', navId)
-                .single();
-            existing = WebsiteNavigation.fromJson(row);
-          } catch (e) {
-            debugPrint(
-                '⚠️ [WebsiteService] Nav $navId not found for update: $e');
-          }
-        }
-
-        if (existing == null) continue;
-
-        final staged = pendingFooterNavItems?[navId];
-        final base = staged ?? existing;
-
-        var nextLinkValue = base.linkValue;
-        if (pendingFooterNavLinkValues?.containsKey(navId) ?? false) {
-          nextLinkValue = pendingFooterNavLinkValues?[navId];
-        }
-
-        final next = WebsiteNavigation(
-          id: existing.id,
-          tenantId: existing.tenantId,
-          menuLocation: base.menuLocation,
-          label: pendingFooterNavLabels?[navId] ?? base.label,
-          icon: base.icon,
-          linkType: pendingFooterNavLinkTypes?[navId] ?? base.linkType,
-          linkValue: nextLinkValue,
-          openInNewTab:
-              pendingFooterNavOpenInNewTab?[navId] ?? base.openInNewTab,
-          parentId: base.parentId,
-          orderIndex: base.orderIndex,
-          isVisible: base.isVisible,
-          showOnDesktop: base.showOnDesktop,
-          showOnMobile: base.showOnMobile,
-          cssClass: base.cssClass,
-          highlight: base.highlight,
-          createdAt: existing.createdAt,
-          updatedAt: DateTime.now(),
-          children: existing.children,
-          linkedPage: existing.linkedPage,
-        );
-
-        await updateNavigation(next);
-      }
-    }
-
-    // Map provider/editor blocks to the canonical save format
-    final blocksForSave = editorBlocks.asMap().entries.map((entry) {
-      final index = entry.key;
-      final block = entry.value;
-      final blockType = block['block_type'] ?? block['type'];
-      final blockData = block['block_data'] ?? block['data'] ?? {};
-      final isVisible = block['is_visible'] ?? block['isVisible'] ?? true;
-      final orderIndex = block['order_index'] ?? index;
-      return {
-        'id': block['id'],
-        'type': blockType,
-        'data': blockData,
-        'isVisible': isVisible,
-        'order_index': orderIndex,
-      };
-    }).toList();
-
-    // Resolve/create page by slug if needed (prevents accidentally overwriting home)
-    var resolvedPageId = pageId;
-    final normalizedSlug = (pageSlug ?? '').trim();
-    if (resolvedPageId == null &&
-        normalizedSlug.isNotEmpty &&
-        normalizedSlug.toLowerCase() != 'home') {
-      final existingPage =
-          await getPageBySlug(normalizedSlug, tenantId: tenantId);
-      if (existingPage != null) {
-        resolvedPageId = existingPage.id;
-      } else {
-        final created = await createPage(
-          WebsitePage(
-            id: '',
-            tenantId: tenantId,
-            slug: normalizedSlug,
-            title: normalizedSlug,
-            isPublished: true,
-            isHome: false,
-            isSystem: false,
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-          ),
-        );
-        resolvedPageId = created.id;
-      }
-    }
-
-    // Persist blocks
-    if (resolvedPageId != null) {
-      await saveBlocksForPage(resolvedPageId, blocksForSave,
-          tenantId: tenantId);
-    } else {
-      await saveBlocks(blocksForSave, tenantId: tenantId);
-    }
-
-    // Reload fresh blocks from DB
-    final List<Map<String, dynamic>> freshBlocks;
-    if (resolvedPageId != null) {
-      freshBlocks = await loadBlocksForPage(resolvedPageId, tenantId: tenantId);
-    } else {
-      freshBlocks = await loadBlocksForTenant(tenantId);
-    }
-
-    return WebsiteEditorSaveResult(
-      pageId: resolvedPageId,
-      pageSlug: normalizedSlug.isNotEmpty ? normalizedSlug : pageSlug,
-      freshBlocks: freshBlocks,
+    await replacePageBlocks(
+      tenantId: effectiveTenantId,
+      pageId: pageId,
+      blocks: blocks,
     );
+    _safeNotifyListeners();
   }
 
   // ==========================================================================
   // PUBLIC-STORE NAVIGATION CACHE (tenantId-scoped)
   // ==========================================================================
 
-  bool _isLoadingNavigationForTenant = false;
   bool _hasLoadedNavigationForTenant = false;
   String? _loadedNavigationTenantId;
 
   final Set<String> _attemptedDefaultFooterSeedForTenant = {};
 
-  Future<void> _seedDefaultFooterNavigationIfNeeded(String tenantId) async {
+  Future<void> _seedDefaultFooterNavigationIfNeeded(
+    _WebsiteTenantScopeLease lease,
+    List<WebsiteNavigation> navigation,
+  ) async {
     // Only seed when authenticated (public/anon store must never attempt inserts).
     if (_supabase.auth.currentUser == null) return;
+    if (!_ownsTenantScope(lease)) return;
+    final tenantId = lease.tenantId;
     if (_attemptedDefaultFooterSeedForTenant.contains(tenantId)) return;
 
     final hasFooter =
-        _navigation.any((n) => n.menuLocation == MenuLocation.footer);
+        navigation.any((n) => n.menuLocation == MenuLocation.footer);
     if (hasFooter) return;
+
+    // A storefront customer session is authenticated too, but it does not own
+    // Website Builder defaults. Only the active ERP tenant may seed them.
+    final activeTenantId = await _tenantService.getTenantId();
+    if (!_ownsTenantScope(lease) || activeTenantId != tenantId) return;
 
     _attemptedDefaultFooterSeedForTenant.add(tenantId);
 
     try {
-      // Create section: Enlaces
-      final enlacesParent = await _supabase
-          .from('website_navigation')
-          .insert({
-            'tenant_id': tenantId,
-            'menu_location': 'footer',
-            'label': 'Enlaces',
-            'link_type': 'action',
-            'link_value': '',
-            'open_in_new_tab': false,
-            'parent_id': null,
-            'order_index': 0,
-            'is_visible': true,
-            'show_on_desktop': true,
-            'show_on_mobile': true,
-          })
-          .select('id')
-          .single();
+      if (!_ownsTenantScope(lease)) return;
+      final result = await _supabase.rpc(
+        'ensure_default_footer_navigation',
+        params: {'p_tenant_id': tenantId},
+      );
+      if (!_ownsTenantScope(lease)) return;
 
-      final enlacesParentId = (enlacesParent['id'] as String?) ?? '';
-
-      if (enlacesParentId.isNotEmpty) {
-        await _supabase.from('website_navigation').insert([
-          {
-            'tenant_id': tenantId,
-            'menu_location': 'footer',
-            'label': 'Inicio',
-            'link_type': 'page',
-            'link_value': '/tienda',
-            'open_in_new_tab': false,
-            'parent_id': enlacesParentId,
-            'order_index': 0,
-            'is_visible': true,
-            'show_on_desktop': true,
-            'show_on_mobile': true,
-          },
-          {
-            'tenant_id': tenantId,
-            'menu_location': 'footer',
-            'label': 'Productos',
-            'link_type': 'page',
-            'link_value': '/productos',
-            'open_in_new_tab': false,
-            'parent_id': enlacesParentId,
-            'order_index': 1,
-            'is_visible': true,
-            'show_on_desktop': true,
-            'show_on_mobile': true,
-          },
-          {
-            'tenant_id': tenantId,
-            'menu_location': 'footer',
-            'label': 'Servicios',
-            'link_type': 'page',
-            'link_value': '/servicios',
-            'open_in_new_tab': false,
-            'parent_id': enlacesParentId,
-            'order_index': 2,
-            'is_visible': true,
-            'show_on_desktop': true,
-            'show_on_mobile': true,
-          },
-          {
-            'tenant_id': tenantId,
-            'menu_location': 'footer',
-            'label': 'Contacto',
-            'link_type': 'page',
-            'link_value': '/tienda/contacto',
-            'open_in_new_tab': false,
-            'parent_id': enlacesParentId,
-            'order_index': 3,
-            'is_visible': true,
-            'show_on_desktop': true,
-            'show_on_mobile': true,
-          },
-        ]);
+      final resultMap = result is Map
+          ? Map<String, dynamic>.from(result)
+          : const <String, dynamic>{};
+      if (resultMap['tenant_id']?.toString() != tenantId) {
+        throw StateError(
+          'El footer devuelto no pertenece al tenant solicitado.',
+        );
       }
 
-      // Create section: Información
-      final infoParent = await _supabase
-          .from('website_navigation')
-          .insert({
-            'tenant_id': tenantId,
-            'menu_location': 'footer',
-            'label': 'Información',
-            'link_type': 'action',
-            'link_value': '',
-            'open_in_new_tab': false,
-            'parent_id': null,
-            'order_index': 1,
-            'is_visible': true,
-            'show_on_desktop': true,
-            'show_on_mobile': true,
-          })
-          .select('id')
-          .single();
-
-      final infoParentId = (infoParent['id'] as String?) ?? '';
-      if (infoParentId.isNotEmpty) {
-        await _supabase.from('website_navigation').insert([
-          {
-            'tenant_id': tenantId,
-            'menu_location': 'footer',
-            'label': 'Sobre Nosotros',
-            'link_type': 'page',
-            'link_value': '/nosotros',
-            'open_in_new_tab': false,
-            'parent_id': infoParentId,
-            'order_index': 0,
-            'is_visible': true,
-            'show_on_desktop': true,
-            'show_on_mobile': true,
-          },
-          {
-            'tenant_id': tenantId,
-            'menu_location': 'footer',
-            'label': 'Términos y Condiciones',
-            'link_type': 'page',
-            'link_value': '/terminos',
-            'open_in_new_tab': false,
-            'parent_id': infoParentId,
-            'order_index': 1,
-            'is_visible': true,
-            'show_on_desktop': true,
-            'show_on_mobile': true,
-          },
-          {
-            'tenant_id': tenantId,
-            'menu_location': 'footer',
-            'label': 'Política de Privacidad',
-            'link_type': 'page',
-            'link_value': '/privacidad',
-            'open_in_new_tab': false,
-            'parent_id': infoParentId,
-            'order_index': 2,
-            'is_visible': true,
-            'show_on_desktop': true,
-            'show_on_mobile': true,
-          },
-          {
-            'tenant_id': tenantId,
-            'menu_location': 'footer',
-            'label': 'Política de Devoluciones',
-            'link_type': 'page',
-            'link_value': '/devoluciones',
-            'open_in_new_tab': false,
-            'parent_id': infoParentId,
-            'order_index': 3,
-            'is_visible': true,
-            'show_on_desktop': true,
-            'show_on_mobile': true,
-          },
-          {
-            'tenant_id': tenantId,
-            'menu_location': 'footer',
-            'label': 'Envíos',
-            'link_type': 'page',
-            'link_value': '/envios',
-            'open_in_new_tab': false,
-            'parent_id': infoParentId,
-            'order_index': 4,
-            'is_visible': true,
-            'show_on_desktop': true,
-            'show_on_mobile': true,
-          },
-        ]);
-      }
-
-      debugPrint('✅ [WebsiteService] Seeded default footer navigation');
+      debugPrint(
+        resultMap['created'] == true
+            ? '✅ [WebsiteService] Seeded default footer navigation'
+            : 'ℹ️ [WebsiteService] Default footer navigation already exists',
+      );
     } catch (e) {
-      // Non-fatal: keep old fallback behavior.
+      // The failed attempt belongs to `tenantId`, even if another tenant
+      // became active while the RPC was in flight. Always release that key so
+      // returning to the original tenant can retry the idempotent command.
+      _attemptedDefaultFooterSeedForTenant.remove(tenantId);
       debugPrint('⚠️ [WebsiteService] Failed to seed default footer nav: $e');
     }
   }
 
   bool _loadNavigationFromSynchronousCacheInternal(
-    String tenantId, {
+    _WebsiteTenantScopeLease lease, {
     required bool notify,
   }) {
-    if (_prefs == null) return false;
+    if (_prefs == null || !_ownsTenantScope(lease)) return false;
+    final tenantId = lease.tenantId;
     _evictLegacyPublicStoreCache(tenantId);
 
     try {
@@ -4166,6 +4335,7 @@ class WebsiteService extends ChangeNotifier {
         return false;
       }
 
+      if (!_ownsTenantScope(lease)) return false;
       _navigation = cachedNavigation;
       _buildNavigationHierarchy();
 
@@ -4185,14 +4355,19 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
-  Future<void> _persistNavigationToLocalCache(String tenantId) async {
+  Future<void> _persistNavigationToLocalCache(
+    _WebsiteTenantScopeLease lease,
+    List<WebsiteNavigation> navigation,
+  ) async {
+    if (!_ownsTenantScope(lease)) return;
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
+      if (!_ownsTenantScope(lease)) return;
       _prefs = prefs;
-      final cacheKey = _publicStoreCacheKey('navigation', tenantId);
+      final cacheKey = _publicStoreCacheKey('navigation', lease.tenantId);
       await prefs.setString(
         cacheKey,
-        jsonEncode(_navigation.map((e) => e.toJson()).toList()),
+        jsonEncode(navigation.map((e) => e.toJson()).toList()),
       );
     } catch (_) {
       // Ignore cache write errors
@@ -4201,12 +4376,16 @@ class WebsiteService extends ChangeNotifier {
 
   /// Try to load navigation from synchronous cache (0ms wait)
   bool loadNavigationFromSynchronousCache(String tenantId) {
-    return _loadNavigationFromSynchronousCacheInternal(tenantId, notify: true);
+    final lease = _bindTenantScope(tenantId);
+    return _loadNavigationFromSynchronousCacheInternal(lease, notify: true);
   }
 
-  Future<void> _resolveLegacyNavigationPageIds(String tenantId) async {
+  Future<void> _resolveLegacyNavigationPageIds(
+    String tenantId,
+    List<WebsiteNavigation> navigation,
+  ) async {
     final legacyIds = <String>{};
-    for (final nav in _navigation) {
+    for (final nav in navigation) {
       if (nav.linkType != NavLinkType.page) continue;
       final raw = (nav.linkValue ?? '').trim();
       if (raw.isEmpty) continue;
@@ -4235,7 +4414,7 @@ class WebsiteService extends ChangeNotifier {
         for (final p in pages) p.id: p,
       };
 
-      for (final nav in _navigation) {
+      for (final nav in navigation) {
         if (nav.linkType != NavLinkType.page) continue;
         final raw = (nav.linkValue ?? '').trim();
         final page = pageMap[raw];
@@ -4275,6 +4454,22 @@ class WebsiteService extends ChangeNotifier {
     required bool notify,
     bool forceRefresh = false,
   }) async {
+    final lease = _bindTenantScope(tenantId);
+    await _loadNavigationForTenantWithinScope(
+      lease,
+      notify: notify,
+      forceRefresh: forceRefresh,
+    );
+  }
+
+  Future<void> _loadNavigationForTenantWithinScope(
+    _WebsiteTenantScopeLease lease, {
+    required bool notify,
+    required bool forceRefresh,
+  }) async {
+    if (!_ownsTenantScope(lease)) return;
+    final tenantId = lease.tenantId;
+
     // Cache hit
     if (!forceRefresh &&
         _hasLoadedNavigationForTenant &&
@@ -4282,101 +4477,116 @@ class WebsiteService extends ChangeNotifier {
       return;
     }
 
-    // Prevent concurrent loads
-    if (_isLoadingNavigationForTenant) {
-      while (_isLoadingNavigationForTenant) {
-        await Future.delayed(const Duration(milliseconds: 50));
+    final existing = _navigationLoad;
+    if (existing != null && _sameTenantScope(existing.lease, lease)) {
+      final didChange = await existing.future;
+      if (notify && didChange && _ownsTenantScope(lease)) {
+        _safeNotifyListeners();
       }
-      // An in-flight navigation load always performs a real origin read. Once
-      // it completes it also satisfies concurrent force-refresh callers; do
-      // not issue the exact same Supabase query a second time.
-      if (_hasLoadedNavigationForTenant &&
-          _loadedNavigationTenantId == tenantId) {
-        if (notify) {
-          _safeNotifyListeners();
-        }
-        return;
-      }
+      return;
     }
 
-    _isLoadingNavigationForTenant = true;
+    final load = _loadNavigationForTenantFromOrigin(lease);
+    final scopedLoad = _WebsiteScopedLoad<bool>(lease: lease, future: load);
+    _navigationLoad = scopedLoad;
     try {
-      final previousTenantId = _loadedNavigationTenantId;
-      final previousFingerprint =
-          jsonEncode(_navigation.map((item) => item.toJson()).toList());
-      final response = await _supabase
-          .from('website_navigation')
-          .select()
-          .eq('tenant_id', tenantId)
-          .order('order_index', ascending: true);
-
-      _navigation = (response as List)
-          .map((json) => WebsiteNavigation.fromJson(json))
-          .toList();
-
-      // If footer navigation isn't configured yet, seed sensible defaults (auth only).
-      await _seedDefaultFooterNavigationIfNeeded(tenantId);
-      if (_navigation.isEmpty ||
-          !_navigation.any((n) => n.menuLocation == MenuLocation.footer)) {
-        final refreshed = await _supabase
-            .from('website_navigation')
-            .select()
-            .eq('tenant_id', tenantId)
-            .order('order_index', ascending: true);
-        _navigation = (refreshed as List)
-            .map((json) => WebsiteNavigation.fromJson(json))
-            .toList();
-      }
-
-      await _resolveLegacyNavigationPageIds(tenantId);
-
-      _buildNavigationHierarchy();
-
-      final nextFingerprint =
-          jsonEncode(_navigation.map((item) => item.toJson()).toList());
-      final didChange = previousTenantId != tenantId ||
-          previousFingerprint != nextFingerprint;
-      _hasLoadedNavigationForTenant = true;
-      _loadedNavigationTenantId = tenantId;
-
-      if (didChange) {
-        await _persistNavigationToLocalCache(tenantId);
-      }
-
-      if (notify && didChange) {
+      final didChange = await load;
+      if (notify && didChange && _ownsTenantScope(lease)) {
         _safeNotifyListeners();
       }
     } catch (e) {
+      if (!_ownsTenantScope(lease)) return;
       _error = 'Error al cargar navegación: $e';
       debugPrint(_error);
       rethrow;
     } finally {
-      _isLoadingNavigationForTenant = false;
+      if (identical(_navigationLoad, scopedLoad)) {
+        _navigationLoad = null;
+      }
     }
+  }
+
+  Future<bool> _loadNavigationForTenantFromOrigin(
+    _WebsiteTenantScopeLease lease,
+  ) async {
+    final tenantId = lease.tenantId;
+    final previousTenantId = _loadedNavigationTenantId;
+    final previousFingerprint =
+        jsonEncode(_navigation.map((item) => item.toJson()).toList());
+    final response = await _supabase
+        .from('website_navigation')
+        .select()
+        .eq('tenant_id', tenantId)
+        .order('order_index', ascending: true);
+    if (!_ownsTenantScope(lease)) return false;
+
+    var navigation = (response as List)
+        .map((json) => WebsiteNavigation.fromJson(json))
+        .toList();
+
+    // If footer navigation isn't configured yet, seed sensible defaults (auth only).
+    await _seedDefaultFooterNavigationIfNeeded(lease, navigation);
+    if (!_ownsTenantScope(lease)) return false;
+    if (navigation.isEmpty ||
+        !navigation.any((n) => n.menuLocation == MenuLocation.footer)) {
+      final refreshed = await _supabase
+          .from('website_navigation')
+          .select()
+          .eq('tenant_id', tenantId)
+          .order('order_index', ascending: true);
+      if (!_ownsTenantScope(lease)) return false;
+      navigation = (refreshed as List)
+          .map((json) => WebsiteNavigation.fromJson(json))
+          .toList();
+    }
+
+    await _resolveLegacyNavigationPageIds(tenantId, navigation);
+    if (!_ownsTenantScope(lease)) return false;
+    _buildNavigationHierarchyFor(navigation);
+
+    final nextFingerprint =
+        jsonEncode(navigation.map((item) => item.toJson()).toList());
+    final didChange =
+        previousTenantId != tenantId || previousFingerprint != nextFingerprint;
+
+    if (!_ownsTenantScope(lease)) return false;
+    _navigation = navigation;
+    _hasLoadedNavigationForTenant = true;
+    _loadedNavigationTenantId = tenantId;
+
+    if (didChange) {
+      await _persistNavigationToLocalCache(lease, navigation);
+    }
+
+    return _ownsTenantScope(lease) && didChange;
   }
 
   /// Build parent-child hierarchy for navigation items
   void _buildNavigationHierarchy() {
+    _buildNavigationHierarchyFor(_navigation);
+  }
+
+  void _buildNavigationHierarchyFor(List<WebsiteNavigation> navigation) {
     // Clear any previous hierarchy to avoid duplicate children.
-    for (final item in _navigation) {
+    for (final item in navigation) {
       item.children.clear();
     }
 
     // Create a map for quick lookup
     final Map<String, WebsiteNavigation> navMap = {};
-    for (final item in _navigation) {
+    for (final item in navigation) {
       navMap[item.id] = item;
     }
 
     // Assign children to parents
-    for (final item in _navigation) {
+    for (final item in navigation) {
       if (item.parentId != null && navMap.containsKey(item.parentId)) {
         navMap[item.parentId]!.children.add(item);
       }
     }
 
     // Sort children by order_index
-    for (final item in _navigation) {
+    for (final item in navigation) {
       item.children.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
     }
   }
@@ -4447,6 +4657,75 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
+  Future<WebsiteNavigation?> getNavigationByIdForTenant(
+    String navId,
+    String tenantId,
+  ) async {
+    final response = await _supabase
+        .from('website_navigation')
+        .select()
+        .eq('tenant_id', tenantId)
+        .eq('id', navId)
+        .maybeSingle();
+    return response == null ? null : WebsiteNavigation.fromJson(response);
+  }
+
+  /// Idempotent create used only for editor drafts.
+  ///
+  /// The persisted UUID comes from the durable draft ID, so retrying after a
+  /// later failure updates the same row instead of inserting a duplicate.
+  Future<WebsiteNavigation> upsertNavigationForTenant({
+    required String tenantId,
+    required String persistedId,
+    required WebsiteNavigation navigation,
+    WebsiteEditorWriteGuard? writeGuard,
+  }) async {
+    final lease = _leaseForBoundTenant(tenantId);
+    if (navigation.tenantId.trim().isNotEmpty &&
+        navigation.tenantId != tenantId) {
+      throw StateError('La navegación no pertenece al tenant del guardado.');
+    }
+
+    final data = navigation.toInsertJson()
+      ..['id'] = persistedId
+      ..['tenant_id'] = tenantId
+      ..['updated_at'] = DateTime.now().toIso8601String();
+    if (navigation.linkType == NavLinkType.page && data['link_value'] != null) {
+      final raw = data['link_value'].toString().trim();
+      if (raw.isNotEmpty && !raw.startsWith('/') && !raw.contains('-')) {
+        data['link_value'] = '/$raw';
+      }
+    }
+
+    writeGuard?.call();
+    final Map<String, dynamic> response;
+    try {
+      response = await _supabase
+          .from('website_navigation')
+          .upsert(data, onConflict: 'id')
+          .select()
+          .single();
+    } catch (e) {
+      // Reclassify a late failure after an identity change as SUPERSEDED.
+      if (e is! WebsiteEditorWriteSupersededException) writeGuard?.call();
+      rethrow;
+    }
+    // Post-response guard: never project A's result into B locally.
+    writeGuard?.call();
+    final saved = WebsiteNavigation.fromJson(response);
+    if (lease != null && _ownsTenantScope(lease)) {
+      final index = _navigation.indexWhere((item) => item.id == saved.id);
+      if (index >= 0) {
+        _navigation[index] = saved;
+      } else {
+        _navigation.add(saved);
+      }
+      _buildNavigationHierarchy();
+      _safeNotifyListeners();
+    }
+    return saved;
+  }
+
   /// Update an existing navigation item
   Future<WebsiteNavigation> updateNavigation(WebsiteNavigation nav) async {
     try {
@@ -4485,18 +4764,94 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
-  /// Delete a navigation item and its children
-  Future<void> deleteNavigation(String navId) async {
-    try {
-      await _supabase.from('website_navigation').delete().eq('id', navId);
+  Future<WebsiteNavigation> updateNavigationForTenant(
+    WebsiteNavigation nav,
+    String tenantId, {
+    WebsiteEditorWriteGuard? writeGuard,
+  }) async {
+    final lease = _leaseForBoundTenant(tenantId);
+    if (nav.tenantId != tenantId) {
+      throw StateError('La navegación no pertenece al tenant del guardado.');
+    }
+    final updateData = nav.toUpdateJson();
+    if (nav.linkType == NavLinkType.page && updateData['link_value'] != null) {
+      final raw = updateData['link_value'].toString().trim();
+      if (raw.isNotEmpty && !raw.startsWith('/') && !raw.contains('-')) {
+        updateData['link_value'] = '/$raw';
+      }
+    }
 
-      _navigation.removeWhere((n) => n.id == navId || n.parentId == navId);
+    writeGuard?.call();
+    final Map<String, dynamic> response;
+    try {
+      response = await _supabase
+          .from('website_navigation')
+          .update(updateData)
+          .eq('tenant_id', tenantId)
+          .eq('id', nav.id)
+          .select()
+          .single();
+    } catch (e) {
+      // Reclassify a late failure after an identity change as SUPERSEDED.
+      if (e is! WebsiteEditorWriteSupersededException) writeGuard?.call();
+      rethrow;
+    }
+    // Post-response guard: never project A's result into B locally.
+    writeGuard?.call();
+    final saved = WebsiteNavigation.fromJson(response);
+    if (lease != null && _ownsTenantScope(lease)) {
+      final index = _navigation.indexWhere((item) => item.id == saved.id);
+      if (index >= 0) {
+        _navigation[index] = saved;
+      }
       _buildNavigationHierarchy();
       _safeNotifyListeners();
+    }
+    return saved;
+  }
+
+
+  Future<void> deleteNavigationForTenant(
+    String navId,
+    String tenantId, {
+    WebsiteEditorWriteGuard? writeGuard,
+  }) async {
+    final lease = _leaseForBoundTenant(tenantId);
+    writeGuard?.call();
+    // Authority-bound idempotent command: a stale grant raises 42501
+    // instead of silently filtering to 0 rows, and a retry after a lost
+    // response converges on 'already_absent'.
+    final Object? outcome;
+    try {
+      outcome = await _supabase.rpc(
+        'delete_website_navigation',
+        params: {
+          'p_tenant_id': tenantId,
+          'p_navigation_id': navId,
+        },
+      );
     } catch (e) {
-      _error = 'Error al eliminar navegación: $e';
-      debugPrint(_error);
+      // Reclassify a late failure after an identity change as SUPERSEDED.
+      if (e is! WebsiteEditorWriteSupersededException) writeGuard?.call();
       rethrow;
+    }
+    // Post-response guard BEFORE validating the outcome: a late
+    // already_absent from A can never become B's confirmation.
+    writeGuard?.call();
+    if (outcome != 'deleted' && outcome != 'already_absent') {
+      throw StateError(
+        'delete_website_navigation devolvió un resultado inesperado: '
+        '$outcome',
+      );
+    }
+    if (lease != null && _ownsTenantScope(lease)) {
+      _navigation.removeWhere(
+        (item) =>
+            item.tenantId == tenantId &&
+            (item.id == navId || item.parentId == navId),
+      );
+      _buildNavigationHierarchy();
+      _safeNotifyListeners();
     }
   }
 
@@ -4597,6 +4952,69 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
+  /// Tenant-scoped, fail-closed ordering used by the editor save coordinator.
+  Future<void> reorderNavigationIdsForTenant(
+    String tenantId,
+    List<String> orderedIds, {
+    WebsiteEditorWriteGuard? writeGuard,
+  }) async {
+    final lease = _leaseForBoundTenant(tenantId);
+    final uniqueIds = <String>[];
+    final seen = <String>{};
+    for (final rawId in orderedIds) {
+      final id = rawId.trim();
+      if (id.isNotEmpty && seen.add(id)) uniqueIds.add(id);
+    }
+
+    final now = DateTime.now();
+    for (var index = 0; index < uniqueIds.length; index++) {
+      // Re-validate before EVERY one of the N internal updates: an identity
+      // switch mid-reorder stops the remaining writes.
+      writeGuard?.call();
+      final Object? response;
+      try {
+        response = await _supabase
+            .from('website_navigation')
+            .update({
+              'order_index': index,
+              'updated_at': now.toIso8601String(),
+            })
+            .eq('tenant_id', tenantId)
+            .eq('id', uniqueIds[index])
+            .select('id')
+            .maybeSingle();
+      } catch (e) {
+        // Reclassify a late failure after an identity change as SUPERSEDED.
+        if (e is! WebsiteEditorWriteSupersededException) writeGuard?.call();
+        rethrow;
+      }
+      // Post-response guard BEFORE the null validation: a late null after
+      // A -> B is a superseded outcome, never B's missing-row error.
+      writeGuard?.call();
+      if (response == null) {
+        throw StateError(
+          'No existe la navegación ${uniqueIds[index]} en el tenant activo.',
+        );
+      }
+
+      if (lease != null && _ownsTenantScope(lease)) {
+        final localIndex =
+            _navigation.indexWhere((item) => item.id == uniqueIds[index]);
+        if (localIndex >= 0) {
+          _navigation[localIndex] = _navigation[localIndex].copyWith(
+            orderIndex: index,
+            updatedAt: now,
+          );
+        }
+      }
+    }
+    writeGuard?.call();
+    if (lease != null && _ownsTenantScope(lease)) {
+      _buildNavigationHierarchy();
+      _safeNotifyListeners();
+    }
+  }
+
   /// Link navigation items to pages (populate linkedPage field)
   Future<void> linkNavigationToPages() async {
     final Map<String, WebsitePage> pageMap = {};
@@ -4642,25 +5060,35 @@ class WebsiteService extends ChangeNotifier {
 
   /// Initialize orders (call this when OnlineOrdersPage opens)
   Future<void> initializeOrders() async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) {
+      throw Exception('No tenant_id found for current user');
+    }
+    final lease = _bindTenantScope(tenantId);
     if (_orders.isNotEmpty) return; // Already loaded
     await loadOrders();
-    _setupOrdersRealtime(); // Subscribe to real-time order updates
+    if (!_ownsTenantScope(lease)) return;
+    await _setupOrdersRealtime(lease);
   }
 
   /// Set up realtime subscription for online orders
-  void _setupOrdersRealtime() async {
+  Future<void> _setupOrdersRealtime(_WebsiteTenantScopeLease lease) async {
     try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
+      if (!_ownsTenantScope(lease)) return;
+      final activeTenantId = await _tenantService.getTenantId();
+      if (!_ownsTenantScope(lease) || activeTenantId != lease.tenantId) {
         debugPrint('⚠️ [WebsiteService] Cannot setup realtime: no tenant_id');
         return;
       }
 
       // Unsubscribe from existing channel if any
       await _ordersChannel?.unsubscribe();
+      if (!_ownsTenantScope(lease)) return;
 
-      _ordersChannel = _supabase
-          .channel('online_orders_changes')
+      final channel = _supabase
+          .channel(
+            'online_orders_changes_${lease.tenantId}_${lease.generation}',
+          )
           .onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
@@ -4668,15 +5096,21 @@ class WebsiteService extends ChangeNotifier {
             filter: PostgresChangeFilter(
               type: PostgresChangeFilterType.eq,
               column: 'tenant_id',
-              value: tenantId,
+              value: lease.tenantId,
             ),
             callback: (payload) {
+              if (!_ownsTenantScope(lease)) return;
               debugPrint(
                   '🔔 [WebsiteService] Online order changed: ${payload.eventType}');
-              loadOrders(); // Reload orders list
+              unawaited(loadOrders()); // Reload orders list
             },
           )
           .subscribe();
+      if (!_ownsTenantScope(lease)) {
+        await channel.unsubscribe();
+        return;
+      }
+      _ordersChannel = channel;
 
       debugPrint(
           '✅ [WebsiteService] Realtime subscription active for online_orders');
@@ -4699,24 +5133,304 @@ class WebsiteService extends ChangeNotifier {
   Future<CachedPageSnapshot?> loadPageWithBlocks(
     String slug, {
     required String tenantId,
+  }) async =>
+      (await loadPageWithBlocksResult(
+        slug,
+        tenantId: tenantId,
+      ))
+          .snapshot;
+
+  /// Same origin revalidation as [loadPageWithBlocks], with provenance.
+  ///
+  /// A caller that renders retained content after a transient network failure
+  /// must keep it `noindex`; an authoritative `null` means the page is no
+  /// longer public and local state must be cleared.
+  Future<PageSnapshotLoadResult> loadPageWithBlocksResult(
+    String slug, {
+    required String tenantId,
   }) async {
     final cacheKey = _pageCacheKey(tenantId, slug);
     final fallback = _pageCache.peek(cacheKey);
 
     try {
-      return await _pageCache.revalidate(
+      final refreshed = await _pageCache.revalidate(
         cacheKey,
         () => _loadPageWithBlocksFromOrigin(
           slug,
           tenantId: tenantId,
         ),
       );
+      return refreshed == null
+          ? const PageSnapshotLoadResult.originMissing()
+          : PageSnapshotLoadResult.origin(refreshed);
+    } on PageSnapshotInvalidatedException {
+      // An editor save invalidated this request while it was in flight. That
+      // is an unknown/stale result, never authoritative proof that the public
+      // page was deleted.
+      return PageSnapshotLoadResult.staleFallback(fallback);
     } catch (e) {
       debugPrint('Error loading page with blocks: $e');
       // A transient origin failure must not blank already rendered CMS
-      // content. The next navigation will revalidate again.
-      return fallback;
+      // content. Provenance keeps that retained copy out of the index until
+      // the next successful origin revalidation.
+      return PageSnapshotLoadResult.staleFallback(fallback);
     }
+  }
+
+  /// Single editor-capability truth for every untrusted entry command
+  /// (`?edit=true`/`?preview=true` deep links, the OAuth editor restore) and
+  /// for the editor data loaders: an authenticated profile, an active tenant
+  /// matching the storefront tenant, and admin or `edit_settings` authority.
+  ///
+  /// The returned snapshot carries an identity fingerprint
+  /// (user|activeTenant|storefrontTenant|authority) so the consumer lease is
+  /// revoked the moment any of those change (logout, user switch, tenant
+  /// switch, role/permission change). Fails closed on any missing piece.
+  /// Database RLS remains the final enforcement boundary; this gate protects
+  /// the client-side editor projection (chrome, drafts, unpublished-site
+  /// bypass).
+  ///
+  /// [editorCapabilitySync] answers from the warmed identity caches only and
+  /// returns null when the profile cache is cold (an async resolve is then
+  /// required); [resolveEditorCapability] always answers.
+  WebsiteEditorCapabilitySnapshot? editorCapabilitySync(
+    String? storefrontTenantId,
+  ) {
+    final requestedTenantId = storefrontTenantId?.trim() ?? '';
+    final userId = _tenantService.currentAuthUserId;
+    if (userId == null) {
+      return WebsiteEditorCapabilitySnapshot(
+        identity: 'anon',
+        activeTenantId: '',
+        storefrontTenantId: requestedTenantId,
+        hasAuthority: false,
+        authorityEpoch: _identityEpoch,
+      );
+    }
+    final activeTenantId = _tenantService.currentTenantId;
+    if (activeTenantId == null) {
+      if (_tenantService.hasResolvedProfileForCurrentUser) {
+        // DURABLE: the profile resolved and this user has no active tenant.
+        return WebsiteEditorCapabilitySnapshot(
+          identity: userId,
+          activeTenantId: 'none',
+          storefrontTenantId: requestedTenantId,
+          hasAuthority: false,
+          authorityEpoch: _identityEpoch,
+        );
+      }
+      return null; // Cold cache: resolve async.
+    }
+    final hasAuthority = _tenantService.hasRole('admin') ||
+        _tenantService.hasPermission('edit_settings');
+    // `granted` is DERIVED by the snapshot from these typed fields.
+    final snapshot = WebsiteEditorCapabilitySnapshot(
+      identity: userId,
+      activeTenantId: activeTenantId,
+      storefrontTenantId: requestedTenantId,
+      hasAuthority: hasAuthority,
+      authorityEpoch: _identityEpoch,
+    );
+    // A server-classified authority rejection outranks the stale local
+    // grant for this exact fingerprint: the denial holds until NEW identity
+    // evidence (an auth lifecycle refresh) replaces the caches, so a
+    // rejected ?edit=true cannot loop revoke -> re-grant -> reopen.
+    if (snapshot.granted &&
+        _editorAuthorityDenialFingerprints[requestedTenantId] ==
+            snapshot.fingerprint) {
+      return WebsiteEditorCapabilitySnapshot(
+        identity: userId,
+        activeTenantId: activeTenantId,
+        storefrontTenantId: requestedTenantId,
+        hasAuthority: false,
+        authorityEpoch: _identityEpoch,
+      );
+    }
+    return snapshot;
+  }
+
+  /// Server-evidenced denials keyed by storefront tenant: value is the
+  /// GRANTED fingerprint the server rejected. Cleared on every auth
+  /// lifecycle notification (new identity evidence).
+  final Map<String, String> _editorAuthorityDenialFingerprints = {};
+
+  /// Sync identity component for capability request keys (never null).
+  String get editorCapabilityRequestIdentity =>
+      _tenantService.currentAuthUserId ?? 'anon';
+
+  Future<WebsiteEditorCapabilitySnapshot> resolveEditorCapability(
+    String? storefrontTenantId,
+  ) async {
+    final sync = editorCapabilitySync(storefrontTenantId);
+    if (sync != null) return sync;
+    await _tenantService.getTenantId(); // Warm the identity caches.
+    final warmed = editorCapabilitySync(storefrontTenantId);
+    if (warmed != null) return warmed;
+    // The profile lookup failed transiently (the cache is still cold for
+    // this user). Surface it as unresolved so consumers SUSPEND and retain
+    // drafts; a fabricated durable denial here would consume the entry
+    // command and discard recoverable sessions.
+    throw const WebsiteEditorCapabilityUnresolvedException(
+      'No se pudo resolver la identidad del editor; reintenta.',
+    );
+  }
+
+  Future<bool> canOpenEditorForTenant(String? storefrontTenantId) async =>
+      (await resolveEditorCapability(storefrontTenantId)).granted;
+
+  /// Loads a CMS page for the authenticated Website Builder.
+  ///
+  /// Public callers may only read published rows, while an authorized editor
+  /// must be able to open and repair a draft. The capability check is the
+  /// same single truth used by the editor entry gate; database RLS remains
+  /// the final enforcement boundary.
+  Future<CachedPageSnapshot?> loadEditorPageWithBlocks(
+    String slug, {
+    required String tenantId,
+  }) async {
+    // Captured BEFORE the FIRST await: the capability resolve itself can
+    // span an identity switch, so the whole read is keyed to the identity
+    // context present at entry.
+    final requestEpoch = identityEpoch;
+    final requestIdentity = editorCapabilityRequestIdentity;
+    final preGateFingerprint = editorCapabilitySync(tenantId)?.fingerprint;
+    if (!await canOpenEditorForTenant(tenantId)) {
+      if (identityEpoch != requestEpoch ||
+          editorCapabilityRequestIdentity != requestIdentity) {
+        throw const WebsiteEditorReadSupersededException(
+          'La lectura del editor pertenece a una identidad anterior.',
+        );
+      }
+      throw const WebsiteEditorAuthorityException(
+        'No tienes autorización para abrir esta página en el editor.',
+      );
+    }
+    if (identityEpoch != requestEpoch ||
+        editorCapabilityRequestIdentity != requestIdentity ||
+        (preGateFingerprint != null &&
+            editorCapabilitySync(tenantId)?.fingerprint !=
+                preGateFingerprint)) {
+      throw const WebsiteEditorReadSupersededException(
+        'La lectura del editor pertenece a una identidad anterior.',
+      );
+    }
+    // The warm gate fixed the fingerprint for the (unchanged) identity.
+    final requestFingerprint = editorCapabilitySync(tenantId)?.fingerprint;
+    final Object? response;
+    try {
+      // The ONLY private read path is the authority-bound RPC: the server
+      // re-validates tenant + edit_settings authority and raises 42501.
+      // The REST origin loader stays public and published-only.
+      response = await _supabase.rpc(
+        'load_editor_page_with_blocks',
+        params: {
+          'p_tenant_id': tenantId,
+          'p_slug': _normalizePageSlug(slug),
+        },
+      );
+    } catch (error) {
+      if (_editorReadSuperseded(tenantId, requestEpoch, requestFingerprint)) {
+        // Identity A's late rejection can neither latch a denial for B nor
+        // revoke B; the completion is discarded by the consumer.
+        throw WebsiteEditorReadSupersededException(
+          'La lectura del editor pertenece a una identidad anterior.',
+          cause: error,
+        );
+      }
+      // A cached grant can outlive a remote role/permission edit; the
+      // server is the enforcement boundary, so ONLY classified auth/RLS
+      // rejections convert into authority loss. Anything transient rethrows
+      // unchanged and must never revoke the lease or drafts.
+      if (isEditorAuthorityRejection(error)) {
+        // Install the durable typed denial BEFORE throwing so the very next
+        // capability read already reports it (no re-adoption window).
+        recordEditorAuthorityRejectionForTenant(tenantId);
+        throw WebsiteEditorAuthorityException(
+          'El servidor rechazó la autorización del editor.',
+          cause: error,
+        );
+      }
+      rethrow;
+    }
+    if (_editorReadSuperseded(tenantId, requestEpoch, requestFingerprint)) {
+      // A late SUCCESS is equally obsolete: never adopt data across an
+      // identity change (A -> B or A -> B -> A).
+      throw const WebsiteEditorReadSupersededException(
+        'La lectura del editor pertenece a una identidad anterior.',
+      );
+    }
+    if (response == null) return null;
+    if (response is! Map) {
+      throw const WebsiteCmsReadContractException(
+        'La respuesta del editor no es un objeto de página válido.',
+      );
+    }
+    final Map<String, dynamic> row;
+    try {
+      row = Map<String, dynamic>.from(response);
+    } catch (error) {
+      throw WebsiteCmsReadContractException(
+        'La respuesta del editor no se pudo interpretar.',
+        cause: error,
+      );
+    }
+    return _snapshotFromJoinedPageRow(row, tenantId: tenantId);
+  }
+
+  /// Latches the durable typed denial for [tenantId] after a
+  /// server-classified authority rejection — shared by the read AND write
+  /// paths, so a 42501 during Guardar closes the session exactly like one
+  /// during a load.
+  void recordEditorAuthorityRejectionForTenant(String tenantId) {
+    final current = editorCapabilitySync(tenantId);
+    if (current != null && current.granted) {
+      _editorAuthorityDenialFingerprints[tenantId.trim()] =
+          current.fingerprint;
+    }
+  }
+
+  bool _editorReadSuperseded(
+    String tenantId,
+    int requestEpoch,
+    String? requestFingerprint,
+  ) {
+    if (identityEpoch != requestEpoch) return true;
+    return editorCapabilitySync(tenantId)?.fingerprint != requestFingerprint;
+  }
+
+  /// ALLOWLIST classifier for durable authority loss on editor reads. Only
+  /// explicit auth/RLS evidence qualifies: 42501 (Postgres
+  /// insufficient_privilege), PGRST301/PGRST302 (PostgREST JWT), explicit
+  /// 401/403 statuses, a missing session or an invalid JWT. Every ambiguous
+  /// shape — retryable fetches, unknown wrappers without an explicit status,
+  /// 5xx, timeouts, base AuthException without status — stays transient so
+  /// consumers suspend and retain drafts while the server remains the
+  /// fail-closed boundary for content.
+  static bool isEditorAuthorityRejection(Object error) {
+    // Network-ish AuthException subtypes first: never durable.
+    if (error is AuthRetryableFetchException) return false;
+    if (error is AuthSessionMissingException) return true;
+    if (error is AuthInvalidJwtException) return true;
+    if (error is AuthException) {
+      // AuthApiException / AuthUnknownException / base AuthException may
+      // wrap network failures: only an EXPLICIT auth status or JWT/session
+      // code is durable evidence.
+      final status = int.tryParse(error.statusCode ?? '');
+      if (status == 401 || status == 403) return true;
+      final code = error.code?.trim() ?? '';
+      return code == 'invalid_jwt' ||
+          code == 'session_expired' ||
+          code == 'session_not_found';
+    }
+    if (error is PostgrestException) {
+      final code = error.code?.trim() ?? '';
+      return code == '42501' ||
+          code == 'PGRST301' ||
+          code == 'PGRST302' ||
+          code == '401' ||
+          code == '403';
+    }
+    return false;
   }
 
   /// Warm a page snapshot without issuing another request when it is already
@@ -4745,40 +5459,120 @@ class WebsiteService extends ChangeNotifier {
     // old page-list -> page lookup -> blocks waterfall.
     final Map<String, dynamic>? response;
     if (normalizedSlug.isEmpty) {
-      response = await _supabase
+      final query = _supabase
           .from('website_pages')
           .select('*, website_blocks(*)')
-          .eq('tenant_id', tenantId)
+          .eq('tenant_id', tenantId);
+      // Structurally public: ONLY published rows can leave this loader.
+      response = await query
           .eq('is_published', true)
           .order('is_home', ascending: false)
           .order('created_at', ascending: true)
           .limit(1)
           .maybeSingle();
     } else {
-      response = await _supabase
+      final query = _supabase
           .from('website_pages')
           .select('*, website_blocks(*)')
           .eq('tenant_id', tenantId)
-          .eq('slug', normalizedSlug)
-          .eq('is_published', true)
-          .limit(1)
-          .maybeSingle();
+          .eq('slug', normalizedSlug);
+      // Structurally public: ONLY published rows can leave this loader.
+      response =
+          await query.eq('is_published', true).limit(1).maybeSingle();
     }
 
     if (response == null) return null;
+    return _snapshotFromJoinedPageRow(response, tenantId: tenantId);
+  }
 
-    final page = WebsitePage.fromJson(response);
-    final rawBlocks = response['website_blocks'] as List? ?? const [];
-    final blocks = <Map<String, dynamic>>[
-      for (final rawBlock in rawBlocks)
-        if (rawBlock is Map &&
-            rawBlock['tenant_id']?.toString() == tenantId &&
-            rawBlock['page_id']?.toString() == page.id)
-          Map<String, dynamic>.from(rawBlock),
-    ]..sort(
-        (a, b) => ((a['order_index'] as num?)?.toInt() ?? 0)
-            .compareTo((b['order_index'] as num?)?.toInt() ?? 0),
+  /// One parser for every joined page+blocks row (public REST origin and
+  /// the editor RPC alike). Blocks order deterministically by
+  /// (order_index, id) regardless of transport ordering.
+  CachedPageSnapshot _snapshotFromJoinedPageRow(
+    Map<String, dynamic> response, {
+    required String tenantId,
+  }) {
+    try {
+      return _snapshotFromJoinedPageRowUnsafe(response, tenantId: tenantId);
+    } on WebsiteCmsReadContractException {
+      rethrow;
+    } catch (error) {
+      // ANY parse/cast/sort/normalization failure is a typed CONTRACT
+      // violation (fail closed), never a leaked TypeError/FormatException.
+      throw WebsiteCmsReadContractException(
+        'La proyección de página no se pudo interpretar.',
+        cause: error,
       );
+    }
+  }
+
+  CachedPageSnapshot _snapshotFromJoinedPageRowUnsafe(
+    Map<String, dynamic> response, {
+    required String tenantId,
+  }) {
+    final WebsitePage page;
+    try {
+      page = WebsitePage.fromJson(response);
+    } catch (error) {
+      // A malformed page row (bad types/dates) is a CONTRACT violation, not
+      // a leaked TypeError/FormatException.
+      throw WebsiteCmsReadContractException(
+        'La página de la respuesta no se pudo interpretar.',
+        cause: error,
+      );
+    }
+    // FAIL CLOSED: a contract violation is an error, never a silent filter
+    // that could hide a cross-tenant or malformed row.
+    if (page.id.trim().isEmpty) {
+      throw const WebsiteCmsReadContractException(
+        'La página de la respuesta no tiene id válido.',
+      );
+    }
+    if (page.tenantId != tenantId) {
+      throw const WebsiteCmsReadContractException(
+        'La página no pertenece al tenant solicitado.',
+      );
+    }
+    final rawBlocks = response['website_blocks'];
+    if (rawBlocks is! List) {
+      throw const WebsiteCmsReadContractException(
+        'La respuesta no incluye una lista de bloques válida.',
+      );
+    }
+    final blocks = <Map<String, dynamic>>[];
+    for (final rawBlock in rawBlocks) {
+      if (rawBlock is! Map) {
+        throw const WebsiteCmsReadContractException(
+          'Un bloque de la respuesta no es un objeto válido.',
+        );
+      }
+      final blockId = rawBlock['id']?.toString() ?? '';
+      if (blockId.isEmpty) {
+        throw const WebsiteCmsReadContractException(
+          'Un bloque de la respuesta no tiene id válido.',
+        );
+      }
+      if (rawBlock['tenant_id']?.toString() != tenantId ||
+          rawBlock['page_id']?.toString() != page.id) {
+        throw const WebsiteCmsReadContractException(
+          'Un bloque de la respuesta no pertenece a la página/tenant.',
+        );
+      }
+      if (rawBlock['block_data'] is! Map) {
+        // Normalization would silently coerce this to an empty map: at the
+        // READ boundary a corrupt payload is a contract violation instead.
+        throw const WebsiteCmsReadContractException(
+          'Un bloque de la respuesta tiene block_data inválido.',
+        );
+      }
+      blocks.add(Map<String, dynamic>.from(rawBlock));
+    }
+    blocks.sort((a, b) {
+      final byOrder = ((a['order_index'] as num?)?.toInt() ?? 0)
+          .compareTo(((b['order_index'] as num?)?.toInt() ?? 0));
+      if (byOrder != 0) return byOrder;
+      return (a['id']?.toString() ?? '').compareTo(b['id']?.toString() ?? '');
+    });
 
     return CachedPageSnapshot(
       page: page,
@@ -4798,204 +5592,32 @@ class WebsiteService extends ChangeNotifier {
     return _pageCache.peek(_pageCacheKey(tenantId, slug));
   }
 
+  /// Monotonic auth-identity epoch: bumped on EVERY TenantService identity
+  /// notification. Coalesced A→B→A auth events leave the user id equal but
+  /// never the epoch, so async consumers (lease resolution, OAuth restore)
+  /// key their in-flight work on it and drop stale completions.
+  int get identityEpoch => _identityEpoch;
+  int _identityEpoch = 0;
+
+  void _onTenantIdentityChanged() {
+    if (_disposed) return;
+    _identityEpoch++;
+    // New identity evidence replaces any server-evidenced denial.
+    _editorAuthorityDenialFingerprints.clear();
+    // Wake consumers ONLY. The rebuild lets the layout's lease sync observe
+    // the identity change, and that lease transition is the single owner of
+    // the CMS revalidation signal — emitting here too would double every
+    // reload on one auth event.
+    _safeNotifyListeners();
+  }
+
   @override
   void dispose() {
     _disposed = true;
+    _tenantService.removeListener(_onTenantIdentityChanged);
     _ordersChannel?.unsubscribe();
     _cmsPageFreshnessSignal.dispose();
     _httpClient.close();
     super.dispose();
   }
-}
-
-class _LooseAddressParts {
-  final String street;
-  final String city;
-  final String country;
-
-  const _LooseAddressParts({
-    required this.street,
-    required this.city,
-    required this.country,
-  });
-}
-
-/// Public snapshot of cached page data (safe to expose).
-class CachedPageSnapshot {
-  final WebsitePage page;
-  final List<Map<String, dynamic>> blocks;
-  final String fingerprint;
-
-  CachedPageSnapshot({
-    required this.page,
-    required this.blocks,
-  }) : fingerprint = jsonEncode(<Object?>[
-          page.toJson(),
-          blocks,
-        ]);
-}
-
-/// Tenant/slug page snapshot cache used by public CMS routes.
-///
-/// It owns bounded LRU retention, concurrent request de-duplication, and
-/// generation isolation so an invalidated in-flight response cannot restore
-/// stale content after an editor save.
-@visibleForTesting
-class WebsitePageSnapshotCache {
-  final Duration ttl;
-  final Duration retainFor;
-  final int capacity;
-
-  final LinkedHashMap<String, _CachedPage> _entries =
-      LinkedHashMap<String, _CachedPage>();
-  final Map<String, Future<CachedPageSnapshot?>> _inFlight =
-      <String, Future<CachedPageSnapshot?>>{};
-  final Map<String, int> _keyGenerations = <String, int>{};
-  int _generation = 0;
-
-  WebsitePageSnapshotCache({
-    this.ttl = const Duration(minutes: 5),
-    Duration? retainFor,
-    this.capacity = 96,
-  })  : assert(capacity > 0),
-        assert((retainFor ?? ttl) >= ttl),
-        retainFor = retainFor ?? ttl;
-
-  @visibleForTesting
-  int get length => _entries.length;
-
-  CachedPageSnapshot? peek(String key) {
-    final cached = _entries.remove(key);
-    if (cached == null) return null;
-    if (cached.isExpired(retainFor)) return null;
-
-    // Reinsert to mark this key as the most recently used.
-    _entries[key] = cached;
-    return _copySnapshot(cached.snapshot);
-  }
-
-  bool isFresh(String key) {
-    final cached = _entries[key];
-    return cached != null && !cached.isExpired(ttl);
-  }
-
-  Future<CachedPageSnapshot?> revalidate(
-    String key,
-    Future<CachedPageSnapshot?> Function() loader,
-  ) {
-    final existing = _inFlight[key];
-    if (existing != null) return existing;
-
-    final generation = _generation;
-    final keyGeneration = _keyGenerations[key] ?? 0;
-    final completer = Completer<CachedPageSnapshot?>();
-    final future = completer.future;
-    _inFlight[key] = future;
-
-    unawaited(() async {
-      try {
-        final loaded = await loader();
-        final isCurrent = generation == _generation &&
-            keyGeneration == (_keyGenerations[key] ?? 0);
-        if (!isCurrent) {
-          completer.complete(peek(key));
-          return;
-        }
-
-        if (loaded == null) {
-          _entries.remove(key);
-          completer.complete(null);
-          return;
-        }
-
-        _put(key, loaded);
-        completer.complete(peek(key));
-      } catch (error, stackTrace) {
-        completer.completeError(error, stackTrace);
-      } finally {
-        if (identical(_inFlight[key], future)) {
-          _inFlight.remove(key);
-        }
-      }
-    }());
-
-    return future;
-  }
-
-  void invalidateKey(String key) {
-    _entries.remove(key);
-    _inFlight.remove(key);
-    _keyGenerations[key] = (_keyGenerations[key] ?? 0) + 1;
-  }
-
-  void invalidateWhere(bool Function(String key) predicate) {
-    final keys = <String>{..._entries.keys, ..._inFlight.keys};
-    for (final key in keys) {
-      if (predicate(key)) invalidateKey(key);
-    }
-  }
-
-  void clear() {
-    _generation += 1;
-    _entries.clear();
-    _inFlight.clear();
-    _keyGenerations.clear();
-  }
-
-  void _put(String key, CachedPageSnapshot snapshot) {
-    final previous = _entries.remove(key);
-    final retainedSnapshot =
-        previous?.snapshot.fingerprint == snapshot.fingerprint
-            ? previous!.snapshot
-            : _copySnapshot(snapshot);
-    _entries[key] = _CachedPage(
-      snapshot: retainedSnapshot,
-      cachedAt: DateTime.now(),
-    );
-    while (_entries.length > capacity) {
-      _entries.remove(_entries.keys.first);
-    }
-  }
-
-  CachedPageSnapshot _copySnapshot(CachedPageSnapshot snapshot) {
-    return CachedPageSnapshot(
-      page: snapshot.page,
-      blocks: <Map<String, dynamic>>[
-        for (final block in snapshot.blocks) _copyBlock(block),
-      ],
-    );
-  }
-
-  Map<String, dynamic> _copyBlock(Map<String, dynamic> block) {
-    return Map<String, dynamic>.from(
-      _deepCopyJson(block) as Map,
-    );
-  }
-
-  Object? _deepCopyJson(Object? value) {
-    if (value is Map) {
-      return <String, dynamic>{
-        for (final entry in value.entries)
-          entry.key.toString(): _deepCopyJson(entry.value),
-      };
-    }
-    if (value is List) {
-      return <Object?>[
-        for (final item in value) _deepCopyJson(item),
-      ];
-    }
-    return value;
-  }
-}
-
-class _CachedPage {
-  final CachedPageSnapshot snapshot;
-  final DateTime cachedAt;
-
-  _CachedPage({
-    required this.snapshot,
-    required this.cachedAt,
-  });
-
-  bool isExpired(Duration ttl) => DateTime.now().difference(cachedAt) > ttl;
 }

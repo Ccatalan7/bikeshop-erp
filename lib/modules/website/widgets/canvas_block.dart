@@ -32,7 +32,6 @@ import 'snap_result.dart';
 /// - gridSize: number (px, optional)
 /// - snap: bool (optional)
 /// - snapDistance: number (px, optional)
-/// - activeElementId: string? (optional)
 /// - elements: List<Map> where each element has:
 ///   - id: string
 ///   - type: "text" | "button" | "image" | "shape" | "product" |
@@ -47,10 +46,12 @@ class CanvasBlock extends StatefulWidget {
   final Map<String, dynamic> data;
   final bool editable;
   final Color accentColor;
+  final String? activeElementId;
   final ValueChanged<List<Map<String, dynamic>>>? onElementsChanged;
   final ValueChanged<String?>? onActiveElementChanged;
   final ValueChanged<Size>? onCanvasSizeChanged;
   final void Function(String route)? onNavigate;
+  final bool Function(String href)? isNavigationEligible;
   final String? tenantId;
   final String? headingFont;
   final String? bodyFont;
@@ -63,10 +64,12 @@ class CanvasBlock extends StatefulWidget {
     required this.data,
     required this.editable,
     required this.accentColor,
+    this.activeElementId,
     this.onElementsChanged,
     this.onActiveElementChanged,
     this.onCanvasSizeChanged,
     this.onNavigate,
+    this.isNavigationEligible,
     this.tenantId,
     this.headingFont,
     this.bodyFont,
@@ -247,8 +250,8 @@ class _CanvasBlockState extends State<CanvasBlock> {
     return <Map<String, dynamic>>[];
   }
 
-  String? _activeElementIdFromData() {
-    final raw = widget.data['activeElementId'];
+  String? _normalizedActiveElementId() {
+    final raw = widget.activeElementId;
     final id = raw?.toString();
     if (id == null || id.trim().isEmpty) return null;
     return id.trim();
@@ -279,7 +282,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
   void initState() {
     super.initState();
     _elements = _elementsFromData();
-    _activeElementIdLocal = _activeElementIdFromData();
+    _activeElementIdLocal = _normalizedActiveElementId();
     _inlineFocusNode.addListener(() {
       // Commit on blur (common Wix behavior)
       if (!_inlineFocusNode.hasFocus && _editingElementId != null) {
@@ -315,14 +318,13 @@ class _CanvasBlockState extends State<CanvasBlock> {
         _editingElementId != null;
     if (isBusy) return;
 
-    // Only update elements if the source list reference changed
-    // This avoids rebuilding the internal list when other props change (like activeElementId)
+    // Only update elements if the source list reference changed.
     if (widget.data['elements'] != oldWidget.data['elements']) {
       _elements = _elementsFromData();
     }
 
-    // Sync selection from provider so panel-driven selection reflects on canvas.
-    _activeElementIdLocal = _activeElementIdFromData();
+    // Sync the edit-only binding so panel-driven selection reflects on canvas.
+    _activeElementIdLocal = _normalizedActiveElementId();
   }
 
   void _setActive(String? id) {
@@ -1487,7 +1489,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
                           behavior: HitTestBehavior.opaque,
                           onTap: () {
                             // Deselect any active element
-                            final currentActive = _activeElementIdFromData();
+                            final currentActive = _activeElementIdLocal;
                             if (currentActive != null &&
                                 currentActive.isNotEmpty) {
                               _setActive(null);
@@ -2063,6 +2065,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
               el,
               labelKeys: const ['label'],
               hrefKeys: const ['link'],
+              variantKeys: const ['style'],
               defaultLabel: 'Botón',
               defaultHref: '/',
               defaultVariant: WebsiteActionVariant.fromStorage(
@@ -2073,6 +2076,12 @@ class _CanvasBlockState extends State<CanvasBlock> {
         final label = action.label;
         final style = action.variant.storageValue;
         final link = action.href;
+        if (!widget.editable &&
+            widget.isNavigationEligible != null &&
+            !widget.isNavigationEligible!(link)) {
+          content = const SizedBox.shrink();
+          break;
+        }
         final inheritTheme = el['inheritTheme'] != false;
         final fontSize = ((el['fontSize'] as num?)?.toDouble() ?? 14) * scale;
         final radius = ((el['radius'] as num?)?.toDouble() ?? 10) * scale;

@@ -2,7 +2,7 @@
 
 **Status:** Mandatory for every Website Builder, public storefront, campaign,
 and editor-management change  
-**Last updated:** 2026-07-18
+**Last updated:** 2026-07-29
 
 This document is the current engineering contract for the Viñabike Website
 Editor. Read it before changing website editor controls, blocks, renderers,
@@ -14,6 +14,9 @@ After this contract, read
 the operational summary of the refactor, defines AI action equivalence, maps
 the connected configuration owners, and contains the current catalog/category
 evolution plan.
+
+Track the progressive architecture phases and their verified completion in
+[`WEBSITE_BUILDER_PROGRESSIVE_ARCHITECTURE_REFACTOR_PLAN_2026-07-29.md`](../development/WEBSITE_BUILDER_PROGRESSIVE_ARCHITECTURE_REFACTOR_PLAN_2026-07-29.md).
 
 The editor is not a mockup layered over a separate website. It is the CMS for
 the real website. A result is complete only when the saved editor state fully
@@ -50,7 +53,9 @@ Every change must satisfy all four parts of the editor-owned contract:
 |---|---|
 | Inline store/editor shell and page-route controller | `PublicStoreLayout` |
 | Persistent right inspector | `PersistentEditorShell`, `WebsiteEditorPanel` |
-| Draft, page context, selection, history, and global save state | `WebsiteEditModeProvider` |
+| Typed active document, scoped drafts, page context, selection, and history | `WebsiteEditModeProvider`, `WebsiteEditorDocument` |
+| Page visibility, order, spacing, full-bleed and height projection | `WebsitePageComposition` |
+| Page-level Edit/Preview/Public composition | `PageComposition` |
 | Editable block composition and block hit testing | `EditableBlockRenderer` |
 | Public block rendering | `WebsiteBlockRenderer` |
 | Layered campaign rendering | `CanvasBlock`, `DeferredCanvasBlock` |
@@ -59,7 +64,8 @@ Every change must satisfy all four parts of the editor-owned contract:
 | CTA value and rendering | `WebsiteActionValue`, `WebsiteActionEditor`, `WebsiteActionButton` |
 | Global site theme | `WebsiteThemeBuilder` plus saved `website_settings` |
 | Page/catalog/navigation management | Website Builder management workspaces registered in `canonical-ui-surfaces.md` |
-| Persistence | `WebsiteService.saveEditorChanges(...)` through global `Guardar` |
+| Persistence orchestration | `WebsiteSaveCoordinator` through global `Guardar` |
+| Atomic page-block replacement | `replace_page_blocks` through `WebsiteService.replacePageBlocks(...)` |
 
 The visual canvas, right inspector, page selector, and black management bar are
 connected parts of this one system. They may expose different tasks, but they
@@ -180,6 +186,23 @@ saved public visual result.
 
 Required rules:
 
+- Home, dynamic CMS pages and policy pages must project their block document
+  through `WebsitePageComposition`. That projection is the sole owner of
+  breakpoint visibility, `order_index` (with legacy `sort_order` fallback),
+  `spacingAfter`, `fullBleed`, and height behavior.
+- `PageComposition` is the only page-level switch between editable chrome and
+  shared content rendering. Preview and public use the same public visibility
+  projection. Edit alone retains hidden blocks so they remain repairable.
+- `WebsiteBlockCapabilityRegistry` owns one height behavior per block type:
+  `exact` fixes the saved height, `minimum` allows content to grow beyond it,
+  and `intrinsic` ignores a legacy saved height. The inspector, Edit renderer
+  and Preview/public composition must consume that same capability.
+- Block gaps exist only between projected blocks. There is no implicit trailing
+  section gap, and a progressive Home slice cannot leave a gap for an
+  unpainted block.
+- Editor insertion and spacing affordances live in the composition chrome
+  layer. A zero or small persisted gap keeps its exact page geometry while the
+  linked overlay retains a real 24 px hit target.
 - Reuse the same renderer, value resolver, theme, and layout math wherever
   possible. If mode-specific wrappers are necessary, keep the content subtree
   and its transforms identical.
@@ -193,6 +216,10 @@ Required rules:
   resize handles, editor toolbars, or admin-only gestures.
 - Defaults are fallbacks only. Once an editor value exists, it wins in all
   modes.
+- A block whose row is not explicitly hidden but whose desktop, tablet, and
+  mobile visibility values are all false is still absent from every public
+  surface. It cannot contribute runtime text, static HTML, SEO eligibility, or
+  sitemap freshness. Edit may keep it available for repair.
 - A parity fix belongs in the shared renderer or shared value resolver, not in
   one campaign's stored data.
 
@@ -467,6 +494,21 @@ Required behavior:
   shell/header/footer.
 - Switching pages must preserve the draft or show an explicit unsaved-change
   guard. Never discard a draft silently.
+- `WebsiteEditorNavigationGuard` is the single confirmation boundary. Page
+  switches discard only the captured page draft; leaving the editor discards
+  page, sitewide and SEO scopes. Every authorization captures the provider
+  revision and must still be current at the navigation operation.
+- Checkout and editor Back guards authorize both scopes before any destructive
+  state change. After final revalidation, discard and `Navigator.pop` occur
+  synchronously with no awaited destination activation between them.
+- Back inside a nested storefront page stack uses `switchPage` and preserves
+  sitewide/SEO drafts; a pop that leaves the storefront editor uses
+  `leaveEditor`. Route-local history is consumed before either editor intent.
+  A checkout wait captures the editor revision even when it began clean, so a
+  draft created while the confirmation is open cancels that stale exit.
+- Replacing the browser document is `leaveEditor`, even from Preview and even
+  when the destination URL is the current page. A hard Home refresh must never
+  bypass page, sitewide or SEO draft confirmation as `samePage`.
 - Route filters selected by a CTA, including category plus brand/search, must
   survive navigation and reopen visibly in `WebsiteLinkValueEditor`.
 - Category collections use the clean typed route
@@ -500,9 +542,72 @@ preserving the current page draft and return context.
 - `Estructura > Destinos y enlaces` audits CTA/menu destination integrity.
 - `Tema` owns global typography, colors, background, and button tokens.
 - The visual page editor owns page blocks, slides, and their presentation.
+- `SEO y visibilidad` reads those owners and sends the operator back to them.
+  It does not own another copy of site, page, product, category, canonical,
+  social, schema, analytics, or publication settings.
 
 Contextual shortcuts may open these owners. They must not duplicate their data,
 save semantics, or business rules.
+
+### SEO visibility and evidence
+
+SEO has one orchestration surface but not one flattened state. Every diagnostic
+must preserve these independent planes:
+
+1. **Current app eligibility:** derived now from canonical editable owners.
+2. **Deployed-build evidence:** dated evidence from the deployed
+   `release.json`, `sitemap.xml`, and `robots.txt`.
+3. **Google evidence:** dated Search Console evidence. A submitted or downloaded
+   sitemap is not proof that one URL was crawled or indexed.
+
+The center is read-only. Site metadata and the canonical origin remain owned by
+site settings (`store_url` is canonical and `seo_canonical_url` is only a
+compatibility mirror); page metadata remains owned by `website_pages`; product
+metadata/search phrases remain owned by the product's web controls; category
+publication and collection presentation remain owned by the catalog workspaces.
+The center may search, summarize, diagnose, preview effective copy, and route to
+those owners, but it cannot save or delete them.
+
+`store_url` must be one clean HTTPS origin: credentials, page paths, queries,
+and fragments are invalid. The editor, runtime projection, static generators,
+and Google integration must normalize or reject it through the same contract;
+none may silently reinterpret an arbitrary page URL as the site origin.
+
+Product diagnostics must compare all internal products with the exact result of
+the canonical public catalog query. They must not infer web eligibility from
+`is_active`, inventory publication, or lifecycle fields alone. Generated
+product title/description copy uses the same resolver in runtime metadata,
+product-form preview, and static snapshots. The first explicit search phrase
+may enrich generated copy; it never overrides hand-written metadata or becomes
+a hidden keyword dump.
+
+Static trust follows owner publication too: a fallback body may keep a policy
+route usable, but cannot make an unpublished `website_pages` owner indexable or
+eligible for the sitemap. The initial no-JavaScript navigation and structured
+policy references include only trust pages currently published by that owner;
+legacy free-form `seo_*_policy_url` values are not route owners. Cart, checkout,
+account, order, auth, ERP/editor and preview routes must also emit
+response-level `X-Robots-Tag` protection; runtime meta alone is insufficient
+for their cached/bootstrap responses.
+
+The deploy-time static generator reads settings (including the presentation
+registry), published product owners, public availability, brands, active
+categories, product aliases, pages, and blocks as one optimistic source
+revision. It accepts two identical complete reads and revalidates the same
+complete revision immediately before applying generated redirects. A change in
+any participating owner aborts the release instead of publishing mixed HTML,
+sitemap, and redirect evidence. Known direct routes such as `/servicios` and
+`/contacto` retain a route-specific `noindex,follow` snapshot when their public
+owner is not eligible; they never inherit the indexable Home document.
+
+**Known release-freshness residual (2026-07-28):** saving an editor owner does
+not itself dispatch the Firebase storefront build. The current app projection
+can therefore be newer than the dated deployed-build evidence until the
+authorized push/manual workflow runs. UI and diagnostics must expose that age
+honestly and must not claim the static snapshot, sitemap, redirects, or Google
+state are live merely because an editor save succeeded. Adding an automatic
+dispatch requires a separately reviewed authorization, idempotency, failure,
+and deployment-ownership contract; it is not inferred by this SEO fix.
 
 ## Shared capabilities are universal
 
@@ -573,6 +678,17 @@ persist through the editor-wide `Guardar` action.
   renderer must reproduce the same result.
 - Discard must restore blocks and all staged theme/header/footer/navigation/SEO
   state, not only the currently visible block.
+- `WebsiteSaveCoordinator` captures one immutable save command. Idempotent
+  sitewide families save first, page blocks use tenant/page-scoped
+  `replace_page_blocks`, and navigation creates run last with deterministic
+  idempotency keys. A sitewide-only save does not resolve or replace a page.
+- Each successful family is acknowledged only when the current staged value
+  still matches its captured snapshot. A failed or concurrently changed family
+  stays dirty and retryable; a block failure cannot delete the prior published
+  page because delete and insert are one PostgreSQL transaction.
+- A successful page-block save rebaselines undo history. Therefore
+  `Guardar -> Editar -> Descartar` restores the newly saved document, not the
+  session's original load.
 
 ## Failure patterns that must not recur
 
@@ -593,10 +709,13 @@ This contract is the target behavior, not a claim that every legacy path already
 complies. Future work touching these areas must reduce, not copy, the remaining
 debt:
 
-- Canvas `activeElementId` is intended to be transient, but some provider paths
-  can still mark the draft dirty and serialize nested slide selection. Move
-  selection to provider-only UI state or strip it recursively from persistence;
-  selection alone must never enable `Guardar`.
+- Resolved 2026-07-30: Canvas `activeElementId` is transient everywhere.
+  Selection travels through typed editor bindings, never inside `block_data`;
+  `website_block_document_sanitizer.dart` strips it type-aware at ingress,
+  history, acknowledge, mutations, save capture and the RPC client boundary;
+  and a mutation whose sanitized document is unchanged never dirties the
+  draft. Selection alone can never enable `Guardar` — do not reintroduce
+  persisted selection.
 - Canvas edit content still passes through editor decoration that can introduce
   a small inset absent from public rendering. Editor chrome must be overlaid
   around the same content geometry, not change its padding or dimensions.
@@ -606,14 +725,20 @@ debt:
   the saved image field receives the WebP URL while source metadata remains
   available for reprocessing. Legacy URL-only fields still need conversion to
   the shared picker when they are touched.
-- Save orchestration exists in both `PublicStoreLayout` and
-  `PersistentEditorShell`. They currently reach the same service but can drift;
-  converge on one save coordinator/result finalizer and verify that failures
-  retain every dirty staged bucket.
-- Current architecture tests include source-contract assertions. Add real
-  widget/golden/integration coverage for transform parity, bounded clipping,
-  repeated nested selection, picker interaction, routed product loading,
-  global theme reach, and save/reload round-trip.
+- Resolved 2026-07-30: all 24 registered block families render through the
+  shared content renderer in every mode. Edit injects only presenters,
+  bindings and chrome; every bespoke `_buildEditableXxx` was deleted with its
+  batch. Do not recreate a parallel renderer or runtime migration flag.
+- Resolved 2026-07-30: `WebsiteEditModeProvider.mode` is the single
+  `public | preview | edit` FSM owner. The URL is an entry command plus a
+  write-through projection (`website_editor_mode_route_binding.dart`), the
+  shared `WebsiteEditorDocumentBinding` attaches routed page documents, and
+  the legacy delayed callbacks, anti-rebounce flags, `provider || URL`
+  calculations and mode-driven subtree remounts were removed. Do not add a
+  second mode owner, timer or reconciliation flag.
+- Some broad architecture suites still contain source-contract assertions.
+  Replace the relevant assertion with widget/unit/integration behavior whenever
+  that contract is touched.
 
 Intentional edit-mode reductions such as suppressing an entrance animation are
 acceptable only when they improve editing stability; the underlying geometry,
@@ -665,6 +790,7 @@ Before completion:
 | Category collection | Presentation controls and actual catalog preview are visible in the canonical catalog workspace | Same hero, breadcrumb, subcategories, facets and grid over public products | Same saved presentation and query-backed products after reload |
 | Responsive behavior | Desktop/tablet/mobile controls remain editable | Same visibility and composition | Same visibility and composition |
 | Persistence | Global save owns content/config | Saved Preview survives reload | Public result survives reload/cache refresh |
+| Page composition | Hidden blocks remain repairable; canonical order/geometry plus chrome | Current-breakpoint public visibility and canonical order/geometry | Same projection after reload; policy trust shell still owns publication/indexability |
 
 Automated guardrails currently include:
 
@@ -726,3 +852,27 @@ A Website Editor change is complete only when:
 - global theme/media/action/save contracts are reused;
 - save/reload round-trips without hidden constants or agent-only state; and
 - the relevant route, responsive surfaces, and regression tests pass.
+
+## Autoridad, épocas y lecturas del editor (cierre 2026-07-30)
+
+- `WebsiteEditorCapabilitySnapshot` es tipado (identity/activeTenant/
+  storefrontTenant/hasAuthority/authorityEpoch); `granted` y `fingerprint` son
+  derivados. Igualdad de autoridad = fingerprint **y** authorityEpoch.
+- La adopción de lease hace takeover central: cualquier fingerprint o epoch
+  distinto sobre un lease vivo invalida completions (generation), sube la
+  identity revision y limpia buckets/owners antes de adoptar.
+- Owners tipados: sesión (estampado en el grant) y documento (estampado al
+  abrir/activar bajo lease granted). El guardado exige ambos según alcance y la
+  verdad del servicio (`currentCapability`) en preflight y por operación
+  (`writeGuard`, pre-request y post-response antes de proyección local).
+- Lecturas privadas del editor: sólo `load_editor_page_with_blocks` (RPC
+  authority-bound, 42501 durable con latch compartido); supersesión tipada para
+  completions de identidades anteriores; parser fail-closed tipado.
+- Borrado de navegación: sólo `delete_website_navigation`
+  (idempotente `deleted|already_absent`; guard estructural en tests).
+- Retorno OAuth: intent único tipado con nonce; take-before-await; restauración
+  sólo por fallo transitorio clasificado del mismo nonce; validación de
+  identidad/tenant/fingerprint antes de cualquier mutación del provider.
+- Shell del storefront: un Scaffold estable y un anchor de contenido de cadena
+  constante para public|preview|edit y todos los device previews; el chrome del
+  editor es overlay hermano, nunca padre del contenido enrutado.

@@ -3,11 +3,13 @@
 **Status:** Mandatory context for every AI agent changing the Website Builder,
 public storefront, campaigns, catalog routes, category presentation, filters,
 SEO, navigation, or website configuration  
-**Last updated:** 2026-07-23  
+**Last updated:** 2026-07-29
 **Normative contract:**
 [`website-editor-contract.md`](website-editor-contract.md)  
 **Surface registry:**
 [`canonical-ui-surfaces.md`](canonical-ui-surfaces.md)
+**Progressive architecture tracker:**
+[`WEBSITE_BUILDER_PROGRESSIVE_ARCHITECTURE_REFACTOR_PLAN_2026-07-29.md`](../development/WEBSITE_BUILDER_PROGRESSIVE_ARCHITECTURE_REFACTOR_PLAN_2026-07-29.md)
 
 This document is the short, operational handoff from the Website Builder
 refactor and the incidents that motivated it. It explains what “make the
@@ -110,8 +112,9 @@ create a second copy of its settings inside a block inspector.
 | Meaning | Canonical owner / API | Editor surface |
 |---|---|---|
 | CMS page identity, slug, SEO and publication | `website_pages` through `WebsiteService` | `Estructura > Páginas` |
-| Page composition | `website_blocks` and registered block schemas | Visual page editor + right inspector |
-| Draft, selection, undo/redo and global save | `WebsiteEditModeProvider` and `WebsiteService.saveEditorChanges(...)` | Editor shell `Guardar` / `Descartar` |
+| Page composition | `website_blocks`, registered block schemas, `WebsitePageComposition`, and `PageComposition` | Visual page editor + right inspector |
+| Typed document, scoped drafts, selection and undo/redo | `WebsiteEditModeProvider` and `WebsiteEditorDocument` | Editor shell `Guardar` / `Descartar` |
+| Global save protocol | `WebsiteSaveCoordinator`; blocks use transactional `replace_page_blocks` | Editor shell `Guardar` |
 | Header/footer navigation hierarchy | `website_navigation` | `Estructura > Navegación y menús` |
 | Typed links and filtered catalog destinations | `WebsiteDestination`, `WebsiteLinkValueEditor` | CTA controls and `Estructura > Destinos y enlaces` |
 | CTA label, destination and presentation | `WebsiteActionValue`, `WebsiteActionEditor`, `WebsiteActionButton` | Every CTA-capable block/layer |
@@ -120,6 +123,8 @@ create a second copy of its settings inside a block inspector.
 | Root/category collection presentation, SEO and route aliases | `WebsiteCatalogPresentationRegistry`, keyed by reserved root owner or stable category ID | `Catálogo web > Categorías > Presentación` |
 | Public catalog facet state | `WebsiteCatalogQuery` plus the canonical public eligibility/availability query | Ordered facet controls in category/root presentation and the routed catalog |
 | Public commerce identity and offer projection | Product/category owners through `PublicCommerceProductProjection` and its equivalent shared TypeScript contract | Product `Tienda Online` controls plus catalog/SEO readiness surfaces |
+| Site SEO identity and canonical origin | Normalized `website_settings`; `store_url` is canonical and `seo_canonical_url` is a compatibility mirror | Site settings |
+| Cross-owner SEO diagnosis | Read-only `WebsiteSeoCenterProjection` with separate app, deployed-build and Google evidence | `/website/seo`, with handoffs to the owning site/page/product/category surface |
 | Global fonts, colors, background, buttons and header/footer tokens | saved `website_settings`, consumed through `WebsiteThemeBuilder` | `Tema` / site settings |
 | Website media | shared website media service and picker | Biblioteca / Productos / Subir / URL avanzada |
 | Layered campaign composition | `CanvasBlock`, `_CanvasBlockControls`, registered Canvas element factory | Canvas inline controls + inspector |
@@ -128,6 +133,24 @@ create a second copy of its settings inside a block inspector.
 When implementation names evolve, preserve the ownership boundary. Update
 this table, the engineering contract, and the canonical surface registry in
 the same task.
+
+Standalone text and button are converged renderer families. The text block
+resolves one `WebsiteTextBlockPresentation` and responsive max-width frame for
+all modes; Edit injects only its inline text/format/width presenter.
+`WebsiteActionButton` likewise owns button presentation while Edit injects only
+the inline label presenter. Its visible `style` alias and the canonical
+`actions` variant must remain synchronized. Do not restore either bespoke
+editable renderer.
+
+Resolved 2026-07-30: all 24 registered renderer families converged on the
+shared content renderer with geometric parity coverage; every bespoke
+`_buildEditableXxx` builder was deleted with its batch (4A simples, 4B
+colecciones, 4C hero/carousel, 4D canvas). Edit injects only presenters,
+typed edit bindings and chrome. The storefront mode is a single provider-owned
+FSM (`public | preview | edit`); the URL is an entry command plus write-through
+projection and can never compete as a second owner. Do not recreate a bespoke
+editable renderer, a runtime migration flag, or a URL/provider mode
+synchronizer.
 
 ## Rules by capability
 
@@ -201,6 +224,17 @@ Product/Offer JSON-LD, Merchant feed, sitemap and checkout.
   or foreign text claim.
 - Web publication, effective public eligibility, Merchant eligibility,
   submitted status and Google approval/rejection are distinct visible states.
+- The SEO center preserves three independent evidence planes: current app
+  eligibility, dated deployed-build evidence and dated Google/Search Console
+  evidence. A successful build or submitted sitemap is not URL-indexing proof,
+  and missing evidence must stay unknown.
+- Product app eligibility comes from the canonical public catalog RPC under the
+  saved visibility/stock/image/category policy. Internal `is_active`,
+  `is_published` or lifecycle fields cannot widen that set.
+- Product runtime metadata, product-form preview and generated static snapshots
+  resolve the same owner overrides, templates, locality and explicit search
+  phrases. Search phrases may enrich generated customer-facing copy but never
+  override explicit copy or become a hidden keyword list.
 - Category/product pages intended for discovery need semantic HTML containing
   real `<a href>` links. Flutter canvas output alone is not an indexable HTML
   contract; the existing public snapshot/prerender pipeline must be extended
@@ -215,6 +249,15 @@ Product/Offer JSON-LD, Merchant feed, sitemap and checkout.
   while the initial semantic HTML remains the authoritative completion gate.
 - Empty public categories are not indexed. Preview/Edit surfaces are private,
   absent from Merchant/sitemap and never treated as evidence of public HTML.
+- Static-policy fallback content cannot invent publication: only a published
+  `website_pages` owner can enter static trust, no-JavaScript navigation,
+  structured policy references and the sitemap. Legacy free-form policy URL
+  settings are not independent route owners. Private routes such as cart,
+  checkout, account, order, auth and editor/ERP surfaces also require
+  response-level `X-Robots-Tag` protection.
+- `store_url` is one clean HTTPS origin across the editor, runtime, static
+  generator and Google integration. Credentials, paths, queries and fragments
+  fail closed instead of being silently stripped by one consumer.
 - Product image controls and readiness diagnostics should adopt 500 x 500 as
   the forward minimum now; Google announced enforcement from 2027-01-31.
 
@@ -298,6 +341,12 @@ release claim.
 
 - Content geometry and value resolution are shared. Editor-only chrome is an
   overlay, not an alternative content layout.
+- The capability registry owns `exact`, `minimum`, or `intrinsic` height
+  behavior for every block type. Composition, inspector and both renderers
+  consume that same value; no local dynamic-height list may compete with it.
+- Spacing and insertion chrome is linked to composition anchors. It may overlap
+  content for operability, but it cannot add height to a zero or small saved
+  gap.
 - Saved rotation, alpha, position, crop, font, fit, spacing, visibility, and
   animation mean the same thing in Edit, Preview, and public mode.
 - Bounded blocks such as carousels clip transformed content at their own
@@ -310,12 +359,44 @@ release claim.
 - Content/configuration changes stage through the editor-wide draft and global
   save. Dialog `Aplicar` may update the draft but does not invent a private
   persistence path.
+- `WebsiteSaveCoordinator` is the only global save orchestrator. It snapshots
+  page, sitewide, navigation and SEO drafts; saves idempotent families first;
+  replaces page blocks through the atomic tenant/page-scoped
+  `replace_page_blocks` RPC; and creates navigation rows last with stable
+  idempotency keys. Sitewide-only saves do not require a page lookup.
+- The RPC migration `20260729010000_atomic_replace_page_blocks.sql` was
+  deployed, verified live and registered in production on 2026-07-29. Its
+  anonymous execute grant is absent; `authenticated` is the sole application
+  role with execute access.
+- A section clears only when its successful snapshot still equals the current
+  draft. Failures and concurrent edits remain staged and visible for retry.
+  Successful block replacement rebaselines undo/discard history.
 - Operational publication, OAuth, sync, import, and destructive actions may
   persist immediately only when the UI clearly presents them as operations.
 - Discard restores every staged bucket, including blocks, theme, header/footer,
   navigation, category visibility, and SEO.
 - A successful write is not a round-trip proof. Reload and read back through
   the canonical UI and consumer.
+
+### Navigation and document replacement
+
+- `WebsiteEditorNavigationGuard` owns unsaved-change confirmation for selectors,
+  CTAs, search, external links, quick page creation, explicit exits and Back.
+  A page switch may discard only the captured page scope; leaving the editor
+  includes sitewide and SEO drafts.
+- Authorization is revision-bound. After any checkout or destination await,
+  callers revalidate before committing. Back authorizes editor and checkout
+  together, then commits discard and pop without an async gap.
+- A nested page-stack Back is `switchPage`; the outer storefront exit is
+  `leaveEditor`. Local route history closes before either draft guard, and a
+  checkout authorization always captures the editor revision even when the
+  editor was clean at the start.
+- A browser reload/assignment is always an editor exit, including same-page
+  Home refresh in Preview. Never classify a document replacement from URL
+  equality alone.
+- Static policy trust has explicit retained provenance: editor-loaded drafts
+  never become public authority. Public origin and retained stale public
+  snapshots may compose; editor-only content stays unavailable and noindex.
 
 ## Failure patterns learned during the refactor
 
@@ -706,3 +787,12 @@ Then the agent should restate the requested feature's Owner, Control,
 Operation, Consumers, route impact, catalog impact, and verification matrix
 before changing implementation. That restatement is the guardrail against
 quietly rebuilding a hardcoded parallel storefront.
+
+## Estado 2026-07-30 (cierre Claude, handoff de emergencia)
+
+Implementación, pruebas y validación productiva-derivada completas (ver el plan
+progresivo para el detalle de gates y conteos). Codex desplegó mediante el flujo
+guardado, verificó por readback y registró
+`20260730091630_harden_website_editor_reads.sql` el 2026-07-30; el health
+productivo cerró con cero violaciones críticas. No queda SQL de este cierre
+pendiente. Sin commit/push/staging de app por decisión del owner.

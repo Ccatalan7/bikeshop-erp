@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/widgets/branded_loading.dart';
+import '../providers/website_edit_mode_provider.dart';
 import '../services/google_business_service.dart';
 import '../services/website_service.dart';
 import '../widgets/website_admin_ui.dart';
@@ -235,7 +236,11 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                     label: const Text('Sincronizar Reseñas'),
                   ),
                   TextButton.icon(
-                    onPressed: () => svc.connect(),
+                    onPressed: () => svc.connect(
+                editorCapability: context
+                    .read<WebsiteEditModeProvider>()
+                    .editorEntryLease,
+              ),
                     icon: const Icon(Icons.refresh, size: 18),
                     label: Text(hasToken ? 'Reconectar' : 'Renovar acceso'),
                   ),
@@ -274,7 +279,11 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        onPressed: svc.isLoading ? null : () => svc.connect(),
+                        onPressed: svc.isLoading ? null : () => svc.connect(
+                editorCapability: context
+                    .read<WebsiteEditModeProvider>()
+                    .editorEntryLease,
+              ),
                         icon: svc.isLoading
                             ? const SizedBox(
                                 width: 18,
@@ -524,7 +533,10 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
         ),
       ),
     );
-    await googleService.connect();
+    await googleService.connect(
+      editorCapability:
+          context.read<WebsiteEditModeProvider>().editorEntryLease,
+    );
     return false;
   }
 

@@ -13,6 +13,6 @@ class VideoBannerPlatform {
     // The image background will be shown instead
     return const SizedBox.shrink();
   }
-  
+
   static bool get isSupported => false;
 }

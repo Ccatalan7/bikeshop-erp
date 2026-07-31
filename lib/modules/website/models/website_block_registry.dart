@@ -394,7 +394,7 @@ class WebsiteBlockRegistry {
           label: 'Servicios',
           type: WebsiteBlockFieldType.repeater,
           itemLabel: 'Servicio',
-          minItems: 1,
+          migrationAliases: ['items'],
           itemFields: [
             WebsiteBlockFieldSchema(
               key: 'icon',
@@ -416,12 +416,16 @@ class WebsiteBlockRegistry {
               label: 'Título',
               type: WebsiteBlockFieldType.text,
               defaultValue: 'Servicio',
+              textRole: WebsiteTextRole.heading,
+              supportsFormatting: true,
             ),
             WebsiteBlockFieldSchema(
               key: 'description',
               label: 'Descripción',
               type: WebsiteBlockFieldType.textarea,
               defaultValue: 'Describe el servicio',
+              textRole: WebsiteTextRole.paragraph,
+              supportsFormatting: true,
             ),
           ],
         ),
@@ -527,25 +531,32 @@ class WebsiteBlockRegistry {
           label: 'Testimonios',
           type: WebsiteBlockFieldType.repeater,
           itemLabel: 'Testimonio',
-          minItems: 1,
+          migrationAliases: ['items'],
           itemFields: [
             WebsiteBlockFieldSchema(
               key: 'name',
               label: 'Nombre',
               type: WebsiteBlockFieldType.text,
               defaultValue: 'Nombre',
+              textRole: WebsiteTextRole.heading,
+              supportsFormatting: true,
             ),
             WebsiteBlockFieldSchema(
               key: 'role',
               label: 'Rol',
               type: WebsiteBlockFieldType.text,
               defaultValue: 'Cliente',
+              textRole: WebsiteTextRole.caption,
+              supportsFormatting: true,
             ),
             WebsiteBlockFieldSchema(
               key: 'comment',
               label: 'Comentario',
               type: WebsiteBlockFieldType.textarea,
               defaultValue: 'Escribe el testimonio',
+              textRole: WebsiteTextRole.paragraph,
+              supportsFormatting: true,
+              migrationAliases: ['quote', 'text'],
             ),
             WebsiteBlockFieldSchema(
               key: 'rating',
@@ -601,7 +612,7 @@ class WebsiteBlockRegistry {
           label: 'Características',
           type: WebsiteBlockFieldType.repeater,
           itemLabel: 'Característica',
-          minItems: 1,
+          migrationAliases: ['items'],
           itemFields: [
             WebsiteBlockFieldSchema(
               key: 'icon',
@@ -627,12 +638,16 @@ class WebsiteBlockRegistry {
               label: 'Título',
               type: WebsiteBlockFieldType.text,
               defaultValue: 'Ventaja',
+              textRole: WebsiteTextRole.heading,
+              supportsFormatting: true,
             ),
             WebsiteBlockFieldSchema(
               key: 'description',
               label: 'Descripción',
               type: WebsiteBlockFieldType.textarea,
               defaultValue: 'Describe la característica',
+              textRole: WebsiteTextRole.paragraph,
+              supportsFormatting: true,
             ),
           ],
         ),
@@ -713,6 +728,7 @@ class WebsiteBlockRegistry {
           supportsFocalPoint: true,
           supportsAltText: true,
           altTextKey: 'backgroundImageAltText',
+          migrationAliases: ['imageUrl'],
         ),
         WebsiteBlockFieldSchema(
           key: 'overlayColor',
@@ -774,7 +790,6 @@ class WebsiteBlockRegistry {
           label: 'Imágenes',
           type: WebsiteBlockFieldType.repeater,
           itemLabel: 'Imagen',
-          minItems: 1,
           itemFields: [
             WebsiteBlockFieldSchema(
               key: 'imageUrl',
@@ -790,6 +805,7 @@ class WebsiteBlockRegistry {
               label: 'Leyenda',
               type: WebsiteBlockFieldType.text,
               textRole: WebsiteTextRole.caption,
+              supportsFormatting: true,
             ),
           ],
         ),
@@ -890,19 +906,22 @@ class WebsiteBlockRegistry {
           label: 'Preguntas frecuentes',
           type: WebsiteBlockFieldType.repeater,
           itemLabel: 'Pregunta',
-          minItems: 1,
           itemFields: [
             WebsiteBlockFieldSchema(
               key: 'question',
               label: 'Pregunta',
               type: WebsiteBlockFieldType.text,
               defaultValue: 'Nueva pregunta',
+              textRole: WebsiteTextRole.heading,
+              supportsFormatting: true,
             ),
             WebsiteBlockFieldSchema(
               key: 'answer',
               label: 'Respuesta',
               type: WebsiteBlockFieldType.textarea,
               defaultValue: 'Respuesta detallada',
+              textRole: WebsiteTextRole.paragraph,
+              supportsFormatting: true,
             ),
           ],
         ),
@@ -965,19 +984,23 @@ class WebsiteBlockRegistry {
           label: 'Planes',
           type: WebsiteBlockFieldType.repeater,
           itemLabel: 'Plan',
-          minItems: 1,
+          migrationAliases: ['items'],
           itemFields: [
             WebsiteBlockFieldSchema(
               key: 'name',
               label: 'Nombre',
               type: WebsiteBlockFieldType.text,
               defaultValue: 'Nuevo plan',
+              textRole: WebsiteTextRole.heading,
+              supportsFormatting: true,
             ),
             WebsiteBlockFieldSchema(
               key: 'price',
               label: 'Precio',
               type: WebsiteBlockFieldType.text,
               defaultValue: '0',
+              textRole: WebsiteTextRole.heading,
+              supportsFormatting: true,
             ),
             WebsiteBlockFieldSchema(
               key: 'ctaText',
@@ -985,6 +1008,7 @@ class WebsiteBlockRegistry {
               type: WebsiteBlockFieldType.text,
               defaultValue: 'Reservar',
               textRole: WebsiteTextRole.buttonLabel,
+              migrationAliases: ['buttonText'],
             ),
             WebsiteBlockFieldSchema(
               key: 'ctaLink',
@@ -994,6 +1018,7 @@ class WebsiteBlockRegistry {
               actionRole: WebsiteActionRole.primary,
               actionLabelKey: 'ctaText',
               actionVariantKey: 'actionVariant',
+              migrationAliases: ['buttonLink'],
             ),
             WebsiteBlockFieldSchema(
               key: 'features',
@@ -1006,6 +1031,7 @@ class WebsiteBlockRegistry {
               label: 'Destacar plan',
               type: WebsiteBlockFieldType.toggle,
               defaultValue: false,
+              migrationAliases: ['isFeatured'],
             ),
           ],
         ),
@@ -1401,6 +1427,7 @@ class WebsiteBlockRegistry {
           'Presenta a los mecánicos y especialistas del taller con su rol.',
       defaultData: {
         'title': 'Nuestro Equipo',
+        'description': '',
         'members': [
           {
             'name': 'Daniela Torres',
@@ -1425,29 +1452,43 @@ class WebsiteBlockRegistry {
           type: WebsiteBlockFieldType.text,
         ),
         WebsiteBlockFieldSchema(
+          key: 'description',
+          label: 'Descripción',
+          type: WebsiteBlockFieldType.textarea,
+          migrationAliases: ['subtitle'],
+          textRole: WebsiteTextRole.paragraph,
+          supportsFormatting: true,
+        ),
+        WebsiteBlockFieldSchema(
           key: 'members',
           label: 'Integrantes',
           type: WebsiteBlockFieldType.repeater,
           itemLabel: 'Integrante',
-          minItems: 1,
+          migrationAliases: ['team', 'items'],
           itemFields: [
             WebsiteBlockFieldSchema(
               key: 'name',
               label: 'Nombre',
               type: WebsiteBlockFieldType.text,
               defaultValue: 'Integrante',
+              textRole: WebsiteTextRole.heading,
+              supportsFormatting: true,
             ),
             WebsiteBlockFieldSchema(
               key: 'role',
               label: 'Rol',
               type: WebsiteBlockFieldType.text,
               defaultValue: 'Cargo',
+              textRole: WebsiteTextRole.caption,
+              supportsFormatting: true,
             ),
             WebsiteBlockFieldSchema(
               key: 'bio',
               label: 'Descripción',
               type: WebsiteBlockFieldType.textarea,
               defaultValue: 'Resumen profesional',
+              textRole: WebsiteTextRole.paragraph,
+              supportsFormatting: true,
             ),
             WebsiteBlockFieldSchema(
               key: 'avatarUrl',
@@ -1456,6 +1497,7 @@ class WebsiteBlockRegistry {
               mediaRole: WebsiteMediaRole.avatar,
               supportsAltText: true,
               altTextKey: 'avatarAltText',
+              migrationAliases: ['image'],
             ),
             WebsiteBlockFieldSchema(
               key: 'instagram',
@@ -1476,7 +1518,7 @@ class WebsiteBlockRegistry {
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
-          fieldKeys: ['title', 'members'],
+          fieldKeys: ['title', 'description', 'members'],
         ),
       ],
     ),
@@ -1513,19 +1555,31 @@ class WebsiteBlockRegistry {
           label: 'Indicadores',
           type: WebsiteBlockFieldType.repeater,
           itemLabel: 'Indicador',
-          minItems: 1,
+          migrationAliases: ['stats', 'items'],
           itemFields: [
             WebsiteBlockFieldSchema(
               key: 'label',
               label: 'Etiqueta',
               type: WebsiteBlockFieldType.text,
               defaultValue: 'Métrica',
+              textRole: WebsiteTextRole.caption,
+              supportsFormatting: true,
             ),
             WebsiteBlockFieldSchema(
               key: 'value',
               label: 'Valor',
               type: WebsiteBlockFieldType.text,
               defaultValue: '0',
+              textRole: WebsiteTextRole.heading,
+              supportsFormatting: true,
+            ),
+            WebsiteBlockFieldSchema(
+              key: 'suffix',
+              label: 'Sufijo',
+              type: WebsiteBlockFieldType.text,
+              defaultValue: '',
+              textRole: WebsiteTextRole.heading,
+              supportsFormatting: true,
             ),
             WebsiteBlockFieldSchema(
               key: 'icon',

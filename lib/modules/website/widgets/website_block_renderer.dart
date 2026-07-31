@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/website_service.dart';
 
 import '../../../public_store/providers/public_store_tenant_provider.dart';
+import '../../../public_store/services/public_category_publication.dart';
 import '../../../public_store/services/public_inventory_service.dart';
 import '../../../shared/models/public_product_visibility_policy.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -24,7 +25,23 @@ import 'deferred_canvas_block.dart';
 import 'premium_product_card.dart';
 import 'text_formatting_toolbar.dart';
 import 'google_reviews_carousel.dart';
+import 'website_about_block_content.dart';
 import 'website_carousel_media.dart';
+import 'website_carousel_edit_binding.dart';
+import 'website_canvas_editor_binding.dart';
+import 'website_block_content_presenters.dart';
+import 'website_contact_block_content.dart';
+import 'website_cta_block_content.dart';
+import 'website_faq_block_content.dart';
+import 'website_features_block_content.dart';
+import 'website_gallery_block_content.dart';
+import 'website_hero_block_content.dart';
+import 'website_pricing_block_content.dart';
+import 'website_services_block_content.dart';
+import 'website_stats_block_content.dart';
+import 'website_team_block_content.dart';
+import 'website_testimonials_block_content.dart';
+import 'website_text_block_content.dart';
 
 // Conditional import for web platform
 import 'video_banner_stub.dart' if (dart.library.html) 'video_banner_web.dart'
@@ -62,6 +79,29 @@ class WebsiteBlockRenderer {
     );
   }
 
+  /// Single visibility filter for configurable block actions.
+  ///
+  /// Phase-2 contract (reconciliación Codex, 2026-07-28): the host injects its
+  /// navigation-eligibility boundary through `isNavigationEligible`; this
+  /// renderer never resolves category publication itself and must not import
+  /// storefront navigation owners. An action whose configured destination is
+  /// not eligible is ABSENT from public and public-preview composition — never
+  /// rendered disabled — because a dead call-to-action invites a retry that
+  /// cannot succeed. An empty href keeps its block's existing fallback
+  /// semantics, and an ineligible href is never rewritten to a substitute
+  /// destination.
+  @visibleForTesting
+  static WebsiteActionValue? visibleNavigationAction(
+    WebsiteActionValue? action, {
+    required bool Function(String href)? isNavigationEligible,
+  }) {
+    if (action == null) return null;
+    final href = action.href.trim();
+    if (href.isEmpty) return action;
+    if (isNavigationEligible == null) return action;
+    return isNavigationEligible(href) ? action : null;
+  }
+
   static Widget build({
     required BuildContext context,
     required String blockType,
@@ -76,6 +116,10 @@ class WebsiteBlockRenderer {
     double? headingSize,
     double? bodySize,
     void Function(String route)? onNavigate,
+    bool Function(String href)? isNavigationEligible,
+    WebsiteBlockContentPresenters? contentPresenters,
+    WebsiteCarouselEditBinding? carouselEditBinding,
+    WebsiteCanvasEditorBinding? canvasEditBinding,
     String? tenantId,
   }) {
     final type = parseWebsiteBlockType(blockType);
@@ -84,17 +128,18 @@ class WebsiteBlockRenderer {
 
     switch (type) {
       case WebsiteBlockType.hero:
-        return _buildHero(
-          context: context,
+        return WebsiteHeroBlockContent(
           data: data,
-          accentColor: accentColor,
           primaryColor: primaryColor,
+          accentColor: accentColor,
           previewMode: previewMode,
           headingFont: headingFont,
           bodyFont: bodyFont,
           headingSize: headingSize,
           bodySize: bodySize,
           onNavigate: onNavigate,
+          isNavigationEligible: isNavigationEligible,
+          presenters: contentPresenters,
         );
       case WebsiteBlockType.carousel:
         return _buildCarousel(
@@ -108,7 +153,10 @@ class WebsiteBlockRenderer {
           headingSize: headingSize,
           bodySize: bodySize,
           onNavigate: onNavigate,
+          isNavigationEligible: isNavigationEligible,
           tenantId: tenantId,
+          presenters: contentPresenters,
+          editBinding: carouselEditBinding,
         );
       case WebsiteBlockType.canvas:
         return _buildCanvas(
@@ -116,9 +164,11 @@ class WebsiteBlockRenderer {
           data: data,
           accentColor: accentColor,
           onNavigate: onNavigate,
+          isNavigationEligible: isNavigationEligible,
           tenantId: tenantId,
           headingFont: headingFont,
           bodyFont: bodyFont,
+          editBinding: canvasEditBinding,
         );
       case WebsiteBlockType.text:
         return _buildText(
@@ -128,7 +178,7 @@ class WebsiteBlockRenderer {
           bodyFont: bodyFont,
           headingSize: headingSize,
           bodySize: bodySize,
-          previewMode: previewMode,
+          inlinePresenter: contentPresenters?.text,
         );
       case WebsiteBlockType.button:
         return _buildButton(
@@ -139,6 +189,8 @@ class WebsiteBlockRenderer {
           bodyFont: bodyFont,
           bodySize: bodySize,
           onNavigate: onNavigate,
+          isNavigationEligible: isNavigationEligible,
+          actionPresenter: contentPresenters?.action,
         );
       case WebsiteBlockType.divider:
         return _buildDivider(
@@ -156,27 +208,38 @@ class WebsiteBlockRenderer {
           previewMode: previewMode,
           bodyFont: bodyFont,
           onNavigate: onNavigate,
+          isNavigationEligible: isNavigationEligible,
           tenantId: tenantId,
         );
       case WebsiteBlockType.services:
-        return _buildServices(
+        return _withResponsiveContentPadding(
           context: context,
           data: data,
-          primaryColor: primaryColor,
-          previewMode: previewMode,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
+          defaultVertical: 56,
+          builder: (padding) => WebsiteServicesBlockContent(
+            data: data,
+            primaryColor: primaryColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            presenters: contentPresenters,
+            backgroundColor: _parseColor(data['style']?['backgroundColor']),
+            padding: padding,
+          ),
         );
       case WebsiteBlockType.about:
-        return _buildAbout(
-          context: context,
+        return WebsiteAboutBlockContent(
           data: data,
           headingFont: headingFont,
           bodyFont: bodyFont,
+          presenters: contentPresenters,
+          padding: _parsePadding(
+            data,
+            defaultVertical: 64,
+            screenWidth: MediaQuery.sizeOf(context).width,
+          ),
         );
       case WebsiteBlockType.cta:
-        return _buildCta(
-          context: context,
+        return WebsiteCtaBlockContent(
           data: data,
           primaryColor: primaryColor,
           accentColor: accentColor,
@@ -184,47 +247,67 @@ class WebsiteBlockRenderer {
           headingFont: headingFont,
           bodyFont: bodyFont,
           onNavigate: onNavigate,
+          isNavigationEligible: isNavigationEligible,
+          presenters: contentPresenters,
         );
       case WebsiteBlockType.features:
-        return _buildFeatures(
+        return _withResponsiveContentPadding(
           context: context,
           data: data,
-          primaryColor: primaryColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
+          builder: (padding) => WebsiteFeaturesBlockContent(
+            data: data,
+            primaryColor: primaryColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            presenters: contentPresenters,
+            backgroundColor: _parseColor(data['style']?['backgroundColor']),
+            padding: padding,
+          ),
         );
       case WebsiteBlockType.testimonials:
-        return _buildTestimonials(
+        return _withResponsiveContentPadding(
           context: context,
           data: data,
-          primaryColor: primaryColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-          previewMode: previewMode,
+          builder: (padding) => WebsiteTestimonialsBlockContent(
+            data: data,
+            primaryColor: primaryColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            presenters: contentPresenters,
+            padding: padding,
+          ),
         );
       case WebsiteBlockType.pricing:
-        return _buildPricing(
+        return _withResponsiveContentPadding(
           context: context,
           data: data,
-          primaryColor: primaryColor,
-          accentColor: accentColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-          previewMode: previewMode,
-          onNavigate: onNavigate,
+          builder: (padding) => WebsitePricingBlockContent(
+            data: data,
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            previewMode: previewMode,
+            onNavigate: onNavigate,
+            isNavigationEligible: isNavigationEligible,
+            presenters: contentPresenters,
+            padding: padding,
+          ),
         );
       case WebsiteBlockType.gallery:
-        return _buildGallery(
+        return _withResponsiveContentPadding(
           context: context,
           data: data,
-          primaryColor: primaryColor,
-          previewMode: previewMode,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
+          builder: (padding) => WebsiteGalleryBlockContent(
+            data: data,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            presenters: contentPresenters,
+            padding: padding,
+          ),
         );
       case WebsiteBlockType.contact:
-        return _buildContact(
-          context: context,
+        return WebsiteContactBlockContent(
           data: data,
           primaryColor: primaryColor,
           accentColor: accentColor,
@@ -232,34 +315,57 @@ class WebsiteBlockRenderer {
           bodyFont: bodyFont,
           previewMode: previewMode,
           onNavigate: onNavigate,
+          isNavigationEligible: isNavigationEligible,
+          presenters: contentPresenters,
+          padding: _parsePadding(
+            data,
+            screenWidth: MediaQuery.sizeOf(context).width,
+            defaultVertical: 64,
+            defaultHorizontal: 24,
+          ),
         );
       case WebsiteBlockType.faq:
-        return _buildFaq(
+        return _withResponsiveContentPadding(
           context: context,
           data: data,
-          primaryColor: primaryColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
+          builder: (padding) => WebsiteFaqBlockContent(
+            data: data,
+            primaryColor: primaryColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            presenters: contentPresenters,
+            padding: padding,
+          ),
         );
       case WebsiteBlockType.stats:
-        return _buildStats(
+        return _withResponsiveContentPadding(
           context: context,
           data: data,
-          primaryColor: primaryColor,
-          accentColor: accentColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
+          builder: (padding) => WebsiteStatsBlockContent(
+            data: data,
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            presenters: contentPresenters,
+            padding: padding,
+          ),
         );
       case WebsiteBlockType.team:
-        return _buildTeam(
+        return _withResponsiveContentPadding(
           context: context,
           data: data,
-          primaryColor: primaryColor,
-          accentColor: accentColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-          previewMode: previewMode,
-          onNavigate: onNavigate,
+          builder: (padding) => WebsiteTeamBlockContent(
+            data: data,
+            accentColor: accentColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            previewMode: previewMode,
+            onNavigate: onNavigate,
+            isNavigationEligible: isNavigationEligible,
+            presenters: contentPresenters,
+            padding: padding,
+          ),
         );
       case WebsiteBlockType.footer:
         return const SizedBox(height: 64);
@@ -283,6 +389,7 @@ class WebsiteBlockRenderer {
           bodyFont: bodyFont,
           previewMode: previewMode,
           onNavigate: onNavigate,
+          isNavigationEligible: isNavigationEligible,
         );
       case WebsiteBlockType.partnersBanner:
         return _buildPartnersBanner(
@@ -301,6 +408,7 @@ class WebsiteBlockRenderer {
           bodyFont: bodyFont,
           previewMode: previewMode,
           onNavigate: onNavigate,
+          isNavigationEligible: isNavigationEligible,
         );
       case WebsiteBlockType.googleReviews:
         // Inject synced Google review truth when the block has no custom reviews.
@@ -354,100 +462,44 @@ class WebsiteBlockRenderer {
     required Map<String, dynamic> data,
     required Color accentColor,
     void Function(String route)? onNavigate,
+    bool Function(String href)? isNavigationEligible,
     String? tenantId,
     String? headingFont,
     String? bodyFont,
+    WebsiteCanvasEditorBinding? editBinding,
   }) {
     return DeferredCanvasBlock(
       data: data,
       accentColor: accentColor,
       onNavigate: onNavigate,
+      isNavigationEligible: isNavigationEligible,
       tenantId: tenantId,
       headingFont: headingFont,
       bodyFont: bodyFont,
+      editorBinding: editBinding,
     );
   }
 
   static Widget _buildText({
     required BuildContext context,
     required Map<String, dynamic> data,
-    required bool previewMode,
     String? headingFont,
     String? bodyFont,
     double? headingSize,
     double? bodySize,
+    WebsiteInlineTextPresenter? inlinePresenter,
   }) {
-    final text = (data['text'] ?? '').toString();
-    final preset = (data['preset'] ?? 'paragraph').toString();
-    final maxWidth = (data['maxWidth'] as num?)?.toDouble();
-    final formatting =
-        TextFormatting.fromJson(data['formatting'] as Map<String, dynamic>?);
-
-    TextStyle base;
-    switch (preset) {
-      case 'heading':
-        base = Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontFamily: headingFont,
-                  fontSize: headingSize,
-                ) ??
-            TextStyle(
-              fontSize: headingSize ?? 36,
-              fontWeight: FontWeight.w700,
-              fontFamily: headingFont,
-            );
-        break;
-      case 'subheading':
-        base = Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  fontFamily: headingFont,
-                ) ??
-            TextStyle(
-              fontSize: (bodySize ?? 16) * 1.25,
-              fontWeight: FontWeight.w600,
-              fontFamily: headingFont,
-            );
-        break;
-      case 'caption':
-        base = Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontFamily: bodyFont,
-                  fontSize: (bodySize ?? 16) * 0.9,
-                ) ??
-            TextStyle(
-              fontSize: (bodySize ?? 16) * 0.9,
-              fontFamily: bodyFont,
-            );
-        break;
-      default:
-        base = Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontFamily: bodyFont,
-                  fontSize: bodySize,
-                ) ??
-            TextStyle(
-              fontSize: bodySize ?? 16,
-              fontFamily: bodyFont,
-            );
-    }
-
-    final effectiveStyle = formatting.applyTo(base);
-    final align = formatting.textAlign;
-
-    Widget content = Text(
-      text.isEmpty && previewMode ? 'Texto' : text,
-      style: effectiveStyle,
-      textAlign: align,
+    return WebsiteTextBlockContent(
+      presentation: WebsiteTextBlockPresentation.resolve(
+        context: context,
+        data: data,
+        headingFont: headingFont,
+        bodyFont: bodyFont,
+        headingSize: headingSize,
+        bodySize: bodySize,
+      ),
+      inlinePresenter: inlinePresenter,
     );
-
-    if (maxWidth != null) {
-      content = Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth.clamp(200, 1600)),
-          child: content,
-        ),
-      );
-    }
-
-    return content;
   }
 
   static Widget _buildButton({
@@ -458,23 +510,41 @@ class WebsiteBlockRenderer {
     void Function(String route)? onNavigate,
     String? bodyFont,
     double? bodySize,
+    bool Function(String href)? isNavigationEligible,
+    WebsiteInlineActionPresenter? actionPresenter,
   }) {
-    final action = WebsiteActionValue.resolvePrimary(
-          data,
-          labelKeys: const ['label', 'text'],
-          hrefKeys: const ['link'],
-          defaultLabel: 'Botón',
-          defaultVariant: WebsiteActionVariant.fromStorage(
-            data['style']?.toString(),
-          ),
-        ) ??
+    final resolvedAction = WebsiteActionValue.resolvePrimary(
+      data,
+      labelKeys: const ['label', 'text'],
+      hrefKeys: const ['link'],
+      variantKeys: const ['style'],
+      defaultLabel: 'Botón',
+      defaultVariant: WebsiteActionVariant.fromStorage(
+        data['style']?.toString(),
+      ),
+    );
+    final action = resolvedAction ??
         WebsiteActionValue(
           label: (data['label'] ?? 'Botón').toString(),
           href: (data['link'] ?? '').toString(),
           variant: WebsiteActionVariant.fromStorage(data['style']?.toString()),
         );
-    final link = action.href;
-    final style = action.variant.storageValue;
+    // The button IS this block's content: an ineligible destination leaves
+    // nothing honest to render, so the whole block is absent.
+    if (resolvedAction == null && actionPresenter == null) {
+      return const SizedBox.shrink();
+    }
+    final visibleAction = visibleNavigationAction(
+      action,
+      isNavigationEligible: isNavigationEligible,
+    );
+    if (visibleAction == null && actionPresenter == null) {
+      return const SizedBox.shrink();
+    }
+
+    final renderedAction = visibleAction ?? action;
+    final link = renderedAction.href;
+    final style = renderedAction.variant.storageValue;
 
     final textStyle = TextStyle(
       fontFamily: bodyFont,
@@ -483,26 +553,42 @@ class WebsiteBlockRenderer {
     );
 
     VoidCallback? onPressed;
-    if (link.isNotEmpty && onNavigate != null) {
+    if (actionPresenter != null) {
+      // Editor chrome owns the pointer boundary, so the visitor destination
+      // remains visible without being activated from Edit.
+      onPressed = () {};
+    } else if (link.isNotEmpty && onNavigate != null) {
       onPressed = () => onNavigate(link);
     }
 
     final button = WebsiteActionButton(
-      action: action,
+      action: renderedAction,
       onPressed: onPressed,
       backgroundColor: accentColor,
       foregroundColor: style == 'filled' ? Colors.white : accentColor,
       outlineColor: accentColor,
       textStyle: textStyle,
     );
+    final content = actionPresenter?.call(
+          context,
+          WebsiteInlineActionSlot(
+            id: 'standalone-button',
+            action: renderedAction,
+            labelKeys: const ['label', 'text'],
+            hrefKeys: const ['link'],
+            variantKeys: const ['style'],
+            child: button,
+          ),
+        ) ??
+        button;
 
-    final bool isEnabled = onPressed != null;
+    final bool isEnabled = onPressed != null && actionPresenter == null;
 
     return HoverScale(
       enabled: isEnabled,
       hoverScale: 1.03,
       pressedScale: 0.98,
-      child: button,
+      child: content,
     );
   }
 
@@ -658,6 +744,30 @@ class WebsiteBlockRenderer {
       right: right,
       bottom: bottom,
       left: left,
+    );
+  }
+
+  static Widget _withResponsiveContentPadding({
+    required BuildContext context,
+    required Map<String, dynamic> data,
+    required Widget Function(EdgeInsets padding) builder,
+    double defaultVertical = 64,
+    double defaultHorizontal = 24,
+  }) {
+    return ConstraintLayoutBuilder(
+      builder: (context, constraints) {
+        final frameWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        return builder(
+          _parsePadding(
+            data,
+            defaultVertical: defaultVertical,
+            defaultHorizontal: defaultHorizontal,
+            screenWidth: frameWidth,
+          ),
+        );
+      },
     );
   }
 
@@ -850,266 +960,6 @@ class WebsiteBlockRenderer {
     );
   }
 
-  static Widget _buildHero({
-    required BuildContext context,
-    required Map<String, dynamic> data,
-    required Color primaryColor,
-    required Color accentColor,
-    bool previewMode = false,
-    String? headingFont,
-    String? bodyFont,
-    double? headingSize,
-    double? bodySize,
-    void Function(String route)? onNavigate,
-  }) {
-    final theme = Theme.of(context);
-
-    final title = (data['title'] ?? 'Bienvenido').toString().trim();
-    final subtitle = (data['subtitle'] ?? '').toString().trim();
-    final legacyCtaText =
-        (data['ctaText'] ?? data['buttonText'] ?? 'Ver más').toString().trim();
-    final legacyCtaLink =
-        (data['ctaLink'] ?? data['buttonLink'] ?? '/productos')
-            .toString()
-            .trim();
-    final primaryAction = _resolvePrimaryNavigateAction(
-      data,
-      fallbackLabel: legacyCtaText,
-      fallbackTo: legacyCtaLink,
-    );
-    final imageUrl = data['imageUrl'] ?? data['backgroundImage'];
-    final showOverlay = (data['showOverlay'] ?? true) == true;
-    final overlayOpacity =
-        ((data['overlayOpacity'] ?? 0.5) as num).clamp(0.0, 1.0).toDouble();
-
-    // Use style background if no image
-    const defaultBgColor = Color(0xFF1a1a1a);
-
-    // New Props for Alignment and Full Screen
-    final isFullScreen = data['isFullScreen'] == true;
-    final alignment =
-        data['alignment']?.toString() ?? 'center'; // center, left, right
-
-    final titleFormatting = _resolveTextFormatting(data, 'titleFormatting');
-    final subtitleFormatting =
-        _resolveTextFormatting(data, 'subtitleFormatting');
-
-    final resolvedHeading = titleFormatting.applyTo(_applyThemeFont(
-      (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
-        fontSize: headingSize,
-        color: Colors.white,
-      ),
-      headingFont,
-    ));
-
-    final resolvedSubtitle = subtitleFormatting.applyTo(_applyThemeFont(
-      (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
-        fontSize: bodySize != null ? bodySize * 1.2 : null,
-        color: Colors.white70,
-      ),
-      bodyFont,
-    ));
-
-    // Resolve alignment logic
-    CrossAxisAlignment crossAlign;
-    TextAlign textAlign;
-    Alignment geometryAlign;
-
-    switch (alignment) {
-      case 'left':
-        crossAlign = CrossAxisAlignment.start;
-        textAlign = TextAlign.left;
-        geometryAlign = Alignment.centerLeft;
-        break;
-      case 'right':
-        crossAlign = CrossAxisAlignment.end;
-        textAlign = TextAlign.right;
-        geometryAlign = Alignment.centerRight;
-        break;
-      default:
-        crossAlign = CrossAxisAlignment.center;
-        textAlign = TextAlign.center;
-        geometryAlign = Alignment.center;
-    }
-
-    return ConstraintLayoutBuilder(builder: (context, constraints) {
-      final screenWidth = constraints.maxWidth;
-      // Use 600 as mobile breakpoint (standard)
-      final isMobile = screenWidth < 600;
-
-      // Resolve Mobile Background Alignment
-      // Priority: focal point values > legacy preset alignment > center default
-      Alignment? bgAlignment;
-      if (isMobile) {
-        final focalX = (data['mobileFocalPointX'] as num?)?.toDouble();
-        final focalY = (data['mobileFocalPointY'] as num?)?.toDouble();
-
-        if (focalX != null && focalY != null) {
-          // Convert from 0-1 range to -1 to 1 range for Alignment
-          bgAlignment = Alignment(
-            (focalX * 2) - 1, // 0→-1, 0.5→0, 1→1
-            (focalY * 2) - 1,
-          );
-        } else if (data['mobileBgAlignment'] != null) {
-          // Legacy fallback: preset alignment strings
-          switch (data['mobileBgAlignment']) {
-            case 'left':
-            case 'centerLeft':
-              bgAlignment = Alignment.centerLeft;
-              break;
-            case 'right':
-            case 'centerRight':
-              bgAlignment = Alignment.centerRight;
-              break;
-            case 'top':
-            case 'topCenter':
-              bgAlignment = Alignment.topCenter;
-              break;
-            case 'bottom':
-            case 'bottomCenter':
-              bgAlignment = Alignment.bottomCenter;
-              break;
-            case 'center':
-            default:
-              bgAlignment = Alignment.center;
-          }
-        }
-      }
-
-      final decoration = _resolveBackgroundDecoration(
-        data: data,
-        defaultColor: defaultBgColor,
-        imageUrl: imageUrl?.toString(),
-        imageAlignmentParam: bgAlignment,
-      );
-
-      final shouldDeferHeroImage =
-          !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-
-      // Determine height
-      // For full screen, we want to respect the device height, but in the editor preview (which might be desktop height),
-      // we should cap it to a reasonable mobile height to avoid a "slit" look.
-      final mediaQueryHeight = MediaQuery.of(context).size.height;
-      double height;
-      if (isFullScreen) {
-        if (isMobile && mediaQueryHeight > 900) {
-          // Cap mobile fullscreen height in editor/large screens
-          height = 800;
-        } else {
-          height = mediaQueryHeight;
-        }
-      } else {
-        height = isMobile ? 420 : 520;
-      }
-
-      final heroInner = Container(
-        decoration: showOverlay
-            ? BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: overlayOpacity * 0.5),
-                    Colors.black.withValues(alpha: overlayOpacity * 0.8),
-                  ],
-                ),
-              )
-            : null,
-        child: Align(
-          alignment: geometryAlign,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: crossAlign,
-              children: [
-                Text(
-                  (title.isEmpty ? 'Título' : title).toUpperCase(),
-                  style: resolvedHeading.copyWith(
-                    letterSpacing: 3,
-                    fontWeight: FontWeight.w900,
-                    fontSize:
-                        isMobile ? (headingSize ?? 32) * 0.8 : headingSize,
-                  ),
-                  textAlign: titleFormatting.textAlign == TextAlign.start
-                      ? textAlign
-                      : titleFormatting.textAlign,
-                ),
-                if (subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-                  Text(
-                    subtitle,
-                    style: resolvedSubtitle.copyWith(
-                      fontSize: isMobile ? (bodySize ?? 16) : bodySize,
-                    ),
-                    textAlign: subtitleFormatting.textAlign == TextAlign.start
-                        ? textAlign
-                        : subtitleFormatting.textAlign,
-                  ),
-                ],
-                const SizedBox(height: 40),
-                WebsiteActionButton(
-                  action: primaryAction ??
-                      WebsiteActionValue(
-                        label: legacyCtaText.isEmpty
-                            ? 'CHECK IT OUT'
-                            : legacyCtaText,
-                        href: legacyCtaLink,
-                        variant: WebsiteActionVariant.outline,
-                      ),
-                  onPressed: previewMode
-                      ? () {}
-                      : () {
-                          final route =
-                              (primaryAction?.href ?? '/productos').trim();
-                          if (onNavigate != null) {
-                            onNavigate(route);
-                          }
-                        },
-                  backgroundColor: accentColor,
-                  foregroundColor: Colors.white,
-                  outlineColor: Colors.white,
-                  uppercase: true,
-                  textStyle: const TextStyle(letterSpacing: 1.5),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-
-      if (!shouldDeferHeroImage || imageUrl == null) {
-        return Container(
-          height: height,
-          width: double.infinity,
-          decoration: decoration,
-          child: heroInner,
-        );
-      }
-
-      // Android first-frame optimization: build the hero WITHOUT the background image
-      // for the first frame, then rebuild with the image.
-      return _DeferredFirstFrame(
-        builder: (showHeavy) {
-          final deferredDecoration = _resolveBackgroundDecoration(
-            data: data,
-            defaultColor: defaultBgColor,
-            imageUrl: imageUrl?.toString(),
-            imageAlignmentParam: bgAlignment,
-            skipImage: !showHeavy,
-          );
-
-          return Container(
-            height: height,
-            width: double.infinity,
-            decoration: deferredDecoration,
-            child: heroInner,
-          );
-        },
-      );
-    });
-  }
-
   static Widget _buildCarousel({
     required BuildContext context,
     required Map<String, dynamic> data,
@@ -1121,13 +971,16 @@ class WebsiteBlockRenderer {
     double? headingSize,
     double? bodySize,
     void Function(String route)? onNavigate,
+    bool Function(String href)? isNavigationEligible,
     String? tenantId,
+    WebsiteBlockContentPresenters? presenters,
+    WebsiteCarouselEditBinding? editBinding,
   }) {
     // Use block ID as stable key to prevent rebuilds on every page mount
     // Falls back to a constant key if no ID is available
     final blockId = data['id']?.toString() ?? 'carousel_default';
 
-    return _CarouselBanner(
+    return WebsiteCarouselBlockContent(
       key: ValueKey('carousel_$blockId'),
       data: data,
       primaryColor: primaryColor,
@@ -1138,7 +991,10 @@ class WebsiteBlockRenderer {
       headingSize: headingSize,
       bodySize: bodySize,
       onNavigate: onNavigate,
+      isNavigationEligible: isNavigationEligible,
       tenantId: tenantId,
+      presenters: presenters,
+      editBinding: editBinding,
     );
   }
 
@@ -1152,6 +1008,7 @@ class WebsiteBlockRenderer {
     bool previewMode = false,
     String? bodyFont,
     void Function(String route)? onNavigate,
+    bool Function(String href)? isNavigationEligible,
     String? tenantId,
   }) {
     // Delegate to stateful widget that can fetch its own products
@@ -1164,1985 +1021,11 @@ class WebsiteBlockRenderer {
       previewMode: previewMode,
       bodyFont: bodyFont,
       onNavigate: onNavigate,
+      isNavigationEligible: isNavigationEligible,
       tenantId: tenantId,
     );
   }
 
-  static Widget _buildServices({
-    required BuildContext context,
-    required Map<String, dynamic> data,
-    required Color primaryColor,
-    bool previewMode = false,
-    String? headingFont,
-    String? bodyFont,
-  }) {
-    final rawTitle = (data['title'] ?? 'Nuestros Servicios').toString().trim();
-    final title =
-        rawTitle.isEmpty ? 'NUESTROS SERVICIOS' : rawTitle.toUpperCase();
-    final rawServices = data['services'];
-
-    List<Map<String, dynamic>> services = [];
-    if (rawServices is List) {
-      services = rawServices
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-    }
-
-    if (services.isEmpty) {
-      services = [
-        {
-          'title': 'Servicio Técnico',
-          'description': 'Mantención y reparación profesional',
-          'icon': 'build',
-        },
-        {
-          'title': 'Envíos a Chile continental',
-          'description': 'Despacho rápido y seguro',
-          'icon': 'local_shipping',
-        },
-        {
-          'title': 'Productos Originales',
-          'description': 'Garantía de autenticidad',
-          'icon': 'verified',
-        },
-      ];
-    }
-
-    // Use LayoutBuilder to fill available height and center content
-    return ConstraintLayoutBuilder(
-      builder: (context, constraints) {
-        final hasFixedHeight = constraints.maxHeight.isFinite;
-        final bgColor = _parseColor(data['style']?['backgroundColor']) ??
-            const Color(0xFFFAFAFA);
-        final isMobile = constraints.maxWidth < 600;
-
-        final padding = hasFixedHeight
-            ? EdgeInsets.only(
-                left: (data['style']?['paddingLeft'] as num?)?.toDouble() ??
-                    (isMobile ? 16 : 24),
-                right: (data['style']?['paddingRight'] as num?)?.toDouble() ??
-                    (isMobile ? 16 : 24),
-              )
-            : _parsePadding(
-                data,
-                defaultVertical: 56,
-                screenWidth: constraints.maxWidth,
-              );
-
-        return Container(
-          color: bgColor,
-          width: double.infinity,
-          height: hasFixedHeight ? constraints.maxHeight : null,
-          padding: padding,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1000),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 2,
-                      color: Colors.black87,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 40),
-                  if (isMobile)
-                    Column(
-                      children: services.take(3).map((service) {
-                        final index = services.indexOf(service);
-                        final iconName = service['icon']?.toString();
-                        final serviceTitle =
-                            (service['title'] ?? 'Servicio').toString();
-                        final description =
-                            (service['description'] ?? '').toString().trim();
-
-                        return Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 24),
-                          decoration: BoxDecoration(
-                            border: Border(
-                              bottom: index < services.take(3).length - 1
-                                  ? BorderSide(
-                                      color: Colors.grey.shade300, width: 1)
-                                  : BorderSide.none,
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _getIconFromString(iconName),
-                                size: 32,
-                                color: primaryColor,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                serviceTitle,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              if (description.isNotEmpty) ...[
-                                const SizedBox(height: 6),
-                                Text(
-                                  description,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey.shade600,
-                                    height: 1.4,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    )
-                  else
-                    Row(
-                      children: services.take(3).map((service) {
-                        final iconName = service['icon']?.toString();
-                        final serviceTitle =
-                            (service['title'] ?? 'Servicio').toString();
-                        final description =
-                            (service['description'] ?? '').toString().trim();
-
-                        return Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 24),
-                            decoration: BoxDecoration(
-                              border: Border(
-                                left: services.indexOf(service) > 0
-                                    ? BorderSide(
-                                        color: Colors.grey.shade300, width: 1)
-                                    : BorderSide.none,
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  _getIconFromString(iconName),
-                                  size: 32,
-                                  color: primaryColor,
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  serviceTitle,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                                if (description.isNotEmpty) ...[
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    description,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey.shade600,
-                                      height: 1.4,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  static Widget _buildAbout({
-    required BuildContext context,
-    required Map<String, dynamic> data,
-    String? headingFont,
-    String? bodyFont,
-  }) {
-    final theme = Theme.of(context);
-    final title = (data['title'] ?? 'Sobre Nosotros').toString().trim();
-    final content = (data['content'] ?? '').toString().trim();
-    final titleFormatting = _resolveTextFormatting(data, 'titleFormatting');
-    final contentFormatting = _resolveTextFormatting(
-      data,
-      'contentFormatting',
-      fallbackKey: 'descriptionFormatting',
-    );
-
-    if (content.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final screenWidth = MediaQuery.of(context).size.width;
-    final padding = _parsePadding(
-      data,
-      defaultVertical: 64,
-      screenWidth: screenWidth,
-    );
-
-    return Container(
-      padding: padding,
-      child: Column(
-        children: [
-          Text(
-            title.isEmpty ? 'Sobre Nosotros' : title,
-            style: titleFormatting.applyTo(
-              theme.textTheme.displaySmall?.copyWith(
-                    fontFamily: headingFont,
-                  ) ??
-                  const TextStyle(),
-            ),
-            textAlign: titleFormatting.textAlign == TextAlign.start
-                ? TextAlign.center
-                : titleFormatting.textAlign,
-          ),
-          const SizedBox(height: 24),
-          Text(
-            content,
-            style: contentFormatting.applyTo(
-              theme.textTheme.bodyLarge?.copyWith(
-                    fontFamily: bodyFont,
-                  ) ??
-                  const TextStyle(),
-            ),
-            textAlign: contentFormatting.textAlign == TextAlign.start
-                ? TextAlign.center
-                : contentFormatting.textAlign,
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Widget _buildCta({
-    required BuildContext context,
-    required Map<String, dynamic> data,
-    required Color primaryColor,
-    required Color accentColor,
-    bool previewMode = false,
-    String? headingFont,
-    String? bodyFont,
-    void Function(String route)? onNavigate,
-  }) {
-    final title = (data['title'] ?? 'Visita nuestra tienda').toString().trim();
-    final subtitle =
-        (data['subtitle'] ?? data['description'] ?? '').toString().trim();
-    final legacyButtonText =
-        (data['buttonText'] ?? data['ctaText'] ?? 'Ver productos')
-            .toString()
-            .trim();
-    final legacyButtonLink =
-        (data['buttonLink'] ?? data['ctaLink'] ?? '/tienda/contacto')
-            .toString()
-            .trim();
-
-    final primaryAction = _resolvePrimaryNavigateAction(
-      data,
-      fallbackLabel: legacyButtonText,
-      fallbackTo: legacyButtonLink,
-    );
-
-    final backgroundImage =
-        (data['backgroundImage'] ?? data['imageUrl'])?.toString().trim();
-    final hasBackground =
-        backgroundImage != null && backgroundImage.trim().isNotEmpty;
-
-    final overlayColor =
-        _parseColor(data['overlayColor']?.toString()) ?? Colors.black;
-    final overlayOpacity =
-        ((data['overlayOpacity'] ?? 0.5) as num).toDouble().clamp(0.0, 1.0);
-
-    final blockHeight = (data['blockHeight'] as num?)?.toDouble();
-
-    final decoration = _resolveBackgroundDecoration(
-      data: data,
-      defaultColor: primaryColor,
-      imageUrl: backgroundImage,
-      imageAlignmentParam: _resolveFocalAlignment(
-        data,
-        screenWidth: MediaQuery.of(context).size.width,
-      ),
-    );
-
-    final titleFormatting = _resolveTextFormatting(data, 'titleFormatting');
-    final subtitleFormatting = _resolveTextFormatting(
-      data,
-      'subtitleFormatting',
-      fallbackKey: 'descriptionFormatting',
-    );
-    final titleStyle = titleFormatting.applyTo(const TextStyle(
-      fontSize: 24,
-      fontWeight: FontWeight.w700,
-      color: Colors.white,
-      letterSpacing: 1,
-    ).copyWith(
-      fontFamily: headingFont?.isNotEmpty == true ? headingFont : null,
-    ));
-
-    final subtitleStyle = subtitleFormatting.applyTo(
-        (Theme.of(context).textTheme.bodyLarge ?? const TextStyle(fontSize: 16))
-            .copyWith(
-      fontFamily: bodyFont?.isNotEmpty == true ? bodyFont : null,
-      color: Colors.white70,
-    ));
-
-    return Container(
-      height: blockHeight,
-      width: double.infinity,
-      decoration: decoration,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (hasBackground && overlayOpacity > 0)
-            Container(
-              color: overlayColor.withValues(alpha: overlayOpacity),
-            ),
-          Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: blockHeight == null ? 56 : 0,
-            ),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    (title.isEmpty ? '¿Necesitas ayuda?' : title).toUpperCase(),
-                    style: titleStyle,
-                    textAlign: titleFormatting.textAlign == TextAlign.start
-                        ? TextAlign.center
-                        : titleFormatting.textAlign,
-                  ),
-                  if (subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      subtitle,
-                      style: subtitleStyle,
-                      textAlign: subtitleFormatting.textAlign == TextAlign.start
-                          ? TextAlign.center
-                          : subtitleFormatting.textAlign,
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  WebsiteActionButton(
-                    action: primaryAction ??
-                        WebsiteActionValue(
-                          label: legacyButtonText.isEmpty
-                              ? 'Contáctanos'
-                              : legacyButtonText,
-                          href: legacyButtonLink,
-                          variant: WebsiteActionVariant.outline,
-                        ),
-                    onPressed: previewMode
-                        ? () {}
-                        : () {
-                            final route =
-                                primaryAction?.href ?? '/tienda/contacto';
-                            if (onNavigate != null) {
-                              onNavigate(route);
-                            }
-                          },
-                    backgroundColor: accentColor,
-                    foregroundColor: Colors.white,
-                    outlineColor: Colors.white,
-                    uppercase: true,
-                    textStyle: const TextStyle(letterSpacing: 1),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Widget _buildFeatures({
-    required BuildContext context,
-    required Map<String, dynamic> data,
-    required Color primaryColor,
-    String? headingFont,
-    String? bodyFont,
-  }) {
-    final theme = Theme.of(context);
-    final title = (data['title'] ?? '¿Por qué elegirnos?').toString();
-    final featuresRaw = data['features'];
-    final features = (featuresRaw is List)
-        ? featuresRaw
-            .whereType<Map>()
-            .map((item) => Map<String, dynamic>.from(item))
-            .toList()
-        : <Map<String, dynamic>>[];
-
-    final layout = data['layout']?.toString() ?? 'grid'; // grid or list
-    final bgColor = _parseColor(
-        data['style']?['backgroundColor']); // Default transparent/theme
-    final screenWidth = MediaQuery.of(context).size.width;
-    final padding = _parsePadding(
-      data,
-      defaultVertical: 64,
-      screenWidth: screenWidth,
-    );
-
-    return Container(
-      padding: padding,
-      color: bgColor,
-      child: Column(
-        children: [
-          Text(
-            title.isEmpty ? 'Características' : title,
-            style: theme.textTheme.displaySmall?.copyWith(
-              fontFamily: headingFont,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 48),
-          if (features.isEmpty)
-            _buildDefaultFeatures(context, primaryColor, headingFont, bodyFont)
-          else if (layout == 'list')
-            Column(
-              children: features.map((item) {
-                final rawIcon = item['icon']?.toString();
-                final icon = _getIconFromString(rawIcon);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 32),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: primaryColor.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(icon, size: 28, color: primaryColor),
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item['title']?.toString() ?? 'Título',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: headingFont,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              item['description']?.toString() ?? 'Descripción',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.grey.shade600,
-                                height: 1.5,
-                                fontFamily: bodyFont,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            )
-          else
-            Wrap(
-              spacing: 24,
-              runSpacing: 24,
-              alignment: WrapAlignment.center,
-              children: features.map((item) {
-                final rawIcon = item['icon']?.toString();
-                final icon = _getIconFromString(rawIcon);
-                return _buildFeatureCard(
-                  context,
-                  icon: icon,
-                  title: item['title']?.toString() ?? 'Título',
-                  description: item['description']?.toString() ?? 'Descripción',
-                  primaryColor: primaryColor,
-                  headingFont: headingFont,
-                  bodyFont: bodyFont,
-                );
-              }).toList(),
-            ),
-        ],
-      ),
-    );
-  }
-
-  static Widget _buildDefaultFeatures(BuildContext context, Color primaryColor,
-      String? headingFont, String? bodyFont) {
-    return Wrap(
-      spacing: 24,
-      runSpacing: 24,
-      alignment: WrapAlignment.center,
-      children: [
-        _buildFeatureCard(
-          context,
-          icon: Icons.verified,
-          title: 'Servicio certificado',
-          description: 'Técnicos con amplia experiencia en bicicletas.',
-          primaryColor: primaryColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-        ),
-        _buildFeatureCard(
-          context,
-          icon: Icons.pedal_bike,
-          title: 'Variedad de productos',
-          description: 'Catálogo actualizado con las mejores marcas.',
-          primaryColor: primaryColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-        ),
-        _buildFeatureCard(
-          context,
-          icon: Icons.support_agent,
-          title: 'Acompañamiento experto',
-          description: 'Te ayudamos a elegir la bicicleta perfecta.',
-          primaryColor: primaryColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-        ),
-      ],
-    );
-  }
-
-  static Widget _buildTestimonials({
-    required BuildContext context,
-    required Map<String, dynamic> data,
-    required Color primaryColor,
-    String? headingFont,
-    String? bodyFont,
-    bool previewMode = false,
-  }) {
-    final theme = Theme.of(context);
-    final rawTitle = (data['title'] ?? 'Testimonios').toString().trim();
-    final title = rawTitle.isEmpty ? 'Testimonios' : rawTitle;
-    final rawTestimonials = data['testimonials'];
-
-    var testimonials = <Map<String, dynamic>>[];
-    if (rawTestimonials is List) {
-      testimonials = rawTestimonials
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-    }
-
-    if (testimonials.isEmpty && previewMode) {
-      testimonials = [
-        {
-          'name': 'Carolina M.',
-          'role': 'Ciclista urbana',
-          'comment':
-              '“Me ayudaron a dejar mi bicicleta como nueva y fueron súper rápidos.”',
-          'rating': 5,
-        },
-        {
-          'name': 'Luis P.',
-          'role': 'Mountain biker',
-          'comment':
-              '“Excelente servicio y atención. Siempre tienen repuestos de calidad.”',
-          'rating': 5,
-        },
-        {
-          'name': 'Paula G.',
-          'role': 'Cicloturista',
-          'comment':
-              '“El equipo es muy dedicado y se nota la pasión por el ciclismo.”',
-          'rating': 4,
-        },
-      ];
-    }
-
-    if (testimonials.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isCompact = screenWidth < 380;
-    final padding = _parsePadding(
-      data,
-      defaultVertical: 64,
-      screenWidth: screenWidth,
-    );
-
-    return Container(
-      padding: padding,
-      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1100),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                title,
-                style: theme.textTheme.displaySmall?.copyWith(
-                  fontFamily: headingFont,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 40),
-              Wrap(
-                spacing: 24,
-                runSpacing: 24,
-                alignment: WrapAlignment.center,
-                children: testimonials
-                    .map(
-                      (item) => SizedBox(
-                        width: isCompact ? double.infinity : 320,
-                        child: _buildTestimonialCard(
-                          context: context,
-                          testimonial: item,
-                          primaryColor: primaryColor,
-                          bodyFont: bodyFont,
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static Widget _buildPricing({
-    required BuildContext context,
-    required Map<String, dynamic> data,
-    required Color primaryColor,
-    required Color accentColor,
-    String? headingFont,
-    String? bodyFont,
-    bool previewMode = false,
-    void Function(String route)? onNavigate,
-  }) {
-    final theme = Theme.of(context);
-    final rawTitle = (data['title'] ?? 'Planes y Precios').toString().trim();
-    final title = rawTitle.isEmpty ? 'Planes y Precios' : rawTitle;
-    final subtitle = (data['subtitle'] ?? '').toString().trim();
-    final rawPlans = data['plans'];
-
-    var plans = <Map<String, dynamic>>[];
-    if (rawPlans is List) {
-      plans = rawPlans
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-    }
-
-    if (plans.isEmpty && previewMode) {
-      plans = [
-        {
-          'name': 'Mantención Básica',
-          'price': '29.990',
-          'features': [
-            'Revisión de frenos',
-            'Ajuste de cambios',
-            'Limpieza básica',
-          ],
-          'ctaText': 'Reservar',
-          'ctaLink': '/productos',
-        },
-        {
-          'name': 'Full Service',
-          'price': '59.990',
-          'features': [
-            'Incluye plan básico',
-            'Lubricación completa',
-            'Ajuste integral',
-          ],
-          'ctaText': 'Agendar',
-          'ctaLink': '/productos',
-          'highlighted': true,
-        },
-        {
-          'name': 'Elite Racing',
-          'price': '89.990',
-          'features': [
-            'Servicio avanzado de suspensión',
-            'Lavado premium',
-            'Entrega prioritaria',
-          ],
-          'ctaText': 'Contactar',
-          'ctaLink': '/productos',
-        },
-      ];
-    }
-
-    if (plans.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isCompact = screenWidth < 380;
-
-    return Container(
-      padding: _parsePadding(
-        data,
-        screenWidth: screenWidth,
-        defaultVertical: 64,
-        defaultHorizontal: 24,
-      ),
-      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.15),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1100),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                title,
-                style: theme.textTheme.displaySmall?.copyWith(
-                  fontFamily: headingFont,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              if (subtitle.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(
-                  subtitle,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontFamily: bodyFont,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: 40),
-              Wrap(
-                spacing: 24,
-                runSpacing: 24,
-                alignment: WrapAlignment.center,
-                children: plans
-                    .map(
-                      (plan) => SizedBox(
-                        width: isCompact ? double.infinity : 320,
-                        child: _buildPricingPlanCard(
-                          context: context,
-                          plan: plan,
-                          primaryColor: primaryColor,
-                          accentColor: accentColor,
-                          bodyFont: bodyFont,
-                          previewMode: previewMode,
-                          onNavigate: onNavigate,
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static Widget _buildTestimonialCard({
-    required BuildContext context,
-    required Map<String, dynamic> testimonial,
-    required Color primaryColor,
-    String? bodyFont,
-  }) {
-    final theme = Theme.of(context);
-    final name = (testimonial['name'] ?? 'Cliente').toString().trim();
-    final role = (testimonial['role'] ?? '').toString().trim();
-    final comment = (testimonial['comment'] ?? '').toString().trim();
-    final ratingRaw = testimonial['rating'];
-
-    int rating = 5;
-    if (ratingRaw is num) {
-      rating = ratingRaw.clamp(1, 5).round();
-    } else if (ratingRaw is String) {
-      final parsed = int.tryParse(ratingRaw);
-      if (parsed != null) {
-        rating = parsed.clamp(1, 5);
-      }
-    }
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              Icons.format_quote,
-              color: primaryColor,
-              size: 32,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              comment.isEmpty
-                  ? 'Agrega testimonios reales desde el editor.'
-                  : comment,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                fontFamily: bodyFont,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                ...List.generate(5, (index) {
-                  final filled = index < rating;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Icon(
-                      filled ? Icons.star : Icons.star_border,
-                      color: filled
-                          ? primaryColor
-                          : theme.colorScheme.onSurfaceVariant,
-                      size: 18,
-                    ),
-                  );
-                }),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              name.isEmpty ? 'Cliente' : name,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontFamily: bodyFont,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            if (role.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                role,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontFamily: bodyFont,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  static Widget _buildPricingPlanCard({
-    required BuildContext context,
-    required Map<String, dynamic> plan,
-    required Color primaryColor,
-    required Color accentColor,
-    String? bodyFont,
-    bool previewMode = false,
-    void Function(String route)? onNavigate,
-  }) {
-    final theme = Theme.of(context);
-    final name = (plan['name'] ?? 'Plan').toString().trim();
-    final priceRaw = (plan['price'] ?? '0').toString().trim();
-    final featuresRaw = plan['features'];
-    final action = WebsiteActionValue.resolvePrimary(
-      plan,
-      labelKeys: const ['ctaText', 'buttonText'],
-      hrefKeys: const ['ctaLink', 'buttonLink'],
-      defaultLabel: 'Seleccionar',
-    );
-    final isHighlighted =
-        plan['highlighted'] == true || plan['isFeatured'] == true;
-
-    final features = <String>[];
-    if (featuresRaw is List) {
-      features
-        ..clear()
-        ..addAll(featuresRaw
-            .where((item) => item != null)
-            .map((item) => item.toString())
-            .where((item) => item.isNotEmpty));
-    }
-
-    final hasCurrency = RegExp(r'[A-Za-z\$]').hasMatch(priceRaw);
-    final priceLabel = priceRaw.isEmpty
-        ? 'CLP 0'
-        : hasCurrency
-            ? priceRaw
-            : 'CLP $priceRaw';
-
-    final cardColor = isHighlighted
-        ? accentColor.withValues(alpha: 0.12)
-        : theme.colorScheme.surface;
-    final borderColor = isHighlighted ? accentColor : theme.dividerColor;
-
-    return Card(
-      color: cardColor,
-      elevation: isHighlighted ? 4 : 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: borderColor, width: 1.5),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (isHighlighted) ...[
-              Align(
-                alignment: Alignment.centerRight,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: accentColor,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    'Más popular',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            Text(
-              name.isEmpty ? 'Plan' : name,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontFamily: bodyFont,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              priceLabel,
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontFamily: bodyFont,
-                color: primaryColor,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 24),
-            if (features.isEmpty)
-              Text(
-                'Agrega beneficios desde el editor.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontFamily: bodyFont,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              )
-            else
-              ...features.map(
-                (feature) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.check_circle, color: primaryColor, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          feature,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontFamily: bodyFont,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            const SizedBox(height: 24),
-            WebsiteActionButton(
-              action: action ??
-                  const WebsiteActionValue(label: 'Seleccionar', href: ''),
-              onPressed: previewMode || action == null
-                  ? null
-                  : () => onNavigate?.call(action.href),
-              backgroundColor: isHighlighted ? accentColor : primaryColor,
-              foregroundColor: Colors.white,
-              outlineColor: isHighlighted ? accentColor : primaryColor,
-              expand: true,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static Widget _buildGallery({
-    required BuildContext context,
-    required Map<String, dynamic> data,
-    required Color primaryColor,
-    bool previewMode = false,
-    String? headingFont,
-    String? bodyFont,
-  }) {
-    final theme = Theme.of(context);
-    final title = (data['title'] ?? 'Galería').toString().trim();
-    final layout = (data['layout'] ?? 'grid').toString();
-    final rawImages = data['images'];
-
-    var images = <Map<String, dynamic>>[];
-    if (rawImages is List) {
-      images = rawImages
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-    }
-
-    if (images.isEmpty) {
-      images = [
-        {
-          'imageUrl':
-              'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=60',
-          'caption': 'Agrega fotos reales desde el editor.',
-        },
-        {
-          'imageUrl':
-              'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=900&q=60',
-          'caption': 'Esta es una imagen de ejemplo.',
-        },
-        {
-          'imageUrl':
-              'https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=900&q=60',
-          'caption': 'Sustituye las imágenes para personalizar tu galería.',
-        },
-      ];
-    }
-
-    final useMasonry = layout == 'masonry';
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    return Container(
-      padding: _parsePadding(
-        data,
-        screenWidth: screenWidth,
-        defaultVertical: 64,
-        defaultHorizontal: 24,
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1100),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                title.isEmpty ? 'Galería' : title,
-                style: theme.textTheme.displaySmall?.copyWith(
-                  fontFamily: headingFont,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 36),
-              ConstraintLayoutBuilder(
-                builder: (context, constraints) {
-                  final columns = constraints.maxWidth >= 900
-                      ? 3
-                      : constraints.maxWidth >= 600
-                          ? 2
-                          : 1;
-                  final itemWidth =
-                      (constraints.maxWidth - (16 * (columns - 1))) / columns;
-
-                  return Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    children: images.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final image = entry.value;
-                      final imageUrl =
-                          (image['imageUrl'] ?? '').toString().trim();
-                      final caption =
-                          (image['caption'] ?? '').toString().trim();
-                      final aspectRatio = useMasonry
-                          ? (index % 3 == 0
-                              ? 1.2
-                              : index % 3 == 1
-                                  ? 0.8
-                                  : 1.0)
-                          : 1.0;
-
-                      return SizedBox(
-                        width: itemWidth,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            AspectRatio(
-                              aspectRatio: aspectRatio,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(20),
-                                child: Container(
-                                  color:
-                                      theme.colorScheme.surfaceContainerHighest,
-                                  child: imageUrl.isEmpty
-                                      ? Center(
-                                          child: Icon(
-                                            Icons.image_outlined,
-                                            color: theme
-                                                .colorScheme.onSurfaceVariant,
-                                          ),
-                                        )
-                                      : Image.network(
-                                          imageUrl,
-                                          fit: BoxFit.cover,
-                                          alignment:
-                                              _resolveFocalAlignment(image),
-                                          semanticLabel:
-                                              image['altText']?.toString(),
-                                          errorBuilder:
-                                              (context, error, stackTrace) {
-                                            return Center(
-                                              child: Icon(
-                                                Icons.broken_image,
-                                                color: theme.colorScheme.error,
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                ),
-                              ),
-                            ),
-                            if (caption.isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                caption,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontFamily: bodyFont,
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  );
-                },
-              ),
-              if (!previewMode)
-                Padding(
-                  padding: const EdgeInsets.only(top: 24),
-                  child: Text(
-                    'Optimiza tus imágenes antes de subirlas para mejorar el rendimiento.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static Widget _buildFaq({
-    required BuildContext context,
-    required Map<String, dynamic> data,
-    required Color primaryColor,
-    String? headingFont,
-    String? bodyFont,
-  }) {
-    final theme = Theme.of(context);
-    final title = (data['title'] ?? 'Preguntas frecuentes').toString().trim();
-    final subtitle = (data['subtitle'] ?? '').toString().trim();
-    final rawItems = data['items'];
-
-    var items = <Map<String, dynamic>>[];
-    if (rawItems is List) {
-      items = rawItems
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-    }
-
-    if (items.isEmpty) {
-      items = [
-        {
-          'question': '¿Cómo agendo una mantención?',
-          'answer':
-              'Puedes agendar directamente desde el botón “Reservar” del sitio o escribirnos por WhatsApp.',
-        },
-        {
-          'question': '¿Trabajan con bicicletas eléctricas?',
-          'answer':
-              'Sí, contamos con técnicos certificados y repuestos para e-bikes.',
-        },
-      ];
-    }
-
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    return Container(
-      padding: _parsePadding(
-        data,
-        screenWidth: screenWidth,
-        defaultVertical: 64,
-        defaultHorizontal: 24,
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 900),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                title.isEmpty ? 'Preguntas frecuentes' : title,
-                style: theme.textTheme.displaySmall?.copyWith(
-                  fontFamily: headingFont,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              if (subtitle.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(
-                  subtitle,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontFamily: bodyFont,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: 32),
-              ...items.map(
-                (item) => Card(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Theme(
-                    data: theme.copyWith(
-                      dividerColor: Colors.transparent,
-                    ),
-                    child: ExpansionTile(
-                      iconColor: primaryColor,
-                      collapsedIconColor: primaryColor,
-                      title: Text(
-                        (item['question'] ?? 'Pregunta').toString(),
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontFamily: headingFont,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      childrenPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      children: [
-                        Text(
-                          (item['answer'] ?? 'Agrega una respuesta clara.')
-                              .toString(),
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontFamily: bodyFont,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static Widget _buildStats({
-    required BuildContext context,
-    required Map<String, dynamic> data,
-    required Color primaryColor,
-    required Color accentColor,
-    String? headingFont,
-    String? bodyFont,
-  }) {
-    final theme = Theme.of(context);
-    final title = (data['title'] ?? 'Resultados').toString().trim();
-    final rawMetrics = data['metrics'];
-
-    var metrics = <Map<String, dynamic>>[];
-    if (rawMetrics is List) {
-      metrics = rawMetrics
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-    }
-
-    if (metrics.isEmpty) {
-      metrics = [
-        {
-          'label': 'Bicis reparadas',
-          'value': '1200',
-          'suffix': '+',
-        },
-        {
-          'label': 'Clientes felices',
-          'value': '980',
-          'suffix': '+',
-        },
-        {
-          'label': 'Años de experiencia',
-          'value': '10',
-        },
-      ];
-    }
-
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    return Container(
-      padding: _parsePadding(
-        data,
-        screenWidth: screenWidth,
-        defaultVertical: 64,
-        defaultHorizontal: 24,
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1000),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                title.isEmpty ? 'Indicadores' : title,
-                style: theme.textTheme.displaySmall?.copyWith(
-                  fontFamily: headingFont,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 40),
-              Wrap(
-                spacing: 24,
-                runSpacing: 24,
-                alignment: WrapAlignment.center,
-                children: metrics.map((metric) {
-                  final label = (metric['label'] ?? 'Indicador').toString();
-                  final value = (metric['value'] ?? '0').toString();
-                  final suffix = (metric['suffix'] ?? '').toString();
-                  return Container(
-                    width: 220,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 32),
-                    decoration: BoxDecoration(
-                      color: accentColor.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: primaryColor.withValues(alpha: 0.2)),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          '$value$suffix',
-                          style: theme.textTheme.displaySmall?.copyWith(
-                            fontFamily: headingFont,
-                            color: primaryColor,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          label,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            fontFamily: bodyFont,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static Widget _buildContact({
-    required BuildContext context,
-    required Map<String, dynamic> data,
-    required Color primaryColor,
-    required Color accentColor,
-    String? headingFont,
-    String? bodyFont,
-    bool previewMode = false,
-    void Function(String route)? onNavigate,
-  }) {
-    final theme = Theme.of(context);
-    final title = (data['title'] ?? 'Contáctanos').toString().trim();
-    final subtitle = (data['subtitle'] ?? '').toString().trim();
-    final phone = (data['phone'] ?? '').toString().trim();
-    final email = (data['email'] ?? '').toString().trim();
-    final address = (data['address'] ?? '').toString().trim();
-    final mapUrl = (data['mapUrl'] ?? '').toString().trim();
-    final showForm = data['showForm'] != false;
-    final showMap = data['showMap'] == true;
-
-    final contactItems = <Widget>[];
-    if (phone.isNotEmpty) {
-      contactItems.add(
-        _buildContactDetail(
-          icon: Icons.phone,
-          label: 'Teléfono',
-          value: phone,
-          theme: theme,
-          bodyFont: bodyFont,
-        ),
-      );
-    }
-    if (email.isNotEmpty) {
-      contactItems.add(
-        _buildContactDetail(
-          icon: Icons.email_outlined,
-          label: 'Correo',
-          value: email,
-          theme: theme,
-          bodyFont: bodyFont,
-        ),
-      );
-    }
-    if (address.isNotEmpty) {
-      contactItems.add(
-        _buildContactDetail(
-          icon: Icons.location_on_outlined,
-          label: 'Dirección',
-          value: address,
-          theme: theme,
-          bodyFont: bodyFont,
-        ),
-      );
-    }
-
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isCompact = screenWidth < 400;
-
-    return Container(
-      padding: _parsePadding(
-        data,
-        screenWidth: screenWidth,
-        defaultVertical: 64,
-        defaultHorizontal: 24,
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1100),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                title.isEmpty ? 'Contáctanos' : title,
-                style: theme.textTheme.displaySmall?.copyWith(
-                  fontFamily: headingFont,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              if (subtitle.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(
-                  subtitle,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontFamily: bodyFont,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: 36),
-              Wrap(
-                spacing: 24,
-                runSpacing: 24,
-                alignment: WrapAlignment.center,
-                children: [
-                  SizedBox(
-                    width: isCompact ? double.infinity : 320,
-                    child: Card(
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Información de contacto',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontFamily: headingFont,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            if (contactItems.isEmpty)
-                              Text(
-                                'Completa tus datos de contacto desde el editor.',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              )
-                            else
-                              ...contactItems,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (showForm)
-                    SizedBox(
-                      width: isCompact ? double.infinity : 360,
-                      child: Card(
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                'Envíanos un mensaje',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontFamily: headingFont,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              _buildDisabledTextField(theme, 'Nombre'),
-                              const SizedBox(height: 12),
-                              _buildDisabledTextField(
-                                  theme, 'Correo electrónico'),
-                              const SizedBox(height: 12),
-                              _buildDisabledTextField(theme, 'Mensaje',
-                                  maxLines: 4),
-                              const SizedBox(height: 20),
-                              ElevatedButton(
-                                onPressed: previewMode ? () {} : null,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: primaryColor,
-                                  foregroundColor: Colors.white,
-                                ),
-                                child: const Text('Enviar consulta'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (showMap)
-                    SizedBox(
-                      width: isCompact ? double.infinity : 360,
-                      child: Card(
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                'Cómo llegar',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontFamily: headingFont,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Container(
-                                height: 200,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(16),
-                                  color:
-                                      theme.colorScheme.surfaceContainerHighest,
-                                ),
-                                child: Center(
-                                  child: Icon(
-                                    Icons.map_outlined,
-                                    size: 64,
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                              if (mapUrl.isNotEmpty) ...[
-                                const SizedBox(height: 16),
-                                TextButton.icon(
-                                  onPressed: previewMode
-                                      ? () {}
-                                      : (mapUrl.startsWith('/')
-                                          ? () => onNavigate?.call(mapUrl)
-                                          : null),
-                                  icon: const Icon(Icons.arrow_outward),
-                                  label: const Text('Abrir mapa'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: accentColor,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static Widget _buildContactDetail({
-    required IconData icon,
-    required String label,
-    required String value,
-    required ThemeData theme,
-    String? bodyFont,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: theme.colorScheme.primary, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontFamily: bodyFont,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontFamily: bodyFont,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Widget _buildDisabledTextField(ThemeData theme, String label,
-      {int maxLines = 1}) {
-    return TextField(
-      enabled: false,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
-      maxLines: maxLines,
-    );
-  }
-
-  static Widget _buildTeam({
-    required BuildContext context,
-    required Map<String, dynamic> data,
-    required Color primaryColor,
-    required Color accentColor,
-    String? headingFont,
-    String? bodyFont,
-    bool previewMode = false,
-    void Function(String route)? onNavigate,
-  }) {
-    final theme = Theme.of(context);
-    final title = (data['title'] ?? 'Nuestro equipo').toString().trim();
-    final description = (data['description'] ?? '').toString().trim();
-    final rawMembers = data['members'];
-
-    var members = <Map<String, dynamic>>[];
-    if (rawMembers is List) {
-      members = rawMembers
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-    }
-
-    if (members.isEmpty) {
-      members = [
-        {
-          'name': 'Nombre del integrante',
-          'role': 'Cargo',
-          'bio': 'Usa el editor para agregar información de tu equipo.',
-          'avatarUrl': '',
-        },
-        {
-          'name': 'Integrante 2',
-          'role': 'Cargo',
-          'bio':
-              'Cada integrante puede incluir redes sociales y una breve bio.',
-          'avatarUrl': '',
-        },
-      ];
-    }
-
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isCompact = screenWidth < 350;
-
-    return Container(
-      padding: _parsePadding(
-        data,
-        screenWidth: screenWidth,
-        defaultVertical: 64,
-        defaultHorizontal: 24,
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1100),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                title.isEmpty ? 'Nuestro equipo' : title,
-                style: theme.textTheme.displaySmall?.copyWith(
-                  fontFamily: headingFont,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              if (description.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(
-                  description,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontFamily: bodyFont,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: 40),
-              Wrap(
-                spacing: 24,
-                runSpacing: 24,
-                alignment: WrapAlignment.center,
-                children: members.map((member) {
-                  final name = (member['name'] ?? 'Integrante').toString();
-                  final role = (member['role'] ?? '').toString();
-                  final bio = (member['bio'] ?? '').toString();
-                  final avatarUrl =
-                      (member['avatarUrl'] ?? '').toString().trim();
-                  final instagram =
-                      (member['instagram'] ?? '').toString().trim();
-                  final linkedin = (member['linkedin'] ?? '').toString().trim();
-
-                  return SizedBox(
-                    width: isCompact ? double.infinity : 300,
-                    child: Card(
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            CircleAvatar(
-                              radius: 48,
-                              backgroundColor:
-                                  accentColor.withValues(alpha: 0.12),
-                              backgroundImage: avatarUrl.isNotEmpty
-                                  ? NetworkImage(avatarUrl)
-                                  : null,
-                              child: avatarUrl.isEmpty
-                                  ? Icon(
-                                      Icons.person,
-                                      size: 48,
-                                      color: accentColor,
-                                    )
-                                  : null,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              name,
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                fontFamily: headingFont,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            if (role.isNotEmpty) ...[
-                              const SizedBox(height: 6),
-                              Text(
-                                role,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontFamily: bodyFont,
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                            if (bio.isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              Text(
-                                bio,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontFamily: bodyFont,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                            if (instagram.isNotEmpty || linkedin.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 16),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (instagram.isNotEmpty)
-                                      IconButton(
-                                        tooltip: 'Instagram',
-                                        onPressed: previewMode
-                                            ? null
-                                            : () => onNavigate?.call(instagram),
-                                        icon: const Icon(
-                                            Icons.camera_alt_outlined),
-                                        color: accentColor,
-                                      ),
-                                    if (linkedin.isNotEmpty)
-                                      IconButton(
-                                        tooltip: 'LinkedIn',
-                                        onPressed: previewMode
-                                            ? null
-                                            : () => onNavigate?.call(linkedin),
-                                        icon: const Icon(Icons.work_outline),
-                                        color: accentColor,
-                                      ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static Widget _buildFeatureCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String description,
-    required Color primaryColor,
-    String? headingFont,
-    String? bodyFont,
-  }) {
-    return SizedBox(
-      width: 320,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Icon(icon, size: 48, color: primaryColor),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontFamily: headingFont,
-                    ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                description,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontFamily: bodyFont,
-                    ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static IconData _getIconFromString(String? iconName) {
-    switch (iconName) {
-      case 'directions_bike':
-        return Icons.directions_bike;
-      case 'build':
-        return Icons.build;
-      case 'shopping_bag':
-        return Icons.shopping_bag;
-      case 'verified':
-        return Icons.verified;
-      case 'pedal_bike':
-        return Icons.pedal_bike;
-      case 'support_agent':
-        return Icons.support_agent;
-      case 'favorite':
-        return Icons.favorite;
-      case 'star':
-        return Icons.star;
-      case 'links':
-        return Icons.link;
-      case 'instagram':
-        return Icons.camera_alt_outlined;
-      case 'strava':
-        return Icons.timeline;
-      case 'facebook':
-        return Icons.thumb_up_alt_outlined;
-      case 'phone':
-        return Icons.phone;
-      case 'mail':
-        return Icons.mail_outline;
-      case 'location':
-        return Icons.location_on_outlined;
-      default:
-        return Icons.star;
-    }
-  }
-
-  // ============================================================================
-  // VIDEO BANNER BLOCK
-  // Full-width image/video banner with overlay text
-  // ============================================================================
   static Widget _buildVideoBanner({
     required BuildContext context,
     required Map<String, dynamic> data,
@@ -3152,6 +1035,7 @@ class WebsiteBlockRenderer {
     String? bodyFont,
     bool previewMode = false,
     void Function(String route)? onNavigate,
+    bool Function(String href)? isNavigationEligible,
   }) {
     final title = (data['title'] ?? '').toString().trim();
     final subtitle = (data['subtitle'] ?? '').toString().trim();
@@ -3197,7 +1081,13 @@ class WebsiteBlockRenderer {
       ctaText: primaryAction?.label ?? legacyCtaText,
       ctaLink: primaryAction?.href ?? legacyCtaLink,
       actionVariant: primaryAction?.variant ?? WebsiteActionVariant.outline,
-      showCta: primaryAction != null,
+      // Absence, not disabling: an ineligible destination suppresses the CTA
+      // slot entirely while the configured values stay untouched.
+      showCta: visibleNavigationAction(
+            primaryAction,
+            isNavigationEligible: isNavigationEligible,
+          ) !=
+          null,
       overlayOpacity: overlayOpacity,
       accentColor: accentColor,
       headingFont: headingFont,
@@ -3391,6 +1281,7 @@ class WebsiteBlockRenderer {
     String? bodyFont,
     bool previewMode = false,
     void Function(String route)? onNavigate,
+    bool Function(String href)? isNavigationEligible,
   }) {
     final title = (data['title'] ?? 'MARCAS').toString().trim();
     final titleFormatting = _resolveTextFormatting(data, 'titleFormatting');
@@ -3494,6 +1385,7 @@ class WebsiteBlockRenderer {
                     gap: gap,
                     previewMode: previewMode,
                     onNavigate: onNavigate,
+                    isNavigationEligible: isNavigationEligible,
                   ),
                 ),
               ],
@@ -3503,31 +1395,6 @@ class WebsiteBlockRenderer {
       },
     );
   }
-}
-
-class _DeferredFirstFrame extends StatefulWidget {
-  const _DeferredFirstFrame({required this.builder});
-
-  final Widget Function(bool showHeavy) builder;
-
-  @override
-  State<_DeferredFirstFrame> createState() => _DeferredFirstFrameState();
-}
-
-class _DeferredFirstFrameState extends State<_DeferredFirstFrame> {
-  bool _showHeavy = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() => _showHeavy = true);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) => widget.builder(_showHeavy);
 }
 
 // ============================================================================
@@ -3541,6 +1408,7 @@ class _BrandLogosCarousel extends StatefulWidget {
   final double gap;
   final bool previewMode;
   final void Function(String route)? onNavigate;
+  final bool Function(String href)? isNavigationEligible;
 
   const _BrandLogosCarousel({
     required this.brands,
@@ -3549,6 +1417,7 @@ class _BrandLogosCarousel extends StatefulWidget {
     this.gap = 40,
     required this.previewMode,
     this.onNavigate,
+    this.isNavigationEligible,
   });
 
   @override
@@ -3611,6 +1480,7 @@ class _BrandLogosCarouselState extends State<_BrandLogosCarousel> {
                             height: widget.logoHeight,
                             previewMode: widget.previewMode,
                             onNavigate: widget.onNavigate,
+                            isNavigationEligible: widget.isNavigationEligible,
                           ),
                         ),
                         if (i < items.length - 1) SizedBox(width: widget.gap),
@@ -3668,6 +1538,7 @@ class _BrandLogoItem extends StatelessWidget {
   final double height;
   final bool previewMode;
   final void Function(String route)? onNavigate;
+  final bool Function(String href)? isNavigationEligible;
 
   const _BrandLogoItem({
     required this.brand,
@@ -3676,6 +1547,7 @@ class _BrandLogoItem extends StatelessWidget {
     this.height = 90,
     required this.previewMode,
     this.onNavigate,
+    this.isNavigationEligible,
   });
 
   @override
@@ -3699,7 +1571,9 @@ class _BrandLogoItem extends StatelessWidget {
           : _buildPlaceholder(name),
     );
 
-    if (link.isNotEmpty) {
+    final canNavigate = link.isNotEmpty &&
+        (isNavigationEligible == null || isNavigationEligible!(link));
+    if (canNavigate) {
       content = MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
@@ -3764,41 +1638,10 @@ class _AutoCategoryGrid extends StatefulWidget {
 class _AutoCategoryGridState extends State<_AutoCategoryGrid> {
   List<Map<String, dynamic>>? _categories;
   bool _isLoading = true;
-  bool _useManualCategories = false;
 
   @override
   void initState() {
     super.initState();
-    _initCategories();
-  }
-
-  void _initCategories() {
-    // Check if block has manual categories with images defined
-    // If so, use those instead of auto-fetching from database
-    final rawCategories = widget.data['categories'];
-    if (rawCategories is List && rawCategories.isNotEmpty) {
-      // Check if at least one category has an imageUrl
-      final hasImagesConfigured = rawCategories.any((cat) {
-        if (cat is Map) {
-          final imageUrl = cat['imageUrl']?.toString() ?? '';
-          return imageUrl.isNotEmpty;
-        }
-        return false;
-      });
-
-      if (hasImagesConfigured) {
-        // Use manual categories from block data (independent of DB)
-        _useManualCategories = true;
-        _categories = rawCategories
-            .whereType<Map>()
-            .map((item) => Map<String, dynamic>.from(item))
-            .toList();
-        _isLoading = false;
-        return;
-      }
-    }
-
-    // No manual categories with images, fetch from database
     _loadCategories();
   }
 
@@ -3824,40 +1667,74 @@ class _AutoCategoryGridState extends State<_AutoCategoryGrid> {
         return;
       }
 
-      // Fetch categories with show_on_website = true
-      final response = await Supabase.instance.client
-          .from('product_categories')
-          .select('id, name, description, image_url')
-          .eq('tenant_id', tenantId)
-          .eq('show_on_website', true)
-          .eq('is_active', true)
-          .isFilter('parent_id', null) // Only root categories
-          .order('name');
+      final inventory = context.read<PublicInventoryService>();
+      final categories =
+          await inventory.getCategoriesForTenant(tenantId: tenantId);
+      if (!mounted) return;
+      final websiteService = context.read<WebsiteService>();
+      final publication = PublicCategoryPublication.resolve(
+        categories: [
+          for (final category in categories)
+            if (category.id != null)
+              PublicCategoryDescriptor(
+                id: category.id!,
+                name: category.name,
+                fullPath: category.fullPath,
+                showOnWebsite: category.showOnWebsite,
+              ),
+        ],
+        navigation: websiteService.navigation,
+        presentationRegistry: websiteService.catalogPresentationRegistry,
+      );
 
-      final List<Map<String, dynamic>> cats = (response as List)
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
+      // Manual cards own presentation and order, never publication. Category
+      // destinations still respect Catálogo web, while generic catalog
+      // searches and other authored destinations remain eligible.
+      final rawCategories = widget.data['categories'];
+      final manualCategories = rawCategories is List
+          ? rawCategories
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList()
+          : const <Map<String, dynamic>>[];
+      final hasManualPresentation = manualCategories.any(
+        (category) =>
+            (category['imageUrl']?.toString().trim() ?? '').isNotEmpty,
+      );
+      final publishedManualCategories = manualCategories.where((category) {
+        final href = _CategoryCard.resolveHref(category);
+        return publication.allowsHref(href);
+      }).toList(growable: false);
 
-      // Convert to block format
-      final blockCategories = cats.asMap().entries.map((entry) {
-        final cat = entry.value;
+      final publishedCategories = categories
+          .where(
+            (category) =>
+                category.id != null && publication.isPublished(category.id),
+          )
+          .toList()
+        ..sort((a, b) {
+          final byOrder = a.sortOrder.compareTo(b.sortOrder);
+          return byOrder != 0 ? byOrder : a.name.compareTo(b.name);
+        });
+
+      final autoCategories = publishedCategories.asMap().entries.map((entry) {
+        final category = entry.value;
         final index = entry.key;
         return {
-          'title': cat['name'] ?? '',
-          'subtitle': cat['description'] ?? '',
-          'imageUrl': cat['image_url'] ?? '',
+          'title': category.name,
+          'subtitle': category.description ?? '',
+          'imageUrl': category.imageUrl ?? '',
           'ctaText': 'Ver productos',
-          'ctaLink': '/productos?category=${cat['id']}',
+          'ctaLink': '/productos?category=${category.id}',
           'size': index < 2 ? 'large' : 'medium',
         };
       }).toList();
 
-      if (mounted) {
-        setState(() {
-          _categories = blockCategories;
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _categories =
+            hasManualPresentation ? publishedManualCategories : autoCategories;
+        _isLoading = false;
+      });
     } catch (e) {
       debugPrint('Error loading website categories: $e');
       if (mounted) {
@@ -3875,19 +1752,9 @@ class _AutoCategoryGridState extends State<_AutoCategoryGrid> {
     final title = (widget.data['title'] ?? '').toString().trim();
     final subtitle = (widget.data['subtitle'] ?? '').toString().trim();
 
-    // Use categories (either manual from block or fetched from DB)
-    List<Map<String, dynamic>> categories = _categories ?? [];
-
-    // If auto-fetch returned empty and not using manual, fall back to block data
-    if (categories.isEmpty && !_isLoading && !_useManualCategories) {
-      final rawCategories = widget.data['categories'];
-      if (rawCategories is List) {
-        categories = rawCategories
-            .whereType<Map>()
-            .map((item) => Map<String, dynamic>.from(item))
-            .toList();
-      }
-    }
+    // Publication comes only from Catálogo web. Manual block data may style or
+    // order cards, but an empty authoritative result must remain empty.
+    final categories = _categories ?? const <Map<String, dynamic>>[];
 
     // Show placeholder while loading
     if (_isLoading) {
@@ -4157,9 +2024,7 @@ class _CategoryCard extends StatelessWidget {
     final ctaText = (data['ctaText'] ?? 'Ver colección').toString();
     // Backward/forward compat: some editors/definitions use `link`, others use `ctaLink`.
     // If both exist but disagree (common in legacy data), prefer the non-generic one.
-    final ctaLink = (data['ctaLink'] ?? '').toString().trim();
-    final link = (data['link'] ?? '').toString().trim();
-    final href = _resolveCategoryHref(ctaLink: ctaLink, link: link);
+    final href = resolveHref(data);
     final imageUrl = data['imageUrl']?.toString();
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
@@ -4273,6 +2138,12 @@ class _CategoryCard extends StatelessWidget {
     );
   }
 
+  static String resolveHref(Map<String, dynamic> data) {
+    final ctaLink = (data['ctaLink'] ?? '').toString().trim();
+    final link = (data['link'] ?? '').toString().trim();
+    return _resolveCategoryHref(ctaLink: ctaLink, link: link);
+  }
+
   static String _resolveCategoryHref({
     required String ctaLink,
     required String link,
@@ -4304,8 +2175,8 @@ class _CategoryCard extends StatelessWidget {
 
 enum _CarouselAnimation { slide, fade, zoom }
 
-class _CarouselBanner extends StatefulWidget {
-  const _CarouselBanner({
+class WebsiteCarouselBlockContent extends StatefulWidget {
+  const WebsiteCarouselBlockContent({
     super.key,
     required this.data,
     required this.primaryColor,
@@ -4316,8 +2187,22 @@ class _CarouselBanner extends StatefulWidget {
     this.headingSize,
     this.bodySize,
     this.onNavigate,
+    this.isNavigationEligible,
     this.tenantId,
+    this.presenters,
+    this.editBinding,
   });
+
+  static const rootKey = ValueKey<String>('website-carousel-content-root');
+  static const previousButtonKey =
+      ValueKey<String>('website-carousel-previous');
+  static const nextButtonKey = ValueKey<String>('website-carousel-next');
+
+  static ValueKey<String> slideKey(int index) =>
+      ValueKey<String>('website-carousel-slide-$index');
+
+  static ValueKey<String> indicatorKey(int index) =>
+      ValueKey<String>('website-carousel-indicator-$index');
 
   final Map<String, dynamic> data;
   final Color primaryColor;
@@ -4328,13 +2213,18 @@ class _CarouselBanner extends StatefulWidget {
   final double? headingSize;
   final double? bodySize;
   final void Function(String route)? onNavigate;
+  final bool Function(String href)? isNavigationEligible;
   final String? tenantId;
+  final WebsiteBlockContentPresenters? presenters;
+  final WebsiteCarouselEditBinding? editBinding;
 
   @override
-  State<_CarouselBanner> createState() => _CarouselBannerState();
+  State<WebsiteCarouselBlockContent> createState() =>
+      _WebsiteCarouselBlockContentState();
 }
 
-class _CarouselBannerState extends State<_CarouselBanner> {
+class _WebsiteCarouselBlockContentState
+    extends State<WebsiteCarouselBlockContent> {
   late List<Map<String, dynamic>> _slides;
   int _currentIndex = 0;
   late bool _autoPlay;
@@ -4351,6 +2241,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
   int? _pendingSlideIndex;
   late String _configurationSignature;
   bool _initialMediaPreloadScheduled = false;
+  bool _dependenciesReady = false;
 
   @override
   void initState() {
@@ -4362,13 +2253,15 @@ class _CarouselBannerState extends State<_CarouselBanner> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _dependenciesReady = true;
+    _restartTimer();
     if (_initialMediaPreloadScheduled) return;
     _initialMediaPreloadScheduled = true;
     _scheduleMediaPreload();
   }
 
   @override
-  void didUpdateWidget(covariant _CarouselBanner oldWidget) {
+  void didUpdateWidget(covariant WebsiteCarouselBlockContent oldWidget) {
     super.didUpdateWidget(oldWidget);
     final nextSignature = jsonEncode(widget.data);
     if (nextSignature != _configurationSignature) {
@@ -4463,15 +2356,17 @@ class _CarouselBannerState extends State<_CarouselBanner> {
 
   void _refreshConfiguration({bool resetIndex = false}) {
     _slides = _parseSlides(widget.data);
+    final editorIndex = widget.editBinding?.selectedSlideIndex;
     if (_slides.isEmpty) {
-      _slides = _defaultSlides();
-    }
-
-    if (resetIndex || _currentIndex >= _slides.length) {
+      _currentIndex = 0;
+    } else if (editorIndex != null) {
+      _currentIndex = editorIndex.clamp(0, _slides.length - 1).toInt();
+    } else if (resetIndex || _currentIndex >= _slides.length) {
       _currentIndex = 0;
     }
 
-    _autoPlay = (widget.data['autoPlay'] ?? true) == true;
+    _autoPlay =
+        !widget.previewMode && (widget.data['autoPlay'] ?? true) == true;
     _showIndicators = (widget.data['showIndicators'] ?? true) == true;
     _showArrows = (widget.data['showArrows'] ?? true) == true;
     _interval =
@@ -4495,14 +2390,17 @@ class _CarouselBannerState extends State<_CarouselBanner> {
       builder: (context, constraints) {
         final height =
             constraints.maxHeight.isFinite ? constraints.maxHeight : 520.0;
+        final transitionDuration =
+            _motionDisabled ? Duration.zero : _transitionDuration;
         return SizedBox(
+          key: WebsiteCarouselBlockContent.rootKey,
           height: height,
           width: double.infinity,
           child: Stack(
             fit: StackFit.expand,
             children: [
               AnimatedSwitcher(
-                duration: _transitionDuration,
+                duration: transitionDuration,
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
                 transitionBuilder: _buildTransition,
@@ -4520,6 +2418,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
                       final isActive = index == _currentIndex;
                       final isPending = index == _pendingSlideIndex;
                       return GestureDetector(
+                        key: WebsiteCarouselBlockContent.indicatorKey(index),
                         onTapDown: (_) => _warmSlide(index),
                         onTap: () => _goToSlide(index),
                         child: SizedBox(
@@ -4562,6 +2461,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
                       final target =
                           (_currentIndex - 1 + _slides.length) % _slides.length;
                       return _buildArrowButton(
+                        key: WebsiteCarouselBlockContent.previousButtonKey,
                         icon: Icons.chevron_left,
                         isPending: _pendingSlideIndex == target,
                         onWarmUp: () => _warmSlide(target),
@@ -4578,6 +2478,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
                     child: Builder(builder: (context) {
                       final target = (_currentIndex + 1) % _slides.length;
                       return _buildArrowButton(
+                        key: WebsiteCarouselBlockContent.nextButtonKey,
                         icon: Icons.chevron_right,
                         isPending: _pendingSlideIndex == target,
                         onWarmUp: () => _warmSlide(target),
@@ -4601,15 +2502,20 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     double maxWidth,
   ) {
     final theme = Theme.of(context);
-    final title = (slide['title'] ?? 'Título').toString().trim();
+    final title = (slide['title'] ?? '').toString().trim();
     final subtitle = (slide['subtitle'] ?? '').toString().trim();
-    final action = WebsiteActionValue.resolvePrimary(
-      slide,
-      labelKeys: const ['ctaText', 'buttonText'],
-      hrefKeys: const ['ctaLink', 'buttonLink'],
-      defaultLabel: 'Ver más',
-      defaultHref: '/productos',
-      defaultVariant: WebsiteActionVariant.outline,
+    final authoredAction = _resolveSlideAction(slide);
+    final action = widget.presenters != null
+        ? authoredAction
+        : authoredAction == null || authoredAction.href.trim().isEmpty
+            ? null
+            : WebsiteBlockRenderer.visibleNavigationAction(
+                authoredAction,
+                isNavigationEligible: widget.isNavigationEligible,
+              );
+    final repeaterTarget = WebsiteInlineRepeaterTarget(
+      collectionKeys: const <String>['slides'],
+      itemIndex: index,
     );
     final imageUrl = slide['imageUrl'];
     final videoUrl = slide['videoUrl']?.toString() ?? '';
@@ -4704,41 +2610,97 @@ class _CarouselBannerState extends State<_CarouselBanner> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  (title.isEmpty ? 'Título' : title).toUpperCase(),
-                  style: headingStyle,
-                  textAlign: titleFormatting.textAlign == TextAlign.start
-                      ? TextAlign.center
-                      : titleFormatting.textAlign,
-                ),
-                if (subtitle.isNotEmpty) ...[
+                if (title.isNotEmpty || widget.presenters?.text != null)
+                  widget.presenters?.text?.call(
+                        context,
+                        WebsiteInlineTextSlot(
+                          id: 'carousel.slide.$index.title',
+                          value: title,
+                          valueKeys: const <String>['title'],
+                          baseStyle: headingStyle,
+                          formatting: titleFormatting,
+                          formattingKeys: const <String>['titleFormatting'],
+                          textAlign: TextAlign.center,
+                          placeholder: 'Título del banner',
+                          displayTransform: (value) =>
+                              value.trim().toUpperCase(),
+                          repeaterTarget: repeaterTarget,
+                        ),
+                      ) ??
+                      Text(
+                        title.toUpperCase(),
+                        style: headingStyle,
+                        textAlign: titleFormatting.textAlign == TextAlign.start
+                            ? TextAlign.center
+                            : titleFormatting.textAlign,
+                      ),
+                if (subtitle.isNotEmpty || widget.presenters?.text != null) ...[
                   const SizedBox(height: 20),
-                  Text(
-                    subtitle,
-                    style: subtitleStyle,
-                    textAlign: subtitleFormatting.textAlign == TextAlign.start
-                        ? TextAlign.center
-                        : subtitleFormatting.textAlign,
+                  widget.presenters?.text?.call(
+                        context,
+                        WebsiteInlineTextSlot(
+                          id: 'carousel.slide.$index.subtitle',
+                          value: subtitle,
+                          valueKeys: const <String>['subtitle'],
+                          baseStyle: subtitleStyle,
+                          formatting: subtitleFormatting,
+                          formattingKeys: const <String>[
+                            'subtitleFormatting',
+                          ],
+                          textAlign: TextAlign.center,
+                          placeholder: 'Subtítulo descriptivo',
+                          repeaterTarget: repeaterTarget,
+                        ),
+                      ) ??
+                      Text(
+                        subtitle,
+                        style: subtitleStyle,
+                        textAlign:
+                            subtitleFormatting.textAlign == TextAlign.start
+                                ? TextAlign.center
+                                : subtitleFormatting.textAlign,
+                      ),
+                ],
+                if (action != null && action.label.isNotEmpty) ...[
+                  const SizedBox(height: 40),
+                  Builder(
+                    builder: (context) {
+                      final button = WebsiteActionButton(
+                        action: action,
+                        onPressed: !widget.previewMode &&
+                                widget.presenters == null &&
+                                action.href.trim().isNotEmpty &&
+                                widget.onNavigate != null
+                            ? () => widget.onNavigate!(action.href)
+                            : null,
+                        backgroundColor: widget.accentColor,
+                        foregroundColor: Colors.white,
+                        outlineColor: Colors.white,
+                        uppercase: true,
+                        textStyle: ctaTextStyle,
+                      );
+                      return widget.presenters?.action?.call(
+                            context,
+                            WebsiteInlineActionSlot(
+                              id: 'carousel.slide.$index.action',
+                              action: action,
+                              labelKeys: const <String>[
+                                'ctaText',
+                                'buttonText',
+                              ],
+                              hrefKeys: const <String>[
+                                'ctaLink',
+                                'buttonLink',
+                              ],
+                              variantKeys: const <String>['actionVariant'],
+                              child: button,
+                              repeaterTarget: repeaterTarget,
+                            ),
+                          ) ??
+                          button;
+                    },
                   ),
                 ],
-                const SizedBox(height: 40),
-                if (action != null && action.label.isNotEmpty)
-                  WebsiteActionButton(
-                    action: action,
-                    onPressed: widget.previewMode
-                        ? () {}
-                        : () {
-                            final route = action.href;
-                            if (widget.onNavigate != null) {
-                              widget.onNavigate!(route);
-                            }
-                          },
-                    backgroundColor: widget.accentColor,
-                    foregroundColor: Colors.white,
-                    outlineColor: Colors.white,
-                    uppercase: true,
-                    textStyle: ctaTextStyle,
-                  ),
               ],
             ),
           ),
@@ -4749,7 +2711,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     if (usesComposition) {
       final compositionData = <String, dynamic>{
         'backgroundColor': '#00000000',
-        'showGrid': false,
+        'showGrid': widget.editBinding != null,
         'snap': true,
         'designWidth': (slide['designWidth'] as num?)?.toDouble() ?? 1200.0,
         'mobileDesignWidth':
@@ -4778,12 +2740,14 @@ class _CarouselBannerState extends State<_CarouselBanner> {
           DeferredCanvasBlock(
             data: compositionData,
             accentColor: widget.accentColor,
-            onNavigate: widget.onNavigate,
+            onNavigate: widget.previewMode ? null : widget.onNavigate,
+            isNavigationEligible: widget.isNavigationEligible,
             tenantId: widget.tenantId,
             headingFont: widget.headingFont,
             bodyFont: widget.bodyFont,
             fillAvailableHeight: true,
             clipContentToBounds: true,
+            editorBinding: widget.editBinding?.canvasBindingForSlide(index),
           ),
         ],
       );
@@ -4794,7 +2758,7 @@ class _CarouselBannerState extends State<_CarouselBanner> {
       return ConstraintLayoutBuilder(
         builder: (context, constraints) {
           return Container(
-            key: ValueKey<int>(index),
+            key: WebsiteCarouselBlockContent.slideKey(index),
             color: const Color(0xFF1a1a1a),
             child: Stack(
               fit: StackFit.expand,
@@ -4870,11 +2834,84 @@ class _CarouselBannerState extends State<_CarouselBanner> {
       imageUrl: hasImage ? imageUrl.toString() : null,
       imageAlignmentParam: slideBgAlignment,
     );
+    final mediaPresenter = widget.presenters?.media;
+    if (mediaPresenter != null) {
+      final fallbackDecoration =
+          WebsiteBlockRenderer._resolveBackgroundDecoration(
+        data: slideWithStyle,
+        defaultColor: const Color(0xFF1a1a1a),
+        imageUrl: null,
+        imageAlignmentParam: slideBgAlignment,
+      );
+      return Stack(
+        key: WebsiteCarouselBlockContent.slideKey(index),
+        fit: StackFit.expand,
+        children: <Widget>[
+          mediaPresenter(
+            context,
+            WebsiteInlineMediaSlot(
+              id: 'carousel.slide.$index.background',
+              url: hasImage ? imageUrl.toString() : null,
+              valueKeys: const <String>['imageUrl'],
+              fit: BoxFit.cover,
+              alignment: slideBgAlignment ?? Alignment.center,
+              fallback: DecoratedBox(decoration: fallbackDecoration),
+              semanticLabel:
+                  (slide['imageAltText'] ?? slide['altText'])?.toString(),
+              repeaterTarget: repeaterTarget,
+            ),
+          ),
+          contentWidget,
+        ],
+      );
+    }
 
     return Container(
-      key: ValueKey<int>(index),
+      key: WebsiteCarouselBlockContent.slideKey(index),
       decoration: decoration,
       child: contentWidget,
+    );
+  }
+
+  WebsiteActionValue? _resolveSlideAction(Map<String, dynamic> slide) {
+    ({bool present, String value}) firstPresent(List<String> keys) {
+      for (final key in keys) {
+        if (slide.containsKey(key)) {
+          return (
+            present: true,
+            value: slide[key]?.toString().trim() ?? '',
+          );
+        }
+      }
+      return (present: false, value: '');
+    }
+
+    final labelField = firstPresent(const <String>['ctaText', 'buttonText']);
+    final hrefField = firstPresent(const <String>['ctaLink', 'buttonLink']);
+    final resolved = WebsiteActionValue.resolvePrimary(
+      slide,
+      labelKeys: const <String>['ctaText', 'buttonText'],
+      hrefKeys: const <String>['ctaLink', 'buttonLink'],
+      variantKeys: const <String>['actionVariant'],
+      defaultLabel: '',
+      defaultHref: '',
+      defaultVariant: WebsiteActionVariant.outline,
+    );
+    final label =
+        (labelField.present ? labelField.value : resolved?.label ?? '').trim();
+    if (label.isEmpty) return null;
+    final href =
+        (hrefField.present ? hrefField.value : resolved?.href ?? '').trim();
+    final variant = slide.containsKey('actionVariant')
+        ? WebsiteActionVariant.fromStorage(
+            slide['actionVariant']?.toString(),
+            fallback: WebsiteActionVariant.outline,
+          )
+        : resolved?.variant ?? WebsiteActionVariant.outline;
+    return WebsiteActionValue(
+      label: label,
+      href: href,
+      variant: variant,
     );
   }
 
@@ -4901,12 +2938,14 @@ class _CarouselBannerState extends State<_CarouselBanner> {
   }
 
   Widget _buildArrowButton({
+    required Key key,
     required IconData icon,
     required bool isPending,
     required VoidCallback onTap,
     required VoidCallback onWarmUp,
   }) {
     return InkWell(
+      key: key,
       onTap: onTap,
       onTapDown: (_) => onWarmUp(),
       onHover: (isHovering) {
@@ -4963,6 +3002,17 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     }
 
     _timer?.cancel();
+    final editBinding = widget.editBinding;
+    if (editBinding != null) {
+      setState(() {
+        _currentIndex = index;
+        _pendingSlideIndex = null;
+      });
+      editBinding.onSlideSelected(index);
+      _scheduleMediaPreload();
+      return;
+    }
+
     final intent = ++_slideIntentGeneration;
     setState(() {
       _pendingSlideIndex = index;
@@ -4986,7 +3036,9 @@ class _CarouselBannerState extends State<_CarouselBanner> {
 
   void _restartTimer() {
     _timer?.cancel();
-    if (!_autoPlay || _slides.length <= 1) {
+    if (!_autoPlay ||
+        (_dependenciesReady && _motionDisabled) ||
+        _slides.length <= 1) {
       return;
     }
     _timer = Timer.periodic(_interval, (_) => _nextSlide());
@@ -5003,27 +3055,10 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     return [];
   }
 
-  List<Map<String, dynamic>> _defaultSlides() {
-    return [
-      {
-        'title': 'Descubre la tienda',
-        'subtitle': 'Todo lo que necesitas para tu bicicleta en un solo lugar',
-        'ctaText': 'Ver catálogo',
-        'ctaLink': '/productos',
-        'imageUrl': null,
-        'showOverlay': true,
-        'overlayOpacity': 0.55,
-      },
-      {
-        'title': 'Servicio técnico certificado',
-        'subtitle': 'Agenda tu mantención sin salir de casa',
-        'ctaText': 'Agendar ahora',
-        'ctaLink': '/tienda/servicios',
-        'imageUrl': null,
-        'showOverlay': true,
-        'overlayOpacity': 0.55,
-      },
-    ];
+  bool get _motionDisabled {
+    final mediaQuery = MediaQuery.maybeOf(context);
+    return mediaQuery?.disableAnimations == true ||
+        mediaQuery?.accessibleNavigation == true;
   }
 
   int _parseInterval(dynamic value) {
@@ -5081,6 +3116,7 @@ class _ProductsBlockWidget extends StatefulWidget {
   final bool previewMode;
   final String? bodyFont;
   final void Function(String route)? onNavigate;
+  final bool Function(String href)? isNavigationEligible;
   final String? tenantId;
 
   const _ProductsBlockWidget({
@@ -5092,6 +3128,7 @@ class _ProductsBlockWidget extends StatefulWidget {
     this.previewMode = false,
     this.bodyFont,
     this.onNavigate,
+    this.isNavigationEligible,
     this.tenantId,
   });
 
@@ -5582,14 +3619,17 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
         (widget.data['title'] ?? 'Productos Destacados').toString().trim();
     final title = rawTitle.isEmpty ? 'DESTACADOS' : rawTitle.toUpperCase();
     final showViewAll = widget.data['showViewAll'] ?? true;
-    final viewAllAction = WebsiteActionValue.resolvePrimary(
-      widget.data,
-      labelKeys: const ['viewAllText'],
-      hrefKeys: const ['viewAllLink'],
-      defaultLabel: 'Ver todos los productos',
-      defaultHref: '/productos',
-      defaultVariant: WebsiteActionVariant.outline,
-      enabled: showViewAll == true,
+    final viewAllAction = WebsiteBlockRenderer.visibleNavigationAction(
+      WebsiteActionValue.resolvePrimary(
+        widget.data,
+        labelKeys: const ['viewAllText'],
+        hrefKeys: const ['viewAllLink'],
+        defaultLabel: 'Ver todos los productos',
+        defaultHref: '/productos',
+        defaultVariant: WebsiteActionVariant.outline,
+        enabled: showViewAll == true,
+      ),
+      isNavigationEligible: widget.isNavigationEligible,
     );
     final layout = widget.data['layout']?.toString() ?? 'grid';
 

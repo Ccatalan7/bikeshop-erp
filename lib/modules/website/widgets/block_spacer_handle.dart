@@ -2,31 +2,35 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// A minimalist spacer handle between website blocks in edit mode.
-/// 
+///
 /// Appears as a subtle horizontal divider between blocks.
 /// When hovered, shows resize controls. Dragging vertically
 /// resizes the gap between blocks (can go to 0).
 class BlockSpacerHandle extends StatefulWidget {
   /// Current spacing height (gap between blocks)
   final double currentSpacing;
-  
+
   /// Minimum allowed spacing (can be 0)
   final double minSpacing;
-  
+
   /// Maximum allowed spacing
   final double maxSpacing;
-  
+
   /// Callback when spacing changes during drag
   final ValueChanged<double> onSpacingChanged;
-  
+
   /// Callback when drag ends (final value)
   final ValueChanged<double>? onSpacingChangeEnd;
-  
+
   /// Whether the handle is active (edit mode)
   final bool isActive;
-  
+
   /// Spacing snap increments (e.g., 4 = snaps to 4px increments)
   final double? snapIncrement;
+
+  /// Minimum editor hit target. This may exceed [currentSpacing] only when the
+  /// caller overlays the handle instead of letting it own page layout.
+  final double minimumInteractiveExtent;
 
   const BlockSpacerHandle({
     super.key,
@@ -37,6 +41,7 @@ class BlockSpacerHandle extends StatefulWidget {
     this.onSpacingChangeEnd,
     this.isActive = false,
     this.snapIncrement = 4,
+    this.minimumInteractiveExtent = 0,
   });
 
   @override
@@ -62,14 +67,13 @@ class _BlockSpacerHandleState extends State<BlockSpacerHandle> {
         ? (_localDragSpacing ?? widget.currentSpacing)
         : widget.currentSpacing;
     final showControls = _isHovered || _isDragging;
-    
-    // Simple fix: always have a minimum height for hit testing (16px)
-    // This is the ACTUAL container height - no tricks with positioned elements
-    const minInteractiveHeight = 16.0;
-    final containerHeight = displaySpacing < minInteractiveHeight
-        ? minInteractiveHeight
+
+    // Editor chrome must not change persisted page geometry. Small gaps keep
+    // their exact height; the controls may paint beyond that box while active.
+    final containerHeight = displaySpacing < widget.minimumInteractiveExtent
+        ? widget.minimumInteractiveExtent
         : displaySpacing;
-    
+
     return MouseRegion(
       cursor: SystemMouseCursors.resizeRow,
       onEnter: (_) {
@@ -88,8 +92,8 @@ class _BlockSpacerHandleState extends State<BlockSpacerHandle> {
         child: Container(
           height: containerHeight,
           decoration: BoxDecoration(
-            color: showControls 
-                ? const Color(0xFF00A09D).withValues(alpha: 0.1) 
+            color: showControls
+                ? const Color(0xFF00A09D).withValues(alpha: 0.1)
                 : Colors.transparent,
           ),
           child: Stack(
@@ -212,19 +216,19 @@ class _BlockSpacerHandleState extends State<BlockSpacerHandle> {
     setState(() {
       _localDragSpacing = newSpacing;
     });
-    
+
     widget.onSpacingChanged(newSpacing);
   }
 
   void _onDragEnd(DragEndDetails details) {
     final finalSpacing = _localDragSpacing ?? widget.currentSpacing;
-    
+
     setState(() {
       _isDragging = false;
       _isHovered = false;
       _localDragSpacing = null;
     });
-    
+
     widget.onSpacingChangeEnd?.call(finalSpacing);
     HapticFeedback.mediumImpact();
   }
@@ -250,12 +254,12 @@ class _QuickSpacingButton extends StatelessWidget {
         width: 24,
         height: 20,
         decoration: BoxDecoration(
-          color: isSelected 
+          color: isSelected
               ? const Color(0xFF00A09D)
               : Colors.white.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
-            color: isSelected 
+            color: isSelected
                 ? const Color(0xFF00A09D)
                 : const Color(0xFF00A09D).withValues(alpha: 0.3),
           ),

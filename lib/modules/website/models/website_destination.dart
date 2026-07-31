@@ -49,8 +49,14 @@ class WebsiteDestination {
     '/envios': 'Envíos',
   };
 
-  static WebsiteDestination parse(String rawHref) {
-    final href = normalizeHref(rawHref);
+  static WebsiteDestination parse(
+    String rawHref, {
+    Iterable<Uri> internalOrigins = const <Uri>[],
+  }) {
+    final href = normalizeHref(
+      rawHref,
+      internalOrigins: internalOrigins,
+    );
     if (href.isEmpty) {
       return const WebsiteDestination(
         kind: WebsiteDestinationKind.none,
@@ -131,14 +137,35 @@ class WebsiteDestination {
     );
   }
 
-  static String normalizeHref(String rawHref) {
+  /// Normalizes authored storefront destinations before they are classified.
+  ///
+  /// Absolute HTTP(S) URLs remain external by default. Callers that know the
+  /// active storefront origins may supply them so an authored absolute link
+  /// back to the same store is classified exactly like its relative form.
+  static String normalizeHref(
+    String rawHref, {
+    Iterable<Uri> internalOrigins = const <Uri>[],
+  }) {
     var value = rawHref.trim();
-    if (value.isEmpty ||
-        value.startsWith('http://') ||
-        value.startsWith('https://') ||
-        value.startsWith('#')) {
+    if (value.isEmpty || value.startsWith('#')) {
       return value;
     }
+
+    final absolute = Uri.tryParse(value);
+    if (absolute != null &&
+        (absolute.scheme == 'http' || absolute.scheme == 'https')) {
+      final isInternal =
+          internalOrigins.any((origin) => _sameHttpOrigin(absolute, origin));
+      if (!isInternal) return value;
+
+      final buffer = StringBuffer(
+        absolute.path.isEmpty ? '/' : absolute.path,
+      );
+      if (absolute.hasQuery) buffer.write('?${absolute.query}');
+      if (absolute.hasFragment) buffer.write('#${absolute.fragment}');
+      value = buffer.toString();
+    }
+
     if (!value.startsWith('/')) value = '/$value';
 
     final uri = Uri.tryParse(value);
@@ -164,7 +191,81 @@ class WebsiteDestination {
     return Uri(
       path: path.isEmpty ? '/' : path,
       queryParameters: query.isEmpty ? null : query,
+      fragment: uri.hasFragment ? uri.fragment : null,
     ).toString();
+  }
+
+  /// Builds the tenant-owned HTTP origin set consumed by renderers, click
+  /// guards, and destination audits.
+  ///
+  /// Callers remain responsible for supplying only origins that belong to the
+  /// active tenant. Keeping parsing and de-duplication here prevents each
+  /// consumer from interpreting configured domains differently.
+  static List<Uri> resolveInternalOrigins({
+    Iterable<String> configuredUrls = const <String>[],
+    Iterable<String> ownedHosts = const <String>[],
+    Uri? currentUri,
+  }) {
+    final origins = <Uri>[];
+    final seen = <String>{};
+
+    void add(String raw) {
+      final value = raw.trim();
+      if (value.isEmpty) return;
+      final uri = Uri.tryParse(
+        value.contains('://') ? value : 'https://$value',
+      );
+      if (uri == null ||
+          (uri.scheme != 'http' && uri.scheme != 'https') ||
+          uri.host.isEmpty) {
+        return;
+      }
+      final hasCustomPort = uri.hasPort && uri.port != 80 && uri.port != 443;
+      final key = '${uri.host.toLowerCase()}:'
+          '${hasCustomPort ? uri.port : 'web'}';
+      if (seen.add(key)) origins.add(uri);
+    }
+
+    for (final url in configuredUrls) {
+      add(url);
+    }
+    for (final host in ownedHosts) {
+      add(host);
+    }
+    if (currentUri != null) {
+      add(currentUri.toString());
+    }
+    return List<Uri>.unmodifiable(origins);
+  }
+
+  static bool _sameHttpOrigin(Uri candidate, Uri origin) {
+    final candidateScheme = candidate.scheme.toLowerCase();
+    final originScheme = origin.scheme.toLowerCase();
+    if ((candidateScheme != 'http' && candidateScheme != 'https') ||
+        (originScheme != 'http' && originScheme != 'https')) {
+      return false;
+    }
+    String normalizedHost(String host) {
+      final value = host.toLowerCase();
+      return value.startsWith('www.') ? value.substring(4) : value;
+    }
+
+    if (normalizedHost(candidate.host) != normalizedHost(origin.host)) {
+      return false;
+    }
+
+    final candidateHasCustomPort =
+        candidate.hasPort && candidate.port != 80 && candidate.port != 443;
+    final originHasCustomPort =
+        origin.hasPort && origin.port != 80 && origin.port != 443;
+    if (candidateHasCustomPort || originHasCustomPort) {
+      return candidate.port == origin.port;
+    }
+
+    // HTTP is an owned-but-insecure alias of the HTTPS storefront. Treating
+    // it as internal lets the shared navigation layer upgrade/guard the
+    // destination instead of launching an unchecked external collection.
+    return true;
   }
 
   static String routeForPage({

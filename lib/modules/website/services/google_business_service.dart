@@ -5,6 +5,9 @@ import 'package:flutter/scheduler.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/website_editor_capability.dart';
+import '../models/website_editor_oauth_intent.dart';
+
 // ignore: avoid_web_libraries_in_flutter
 import 'package:web/web.dart'
     if (dart.library.io) 'google_business_service_stub.dart' as web;
@@ -19,13 +22,65 @@ class GoogleBusinessService with ChangeNotifier {
   String? _lastProviderToken;
   List<String>? _lastIdentityProviders;
 
-  static const _kWebReturnToEditorKey = 'google_oauth_return_to_editor';
-  static const _kWebReturnToPathKey = 'google_oauth_return_path';
-  static const _kWebOpenIntegrationsKey = 'google_oauth_open_integrations';
 
   // Edge Function URL for proxying Google Business API calls (bypasses CORS on web)
   static const String _edgeFunctionUrl =
       'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/google-business-reviews';
+
+  String? _issuedIntentNonce;
+
+  /// Test seam: replaces the web localStorage-backed intent store.
+  @visibleForTesting
+  WebsiteEditorOAuthIntentStore? intentStoreOverride;
+
+  /// Test seam: replaces the current auth user id lookup.
+  @visibleForTesting
+  String? Function()? currentUserIdOverride;
+
+  /// Test seam: replaces the real OAuth/link launch. Receives the stage
+  /// ('signIn' | 'link' | 'signInFallback') and returns the launcher bool.
+  @visibleForTesting
+  Future<bool> Function(String stage)? oauthLaunchOverride;
+
+  WebsiteEditorOAuthIntentStore? get _intentStore =>
+      intentStoreOverride ?? (kIsWeb ? _webIntentStore() : null);
+
+  static WebsiteEditorOAuthIntentStore _webIntentStore() =>
+      WebsiteEditorOAuthIntentStore(
+        readRaw: () => web.window.localStorage
+            .getItem(WebsiteEditorOAuthIntentGate.storageKey),
+        writeRaw: (value) => web.window.localStorage
+            .setItem(WebsiteEditorOAuthIntentGate.storageKey, value),
+        removeRaw: () => web.window.localStorage
+            .removeItem(WebsiteEditorOAuthIntentGate.storageKey),
+      );
+
+  /// A failed/aborted OAuth launch consumes ONLY its own nonce: it can
+  /// never destroy a newer intent issued meanwhile.
+  void _consumeOwnIntentAfterFailedLaunch() {
+    final nonce = _issuedIntentNonce;
+    if (nonce == null) return;
+    try {
+      _intentStore?.clearIfNonce(
+        nonce,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      );
+    } catch (_) {}
+  }
+
+  /// Treats the launcher's `false` as a failed/aborted launch: the pending
+  /// intent is consumed and a visible error is surfaced. Returns whether
+  /// the launch actually succeeded.
+  bool _handleOAuthLaunchResult(bool result, String stage) {
+    if (result) return true;
+    debugPrint(
+        '⛔ [GoogleBusinessService] OAuth launch ($stage) returned false');
+    _consumeOwnIntentAfterFailedLaunch();
+    _error =
+        'No se pudo iniciar la conexión con Google. Inténtalo de nuevo.';
+    _safeNotifyListeners();
+    return false;
+  }
 
   GoogleBusinessService() {
     _lastProviderToken = _supabase.auth.currentSession?.providerToken;
@@ -249,39 +304,64 @@ class GoogleBusinessService with ChangeNotifier {
     return 'Error conectando con Google: $raw';
   }
 
-  /// Trigger Google Sign-In with "business.manage" scope
-  Future<void> connect() async {
+  /// Trigger Google Sign-In with "business.manage" scope.
+  ///
+  /// The EDITOR capability comes from the consumer (the open editor session)
+  /// — never from a cold singleton cache — and is validated BEFORE anything
+  /// is persisted: only a granted capability whose identity is the current
+  /// auth user may issue the one-shot typed return intent.
+  Future<void> connect({
+    required WebsiteEditorCapabilitySnapshot? editorCapability,
+  }) async {
     _isLoading = true;
     _error = null;
     _safeNotifyListeners();
 
+    final currentUserId =
+        currentUserIdOverride?.call() ?? _supabase.auth.currentUser?.id;
+    if (editorCapability == null ||
+        !editorCapability.granted ||
+        currentUserId == null ||
+        editorCapability.identity != currentUserId) {
+      _isLoading = false;
+      _error =
+          'La sesión del editor no está autorizada para conectar Google.';
+      _safeNotifyListeners();
+      return;
+    }
+
     try {
       // Determines redirect URL based on platform
+      // ONE typed, versioned, one-shot intent replaces the legacy loose
+      // flags: nonce + issuer identity + tenant + capability fingerprint,
+      // issue/expiry window, sanitized return path and the Integrations
+      // request all travel together. Persisting is transport-independent:
+      // it happens whenever an intent store exists (web localStorage, or an
+      // injected store under test).
+      try {
+        final uri = Uri.base;
+        final pathWithQuery =
+            uri.hasQuery ? '${uri.path}?${uri.query}' : uri.path;
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        _issuedIntentNonce = WebsiteEditorOAuthIntentGate.newNonce(nowMs);
+        _intentStore?.put(
+          WebsiteEditorOAuthIntentGate.issue(
+            capability: editorCapability,
+            nowMs: nowMs,
+            nonce: _issuedIntentNonce!,
+            returnPath: pathWithQuery,
+            openIntegrations: true,
+          ),
+        );
+        debugPrint(
+            '💾 [GoogleBusinessService] Saved typed OAuth editor intent');
+      } catch (e) {
+        debugPrint(
+            '⚠️ [GoogleBusinessService] Could not persist OAuth intent: $e');
+      }
+
       String? redirectTo;
       if (kIsWeb) {
-        // Store a flag in localStorage so the app knows to re-enter edit mode
-        // after OAuth redirect (Supabase may strip query params from callback)
-        try {
-          web.window.localStorage.setItem(_kWebReturnToEditorKey, 'true');
-          debugPrint(
-              '💾 [GoogleBusinessService] Saved edit mode flag to localStorage');
-
-          // Also store the current route so the callback can bring the user
-          // back to the Integraciones module instead of sending them to '/'
-          // (which redirects to /dashboard on ERP hosts).
-          final uri = Uri.base;
-          final pathWithQuery =
-              uri.hasQuery ? '${uri.path}?${uri.query}' : uri.path;
-          web.window.localStorage.setItem(_kWebReturnToPathKey, pathWithQuery);
-          // Request opening Integraciones panel on return.
-          web.window.localStorage.setItem(_kWebOpenIntegrationsKey, 'true');
-          debugPrint(
-              '💾 [GoogleBusinessService] Saved return path for OAuth: $pathWithQuery');
-        } catch (e) {
-          debugPrint(
-              '⚠️ [GoogleBusinessService] Could not save to localStorage: $e');
-        }
-
         // IMPORTANT:
         // Redirect back to a stable callback route to prevent the router from
         // immediately redirecting away from '/' and stripping the OAuth code.
@@ -292,12 +372,12 @@ class GoogleBusinessService with ChangeNotifier {
         redirectTo = 'io.supabase.vinabike://login-callback';
       }
 
+      // The gate above already proved an authenticated identity (override or
+      // real session) matching the capability; the auth user object is only
+      // needed here to inspect linked identities.
       final user = _supabase.auth.currentUser;
-      if (user == null) throw Exception('No estás autenticado');
-
-      // Check if Google is already linked to this account
       final isLinked =
-          user.identities?.any((i) => i.provider == 'google') ?? false;
+          user?.identities?.any((i) => i.provider == 'google') ?? false;
 
       debugPrint(
           '🔍 [GoogleBusinessService] isLinked: $isLinked, calling OAuth...');
@@ -315,33 +395,39 @@ class GoogleBusinessService with ChangeNotifier {
         // This will refresh the session and include the token needed for APIs
         debugPrint(
             '🚀 [GoogleBusinessService] Calling signInWithOAuth (already linked)...');
-        final result = await _supabase.auth.signInWithOAuth(
-          OAuthProvider.google,
-          scopes: 'https://www.googleapis.com/auth/business.manage',
-          redirectTo: redirectTo,
-          queryParams: {
-            'access_type': 'offline',
-            'prompt': 'consent',
-          },
-        );
+        final result = oauthLaunchOverride != null
+            ? await oauthLaunchOverride!('signIn')
+            : await _supabase.auth.signInWithOAuth(
+                OAuthProvider.google,
+                scopes: 'https://www.googleapis.com/auth/business.manage',
+                redirectTo: redirectTo,
+                queryParams: {
+                  'access_type': 'offline',
+                  'prompt': 'consent',
+                },
+              );
         debugPrint(
             '✅ [GoogleBusinessService] signInWithOAuth returned: $result');
+        if (!_handleOAuthLaunchResult(result, 'signIn')) return;
       } else {
         // If not linked, we try to link first
         debugPrint(
             '🚀 [GoogleBusinessService] Calling linkIdentity (not linked)...');
         try {
-          final result = await _supabase.auth.linkIdentity(
-            OAuthProvider.google,
-            scopes: 'https://www.googleapis.com/auth/business.manage',
-            redirectTo: redirectTo,
-            queryParams: {
-              'access_type': 'offline',
-              'prompt': 'consent',
-            },
-          );
+          final result = oauthLaunchOverride != null
+              ? await oauthLaunchOverride!('link')
+              : await _supabase.auth.linkIdentity(
+                  OAuthProvider.google,
+                  scopes: 'https://www.googleapis.com/auth/business.manage',
+                  redirectTo: redirectTo,
+                  queryParams: {
+                    'access_type': 'offline',
+                    'prompt': 'consent',
+                  },
+                );
           debugPrint(
               '✅ [GoogleBusinessService] linkIdentity returned: $result');
+          if (!_handleOAuthLaunchResult(result, 'link')) return;
         } catch (e) {
           debugPrint('⚠️ [GoogleBusinessService] linkIdentity error: $e');
           final msg = e.toString().toLowerCase();
@@ -351,17 +437,20 @@ class GoogleBusinessService with ChangeNotifier {
               msg.contains('already_linked')) {
             debugPrint(
                 '🔄 [GoogleBusinessService] Already linked, falling back to signInWithOAuth...');
-            final result = await _supabase.auth.signInWithOAuth(
-              OAuthProvider.google,
-              scopes: 'https://www.googleapis.com/auth/business.manage',
-              redirectTo: redirectTo,
-              queryParams: {
-                'access_type': 'offline',
-                'prompt': 'consent',
-              },
-            );
+            final result = oauthLaunchOverride != null
+                ? await oauthLaunchOverride!('signInFallback')
+                : await _supabase.auth.signInWithOAuth(
+                    OAuthProvider.google,
+                    scopes: 'https://www.googleapis.com/auth/business.manage',
+                    redirectTo: redirectTo,
+                    queryParams: {
+                      'access_type': 'offline',
+                      'prompt': 'consent',
+                    },
+                  );
             debugPrint(
                 '✅ [GoogleBusinessService] signInWithOAuth (fallback) returned: $result');
+            if (!_handleOAuthLaunchResult(result, 'signInFallback')) return;
             return;
           }
 
@@ -373,6 +462,7 @@ class GoogleBusinessService with ChangeNotifier {
 
       // Note: The app will likely reload/redirect after this
     } catch (e) {
+      _consumeOwnIntentAfterFailedLaunch();
       _error = _toFriendlyConnectError(e);
       _safeNotifyListeners();
       return;

@@ -1246,7 +1246,10 @@ class _ProductWebsiteVisibilityPageState
     _applyFilters();
   }
 
-  Future<void> _clearProductCaches(String tenantId) async {
+  Future<void> _clearProductCaches(
+    String tenantId, {
+    bool refreshCategories = false,
+  }) async {
     shared_inventory.InventoryService? inventoryService;
     PublicInventoryService? publicInventoryService;
     try {
@@ -1261,7 +1264,12 @@ class _ProductWebsiteVisibilityPageState
     }
 
     await inventoryService?.refresh();
-    publicInventoryService?.clearCache(tenantId: tenantId);
+    publicInventoryService?.clearProductCache(tenantId: tenantId);
+    if (refreshCategories && publicInventoryService != null) {
+      await publicInventoryService.refreshCategoriesForTenant(
+        tenantId: tenantId,
+      );
+    }
   }
 
   Future<void> _saveVisibilityPolicy(
@@ -1319,7 +1327,10 @@ class _ProductWebsiteVisibilityPageState
             visibleCategoryIds: selected,
           );
 
-      await _clearProductCaches(tenantId);
+      await _clearProductCaches(
+        tenantId,
+        refreshCategories: true,
+      );
       _showSnackBar('Categorías públicas actualizadas.');
       return true;
     } catch (e) {

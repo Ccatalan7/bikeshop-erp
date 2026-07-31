@@ -45,6 +45,7 @@ class WebsiteActionValue {
     Map<String, dynamic> data, {
     required List<String> labelKeys,
     required List<String> hrefKeys,
+    List<String> variantKeys = const ['actionVariant'],
     String defaultLabel = 'Ver más',
     String defaultHref = '',
     WebsiteActionVariant defaultVariant = WebsiteActionVariant.filled,
@@ -77,9 +78,9 @@ class WebsiteActionValue {
     final label = fieldLabel.present
         ? (fieldLabel.value.isNotEmpty ? fieldLabel.value : defaultLabel)
         : (structuredLabel.isNotEmpty ? structuredLabel : defaultLabel);
-    final actionVariantField = firstField(const ['actionVariant']);
-    final rawVariant = fieldHref.present && actionVariantField.present
-        ? actionVariantField.value
+    final variantField = firstField(variantKeys);
+    final rawVariant = fieldHref.present && variantField.present
+        ? variantField.value
         : (structured?['variant'] ?? structured?['style'])?.toString() ?? '';
 
     return WebsiteActionValue(

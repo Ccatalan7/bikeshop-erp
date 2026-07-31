@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../shared/widgets/branded_loading.dart';
+import '../models/website_seo_settings_aliases.dart';
 import '../services/website_service.dart';
 import '../widgets/website_admin_ui.dart';
+import '../widgets/website_media_picker.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/models/tenant.dart';
 
@@ -48,10 +51,40 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
   late final TextEditingController _twitterController;
   late final TextEditingController _youtubeController;
 
-  // SEO
-  late final TextEditingController _metaTitleController;
-  late final TextEditingController _metaDescriptionController;
-  late final TextEditingController _metaKeywordsController;
+  // Canonical site SEO owner
+  late final TextEditingController _seoMetaTitleController;
+  late final TextEditingController _seoMetaDescriptionController;
+  late final TextEditingController _seoTopicsController;
+  late final TextEditingController _seoProductTitleTemplateController;
+  late final TextEditingController _seoProductDescriptionTemplateController;
+
+  /// GA4 measurement id.
+  ///
+  /// This page is its only writer. `scripts/sync_seo_index.sh` requires
+  /// `seo_ga_id` and validates the same `G-…` shape before it will build the
+  /// indexable shell, so an operator with no control over it cannot publish.
+  late final TextEditingController _seoAnalyticsIdController;
+
+  String _seoOgImageUrl = '';
+  final GlobalKey _seoSectionKey = GlobalKey();
+
+  /// Read-only projection of the company profile.
+  ///
+  /// `CompanyProfileService` writes these keys into `website_settings` whenever
+  /// the company record is saved. Editing them here would create a second
+  /// writer whose empty values that projection silently resurrects, so this
+  /// page shows the effective value and routes to the owner.
+  static const List<({String key, String label})> _companyOwnedSeoFields = [
+    (key: 'business_legal_name', label: 'Razón social'),
+    (key: 'business_tax_id', label: 'RUT'),
+    (key: 'seo_address_street', label: 'Calle'),
+    (key: 'seo_address_city', label: 'Ciudad'),
+    (key: 'seo_address_region', label: 'Región'),
+    (key: 'seo_address_postal', label: 'Código postal'),
+    (key: 'seo_address_country', label: 'País'),
+  ];
+
+  Map<String, String> _companyOwnedValues = const {};
 
   // Feature toggles
   bool _enableOrders = true;
@@ -87,10 +120,12 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
     _instagramController = TextEditingController();
     _twitterController = TextEditingController();
     _youtubeController = TextEditingController();
-    _metaTitleController = TextEditingController();
-    _metaDescriptionController = TextEditingController();
-    _metaKeywordsController = TextEditingController();
-
+    _seoMetaTitleController = TextEditingController();
+    _seoMetaDescriptionController = TextEditingController();
+    _seoTopicsController = TextEditingController();
+    _seoProductTitleTemplateController = TextEditingController();
+    _seoProductDescriptionTemplateController = TextEditingController();
+    _seoAnalyticsIdController = TextEditingController();
     // Load settings
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadSettings();
@@ -117,9 +152,12 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
     _instagramController.dispose();
     _twitterController.dispose();
     _youtubeController.dispose();
-    _metaTitleController.dispose();
-    _metaDescriptionController.dispose();
-    _metaKeywordsController.dispose();
+    _seoMetaTitleController.dispose();
+    _seoMetaDescriptionController.dispose();
+    _seoTopicsController.dispose();
+    _seoProductTitleTemplateController.dispose();
+    _seoProductDescriptionTemplateController.dispose();
+    _seoAnalyticsIdController.dispose();
     super.dispose();
   }
 
@@ -192,14 +230,37 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
           _twitterController.text = service.getSetting('twitter', '');
           _youtubeController.text = service.getSetting('youtube', '');
 
-          // SEO - Use tenant data as defaults
-          _metaTitleController.text = service.getSetting(
-              'meta_title', '$tenantName - Tienda de Bicicletas');
-          _metaDescriptionController.text = service.getSetting(
-              'meta_description',
-              'Tienda de bicicletas y accesorios. Envío a Chile continental.');
-          _metaKeywordsController.text = service.getSetting(
-              'meta_keywords', 'bicicletas, mtb, ruta, accesorios, ciclismo');
+          _seoMetaTitleController.text = service.getSetting(
+            'seo_meta_title',
+            service.getSetting('meta_title', ''),
+          );
+          _seoMetaDescriptionController.text = service.getSetting(
+            'seo_meta_description',
+            service.getSetting('meta_description', ''),
+          );
+          _seoTopicsController.text = service.getSetting(
+            'seo_meta_keywords',
+            service.getSetting('meta_keywords', ''),
+          );
+          _seoAnalyticsIdController.text = service.getSetting('seo_ga_id', '');
+          _companyOwnedValues = {
+            for (final field in _companyOwnedSeoFields)
+              field.key: field.key == 'seo_address_city'
+                  ? service.getSetting(
+                      'seo_address_city',
+                      service.getSetting('seo_address_locality', ''),
+                    )
+                  : service.getSetting(field.key, ''),
+          };
+          _seoProductTitleTemplateController.text = service.getSetting(
+            'seo_product_title_template',
+            '{product_name} | {store_name}',
+          );
+          _seoProductDescriptionTemplateController.text = service.getSetting(
+            'seo_product_description_template',
+            '{product_description}',
+          );
+          _seoOgImageUrl = service.getSetting('seo_og_image', '');
 
           // Feature toggles
           _enableOrders = service.getSetting('enable_orders', 'true') == 'true';
@@ -210,6 +271,20 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
               service.getSetting('enable_reviews', 'false') == 'true';
           _showStock = service.getSetting('show_stock', 'true') == 'true';
         });
+
+        if (GoRouterState.of(context).uri.queryParameters['section'] == 'seo') {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final targetContext = _seoSectionKey.currentContext;
+            if (mounted && targetContext != null) {
+              Scrollable.ensureVisible(
+                targetContext,
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeOutCubic,
+                alignment: 0.05,
+              );
+            }
+          });
+        }
       }
     } finally {
       if (mounted) {
@@ -268,6 +343,7 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
                               children: [
                                 TextFormField(
                                   controller: _storeNameController,
+                                  onChanged: (_) => setState(() {}),
                                   decoration: const InputDecoration(
                                     labelText: 'Nombre de la Tienda',
                                     hintText: 'Ej: Vinabike',
@@ -280,17 +356,21 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
                                 const SizedBox(height: 16),
                                 TextFormField(
                                   controller: _storeUrlController,
+                                  onChanged: (_) => setState(() {}),
                                   decoration: const InputDecoration(
                                     labelText: 'URL de la Tienda',
                                     hintText: 'https://tienda.ejemplo.cl',
                                     prefixIcon: Icon(Icons.link),
                                   ),
                                   validator: (value) {
-                                    if (value?.isEmpty ?? true) {
+                                    final raw = value?.trim() ?? '';
+                                    if (raw.isEmpty) {
                                       return 'Campo requerido';
                                     }
-                                    if (!value!.startsWith('http')) {
-                                      return 'Debe comenzar con http:// o https://';
+                                    if (WebsiteSeoSettingsAliases
+                                            .normalizeHttpsOrigin(raw)
+                                        .isEmpty) {
+                                      return 'Ingresa solo el dominio público con HTTPS, sin rutas ni parámetros';
                                     }
                                     return null;
                                   },
@@ -298,6 +378,7 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
                                 const SizedBox(height: 16),
                                 TextFormField(
                                   controller: _storeDescriptionController,
+                                  onChanged: (_) => setState(() {}),
                                   decoration: const InputDecoration(
                                     labelText: 'Descripción',
                                     hintText: 'Breve descripción de tu tienda',
@@ -508,47 +589,160 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
 
                             const SizedBox(height: 32),
 
-                            // SEO Section
-                            _buildSection(
-                              icon: Icons.search,
-                              title: 'SEO - Optimización en Buscadores',
-                              color: Colors.orange,
-                              children: [
-                                TextFormField(
-                                  controller: _metaTitleController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Título SEO',
-                                    hintText: 'Título que aparece en Google',
-                                    prefixIcon: Icon(Icons.title),
-                                    helperText: 'Máximo 60 caracteres',
+                            KeyedSubtree(
+                              key: _seoSectionKey,
+                              child: _buildSection(
+                                icon: Icons.search,
+                                title: 'Cómo aparece tu sitio en buscadores',
+                                color: Theme.of(context).colorScheme.primary,
+                                children: [
+                                  Text(
+                                    'Estos son los datos generales que heredan '
+                                    'las páginas y productos cuando no tienen '
+                                    'un texto propio.',
+                                    style:
+                                        Theme.of(context).textTheme.bodyMedium,
                                   ),
-                                  maxLength: 60,
-                                ),
-                                const SizedBox(height: 16),
-                                TextFormField(
-                                  controller: _metaDescriptionController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Meta Descripción',
-                                    hintText:
-                                        'Descripción que aparece en resultados de búsqueda',
-                                    prefixIcon: Icon(Icons.description),
-                                    helperText: 'Máximo 160 caracteres',
+                                  const SizedBox(height: 16),
+                                  TextFormField(
+                                    controller: _seoMetaTitleController,
+                                    maxLength: 60,
+                                    onChanged: (_) => setState(() {}),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Título del sitio',
+                                      hintText:
+                                          'Viñabike | Bicicletas y taller',
+                                      helperText:
+                                          'Es el título principal que puede mostrar Google.',
+                                      prefixIcon: Icon(Icons.title_rounded),
+                                    ),
                                   ),
-                                  maxLines: 3,
-                                  maxLength: 160,
-                                ),
-                                const SizedBox(height: 16),
-                                TextFormField(
-                                  controller: _metaKeywordsController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Palabras Clave',
-                                    hintText: 'palabra1, palabra2, palabra3',
-                                    prefixIcon: Icon(Icons.label),
-                                    helperText: 'Separadas por comas',
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: _seoMetaDescriptionController,
+                                    minLines: 3,
+                                    maxLines: 4,
+                                    maxLength: 165,
+                                    onChanged: (_) => setState(() {}),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Descripción del sitio',
+                                      hintText:
+                                          'Explica qué vendes, qué servicio ofreces y dónde.',
+                                      helperText:
+                                          'Texto breve y persuasivo para los resultados de búsqueda.',
+                                      prefixIcon: Icon(Icons.notes_rounded),
+                                    ),
                                   ),
-                                  maxLines: 2,
-                                ),
-                              ],
+                                  const SizedBox(height: 4),
+                                  _buildSearchResultPreview(),
+                                  const SizedBox(height: 20),
+                                  TextFormField(
+                                    controller: _seoTopicsController,
+                                    minLines: 2,
+                                    maxLines: 3,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Temas principales del sitio',
+                                      hintText:
+                                          'bicicletas, repuestos, taller de bicicletas',
+                                      helperText:
+                                          'Orientación editorial separada por comas; no garantiza posicionamiento.',
+                                      prefixIcon:
+                                          Icon(Icons.label_outline_rounded),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 18),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      'Imagen al compartir el sitio',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  WebsiteImagePickerField(
+                                    currentUrl: _seoOgImageUrl.trim().isEmpty
+                                        ? null
+                                        : _seoOgImageUrl,
+                                    enableBackgroundRemoval: false,
+                                    onChanged: (url) => setState(
+                                      () => _seoOgImageUrl = url.trim(),
+                                    ),
+                                  ),
+                                  if (_seoOgImageUrl.trim().isNotEmpty)
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: TextButton.icon(
+                                        onPressed: () => setState(
+                                          () => _seoOgImageUrl = '',
+                                        ),
+                                        icon: const Icon(
+                                          Icons.delete_outline_rounded,
+                                          size: 18,
+                                        ),
+                                        label:
+                                            const Text('Quitar imagen global'),
+                                      ),
+                                    ),
+                                  const SizedBox(height: 8),
+                                  ExpansionTile(
+                                    tilePadding: EdgeInsets.zero,
+                                    childrenPadding: EdgeInsets.zero,
+                                    title: const Text(
+                                      'Plantillas automáticas para productos',
+                                    ),
+                                    subtitle: const Text(
+                                      'Se usan solo cuando un producto no tiene texto SEO propio.',
+                                    ),
+                                    children: [
+                                      const SizedBox(height: 8),
+                                      TextFormField(
+                                        controller:
+                                            _seoProductTitleTemplateController,
+                                        decoration: const InputDecoration(
+                                          labelText:
+                                              'Plantilla de título de producto',
+                                          helperText:
+                                              'Variables: {product_name}, {store_name}, {product_brand}, {product_price}, {product_sku}',
+                                        ),
+                                      ),
+                                      const SizedBox(height: 14),
+                                      TextFormField(
+                                        controller:
+                                            _seoProductDescriptionTemplateController,
+                                        minLines: 2,
+                                        maxLines: 4,
+                                        decoration: const InputDecoration(
+                                          labelText:
+                                              'Plantilla de descripción de producto',
+                                          helperText:
+                                              'También admite {product_description}.',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  _buildCompanyOwnedSeoTile(),
+                                  _buildAnalyticsTile(),
+                                  const SizedBox(height: 16),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () =>
+                                          context.push('/website/seo'),
+                                      icon: const Icon(
+                                        Icons.travel_explore_rounded,
+                                      ),
+                                      label: const Text(
+                                        'Ver diagnóstico y evidencia SEO',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
 
                             const SizedBox(height: 32),
@@ -657,6 +851,197 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
     );
   }
 
+  /// Read-only projection of the company-profile owner.
+  ///
+  /// These keys reach `website_settings` through
+  /// `CompanyProfileService._buildWebsiteSettings`, and `sync_seo_index.sh`
+  /// refuses to build the indexable shell while any of them is empty. Showing
+  /// them here — with their real emptiness — makes that failure visible from
+  /// the SEO surface without creating a competing writer.
+  Widget _buildCompanyOwnedSeoTile() {
+    final theme = Theme.of(context);
+    final missing = _companyOwnedSeoFields
+        .where((field) => (_companyOwnedValues[field.key] ?? '').trim().isEmpty)
+        .length;
+
+    return ExpansionTile(
+      // `initiallyExpanded` is read once per State. Keying on the condition
+      // makes the re-evaluation explicit instead of depending on the loading
+      // placeholder happening to replace this subtree.
+      key: ValueKey('company-owned-seo-${missing > 0}'),
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: EdgeInsets.zero,
+      // Opened by default only when something is actually missing, so the
+      // normal case stays compact and the blocking case is not hidden.
+      initiallyExpanded: missing > 0,
+      title: const Text('Identidad legal y dirección del negocio'),
+      subtitle: Text(
+        missing == 0
+            ? 'Se usan en los datos estructurados del sitio. Los edita la '
+                'ficha de empresa.'
+            : '$missing de ${_companyOwnedSeoFields.length} sin definir. La '
+                'publicación indexable los exige.',
+        style: missing == 0 ? null : TextStyle(color: theme.colorScheme.error),
+      ),
+      children: [
+        const SizedBox(height: 4),
+        for (final field in _companyOwnedSeoFields)
+          _buildOwnedValueRow(
+            label: field.label,
+            value: (_companyOwnedValues[field.key] ?? '').trim(),
+          ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: () => context.push('/settings/company'),
+            icon: const Icon(Icons.badge_outlined, size: 18),
+            label: const Text('Editar en la ficha de empresa'),
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  Widget _buildOwnedValueRow({required String label, required String value}) {
+    final theme = Theme.of(context);
+    final isEmpty = value.isEmpty;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 132,
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              isEmpty ? 'Sin definir' : value,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: isEmpty ? FontWeight.w400 : FontWeight.w600,
+                color: isEmpty ? theme.colorScheme.error : null,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The only writer of `seo_ga_id` in the application.
+  Widget _buildAnalyticsTile() {
+    final isUnset = _seoAnalyticsIdController.text.trim().isEmpty;
+    return ExpansionTile(
+      key: ValueKey('seo-analytics-$isUnset'),
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: EdgeInsets.zero,
+      initiallyExpanded: isUnset,
+      title: const Text('Medición de audiencia'),
+      subtitle: const Text(
+        'Identificador de Google Analytics 4 usado por el sitio publicado.',
+      ),
+      children: [
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _seoAnalyticsIdController,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(
+            labelText: 'ID de medición GA4',
+            hintText: 'G-XXXXXXXXXX',
+            helperText:
+                'Empieza con «G-». Déjalo vacío solo si no vas a medir: la '
+                'publicación indexable lo exige.',
+            prefixIcon: Icon(Icons.insights_outlined),
+          ),
+          validator: (value) {
+            final raw = value?.trim() ?? '';
+            if (raw.isEmpty) return null;
+            // Same shape the publish script enforces, so an invalid value is
+            // rejected here instead of failing the build later.
+            if (!RegExp(r'^G-[A-Z0-9]+$').hasMatch(raw)) {
+              return 'Formato inválido. Debe ser como G-XXXXXXXXXX.';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  Widget _buildSearchResultPreview() {
+    final theme = Theme.of(context);
+    final title = _seoMetaTitleController.text.trim().isNotEmpty
+        ? _seoMetaTitleController.text.trim()
+        : _storeNameController.text.trim().isNotEmpty
+            ? _storeNameController.text.trim()
+            : 'Tu tienda';
+    final description = _seoMetaDescriptionController.text.trim().isNotEmpty
+        ? _seoMetaDescriptionController.text.trim()
+        : _storeDescriptionController.text.trim().isNotEmpty
+            ? _storeDescriptionController.text.trim()
+            : 'Agrega una descripción breve de tu tienda.';
+    final url = _storeUrlController.text.trim().isEmpty
+        ? 'https://tu-dominio.cl'
+        : _storeUrlController.text.trim();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Vista previa aproximada',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            url,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.tertiary,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            description,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(height: 1.35),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSection({
     required IconData icon,
     required String title,
@@ -736,10 +1121,20 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
         'twitter': _twitterController.text,
         'youtube': _youtubeController.text,
 
-        // SEO
-        'meta_title': _metaTitleController.text,
-        'meta_description': _metaDescriptionController.text,
-        'meta_keywords': _metaKeywordsController.text,
+        // Canonical site SEO owner.
+        //
+        // `seo_address_*`, `business_legal_name` and `business_tax_id` are
+        // deliberately absent: the company profile owns them and re-projects
+        // them on every save, so writing them here would be a second writer
+        // whose cleared values that projection silently restores.
+        'seo_meta_title': _seoMetaTitleController.text,
+        'seo_meta_description': _seoMetaDescriptionController.text,
+        'seo_meta_keywords': _seoTopicsController.text,
+        'seo_ga_id': _seoAnalyticsIdController.text.trim(),
+        'seo_og_image': _seoOgImageUrl,
+        'seo_product_title_template': _seoProductTitleTemplateController.text,
+        'seo_product_description_template':
+            _seoProductDescriptionTemplateController.text,
 
         // Features
         'enable_orders': _enableOrders.toString(),
@@ -749,9 +1144,10 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
         'show_stock': _showStock.toString(),
       };
 
-      for (final entry in settings.entries) {
-        await service.saveSetting(entry.key, entry.value);
-      }
+      // One operation. The previous per-key loop issued 33 sequential upserts,
+      // so a failure midway left the site configured half old and half new
+      // while still reporting a plain error.
+      await service.saveSettings(settings);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

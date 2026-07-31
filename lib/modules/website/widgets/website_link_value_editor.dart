@@ -1572,6 +1572,70 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
     );
   }
 
+  /// Refuses a destination whose owner cannot receive public visitors.
+  ///
+  /// The readiness state was already computed and displayed here; only the
+  /// gate was missing, so an operator could read "todavía está en borrador"
+  /// and still press Aplicar. Persisting that link produced a CTA that looks
+  /// configured, passes every later audit as "a link", and dead-ends for the
+  /// customer. Fail closed at the moment of authoring instead.
+  String? _blockingReadinessMessage() {
+    if (_mode != WebsiteLinkEditMode.internal) return null;
+
+    switch (_internalType) {
+      case _InternalDestinationType.page:
+        if (_selectedPageHref.trim().isEmpty) return null;
+        final page = _selectedPage;
+        if (_loadingSelectedPage || !_selectedPageLookupComplete) {
+          return 'Todavía se está comprobando la página seleccionada.';
+        }
+        if (page == null) {
+          return 'No existe una página CMS con esta ruta. Elige una página '
+              'publicada.';
+        }
+        if (!page.isPublished) {
+          return 'La página está en borrador. Publícala en Estructura > '
+              'Páginas antes de enlazarla.';
+        }
+        return null;
+
+      case _InternalDestinationType.category:
+        if (_catalogCategoryId == null) return null;
+        if (_loadingCategories) {
+          return 'Todavía se está comprobando la categoría seleccionada.';
+        }
+        final category = _selectedCategoryOption;
+        if (category == null) {
+          return 'La categoría seleccionada ya no existe en el catálogo '
+              'activo.';
+        }
+        if (!category.showOnWebsite) {
+          return 'La categoría está oculta del catálogo público. Publícala '
+              'en Catálogo web > Categorías antes de enlazarla.';
+        }
+        return null;
+
+      case _InternalDestinationType.product:
+        if (_selectedProductId == null) return null;
+        if (_loadingProducts) {
+          return 'Todavía se está comprobando el producto seleccionado.';
+        }
+        final product = _selectedProductOption;
+        if (product == null) {
+          return 'El producto seleccionado ya no existe en este catálogo.';
+        }
+        if (!product.isReady) {
+          return 'El producto no está publicado en la web. Actívalo y '
+              'publícalo antes de enlazarlo.';
+        }
+        return null;
+
+      case _InternalDestinationType.special:
+      case _InternalDestinationType.custom:
+        return null;
+    }
+  }
+
   void _apply({WebsiteWorkspacePanel? openPanel}) {
     final url = _generateUrl().trim();
     if (url.isEmpty) {
@@ -1583,6 +1647,11 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
         !url.startsWith('https://')) {
       setState(() => _validationMessage =
           'La URL externa debe comenzar con http:// o https://.');
+      return;
+    }
+    final blocking = _blockingReadinessMessage();
+    if (blocking != null) {
+      setState(() => _validationMessage = blocking);
       return;
     }
     Navigator.of(context).pop(

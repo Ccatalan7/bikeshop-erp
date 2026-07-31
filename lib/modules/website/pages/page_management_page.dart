@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../providers/website_edit_mode_provider.dart';
 import '../services/website_service.dart';
 import '../models/website_page_models.dart';
 import '../widgets/website_admin_ui.dart';
+import '../widgets/website_editor_navigation_guard.dart';
 
 /// Page Management UI - Manage website pages (Odoo-style multi-page support)
 /// Allows creating, editing, and organizing pages for the public store
@@ -484,10 +486,21 @@ class _PageManagementPageState extends State<PageManagementPage> {
     }
   }
 
-  void _openPageEditor(WebsitePage page) {
+  Future<void> _openPageEditor(WebsitePage page) async {
     // Dec 2025+: Multi-page inline editing supported via DynamicWebsitePage + query params.
     // Use legacy /tienda/* routes on ERP host (root '/' is reserved for ERP).
     final path = page.isHome ? '/tienda' : '/tienda/pagina/${page.slug}';
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final keepsCurrentDocument = editProvider.currentPageId == page.id ||
+        editProvider.currentPageSlug == page.slug;
+    final editorDecision = await WebsiteEditorNavigationGuard.authorize(
+      context,
+      intent: keepsCurrentDocument
+          ? WebsiteEditorNavigationIntent.samePage
+          : WebsiteEditorNavigationIntent.switchPage,
+    );
+    if (!editorDecision.isAllowed || !mounted) return;
+    if (!editorDecision.commit()) return;
     context.go('$path?edit=true');
   }
 
@@ -964,6 +977,10 @@ class _PageFormDialogState extends State<_PageFormDialog> {
         metaKeywords: _metaKeywordsController.text.trim().isEmpty
             ? null
             : _metaKeywordsController.text.trim(),
+        // The compact page dialog does not edit the social image. Preserve the
+        // canonical value instead of silently clearing it on every unrelated
+        // title, slug, template, or publication change.
+        ogImageUrl: widget.page?.ogImageUrl,
         isPublished: _isPublished,
         isHome: widget.page?.isHome ?? false,
         isSystem: widget.page?.isSystem ?? false,
