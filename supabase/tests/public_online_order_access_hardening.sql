@@ -72,6 +72,19 @@ values (
   true, true, true
 );
 
+insert into public.website_settings (tenant_id, key, value)
+values
+  (
+    '9e170000-0000-4000-8000-000000000001',
+    'mercadopago_access_token',
+    'TEST-server-secret-never-returned'
+  ),
+  (
+    '9e170000-0000-4000-8000-000000000001',
+    'store_url',
+    'https://checkout.example'
+  );
+
 select ok(
   not has_function_privilege(
     'anon',

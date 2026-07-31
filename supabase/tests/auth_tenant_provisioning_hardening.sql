@@ -280,11 +280,10 @@ select is(
     where policy.schemaname = 'public'
       and policy.tablename = 'employees'
   ),
-  'employees_delete_managers:DELETE:{authenticated},'
-    || 'employees_insert_managers:INSERT:{authenticated},'
-    || 'employees_read_tenant:SELECT:{authenticated},'
+  'employees_insert_managers:INSERT:{authenticated},'
+    || 'employees_read_authorized:SELECT:{authenticated},'
     || 'employees_update_managers:UPDATE:{authenticated}',
-  'employee RLS separates tenant reads from manager-only lifecycle writes'
+  'employee RLS limits reads and lifecycle writes to authorized identities'
 );
 select ok(
   not has_table_privilege('anon', 'public.employees', 'SELECT'),
@@ -1917,8 +1916,8 @@ select throws_ok(
     set user_id = '9f260000-0000-4000-8000-000000000091'
     where id = '9f260000-0000-4000-8000-000000000011'
   $$,
-  '42501',
-  'Worker portal identity cannot be linked as ERP staff',
+  'P0001',
+  'worker_access_conflict',
   'worker Auth cannot also become an ERP employee login'
 );
 
@@ -2320,7 +2319,7 @@ select throws_ok(
     where id = '9f260000-0000-4000-8000-000000000011'
   $$,
   '42501',
-  'Linked worker access must be removed before deleting the employee',
+  'employee_retirement_required',
   'physical employee deletion cannot leave Auth and sessions orphaned'
 );
 
@@ -4419,31 +4418,33 @@ values (
   now() - interval '2 minutes'
 );
 
-select is(
-  public.accept_user_invitation(
+select throws_ok(
+  $$ select public.accept_user_invitation(
     'auth-boundary-existing-same-tenant-token-v2'
-  ),
-  true,
-  'a duplicate same-tenant invitation is consumed idempotently'
+  ) $$,
+  'P0001',
+  'active_staff_email_requires_direct_link',
+  'a new same-tenant invitation cannot silently change active staff authority'
 );
-select is(
+select ok(
   (
-    select role
+    select role = 'cashier'
+      and permissions = '{"manage_users": false}'::jsonb
     from public.user_profiles
     where user_id = '9f260000-0000-4000-8000-000000000098'
       and is_active is true
   ),
-  'cashier',
-  'same-tenant retry cannot escalate the existing DB-backed role'
+  'rejected same-tenant invitation preserves the existing role and permissions'
 );
-select is(
+select ok(
   (
-    select status
+    select status = 'pending'
+      and accepted_user_id is null
+      and token_hash is not null
     from public.user_invitations
     where id = '9f260000-0000-4000-8000-000000000023'
   ),
-  'accepted',
-  'same-tenant idempotent acceptance closes the duplicate invitation'
+  'rejected same-tenant invitation remains pending for explicit resolution'
 );
 
 insert into public.user_invitations (
@@ -4486,8 +4487,8 @@ select throws_ok(
       'auth-boundary-existing-cross-tenant-token-v3'
     )
   $$,
-  '42501',
-  'Invalid or unavailable invitation',
+  'P0001',
+  'identity_unavailable',
   'an existing active ERP identity cannot acquire a second tenant'
 );
 select is(
@@ -5228,20 +5229,11 @@ select throws_ok(
   'Accounting access denied',
   'ordinary staff cannot generate another tenant F29'
 );
-select ok(
-  (
-    select count(*) = 1
-    from public.get_checked_in_employees()
-    where employee_id =
-      '9f260000-0000-4000-8000-000000000011'
-  )
-  and not exists (
-    select 1
-    from public.get_checked_in_employees()
-    where employee_id =
-      '9f26a100-0000-4000-8000-000000000013'
-  ),
-  'checked-in employees are restricted to the callers active tenant'
+select throws_ok(
+  $$ select * from public.get_checked_in_employees() $$,
+  '42501',
+  'Attendance access denied',
+  'ordinary staff cannot inspect the tenant-wide check-in roster'
 );
 select throws_ok(
   $$
@@ -5268,26 +5260,17 @@ select throws_ok(
   'Attendance access denied',
   'hours summary rejects a cross-tenant employee'
 );
-select ok(
-  exists (
-    select 1
+select throws_ok(
+  $$
+    select *
     from public.get_attendance_summary_for_period(
       current_date - 7,
       current_date
     )
-    where employee_id =
-      '9f260000-0000-4000-8000-000000000011'
-  )
-  and not exists (
-    select 1
-    from public.get_attendance_summary_for_period(
-      current_date - 7,
-      current_date
-    )
-    where employee_id =
-      '9f26a100-0000-4000-8000-000000000013'
-  ),
-  'period attendance never mixes employees from another tenant'
+  $$,
+  '42501',
+  'Attendance access denied',
+  'ordinary staff cannot aggregate the tenant-wide attendance period'
 );
 select lives_ok(
   $$

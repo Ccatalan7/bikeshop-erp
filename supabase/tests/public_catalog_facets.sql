@@ -239,14 +239,20 @@ select ok(
   ) = 0,
   'faceted paging cannot bypass the reservation-aware canonical RPC'
 );
+-- The behavioral reservation assertions below protect the public result. This
+-- cheap structural guard separately prevents the N+1 scalar implementation
+-- that the set-based migration was introduced to remove.
 select ok(
-  position(
-    'online_product_available_quantity(' in pg_get_functiondef(
-      'public.get_public_products(uuid,uuid[],uuid[],text,text,text,boolean,text,integer,integer)'::regprocedure
-    )
-  ) > 0,
-  'the installed canonical public RPC satisfies the reservation-aware prerequisite'
-);
+  position('online_product_available_quantity(' in installed.body) = 0
+  and position('online_order_inventory_reservations' in installed.body) > 0
+  and position('product_set_components' in installed.body) > 0,
+  'the installed canonical public RPC keeps reservation-aware availability set-based'
+)
+from (
+  select pg_get_functiondef(
+    'public.get_public_products(uuid,uuid[],uuid[],text,text,text,boolean,text,integer,integer)'::regprocedure
+  ) as body
+) installed;
 select has_function(
   'public',
   'get_public_products_without_inventory_reservations',

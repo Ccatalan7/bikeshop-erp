@@ -87,7 +87,7 @@ select ok(
     'public.rebuild_expense_journal_entry(uuid)',
     'EXECUTE'
   )
-  and has_function_privilege(
+  and not has_function_privilege(
     'authenticated',
     'public.recalculate_expense_totals(uuid)',
     'EXECUTE'
@@ -102,7 +102,7 @@ select ok(
     ]) signature
     where has_function_privilege('authenticated', signature, 'EXECUTE')
   ),
-  'authenticated employees can rebuild/recalculate but cannot directly create or delete journals'
+  'authenticated employees can rebuild but cannot call recalculation or journal helpers directly'
 );
 select ok(
   not exists (
@@ -434,8 +434,8 @@ select throws_ok(
       '9a215000-0000-4000-8000-000000000201'
     )$$,
   '42501',
-  'Expense not found or access denied',
-  'tenant A cannot recalculate totals for tenant B expense'
+  'permission denied for function recalculate_expense_totals',
+  'authenticated callers cannot invoke internal recalculation for any tenant'
 );
 
 reset role;
@@ -453,7 +453,7 @@ select throws_ok(
       '9a215000-0000-4000-8000-000000000201'
     )$$,
   '42501',
-  'Expense not found or access denied',
+  'permission denied for function recalculate_expense_totals',
   'authenticated database role cannot forge service_role through JWT claims'
 );
 reset role;
@@ -479,8 +479,8 @@ select throws_ok(
       '9a215000-0000-4000-8000-000000000999'
     )$$,
   '42501',
-  'Expense not found or access denied',
-  'a missing recalculate target is indistinguishable from denied access'
+  'permission denied for function recalculate_expense_totals',
+  'authenticated callers cannot probe missing targets through recalculation'
 );
 
 reset role;
@@ -543,10 +543,12 @@ select is(
 
 set local role authenticated;
 select lives_ok(
-  $$select public.recalculate_expense_totals(
-      '9a215000-0000-4000-8000-000000000101'
-    )$$,
-  'tenant A can recalculate its own expense totals'
+  $$
+    update public.expense_lines
+       set description = 'Gasto propio recalculado por trigger'
+     where id = '9a215000-0000-4000-8000-000000000102'
+  $$,
+  'tenant A can recalculate its own expense through an authorized line update'
 );
 reset role;
 

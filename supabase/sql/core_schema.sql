@@ -352,6 +352,38 @@ $$;
 grant execute on function public.user_tenant_id() to authenticated;
 
 --------------------------------------------------------------------------------
+-- HELPER FUNCTION: Authorize public website/settings mutations
+-- (Defined early because category commands and later RLS policies depend on it.)
+--------------------------------------------------------------------------------
+create or replace function public.can_edit_tenant_settings(p_tenant_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+  select exists (
+    select 1
+    from public.user_profiles profile
+    join public.tenants tenant
+      on tenant.id = profile.tenant_id
+     and tenant.is_active is true
+    where profile.user_id = auth.uid()
+      and profile.tenant_id = p_tenant_id
+      and profile.is_active is true
+      and (
+        profile.role = 'admin'
+        or profile.permissions @> '{"edit_settings": true}'::jsonb
+      )
+  )
+$$;
+
+revoke all on function public.can_edit_tenant_settings(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.can_edit_tenant_settings(uuid)
+  to authenticated, service_role;
+
+--------------------------------------------------------------------------------
 -- TRIGGER FUNCTION: Auto-update updated_at timestamp
 -- (Defined early because many tables create updated_at triggers.)
 --------------------------------------------------------------------------------
@@ -3879,6 +3911,154 @@ create trigger trg_sync_products_on_category_change
   on product_categories
   for each row
   execute function sync_products_on_category_change();
+
+-- Canonical Website Builder command: replace the published category set in
+-- one tenant-scoped transaction, preserving unchanged timestamps and an exact
+-- actor/diff trail.
+create or replace function public.replace_website_category_visibility(
+  p_tenant_id uuid,
+  p_visible_category_ids uuid[] default '{}'::uuid[]
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  v_caller_id uuid := auth.uid();
+  v_caller_tenant_id uuid := public.user_tenant_id();
+  v_requested_ids uuid[];
+  v_before_ids uuid[];
+  v_added_ids uuid[];
+  v_removed_ids uuid[];
+  v_invalid_ids uuid[];
+  v_changed_at timestamptz := clock_timestamp();
+begin
+  if v_caller_id is null
+     or p_tenant_id is null
+     or v_caller_tenant_id is distinct from p_tenant_id
+     or not public.can_edit_tenant_settings(p_tenant_id) then
+    raise exception 'website_category_publication_tenant_forbidden'
+      using errcode = '42501';
+  end if;
+
+  if array_position(p_visible_category_ids, null) is not null then
+    raise exception 'website_category_publication_invalid_category'
+      using errcode = '22023';
+  end if;
+
+  select coalesce(
+    array_agg(requested.category_id order by requested.category_id),
+    '{}'::uuid[]
+  )
+  into v_requested_ids
+  from (
+    select distinct category_id
+    from unnest(
+      coalesce(p_visible_category_ids, '{}'::uuid[])
+    ) as requested_id(category_id)
+  ) requested;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      'website_category_publication:' || p_tenant_id::text,
+      0
+    )
+  );
+
+  select coalesce(
+    array_agg(requested.category_id order by requested.category_id),
+    '{}'::uuid[]
+  )
+  into v_invalid_ids
+  from unnest(v_requested_ids) requested(category_id)
+  left join public.product_categories category
+    on category.id = requested.category_id
+   and category.tenant_id = p_tenant_id
+   and category.is_active is true
+  where category.id is null;
+
+  if cardinality(v_invalid_ids) > 0 then
+    raise exception 'website_category_publication_invalid_category'
+      using errcode = '22023';
+  end if;
+
+  select coalesce(
+    array_agg(category.id order by category.id),
+    '{}'::uuid[]
+  )
+  into v_before_ids
+  from public.product_categories category
+  where category.tenant_id = p_tenant_id
+    and category.show_on_website is true;
+
+  select coalesce(
+    array_agg(category_id order by category_id),
+    '{}'::uuid[]
+  )
+  into v_added_ids
+  from (
+    select unnest(v_requested_ids) as category_id
+    except
+    select unnest(v_before_ids) as category_id
+  ) added;
+
+  select coalesce(
+    array_agg(category_id order by category_id),
+    '{}'::uuid[]
+  )
+  into v_removed_ids
+  from (
+    select unnest(v_before_ids) as category_id
+    except
+    select unnest(v_requested_ids) as category_id
+  ) removed;
+
+  update public.product_categories category
+  set show_on_website = category.id = any(v_requested_ids),
+      updated_at = v_changed_at
+  where category.tenant_id = p_tenant_id
+    and category.show_on_website is distinct from (
+      category.id = any(v_requested_ids)
+    );
+
+  if cardinality(v_added_ids) > 0 or cardinality(v_removed_ids) > 0 then
+    insert into public.user_activity_log (
+      tenant_id,
+      user_id,
+      action,
+      details,
+      performed_by,
+      created_at
+    )
+    values (
+      p_tenant_id,
+      v_caller_id,
+      'website_category_publication_replaced',
+      jsonb_build_object(
+        'before_ids', to_jsonb(v_before_ids),
+        'after_ids', to_jsonb(v_requested_ids),
+        'added_ids', to_jsonb(v_added_ids),
+        'removed_ids', to_jsonb(v_removed_ids)
+      ),
+      v_caller_id,
+      v_changed_at
+    );
+  end if;
+
+  return jsonb_build_object(
+    'visible_ids', to_jsonb(v_requested_ids),
+    'added_ids', to_jsonb(v_added_ids),
+    'removed_ids', to_jsonb(v_removed_ids),
+    'changed_at', v_changed_at
+  );
+end;
+$$;
+
+revoke all on function public.replace_website_category_visibility(uuid, uuid[])
+  from public, anon;
+grant execute on function public.replace_website_category_visibility(uuid, uuid[])
+  to authenticated;
 
 -- Step 3: Migrate existing data from 'categories' to 'product_categories' (if old table exists)
 do $$
@@ -20230,21 +20410,259 @@ create policy "website_navigation_select" on website_navigation
 
 create policy "website_navigation_insert" on website_navigation
   for insert to authenticated
-  with check (tenant_id = public.user_tenant_id());
+  with check (public.can_edit_tenant_settings(tenant_id));
 
 create policy "website_navigation_update" on website_navigation
   for update to authenticated
-  using (tenant_id = public.user_tenant_id());
+  using (public.can_edit_tenant_settings(tenant_id))
+  with check (public.can_edit_tenant_settings(tenant_id));
 
 create policy "website_navigation_delete" on website_navigation
   for delete to authenticated
-  using (tenant_id = public.user_tenant_id());
+  using (public.can_edit_tenant_settings(tenant_id));
 
 -- Public access policy for navigation (anonymous visitors and logged-in website customers)
 drop policy if exists "website_navigation_select_public" on website_navigation;
 create policy "website_navigation_select_public" on website_navigation
   for select to public
   using (is_visible = true);
+
+create or replace function public.ensure_default_footer_navigation(
+  p_tenant_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  v_caller_id uuid := auth.uid();
+  v_links_parent_id uuid := gen_random_uuid();
+  v_information_parent_id uuid := gen_random_uuid();
+  v_created boolean := false;
+  v_items jsonb := '[]'::jsonb;
+begin
+  if v_caller_id is null
+     or p_tenant_id is null
+     or public.user_tenant_id() is distinct from p_tenant_id
+     or not public.can_edit_tenant_settings(p_tenant_id) then
+    raise exception 'website_navigation_seed_forbidden'
+      using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      'website_default_footer:' || p_tenant_id::text,
+      0
+    )
+  );
+
+  if not exists (
+    select 1
+    from public.website_navigation navigation
+    where navigation.tenant_id = p_tenant_id
+      and navigation.menu_location = 'footer'
+  ) then
+    insert into public.website_navigation (
+      id,
+      tenant_id,
+      menu_location,
+      label,
+      link_type,
+      link_value,
+      open_in_new_tab,
+      parent_id,
+      order_index,
+      is_visible,
+      show_on_desktop,
+      show_on_mobile
+    )
+    values
+      (
+        v_links_parent_id,
+        p_tenant_id,
+        'footer',
+        'Enlaces',
+        'action',
+        '',
+        false,
+        null,
+        0,
+        true,
+        true,
+        true
+      ),
+      (
+        gen_random_uuid(),
+        p_tenant_id,
+        'footer',
+        'Inicio',
+        'page',
+        '/tienda',
+        false,
+        v_links_parent_id,
+        0,
+        true,
+        true,
+        true
+      ),
+      (
+        gen_random_uuid(),
+        p_tenant_id,
+        'footer',
+        'Productos',
+        'page',
+        '/productos',
+        false,
+        v_links_parent_id,
+        1,
+        true,
+        true,
+        true
+      ),
+      (
+        gen_random_uuid(),
+        p_tenant_id,
+        'footer',
+        'Servicios',
+        'page',
+        '/servicios',
+        false,
+        v_links_parent_id,
+        2,
+        true,
+        true,
+        true
+      ),
+      (
+        gen_random_uuid(),
+        p_tenant_id,
+        'footer',
+        'Contacto',
+        'page',
+        '/tienda/contacto',
+        false,
+        v_links_parent_id,
+        3,
+        true,
+        true,
+        true
+      ),
+      (
+        v_information_parent_id,
+        p_tenant_id,
+        'footer',
+        'Información',
+        'action',
+        '',
+        false,
+        null,
+        1,
+        true,
+        true,
+        true
+      ),
+      (
+        gen_random_uuid(),
+        p_tenant_id,
+        'footer',
+        'Sobre Nosotros',
+        'page',
+        '/nosotros',
+        false,
+        v_information_parent_id,
+        0,
+        true,
+        true,
+        true
+      ),
+      (
+        gen_random_uuid(),
+        p_tenant_id,
+        'footer',
+        'Términos y Condiciones',
+        'page',
+        '/terminos',
+        false,
+        v_information_parent_id,
+        1,
+        true,
+        true,
+        true
+      ),
+      (
+        gen_random_uuid(),
+        p_tenant_id,
+        'footer',
+        'Política de Privacidad',
+        'page',
+        '/privacidad',
+        false,
+        v_information_parent_id,
+        2,
+        true,
+        true,
+        true
+      ),
+      (
+        gen_random_uuid(),
+        p_tenant_id,
+        'footer',
+        'Política de Devoluciones',
+        'page',
+        '/devoluciones',
+        false,
+        v_information_parent_id,
+        3,
+        true,
+        true,
+        true
+      ),
+      (
+        gen_random_uuid(),
+        p_tenant_id,
+        'footer',
+        'Envíos',
+        'page',
+        '/envios',
+        false,
+        v_information_parent_id,
+        4,
+        true,
+        true,
+        true
+      );
+
+    v_created := true;
+  end if;
+
+  select coalesce(
+    jsonb_agg(
+      to_jsonb(navigation)
+      order by
+        navigation.parent_id nulls first,
+        navigation.order_index,
+        navigation.id
+    ),
+    '[]'::jsonb
+  )
+  into v_items
+  from public.website_navigation navigation
+  where navigation.tenant_id = p_tenant_id
+    and navigation.menu_location = 'footer';
+
+  return jsonb_build_object(
+    'tenant_id', p_tenant_id,
+    'created', v_created,
+    'items', v_items
+  );
+end;
+$$;
+
+revoke all on function public.ensure_default_footer_navigation(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.ensure_default_footer_navigation(uuid)
+  to authenticated;
 
 -- ============================================================================
 -- MIGRATION: Add page_id to website_blocks (links blocks to pages)
@@ -22389,7 +22807,15 @@ create table if not exists public.google_oauth_connections (
   expires_at timestamptz,
   updated_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  tenant_id uuid references public.tenants(id) on delete cascade,
+  site_url text check (
+    site_url is null
+    or (
+      length(site_url) between 4 and 2048
+      and site_url ~ '^(sc-domain:[a-z0-9.-]+|https://[^[:space:]]+)$'
+    )
+  )
 );
 
 alter table public.google_oauth_connections enable row level security;
@@ -22398,10 +22824,1499 @@ create table if not exists public.google_oauth_states (
   state text primary key,
   created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
-  expires_at timestamptz not null default (now() + interval '15 minutes')
+  expires_at timestamptz not null default (now() + interval '15 minutes'),
+  state_hash text
+    constraint google_oauth_states_state_hash_key unique
+    constraint google_oauth_states_state_hash_check check (
+      state_hash is null or state_hash ~ '^[0-9a-f]{64}$'
+    ),
+  tenant_id uuid references public.tenants(id) on delete cascade,
+  site_url text check (
+    site_url is null
+    or (
+      length(site_url) between 4 and 2048
+      and site_url ~ '^(sc-domain:[a-z0-9.-]+|https://[^[:space:]]+)$'
+    )
+  ),
+  consumed_at timestamptz,
+  invalidated_at timestamptz
 );
 
 alter table public.google_oauth_states enable row level security;
+
+create index if not exists idx_google_oauth_connections_integration
+  on public.google_oauth_connections(integration_key, tenant_id);
+
+create index if not exists idx_google_oauth_states_expiry
+  on public.google_oauth_states(expires_at)
+  where consumed_at is null;
+
+comment on column public.google_oauth_states.state_hash is
+  'Legacy bridge SHA-256 verifier. New OAuth nonces live only in google_oauth_tenant_states.';
+comment on column public.google_oauth_connections.tenant_id is
+  'Best-effort legacy owner used only for an additive cutover into tenant storage.';
+comment on column public.google_oauth_states.site_url is
+  'Exact Search Console property selected when a tenant-scoped legacy state was created.';
+
+create or replace function public.google_oauth_tenant_store_host(
+  p_tenant_id uuid
+)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_store_url text;
+  v_legacy_store_url text;
+  v_custom_domain text;
+  v_candidate text;
+begin
+  select
+    max(nullif(btrim(setting.value), ''))
+      filter (where setting.key = 'store_url'),
+    max(nullif(btrim(setting.value), ''))
+      filter (where setting.key = 'seo_canonical_url')
+  into v_store_url, v_legacy_store_url
+  from public.website_settings setting
+  where setting.tenant_id = p_tenant_id
+    and setting.key in ('store_url', 'seo_canonical_url');
+
+  if v_store_url is not null
+     and v_legacy_store_url is not null
+     and lower(rtrim(v_store_url, '/')) <>
+       lower(rtrim(v_legacy_store_url, '/')) then
+    return null;
+  end if;
+
+  select nullif(btrim(tenant.custom_domain), '')
+  into v_custom_domain
+  from public.tenants tenant
+  where tenant.id = p_tenant_id
+    and tenant.is_active is true;
+
+  if not found then
+    return null;
+  end if;
+
+  v_candidate := coalesce(v_store_url, v_legacy_store_url);
+  if v_candidate is not null then
+    v_candidate := lower(v_candidate);
+    if v_candidate !~
+      '^https://([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}/?$' then
+      return null;
+    end if;
+    return regexp_replace(
+      regexp_replace(v_candidate, '^https://', ''),
+      '/$',
+      ''
+    );
+  end if;
+
+  if v_custom_domain is null then
+    return null;
+  end if;
+  v_candidate := lower(v_custom_domain);
+  if v_candidate !~
+    '^(https://)?([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}/?$' then
+    return null;
+  end if;
+  return regexp_replace(
+    regexp_replace(v_candidate, '^https://', ''),
+    '/$',
+    ''
+  );
+end;
+$$;
+
+create or replace function public.google_oauth_site_matches_tenant(
+  p_tenant_id uuid,
+  p_site_url text
+)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_store_host text;
+  v_site_url text := lower(btrim(coalesce(p_site_url, '')));
+  v_site_host text;
+begin
+  v_store_host := public.google_oauth_tenant_store_host(p_tenant_id);
+  if v_store_host is null then
+    return false;
+  end if;
+
+  if v_site_url ~
+    '^sc-domain:([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$' then
+    v_site_host := substring(v_site_url from length('sc-domain:') + 1);
+  elsif v_site_url ~
+    '^https://([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}/?$' then
+    v_site_host := regexp_replace(
+      regexp_replace(v_site_url, '^https://', ''),
+      '/$',
+      ''
+    );
+  else
+    return false;
+  end if;
+
+  return v_site_host = v_store_host;
+end;
+$$;
+
+create table if not exists public.google_oauth_generation_heads (
+  tenant_id uuid not null
+    references public.tenants(id) on delete cascade,
+  integration_key text not null,
+  current_generation bigint not null default 0,
+  updated_at timestamptz not null default clock_timestamp(),
+  constraint google_oauth_generation_heads_pkey
+    primary key (tenant_id, integration_key),
+  constraint google_oauth_generation_heads_key_check check (
+    integration_key ~ '^[a-z0-9][a-z0-9_:-]{0,63}$'
+  ),
+  constraint google_oauth_generation_heads_generation_check check (
+    current_generation >= 0
+  )
+);
+
+create table if not exists public.google_oauth_tenant_connections (
+  id uuid primary key default extensions.gen_random_uuid(),
+  tenant_id uuid not null
+    references public.tenants(id) on delete cascade,
+  integration_key text not null,
+  site_url text not null,
+  generation bigint not null,
+  credential_version bigint not null default 0,
+  provider text not null default 'google',
+  account_email text,
+  access_token text not null,
+  refresh_token text,
+  token_type text,
+  scope text,
+  expires_at timestamptz,
+  updated_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default clock_timestamp(),
+  updated_at timestamptz not null default clock_timestamp(),
+  constraint google_oauth_tenant_connections_owner_key
+    unique (tenant_id, integration_key),
+  constraint google_oauth_tenant_connections_key_check check (
+    integration_key ~ '^[a-z0-9][a-z0-9_:-]{0,63}$'
+  ),
+  constraint google_oauth_tenant_connections_generation_check check (
+    generation >= 0
+  ),
+  constraint google_oauth_tenant_connections_version_check check (
+    credential_version >= 0
+  ),
+  constraint google_oauth_tenant_connections_site_check check (
+    length(site_url) between 4 and 2048
+    and site_url ~ '^(sc-domain:[a-z0-9.-]+|https://[^[:space:]]+)$'
+  )
+);
+
+create table if not exists public.google_oauth_tenant_states (
+  state_hash text primary key,
+  tenant_id uuid not null,
+  integration_key text not null,
+  site_url text not null,
+  generation bigint not null,
+  created_by uuid not null
+    references auth.users(id) on delete cascade,
+  created_at timestamptz not null default clock_timestamp(),
+  expires_at timestamptz not null,
+  consumed_at timestamptz,
+  invalidated_at timestamptz,
+  committed_at timestamptz,
+  constraint google_oauth_tenant_states_head_fkey
+    foreign key (tenant_id, integration_key)
+    references public.google_oauth_generation_heads(
+      tenant_id,
+      integration_key
+    )
+    on delete cascade,
+  constraint google_oauth_tenant_states_generation_key
+    unique (tenant_id, integration_key, generation),
+  constraint google_oauth_tenant_states_hash_check check (
+    state_hash ~ '^[0-9a-f]{64}$'
+  ),
+  constraint google_oauth_tenant_states_generation_check check (
+    generation > 0
+  ),
+  constraint google_oauth_tenant_states_site_check check (
+    length(site_url) between 4 and 2048
+    and site_url ~ '^(sc-domain:[a-z0-9.-]+|https://[^[:space:]]+)$'
+  )
+);
+
+create table if not exists public.google_merchant_operation_leases (
+  tenant_id uuid not null
+    references public.tenants(id) on delete cascade,
+  operation_key text not null,
+  lease_token uuid,
+  lease_fence bigint not null default 0,
+  lease_expires_at timestamptz,
+  window_started_at timestamptz not null default clock_timestamp(),
+  window_count integer not null default 0,
+  updated_at timestamptz not null default clock_timestamp(),
+  constraint google_merchant_operation_leases_pkey
+    primary key (tenant_id, operation_key),
+  constraint google_merchant_operation_leases_key_check check (
+    operation_key ~ '^[a-z0-9][a-z0-9_:-]{0,63}$'
+  ),
+  constraint google_merchant_operation_leases_count_check check (
+    window_count between 0 and 3
+  ),
+  constraint google_merchant_operation_leases_fence_check check (
+    lease_fence >= 0
+  ),
+  constraint google_merchant_operation_leases_pair_check check (
+    (lease_token is null and lease_expires_at is null)
+    or (lease_token is not null and lease_expires_at is not null)
+  )
+);
+
+alter table public.google_oauth_generation_heads enable row level security;
+alter table public.google_oauth_tenant_connections enable row level security;
+alter table public.google_oauth_tenant_states enable row level security;
+alter table public.google_merchant_operation_leases enable row level security;
+
+create index if not exists idx_google_oauth_tenant_states_expiry
+  on public.google_oauth_tenant_states(expires_at)
+  where consumed_at is null and invalidated_at is null;
+
+create index if not exists idx_google_oauth_tenant_connections_site
+  on public.google_oauth_tenant_connections(tenant_id, site_url);
+
+create index if not exists idx_google_merchant_operation_leases_expiry
+  on public.google_merchant_operation_leases(lease_expires_at)
+  where lease_token is not null;
+
+comment on table public.google_oauth_tenant_connections is
+  'Canonical tenant-owned Google credential store. Legacy global-key storage is bridge-only.';
+comment on column public.google_oauth_tenant_connections.generation is
+  'Authorization generation committed by an exact consumed OAuth state.';
+comment on column public.google_oauth_tenant_connections.credential_version is
+  'CAS version incremented by every credential commit or access-token refresh.';
+comment on table public.google_merchant_operation_leases is
+  'Durable per-tenant operation lease and fixed-window rate receipt shared by all Edge isolates.';
+
+create or replace function public.prepare_google_oauth_state_transition()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_tenant_id uuid;
+  v_site_url text;
+  v_store_host text;
+begin
+  if new.state_hash is null then
+    new.state_hash := encode(
+      extensions.digest(convert_to(new.state, 'UTF8'), 'sha256'),
+      'hex'
+    );
+  end if;
+
+  if new.created_by is null then
+    new.tenant_id := null;
+    new.site_url := null;
+    return new;
+  end if;
+
+  select
+    profile.tenant_id,
+    public.google_oauth_tenant_store_host(profile.tenant_id)
+  into v_tenant_id, v_store_host
+  from public.user_profiles profile
+  join public.tenants tenant
+    on tenant.id = profile.tenant_id
+   and tenant.is_active is true
+  where profile.user_id = new.created_by
+    and profile.is_active is true
+    and (
+      profile.role = 'admin'
+      or profile.permissions @> '{"edit_settings": true}'::jsonb
+    )
+    and (
+      select count(*)
+      from public.user_profiles active_profile
+      join public.tenants active_tenant
+        on active_tenant.id = active_profile.tenant_id
+       and active_tenant.is_active is true
+      where active_profile.user_id = new.created_by
+        and active_profile.is_active is true
+    ) = 1;
+
+  v_site_url := case
+    when v_store_host is null then null
+    else 'sc-domain:' || v_store_host
+  end;
+
+  if v_tenant_id is null
+     or v_site_url is null
+     or (new.tenant_id is not null and new.tenant_id <> v_tenant_id)
+     or (
+       new.site_url is not null
+       and not public.google_oauth_site_matches_tenant(
+         v_tenant_id,
+         new.site_url
+       )
+     ) then
+    -- Preserve the legacy row for forensics/retry, but make it ineligible for
+    -- canonical promotion.
+    new.tenant_id := null;
+    new.site_url := null;
+    return new;
+  end if;
+
+  if new.site_url is not null then
+    v_site_url := btrim(new.site_url);
+  end if;
+  new.tenant_id := v_tenant_id;
+  new.site_url := v_site_url;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_prepare_google_oauth_state_transition
+  on public.google_oauth_states;
+create trigger trg_prepare_google_oauth_state_transition
+  before insert on public.google_oauth_states
+  for each row
+  execute function public.prepare_google_oauth_state_transition();
+
+create or replace function public.mirror_google_oauth_connection_transition()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_tenant_id uuid;
+  v_site_url text;
+  v_store_host text;
+  v_head_generation bigint;
+begin
+  if new.updated_by is null
+     or coalesce(new.integration_key, '') !~
+       '^[a-z0-9][a-z0-9_:-]{0,63}$' then
+    return new;
+  end if;
+
+  select
+    profile.tenant_id,
+    public.google_oauth_tenant_store_host(profile.tenant_id)
+  into v_tenant_id, v_store_host
+  from public.user_profiles profile
+  join public.tenants tenant
+    on tenant.id = profile.tenant_id
+   and tenant.is_active is true
+  where profile.user_id = new.updated_by
+    and profile.is_active is true
+    and (
+      profile.role = 'admin'
+      or profile.permissions @> '{"edit_settings": true}'::jsonb
+    )
+    and (
+      select count(*)
+      from public.user_profiles active_profile
+      join public.tenants active_tenant
+        on active_tenant.id = active_profile.tenant_id
+       and active_tenant.is_active is true
+      where active_profile.user_id = new.updated_by
+        and active_profile.is_active is true
+    ) = 1;
+
+  v_site_url := case
+    when v_store_host is null then null
+    else 'sc-domain:' || v_store_host
+  end;
+
+  if v_tenant_id is null
+     or v_site_url is null
+     or (new.tenant_id is not null and new.tenant_id <> v_tenant_id)
+     or (
+       new.site_url is not null
+       and not public.google_oauth_site_matches_tenant(
+         v_tenant_id,
+         new.site_url
+       )
+     ) then
+    return new;
+  end if;
+
+  if new.site_url is not null then
+    v_site_url := btrim(new.site_url);
+  end if;
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      'google_oauth_head:' ||
+        v_tenant_id::text || ':' || new.integration_key,
+      0
+    )
+  );
+
+  insert into public.google_oauth_generation_heads (
+    tenant_id,
+    integration_key,
+    current_generation
+  ) values (
+    v_tenant_id,
+    new.integration_key,
+    0
+  )
+  on conflict (tenant_id, integration_key) do nothing;
+
+  select head.current_generation
+  into v_head_generation
+  from public.google_oauth_generation_heads head
+  where head.tenant_id = v_tenant_id
+    and head.integration_key = new.integration_key
+  for update;
+
+  if not found or v_head_generation <> 0 then
+    return new;
+  end if;
+
+  insert into public.google_oauth_tenant_connections (
+    tenant_id,
+    integration_key,
+    site_url,
+    generation,
+    credential_version,
+    provider,
+    account_email,
+    access_token,
+    refresh_token,
+    token_type,
+    scope,
+    expires_at,
+    updated_by,
+    created_at,
+    updated_at
+  ) values (
+    v_tenant_id,
+    new.integration_key,
+    v_site_url,
+    0,
+    0,
+    new.provider,
+    new.account_email,
+    new.access_token,
+    new.refresh_token,
+    new.token_type,
+    new.scope,
+    new.expires_at,
+    new.updated_by,
+    new.created_at,
+    new.updated_at
+  )
+  on conflict (tenant_id, integration_key) do update
+  set site_url = excluded.site_url,
+      provider = excluded.provider,
+      account_email = excluded.account_email,
+      access_token = excluded.access_token,
+      refresh_token = excluded.refresh_token,
+      credential_version =
+        google_oauth_tenant_connections.credential_version + 1,
+      token_type = excluded.token_type,
+      scope = excluded.scope,
+      expires_at = excluded.expires_at,
+      updated_by = excluded.updated_by,
+      updated_at = excluded.updated_at
+  where google_oauth_tenant_connections.generation = 0;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_mirror_google_oauth_connection_transition
+  on public.google_oauth_connections;
+create trigger trg_mirror_google_oauth_connection_transition
+  after insert or update on public.google_oauth_connections
+  for each row
+  execute function public.mirror_google_oauth_connection_transition();
+
+create or replace function public.create_google_oauth_state(
+  p_actor_id uuid,
+  p_tenant_id uuid,
+  p_integration_key text,
+  p_state_hash text,
+  p_site_url text,
+  p_expires_at timestamptz
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_role text := coalesce(auth.jwt()->>'role', auth.role(), '');
+  v_active_profile_count integer;
+  v_generation bigint;
+  v_now timestamptz := clock_timestamp();
+begin
+  if v_role <> 'service_role' then
+    raise exception 'Google OAuth state creation requires service role'
+      using errcode = '42501';
+  end if;
+
+  if p_actor_id is null
+     or p_tenant_id is null
+     or coalesce(p_integration_key, '') !~
+       '^[a-z0-9][a-z0-9_:-]{0,63}$'
+     or coalesce(p_state_hash, '') !~ '^[0-9a-f]{64}$'
+     or coalesce(p_site_url, '') !~
+       '^(sc-domain:[a-z0-9.-]+|https://[^[:space:]]+)$'
+     or not public.google_oauth_site_matches_tenant(
+       p_tenant_id,
+       p_site_url
+     )
+     or p_expires_at <= v_now
+     or p_expires_at > v_now + interval '15 minutes' then
+    raise exception 'Invalid Google OAuth state request'
+      using errcode = '22023';
+  end if;
+
+  select count(*)
+  into v_active_profile_count
+  from public.user_profiles profile
+  join public.tenants tenant
+    on tenant.id = profile.tenant_id
+   and tenant.is_active is true
+  where profile.user_id = p_actor_id
+    and profile.is_active is true;
+
+  if v_active_profile_count <> 1 or not exists (
+    select 1
+    from public.user_profiles profile
+    join public.tenants tenant
+      on tenant.id = profile.tenant_id
+     and tenant.is_active is true
+    where profile.user_id = p_actor_id
+      and profile.tenant_id = p_tenant_id
+      and profile.is_active is true
+      and (
+        profile.role = 'admin'
+        or profile.permissions @> '{"edit_settings": true}'::jsonb
+      )
+  ) then
+    raise exception
+      'Google OAuth requires exactly one active authorized tenant profile'
+      using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      'google_oauth_head:' ||
+        p_tenant_id::text || ':' || p_integration_key,
+      0
+    )
+  );
+
+  insert into public.google_oauth_generation_heads (
+    tenant_id,
+    integration_key,
+    current_generation,
+    updated_at
+  ) values (
+    p_tenant_id,
+    p_integration_key,
+    1,
+    v_now
+  )
+  on conflict (tenant_id, integration_key) do update
+  set current_generation =
+        google_oauth_generation_heads.current_generation + 1,
+      updated_at = excluded.updated_at
+  returning current_generation into v_generation;
+
+  update public.google_oauth_tenant_states state
+  set invalidated_at = v_now
+  where state.tenant_id = p_tenant_id
+    and state.integration_key = p_integration_key
+    and state.consumed_at is null
+    and state.invalidated_at is null;
+
+  -- The legacy callback ignores invalidated_at, so removing older owned bridge
+  -- states is the only reliable cross-version invalidation.
+  if p_integration_key = 'search_console' then
+    delete from public.google_oauth_states state
+    where state.tenant_id = p_tenant_id
+      and state.consumed_at is null;
+  end if;
+
+  with stale as (
+    select state.state_hash
+    from public.google_oauth_tenant_states state
+    where state.expires_at < v_now - interval '30 days'
+       or state.consumed_at < v_now - interval '30 days'
+       or state.invalidated_at < v_now - interval '30 days'
+    order by state.expires_at
+    limit 200
+  )
+  delete from public.google_oauth_tenant_states state
+  using stale
+  where state.state_hash = stale.state_hash;
+
+  with stale as (
+    select state.state
+    from public.google_oauth_states state
+    where state.expires_at < v_now - interval '30 days'
+       or state.consumed_at < v_now - interval '30 days'
+       or state.invalidated_at < v_now - interval '30 days'
+    order by state.expires_at
+    limit 200
+  )
+  delete from public.google_oauth_states state
+  using stale
+  where state.state = stale.state;
+
+  insert into public.google_oauth_tenant_states (
+    state_hash,
+    tenant_id,
+    integration_key,
+    site_url,
+    generation,
+    created_by,
+    expires_at
+  ) values (
+    p_state_hash,
+    p_tenant_id,
+    p_integration_key,
+    btrim(p_site_url),
+    v_generation,
+    p_actor_id,
+    p_expires_at
+  );
+
+  return jsonb_build_object(
+    'tenant_id', p_tenant_id,
+    'integration_key', p_integration_key,
+    'site_url', btrim(p_site_url),
+    'generation', v_generation,
+    'expires_at', p_expires_at
+  );
+end;
+$$;
+
+create or replace function public.consume_google_oauth_state(
+  p_state_hash text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_role text := coalesce(auth.jwt()->>'role', auth.role(), '');
+  v_tenant_id uuid;
+  v_integration_key text;
+  v_site_url text;
+  v_generation bigint;
+  v_created_by uuid;
+  v_expires_at timestamptz;
+  v_consumed_at timestamptz;
+  v_invalidated_at timestamptz;
+  v_head_generation bigint;
+  v_legacy_state text;
+  v_legacy_match_count integer;
+  v_authorized_tenant_id uuid;
+  v_authorized_store_host text;
+  v_now timestamptz := clock_timestamp();
+begin
+  if v_role <> 'service_role' then
+    raise exception 'Google OAuth state consumption requires service role'
+      using errcode = '42501';
+  end if;
+  if coalesce(p_state_hash, '') !~ '^[0-9a-f]{64}$' then
+    raise exception 'Invalid Google OAuth state' using errcode = '22023';
+  end if;
+
+  select
+    state.tenant_id,
+    state.integration_key
+  into
+    v_tenant_id,
+    v_integration_key
+  from public.google_oauth_tenant_states state
+  where state.state_hash = p_state_hash;
+
+  if found then
+    perform pg_advisory_xact_lock(
+      hashtextextended(
+        'google_oauth_head:' ||
+          v_tenant_id::text || ':' || v_integration_key,
+        0
+      )
+    );
+
+    select
+      state.site_url,
+      state.generation,
+      state.created_by,
+      state.expires_at,
+      state.consumed_at,
+      state.invalidated_at
+    into
+      v_site_url,
+      v_generation,
+      v_created_by,
+      v_expires_at,
+      v_consumed_at,
+      v_invalidated_at
+    from public.google_oauth_tenant_states state
+    where state.state_hash = p_state_hash
+    for update;
+
+    select head.current_generation
+    into v_head_generation
+    from public.google_oauth_generation_heads head
+    where head.tenant_id = v_tenant_id
+      and head.integration_key = v_integration_key
+    for update;
+
+    if v_consumed_at is not null
+       or v_invalidated_at is not null
+       or v_expires_at <= v_now
+       or v_generation <> v_head_generation then
+      raise exception
+        'Google OAuth state is invalid, expired, superseded, or already consumed'
+        using errcode = '22023';
+    end if;
+
+    update public.google_oauth_tenant_states
+    set consumed_at = v_now
+    where state_hash = p_state_hash;
+
+    return jsonb_build_object(
+      'tenant_id', v_tenant_id,
+      'integration_key', v_integration_key,
+      'actor_id', v_created_by,
+      'site_url', v_site_url,
+      'generation', v_generation
+    );
+  end if;
+
+  -- A state created by the old function can cross the deployment boundary once,
+  -- but only if no v2 generation has started for that tenant/integration.
+  select count(*)
+  into v_legacy_match_count
+  from public.google_oauth_states state
+  where state.state_hash = p_state_hash
+     or (
+       state.state_hash is null
+       and encode(
+         extensions.digest(convert_to(state.state, 'UTF8'), 'sha256'),
+         'hex'
+       ) = p_state_hash
+     );
+
+  if v_legacy_match_count <> 1 then
+    raise exception
+      'Google OAuth state is invalid, expired, superseded, or already consumed'
+      using errcode = '22023';
+  end if;
+
+  select
+    state.state,
+    state.tenant_id,
+    state.site_url,
+    state.created_by,
+    state.expires_at,
+    state.consumed_at,
+    state.invalidated_at
+  into
+    v_legacy_state,
+    v_tenant_id,
+    v_site_url,
+    v_created_by,
+    v_expires_at,
+    v_consumed_at,
+    v_invalidated_at
+  from public.google_oauth_states state
+  where state.state_hash = p_state_hash
+     or (
+       state.state_hash is null
+       and encode(
+         extensions.digest(convert_to(state.state, 'UTF8'), 'sha256'),
+         'hex'
+       ) = p_state_hash
+     );
+
+  if not found
+     or v_tenant_id is null
+     or v_site_url is null
+     or v_created_by is null
+     or v_consumed_at is not null
+     or v_invalidated_at is not null
+     or v_expires_at <= v_now then
+    raise exception
+      'Google OAuth state is invalid, expired, superseded, or already consumed'
+      using errcode = '22023';
+  end if;
+
+  select
+    profile.tenant_id,
+    public.google_oauth_tenant_store_host(profile.tenant_id)
+  into v_authorized_tenant_id, v_authorized_store_host
+  from public.user_profiles profile
+  join public.tenants tenant
+    on tenant.id = profile.tenant_id
+   and tenant.is_active is true
+  where profile.user_id = v_created_by
+    and profile.is_active is true
+    and (
+      profile.role = 'admin'
+      or profile.permissions @> '{"edit_settings": true}'::jsonb
+    )
+    and (
+      select count(*)
+      from public.user_profiles active_profile
+      join public.tenants active_tenant
+        on active_tenant.id = active_profile.tenant_id
+       and active_tenant.is_active is true
+      where active_profile.user_id = v_created_by
+        and active_profile.is_active is true
+    ) = 1;
+
+  if v_authorized_tenant_id is null
+     or v_authorized_store_host is null
+     or v_tenant_id <> v_authorized_tenant_id
+     or not public.google_oauth_site_matches_tenant(
+       v_authorized_tenant_id,
+       v_site_url
+     ) then
+    raise exception
+      'Google OAuth state is invalid, expired, superseded, or already consumed'
+      using errcode = '22023';
+  end if;
+
+  v_integration_key := 'search_console';
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      'google_oauth_head:' ||
+        v_tenant_id::text || ':' || v_integration_key,
+      0
+    )
+  );
+
+  select
+    state.consumed_at,
+    state.invalidated_at
+  into
+    v_consumed_at,
+    v_invalidated_at
+  from public.google_oauth_states state
+  where state.state = v_legacy_state
+  for update;
+
+  if v_consumed_at is not null or v_invalidated_at is not null then
+    raise exception
+      'Google OAuth state is invalid, expired, superseded, or already consumed'
+      using errcode = '22023';
+  end if;
+
+  insert into public.google_oauth_generation_heads (
+    tenant_id,
+    integration_key,
+    current_generation,
+    updated_at
+  ) values (
+    v_tenant_id,
+    v_integration_key,
+    1,
+    v_now
+  )
+  on conflict (tenant_id, integration_key) do update
+  set current_generation = 1,
+      updated_at = excluded.updated_at
+  where google_oauth_generation_heads.current_generation = 0
+  returning current_generation into v_generation;
+
+  if v_generation is null then
+    raise exception
+      'Google OAuth state is invalid, expired, superseded, or already consumed'
+      using errcode = '22023';
+  end if;
+
+  insert into public.google_oauth_tenant_states (
+    state_hash,
+    tenant_id,
+    integration_key,
+    site_url,
+    generation,
+    created_by,
+    expires_at,
+    consumed_at
+  ) values (
+    p_state_hash,
+    v_tenant_id,
+    v_integration_key,
+    v_site_url,
+    v_generation,
+    v_created_by,
+    v_expires_at,
+    v_now
+  );
+
+  update public.google_oauth_states
+  set state_hash = p_state_hash,
+      consumed_at = v_now
+  where state = v_legacy_state;
+
+  return jsonb_build_object(
+    'tenant_id', v_tenant_id,
+    'integration_key', v_integration_key,
+    'actor_id', v_created_by,
+    'site_url', v_site_url,
+    'generation', v_generation
+  );
+end;
+$$;
+
+create or replace function public.commit_google_oauth_connection(
+  p_state_hash text,
+  p_tenant_id uuid,
+  p_integration_key text,
+  p_generation bigint,
+  p_site_url text,
+  p_provider text,
+  p_account_email text,
+  p_access_token text,
+  p_refresh_token text,
+  p_token_type text,
+  p_scope text,
+  p_expires_at timestamptz
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_role text := coalesce(auth.jwt()->>'role', auth.role(), '');
+  v_state public.google_oauth_tenant_states%rowtype;
+  v_state_found boolean;
+  v_head_generation bigint;
+  v_head_found boolean;
+  v_active_profile_count integer;
+  v_committed_generation bigint;
+  v_now timestamptz := clock_timestamp();
+begin
+  if v_role <> 'service_role' then
+    raise exception 'Google OAuth connection commit requires service role'
+      using errcode = '42501';
+  end if;
+  if coalesce(p_state_hash, '') !~ '^[0-9a-f]{64}$'
+     or p_tenant_id is null
+     or coalesce(p_integration_key, '') !~
+       '^[a-z0-9][a-z0-9_:-]{0,63}$'
+     or p_generation is null
+     or p_generation <= 0
+     or coalesce(p_site_url, '') !~
+       '^(sc-domain:[a-z0-9.-]+|https://[^[:space:]]+)$'
+     or not public.google_oauth_site_matches_tenant(
+       p_tenant_id,
+       p_site_url
+     )
+     or nullif(btrim(p_access_token), '') is null
+     or nullif(btrim(p_refresh_token), '') is null then
+    raise exception 'Invalid Google OAuth connection commit'
+      using errcode = '22023';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      'google_oauth_head:' ||
+        p_tenant_id::text || ':' || p_integration_key,
+      0
+    )
+  );
+
+  select state.*
+  into v_state
+  from public.google_oauth_tenant_states state
+  where state.state_hash = p_state_hash
+  for update;
+  v_state_found := found;
+
+  select head.current_generation
+  into v_head_generation
+  from public.google_oauth_generation_heads head
+  where head.tenant_id = p_tenant_id
+    and head.integration_key = p_integration_key
+  for update;
+  v_head_found := found;
+
+  if not v_state_found
+     or not v_head_found
+     or v_state.tenant_id <> p_tenant_id
+     or v_state.integration_key <> p_integration_key
+     or v_state.generation <> p_generation
+     or v_state.site_url <> btrim(p_site_url)
+     or v_state.consumed_at is null
+     or v_state.invalidated_at is not null
+     or v_state.committed_at is not null
+     or v_head_generation <> p_generation then
+    return jsonb_build_object(
+      'committed', false,
+      'reason', 'superseded'
+    );
+  end if;
+
+  select count(*)
+  into v_active_profile_count
+  from public.user_profiles profile
+  join public.tenants tenant
+    on tenant.id = profile.tenant_id
+   and tenant.is_active is true
+  where profile.user_id = v_state.created_by
+    and profile.is_active is true;
+
+  if v_active_profile_count <> 1 or not exists (
+    select 1
+    from public.user_profiles profile
+    join public.tenants tenant
+      on tenant.id = profile.tenant_id
+     and tenant.is_active is true
+    where profile.user_id = v_state.created_by
+      and profile.tenant_id = p_tenant_id
+      and profile.is_active is true
+      and (
+        profile.role = 'admin'
+        or profile.permissions @> '{"edit_settings": true}'::jsonb
+      )
+  ) then
+    raise exception
+      'Google OAuth actor lost tenant authority before commit'
+      using errcode = '42501';
+  end if;
+
+  insert into public.google_oauth_tenant_connections (
+    tenant_id,
+    integration_key,
+    site_url,
+    generation,
+    credential_version,
+    provider,
+    account_email,
+    access_token,
+    refresh_token,
+    token_type,
+    scope,
+    expires_at,
+    updated_by,
+    updated_at
+  ) values (
+    p_tenant_id,
+    p_integration_key,
+    btrim(p_site_url),
+    p_generation,
+    1,
+    coalesce(nullif(btrim(p_provider), ''), 'google'),
+    nullif(btrim(p_account_email), ''),
+    p_access_token,
+    p_refresh_token,
+    nullif(btrim(p_token_type), ''),
+    nullif(btrim(p_scope), ''),
+    p_expires_at,
+    v_state.created_by,
+    v_now
+  )
+  on conflict (tenant_id, integration_key) do update
+  set site_url = excluded.site_url,
+      generation = excluded.generation,
+      credential_version =
+        google_oauth_tenant_connections.credential_version + 1,
+      provider = excluded.provider,
+      account_email = excluded.account_email,
+      access_token = excluded.access_token,
+      refresh_token = excluded.refresh_token,
+      token_type = excluded.token_type,
+      scope = excluded.scope,
+      expires_at = excluded.expires_at,
+      updated_by = excluded.updated_by,
+      updated_at = excluded.updated_at
+  where google_oauth_tenant_connections.generation <
+    excluded.generation
+    and (
+      google_oauth_tenant_connections.refresh_token is distinct from
+        excluded.refresh_token
+      or (
+        google_oauth_tenant_connections.account_email is not null
+        and excluded.account_email is not null
+        and lower(btrim(google_oauth_tenant_connections.account_email)) =
+          lower(btrim(excluded.account_email))
+      )
+    )
+  returning generation into v_committed_generation;
+
+  if v_committed_generation is null then
+    return jsonb_build_object(
+      'committed', false,
+      'reason', 'superseded'
+    );
+  end if;
+
+  update public.google_oauth_tenant_states
+  set committed_at = v_now
+  where state_hash = p_state_hash;
+
+  return jsonb_build_object(
+    'committed', true,
+    'tenant_id', p_tenant_id,
+    'integration_key', p_integration_key,
+    'generation', p_generation
+  );
+end;
+$$;
+
+create or replace function public.refresh_google_oauth_access_token(
+  p_tenant_id uuid,
+  p_integration_key text,
+  p_site_url text,
+  p_generation bigint,
+  p_expected_credential_version bigint,
+  p_access_token text,
+  p_token_type text,
+  p_scope text,
+  p_expires_at timestamptz
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_role text := coalesce(auth.jwt()->>'role', auth.role(), '');
+begin
+  if v_role <> 'service_role' then
+    raise exception 'Google OAuth token refresh requires service role'
+      using errcode = '42501';
+  end if;
+  if p_tenant_id is null
+     or coalesce(p_integration_key, '') !~
+       '^[a-z0-9][a-z0-9_:-]{0,63}$'
+     or p_generation is null
+     or p_generation < 0
+     or p_expected_credential_version is null
+     or p_expected_credential_version < 0
+     or nullif(btrim(p_access_token), '') is null then
+    raise exception 'Invalid Google OAuth token refresh'
+      using errcode = '22023';
+  end if;
+
+  update public.google_oauth_tenant_connections connection
+  set access_token = p_access_token,
+      token_type = coalesce(
+        nullif(btrim(p_token_type), ''),
+        connection.token_type
+      ),
+      scope = coalesce(nullif(btrim(p_scope), ''), connection.scope),
+      expires_at = p_expires_at,
+      credential_version = connection.credential_version + 1,
+      updated_at = clock_timestamp()
+  where connection.tenant_id = p_tenant_id
+    and connection.integration_key = p_integration_key
+    and connection.site_url = btrim(p_site_url)
+    and connection.generation = p_generation
+    and connection.credential_version = p_expected_credential_version;
+
+  return found;
+end;
+$$;
+
+create or replace function public.acquire_google_merchant_refresh_lease(
+  p_tenant_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_role text := coalesce(auth.jwt()->>'role', auth.role(), '');
+  v_now timestamptz := clock_timestamp();
+  v_operation_key constant text := 'merchant_feed_refresh';
+  v_lease public.google_merchant_operation_leases%rowtype;
+  v_token uuid;
+  v_fence bigint;
+begin
+  if v_role <> 'service_role' then
+    raise exception 'Merchant refresh lease requires service role'
+      using errcode = '42501';
+  end if;
+  if p_tenant_id is null or not exists (
+    select 1
+    from public.tenants tenant
+    where tenant.id = p_tenant_id
+      and tenant.is_active is true
+  ) then
+    raise exception 'Merchant refresh tenant is not active'
+      using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      'google_merchant_lease:' ||
+        p_tenant_id::text || ':' || v_operation_key,
+      0
+    )
+  );
+
+  insert into public.google_merchant_operation_leases (
+    tenant_id,
+    operation_key,
+    window_started_at,
+    window_count,
+    updated_at
+  ) values (
+    p_tenant_id,
+    v_operation_key,
+    v_now,
+    0,
+    v_now
+  )
+  on conflict (tenant_id, operation_key) do nothing;
+
+  select lease.*
+  into v_lease
+  from public.google_merchant_operation_leases lease
+  where lease.tenant_id = p_tenant_id
+    and lease.operation_key = v_operation_key
+  for update;
+
+  if v_lease.window_started_at <= v_now - interval '1 minute' then
+    v_lease.window_started_at := v_now;
+    v_lease.window_count := 0;
+  end if;
+
+  if v_lease.lease_token is not null
+     and v_lease.lease_expires_at > v_now then
+    return jsonb_build_object(
+      'acquired', false,
+      'reason', 'active',
+      'retry_after_seconds',
+        greatest(
+          1,
+          ceil(extract(epoch from (v_lease.lease_expires_at - v_now)))
+        )::integer
+    );
+  end if;
+
+  if v_lease.window_count >= 3 then
+    return jsonb_build_object(
+      'acquired', false,
+      'reason', 'rate_limited',
+      'retry_after_seconds',
+        greatest(
+          1,
+          ceil(
+            extract(
+              epoch from (
+                v_lease.window_started_at + interval '1 minute' - v_now
+              )
+            )
+          )
+        )::integer
+    );
+  end if;
+
+  v_token := extensions.gen_random_uuid();
+  v_fence := v_lease.lease_fence + 1;
+  update public.google_merchant_operation_leases
+  set lease_token = v_token,
+      lease_fence = v_fence,
+      -- The Edge operation has a 25-second hard deadline. A 60-second lease
+      -- leaves shutdown/network margin, while renewal keeps one long-running
+      -- owner fenced from replacement.
+      lease_expires_at = v_now + interval '60 seconds',
+      window_started_at = v_lease.window_started_at,
+      window_count = v_lease.window_count + 1,
+      updated_at = v_now
+  where tenant_id = p_tenant_id
+    and operation_key = v_operation_key;
+
+  return jsonb_build_object(
+    'acquired', true,
+    'lease_token', v_token,
+    'lease_fence', v_fence,
+    'lease_expires_at', v_now + interval '60 seconds',
+    'window_count', v_lease.window_count + 1
+  );
+end;
+$$;
+
+create or replace function public.renew_google_merchant_refresh_lease(
+  p_tenant_id uuid,
+  p_lease_token uuid,
+  p_lease_fence bigint
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_role text := coalesce(auth.jwt()->>'role', auth.role(), '');
+  v_now timestamptz := clock_timestamp();
+  v_expires_at timestamptz;
+begin
+  if v_role <> 'service_role' then
+    raise exception 'Merchant refresh lease renewal requires service role'
+      using errcode = '42501';
+  end if;
+  if p_tenant_id is null
+     or p_lease_token is null
+     or p_lease_fence is null
+     or p_lease_fence <= 0 then
+    return jsonb_build_object('renewed', false, 'reason', 'invalid');
+  end if;
+
+  update public.google_merchant_operation_leases
+  set lease_expires_at = v_now + interval '60 seconds',
+      updated_at = v_now
+  where tenant_id = p_tenant_id
+    and operation_key = 'merchant_feed_refresh'
+    and lease_token = p_lease_token
+    and lease_fence = p_lease_fence
+    and lease_expires_at > v_now
+  returning lease_expires_at into v_expires_at;
+
+  if v_expires_at is null then
+    return jsonb_build_object('renewed', false, 'reason', 'lost');
+  end if;
+
+  return jsonb_build_object(
+    'renewed', true,
+    'lease_token', p_lease_token,
+    'lease_fence', p_lease_fence,
+    'lease_expires_at', v_expires_at
+  );
+end;
+$$;
+
+create or replace function public.release_google_merchant_refresh_lease(
+  p_tenant_id uuid,
+  p_lease_token uuid,
+  p_lease_fence bigint
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_role text := coalesce(auth.jwt()->>'role', auth.role(), '');
+begin
+  if v_role <> 'service_role' then
+    raise exception 'Merchant refresh lease release requires service role'
+      using errcode = '42501';
+  end if;
+  if p_tenant_id is null
+     or p_lease_token is null
+     or p_lease_fence is null
+     or p_lease_fence <= 0 then
+    return false;
+  end if;
+
+  update public.google_merchant_operation_leases
+  set lease_token = null,
+      lease_expires_at = null,
+      updated_at = clock_timestamp()
+  where tenant_id = p_tenant_id
+    and operation_key = 'merchant_feed_refresh'
+    and lease_token = p_lease_token
+    and lease_fence = p_lease_fence;
+
+  return found;
+end;
+$$;
+
+revoke all on table public.google_oauth_connections from anon, authenticated;
+revoke all on table public.google_oauth_states from anon, authenticated;
+revoke all on table public.google_oauth_generation_heads
+  from anon, authenticated;
+revoke all on table public.google_oauth_tenant_connections
+  from anon, authenticated;
+revoke all on table public.google_oauth_tenant_states
+  from anon, authenticated;
+revoke all on table public.google_merchant_operation_leases
+  from anon, authenticated;
+grant select, insert, update, delete
+  on table public.google_oauth_connections to service_role;
+grant select, insert, update, delete
+  on table public.google_oauth_states to service_role;
+grant select, insert, update, delete
+  on table public.google_oauth_generation_heads to service_role;
+grant select, insert, update, delete
+  on table public.google_oauth_tenant_connections to service_role;
+grant select, insert, update, delete
+  on table public.google_oauth_tenant_states to service_role;
+grant select, insert, update, delete
+  on table public.google_merchant_operation_leases to service_role;
+
+revoke all on function public.prepare_google_oauth_state_transition()
+  from public, anon, authenticated, service_role;
+revoke all on function public.mirror_google_oauth_connection_transition()
+  from public, anon, authenticated, service_role;
+revoke all on function public.google_oauth_tenant_store_host(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.google_oauth_site_matches_tenant(uuid, text)
+  from public, anon, authenticated, service_role;
+revoke all on function public.create_google_oauth_state(
+  uuid, uuid, text, text, text, timestamptz
+) from public, anon, authenticated, service_role;
+revoke all on function public.consume_google_oauth_state(text)
+  from public, anon, authenticated, service_role;
+revoke all on function public.commit_google_oauth_connection(
+  text, uuid, text, bigint, text, text, text, text, text, text, text,
+  timestamptz
+) from public, anon, authenticated, service_role;
+revoke all on function public.refresh_google_oauth_access_token(
+  uuid, text, text, bigint, bigint, text, text, text, timestamptz
+) from public, anon, authenticated, service_role;
+revoke all on function public.acquire_google_merchant_refresh_lease(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.renew_google_merchant_refresh_lease(
+  uuid, uuid, bigint
+) from public, anon, authenticated, service_role;
+revoke all on function public.release_google_merchant_refresh_lease(
+  uuid, uuid, bigint
+)
+  from public, anon, authenticated, service_role;
+
+grant execute on function public.create_google_oauth_state(
+  uuid, uuid, text, text, text, timestamptz
+) to service_role;
+grant execute on function public.consume_google_oauth_state(text)
+  to service_role;
+grant execute on function public.commit_google_oauth_connection(
+  text, uuid, text, bigint, text, text, text, text, text, text, text,
+  timestamptz
+) to service_role;
+grant execute on function public.refresh_google_oauth_access_token(
+  uuid, text, text, bigint, bigint, text, text, text, timestamptz
+) to service_role;
+grant execute on function public.acquire_google_merchant_refresh_lease(uuid)
+  to service_role;
+grant execute on function public.renew_google_merchant_refresh_lease(
+  uuid,
+  uuid,
+  bigint
+) to service_role;
+grant execute on function public.release_google_merchant_refresh_lease(
+  uuid,
+  uuid,
+  bigint
+) to service_role;
 
 -- ============================================================================
 -- ROW LEVEL SECURITY FOR WEBSITE TABLES
@@ -25284,18 +27199,23 @@ end $$;
 
 -- Website Blocks: Tenant isolation
 do $$ begin
-  create policy "website_blocks_select" on website_blocks for select using (
-    tenant_id in (select tenant_id from user_profiles where user_id = auth.uid())
-  );
-  create policy "website_blocks_insert" on website_blocks for insert with check (
-    tenant_id in (select tenant_id from user_profiles where user_id = auth.uid())
-  );
-  create policy "website_blocks_update" on website_blocks for update using (
-    tenant_id in (select tenant_id from user_profiles where user_id = auth.uid())
-  );
-  create policy "website_blocks_delete" on website_blocks for delete using (
-    tenant_id in (select tenant_id from user_profiles where user_id = auth.uid())
-  );
+  create policy "website_blocks_select" on website_blocks
+    for select
+    to authenticated
+    using (tenant_id = public.user_tenant_id());
+  create policy "website_blocks_insert" on website_blocks
+    for insert
+    to authenticated
+    with check (tenant_id = public.user_tenant_id());
+  create policy "website_blocks_update" on website_blocks
+    for update
+    to authenticated
+    using (tenant_id = public.user_tenant_id())
+    with check (tenant_id = public.user_tenant_id());
+  create policy "website_blocks_delete" on website_blocks
+    for delete
+    to authenticated
+    using (tenant_id = public.user_tenant_id());
   raise notice '✓ Created RLS policies for website_blocks';
 exception
   when undefined_table then raise notice '⚠ Table website_blocks does not exist yet';
@@ -26450,6 +28370,7 @@ drop policy if exists "public_website_settings_select" on website_settings;
 drop policy if exists "public_website_settings_select_authenticated" on website_settings;
 drop policy if exists "public_website_blocks_select" on website_blocks;
 drop policy if exists "public_website_blocks_select_authenticated" on website_blocks;
+drop policy if exists "website_blocks_select_public" on website_blocks;
 drop policy if exists "public_tenants_select" on tenants;
 drop policy if exists "public_tenants_select_authenticated" on tenants;
 drop policy if exists "public_orders_insert" on orders;
@@ -26496,12 +28417,41 @@ create policy "public_tenants_select_authenticated" on tenants
 create policy "public_website_blocks_select" on website_blocks
   for select
   to anon
-  using (is_visible = true);
+  using (
+    coalesce(is_visible, true)
+    and (
+      page_id is null
+      or exists (
+        select 1
+        from public.website_pages page
+        where page.id = website_blocks.page_id
+          and page.tenant_id = website_blocks.tenant_id
+          and page.is_published = true
+      )
+    )
+  );
 
 create policy "public_website_blocks_select_authenticated" on website_blocks
   for select
   to authenticated
-  using (is_visible = true);
+  using (
+    coalesce(is_visible, true)
+    and (
+      page_id is null
+      or exists (
+        select 1
+        from public.website_pages page
+        where page.id = website_blocks.page_id
+          and page.tenant_id = website_blocks.tenant_id
+          and page.is_published = true
+      )
+    )
+  );
+
+revoke insert, update, delete, truncate, references, trigger
+  on table public.website_blocks
+  from anon;
+grant select on table public.website_blocks to anon;
 
 -- ============================================================================
 -- PRODUCT CATALOG POLICIES (anon + authenticated)
@@ -27318,53 +29268,31 @@ revoke all on function public.get_public_products_without_inventory_reservations
 
 create or replace function public.get_public_products(
   p_tenant_id uuid,
-  p_category_ids uuid[] default null,
-  p_product_ids uuid[] default null,
-  p_sku text default null,
-  p_search_term text default null,
-  p_product_type text default null,
+  p_category_ids uuid[] default null::uuid[],
+  p_product_ids uuid[] default null::uuid[],
+  p_sku text default null::text,
+  p_search_term text default null::text,
+  p_product_type text default null::text,
   p_only_in_stock boolean default true,
-  p_sort_by text default 'name',
+  p_sort_by text default 'name'::text,
   p_limit integer default 20,
   p_offset integer default 0
 )
-returns table (
-  id uuid,
-  tenant_id uuid,
-  name text,
-  sku text,
-  barcode text,
-  price numeric,
-  cost numeric,
-  inventory_qty integer,
-  stock_quantity integer,
-  image_url text,
-  image_url_optimized text,
-  image_urls text[],
-  description text,
-  website_description text,
-  category text,
-  category_id uuid,
-  category_name text,
-  brand_id uuid,
-  brand text,
-  model text,
-  manufacturer text,
-  manufacturer_sku text,
-  gtin text,
-  product_type text,
-  track_stock boolean,
-  is_active boolean,
-  is_published boolean,
-  show_on_website boolean,
-  created_at timestamptz,
-  updated_at timestamptz,
+returns table(
+  id uuid, tenant_id uuid, name text, sku text, barcode text, price numeric,
+  cost numeric, inventory_qty integer, stock_quantity integer, image_url text,
+  image_url_optimized text, image_urls text[], description text,
+  website_description text, category text, category_id uuid,
+  category_name text, brand_id uuid, brand text, model text, manufacturer text,
+  manufacturer_sku text, gtin text, product_type text, track_stock boolean,
+  is_active boolean, is_published boolean, show_on_website boolean,
+  created_at timestamp with time zone, updated_at timestamp with time zone,
   total_count bigint
 )
 language sql
 stable
 security definer
-set search_path = public
+set search_path to 'public'
 as $$
   with policy as (
     select case lower(coalesce(
@@ -27384,17 +29312,8 @@ as $$
       when 'sin_stock' then 'out_of_stock_only'
       else 'available_only'
     end as stock_policy
-  ), base_rows as (
-    select raw.*,
-           case
-             when raw.product_type = 'service'
-               or not coalesce(raw.track_stock, true)
-               then greatest(coalesce(raw.stock_quantity, raw.inventory_qty, 0), 0)
-             else public.online_product_available_quantity(
-               raw.tenant_id,
-               raw.id
-             )
-           end as available_quantity
+  ), raw_rows as (
+    select raw.*
       from public.get_public_products_without_inventory_reservations(
         p_tenant_id,
         p_category_ids,
@@ -27407,6 +29326,81 @@ as $$
         2147483647,
         0
       ) with ordinality as raw
+  ), candidate as (
+    -- One join instead of one function call per row. `is_set` and `is_service`
+    -- are the only facts the inner catalog query does not already return.
+    select r.id,
+           r.tenant_id,
+           r.stock_quantity,
+           r.inventory_qty,
+           coalesce(product.is_set, false) as is_set,
+           coalesce(product.is_service, false) as is_service
+      from raw_rows r
+      join public.products product
+        on product.id = r.id
+       and product.tenant_id = r.tenant_id
+     where r.product_type is distinct from 'service'
+       and coalesce(r.track_stock, true)
+  ), reserved as (
+    -- Aggregated once for the whole tenant, then joined. Covers both the
+    -- products themselves and the components of any set among them.
+    select reservation.product_id,
+           sum(reservation.quantity)::integer as quantity
+      from public.online_order_inventory_reservations reservation
+     where reservation.tenant_id = p_tenant_id
+       and reservation.state = 'active'
+       and reservation.expires_at > clock_timestamp()
+     group by reservation.product_id
+  ), simple_availability as (
+    select candidate.id,
+           greatest(
+             coalesce(candidate.stock_quantity, candidate.inventory_qty, 0)
+               - coalesce(reserved.quantity, 0),
+             0
+           ) as available_quantity
+      from candidate
+      left join reserved on reserved.product_id = candidate.id
+     where not candidate.is_set
+       and not candidate.is_service
+  ), set_availability as (
+    -- A set is limited by its scarcest component. An inner join means a set
+    -- with no components produces no row here and resolves to zero below,
+    -- which is what the per-row function returned for that case.
+    select candidate.id,
+           min(greatest(floor(
+             (
+               coalesce(component.stock_quantity, component.inventory_qty, 0)
+               - coalesce(component_reserved.quantity, 0)
+             )::numeric / set_component.quantity_in_set
+           ), 0))::integer as available_quantity
+      from candidate
+      join public.product_set_components set_component
+        on set_component.tenant_id = candidate.tenant_id
+       and set_component.set_product_id = candidate.id
+      join public.products component
+        on component.id = set_component.component_product_id
+       and component.tenant_id = set_component.tenant_id
+      left join reserved component_reserved
+        on component_reserved.product_id = component.id
+     where candidate.is_set
+       and not candidate.is_service
+     group by candidate.id
+  ), availability as (
+    select id, available_quantity from simple_availability
+    union all
+    select id, available_quantity from set_availability
+  ), base_rows as (
+    select r.*,
+           case
+             when r.product_type = 'service'
+               or not coalesce(r.track_stock, true)
+               or coalesce(service_like.is_service, false)
+               then greatest(coalesce(r.stock_quantity, r.inventory_qty, 0), 0)
+             else coalesce(availability.available_quantity, 0)
+           end as available_quantity
+      from raw_rows r
+      left join availability on availability.id = r.id
+      left join candidate service_like on service_like.id = r.id
   ), filtered as (
     select base.*
       from base_rows base
@@ -36555,6 +38549,23 @@ begin
 end
 $$;
 
+-- Preserve expense-category ownership when its optional default account is
+-- deleted.
+-- Deployment status: NOT DEPLOYED.
+-- Recovery: replace the constraint with ON DELETE RESTRICT if account deletion
+-- must be stopped while category ownership is investigated.
+-- Lock/backfill risk: brief catalog lock while one validated FK is replaced;
+-- no table rewrite or data backfill.
+
+alter table public.expense_categories
+  drop constraint if exists expense_categories_default_account_id_fkey;
+
+alter table public.expense_categories
+  add constraint expense_categories_default_account_id_fkey
+  foreign key (tenant_id, default_account_id)
+  references public.accounts(tenant_id, id)
+  on delete set null (default_account_id);
+
 commit;
 
 -- ============================================================================
@@ -40542,6 +42553,10 @@ comment on function public.correct_sales_payment(
 -- derived per source line from posted receipts and effective resolutions, so
 -- list consumers never need a second asynchronous status query.
 \ir ../migrations/20260724053000_add_purchase_invoice_list_read_model.sql
+
+-- Reassert the final set-based availability implementation after the older
+-- inventory-reservation migration included above has restored its scalar form.
+\ir ../migrations/20260727180000_set_based_public_catalog_availability.sql
 --------------------------------------------------------------------------------
 -- PRIVATE ANDROID ERP RELEASES
 --------------------------------------------------------------------------------
@@ -45460,6 +47475,7 @@ begin
       and tenant.is_active is true
   ) then
     return json_build_object(
+      'tenant_id', p_tenant_id,
       'settings', '{}'::json,
       'blocks', '[]'::json,
       'home_page_id', null
@@ -45514,6 +47530,7 @@ begin
     and block.is_visible is true;
 
   return json_build_object(
+    'tenant_id', p_tenant_id,
     'settings', settings_value,
     'blocks', blocks_value,
     'home_page_id', home_page_id_value
@@ -45525,29 +47542,6 @@ revoke all on function public.get_public_store_data(uuid)
   from public, anon, authenticated, service_role;
 grant execute on function public.get_public_store_data(uuid)
   to anon, authenticated;
-
-create or replace function public.can_edit_tenant_settings(p_tenant_id uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = pg_catalog, public, pg_temp
-as $$
-  select exists (
-    select 1
-    from public.user_profiles profile
-    join public.tenants tenant
-      on tenant.id = profile.tenant_id
-     and tenant.is_active is true
-    where profile.user_id = auth.uid()
-      and profile.tenant_id = p_tenant_id
-      and profile.is_active is true
-      and (
-        profile.role = 'admin'
-        or profile.permissions @> '{"edit_settings": true}'::jsonb
-      )
-  )
-$$;
 
 create or replace function public.can_manage_tenant_backups(p_tenant_id uuid)
 returns boolean
@@ -45569,12 +47563,8 @@ as $$
   )
 $$;
 
-revoke all on function public.can_edit_tenant_settings(uuid)
-  from public, anon, authenticated, service_role;
 revoke all on function public.can_manage_tenant_backups(uuid)
   from public, anon, authenticated, service_role;
-grant execute on function public.can_edit_tenant_settings(uuid)
-  to authenticated, service_role;
 grant execute on function public.can_manage_tenant_backups(uuid)
   to authenticated, service_role;
 
@@ -45644,6 +47634,59 @@ grant select on table public.website_settings to anon;
 grant select, insert, update, delete on table public.website_settings
   to authenticated;
 grant all on table public.website_settings to service_role;
+
+-- Website pages, blocks, and catalog publication all change the public brand
+-- surface. Reassert their final write policies after the shared settings
+-- authority helper exists, so the bootstrap and incremental migration paths
+-- expose the same permission boundary.
+drop policy if exists "website_pages_insert" on public.website_pages;
+drop policy if exists "website_pages_update" on public.website_pages;
+drop policy if exists "website_pages_delete" on public.website_pages;
+
+create policy "website_pages_insert"
+  on public.website_pages
+  for insert
+  to authenticated
+  with check (public.can_edit_tenant_settings(tenant_id));
+
+create policy "website_pages_update"
+  on public.website_pages
+  for update
+  to authenticated
+  using (public.can_edit_tenant_settings(tenant_id))
+  with check (public.can_edit_tenant_settings(tenant_id));
+
+create policy "website_pages_delete"
+  on public.website_pages
+  for delete
+  to authenticated
+  using (
+    public.can_edit_tenant_settings(tenant_id)
+    and is_system = false
+  );
+
+drop policy if exists "website_blocks_insert" on public.website_blocks;
+drop policy if exists "website_blocks_update" on public.website_blocks;
+drop policy if exists "website_blocks_delete" on public.website_blocks;
+
+create policy "website_blocks_insert"
+  on public.website_blocks
+  for insert
+  to authenticated
+  with check (public.can_edit_tenant_settings(tenant_id));
+
+create policy "website_blocks_update"
+  on public.website_blocks
+  for update
+  to authenticated
+  using (public.can_edit_tenant_settings(tenant_id))
+  with check (public.can_edit_tenant_settings(tenant_id));
+
+create policy "website_blocks_delete"
+  on public.website_blocks
+  for delete
+  to authenticated
+  using (public.can_edit_tenant_settings(tenant_id));
 
 -- Sensitive rows are intentionally invisible to authenticated SELECT. That
 -- makes a direct INSERT ... ON CONFLICT DO UPDATE fail under RLS even for a
@@ -49299,7 +51342,11 @@ begin
   select coalesce(auth_user.raw_app_meta_data->>'account_type', '')
   into account_type_value
   from auth.users auth_user
-  where auth_user.id = caller_user_id;
+  where auth_user.id = caller_user_id
+    and (
+      auth_user.banned_until is null
+      or auth_user.banned_until <= statement_timestamp()
+    );
 
   if not found or account_type_value not in ('erp_owner', 'erp_staff') then
     raise exception 'erp_profile_context_invalid'
@@ -49556,4 +51603,11239 @@ revoke all on function public.update_my_employee_contact(jsonb)
 grant execute on function public.update_my_employee_contact(jsonb)
   to authenticated;
 
+-- Auth-bound ERP employee self-service projection. The caller supplies only a
+-- calendar anchor; tenant and employee authority always come from auth.uid().
+create or replace function public.get_my_employee_self_service(
+  p_week_anchor date default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, auth, pg_temp
+as $function$
+declare
+  caller_user_id uuid := auth.uid();
+  profile_count integer;
+  profile_row public.user_profiles%rowtype;
+  account_type_value text;
+  employee_row public.employees%rowtype;
+  employee_side_count integer;
+  store_timezone text;
+  shop_today date;
+  current_week_start date;
+  week_start_date date;
+  week_end_date date;
+  week_start_at timestamp with time zone;
+  week_end_at timestamp with time zone;
+begin
+  if caller_user_id is null then
+    raise exception 'Authentication required'
+      using errcode = '42501';
+  end if;
+
+  select count(*)::integer
+  into profile_count
+  from public.user_profiles profile
+  join public.tenants tenant
+    on tenant.id = profile.tenant_id
+   and tenant.is_active is true
+  where profile.user_id = caller_user_id
+    and profile.is_active is true;
+
+  if profile_count <> 1 then
+    raise exception 'erp_employee_self_service_context_invalid'
+      using errcode = 'P0001';
+  end if;
+
+  select profile.*
+  into profile_row
+  from public.user_profiles profile
+  join public.tenants tenant
+    on tenant.id = profile.tenant_id
+   and tenant.is_active is true
+  where profile.user_id = caller_user_id
+    and profile.is_active is true;
+
+  select coalesce(auth_user.raw_app_meta_data->>'account_type', '')
+  into account_type_value
+  from auth.users auth_user
+  where auth_user.id = caller_user_id
+    and (
+      auth_user.banned_until is null
+      or auth_user.banned_until <= statement_timestamp()
+    );
+
+  if not found or account_type_value not in ('erp_owner', 'erp_staff') then
+    raise exception 'erp_employee_self_service_context_invalid'
+      using errcode = 'P0001';
+  end if;
+
+  select count(*)::integer
+  into employee_side_count
+  from public.employees employee
+  where employee.user_id = caller_user_id;
+
+  if profile_row.employee_id is null or employee_side_count <> 1 then
+    raise exception 'erp_employee_self_service_context_invalid'
+      using errcode = 'P0001';
+  end if;
+
+  select employee.*
+  into employee_row
+  from public.employees employee
+  where employee.id = profile_row.employee_id
+    and employee.tenant_id = profile_row.tenant_id
+    and employee.user_id = caller_user_id
+    and employee.status = 'active';
+
+  if not found
+     or exists (
+       select 1
+       from public.employee_portal_accounts portal
+       where portal.employee_id = profile_row.employee_id
+         and portal.tenant_id = profile_row.tenant_id
+         and portal.is_active is true
+     ) then
+    raise exception 'erp_employee_self_service_context_invalid'
+      using errcode = 'P0001';
+  end if;
+
+  select tenant.timezone
+  into store_timezone
+  from public.tenants tenant
+  where tenant.id = profile_row.tenant_id
+    and tenant.is_active is true;
+
+  if store_timezone is null
+     or not exists (
+       select 1
+       from pg_catalog.pg_timezone_names timezone_row
+       where timezone_row.name = store_timezone
+     ) then
+    raise exception 'erp_employee_self_service_timezone_invalid'
+      using errcode = 'P0001';
+  end if;
+
+  shop_today := (statement_timestamp() at time zone store_timezone)::date;
+  current_week_start :=
+    shop_today - (extract(isodow from shop_today)::integer - 1);
+  week_start_date :=
+    coalesce(p_week_anchor, shop_today)
+      - (
+        extract(isodow from coalesce(p_week_anchor, shop_today))::integer
+        - 1
+      );
+  week_end_date := week_start_date + 7;
+  week_start_at :=
+    week_start_date::timestamp without time zone at time zone store_timezone;
+  week_end_at :=
+    week_end_date::timestamp without time zone at time zone store_timezone;
+
+  return jsonb_build_object(
+    'user_id', caller_user_id,
+    'tenant_id', profile_row.tenant_id,
+    'employee_id', employee_row.id,
+    'timezone', store_timezone,
+    'week_start', week_start_date,
+    'week_end', week_end_date,
+    'week_start_at', week_start_at,
+    'week_end_at', week_end_at,
+    'is_current_week', week_start_date = current_week_start,
+    'my_shifts', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'id', shift.id,
+          'employee_id', shift.employee_id,
+          'title', shift.title,
+          'start_at', shift.start_at,
+          'end_at', shift.end_at,
+          'status', shift.status,
+          'source', shift.source,
+          'store_hours_validated', shift.store_hours_validated,
+          'outside_store_hours_reason', shift.outside_store_hours_reason,
+          'role_name', planning_role.name,
+          'employee_name',
+            trim(concat_ws(' ', employee.first_name, employee.last_name)),
+          'employee_job_title', employee.job_title,
+          'planned_minutes_in_week',
+            round(
+              (
+                extract(
+                  epoch from (
+                    least(shift.end_at, week_end_at)
+                    - greatest(shift.start_at, week_start_at)
+                  )
+                ) / 60.0
+              )::numeric,
+              2
+            )
+        )
+        order by shift.start_at, shift.id
+      )
+      from public.planned_shifts shift
+      join public.employees employee
+        on employee.id = shift.employee_id
+       and employee.tenant_id = shift.tenant_id
+       and employee.status = 'active'
+      left join public.planning_roles planning_role
+        on planning_role.id = shift.planning_role_id
+       and planning_role.tenant_id = shift.tenant_id
+      where shift.tenant_id = profile_row.tenant_id
+        and shift.employee_id = employee_row.id
+        and shift.start_at < week_end_at
+        and shift.end_at > week_start_at
+    ), '[]'::jsonb),
+    'team_shifts', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'id', shift.id,
+          'employee_id', shift.employee_id,
+          'title', shift.title,
+          'start_at', shift.start_at,
+          'end_at', shift.end_at,
+          'status', shift.status,
+          'source', shift.source,
+          'store_hours_validated', shift.store_hours_validated,
+          'outside_store_hours_reason', shift.outside_store_hours_reason,
+          'role_name', planning_role.name,
+          'employee_name',
+            trim(concat_ws(' ', employee.first_name, employee.last_name)),
+          'employee_job_title', employee.job_title,
+          'planned_minutes_in_week',
+            round(
+              (
+                extract(
+                  epoch from (
+                    least(shift.end_at, week_end_at)
+                    - greatest(shift.start_at, week_start_at)
+                  )
+                ) / 60.0
+              )::numeric,
+              2
+            )
+        )
+        order by shift.start_at, shift.id
+      )
+      from public.planned_shifts shift
+      join public.employees employee
+        on employee.id = shift.employee_id
+       and employee.tenant_id = shift.tenant_id
+       and employee.status = 'active'
+      left join public.planning_roles planning_role
+        on planning_role.id = shift.planning_role_id
+       and planning_role.tenant_id = shift.tenant_id
+      where shift.tenant_id = profile_row.tenant_id
+        and shift.employee_id <> employee_row.id
+        and shift.status in ('published', 'completed')
+        and shift.start_at < week_end_at
+        and shift.end_at > week_start_at
+    ), '[]'::jsonb),
+    'attendances', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'id', attendance.id,
+          'employee_id', attendance.employee_id,
+          'check_in', attendance.check_in,
+          'check_out', attendance.check_out,
+          'worked_hours', attendance.worked_hours,
+          'overtime_hours', attendance.overtime_hours,
+          'break_minutes', attendance.break_minutes,
+          'status', attendance.status,
+          'notes', attendance.notes,
+          'worked_minutes_in_week',
+            case
+              when attendance.status in ('completed', 'approved')
+                   and attendance.check_out is not null
+                   and attendance.check_out > attendance.check_in then
+                round(
+                  (
+                    greatest(
+                      coalesce(
+                        attendance.worked_hours * 60.0,
+                        extract(
+                          epoch from (
+                            attendance.check_out - attendance.check_in
+                          )
+                        ) / 60.0
+                          - coalesce(attendance.break_minutes, 0)
+                      ),
+                      0
+                    )
+                    * extract(
+                        epoch from (
+                          least(attendance.check_out, week_end_at)
+                          - greatest(attendance.check_in, week_start_at)
+                        )
+                      )
+                    / extract(
+                        epoch from (
+                          attendance.check_out - attendance.check_in
+                        )
+                      )
+                  )::numeric,
+                  2
+                )
+              else 0
+            end
+        )
+        order by attendance.check_in, attendance.id
+      )
+      from public.attendances attendance
+      where attendance.tenant_id = profile_row.tenant_id
+        and attendance.employee_id = employee_row.id
+        and attendance.check_in < week_end_at
+        and coalesce(attendance.check_out, statement_timestamp())
+              > week_start_at
+    ), '[]'::jsonb),
+    'payroll_lines', coalesce((
+      select jsonb_agg(
+        payroll_row.payload
+        order by payroll_row.period_end desc, payroll_row.line_id
+      )
+      from (
+        select
+          voucher.period_end,
+          line.id as line_id,
+          jsonb_build_object(
+            'id', line.id,
+            'employee_id', line.employee_id,
+            'voucher_id', line.voucher_id,
+            'worked_hours', line.worked_hours,
+            'overtime_hours', line.overtime_hours,
+            'regular_amount', line.regular_amount,
+            'overtime_amount', line.overtime_amount,
+            'total_amount', line.total_amount,
+            'payment_method',
+              coalesce(payment_method.name, line.payment_method),
+            'voucher', jsonb_build_object(
+              'id', voucher.id,
+              'voucher_number', voucher.voucher_number,
+              'period_start', voucher.period_start,
+              'period_end', voucher.period_end,
+              'period_label', voucher.period_label,
+              'status', voucher.status,
+              'paid_at', voucher.paid_at
+            )
+          ) as payload
+        from public.payroll_voucher_lines line
+        join public.payroll_vouchers voucher
+          on voucher.id = line.voucher_id
+         and voucher.tenant_id = line.tenant_id
+        left join public.payment_methods payment_method
+          on payment_method.id = line.payment_method_id
+         and payment_method.tenant_id = line.tenant_id
+        where line.tenant_id = profile_row.tenant_id
+          and line.employee_id = employee_row.id
+          and line.is_included is true
+          and voucher.status <> 'voided'
+          and voucher.period_start <= shop_today + 31
+          and voucher.period_end >= shop_today - 365
+        order by voucher.period_end desc, line.id
+        limit 24
+      ) payroll_row
+    ), '[]'::jsonb),
+    'change_requests', coalesce((
+      select jsonb_agg(
+        request_row.payload
+        order by request_row.created_at desc, request_row.request_id
+      )
+      from (
+        select
+          request.created_at,
+          request.id as request_id,
+          jsonb_build_object(
+            'id', request.id,
+            'employee_id', request.employee_id,
+            'request_type', request.request_type,
+            'status', request.status,
+            'requested_start_at', request.requested_start_at,
+            'requested_end_at', request.requested_end_at,
+            'worker_note', request.worker_note,
+            'manager_note', request.manager_note,
+            'created_at', request.created_at,
+            'decided_at', request.decided_at
+          ) as payload
+        from public.shift_change_requests request
+        where request.tenant_id = profile_row.tenant_id
+          and request.employee_id = employee_row.id
+        order by request.created_at desc, request.id
+        limit 20
+      ) request_row
+    ), '[]'::jsonb),
+    'default_shift_blocks', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'id', shift_block.id,
+          'employee_id', shift_block.employee_id,
+          'day_of_week', shift_block.day_of_week,
+          'start_time', shift_block.start_time,
+          'end_time', shift_block.end_time,
+          'role_name', planning_role.name
+        )
+        order by shift_block.day_of_week, shift_block.start_time, shift_block.id
+      )
+      from public.employee_default_shift_blocks shift_block
+      left join public.planning_roles planning_role
+        on planning_role.id = shift_block.planning_role_id
+       and planning_role.tenant_id = shift_block.tenant_id
+      where shift_block.tenant_id = profile_row.tenant_id
+        and shift_block.employee_id = employee_row.id
+        and shift_block.is_active is true
+    ), '[]'::jsonb)
+  );
+end;
+$function$;
+
+revoke all on function public.get_my_employee_self_service(date)
+  from public, anon, authenticated, service_role;
+grant execute on function public.get_my_employee_self_service(date)
+  to authenticated;
+
+comment on function public.get_my_employee_self_service(date) is
+  'Returns the signed-in active ERP employee own labor projection plus published/completed team coverage in the tenant store timezone.';
+
+
+-- Harden HR, attendance, planning, payroll, and employee PII authorization.
+-- Deployment status: NOT DEPLOYED.
+-- Recovery: restore the prior table policies/function definitions from the
+-- immediately preceding schema snapshot. No data rewrite or backfill occurs.
+-- Lock risk: brief catalog locks while RLS policies and function ACLs change.
+
+-- Resolve the signed-in ERP tenant only from authoritative DB/Auth state.
+-- Worker Portal identities deliberately resolve to NULL.
+create or replace function public.erp_member_tenant_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, auth, pg_temp
+as $$
+  select case
+    when count(*) = 1 then (array_agg(profile.tenant_id))[1]
+    else null
+  end
+  from public.user_profiles profile
+  join public.tenants tenant
+    on tenant.id = profile.tenant_id
+   and tenant.is_active is true
+  join auth.users auth_user
+    on auth_user.id = profile.user_id
+  where profile.user_id = auth.uid()
+    and profile.is_active is true
+    and (
+      auth_user.banned_until is null
+      or auth_user.banned_until <= statement_timestamp()
+    )
+    and coalesce(
+      auth_user.raw_app_meta_data->>'account_type',
+      ''
+    ) in ('erp_owner', 'erp_staff')
+    and not exists (
+      select 1
+      from public.employee_portal_accounts portal
+      where portal.auth_user_id = profile.user_id
+        and portal.is_active is true
+    )
+$$;
+
+revoke all on function public.erp_member_tenant_id()
+  from public, anon, authenticated, service_role;
+grant execute on function public.erp_member_tenant_id()
+  to authenticated, service_role;
+
+-- A self-service employee is accepted only when both sides of the ERP link,
+-- the tenant, the employee lifecycle, and the Auth account type agree.
+create or replace function public.current_erp_employee_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, auth, pg_temp
+as $$
+  select case
+    when count(*) = 1 then (array_agg(employee.id))[1]
+    else null
+  end
+  from public.user_profiles profile
+  join public.employees employee
+    on employee.id = profile.employee_id
+   and employee.tenant_id = profile.tenant_id
+   and employee.user_id = profile.user_id
+   and employee.status = 'active'
+  join public.tenants tenant
+    on tenant.id = profile.tenant_id
+   and tenant.is_active is true
+  join auth.users auth_user
+    on auth_user.id = profile.user_id
+  where profile.user_id = auth.uid()
+    and profile.is_active is true
+    and profile.tenant_id = public.erp_member_tenant_id()
+    and (
+      auth_user.banned_until is null
+      or auth_user.banned_until <= statement_timestamp()
+    )
+    and coalesce(
+      auth_user.raw_app_meta_data->>'account_type',
+      ''
+    ) in ('erp_owner', 'erp_staff')
+    and (
+      select count(*)
+      from public.employees employee_side
+      where employee_side.user_id = profile.user_id
+    ) = 1
+    and not exists (
+      select 1
+      from public.employee_portal_accounts portal
+      where portal.employee_id = employee.id
+        and portal.tenant_id = employee.tenant_id
+        and portal.is_active is true
+    )
+$$;
+
+revoke all on function public.current_erp_employee_id()
+  from public, anon, authenticated, service_role;
+grant execute on function public.current_erp_employee_id()
+  to authenticated, service_role;
+
+-- Scope the existing broad tenant capabilities to an authoritative ERP Auth
+-- identity. This prevents a still-valid JWT for a currently banned account
+-- from retaining HR or payroll authority.
+create or replace function public.can_manage_tenant_hr(
+  p_tenant_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+  select coalesce(
+    p_tenant_id = public.erp_member_tenant_id()
+    and public.can_manage_tenant_users(p_tenant_id),
+    false
+  )
+$$;
+
+revoke all on function public.can_manage_tenant_hr(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.can_manage_tenant_hr(uuid)
+  to authenticated, service_role;
+
+create or replace function public.can_manage_tenant_payroll(
+  p_tenant_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+  select coalesce(
+    p_tenant_id = public.erp_member_tenant_id()
+    and public.can_manage_tenant_accounting(p_tenant_id),
+    false
+  )
+$$;
+
+revoke all on function public.can_manage_tenant_payroll(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.can_manage_tenant_payroll(uuid)
+  to authenticated, service_role;
+
+-- Match Supabase ban semantics for Worker identities: a future ban is denied,
+-- while an expired temporary ban no longer blocks the authoritative account.
+create or replace function public.is_authoritative_worker_portal_identity(
+  p_user_id uuid,
+  p_tenant_id uuid,
+  p_employee_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public, auth, pg_temp
+as $$
+  select exists (
+    select 1
+    from auth.users auth_user
+    join public.employee_portal_accounts portal
+      on portal.auth_user_id = auth_user.id
+     and portal.tenant_id = p_tenant_id
+     and portal.employee_id = p_employee_id
+     and portal.is_active is true
+    join public.employees employee
+      on employee.id = portal.employee_id
+     and employee.tenant_id = portal.tenant_id
+     and employee.status = 'active'
+     and employee.user_id is null
+    join public.tenants tenant
+      on tenant.id = portal.tenant_id
+     and tenant.is_active is true
+    where auth_user.id = p_user_id
+      and (
+        auth_user.banned_until is null
+        or auth_user.banned_until <= statement_timestamp()
+      )
+      and coalesce(
+        auth_user.raw_app_meta_data->>'account_type',
+        ''
+      ) = 'worker_portal'
+      and coalesce(
+        auth_user.raw_app_meta_data->>'tenant_id',
+        ''
+      ) = p_tenant_id::text
+      and coalesce(
+        auth_user.raw_app_meta_data->>'employee_id',
+        ''
+      ) = p_employee_id::text
+      and coalesce(
+        auth_user.raw_app_meta_data->>'role',
+        ''
+      ) = 'worker'
+      and not exists (
+        select 1
+        from public.user_profiles profile
+        where profile.employee_id = p_employee_id
+          and profile.tenant_id = p_tenant_id
+      )
+      and not exists (
+        select 1
+        from public.user_invitations invitation
+        where invitation.employee_id = p_employee_id
+          and invitation.tenant_id = p_tenant_id
+          and invitation.status = 'pending'
+      )
+      and not exists (
+        select 1
+        from public.user_profiles profile
+        join public.tenants profile_tenant
+          on profile_tenant.id = profile.tenant_id
+         and profile_tenant.is_active is true
+        where profile.user_id = p_user_id
+          and profile.is_active is true
+      )
+      and not exists (
+        select 1
+        from public.employees staff_employee
+        join public.tenants staff_tenant
+          on staff_tenant.id = staff_employee.tenant_id
+         and staff_tenant.is_active is true
+        where staff_employee.user_id = p_user_id
+          and staff_employee.status = 'active'
+      )
+  )
+$$;
+
+revoke all on function public.is_authoritative_worker_portal_identity(
+  uuid,
+  uuid,
+  uuid
+) from public, anon, authenticated, service_role;
+
+create or replace function public.guard_worker_portal_identity()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public, auth, pg_temp
+as $$
+declare
+  auth_metadata jsonb;
+  employee_row public.employees%rowtype;
+begin
+  perform public.lock_auth_membership_identities(
+    case
+      when tg_op = 'INSERT' then null
+      else old.auth_user_id
+    end,
+    new.auth_user_id
+  );
+  perform public.lock_employee_access_identity(new.employee_id);
+
+  if new.is_active is not true or new.auth_user_id is null then
+    return new;
+  end if;
+
+  select employee.*
+  into employee_row
+  from public.employees employee
+  where employee.id = new.employee_id
+    and employee.tenant_id = new.tenant_id
+  for update;
+
+  if not found or employee_row.status <> 'active' then
+    raise exception 'employee_not_found'
+      using errcode = 'P0001';
+  end if;
+
+  if employee_row.user_id is not null
+     or exists (
+       select 1
+       from public.user_profiles profile
+       where profile.employee_id = new.employee_id
+         and profile.tenant_id = new.tenant_id
+     )
+     or exists (
+       select 1
+       from public.user_invitations invitation
+       where invitation.employee_id = new.employee_id
+         and invitation.tenant_id = new.tenant_id
+         and invitation.status = 'pending'
+     ) then
+    raise exception 'worker_access_conflict'
+      using errcode = 'P0001';
+  end if;
+
+  select coalesce(auth_user.raw_app_meta_data, '{}'::jsonb)
+  into auth_metadata
+  from auth.users auth_user
+  where auth_user.id = new.auth_user_id
+    and (
+      auth_user.banned_until is null
+      or auth_user.banned_until <= statement_timestamp()
+    );
+
+  if not found
+     or coalesce(auth_metadata->>'account_type', '') <> 'worker_portal'
+     or coalesce(auth_metadata->>'tenant_id', '') <> new.tenant_id::text
+     or coalesce(auth_metadata->>'employee_id', '')
+          <> new.employee_id::text
+     or coalesce(auth_metadata->>'role', '') <> 'worker' then
+    raise exception 'Authoritative worker portal identity is required'
+      using errcode = '42501';
+  end if;
+
+  if exists (
+    select 1
+    from public.user_profiles profile
+    join public.tenants tenant
+      on tenant.id = profile.tenant_id
+     and tenant.is_active is true
+    where profile.user_id = new.auth_user_id
+      and profile.is_active is true
+  ) then
+    raise exception
+      'Worker portal identity cannot be linked to an active ERP profile'
+      using errcode = '42501';
+  end if;
+
+  if exists (
+    select 1
+    from public.employees employee
+    join public.tenants tenant
+      on tenant.id = employee.tenant_id
+     and tenant.is_active is true
+    where employee.user_id = new.auth_user_id
+      and employee.status = 'active'
+  ) then
+    raise exception
+      'Worker portal identity cannot be linked as ERP staff'
+      using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.guard_worker_portal_identity()
+  from public, anon, authenticated, service_role;
+
+-- Existing ERP profile/self-service functions predate the explicit Auth ban
+-- check. Keep their mature business bodies internal and place the same
+-- authoritative ERP gate in front of every API entrypoint.
+do $$
+begin
+  if to_regprocedure(
+    'public.get_my_erp_profile_internal()'
+  ) is null then
+    if to_regprocedure('public.get_my_erp_profile()') is null then
+      raise exception 'Missing ERP profile projection';
+    end if;
+    alter function public.get_my_erp_profile()
+      rename to get_my_erp_profile_internal;
+  end if;
+
+  if to_regprocedure(
+    'public.update_my_employee_contact_internal(jsonb)'
+  ) is null then
+    if to_regprocedure(
+      'public.update_my_employee_contact(jsonb)'
+    ) is null then
+      raise exception 'Missing ERP employee contact command';
+    end if;
+    alter function public.update_my_employee_contact(jsonb)
+      rename to update_my_employee_contact_internal;
+  end if;
+
+end
+$$;
+
+create or replace function public.get_my_erp_profile()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+begin
+  if exists (
+    select 1
+    from auth.users auth_user
+    where auth_user.id = auth.uid()
+      and auth_user.banned_until > statement_timestamp()
+  ) then
+    raise exception 'ERP profile access denied'
+      using errcode = '42501';
+  end if;
+
+  return public.get_my_erp_profile_internal();
+end;
+$$;
+
+create or replace function public.update_my_employee_contact(
+  p_patch jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+begin
+  if exists (
+    select 1
+    from auth.users auth_user
+    where auth_user.id = auth.uid()
+      and auth_user.banned_until > statement_timestamp()
+  ) then
+    raise exception 'ERP employee self-service access denied'
+      using errcode = '42501';
+  end if;
+
+  return public.update_my_employee_contact_internal(p_patch);
+end;
+$$;
+
+revoke all on function public.get_my_erp_profile_internal()
+  from public, anon, authenticated, service_role;
+revoke all on function public.update_my_employee_contact_internal(jsonb)
+  from public, anon, authenticated, service_role;
+revoke all on function public.get_my_erp_profile()
+  from public, anon, authenticated, service_role;
+revoke all on function public.update_my_employee_contact(jsonb)
+  from public, anon, authenticated, service_role;
+grant execute on function public.get_my_erp_profile()
+  to authenticated;
+grant execute on function public.update_my_employee_contact(jsonb)
+  to authenticated;
+
+-- Keep the operational coworker directory useful without exposing the full
+-- employees row (RUT, contacts, health, bank, contract, and remuneration).
+create or replace function public.get_erp_employee_directory()
+returns table (
+  employee_id uuid,
+  user_id uuid,
+  first_name text,
+  last_name text,
+  job_title text,
+  system_role text,
+  status text,
+  photo_url text,
+  department_id uuid
+)
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, auth, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+begin
+  if tenant_id_value is null then
+    raise exception 'Employee directory access denied'
+      using errcode = '42501';
+  end if;
+
+  return query
+  select
+    employee.id,
+    case
+      when employee.user_id is not null
+       and exists (
+         select 1
+         from public.user_profiles directory_profile
+         join auth.users directory_auth_user
+           on directory_auth_user.id = directory_profile.user_id
+         where directory_profile.user_id = employee.user_id
+           and directory_profile.tenant_id = employee.tenant_id
+           and directory_profile.employee_id = employee.id
+           and directory_profile.is_active is true
+           and (
+             directory_auth_user.banned_until is null
+             or directory_auth_user.banned_until
+                  <= statement_timestamp()
+           )
+           and coalesce(
+             directory_auth_user.raw_app_meta_data->>'account_type',
+             ''
+           ) in ('erp_owner', 'erp_staff')
+       )
+       and not exists (
+         select 1
+         from public.employee_portal_accounts directory_portal
+         where directory_portal.auth_user_id = employee.user_id
+           and directory_portal.is_active is true
+       )
+      then employee.user_id
+      else null
+    end,
+    employee.first_name,
+    employee.last_name,
+    employee.job_title,
+    employee.system_role,
+    employee.status,
+    employee.photo_url,
+    employee.department_id
+  from public.employees employee
+  where employee.tenant_id = tenant_id_value
+    and employee.status <> 'terminated'
+  order by employee.first_name, employee.last_name, employee.id;
+end;
+$$;
+
+revoke all on function public.get_erp_employee_directory()
+  from public, anon, authenticated, service_role;
+grant execute on function public.get_erp_employee_directory()
+  to authenticated;
+
+-- Chat addresses ERP principals, not only employee records. Keep this
+-- projection separate so owner/admin accounts without an employee link remain
+-- reachable without widening the operational employee directory.
+create or replace function public.get_erp_chat_principal_directory()
+returns table (
+  tenant_id uuid,
+  user_id uuid,
+  employee_id uuid,
+  display_name text,
+  role text,
+  photo_url text
+)
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, auth, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+begin
+  if tenant_id_value is null then
+    raise exception 'ERP chat directory access denied'
+      using errcode = '42501';
+  end if;
+
+  return query
+  select
+    profile.tenant_id,
+    profile.user_id,
+    employee.id,
+    coalesce(
+      nullif(
+        trim(employee.first_name || ' ' || employee.last_name),
+        ''
+      ),
+      nullif(trim(auth_user.raw_user_meta_data->>'display_name'), ''),
+      nullif(trim(auth_user.raw_user_meta_data->>'full_name'), ''),
+      nullif(trim(auth_user.raw_user_meta_data->>'name'), ''),
+      'Usuario ERP'
+    ),
+    profile.role,
+    employee.photo_url
+  from public.user_profiles profile
+  join auth.users auth_user
+    on auth_user.id = profile.user_id
+  left join public.employees employee
+    on employee.id = profile.employee_id
+   and employee.tenant_id = profile.tenant_id
+   and employee.user_id = profile.user_id
+   and employee.status = 'active'
+  where profile.tenant_id = tenant_id_value
+    and profile.is_active is true
+    and (
+      auth_user.banned_until is null
+      or auth_user.banned_until <= statement_timestamp()
+    )
+    and coalesce(
+      auth_user.raw_app_meta_data->>'account_type',
+      ''
+    ) in ('erp_owner', 'erp_staff')
+    and (
+      profile.employee_id is null
+      or employee.id is not null
+    )
+    and not exists (
+      select 1
+      from public.employees conflicting_employee
+      where conflicting_employee.user_id = profile.user_id
+        and conflicting_employee.id is distinct from profile.employee_id
+    )
+    and not exists (
+      select 1
+      from public.employee_portal_accounts portal
+      where portal.auth_user_id = profile.user_id
+        and portal.is_active is true
+    )
+  order by 4, profile.user_id;
+end;
+$$;
+
+revoke all on function public.get_erp_chat_principal_directory()
+  from public, anon, authenticated, service_role;
+grant execute on function public.get_erp_chat_principal_directory()
+  to authenticated;
+
+-- RLS constrains the row tenant but cannot prove that referenced employee,
+-- contract, attendance, and payroll UUIDs belong to that same tenant. This
+-- trigger closes those cross-tenant graph edges for historical tables that do
+-- not yet have composite foreign keys.
+create or replace function
+  public.validate_hr_payroll_tenant_consistency()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+begin
+  if tg_table_name = 'departments' then
+    if new.manager_id is not null
+       and not exists (
+         select 1
+         from public.employees employee
+         where employee.id = new.manager_id
+           and employee.tenant_id = new.tenant_id
+       ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+  elsif tg_table_name = 'employees' then
+    if new.department_id is not null
+       and not exists (
+         select 1
+         from public.departments department
+         where department.id = new.department_id
+           and department.tenant_id = new.tenant_id
+       ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+    if new.preferred_payment_method_id is not null
+       and not exists (
+         select 1
+         from public.payment_methods payment_method
+         where payment_method.id = new.preferred_payment_method_id
+           and payment_method.tenant_id = new.tenant_id
+       ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+    if new.salary_account_id is not null
+       and not exists (
+         select 1
+         from public.accounts account_row
+         where account_row.id = new.salary_account_id
+           and account_row.tenant_id = new.tenant_id
+       ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+  elsif tg_table_name = 'employee_contracts' then
+    if not exists (
+      select 1
+      from public.employees employee
+      where employee.id = new.employee_id
+        and employee.tenant_id = new.tenant_id
+    ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+    if new.work_schedule_id is not null
+       and not exists (
+         select 1
+         from public.work_schedules work_schedule
+         where work_schedule.id = new.work_schedule_id
+           and work_schedule.tenant_id = new.tenant_id
+       ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+    if new.department_id is not null
+       and not exists (
+         select 1
+         from public.departments department
+         where department.id = new.department_id
+           and department.tenant_id = new.tenant_id
+       ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+  elsif tg_table_name in (
+    'attendances',
+    'attendance_records',
+    'leave_requests',
+    'medical_leaves',
+    'employment_contracts',
+    'payroll_records',
+    'shifts'
+  ) then
+    if new.employee_id is not null
+       and not exists (
+         select 1
+         from public.employees employee
+         where employee.id = new.employee_id
+           and employee.tenant_id = new.tenant_id
+       ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+    if tg_table_name = 'attendances'
+       and new.approved_by is not null
+       and not exists (
+         select 1
+         from public.employees approver
+         where approver.id = new.approved_by
+           and approver.tenant_id = new.tenant_id
+       ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+  elsif tg_table_name = 'payroll_entries' then
+    if new.payroll_run_id is not null
+       and not exists (
+         select 1
+         from public.payroll_runs payroll_run
+         where payroll_run.id = new.payroll_run_id
+           and payroll_run.tenant_id = new.tenant_id
+       ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+    if new.employee_id is not null
+       and not exists (
+         select 1
+         from public.employees employee
+         where employee.id = new.employee_id
+           and employee.tenant_id = new.tenant_id
+       ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+  elsif tg_table_name = 'payroll_voucher_lines' then
+    if not exists (
+      select 1
+      from public.payroll_vouchers voucher
+      where voucher.id = new.voucher_id
+        and voucher.tenant_id = new.tenant_id
+    ) or not exists (
+      select 1
+      from public.employees employee
+      where employee.id = new.employee_id
+        and employee.tenant_id = new.tenant_id
+    ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+    if new.payment_method_id is not null
+       and not exists (
+         select 1
+         from public.payment_methods payment_method
+         where payment_method.id = new.payment_method_id
+           and payment_method.tenant_id = new.tenant_id
+       ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+    if new.payment_account_id is not null
+       and not exists (
+         select 1
+         from public.accounts payment_account
+         where payment_account.id = new.payment_account_id
+           and payment_account.tenant_id = new.tenant_id
+       ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+    if new.salary_account_id is not null
+       and not exists (
+         select 1
+         from public.accounts salary_account
+         where salary_account.id = new.salary_account_id
+           and salary_account.tenant_id = new.tenant_id
+       ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+    if new.expense_id is not null
+       and not exists (
+         select 1
+         from public.expenses expense
+         where expense.id = new.expense_id
+           and expense.tenant_id = new.tenant_id
+       ) then
+      raise exception 'HR/payroll tenant mismatch'
+        using errcode = '23514';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function
+  public.validate_hr_payroll_tenant_consistency()
+  from public, anon, authenticated, service_role;
+
+do $$
+declare
+  table_name_value text;
+begin
+  foreach table_name_value in array array[
+    'departments',
+    'employees',
+    'employee_contracts',
+    'attendances',
+    'attendance_records',
+    'leave_requests',
+    'medical_leaves',
+    'employment_contracts',
+    'payroll_entries',
+    'payroll_records',
+    'shifts',
+    'payroll_voucher_lines'
+  ]
+  loop
+    execute format(
+      'drop trigger if exists trg_validate_hr_payroll_tenant_consistency on public.%I',
+      table_name_value
+    );
+    execute format(
+      'create trigger trg_validate_hr_payroll_tenant_consistency '
+      || 'before insert or update on public.%I '
+      || 'for each row execute function '
+      || 'public.validate_hr_payroll_tenant_consistency()',
+      table_name_value
+    );
+  end loop;
+end
+$$;
+
+-- Every HR/payroll table is an explicit RLS surface. Drop historical generic
+-- tenant policies so they cannot combine permissively with the policies below.
+do $$
+declare
+  table_name_value text;
+  policy_row record;
+begin
+  foreach table_name_value in array array[
+    'departments',
+    'job_roles',
+    'employees',
+    'work_schedules',
+    'employee_contracts',
+    'attendances',
+    'attendance_records',
+    'leave_requests',
+    'medical_leaves',
+    'employment_contracts',
+    'payroll_runs',
+    'payroll_entries',
+    'payroll_records',
+    'shifts',
+    'planning_roles',
+    'employee_planning_roles',
+    'employee_default_shift_blocks',
+    'planned_shifts',
+    'shift_change_requests',
+    'payroll_vouchers',
+    'payroll_voucher_lines',
+    'employee_advances',
+    'employee_advance_allocations'
+  ]
+  loop
+    if to_regclass('public.' || table_name_value) is null then
+      raise exception 'Missing required HR/payroll table: %', table_name_value;
+    end if;
+
+    execute format(
+      'alter table public.%I enable row level security',
+      table_name_value
+    );
+
+    for policy_row in
+      select policyname
+      from pg_policies
+      where schemaname = 'public'
+        and tablename = table_name_value
+    loop
+      execute format(
+        'drop policy if exists %I on public.%I',
+        policy_row.policyname,
+        table_name_value
+      );
+    end loop;
+  end loop;
+end
+$$;
+
+-- Attendance aggregates are definer-rights reads and therefore enforce their
+-- own row authority instead of relying on the caller's table RLS.
+create or replace function public.get_checked_in_employees()
+returns table (
+  attendance_id uuid,
+  employee_id uuid,
+  employee_name text,
+  check_in timestamp with time zone,
+  hours_worked numeric
+)
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+begin
+  if tenant_id_value is null
+     or not (
+       public.can_manage_tenant_hr(tenant_id_value)
+       or public.can_manage_tenant_payroll(tenant_id_value)
+     ) then
+    raise exception 'Attendance access denied'
+      using errcode = '42501';
+  end if;
+
+  return query
+  select
+    attendance.id,
+    employee.id,
+    trim(employee.first_name || ' ' || employee.last_name),
+    attendance.check_in,
+    round(
+      extract(epoch from (statement_timestamp() - attendance.check_in))
+        / 3600.0,
+      2
+    )
+  from public.attendances attendance
+  join public.employees employee
+    on employee.id = attendance.employee_id
+   and employee.tenant_id = attendance.tenant_id
+  where attendance.tenant_id = tenant_id_value
+    and attendance.status = 'ongoing'
+    and attendance.check_out is null
+  order by attendance.check_in;
+end;
+$$;
+
+create or replace function public.get_attendance_summary(
+  p_employee_id uuid,
+  p_start_date date,
+  p_end_date date
+)
+returns table (
+  total_days integer,
+  total_hours numeric,
+  total_overtime numeric,
+  average_hours numeric,
+  late_arrivals integer,
+  early_departures integer
+)
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := coalesce(
+    public.erp_member_tenant_id(),
+    public.worker_portal_tenant_id()
+  );
+  store_timezone text;
+  period_start_at timestamp with time zone;
+  period_end_at timestamp with time zone;
+begin
+  if p_start_date is null
+     or p_end_date is null
+     or p_start_date > p_end_date then
+    raise exception 'Invalid attendance date range'
+      using errcode = '22023';
+  end if;
+
+  if tenant_id_value is null
+     or not exists (
+       select 1
+       from public.employees employee
+       where employee.id = p_employee_id
+         and employee.tenant_id = tenant_id_value
+     )
+     or not (
+       public.can_manage_tenant_hr(tenant_id_value)
+       or public.can_manage_tenant_payroll(tenant_id_value)
+       or (
+         tenant_id_value = public.erp_member_tenant_id()
+         and p_employee_id = public.current_erp_employee_id()
+       )
+       or (
+         tenant_id_value = public.worker_portal_tenant_id()
+         and p_employee_id = public.worker_portal_employee_id()
+       )
+     ) then
+    raise exception 'Attendance access denied'
+      using errcode = '42501';
+  end if;
+
+  select tenant.timezone
+  into store_timezone
+  from public.tenants tenant
+  where tenant.id = tenant_id_value
+    and tenant.is_active is true;
+
+  if store_timezone is null
+     or not exists (
+       select 1
+       from pg_catalog.pg_timezone_names timezone_row
+       where timezone_row.name = store_timezone
+     ) then
+    raise exception 'Attendance timezone invalid'
+      using errcode = '22023';
+  end if;
+
+  period_start_at :=
+    p_start_date::timestamp without time zone
+      at time zone store_timezone;
+  period_end_at :=
+    (p_end_date + 1)::timestamp without time zone
+      at time zone store_timezone;
+
+  return query
+  select
+    count(
+      distinct (
+        attendance.check_in at time zone store_timezone
+      )::date
+    )::integer,
+    coalesce(sum(attendance.worked_hours), 0),
+    coalesce(sum(attendance.overtime_hours), 0),
+    coalesce(avg(attendance.worked_hours), 0),
+    count(*) filter (
+      where (
+        attendance.check_in at time zone store_timezone
+      )::time > time '09:00:00'
+    )::integer,
+    count(*) filter (
+      where attendance.check_out is not null
+        and (
+          attendance.check_out at time zone store_timezone
+        )::time < time '18:00:00'
+    )::integer
+  from public.attendances attendance
+  where attendance.tenant_id = tenant_id_value
+    and attendance.employee_id = p_employee_id
+    and attendance.status in ('completed', 'approved')
+    and attendance.check_in >= period_start_at
+    and attendance.check_in < period_end_at;
+end;
+$$;
+
+create or replace function public.get_employee_hours_summary(
+  p_employee_id uuid,
+  p_start_date date,
+  p_end_date date
+)
+returns json
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := coalesce(
+    public.erp_member_tenant_id(),
+    public.worker_portal_tenant_id()
+  );
+  result_value json;
+  expected_start constant time := '09:00:00';
+  expected_end constant time := '18:00:00';
+  store_timezone text;
+  period_start_at timestamp with time zone;
+  period_end_at timestamp with time zone;
+begin
+  if p_start_date is null
+     or p_end_date is null
+     or p_start_date > p_end_date then
+    raise exception 'Invalid attendance date range'
+      using errcode = '22023';
+  end if;
+
+  if tenant_id_value is null
+     or not exists (
+       select 1
+       from public.employees employee
+       where employee.id = p_employee_id
+         and employee.tenant_id = tenant_id_value
+     )
+     or not (
+       public.can_manage_tenant_hr(tenant_id_value)
+       or public.can_manage_tenant_payroll(tenant_id_value)
+       or (
+         tenant_id_value = public.erp_member_tenant_id()
+         and p_employee_id = public.current_erp_employee_id()
+       )
+       or (
+         tenant_id_value = public.worker_portal_tenant_id()
+         and p_employee_id = public.worker_portal_employee_id()
+       )
+     ) then
+    raise exception 'Attendance access denied'
+      using errcode = '42501';
+  end if;
+
+  select tenant.timezone
+  into store_timezone
+  from public.tenants tenant
+  where tenant.id = tenant_id_value
+    and tenant.is_active is true;
+
+  if store_timezone is null
+     or not exists (
+       select 1
+       from pg_catalog.pg_timezone_names timezone_row
+       where timezone_row.name = store_timezone
+     ) then
+    raise exception 'Attendance timezone invalid'
+      using errcode = '22023';
+  end if;
+
+  period_start_at :=
+    p_start_date::timestamp without time zone
+      at time zone store_timezone;
+  period_end_at :=
+    (p_end_date + 1)::timestamp without time zone
+      at time zone store_timezone;
+
+  select json_build_object(
+    'total_days_worked', count(*),
+    'total_hours', coalesce(sum(attendance.worked_hours), 0),
+    'total_overtime', coalesce(sum(attendance.overtime_hours), 0),
+    'total_break_minutes', coalesce(sum(attendance.break_minutes), 0),
+    'average_hours_per_day',
+      round(coalesce(avg(attendance.worked_hours), 0)::numeric, 2),
+    'earliest_check_in',
+      min((attendance.check_in at time zone store_timezone)::time),
+    'latest_check_out',
+      max((attendance.check_out at time zone store_timezone)::time),
+    'days_with_overtime', count(*) filter (
+      where coalesce(attendance.overtime_hours, 0) > 0
+    ),
+    'late_arrivals', count(*) filter (
+      where (
+        attendance.check_in at time zone store_timezone
+      )::time >
+        expected_start + interval '30 minutes'
+    ),
+    'early_departures', count(*) filter (
+      where attendance.check_out is not null
+        and (
+          attendance.check_out at time zone store_timezone
+        )::time <
+          expected_end - interval '30 minutes'
+    ),
+    'perfect_attendance_days', count(*) filter (
+      where coalesce(attendance.worked_hours, 0) >= 8
+    ),
+    'short_days', count(*) filter (
+      where coalesce(attendance.worked_hours, 0) < 8
+        and coalesce(attendance.worked_hours, 0) > 0
+    )
+  )
+  into result_value
+  from public.attendances attendance
+  where attendance.tenant_id = tenant_id_value
+    and attendance.employee_id = p_employee_id
+    and attendance.check_in >= period_start_at
+    and attendance.check_in < period_end_at
+    and attendance.status in ('completed', 'approved');
+
+  return coalesce(result_value, '{}'::json);
+end;
+$$;
+
+create or replace function public.get_attendance_summary_for_period(
+  p_start_date date,
+  p_end_date date
+)
+returns table (
+  employee_id uuid,
+  employee_name text,
+  total_hours numeric,
+  total_days integer
+)
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+  store_timezone text;
+  period_start_at timestamp with time zone;
+  period_end_at timestamp with time zone;
+begin
+  if p_start_date is null
+     or p_end_date is null
+     or p_start_date > p_end_date then
+    raise exception 'Invalid attendance date range'
+      using errcode = '22023';
+  end if;
+
+  if tenant_id_value is null
+     or not (
+       public.can_manage_tenant_hr(tenant_id_value)
+       or public.can_manage_tenant_payroll(tenant_id_value)
+     ) then
+    raise exception 'Attendance access denied'
+      using errcode = '42501';
+  end if;
+
+  select tenant.timezone
+  into store_timezone
+  from public.tenants tenant
+  where tenant.id = tenant_id_value
+    and tenant.is_active is true;
+
+  if store_timezone is null
+     or not exists (
+       select 1
+       from pg_catalog.pg_timezone_names timezone_row
+       where timezone_row.name = store_timezone
+     ) then
+    raise exception 'Attendance timezone invalid'
+      using errcode = '22023';
+  end if;
+
+  period_start_at :=
+    p_start_date::timestamp without time zone
+      at time zone store_timezone;
+  period_end_at :=
+    (p_end_date + 1)::timestamp without time zone
+      at time zone store_timezone;
+
+  return query
+  select
+    employee.id,
+    trim(employee.first_name || ' ' || employee.last_name),
+    coalesce(sum(attendance.worked_hours), 0)::numeric,
+    count(
+      distinct (
+        attendance.check_in at time zone store_timezone
+      )::date
+    )::integer
+  from public.employees employee
+  left join public.attendances attendance
+    on attendance.employee_id = employee.id
+   and attendance.tenant_id = employee.tenant_id
+   and attendance.status in ('completed', 'approved')
+   and attendance.check_in >= period_start_at
+   and attendance.check_in < period_end_at
+  where employee.tenant_id = tenant_id_value
+    and employee.status = 'active'
+  group by employee.id, employee.first_name, employee.last_name
+  order by trim(employee.first_name || ' ' || employee.last_name);
+end;
+$$;
+
+revoke all on function public.get_checked_in_employees()
+  from public, anon, authenticated, service_role;
+revoke all on function public.get_attendance_summary(uuid, date, date)
+  from public, anon, authenticated, service_role;
+revoke all on function public.get_employee_hours_summary(uuid, date, date)
+  from public, anon, authenticated, service_role;
+revoke all on function public.get_attendance_summary_for_period(date, date)
+  from public, anon, authenticated, service_role;
+grant execute on function public.get_checked_in_employees()
+  to authenticated;
+grant execute on function public.get_attendance_summary(uuid, date, date)
+  to authenticated;
+grant execute on function public.get_employee_hours_summary(uuid, date, date)
+  to authenticated;
+grant execute on function public.get_attendance_summary_for_period(date, date)
+  to authenticated;
+
+-- Fresh canonical snapshots did not carry the legacy voucher sequence even
+-- though the draft generator below depends on it. Client roles never need
+-- direct sequence access because the command executes as SECURITY DEFINER.
+create sequence if not exists public.payroll_voucher_number_seq start with 1;
+revoke all on sequence public.payroll_voucher_number_seq
+  from public, anon, authenticated, service_role;
+
+-- Canonical draft generation was historically present in hosted databases but
+-- absent from some bootstrap snapshots. Define the implementation explicitly
+-- so this hardening migration behaves the same in both states.
+create or replace function
+  public.generate_payroll_voucher_draft_internal(
+    p_start_date date,
+    p_end_date date,
+    p_period_label text default null
+  )
+returns uuid
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.user_tenant_id();
+  voucher_id_value uuid;
+  voucher_number_value text;
+  total_hours_value numeric := 0;
+  total_amount_value numeric := 0;
+  employee_count_value integer := 0;
+  employee_row record;
+  worked_hours_value numeric;
+  overtime_hours_value numeric;
+  hourly_rate_value numeric;
+  overtime_rate_value numeric;
+  regular_amount_value numeric;
+  overtime_amount_value numeric;
+  store_timezone text;
+  period_start_at timestamp with time zone;
+  period_end_at timestamp with time zone;
+begin
+  select tenant.timezone
+  into store_timezone
+  from public.tenants tenant
+  where tenant.id = tenant_id_value
+    and tenant.is_active is true;
+
+  if store_timezone is null
+     or not exists (
+       select 1
+       from pg_catalog.pg_timezone_names timezone_row
+       where timezone_row.name = store_timezone
+     ) then
+    raise exception 'Payroll timezone invalid'
+      using errcode = '22023';
+  end if;
+
+  period_start_at :=
+    p_start_date::timestamp without time zone
+      at time zone store_timezone;
+  period_end_at :=
+    (p_end_date + 1)::timestamp without time zone
+      at time zone store_timezone;
+
+  voucher_number_value :=
+    'PV-'
+    || lpad(
+      nextval('public.payroll_voucher_number_seq')::text,
+      5,
+      '0'
+    );
+
+  insert into public.payroll_vouchers (
+    tenant_id,
+    voucher_number,
+    period_start,
+    period_end,
+    period_label,
+    status,
+    created_by
+  )
+  values (
+    tenant_id_value,
+    voucher_number_value,
+    p_start_date,
+    p_end_date,
+    coalesce(
+      p_period_label,
+      'Periodo: ' || p_start_date || ' - ' || p_end_date
+    ),
+    'draft',
+    auth.uid()
+  )
+  returning id into voucher_id_value;
+
+  for employee_row in
+    select
+      employee.*,
+      coalesce(employee.hourly_rate, 0) as rate
+    from public.employees employee
+    where employee.tenant_id = tenant_id_value
+      and employee.status = 'active'
+  loop
+    select
+      coalesce(sum(attendance.worked_hours), 0),
+      coalesce(sum(attendance.overtime_hours), 0)
+    into worked_hours_value, overtime_hours_value
+    from public.attendances attendance
+    where attendance.tenant_id = tenant_id_value
+      and attendance.employee_id = employee_row.id
+      and attendance.status in ('completed', 'approved')
+      and attendance.check_in >= period_start_at
+      and attendance.check_in < period_end_at;
+
+    hourly_rate_value := employee_row.rate;
+    overtime_rate_value := hourly_rate_value * 1.5;
+    regular_amount_value :=
+      worked_hours_value * hourly_rate_value;
+    overtime_amount_value :=
+      overtime_hours_value * overtime_rate_value;
+
+    insert into public.payroll_voucher_lines (
+      tenant_id,
+      voucher_id,
+      employee_id,
+      employee_name,
+      worked_hours,
+      overtime_hours,
+      hourly_rate,
+      overtime_rate,
+      regular_amount,
+      overtime_amount,
+      total_amount,
+      payment_method,
+      payment_method_id,
+      salary_account_id,
+      is_included
+    )
+    values (
+      tenant_id_value,
+      voucher_id_value,
+      employee_row.id,
+      trim(
+        employee_row.first_name || ' ' || employee_row.last_name
+      ),
+      worked_hours_value,
+      overtime_hours_value,
+      hourly_rate_value,
+      overtime_rate_value,
+      regular_amount_value,
+      overtime_amount_value,
+      regular_amount_value + overtime_amount_value,
+      coalesce(
+        employee_row.preferred_payment_method::text,
+        'transfer'
+      ),
+      employee_row.preferred_payment_method_id,
+      employee_row.salary_account_id,
+      worked_hours_value + overtime_hours_value > 0
+    );
+
+    if worked_hours_value + overtime_hours_value > 0 then
+      total_hours_value :=
+        total_hours_value
+        + worked_hours_value
+        + overtime_hours_value;
+      total_amount_value :=
+        total_amount_value
+        + regular_amount_value
+        + overtime_amount_value;
+      employee_count_value := employee_count_value + 1;
+    end if;
+  end loop;
+
+  update public.payroll_vouchers voucher
+  set total_hours = total_hours_value,
+      total_amount = total_amount_value,
+      employee_count = employee_count_value,
+      updated_at = now()
+  where voucher.id = voucher_id_value
+    and voucher.tenant_id = tenant_id_value;
+
+  return voucher_id_value;
+end;
+$$;
+
+-- Preserve the other established payroll implementations behind service-only
+-- names. Public wrappers below enforce accounting authority before entering
+-- them.
+do $$
+begin
+  if to_regprocedure(
+    'public.confirm_payroll_voucher_internal(uuid)'
+  ) is null then
+    if to_regprocedure('public.confirm_payroll_voucher(uuid)') is null then
+      raise exception 'Missing payroll confirmation command';
+    end if;
+    alter function public.confirm_payroll_voucher(uuid)
+      rename to confirm_payroll_voucher_internal;
+  end if;
+
+  if to_regprocedure(
+    'public.register_employee_advance_internal(uuid,numeric,uuid,uuid,timestamptz,text,text)'
+  ) is null then
+    if to_regprocedure(
+      'public.register_employee_advance(uuid,numeric,uuid,uuid,timestamptz,text,text)'
+    ) is null then
+      raise exception 'Missing employee advance command';
+    end if;
+    alter function public.register_employee_advance(
+      uuid,
+      numeric,
+      uuid,
+      uuid,
+      timestamp with time zone,
+      text,
+      text
+    ) rename to register_employee_advance_internal;
+  end if;
+
+  if to_regprocedure(
+    'public.pay_payroll_voucher_internal(uuid,jsonb)'
+  ) is null then
+    if to_regprocedure('public.pay_payroll_voucher(uuid,jsonb)') is null then
+      raise exception 'Missing split payroll payment command';
+    end if;
+    alter function public.pay_payroll_voucher(uuid, jsonb)
+      rename to pay_payroll_voucher_internal;
+  end if;
+
+  if to_regprocedure(
+    'public.pay_payroll_voucher_internal(uuid)'
+  ) is null then
+    if to_regprocedure('public.pay_payroll_voucher(uuid)') is null then
+      raise exception 'Missing payroll payment command';
+    end if;
+    alter function public.pay_payroll_voucher(uuid)
+      rename to pay_payroll_voucher_internal;
+  end if;
+
+  if to_regprocedure(
+    'public.revert_payroll_payment_internal(uuid)'
+  ) is null then
+    if to_regprocedure('public.revert_payroll_payment(uuid)') is null then
+      raise exception 'Missing payroll payment reversal';
+    end if;
+    alter function public.revert_payroll_payment(uuid)
+      rename to revert_payroll_payment_internal;
+  end if;
+
+  if to_regprocedure(
+    'public.revert_payroll_to_draft_internal(uuid)'
+  ) is null then
+    if to_regprocedure('public.revert_payroll_to_draft(uuid)') is null then
+      raise exception 'Missing payroll draft reversal';
+    end if;
+    alter function public.revert_payroll_to_draft(uuid)
+      rename to revert_payroll_to_draft_internal;
+  end if;
+
+  if to_regprocedure(
+    'public.get_payroll_voucher_line_settlements_internal(uuid)'
+  ) is null then
+    if to_regprocedure(
+      'public.get_payroll_voucher_line_settlements(uuid)'
+    ) is null then
+      raise exception 'Missing payroll settlement projection';
+    end if;
+    alter function public.get_payroll_voucher_line_settlements(uuid)
+      rename to get_payroll_voucher_line_settlements_internal;
+  end if;
+
+  if to_regprocedure(
+    'public.calculate_payroll_internal(uuid,uuid,integer,integer)'
+  ) is null then
+    if to_regprocedure(
+      'public.calculate_payroll(uuid,uuid,integer,integer)'
+    ) is null then
+      raise exception 'Missing legacy payroll calculator';
+    end if;
+    alter function public.calculate_payroll(uuid, uuid, integer, integer)
+      rename to calculate_payroll_internal;
+  end if;
+
+  if to_regprocedure(
+    'public.get_income_statement_data_internal(timestamptz,timestamptz,boolean)'
+  ) is null then
+    if to_regprocedure(
+      'public.get_income_statement_data(timestamptz,timestamptz,boolean)'
+    ) is null then
+      raise exception 'Missing income statement projection';
+    end if;
+    alter function public.get_income_statement_data(
+      timestamp with time zone,
+      timestamp with time zone,
+      boolean
+    ) rename to get_income_statement_data_internal;
+  end if;
+
+  if to_regprocedure(
+    'public.get_income_expense_timeseries_internal(integer,boolean)'
+  ) is null then
+    if to_regprocedure(
+      'public.get_income_expense_timeseries(integer,boolean)'
+    ) is null then
+      raise exception 'Missing income/expense timeseries';
+    end if;
+    alter function public.get_income_expense_timeseries(integer, boolean)
+      rename to get_income_expense_timeseries_internal;
+  end if;
+
+  if to_regprocedure(
+    'public.get_income_expense_daily_timeseries_internal(timestamptz,timestamptz,boolean)'
+  ) is null then
+    if to_regprocedure(
+      'public.get_income_expense_daily_timeseries(timestamptz,timestamptz,boolean)'
+    ) is null then
+      raise exception 'Missing daily income/expense timeseries';
+    end if;
+    alter function public.get_income_expense_daily_timeseries(
+      timestamp with time zone,
+      timestamp with time zone,
+      boolean
+    ) rename to get_income_expense_daily_timeseries_internal;
+  end if;
+end
+$$;
+
+create or replace function public.generate_payroll_voucher_draft(
+  p_start_date date,
+  p_end_date date,
+  p_period_label text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+begin
+  if p_start_date is null
+     or p_end_date is null
+     or p_start_date > p_end_date then
+    raise exception 'Invalid payroll date range'
+      using errcode = '22023';
+  end if;
+
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  return public.generate_payroll_voucher_draft_internal(
+    p_start_date,
+    p_end_date,
+    p_period_label
+  );
+end;
+$$;
+
+create or replace function public.confirm_payroll_voucher(
+  p_voucher_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  return public.confirm_payroll_voucher_internal(p_voucher_id);
+end;
+$$;
+
+create or replace function public.register_employee_advance(
+  p_employee_id uuid,
+  p_amount numeric,
+  p_payment_method_id uuid,
+  p_payment_account_id uuid default null,
+  p_paid_at timestamp with time zone default statement_timestamp(),
+  p_reference text default null,
+  p_notes text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  return public.register_employee_advance_internal(
+    p_employee_id,
+    p_amount,
+    p_payment_method_id,
+    p_payment_account_id,
+    p_paid_at,
+    p_reference,
+    p_notes
+  );
+end;
+$$;
+
+create or replace function public.pay_payroll_voucher(
+  p_voucher_id uuid,
+  p_payment_splits jsonb
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  return public.pay_payroll_voucher_internal(
+    p_voucher_id,
+    p_payment_splits
+  );
+end;
+$$;
+
+create or replace function public.pay_payroll_voucher(
+  p_voucher_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  return public.pay_payroll_voucher_internal(p_voucher_id, null);
+end;
+$$;
+
+create or replace function public.revert_payroll_payment(
+  p_voucher_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  return public.revert_payroll_payment_internal(p_voucher_id);
+end;
+$$;
+
+create or replace function public.revert_payroll_to_draft(
+  p_voucher_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  return public.revert_payroll_to_draft_internal(p_voucher_id);
+end;
+$$;
+
+create or replace function public.get_payroll_voucher_line_settlements(
+  p_voucher_id uuid
+)
+returns table (
+  line_id uuid,
+  cash_paid numeric(14,2),
+  advances_applied numeric(14,2),
+  settled_amount numeric(14,2),
+  balance numeric(14,2)
+)
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  return query
+  select *
+  from public.get_payroll_voucher_line_settlements_internal(p_voucher_id);
+end;
+$$;
+
+create or replace function public.calculate_payroll(
+  p_tenant_id uuid,
+  p_employee_id uuid,
+  p_year integer,
+  p_month integer
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+begin
+  if p_tenant_id is null
+     or p_tenant_id is distinct from public.erp_member_tenant_id()
+     or not public.can_manage_tenant_payroll(p_tenant_id) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  if p_year not between 2000 and 2100
+     or p_month not between 1 and 12 then
+    raise exception 'Invalid payroll period'
+      using errcode = '22023';
+  end if;
+
+  if not exists (
+    select 1
+    from public.employees employee
+    where employee.id = p_employee_id
+      and employee.tenant_id = p_tenant_id
+  ) then
+    raise exception 'Payroll employee not found'
+      using errcode = 'P0002';
+  end if;
+
+  return public.calculate_payroll_internal(
+    p_tenant_id,
+    p_employee_id,
+    p_year,
+    p_month
+  );
+end;
+$$;
+
+create or replace function public.get_income_statement_data(
+  p_start_date timestamp with time zone,
+  p_end_date timestamp with time zone,
+  p_is_cash_flow boolean default false
+)
+returns table (
+  category text,
+  category_label text,
+  account_code text,
+  account_name text,
+  amount numeric(14,2)
+)
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+begin
+  if p_start_date is null
+     or p_end_date is null
+     or p_start_date > p_end_date then
+    raise exception 'Invalid accounting date range'
+      using errcode = '22023';
+  end if;
+
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Accounting access denied'
+      using errcode = '42501';
+  end if;
+
+  return query
+  select *
+  from public.get_income_statement_data_internal(
+    p_start_date,
+    p_end_date,
+    p_is_cash_flow
+  );
+end;
+$$;
+
+create or replace function public.get_income_expense_timeseries(
+  p_months integer default 12,
+  p_is_cash_flow boolean default false
+)
+returns table (
+  period_start date,
+  period_end date,
+  income numeric(14,2),
+  expense numeric(14,2)
+)
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+begin
+  if p_months is null or p_months not between 1 and 120 then
+    raise exception 'Invalid accounting timeseries range'
+      using errcode = '22023';
+  end if;
+
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Accounting access denied'
+      using errcode = '42501';
+  end if;
+
+  return query
+  select *
+  from public.get_income_expense_timeseries_internal(
+    p_months,
+    p_is_cash_flow
+  );
+end;
+$$;
+
+create or replace function public.get_income_expense_daily_timeseries(
+  p_start_date timestamp with time zone,
+  p_end_date timestamp with time zone,
+  p_is_cash_flow boolean default false
+)
+returns table (
+  period_start date,
+  period_end date,
+  income numeric(14,2),
+  expense numeric(14,2)
+)
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+begin
+  if p_start_date is null
+     or p_end_date is null
+     or p_start_date > p_end_date
+     or p_end_date - p_start_date > interval '3660 days' then
+    raise exception 'Invalid accounting date range'
+      using errcode = '22023';
+  end if;
+
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Accounting access denied'
+      using errcode = '42501';
+  end if;
+
+  return query
+  select *
+  from public.get_income_expense_daily_timeseries_internal(
+    p_start_date,
+    p_end_date,
+    p_is_cash_flow
+  );
+end;
+$$;
+
+-- Internal payroll implementations are never public API entrypoints.
+revoke all on function
+  public.generate_payroll_voucher_draft_internal(date, date, text)
+  from public, anon, authenticated, service_role;
+revoke all on function public.confirm_payroll_voucher_internal(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.register_employee_advance_internal(
+  uuid,
+  numeric,
+  uuid,
+  uuid,
+  timestamp with time zone,
+  text,
+  text
+) from public, anon, authenticated, service_role;
+revoke all on function public.pay_payroll_voucher_internal(uuid, jsonb)
+  from public, anon, authenticated, service_role;
+revoke all on function public.pay_payroll_voucher_internal(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.revert_payroll_payment_internal(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.revert_payroll_to_draft_internal(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function
+  public.get_payroll_voucher_line_settlements_internal(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function
+  public.calculate_payroll_internal(uuid, uuid, integer, integer)
+  from public, anon, authenticated, service_role;
+revoke all on function public.get_income_statement_data_internal(
+  timestamp with time zone,
+  timestamp with time zone,
+  boolean
+) from public, anon, authenticated, service_role;
+revoke all on function
+  public.get_income_expense_timeseries_internal(integer, boolean)
+  from public, anon, authenticated, service_role;
+revoke all on function public.get_income_expense_daily_timeseries_internal(
+  timestamp with time zone,
+  timestamp with time zone,
+  boolean
+) from public, anon, authenticated, service_role;
+
+grant execute on function
+  public.generate_payroll_voucher_draft_internal(date, date, text)
+  to service_role;
+grant execute on function public.confirm_payroll_voucher_internal(uuid)
+  to service_role;
+grant execute on function public.register_employee_advance_internal(
+  uuid,
+  numeric,
+  uuid,
+  uuid,
+  timestamp with time zone,
+  text,
+  text
+) to service_role;
+grant execute on function public.pay_payroll_voucher_internal(uuid, jsonb)
+  to service_role;
+grant execute on function public.pay_payroll_voucher_internal(uuid)
+  to service_role;
+grant execute on function public.revert_payroll_payment_internal(uuid)
+  to service_role;
+grant execute on function public.revert_payroll_to_draft_internal(uuid)
+  to service_role;
+grant execute on function
+  public.get_payroll_voucher_line_settlements_internal(uuid)
+  to service_role;
+grant execute on function
+  public.calculate_payroll_internal(uuid, uuid, integer, integer)
+  to service_role;
+grant execute on function public.get_income_statement_data_internal(
+  timestamp with time zone,
+  timestamp with time zone,
+  boolean
+) to service_role;
+grant execute on function
+  public.get_income_expense_timeseries_internal(integer, boolean)
+  to service_role;
+grant execute on function public.get_income_expense_daily_timeseries_internal(
+  timestamp with time zone,
+  timestamp with time zone,
+  boolean
+) to service_role;
+
+revoke all on function public.generate_payroll_voucher_draft(
+  date,
+  date,
+  text
+) from public, anon, authenticated, service_role;
+revoke all on function public.confirm_payroll_voucher(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.register_employee_advance(
+  uuid,
+  numeric,
+  uuid,
+  uuid,
+  timestamp with time zone,
+  text,
+  text
+) from public, anon, authenticated, service_role;
+revoke all on function public.pay_payroll_voucher(uuid, jsonb)
+  from public, anon, authenticated, service_role;
+revoke all on function public.pay_payroll_voucher(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.revert_payroll_payment(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.revert_payroll_to_draft(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.get_payroll_voucher_line_settlements(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.calculate_payroll(
+  uuid,
+  uuid,
+  integer,
+  integer
+) from public, anon, authenticated, service_role;
+revoke all on function public.get_income_statement_data(
+  timestamp with time zone,
+  timestamp with time zone,
+  boolean
+) from public, anon, authenticated, service_role;
+revoke all on function public.get_income_expense_timeseries(integer, boolean)
+  from public, anon, authenticated, service_role;
+revoke all on function public.get_income_expense_daily_timeseries(
+  timestamp with time zone,
+  timestamp with time zone,
+  boolean
+) from public, anon, authenticated, service_role;
+
+grant execute on function public.generate_payroll_voucher_draft(
+  date,
+  date,
+  text
+) to authenticated;
+grant execute on function public.confirm_payroll_voucher(uuid)
+  to authenticated;
+grant execute on function public.register_employee_advance(
+  uuid,
+  numeric,
+  uuid,
+  uuid,
+  timestamp with time zone,
+  text,
+  text
+) to authenticated;
+grant execute on function public.pay_payroll_voucher(uuid, jsonb)
+  to authenticated;
+grant execute on function public.pay_payroll_voucher(uuid)
+  to authenticated;
+grant execute on function public.revert_payroll_payment(uuid)
+  to authenticated;
+grant execute on function public.revert_payroll_to_draft(uuid)
+  to authenticated;
+grant execute on function public.get_payroll_voucher_line_settlements(uuid)
+  to authenticated;
+grant execute on function public.calculate_payroll(
+  uuid,
+  uuid,
+  integer,
+  integer
+) to authenticated;
+grant execute on function public.get_income_statement_data(
+  timestamp with time zone,
+  timestamp with time zone,
+  boolean
+) to authenticated;
+grant execute on function public.get_income_expense_timeseries(integer, boolean)
+  to authenticated;
+grant execute on function public.get_income_expense_daily_timeseries(
+  timestamp with time zone,
+  timestamp with time zone,
+  boolean
+) to authenticated;
+
+-- Trigger/helper functions execute through their owning triggers or the
+-- service-only implementations above, never as direct API commands.
+revoke all on function public.calculate_attendance_hours()
+  from public, anon, authenticated, service_role;
+revoke all on function public.prevent_duplicate_checkin()
+  from public, anon, authenticated, service_role;
+revoke all on function public.validate_employee_advance()
+  from public, anon, authenticated, service_role;
+revoke all on function public.validate_employee_advance_allocation()
+  from public, anon, authenticated, service_role;
+revoke all on function public.handle_employee_advance_change()
+  from public, anon, authenticated, service_role;
+revoke all on function public.handle_employee_advance_allocation_change()
+  from public, anon, authenticated, service_role;
+revoke all on function public.validate_shift_planning_tenant_consistency()
+  from public, anon, authenticated, service_role;
+
+revoke all on function
+  public.create_employee_advance_journal_entry(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function
+  public.create_employee_advance_allocation_journal_entry(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.recalculate_employee_advance(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.recalculate_expense_totals(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.ensure_payroll_line_expense(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.refresh_payroll_voucher_status(uuid)
+  from public, anon, authenticated, service_role;
+
+grant execute on function
+  public.create_employee_advance_journal_entry(uuid)
+  to service_role;
+grant execute on function
+  public.create_employee_advance_allocation_journal_entry(uuid)
+  to service_role;
+grant execute on function public.recalculate_employee_advance(uuid)
+  to service_role;
+grant execute on function public.recalculate_expense_totals(uuid)
+  to service_role;
+grant execute on function public.ensure_payroll_line_expense(uuid)
+  to service_role;
+grant execute on function public.refresh_payroll_voucher_status(uuid)
+  to service_role;
+
+comment on function public.get_erp_employee_directory() is
+  'Minimal same-tenant ERP employee directory; excludes HR, contact, health, bank, and remuneration fields.';
+comment on function public.current_erp_employee_id() is
+  'Returns the exact active bilaterally linked ERP employee for auth.uid(), otherwise NULL.';
+
+-- Non-sensitive HR catalogs remain readable to active ERP members. Their
+-- lifecycle is still a user-management responsibility.
+create policy departments_read_erp
+  on public.departments
+  for select
+  to authenticated
+  using (tenant_id = public.erp_member_tenant_id());
+create policy departments_insert_managers
+  on public.departments
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy departments_update_managers
+  on public.departments
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy departments_delete_managers
+  on public.departments
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id));
+
+create policy job_roles_read_erp
+  on public.job_roles
+  for select
+  to authenticated
+  using (tenant_id = public.erp_member_tenant_id());
+create policy job_roles_insert_managers
+  on public.job_roles
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy job_roles_update_managers
+  on public.job_roles
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy job_roles_delete_managers
+  on public.job_roles
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id));
+
+create policy work_schedules_read_erp
+  on public.work_schedules
+  for select
+  to authenticated
+  using (tenant_id = public.erp_member_tenant_id());
+create policy work_schedules_insert_managers
+  on public.work_schedules
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy work_schedules_update_managers
+  on public.work_schedules
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy work_schedules_delete_managers
+  on public.work_schedules
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id));
+
+-- The full employee row is restricted to HR managers, accounting staff, or
+-- the exact linked ERP employee. Physical employee deletion remains service
+-- only; the canonical retire_employee command owns application retirement.
+create policy employees_read_authorized
+  on public.employees
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_hr(tenant_id)
+    or public.can_manage_tenant_payroll(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and id = public.current_erp_employee_id()
+    )
+  );
+create policy employees_insert_managers
+  on public.employees
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy employees_update_managers
+  on public.employees
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+
+-- Salary contracts and attendance are readable by HR/accounting or the exact
+-- employee. Private leave/medical rows are HR-or-own only. Direct mutation is
+-- manager-only throughout this family.
+create policy employee_contracts_read_authorized
+  on public.employee_contracts
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_hr(tenant_id)
+    or public.can_manage_tenant_payroll(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and employee_id = public.current_erp_employee_id()
+    )
+  );
+create policy employee_contracts_insert_managers
+  on public.employee_contracts
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy employee_contracts_update_managers
+  on public.employee_contracts
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy employee_contracts_delete_managers
+  on public.employee_contracts
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id));
+
+create policy employment_contracts_read_authorized
+  on public.employment_contracts
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_hr(tenant_id)
+    or public.can_manage_tenant_payroll(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and employee_id = public.current_erp_employee_id()
+    )
+  );
+create policy employment_contracts_insert_managers
+  on public.employment_contracts
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy employment_contracts_update_managers
+  on public.employment_contracts
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy employment_contracts_delete_managers
+  on public.employment_contracts
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id));
+
+create policy attendances_read_authorized
+  on public.attendances
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_hr(tenant_id)
+    or public.can_manage_tenant_payroll(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and employee_id = public.current_erp_employee_id()
+    )
+  );
+create policy attendances_insert_managers
+  on public.attendances
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy attendances_update_managers
+  on public.attendances
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy attendances_delete_managers
+  on public.attendances
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id));
+
+create policy attendance_records_read_authorized
+  on public.attendance_records
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_hr(tenant_id)
+    or public.can_manage_tenant_payroll(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and employee_id = public.current_erp_employee_id()
+    )
+  );
+create policy attendance_records_insert_managers
+  on public.attendance_records
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy attendance_records_update_managers
+  on public.attendance_records
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy attendance_records_delete_managers
+  on public.attendance_records
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id));
+
+create policy leave_requests_read_authorized
+  on public.leave_requests
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_hr(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and employee_id = public.current_erp_employee_id()
+    )
+  );
+create policy leave_requests_insert_managers
+  on public.leave_requests
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy leave_requests_update_managers
+  on public.leave_requests
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy leave_requests_delete_managers
+  on public.leave_requests
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id));
+
+create policy medical_leaves_read_authorized
+  on public.medical_leaves
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_hr(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and employee_id = public.current_erp_employee_id()
+    )
+  );
+create policy medical_leaves_insert_managers
+  on public.medical_leaves
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy medical_leaves_update_managers
+  on public.medical_leaves
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy medical_leaves_delete_managers
+  on public.medical_leaves
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id));
+
+-- Legacy and current payroll surfaces share one accounting authority. An
+-- employee may read only rows that are explicitly keyed to that employee.
+create policy payroll_runs_read_accounting
+  on public.payroll_runs
+  for select
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+create policy payroll_runs_insert_accounting
+  on public.payroll_runs
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_payroll(tenant_id));
+create policy payroll_runs_update_accounting
+  on public.payroll_runs
+  for update
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id))
+  with check (public.can_manage_tenant_payroll(tenant_id));
+create policy payroll_runs_delete_accounting
+  on public.payroll_runs
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+create policy payroll_entries_read_authorized
+  on public.payroll_entries
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_payroll(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and employee_id = public.current_erp_employee_id()
+    )
+  );
+create policy payroll_entries_insert_accounting
+  on public.payroll_entries
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_payroll(tenant_id));
+create policy payroll_entries_update_accounting
+  on public.payroll_entries
+  for update
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id))
+  with check (public.can_manage_tenant_payroll(tenant_id));
+create policy payroll_entries_delete_accounting
+  on public.payroll_entries
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+create policy payroll_records_read_authorized
+  on public.payroll_records
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_payroll(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and employee_id = public.current_erp_employee_id()
+    )
+  );
+create policy payroll_records_insert_accounting
+  on public.payroll_records
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_payroll(tenant_id));
+create policy payroll_records_update_accounting
+  on public.payroll_records
+  for update
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id))
+  with check (public.can_manage_tenant_payroll(tenant_id));
+create policy payroll_records_delete_accounting
+  on public.payroll_records
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+-- Legacy shifts have no current Flutter owner. Keep historical rows readable
+-- only to HR managers or the exact ERP employee, and manager-only for writes.
+create policy shifts_read_authorized
+  on public.shifts
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_hr(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and employee_id = public.current_erp_employee_id()
+    )
+  );
+create policy shifts_insert_managers
+  on public.shifts
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy shifts_update_managers
+  on public.shifts
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy shifts_delete_managers
+  on public.shifts
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id));
+
+create policy payroll_vouchers_read_accounting
+  on public.payroll_vouchers
+  for select
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+create policy payroll_vouchers_insert_accounting
+  on public.payroll_vouchers
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_payroll(tenant_id));
+create policy payroll_vouchers_update_accounting
+  on public.payroll_vouchers
+  for update
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id))
+  with check (public.can_manage_tenant_payroll(tenant_id));
+create policy payroll_vouchers_delete_accounting
+  on public.payroll_vouchers
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+create policy payroll_voucher_lines_read_authorized
+  on public.payroll_voucher_lines
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_payroll(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and employee_id = public.current_erp_employee_id()
+    )
+  );
+create policy payroll_voucher_lines_insert_accounting
+  on public.payroll_voucher_lines
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_payroll(tenant_id));
+create policy payroll_voucher_lines_update_accounting
+  on public.payroll_voucher_lines
+  for update
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id))
+  with check (public.can_manage_tenant_payroll(tenant_id));
+create policy payroll_voucher_lines_delete_accounting
+  on public.payroll_voucher_lines
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+create policy employee_advances_read_authorized
+  on public.employee_advances
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_payroll(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and employee_id = public.current_erp_employee_id()
+    )
+  );
+create policy employee_advances_insert_accounting
+  on public.employee_advances
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_payroll(tenant_id));
+create policy employee_advances_update_accounting
+  on public.employee_advances
+  for update
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id))
+  with check (public.can_manage_tenant_payroll(tenant_id));
+create policy employee_advances_delete_accounting
+  on public.employee_advances
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+create policy employee_advance_allocations_read_authorized
+  on public.employee_advance_allocations
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_payroll(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and (
+        exists (
+          select 1
+          from public.employee_advances advance
+          where advance.id =
+              employee_advance_allocations.advance_id
+            and advance.tenant_id =
+              employee_advance_allocations.tenant_id
+            and advance.employee_id =
+              public.current_erp_employee_id()
+        )
+        or exists (
+          select 1
+          from public.payroll_voucher_lines voucher_line
+          where voucher_line.id =
+              employee_advance_allocations.voucher_line_id
+            and voucher_line.tenant_id =
+              employee_advance_allocations.tenant_id
+            and voucher_line.employee_id =
+              public.current_erp_employee_id()
+        )
+      )
+    )
+  );
+create policy employee_advance_allocations_insert_accounting
+  on public.employee_advance_allocations
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_payroll(tenant_id));
+create policy employee_advance_allocations_update_accounting
+  on public.employee_advance_allocations
+  for update
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id))
+  with check (public.can_manage_tenant_payroll(tenant_id));
+create policy employee_advance_allocations_delete_accounting
+  on public.employee_advance_allocations
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+-- Planning managers retain tenant-wide control. ERP and Worker identities may
+-- read only their own employee rows; team coverage remains in curated RPCs.
+create policy planning_roles_read_authorized
+  on public.planning_roles
+  for select
+  to authenticated
+  using (
+    tenant_id = public.erp_member_tenant_id()
+    or tenant_id = public.worker_portal_tenant_id()
+  );
+create policy planning_roles_insert_managers
+  on public.planning_roles
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy planning_roles_update_managers
+  on public.planning_roles
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy planning_roles_delete_managers
+  on public.planning_roles
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id));
+
+create policy employee_planning_roles_read_authorized
+  on public.employee_planning_roles
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_hr(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and employee_id = public.current_erp_employee_id()
+    )
+    or (
+      tenant_id = public.worker_portal_tenant_id()
+      and employee_id = public.worker_portal_employee_id()
+    )
+  );
+create policy employee_planning_roles_insert_managers
+  on public.employee_planning_roles
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy employee_planning_roles_update_managers
+  on public.employee_planning_roles
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy employee_planning_roles_delete_managers
+  on public.employee_planning_roles
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id));
+
+create policy employee_default_shift_blocks_read_authorized
+  on public.employee_default_shift_blocks
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_hr(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and employee_id = public.current_erp_employee_id()
+    )
+    or (
+      tenant_id = public.worker_portal_tenant_id()
+      and employee_id = public.worker_portal_employee_id()
+    )
+  );
+create policy employee_default_shift_blocks_insert_managers
+  on public.employee_default_shift_blocks
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy employee_default_shift_blocks_update_managers
+  on public.employee_default_shift_blocks
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy employee_default_shift_blocks_delete_managers
+  on public.employee_default_shift_blocks
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id));
+
+create policy planned_shifts_read_authorized
+  on public.planned_shifts
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_hr(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and employee_id = public.current_erp_employee_id()
+    )
+    or (
+      tenant_id = public.worker_portal_tenant_id()
+      and employee_id = public.worker_portal_employee_id()
+    )
+  );
+create policy planned_shifts_insert_managers
+  on public.planned_shifts
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy planned_shifts_update_managers
+  on public.planned_shifts
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy planned_shifts_delete_managers
+  on public.planned_shifts
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id));
+
+create policy shift_change_requests_read_authorized
+  on public.shift_change_requests
+  for select
+  to authenticated
+  using (
+    public.can_manage_tenant_hr(tenant_id)
+    or (
+      tenant_id = public.erp_member_tenant_id()
+      and employee_id = public.current_erp_employee_id()
+    )
+    or (
+      tenant_id = public.worker_portal_tenant_id()
+      and employee_id = public.worker_portal_employee_id()
+    )
+  );
+create policy shift_change_requests_insert_managers
+  on public.shift_change_requests
+  for insert
+  to authenticated
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy shift_change_requests_update_managers
+  on public.shift_change_requests
+  for update
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id))
+  with check (public.can_manage_tenant_hr(tenant_id));
+create policy shift_change_requests_delete_managers
+  on public.shift_change_requests
+  for delete
+  to authenticated
+  using (public.can_manage_tenant_hr(tenant_id));
+
+-- Remove Supabase's broad default table ACLs. RLS then applies only to the
+-- intended authenticated operations; service-role maintenance stays explicit.
+do $$
+declare
+  table_name_value text;
+begin
+  foreach table_name_value in array array[
+    'departments',
+    'job_roles',
+    'work_schedules',
+    'employee_contracts',
+    'attendances',
+    'attendance_records',
+    'leave_requests',
+    'medical_leaves',
+    'employment_contracts',
+    'payroll_runs',
+    'payroll_entries',
+    'payroll_records',
+    'shifts',
+    'planning_roles',
+    'employee_planning_roles',
+    'employee_default_shift_blocks',
+    'planned_shifts',
+    'shift_change_requests',
+    'payroll_vouchers',
+    'payroll_voucher_lines',
+    'employee_advances',
+    'employee_advance_allocations'
+  ]
+  loop
+    execute format(
+      'revoke all on table public.%I from public, anon, authenticated, service_role',
+      table_name_value
+    );
+    execute format(
+      'grant select, insert, update, delete on table public.%I to authenticated',
+      table_name_value
+    );
+    execute format(
+      'grant all on table public.%I to service_role',
+      table_name_value
+    );
+  end loop;
+
+  revoke all on table public.employees
+    from public, anon, authenticated, service_role;
+  grant select, insert, update on table public.employees
+    to authenticated;
+  grant all on table public.employees
+    to service_role;
+end
+$$;
+
+-- ============================================================================
+-- EXPENSE TRACE PAYMENT TRUTH
+-- Canonical mirror of
+-- 20260728020000_include_employee_advances_in_expense_trace.sql.
+-- ============================================================================
+
+create index if not exists idx_payroll_voucher_lines_tenant_expense
+  on public.payroll_voucher_lines(tenant_id, expense_id)
+  where expense_id is not null;
+
+create or replace function public.complete_expense_accounting_operation(
+  p_operation_id uuid,
+  p_tenant_id uuid,
+  p_expense_id uuid,
+  p_payment_id uuid default null,
+  p_expected_accrual_journals integer default null,
+  p_expected_payment_journals integer default null,
+  p_require_accrual_operation_link boolean default false,
+  p_require_payment_operation_link boolean default false,
+  p_expense_deleted boolean default false,
+  p_expense_number text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_expense public.expenses%rowtype;
+  v_expense_found boolean := false;
+  v_expense_snapshot jsonb;
+  v_line_subtotal numeric(14,2) := 0;
+  v_line_tax numeric(14,2) := 0;
+  v_line_total numeric(14,2) := 0;
+  v_cash_payment_total numeric(14,2) := 0;
+  v_advance_allocation_total numeric(14,2) := 0;
+  v_payment_total numeric(14,2) := 0;
+  v_effective_paid numeric(14,2) := 0;
+  v_expected_balance numeric(14,2) := 0;
+  v_header_mismatches integer := 0;
+  v_accrual_journal_count integer := 0;
+  v_payment_journal_count integer := 0;
+  v_unbalanced_journal_count integer := 0;
+  v_accrual_link_mismatches integer := 0;
+  v_payment_link_mismatches integer := 0;
+  v_stock_movement_count integer := 0;
+  v_expected_accrual integer := 0;
+  v_expected_payment integer := 0;
+begin
+  if not exists (
+    select 1
+    from public.inventory_accounting_operations operation
+    where operation.id = p_operation_id
+      and operation.tenant_id = p_tenant_id
+  ) then
+    raise exception 'Expense operation % does not belong to tenant %',
+      p_operation_id,
+      p_tenant_id
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  if p_expense_id is not null then
+    select *
+    into v_expense
+    from public.expenses expense
+    where expense.id = p_expense_id
+      and expense.tenant_id = p_tenant_id;
+    v_expense_found := found;
+  end if;
+
+  if v_expense_found then
+    v_expense_snapshot :=
+      public.expense_accounting_trace_snapshot(to_jsonb(v_expense));
+    p_expense_number := coalesce(
+      p_expense_number,
+      v_expense.expense_number
+    );
+
+    select
+      round(coalesce(sum(line.subtotal), 0), 2),
+      round(coalesce(sum(line.tax_amount), 0), 2),
+      round(coalesce(sum(line.total), 0), 2)
+    into v_line_subtotal, v_line_tax, v_line_total
+    from public.expense_lines line
+    where line.expense_id = v_expense.id
+      and line.tenant_id = v_expense.tenant_id;
+
+    select round(coalesce(sum(payment.amount), 0), 2)
+    into v_cash_payment_total
+    from public.expense_payments payment
+    where payment.expense_id = v_expense.id
+      and payment.tenant_id = v_expense.tenant_id;
+
+    select round(coalesce(sum(allocation.amount), 0), 2)
+    into v_advance_allocation_total
+    from public.employee_advance_allocations allocation
+    join public.payroll_voucher_lines voucher_line
+      on voucher_line.id = allocation.voucher_line_id
+     and voucher_line.tenant_id = allocation.tenant_id
+    where voucher_line.expense_id = v_expense.id
+      and voucher_line.tenant_id = v_expense.tenant_id
+      and allocation.tenant_id = v_expense.tenant_id;
+
+    v_payment_total := round(
+      v_cash_payment_total + v_advance_allocation_total,
+      2
+    );
+
+    v_effective_paid := case
+      when v_payment_total = 0
+       and lower(coalesce(v_expense.payment_status, 'pending')) = 'paid'
+       and v_expense.payment_method_id is not null
+       and round(coalesce(v_expense.total_amount, 0), 2) > 0
+        then round(coalesce(v_expense.total_amount, 0), 2)
+      else v_payment_total
+    end;
+    v_expected_balance := greatest(
+      round(coalesce(v_expense.total_amount, 0), 2) - v_effective_paid,
+      0
+    );
+
+    v_header_mismatches :=
+      case
+        when round(coalesce(v_expense.subtotal, 0), 2) <> v_line_subtotal
+          then 1 else 0
+      end
+      + case
+        when round(coalesce(v_expense.tax_amount, 0), 2) <> v_line_tax
+          then 1 else 0
+      end
+      + case
+        when round(coalesce(v_expense.total_amount, 0), 2) <> v_line_total
+          then 1 else 0
+      end
+      + case
+        when round(coalesce(v_expense.amount_paid, 0), 2) <> v_effective_paid
+          then 1 else 0
+      end
+      + case
+        when round(coalesce(v_expense.balance, 0), 2) <> v_expected_balance
+          then 1 else 0
+      end;
+
+    v_expected_accrual := coalesce(
+      p_expected_accrual_journals,
+      case
+        when lower(coalesce(v_expense.posting_status, 'draft')) = 'posted'
+         and round(coalesce(v_expense.total_amount, 0), 2) <> 0 then 1
+        else 0
+      end
+    );
+  elsif p_expense_id is not null and not p_expense_deleted then
+    raise exception 'Expense % disappeared before trace completion',
+      p_expense_id
+      using errcode = 'foreign_key_violation';
+  else
+    v_expected_accrual := coalesce(p_expected_accrual_journals, 0);
+    if p_expense_number is null and p_expense_id is not null then
+      select operation.before_snapshot->>'expense_number'
+      into p_expense_number
+      from public.inventory_accounting_operations operation
+      where operation.id = p_operation_id;
+    end if;
+  end if;
+
+  select count(*)::integer
+  into v_accrual_journal_count
+  from public.journal_entries entry
+  where entry.tenant_id = p_tenant_id
+    and entry.source_module = 'expenses'
+    and (
+      -- Expense journal UUID identity is authoritative; text references may
+      -- belong to preserved journals for deleted legacy expenses.
+      (p_expense_id is not null and entry.source_document_id = p_expense_id)
+      or (
+        p_expense_id is null
+        and entry.source_reference = p_expense_number
+      )
+    );
+
+  if p_payment_id is not null then
+    if p_expected_payment_journals is null then
+      select case
+        when payment.id is not null
+         and round(coalesce(payment.amount, 0), 2) <> 0
+         and lower(coalesce(expense.posting_status, 'draft')) = 'posted' then 1
+        else 0
+      end
+      into v_expected_payment
+      from (select 1) seed
+      left join public.expense_payments payment
+        on payment.id = p_payment_id
+       and payment.tenant_id = p_tenant_id
+      left join public.expenses expense
+        on expense.id = payment.expense_id
+       and expense.tenant_id = payment.tenant_id;
+      v_expected_payment := coalesce(v_expected_payment, 0);
+    else
+      v_expected_payment := p_expected_payment_journals;
+    end if;
+
+    select count(*)::integer
+    into v_payment_journal_count
+    from public.journal_entries entry
+    where entry.tenant_id = p_tenant_id
+      and entry.source_module = 'expense_payments'
+      and (
+        entry.source_reference = p_payment_id::text
+        or entry.source_document_id = p_payment_id
+      );
+  end if;
+
+  if p_require_accrual_operation_link and v_expected_accrual > 0 then
+    select count(*)::integer
+    into v_accrual_link_mismatches
+    from public.journal_entries entry
+    where entry.tenant_id = p_tenant_id
+      and entry.source_module = 'expenses'
+      and (
+        -- Expense journal UUID identity is authoritative; text references may
+        -- belong to preserved journals for deleted legacy expenses.
+        (p_expense_id is not null and entry.source_document_id = p_expense_id)
+        or (
+          p_expense_id is null
+          and entry.source_reference = p_expense_number
+        )
+      )
+      and entry.operation_id is distinct from p_operation_id;
+  end if;
+
+  if p_require_payment_operation_link and v_expected_payment > 0 then
+    select count(*)::integer
+    into v_payment_link_mismatches
+    from public.journal_entries entry
+    where entry.tenant_id = p_tenant_id
+      and entry.source_module = 'expense_payments'
+      and (
+        entry.source_reference = p_payment_id::text
+        or entry.source_document_id = p_payment_id
+      )
+      and entry.operation_id is distinct from p_operation_id;
+  end if;
+
+  select count(*)::integer
+  into v_unbalanced_journal_count
+  from (
+    select entry.id
+    from public.journal_entries entry
+    left join public.journal_lines line
+      on line.entry_id = entry.id
+     and line.tenant_id = entry.tenant_id
+    where entry.tenant_id = p_tenant_id
+      and (
+        (
+          entry.source_module = 'expenses'
+          and (
+            -- Expense journal UUID identity is authoritative; text references
+            -- may belong to preserved journals for deleted legacy expenses.
+            (
+              p_expense_id is not null
+              and entry.source_document_id = p_expense_id
+            )
+            or (
+              p_expense_id is null
+              and entry.source_reference = p_expense_number
+            )
+          )
+        )
+        or (
+          p_payment_id is not null
+          and entry.source_module = 'expense_payments'
+          and (
+            entry.source_reference = p_payment_id::text
+            or entry.source_document_id = p_payment_id
+          )
+        )
+      )
+    group by entry.id
+    having round(coalesce(sum(line.debit_amount), 0), 2)
+        <> round(coalesce(sum(line.credit_amount), 0), 2)
+       or round(coalesce(entry.total_debit, 0), 2)
+        <> round(coalesce(sum(line.debit_amount), 0), 2)
+       or round(coalesce(entry.total_credit, 0), 2)
+        <> round(coalesce(sum(line.credit_amount), 0), 2)
+  ) broken;
+
+  select count(*)::integer
+  into v_stock_movement_count
+  from public.stock_movements movement
+  where movement.tenant_id = p_tenant_id
+    and movement.operation_id = p_operation_id;
+
+  perform public.append_inventory_accounting_checkpoint(
+    p_operation_id,
+    'source_snapshotted',
+    'completed',
+    case when p_payment_id is null then 'expense' else 'expense_payment' end,
+    coalesce(p_payment_id, p_expense_id),
+    jsonb_build_object(
+      'expense_after', v_expense_snapshot,
+      'line_subtotal', v_line_subtotal,
+      'line_tax', v_line_tax,
+      'line_total', v_line_total,
+      'payment_total', v_payment_total,
+      'cash_payment_total', v_cash_payment_total,
+      'advance_allocation_total', v_advance_allocation_total
+    )
+  );
+
+  perform public.append_inventory_accounting_checkpoint(
+    p_operation_id,
+    'accounting_planned',
+    'completed',
+    case when p_payment_id is null then 'expense' else 'expense_payment' end,
+    coalesce(p_payment_id, p_expense_id),
+    jsonb_build_object(
+      'expected_accrual_journals', v_expected_accrual,
+      'actual_accrual_journals', v_accrual_journal_count,
+      'expected_payment_journals', v_expected_payment,
+      'actual_payment_journals', v_payment_journal_count,
+      'stock_effect', 'none'
+    )
+  );
+
+  if v_header_mismatches <> 0
+     or v_accrual_journal_count <> v_expected_accrual
+     or v_payment_journal_count <> v_expected_payment
+     or v_unbalanced_journal_count <> 0
+     or v_accrual_link_mismatches <> 0
+     or v_payment_link_mismatches <> 0
+     or v_stock_movement_count <> 0 then
+    raise exception
+      'Expense trace invariant failed for operation % (header %, accrual %/%, payment %/%, unbalanced %, accrual link %, payment link %, stock %)',
+      p_operation_id,
+      v_header_mismatches,
+      v_accrual_journal_count,
+      v_expected_accrual,
+      v_payment_journal_count,
+      v_expected_payment,
+      v_unbalanced_journal_count,
+      v_accrual_link_mismatches,
+      v_payment_link_mismatches,
+      v_stock_movement_count
+      using errcode = 'check_violation';
+  end if;
+
+  update public.inventory_accounting_operations operation
+  set context = operation.context || jsonb_build_object(
+        'expense_after', v_expense_snapshot,
+        'accrual_journal_count', v_accrual_journal_count,
+        'payment_journal_count', v_payment_journal_count,
+        'stock_movement_count', v_stock_movement_count
+      )
+  where operation.id = p_operation_id
+    and operation.tenant_id = p_tenant_id;
+
+  perform public.complete_inventory_accounting_operation(
+    p_operation_id,
+    p_tenant_id,
+    jsonb_build_object(
+      'expense_id', p_expense_id,
+      'payment_id', p_payment_id,
+      'expense_deleted', p_expense_deleted,
+      'accrual_journal_count', v_accrual_journal_count,
+      'payment_journal_count', v_payment_journal_count,
+      'stock_movement_count', v_stock_movement_count,
+      'header_mismatches', v_header_mismatches
+    )
+  );
+
+  perform set_config('app.inventory_operation_id', '', true);
+  perform set_config('app.inventory_source_document_type', '', true);
+  perform set_config('app.inventory_source_document_id', '', true);
+  perform set_config('app.inventory_source_channel', '', true);
+exception
+  when others then
+    perform set_config('app.inventory_operation_id', '', true);
+    perform set_config('app.inventory_source_document_type', '', true);
+    perform set_config('app.inventory_source_document_id', '', true);
+    perform set_config('app.inventory_source_channel', '', true);
+    raise;
+end;
+$$;
+
+revoke all on function public.complete_expense_accounting_operation(
+  uuid, uuid, uuid, uuid, integer, integer, boolean, boolean, boolean, text
+) from public, anon, authenticated, service_role;
+
+comment on function public.complete_expense_accounting_operation(
+  uuid, uuid, uuid, uuid, integer, integer, boolean, boolean, boolean, text
+) is
+  'Validates expense totals against cash payments plus payroll advance allocations and completes the accounting trace.';
+
+create or replace function public.complete_expense_row_trace()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_operation_text text := nullif(
+    current_setting('app.inventory_operation_id', true),
+    ''
+  );
+  v_operation_id uuid;
+  v_operation_context jsonb;
+  v_tenant_id uuid;
+  v_expense_id uuid;
+  v_payment_id uuid;
+  v_expense_number text;
+  v_require_accrual_link boolean := false;
+  v_require_payment_link boolean := false;
+  v_expected_accrual integer := null;
+  v_expected_payment integer := null;
+  v_expense_deleted boolean := false;
+begin
+  if v_operation_text is null then
+    return case when TG_OP = 'DELETE' then OLD else NEW end;
+  end if;
+
+  v_operation_id := v_operation_text::uuid;
+  select operation.context
+  into v_operation_context
+  from public.inventory_accounting_operations operation
+  where operation.id = v_operation_id;
+
+  -- Nested expense recalculations and RPC-owned traces are finalized by the
+  -- original line/payment trigger or wrapper, never by an intermediate UPDATE.
+  if v_operation_context->>'trace_owner' is distinct from 'row_trigger'
+     or v_operation_context->>'owner_table' is distinct from TG_TABLE_NAME
+     -- Only the owning trigger depth may finalize a same-table root.
+     or coalesce(
+       nullif(v_operation_context->>'trigger_depth', '')::integer,
+       1
+     ) <> pg_trigger_depth() then
+    return case when TG_OP = 'DELETE' then OLD else NEW end;
+  end if;
+
+  v_tenant_id := case
+    when TG_OP = 'DELETE' then OLD.tenant_id
+    else NEW.tenant_id
+  end;
+
+  if TG_TABLE_NAME = 'expenses' then
+    v_expense_id := case when TG_OP = 'DELETE' then OLD.id else NEW.id end;
+    if TG_OP = 'DELETE' then
+      v_expected_accrual := 0;
+      v_expense_deleted := true;
+      v_expense_number := OLD.expense_number;
+    elsif TG_OP = 'UPDATE'
+       and lower(coalesce(NEW.posting_status, 'draft')) = 'posted'
+       and coalesce(
+         (v_operation_context->>'trigger_depth')::integer,
+         pg_trigger_depth()
+       ) <= 1 then
+      -- process_expense_change rebuilds and relinks the accrual journal only
+      -- for a root expense update. Nested totals-only updates intentionally
+      -- return early, so their trace validates journal count/balance but must
+      -- retain the immutable operation link of the unchanged accrual.
+      v_require_accrual_link := true;
+    end if;
+  elsif TG_TABLE_NAME = 'expense_lines' then
+    v_expense_id := case
+      when TG_OP = 'DELETE' then OLD.expense_id
+      else NEW.expense_id
+    end;
+    v_require_accrual_link := true;
+  elsif TG_TABLE_NAME = 'expense_payments' then
+    v_expense_id := case
+      when TG_OP = 'DELETE' then OLD.expense_id
+      else NEW.expense_id
+    end;
+    v_payment_id := case when TG_OP = 'DELETE' then OLD.id else NEW.id end;
+    v_require_payment_link := true;
+    if TG_OP = 'DELETE' then
+      v_expected_payment := 0;
+    end if;
+  end if;
+
+  perform public.complete_expense_accounting_operation(
+    v_operation_id,
+    v_tenant_id,
+    v_expense_id,
+    v_payment_id,
+    v_expected_accrual,
+    v_expected_payment,
+    v_require_accrual_link,
+    v_require_payment_link,
+    v_expense_deleted,
+    v_expense_number
+  );
+
+  return case when TG_OP = 'DELETE' then OLD else NEW end;
+end;
+$$;
+
+revoke all on function public.complete_expense_row_trace()
+  from public, anon, authenticated, service_role;
+
+comment on function public.complete_expense_row_trace() is
+  'Completes root and nested expense traces without relinking an unchanged accrual journal during nested totals-only updates.';
+
+-- The canonical bootstrap predates the dynamic expense-RPC ACL convergence.
+-- Reassert the trigger-only boundary explicitly so a snapshot build and a
+-- migration build expose the same final privileges.
+revoke all on function public.handle_expense_line_change()
+  from public, anon, authenticated, service_role;
+revoke all on function public.handle_expense_payment_change()
+  from public, anon, authenticated, service_role;
+
+-- ============================================================================
+-- PAYROLL STATEMENT RECONCILIATION (2026-07-28 canonical migration mirror)
+-- ============================================================================
+-- Canonical mirror: auditable payroll bank-statement reconciliation boundary.
+--
+-- Importing parser/OCR output never pays payroll. The import command stores a
+-- file digest plus immutable normalized rows in review. A separate apply
+-- command requires an explicit decision for every imported row, current
+-- voucher versions, and a human cash acknowledgement before it can create any
+-- accounting movement.
+--
+-- Backfill: none. Existing payroll vouchers start at reconciliation_version 0.
+-- Lock risk: a brief catalog lock adds the voucher version column and trigger;
+-- reconciliation indexes are over new empty tables. Tenant-composite reference
+-- indexes also scan the existing payroll/accounting tables and briefly block
+-- writes while this transactional migration runs. Runtime settlement commands
+-- serialize per tenant, then lock one import and the explicitly selected
+-- vouchers/lines/advances in deterministic order.
+-- Recovery: stop new calls, preserve the audit tables, and restore the prior
+-- voucher ACL/function definitions. Do not drop reconciliation evidence after
+-- an apply operation has created accounting movements.
+-- Prerequisite: 20260728020000_include_employee_advances_in_expense_trace.sql
+-- must be applied first so advance allocations satisfy the current expense
+-- trace invariant.
+
+do $$
+begin
+  if to_regclass(
+    'public.idx_payroll_voucher_lines_tenant_expense'
+  ) is null then
+    raise exception
+      'Missing prerequisite 20260728020000_include_employee_advances_in_expense_trace'
+      using errcode = '55000';
+  end if;
+end
+$$;
+
+alter table public.payroll_vouchers
+  add column if not exists reconciliation_version bigint not null default 0;
+
+create or replace function public.bump_payroll_voucher_reconciliation_version()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+begin
+  new.reconciliation_version := old.reconciliation_version + 1;
+  return new;
+end;
+$$;
+
+revoke all on function
+  public.bump_payroll_voucher_reconciliation_version()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_payroll_voucher_reconciliation_version
+  on public.payroll_vouchers;
+create trigger trg_payroll_voucher_reconciliation_version
+  before update on public.payroll_vouchers
+  for each row
+  execute function public.bump_payroll_voucher_reconciliation_version();
+
+create or replace function public.touch_payroll_voucher_from_line()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  voucher_id_value uuid := case
+    when tg_op = 'DELETE' then old.voucher_id
+    else new.voucher_id
+  end;
+  prior_voucher_id_value uuid := case
+    when tg_op = 'UPDATE' then old.voucher_id
+    else null
+  end;
+begin
+  -- The voucher trigger owns the actual monotonic increment. A line mutation
+  -- only touches the aggregate header, so direct REST edits cannot leave the
+  -- optimistic-concurrency token stale.
+  update public.payroll_vouchers voucher
+  set updated_at = statement_timestamp()
+  where voucher.id = voucher_id_value;
+
+  if prior_voucher_id_value is not null
+     and prior_voucher_id_value <> voucher_id_value then
+    update public.payroll_vouchers voucher
+    set updated_at = statement_timestamp()
+    where voucher.id = prior_voucher_id_value;
+  end if;
+
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$$;
+
+revoke all on function public.touch_payroll_voucher_from_line()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_touch_payroll_voucher_from_line
+  on public.payroll_voucher_lines;
+create trigger trg_touch_payroll_voucher_from_line
+  after insert or update or delete on public.payroll_voucher_lines
+  for each row
+  execute function public.touch_payroll_voucher_from_line();
+
+create or replace function public.normalize_payroll_statement_text(
+  p_value text
+)
+returns text
+language sql
+immutable
+strict
+set search_path = pg_catalog, public, pg_temp
+as $$
+  select nullif(
+    trim(
+      regexp_replace(
+        lower(public.unaccent('unaccent', p_value)),
+        '[^a-z0-9]+',
+        ' ',
+        'g'
+      )
+    ),
+    ''
+  )
+$$;
+
+revoke all on function public.normalize_payroll_statement_text(text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.normalize_payroll_statement_text(text)
+  to service_role;
+
+create table if not exists public.payroll_statement_account_mappings (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null
+    references public.tenants(id) on delete restrict,
+  erp_account_id uuid not null
+    references public.accounts(id) on delete restrict,
+  account_fingerprint text not null
+    check (account_fingerprint ~ '^[0-9a-f]{64}$'),
+  created_by uuid not null references auth.users(id),
+  created_at timestamp with time zone not null default statement_timestamp(),
+  unique (tenant_id, erp_account_id),
+  unique (tenant_id, account_fingerprint),
+  unique (tenant_id, erp_account_id, account_fingerprint)
+);
+
+create table if not exists public.payroll_voucher_draft_operations (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null
+    references public.tenants(id) on delete restrict,
+  operation_key text not null
+    check (char_length(operation_key) between 8 and 200),
+  payload_hash text not null
+    check (payload_hash ~ '^[0-9a-f]{64}$'),
+  voucher_id uuid
+    references public.payroll_vouchers(id) on delete set null,
+  expected_reconciliation_version bigint
+    check (
+      expected_reconciliation_version is null
+      or expected_reconciliation_version >= 0
+    ),
+  receipt jsonb not null check (jsonb_typeof(receipt) = 'object'),
+  created_by uuid not null references auth.users(id),
+  created_at timestamp with time zone not null default statement_timestamp(),
+  unique (tenant_id, operation_key)
+);
+
+create index if not exists idx_payroll_voucher_draft_operations_voucher
+  on public.payroll_voucher_draft_operations(tenant_id, voucher_id);
+
+create table if not exists public.payroll_money_operations (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null
+    references public.tenants(id) on delete restrict,
+  operation_type text not null
+    check (
+      operation_type in ('manual_payroll_payment', 'employee_advance')
+    ),
+  operation_key text not null
+    check (char_length(operation_key) between 8 and 200),
+  payload_hash text not null
+    check (payload_hash ~ '^[0-9a-f]{64}$'),
+  voucher_id uuid
+    references public.payroll_vouchers(id) on delete restrict,
+  employee_advance_id uuid
+    references public.employee_advances(id) on delete restrict,
+  receipt jsonb not null check (jsonb_typeof(receipt) = 'object'),
+  created_by uuid not null references auth.users(id),
+  created_at timestamp with time zone not null default statement_timestamp(),
+  unique (tenant_id, operation_key),
+  check (
+    (
+      operation_type = 'manual_payroll_payment'
+      and voucher_id is not null
+      and employee_advance_id is null
+    )
+    or (
+      operation_type = 'employee_advance'
+      and voucher_id is null
+      and employee_advance_id is not null
+    )
+  )
+);
+
+create index if not exists idx_payroll_money_operations_voucher
+  on public.payroll_money_operations(tenant_id, voucher_id)
+  where voucher_id is not null;
+create index if not exists idx_payroll_money_operations_advance
+  on public.payroll_money_operations(tenant_id, employee_advance_id)
+  where employee_advance_id is not null;
+
+create table if not exists public.payroll_money_operation_movements (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null
+    references public.tenants(id) on delete restrict,
+  operation_id uuid not null
+    references public.payroll_money_operations(id) on delete restrict,
+  movement_type text not null
+    check (movement_type in ('expense_payment', 'advance_allocation')),
+  expense_payment_id uuid
+    references public.expense_payments(id) on delete restrict,
+  advance_allocation_id uuid
+    references public.employee_advance_allocations(id) on delete restrict,
+  created_at timestamp with time zone not null default statement_timestamp(),
+  unique (expense_payment_id),
+  unique (advance_allocation_id),
+  check (
+    (
+      movement_type = 'expense_payment'
+      and expense_payment_id is not null
+      and advance_allocation_id is null
+    )
+    or (
+      movement_type = 'advance_allocation'
+      and expense_payment_id is null
+      and advance_allocation_id is not null
+    )
+  )
+);
+
+create index if not exists idx_payroll_money_operation_movements_operation
+  on public.payroll_money_operation_movements(tenant_id, operation_id);
+
+create table if not exists public.payroll_statement_imports (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null
+    references public.tenants(id) on delete restrict,
+  file_sha256 text not null
+    check (file_sha256 ~ '^[0-9a-f]{64}$'),
+  account_fingerprint text not null
+    check (account_fingerprint ~ '^[0-9a-f]{64}$'),
+  erp_account_id uuid not null
+    references public.accounts(id) on delete restrict,
+  source_metadata jsonb not null default '{}'::jsonb
+    check (jsonb_typeof(source_metadata) = 'object'),
+  parser_name text not null
+    check (char_length(parser_name) between 1 and 100),
+  parser_version text not null
+    check (char_length(parser_version) between 1 and 100),
+  source_type text not null
+    check (source_type in ('pdf_text', 'pdf_ocr', 'image_ocr')),
+  row_count integer not null default 0
+    check (row_count between 0 and 2000),
+  revision integer not null default 1
+    check (revision between 1 and 1000),
+  status text not null default 'review'
+    check (
+      status in (
+        'review',
+        'applied',
+        'applied_with_variances',
+        'held'
+      )
+    ),
+  create_operation_key text not null
+    check (char_length(create_operation_key) between 8 and 200),
+  create_payload_hash text not null
+    check (create_payload_hash ~ '^[0-9a-f]{64}$'),
+  import_receipt jsonb,
+  apply_operation_key text,
+  apply_payload_hash text,
+  apply_receipt jsonb,
+  created_by uuid not null references auth.users(id),
+  applied_by uuid references auth.users(id),
+  created_at timestamp with time zone not null default statement_timestamp(),
+  applied_at timestamp with time zone,
+  updated_at timestamp with time zone not null default statement_timestamp(),
+  check (
+    (
+      apply_operation_key is null
+      and apply_payload_hash is null
+      and apply_receipt is null
+      and applied_by is null
+      and applied_at is null
+      and status = 'review'
+    )
+    or (
+      apply_operation_key is not null
+      and char_length(apply_operation_key) between 8 and 200
+      and apply_payload_hash ~ '^[0-9a-f]{64}$'
+      and apply_receipt is not null
+      and applied_by is not null
+      and applied_at is not null
+      and status in ('applied', 'applied_with_variances', 'held')
+    )
+  )
+);
+
+alter table public.payroll_statement_imports
+  add column if not exists account_fingerprint text;
+alter table public.payroll_statement_imports
+  add column if not exists erp_account_id uuid;
+alter table public.payroll_statement_imports
+  add column if not exists revision integer not null default 1;
+alter table public.payroll_statement_imports
+  drop constraint if exists
+    payroll_statement_imports_tenant_account_mapping_fkey;
+
+do $$
+begin
+  if exists (
+    select 1
+    from public.payroll_statement_imports statement_import
+    where statement_import.account_fingerprint is null
+       or statement_import.erp_account_id is null
+  ) then
+    raise exception
+      'Existing statement imports require an explicit account migration'
+      using errcode = '55000';
+  end if;
+
+  alter table public.payroll_statement_imports
+    alter column account_fingerprint set not null;
+  alter table public.payroll_statement_imports
+    alter column erp_account_id set not null;
+
+  alter table public.payroll_statement_imports
+    drop constraint if exists payroll_statement_imports_status_check;
+  alter table public.payroll_statement_imports
+    add constraint payroll_statement_imports_status_check
+    check (
+      status in (
+        'review',
+        'applied',
+        'applied_with_variances',
+        'held'
+      )
+    );
+end
+$$;
+
+create unique index if not exists
+  ux_payroll_statement_imports_tenant_file
+  on public.payroll_statement_imports(tenant_id, file_sha256);
+create unique index if not exists
+  ux_payroll_statement_imports_create_operation
+  on public.payroll_statement_imports(tenant_id, create_operation_key);
+create unique index if not exists
+  ux_payroll_statement_imports_apply_operation
+  on public.payroll_statement_imports(tenant_id, apply_operation_key)
+  where apply_operation_key is not null;
+create index if not exists idx_payroll_statement_imports_review
+  on public.payroll_statement_imports(tenant_id, status, created_at desc);
+
+-- Each import operation is retained independently from the mutable current
+-- review revision. A retry of a superseded operation can therefore fail
+-- closed instead of silently restoring stale OCR rows.
+create table if not exists public.payroll_statement_import_operations (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null
+    references public.tenants(id) on delete restrict,
+  import_id uuid not null
+    references public.payroll_statement_imports(id) on delete restrict,
+  operation_key text not null
+    check (char_length(operation_key) between 8 and 200),
+  payload_hash text not null
+    check (payload_hash ~ '^[0-9a-f]{64}$'),
+  revision integer not null check (revision between 1 and 1000),
+  receipt jsonb not null check (jsonb_typeof(receipt) = 'object'),
+  created_by uuid not null references auth.users(id),
+  created_at timestamp with time zone not null default statement_timestamp(),
+  unique (tenant_id, operation_key)
+);
+
+create index if not exists idx_payroll_statement_import_operations_import
+  on public.payroll_statement_import_operations(import_id, revision);
+
+-- This private table is a transaction-scoped capability. Unlike a custom GUC,
+-- authenticated callers cannot forge it with set_config(). Failed commands
+-- roll their context row back automatically.
+create table if not exists public.payroll_statement_command_contexts (
+  transaction_id bigint primary key,
+  tenant_id uuid not null
+    references public.tenants(id) on delete restrict,
+  import_id uuid not null
+    references public.payroll_statement_imports(id) on delete restrict,
+  command text not null check (
+    command in ('import_revision', 'apply', 'manual_settlement')
+  ),
+  actor_id uuid not null references auth.users(id),
+  created_at timestamp with time zone not null default statement_timestamp()
+);
+
+create table if not exists public.payroll_money_command_contexts (
+  transaction_id bigint primary key,
+  tenant_id uuid not null
+    references public.tenants(id) on delete restrict,
+  command text not null
+    check (
+      command in (
+        'manual_payment',
+        'advance_registration',
+        'legacy_reversal'
+      )
+    ),
+  operation_key text not null
+    check (char_length(operation_key) between 8 and 200),
+  actor_id uuid not null references auth.users(id),
+  created_at timestamp with time zone not null default statement_timestamp()
+);
+
+alter table public.payroll_money_command_contexts
+  drop constraint if exists payroll_money_command_contexts_command_check;
+alter table public.payroll_money_command_contexts
+  add constraint payroll_money_command_contexts_command_check
+  check (
+    command in (
+      'manual_payment',
+      'advance_registration',
+      'legacy_reversal'
+    )
+  );
+
+alter table public.payroll_statement_command_contexts
+  drop constraint if exists payroll_statement_command_contexts_command_check;
+alter table public.payroll_statement_command_contexts
+  add constraint payroll_statement_command_contexts_command_check
+  check (command in ('import_revision', 'apply', 'manual_settlement'));
+
+create table if not exists public.payroll_statement_rows (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null
+    references public.tenants(id) on delete restrict,
+  import_id uuid not null
+    references public.payroll_statement_imports(id) on delete restrict,
+  row_ordinal integer not null check (row_ordinal between 1 and 2000),
+  page_number integer check (page_number between 1 and 10000),
+  source_line_start integer,
+  source_line_end integer,
+  source_occurrence integer not null default 1
+    check (source_occurrence between 1 and 2000),
+  transaction_date date
+    check (
+      transaction_date is null
+      or transaction_date between date '1900-01-01' and date '2100-12-31'
+    ),
+  direction text
+    check (direction is null or direction in ('debit', 'credit', 'unknown')),
+  amount numeric(14,2)
+    check (
+      amount is null
+      or (amount > 0 and amount <= 999999999999.99)
+    ),
+  description_observed text,
+  beneficiary_observed text,
+  document_observed text,
+  description_normalized text,
+  beneficiary_normalized text,
+  base_fingerprint text not null
+    check (base_fingerprint ~ '^[0-9a-f]{64}$'),
+  fingerprint text not null
+    check (fingerprint ~ '^[0-9a-f]{64}$'),
+  warnings jsonb not null default '[]'::jsonb
+    check (
+      jsonb_typeof(warnings) = 'array'
+      and jsonb_array_length(warnings) <= 20
+    ),
+  created_at timestamp with time zone not null default statement_timestamp(),
+  check (
+    description_observed is not null
+    or beneficiary_observed is not null
+  ),
+  check (
+    description_observed is null
+    or char_length(description_observed) between 1 and 500
+  ),
+  check (
+    beneficiary_observed is null
+    or char_length(beneficiary_observed) between 1 and 200
+  ),
+  unique (import_id, row_ordinal),
+  unique (import_id, fingerprint)
+);
+
+alter table public.payroll_statement_rows
+  add column if not exists source_line_start integer;
+alter table public.payroll_statement_rows
+  add column if not exists source_line_end integer;
+alter table public.payroll_statement_rows
+  add column if not exists document_observed text;
+alter table public.payroll_statement_rows
+  add column if not exists base_fingerprint text;
+alter table public.payroll_statement_rows
+  drop constraint if exists payroll_statement_rows_source_occurrence_check;
+alter table public.payroll_statement_rows
+  add constraint payroll_statement_rows_source_occurrence_check
+  check (source_occurrence between 1 and 2000);
+alter table public.payroll_statement_rows
+  alter column transaction_date drop not null;
+alter table public.payroll_statement_rows
+  alter column direction drop not null;
+alter table public.payroll_statement_rows
+  alter column amount drop not null;
+alter table public.payroll_statement_rows
+  drop constraint if exists payroll_statement_rows_transaction_date_check;
+alter table public.payroll_statement_rows
+  add constraint payroll_statement_rows_transaction_date_check
+  check (
+    transaction_date is null
+    or transaction_date between date '1900-01-01' and date '2100-12-31'
+  );
+alter table public.payroll_statement_rows
+  drop constraint if exists payroll_statement_rows_direction_check;
+alter table public.payroll_statement_rows
+  add constraint payroll_statement_rows_direction_check
+  check (
+    direction is null
+    or direction in ('debit', 'credit', 'unknown')
+  );
+alter table public.payroll_statement_rows
+  drop constraint if exists payroll_statement_rows_amount_check;
+alter table public.payroll_statement_rows
+  add constraint payroll_statement_rows_amount_check
+  check (
+    amount is null
+    or (amount > 0 and amount <= 999999999999.99)
+  );
+
+do $$
+begin
+  if exists (
+    select 1
+    from public.payroll_statement_rows statement_row
+    where statement_row.base_fingerprint is null
+  ) then
+    raise exception
+      'Existing statement rows require an explicit base fingerprint migration'
+      using errcode = '55000';
+  end if;
+
+  alter table public.payroll_statement_rows
+    alter column base_fingerprint set not null;
+  alter table public.payroll_statement_rows
+    drop constraint if exists
+      payroll_statement_rows_base_fingerprint_check;
+  alter table public.payroll_statement_rows
+    add constraint payroll_statement_rows_base_fingerprint_check
+    check (base_fingerprint ~ '^[0-9a-f]{64}$');
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint constraint_row
+    where constraint_row.conrelid =
+        'public.payroll_statement_rows'::regclass
+      and constraint_row.conname =
+        'payroll_statement_rows_source_line_range_check'
+  ) then
+    alter table public.payroll_statement_rows
+      add constraint payroll_statement_rows_source_line_range_check
+      check (
+        (
+          source_line_start is null
+          and source_line_end is null
+        )
+        or (
+          source_line_start between 1 and 1000000
+          and source_line_end between source_line_start and 1000000
+        )
+      );
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint constraint_row
+    where constraint_row.conrelid =
+        'public.payroll_statement_rows'::regclass
+      and constraint_row.conname =
+        'payroll_statement_rows_document_observed_check'
+  ) then
+    alter table public.payroll_statement_rows
+      add constraint payroll_statement_rows_document_observed_check
+      check (
+        document_observed is null
+        or char_length(document_observed) between 1 and 100
+      );
+  end if;
+end
+$$;
+
+create index if not exists idx_payroll_statement_rows_import_date
+  on public.payroll_statement_rows(import_id, transaction_date, row_ordinal);
+create index if not exists idx_payroll_statement_rows_tenant_fingerprint
+  on public.payroll_statement_rows(tenant_id, fingerprint);
+create index if not exists idx_payroll_statement_rows_tenant_base_fingerprint
+  on public.payroll_statement_rows(tenant_id, base_fingerprint);
+
+create table if not exists public.payroll_statement_decisions (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null
+    references public.tenants(id) on delete restrict,
+  import_id uuid not null
+    references public.payroll_statement_imports(id) on delete restrict,
+  operation_key text not null
+    check (char_length(operation_key) between 8 and 200),
+  decision_ordinal integer not null
+    check (decision_ordinal between 1 and 4000),
+  action text not null check (
+    action in (
+      'bank_payment',
+      'cash_payment',
+      'advance_allocation',
+      'not_paid',
+      'ignore',
+      'hold',
+      'already_resolved'
+    )
+  ),
+  row_id uuid
+    references public.payroll_statement_rows(id) on delete restrict,
+  row_fingerprint text,
+  prior_decision_id uuid,
+  voucher_id uuid
+    references public.payroll_vouchers(id) on delete restrict,
+  voucher_line_id uuid
+    references public.payroll_voucher_lines(id) on delete restrict,
+  employee_id uuid references public.employees(id) on delete restrict,
+  advance_id uuid
+    references public.employee_advances(id) on delete restrict,
+  payment_method_id uuid
+    references public.payment_methods(id) on delete restrict,
+  payment_account_id uuid
+    references public.accounts(id) on delete restrict,
+  bank_amount numeric(14,2),
+  applied_amount numeric(14,2),
+  variance numeric(14,2),
+  variance_disposition text check (
+    variance_disposition is null
+    or variance_disposition in (
+      'exact',
+      'partial',
+      'unresolved',
+      'not_applicable'
+    )
+  ),
+  payment_date date,
+  manual_confirmation boolean not null default false,
+  duplicate_override boolean not null default false,
+  reason text check (reason is null or char_length(reason) between 1 and 1000),
+  movement_reference text,
+  result_expense_payment_id uuid
+    references public.expense_payments(id) on delete restrict,
+  result_advance_allocation_id uuid
+    references public.employee_advance_allocations(id) on delete restrict,
+  outcome text not null default 'pending'
+    check (outcome in ('pending', 'applied', 'acknowledged', 'held')),
+  decided_by uuid not null references auth.users(id),
+  decided_at timestamp with time zone not null default statement_timestamp(),
+  unique (import_id, decision_ordinal),
+  unique (import_id, row_id)
+);
+
+alter table public.payroll_statement_decisions
+  add column if not exists prior_decision_id uuid;
+alter table public.payroll_statement_decisions
+  add column if not exists duplicate_override boolean
+    not null default false;
+alter table public.payroll_statement_decisions
+  drop constraint if exists
+    payroll_statement_decisions_variance_disposition_check;
+alter table public.payroll_statement_decisions
+  add constraint payroll_statement_decisions_variance_disposition_check
+  check (
+    variance_disposition is null
+    or variance_disposition in (
+      'exact',
+      'partial',
+      'unresolved',
+      'not_applicable'
+    )
+  );
+alter table public.payroll_statement_decisions
+  drop constraint if exists payroll_statement_decisions_action_check;
+alter table public.payroll_statement_decisions
+  add constraint payroll_statement_decisions_action_check
+  check (
+    action in (
+      'bank_payment',
+      'cash_payment',
+      'advance_allocation',
+      'not_paid',
+      'ignore',
+      'hold',
+      'already_resolved'
+    )
+  );
+
+create index if not exists idx_payroll_statement_decisions_import
+  on public.payroll_statement_decisions(import_id, decision_ordinal);
+create index if not exists idx_payroll_statement_decisions_voucher
+  on public.payroll_statement_decisions(voucher_id, voucher_line_id);
+drop index if exists
+  public.ux_payroll_statement_decisions_resolved_fingerprint;
+create unique index
+  ux_payroll_statement_decisions_resolved_fingerprint
+  on public.payroll_statement_decisions(tenant_id, row_fingerprint)
+  where row_fingerprint is not null
+    and action <> 'already_resolved'
+    and outcome in ('applied', 'acknowledged', 'held');
+
+create table if not exists public.payroll_statement_allocations (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null
+    references public.tenants(id) on delete restrict,
+  import_id uuid not null
+    references public.payroll_statement_imports(id) on delete restrict,
+  decision_id uuid not null unique
+    references public.payroll_statement_decisions(id) on delete restrict,
+  action text not null check (
+    action in ('bank_payment', 'cash_payment', 'advance_allocation')
+  ),
+  row_id uuid
+    references public.payroll_statement_rows(id) on delete restrict,
+  row_fingerprint text,
+  voucher_id uuid not null
+    references public.payroll_vouchers(id) on delete restrict,
+  voucher_line_id uuid not null
+    references public.payroll_voucher_lines(id) on delete restrict,
+  employee_id uuid not null references public.employees(id) on delete restrict,
+  expense_payment_id uuid unique
+    references public.expense_payments(id) on delete restrict,
+  employee_advance_allocation_id uuid unique
+    references public.employee_advance_allocations(id) on delete restrict,
+  bank_amount numeric(14,2),
+  applied_amount numeric(14,2) not null check (applied_amount > 0),
+  variance numeric(14,2),
+  variance_disposition text not null check (
+    variance_disposition in (
+      'exact',
+      'partial',
+      'unresolved',
+      'not_applicable'
+    )
+  ),
+  payment_date date,
+  movement_reference text not null,
+  applied_by uuid not null references auth.users(id),
+  applied_at timestamp with time zone not null default statement_timestamp(),
+  check (
+    (
+      action = 'bank_payment'
+      and row_id is not null
+      and row_fingerprint ~ '^[0-9a-f]{64}$'
+      and expense_payment_id is not null
+      and employee_advance_allocation_id is null
+      and bank_amount > 0
+      and variance is not null
+      and payment_date is not null
+    )
+    or (
+      action = 'cash_payment'
+      and row_id is null
+      and row_fingerprint is null
+      and expense_payment_id is not null
+      and employee_advance_allocation_id is null
+      and bank_amount is null
+      and variance is null
+      and variance_disposition = 'not_applicable'
+      and payment_date is not null
+    )
+    or (
+      action = 'advance_allocation'
+      and row_id is null
+      and row_fingerprint is null
+      and expense_payment_id is null
+      and employee_advance_allocation_id is not null
+      and bank_amount is null
+      and variance is null
+      and variance_disposition = 'not_applicable'
+    )
+  )
+);
+
+alter table public.payroll_statement_allocations
+  drop constraint if exists
+    payroll_statement_allocations_variance_disposition_check;
+alter table public.payroll_statement_allocations
+  add constraint payroll_statement_allocations_variance_disposition_check
+  check (
+    variance_disposition in (
+      'exact',
+      'partial',
+      'unresolved',
+      'not_applicable'
+    )
+  );
+
+create unique index if not exists
+  ux_payroll_statement_allocations_tenant_fingerprint
+  on public.payroll_statement_allocations(tenant_id, row_fingerprint)
+  where row_fingerprint is not null;
+create index if not exists idx_payroll_statement_allocations_voucher
+  on public.payroll_statement_allocations(voucher_id, voucher_line_id);
+
+-- Composite uniqueness lets every reconciliation FK carry tenant ownership.
+-- IDs are already globally unique; these indexes cannot expose duplicate
+-- business keys, but they do scan the existing referenced tables.
+create unique index if not exists ux_payroll_statement_imports_tenant_id
+  on public.payroll_statement_imports(tenant_id, id);
+create unique index if not exists ux_payroll_statement_rows_tenant_id
+  on public.payroll_statement_rows(tenant_id, id);
+create unique index if not exists ux_payroll_statement_decisions_tenant_id
+  on public.payroll_statement_decisions(tenant_id, id);
+create unique index if not exists ux_payroll_money_operations_tenant_id
+  on public.payroll_money_operations(tenant_id, id);
+create unique index if not exists ux_payroll_vouchers_tenant_id
+  on public.payroll_vouchers(tenant_id, id);
+create unique index if not exists ux_payroll_voucher_lines_tenant_id
+  on public.payroll_voucher_lines(tenant_id, id);
+create unique index if not exists ux_employees_tenant_id
+  on public.employees(tenant_id, id);
+create unique index if not exists ux_employee_advances_tenant_id
+  on public.employee_advances(tenant_id, id);
+create unique index if not exists ux_expense_payments_tenant_id
+  on public.expense_payments(tenant_id, id);
+create unique index if not exists ux_employee_advance_allocations_tenant_id
+  on public.employee_advance_allocations(tenant_id, id);
+
+do $$
+declare
+  constraint_spec record;
+begin
+  for constraint_spec in
+    select *
+    from (
+      values
+        (
+          'payroll_statement_account_mappings',
+          'payroll_statement_account_mappings_tenant_account_fkey',
+          'foreign key (tenant_id, erp_account_id) references '
+            || 'public.accounts(tenant_id, id) on delete restrict'
+        ),
+        (
+          'payroll_money_operations',
+          'payroll_money_operations_tenant_voucher_fkey',
+          'foreign key (tenant_id, voucher_id) references '
+            || 'public.payroll_vouchers(tenant_id, id) on delete restrict'
+        ),
+        (
+          'payroll_money_operations',
+          'payroll_money_operations_tenant_advance_fkey',
+          'foreign key (tenant_id, employee_advance_id) references '
+            || 'public.employee_advances(tenant_id, id) on delete restrict'
+        ),
+        (
+          'payroll_money_operation_movements',
+          'payroll_money_operation_movements_tenant_operation_fkey',
+          'foreign key (tenant_id, operation_id) references '
+            || 'public.payroll_money_operations(tenant_id, id) '
+            || 'on delete restrict'
+        ),
+        (
+          'payroll_money_operation_movements',
+          'payroll_money_operation_movements_tenant_payment_fkey',
+          'foreign key (tenant_id, expense_payment_id) references '
+            || 'public.expense_payments(tenant_id, id) on delete restrict'
+        ),
+        (
+          'payroll_money_operation_movements',
+          'payroll_money_operation_movements_tenant_allocation_fkey',
+          'foreign key (tenant_id, advance_allocation_id) references '
+            || 'public.employee_advance_allocations(tenant_id, id) '
+            || 'on delete restrict'
+        ),
+        (
+          'payroll_statement_imports',
+          'payroll_statement_imports_tenant_erp_account_fkey',
+          'foreign key (tenant_id, erp_account_id) '
+            || 'references public.accounts(tenant_id, id) on delete restrict'
+        ),
+        (
+          'payroll_statement_import_operations',
+          'payroll_statement_import_operations_tenant_import_fkey',
+          'foreign key (tenant_id, import_id) references '
+            || 'public.payroll_statement_imports(tenant_id, id) '
+            || 'on delete restrict'
+        ),
+        (
+          'payroll_statement_command_contexts',
+          'payroll_statement_command_contexts_tenant_import_fkey',
+          'foreign key (tenant_id, import_id) references '
+            || 'public.payroll_statement_imports(tenant_id, id) '
+            || 'on delete cascade'
+        ),
+        (
+          'payroll_statement_rows',
+          'payroll_statement_rows_tenant_import_fkey',
+          'foreign key (tenant_id, import_id) references '
+            || 'public.payroll_statement_imports(tenant_id, id) '
+            || 'on delete restrict'
+        ),
+        (
+          'payroll_statement_decisions',
+          'payroll_statement_decisions_tenant_import_fkey',
+          'foreign key (tenant_id, import_id) references '
+            || 'public.payroll_statement_imports(tenant_id, id) '
+            || 'on delete restrict'
+        ),
+        (
+          'payroll_statement_decisions',
+          'payroll_statement_decisions_tenant_row_fkey',
+          'foreign key (tenant_id, row_id) references '
+            || 'public.payroll_statement_rows(tenant_id, id) '
+            || 'on delete restrict'
+        ),
+        (
+          'payroll_statement_decisions',
+          'payroll_statement_decisions_tenant_prior_decision_fkey',
+          'foreign key (tenant_id, prior_decision_id) references '
+            || 'public.payroll_statement_decisions(tenant_id, id) '
+            || 'on delete restrict'
+        ),
+        (
+          'payroll_statement_decisions',
+          'payroll_statement_decisions_tenant_voucher_fkey',
+          'foreign key (tenant_id, voucher_id) references '
+            || 'public.payroll_vouchers(tenant_id, id) on delete restrict'
+        ),
+        (
+          'payroll_statement_decisions',
+          'payroll_statement_decisions_tenant_voucher_line_fkey',
+          'foreign key (tenant_id, voucher_line_id) references '
+            || 'public.payroll_voucher_lines(tenant_id, id) '
+            || 'on delete restrict'
+        ),
+        (
+          'payroll_statement_decisions',
+          'payroll_statement_decisions_tenant_employee_fkey',
+          'foreign key (tenant_id, employee_id) references '
+            || 'public.employees(tenant_id, id) on delete restrict'
+        ),
+        (
+          'payroll_statement_decisions',
+          'payroll_statement_decisions_tenant_advance_fkey',
+          'foreign key (tenant_id, advance_id) references '
+            || 'public.employee_advances(tenant_id, id) on delete restrict'
+        ),
+        (
+          'payroll_statement_decisions',
+          'payroll_statement_decisions_tenant_method_fkey',
+          'foreign key (tenant_id, payment_method_id) references '
+            || 'public.payment_methods(tenant_id, id) on delete restrict'
+        ),
+        (
+          'payroll_statement_decisions',
+          'payroll_statement_decisions_tenant_account_fkey',
+          'foreign key (tenant_id, payment_account_id) references '
+            || 'public.accounts(tenant_id, id) on delete restrict'
+        ),
+        (
+          'payroll_statement_decisions',
+          'payroll_statement_decisions_tenant_payment_result_fkey',
+          'foreign key (tenant_id, result_expense_payment_id) references '
+            || 'public.expense_payments(tenant_id, id) on delete restrict'
+        ),
+        (
+          'payroll_statement_decisions',
+          'payroll_statement_decisions_tenant_advance_result_fkey',
+          'foreign key (tenant_id, result_advance_allocation_id) references '
+            || 'public.employee_advance_allocations(tenant_id, id) '
+            || 'on delete restrict'
+        ),
+        (
+          'payroll_statement_allocations',
+          'payroll_statement_allocations_tenant_import_fkey',
+          'foreign key (tenant_id, import_id) references '
+            || 'public.payroll_statement_imports(tenant_id, id) '
+            || 'on delete restrict'
+        ),
+        (
+          'payroll_statement_allocations',
+          'payroll_statement_allocations_tenant_decision_fkey',
+          'foreign key (tenant_id, decision_id) references '
+            || 'public.payroll_statement_decisions(tenant_id, id) '
+            || 'on delete restrict'
+        ),
+        (
+          'payroll_statement_allocations',
+          'payroll_statement_allocations_tenant_row_fkey',
+          'foreign key (tenant_id, row_id) references '
+            || 'public.payroll_statement_rows(tenant_id, id) '
+            || 'on delete restrict'
+        ),
+        (
+          'payroll_statement_allocations',
+          'payroll_statement_allocations_tenant_voucher_fkey',
+          'foreign key (tenant_id, voucher_id) references '
+            || 'public.payroll_vouchers(tenant_id, id) on delete restrict'
+        ),
+        (
+          'payroll_statement_allocations',
+          'payroll_statement_allocations_tenant_voucher_line_fkey',
+          'foreign key (tenant_id, voucher_line_id) references '
+            || 'public.payroll_voucher_lines(tenant_id, id) '
+            || 'on delete restrict'
+        ),
+        (
+          'payroll_statement_allocations',
+          'payroll_statement_allocations_tenant_employee_fkey',
+          'foreign key (tenant_id, employee_id) references '
+            || 'public.employees(tenant_id, id) on delete restrict'
+        ),
+        (
+          'payroll_statement_allocations',
+          'payroll_statement_allocations_tenant_payment_result_fkey',
+          'foreign key (tenant_id, expense_payment_id) references '
+            || 'public.expense_payments(tenant_id, id) on delete restrict'
+        ),
+        (
+          'payroll_statement_allocations',
+          'payroll_statement_allocations_tenant_advance_result_fkey',
+          'foreign key (tenant_id, employee_advance_allocation_id) '
+            || 'references public.employee_advance_allocations(tenant_id, id) '
+            || 'on delete restrict'
+        )
+    ) as constraints_to_add(table_name, constraint_name, definition)
+  loop
+    if not exists (
+      select 1
+      from pg_catalog.pg_constraint existing_constraint
+      where existing_constraint.conrelid =
+        format('public.%I', constraint_spec.table_name)::regclass
+        and existing_constraint.conname = constraint_spec.constraint_name
+    ) then
+      execute format(
+        'alter table public.%I add constraint %I %s',
+        constraint_spec.table_name,
+        constraint_spec.constraint_name,
+        constraint_spec.definition
+      );
+    end if;
+  end loop;
+end
+$$;
+
+create or replace function public.guard_payroll_statement_row_immutable()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+begin
+  if tg_op = 'DELETE'
+     and exists (
+       select 1
+       from public.payroll_statement_command_contexts command_context
+       where command_context.transaction_id = txid_current()
+         and command_context.command = 'import_revision'
+         and command_context.tenant_id = old.tenant_id
+         and command_context.import_id = old.import_id
+     ) then
+    return old;
+  end if;
+
+  raise exception 'payroll_statement_rows_are_immutable'
+    using errcode = '55000';
+end;
+$$;
+
+revoke all on function public.guard_payroll_statement_row_immutable()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_payroll_statement_rows_immutable
+  on public.payroll_statement_rows;
+create trigger trg_payroll_statement_rows_immutable
+  before update or delete on public.payroll_statement_rows
+  for each row
+  execute function public.guard_payroll_statement_row_immutable();
+
+create or replace function public.guard_payroll_statement_evidence_immutable()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  import_id_value uuid := case
+    when tg_op = 'DELETE' then old.import_id
+    else new.import_id
+  end;
+  tenant_id_value uuid := case
+    when tg_op = 'DELETE' then old.tenant_id
+    else new.tenant_id
+  end;
+begin
+  if tg_table_name = 'payroll_statement_decisions'
+     and tg_op = 'UPDATE'
+     and old.import_id = new.import_id
+     and old.tenant_id = new.tenant_id
+     and exists (
+       select 1
+       from public.payroll_statement_command_contexts command_context
+       where command_context.transaction_id = txid_current()
+         and command_context.command = 'apply'
+         and command_context.tenant_id = tenant_id_value
+         and command_context.import_id = import_id_value
+     ) then
+    return new;
+  end if;
+
+  raise exception 'payroll_statement_evidence_is_immutable'
+    using errcode = '55000';
+end;
+$$;
+
+revoke all on function public.guard_payroll_statement_evidence_immutable()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_payroll_statement_decisions_immutable
+  on public.payroll_statement_decisions;
+create trigger trg_payroll_statement_decisions_immutable
+  before update or delete on public.payroll_statement_decisions
+  for each row
+  execute function public.guard_payroll_statement_evidence_immutable();
+
+drop trigger if exists trg_payroll_statement_allocations_immutable
+  on public.payroll_statement_allocations;
+create trigger trg_payroll_statement_allocations_immutable
+  before update or delete on public.payroll_statement_allocations
+  for each row
+  execute function public.guard_payroll_statement_evidence_immutable();
+
+create or replace function public.guard_reconciled_payroll_voucher_mutation()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  voucher_id_value uuid := case
+    when tg_table_name = 'payroll_vouchers' then
+      case
+        when tg_op = 'DELETE' then (to_jsonb(old)->>'id')::uuid
+        else (to_jsonb(new)->>'id')::uuid
+      end
+    when tg_op = 'DELETE'
+      then (to_jsonb(old)->>'voucher_id')::uuid
+    else (to_jsonb(new)->>'voucher_id')::uuid
+  end;
+  tenant_id_value uuid := case
+    when tg_op = 'DELETE' then (to_jsonb(old)->>'tenant_id')::uuid
+    else (to_jsonb(new)->>'tenant_id')::uuid
+  end;
+  prior_voucher_id_value uuid := case
+    when tg_table_name = 'payroll_voucher_lines' and tg_op = 'UPDATE'
+      then (to_jsonb(old)->>'voucher_id')::uuid
+    else null
+  end;
+begin
+  if (
+    exists (
+      select 1
+      from public.payroll_statement_decisions decision
+      where decision.voucher_id in (
+        voucher_id_value,
+        prior_voucher_id_value
+      )
+    )
+    or exists (
+      select 1
+      from public.payroll_statement_allocations allocation
+      where allocation.voucher_id in (
+        voucher_id_value,
+        prior_voucher_id_value
+      )
+    )
+  )
+  and not exists (
+    select 1
+    from public.payroll_statement_command_contexts command_context
+    join public.payroll_statement_decisions decision
+      on decision.import_id = command_context.import_id
+     and decision.tenant_id = command_context.tenant_id
+     and decision.voucher_id in (
+       voucher_id_value,
+       prior_voucher_id_value
+     )
+    where command_context.transaction_id = txid_current()
+      and command_context.command = 'apply'
+      and command_context.tenant_id = tenant_id_value
+  )
+  and not (
+    tg_table_name = 'payroll_vouchers'
+    and tg_op = 'UPDATE'
+    and (
+      to_jsonb(new) - array[
+        'status',
+        'paid_at',
+        'paid_by',
+        'updated_at',
+        'reconciliation_version'
+      ]::text[]
+    ) = (
+      to_jsonb(old) - array[
+        'status',
+        'paid_at',
+        'paid_by',
+        'updated_at',
+        'reconciliation_version'
+      ]::text[]
+    )
+    and exists (
+      select 1
+      from public.payroll_statement_command_contexts command_context
+      join public.payroll_statement_decisions decision
+        on decision.import_id = command_context.import_id
+       and decision.tenant_id = command_context.tenant_id
+       and decision.voucher_id = voucher_id_value
+      where command_context.transaction_id = txid_current()
+        and command_context.command = 'manual_settlement'
+        and command_context.tenant_id = tenant_id_value
+    )
+  ) then
+    raise exception 'payroll_reconciled_voucher_is_immutable'
+      using
+        errcode = '55000',
+        detail = 'Use a future audited reconciliation reversal command';
+  end if;
+
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$$;
+
+revoke all on function
+  public.guard_reconciled_payroll_voucher_mutation()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_guard_reconciled_payroll_voucher
+  on public.payroll_vouchers;
+create trigger trg_guard_reconciled_payroll_voucher
+  before update or delete on public.payroll_vouchers
+  for each row
+  execute function public.guard_reconciled_payroll_voucher_mutation();
+
+drop trigger if exists trg_guard_reconciled_payroll_voucher_line
+  on public.payroll_voucher_lines;
+create trigger trg_guard_reconciled_payroll_voucher_line
+  before insert or update or delete on public.payroll_voucher_lines
+  for each row
+  execute function public.guard_reconciled_payroll_voucher_mutation();
+
+create or replace function public.guard_payroll_expense_payment_balance()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  expense_id_value uuid := case
+    when tg_op = 'DELETE' then old.expense_id
+    else new.expense_id
+  end;
+  payment_id_value uuid := case
+    when tg_op = 'INSERT' then null
+    else old.id
+  end;
+  tenant_id_value uuid := case
+    when tg_op = 'DELETE' then old.tenant_id
+    else new.tenant_id
+  end;
+  line_row record;
+  settled_value numeric(14,2);
+begin
+  select
+    voucher_line.id,
+    voucher_line.tenant_id,
+    voucher_line.voucher_id,
+    voucher_line.total_amount
+  into line_row
+  from public.payroll_voucher_lines voucher_line
+  where voucher_line.expense_id = expense_id_value;
+
+  if not found then
+    if tg_op = 'UPDATE'
+       and old.expense_id is distinct from new.expense_id
+       and exists (
+         select 1
+         from public.payroll_voucher_lines voucher_line
+         where voucher_line.expense_id = old.expense_id
+       ) then
+      raise exception 'payroll_payment_expense_link_is_immutable'
+        using errcode = '55000';
+    end if;
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+
+  if line_row.tenant_id <> tenant_id_value then
+    raise exception 'payroll_payment_tenant_mismatch'
+      using errcode = '23514';
+  end if;
+
+  if tg_op = 'INSERT'
+     and not exists (
+       select 1
+       from public.payroll_statement_command_contexts command_context
+       where command_context.transaction_id = txid_current()
+         and command_context.tenant_id = tenant_id_value
+         and command_context.command = 'apply'
+     )
+     and not exists (
+       select 1
+       from public.payroll_money_command_contexts command_context
+       where command_context.transaction_id = txid_current()
+         and command_context.tenant_id = tenant_id_value
+         and command_context.command = 'manual_payment'
+     ) then
+    raise exception 'payroll_money_command_required'
+      using errcode = '42501';
+  end if;
+
+  if (
+    tg_op in ('UPDATE', 'DELETE')
+    and exists (
+      select 1
+      from public.payroll_money_operation_movements movement
+      where movement.expense_payment_id = old.id
+    )
+  ) then
+    raise exception 'payroll_money_receipt_movement_is_immutable'
+      using
+        errcode = '55000',
+        detail = 'Use a future audited idempotent reversal command';
+  end if;
+
+  if (
+    tg_op in ('UPDATE', 'DELETE')
+    and exists (
+      select 1
+      from public.payroll_statement_allocations allocation
+      where allocation.expense_payment_id = old.id
+    )
+  ) then
+    raise exception 'payroll_reconciled_payment_is_immutable'
+      using
+        errcode = '55000',
+        detail = 'Use a future audited reconciliation reversal command';
+  end if;
+
+  if tg_op in ('UPDATE', 'DELETE')
+     and not exists (
+       select 1
+       from public.payroll_money_command_contexts command_context
+       where command_context.transaction_id = txid_current()
+         and command_context.tenant_id = tenant_id_value
+         and command_context.command = 'legacy_reversal'
+     ) then
+    -- PostgreSQL obtains the target payment row lock before this BEFORE
+    -- trigger. Reject untrusted edits before taking the tenant advisory lock,
+    -- so direct DML cannot invert the command lock order.
+    raise exception 'payroll_money_command_required'
+      using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text || ':payroll-settlement',
+      0
+    )
+  );
+
+  perform voucher.id
+  from public.payroll_vouchers voucher
+  where voucher.id = line_row.voucher_id
+    and voucher.tenant_id = tenant_id_value
+  for update;
+
+  perform voucher_line.id
+  from public.payroll_voucher_lines voucher_line
+  where voucher_line.id = line_row.id
+    and voucher_line.tenant_id = tenant_id_value
+  for update;
+
+  if tg_op = 'UPDATE'
+     and old.expense_id is distinct from new.expense_id then
+    raise exception 'payroll_payment_expense_link_is_immutable'
+      using errcode = '55000';
+  end if;
+
+  if tg_op <> 'DELETE' then
+    select
+      coalesce(
+        (
+          select sum(payment.amount)
+          from public.expense_payments payment
+          where payment.expense_id = expense_id_value
+            and payment.id is distinct from payment_id_value
+        ),
+        0
+      )
+      + coalesce(
+        (
+          select sum(allocation.amount)
+          from public.employee_advance_allocations allocation
+          where allocation.voucher_line_id = line_row.id
+        ),
+        0
+      )
+    into settled_value;
+
+    if new.amount <= 0
+       or settled_value + new.amount
+            > line_row.total_amount + 0.01 then
+      raise exception 'payroll_expense_payment_exceeds_line_balance'
+        using errcode = '23514';
+    end if;
+  end if;
+
+  update public.payroll_vouchers voucher
+  set updated_at = statement_timestamp()
+  where voucher.id = line_row.voucher_id
+    and voucher.tenant_id = tenant_id_value;
+
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$$;
+
+revoke all on function public.guard_payroll_expense_payment_balance()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_aaa_payroll_expense_payment_balance
+  on public.expense_payments;
+create trigger trg_aaa_payroll_expense_payment_balance
+  before insert or update or delete on public.expense_payments
+  for each row
+  execute function public.guard_payroll_expense_payment_balance();
+
+create or replace function public.guard_payroll_advance_allocation_evidence()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := case
+    when tg_op = 'DELETE' then old.tenant_id
+    else new.tenant_id
+  end;
+  voucher_line_id_value uuid := case
+    when tg_op = 'DELETE' then old.voucher_line_id
+    else new.voucher_line_id
+  end;
+  advance_id_value uuid := case
+    when tg_op = 'DELETE' then old.advance_id
+    else new.advance_id
+  end;
+  line_row record;
+begin
+  if tg_op in ('UPDATE', 'DELETE')
+     and exists (
+       select 1
+       from public.payroll_money_operation_movements movement
+       where movement.advance_allocation_id = old.id
+     ) then
+    raise exception 'payroll_money_receipt_movement_is_immutable'
+      using
+        errcode = '55000',
+        detail = 'Use a future audited idempotent reversal command';
+  end if;
+
+  if tg_op in ('UPDATE', 'DELETE')
+     and exists (
+       select 1
+       from public.payroll_statement_allocations allocation
+       where allocation.employee_advance_allocation_id = old.id
+     ) then
+    raise exception 'payroll_reconciled_advance_allocation_is_immutable'
+      using
+        errcode = '55000',
+        detail = 'Use a future audited reconciliation reversal command';
+  end if;
+
+  select
+    voucher_line.id,
+    voucher_line.tenant_id,
+    voucher_line.voucher_id
+  into line_row
+  from public.payroll_voucher_lines voucher_line
+  where voucher_line.id = voucher_line_id_value;
+
+  if not found then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+
+  if line_row.tenant_id <> tenant_id_value then
+    raise exception 'payroll_advance_allocation_tenant_mismatch'
+      using errcode = '23514';
+  end if;
+
+  if tg_op = 'INSERT'
+     and not exists (
+       select 1
+       from public.payroll_statement_command_contexts command_context
+       where command_context.transaction_id = txid_current()
+         and command_context.tenant_id = tenant_id_value
+         and command_context.command = 'apply'
+     )
+     and not exists (
+       select 1
+       from public.payroll_money_command_contexts command_context
+       where command_context.transaction_id = txid_current()
+         and command_context.tenant_id = tenant_id_value
+         and command_context.command = 'manual_payment'
+     ) then
+    raise exception 'payroll_money_command_required'
+      using errcode = '42501';
+  end if;
+
+  if tg_op in ('UPDATE', 'DELETE')
+     and not exists (
+       select 1
+       from public.payroll_money_command_contexts command_context
+       where command_context.transaction_id = txid_current()
+         and command_context.tenant_id = tenant_id_value
+         and command_context.command = 'legacy_reversal'
+     ) then
+    -- Reject before acquiring the advisory lock: the target allocation row is
+    -- already locked by PostgreSQL when this BEFORE trigger runs.
+    raise exception 'payroll_money_command_required'
+      using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text || ':payroll-settlement',
+      0
+    )
+  );
+
+  perform voucher.id
+  from public.payroll_vouchers voucher
+  where voucher.id = line_row.voucher_id
+    and voucher.tenant_id = tenant_id_value
+  for update;
+
+  perform advance.id
+  from public.employee_advances advance
+  where advance.id = advance_id_value
+    and advance.tenant_id = tenant_id_value
+  for update;
+
+  perform voucher_line.id
+  from public.payroll_voucher_lines voucher_line
+  where voucher_line.id = voucher_line_id_value
+    and voucher_line.tenant_id = tenant_id_value
+  for update;
+
+  update public.payroll_vouchers voucher
+  set updated_at = statement_timestamp()
+  where voucher.id = line_row.voucher_id
+    and voucher.tenant_id = tenant_id_value;
+
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$$;
+
+revoke all on function
+  public.guard_payroll_advance_allocation_evidence()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_aaa_payroll_advance_allocation_evidence
+  on public.employee_advance_allocations;
+create trigger trg_aaa_payroll_advance_allocation_evidence
+  before insert or update or delete on public.employee_advance_allocations
+  for each row
+  execute function public.guard_payroll_advance_allocation_evidence();
+
+create or replace function public.guard_employee_advance_money_command()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+begin
+  if tg_op = 'INSERT'
+     and not exists (
+       select 1
+       from public.payroll_money_command_contexts command_context
+       where command_context.transaction_id = txid_current()
+         and command_context.tenant_id = new.tenant_id
+         and command_context.command = 'advance_registration'
+     ) then
+    raise exception 'payroll_money_command_required'
+      using errcode = '42501';
+  end if;
+
+  if tg_op = 'DELETE'
+     and exists (
+       select 1
+       from public.payroll_money_operations money_operation
+       where money_operation.employee_advance_id = old.id
+         and money_operation.tenant_id = old.tenant_id
+     ) then
+    raise exception 'payroll_money_receipt_movement_is_immutable'
+      using
+        errcode = '55000',
+        detail = 'Use a future audited idempotent reversal command';
+  end if;
+
+  if tg_op = 'UPDATE'
+     and exists (
+       select 1
+       from public.payroll_money_operations money_operation
+       where money_operation.employee_advance_id = old.id
+         and money_operation.tenant_id = old.tenant_id
+     )
+     and (
+       to_jsonb(new) - array[
+         'amount_applied',
+         'status',
+         'updated_at'
+       ]::text[]
+     ) <> (
+       to_jsonb(old) - array[
+         'amount_applied',
+         'status',
+         'updated_at'
+       ]::text[]
+     ) then
+    raise exception 'payroll_money_receipt_movement_is_immutable'
+      using
+        errcode = '55000',
+        detail = 'Only allocation-derived advance fields may change';
+  end if;
+
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$$;
+
+revoke all on function public.guard_employee_advance_money_command()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_aaa_employee_advance_money_command
+  on public.employee_advances;
+create trigger trg_aaa_employee_advance_money_command
+  before insert or update or delete on public.employee_advances
+  for each row
+  execute function public.guard_employee_advance_money_command();
+
+alter table public.payroll_statement_account_mappings enable row level security;
+alter table public.payroll_voucher_draft_operations enable row level security;
+alter table public.payroll_money_operations enable row level security;
+alter table public.payroll_money_operation_movements enable row level security;
+alter table public.payroll_statement_imports enable row level security;
+alter table public.payroll_statement_import_operations enable row level security;
+alter table public.payroll_statement_rows enable row level security;
+alter table public.payroll_statement_decisions enable row level security;
+alter table public.payroll_statement_allocations enable row level security;
+
+drop policy if exists payroll_statement_imports_read_payroll
+  on public.payroll_statement_imports;
+create policy payroll_statement_imports_read_payroll
+  on public.payroll_statement_imports
+  for select
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+drop policy if exists payroll_statement_account_mappings_read_payroll
+  on public.payroll_statement_account_mappings;
+create policy payroll_statement_account_mappings_read_payroll
+  on public.payroll_statement_account_mappings
+  for select
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+drop policy if exists payroll_voucher_draft_operations_read_payroll
+  on public.payroll_voucher_draft_operations;
+create policy payroll_voucher_draft_operations_read_payroll
+  on public.payroll_voucher_draft_operations
+  for select
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+drop policy if exists payroll_money_operations_read_payroll
+  on public.payroll_money_operations;
+create policy payroll_money_operations_read_payroll
+  on public.payroll_money_operations
+  for select
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+drop policy if exists payroll_money_operation_movements_read_payroll
+  on public.payroll_money_operation_movements;
+create policy payroll_money_operation_movements_read_payroll
+  on public.payroll_money_operation_movements
+  for select
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+drop policy if exists payroll_statement_import_operations_read_payroll
+  on public.payroll_statement_import_operations;
+create policy payroll_statement_import_operations_read_payroll
+  on public.payroll_statement_import_operations
+  for select
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+drop policy if exists payroll_statement_rows_read_payroll
+  on public.payroll_statement_rows;
+create policy payroll_statement_rows_read_payroll
+  on public.payroll_statement_rows
+  for select
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+drop policy if exists payroll_statement_decisions_read_payroll
+  on public.payroll_statement_decisions;
+create policy payroll_statement_decisions_read_payroll
+  on public.payroll_statement_decisions
+  for select
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+drop policy if exists payroll_statement_allocations_read_payroll
+  on public.payroll_statement_allocations;
+create policy payroll_statement_allocations_read_payroll
+  on public.payroll_statement_allocations
+  for select
+  to authenticated
+  using (public.can_manage_tenant_payroll(tenant_id));
+
+do $$
+declare
+  table_name_value text;
+begin
+  foreach table_name_value in array array[
+    'payroll_statement_account_mappings',
+    'payroll_voucher_draft_operations',
+    'payroll_money_operations',
+    'payroll_money_operation_movements',
+    'payroll_statement_imports',
+    'payroll_statement_import_operations',
+    'payroll_statement_rows',
+    'payroll_statement_decisions',
+    'payroll_statement_allocations'
+  ]
+  loop
+    execute format(
+      'revoke all on table public.%I '
+      || 'from public, anon, authenticated, service_role',
+      table_name_value
+    );
+    execute format(
+      'grant select on table public.%I to authenticated',
+      table_name_value
+    );
+    execute format(
+      'grant select on table public.%I to service_role',
+      table_name_value
+    );
+  end loop;
+end
+$$;
+
+revoke all on table public.payroll_statement_command_contexts
+  from public, anon, authenticated, service_role;
+revoke all on table public.payroll_money_command_contexts
+  from public, anon, authenticated, service_role;
+
+create or replace function public.create_payroll_statement_import(
+  p_operation_key text,
+  p_file_sha256 text,
+  p_source_metadata jsonb,
+  p_rows jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+  operation_key_value text := trim(coalesce(p_operation_key, ''));
+  file_sha256_value text := lower(trim(coalesce(p_file_sha256, '')));
+  source_metadata_value jsonb := coalesce(p_source_metadata, '{}'::jsonb);
+  payload_hash_value text;
+  existing_import public.payroll_statement_imports%rowtype;
+  existing_operation public.payroll_statement_import_operations%rowtype;
+  import_id_value uuid;
+  import_receipt_value jsonb;
+  account_fingerprint_value text;
+  erp_account_id_value uuid;
+  revision_value integer := 1;
+  is_revision_value boolean := false;
+  row_value jsonb;
+  row_ordinal_value integer;
+  page_number_value integer;
+  source_line_start_value integer;
+  source_line_end_value integer;
+  supplied_source_occurrence_value integer;
+  source_occurrence_value integer;
+  expected_source_occurrence_value integer;
+  transaction_date_value date;
+  direction_value text;
+  amount_value numeric(14,2);
+  description_observed_value text;
+  beneficiary_observed_value text;
+  document_observed_value text;
+  document_normalized_value text;
+  description_normalized_value text;
+  beneficiary_normalized_value text;
+  base_fingerprint_value text;
+  fingerprint_value text;
+  supplied_fingerprint_value text;
+  warnings_value jsonb;
+  parser_name_value text;
+  parser_version_value text;
+  source_type_value text;
+  statement_start_value date;
+  statement_end_value date;
+  document_date_value date;
+  row_count_value integer;
+  violated_constraint_name text;
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll statement access denied'
+      using errcode = '42501';
+  end if;
+
+  if operation_key_value !~ '^[A-Za-z0-9:_-]{8,200}$' then
+    raise exception 'payroll_statement_invalid_operation_key'
+      using errcode = '22023';
+  end if;
+
+  if file_sha256_value !~ '^[0-9a-f]{64}$' then
+    raise exception 'payroll_statement_invalid_file_sha256'
+      using errcode = '22023';
+  end if;
+
+  if jsonb_typeof(source_metadata_value) <> 'object'
+     or octet_length(source_metadata_value::text) > 8192 then
+    raise exception 'payroll_statement_invalid_source_metadata'
+      using errcode = '22023';
+  end if;
+
+  -- Metadata is deliberately allowlisted. Account numbers, RUTs, statement
+  -- holders, balances, and raw filenames are not accepted by this boundary.
+  if exists (
+    select 1
+    from jsonb_object_keys(source_metadata_value) metadata_key
+    where metadata_key not in (
+      'parser_name',
+      'parser_version',
+      'source_type',
+      'page_count',
+      'extraction_kind',
+      'locale',
+      'statement_start',
+      'statement_end',
+      'document_date',
+      'bank_name',
+      'account_fingerprint',
+      'erp_account_id'
+    )
+  ) then
+    raise exception 'payroll_statement_source_metadata_key_not_allowed'
+      using errcode = '22023';
+  end if;
+
+  parser_name_value :=
+    trim(coalesce(source_metadata_value->>'parser_name', ''));
+  parser_version_value :=
+    trim(coalesce(source_metadata_value->>'parser_version', ''));
+  source_type_value :=
+    lower(trim(coalesce(source_metadata_value->>'source_type', '')));
+  account_fingerprint_value := lower(
+    trim(coalesce(source_metadata_value->>'account_fingerprint', ''))
+  );
+  erp_account_id_value :=
+    nullif(source_metadata_value->>'erp_account_id', '')::uuid;
+  statement_start_value :=
+    nullif(source_metadata_value->>'statement_start', '')::date;
+  statement_end_value :=
+    nullif(source_metadata_value->>'statement_end', '')::date;
+  document_date_value :=
+    nullif(source_metadata_value->>'document_date', '')::date;
+
+  if char_length(parser_name_value) not between 1 and 100
+     or char_length(parser_version_value) not between 1 and 100
+     or source_type_value not in ('pdf_text', 'pdf_ocr', 'image_ocr')
+     or account_fingerprint_value !~ '^[0-9a-f]{64}$'
+     or erp_account_id_value is null
+     or (
+       (statement_start_value is null)
+         <> (statement_end_value is null)
+     )
+     or (
+       statement_start_value is not null
+       and (
+         statement_start_value not between
+           date '1900-01-01' and date '2100-12-31'
+         or statement_end_value not between
+           statement_start_value and date '2100-12-31'
+       )
+     )
+     or (
+       document_date_value is not null
+       and document_date_value not between
+         date '1900-01-01' and date '2100-12-31'
+     ) then
+    raise exception 'payroll_statement_invalid_parser_metadata'
+      using errcode = '22023';
+  end if;
+
+  if not exists (
+    select 1
+    from public.accounts account_row
+    where account_row.id = erp_account_id_value
+      and account_row.tenant_id = tenant_id_value
+      and account_row.is_active is true
+      and account_row.type = 'asset'
+  ) then
+    raise exception 'payroll_statement_erp_account_not_available'
+      using errcode = '42501';
+  end if;
+
+  if p_rows is null
+     or jsonb_typeof(p_rows) <> 'array'
+     or jsonb_array_length(p_rows) not between 1 and 2000 then
+    raise exception 'payroll_statement_invalid_rows'
+      using errcode = '22023';
+  end if;
+
+  payload_hash_value := encode(
+    extensions.digest(
+      convert_to(
+        jsonb_build_object(
+          'file_sha256',
+          file_sha256_value,
+          'source_metadata',
+          source_metadata_value,
+          'rows',
+          p_rows
+        )::text,
+        'UTF8'
+      ),
+      'sha256'
+    ),
+    'hex'
+  );
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text
+      || ':payroll-statement-file:'
+      || file_sha256_value,
+      0
+    )
+  );
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text
+      || ':payroll-statement-import:'
+      || operation_key_value,
+      0
+    )
+  );
+
+  select import_operation.*
+  into existing_operation
+  from public.payroll_statement_import_operations import_operation
+  where import_operation.tenant_id = tenant_id_value
+    and import_operation.operation_key = operation_key_value;
+
+  if found then
+    if existing_operation.payload_hash <> payload_hash_value then
+      raise exception 'payroll_statement_import_idempotency_conflict'
+        using
+          errcode = 'P0001',
+          detail = 'operation_key already has a different payload';
+    end if;
+
+    select import_row.*
+    into existing_import
+    from public.payroll_statement_imports import_row
+    where import_row.id = existing_operation.import_id
+      and import_row.tenant_id = tenant_id_value
+    for update;
+
+    if not found
+       or existing_import.revision <> existing_operation.revision then
+      raise exception 'payroll_statement_import_revision_superseded'
+        using
+          errcode = '40001',
+          detail = 'reload the current OCR review revision';
+    end if;
+
+    return existing_operation.receipt;
+  end if;
+
+  select import_row.*
+  into existing_import
+  from public.payroll_statement_imports import_row
+  where import_row.tenant_id = tenant_id_value
+    and import_row.file_sha256 = file_sha256_value
+  for update;
+
+  if found then
+    import_id_value := existing_import.id;
+    revision_value := existing_import.revision;
+
+    if existing_import.create_payload_hash = payload_hash_value then
+      insert into public.payroll_statement_import_operations (
+        tenant_id,
+        import_id,
+        operation_key,
+        payload_hash,
+        revision,
+        receipt,
+        created_by
+      )
+      values (
+        tenant_id_value,
+        import_id_value,
+        operation_key_value,
+        payload_hash_value,
+        revision_value,
+        existing_import.import_receipt,
+        auth.uid()
+      );
+      return existing_import.import_receipt;
+    end if;
+
+    if existing_import.status <> 'review' then
+      raise exception 'payroll_statement_applied_import_cannot_be_revised'
+        using
+          errcode = '55000',
+          detail = 'applied and held evidence is immutable';
+    end if;
+
+    if existing_import.revision >= 1000 then
+      raise exception 'payroll_statement_revision_limit_reached'
+        using errcode = '54000';
+    end if;
+
+    revision_value := existing_import.revision + 1;
+    is_revision_value := true;
+
+    insert into public.payroll_statement_command_contexts (
+      transaction_id,
+      tenant_id,
+      import_id,
+      command,
+      actor_id
+    )
+    values (
+      txid_current(),
+      tenant_id_value,
+      import_id_value,
+      'import_revision',
+      auth.uid()
+    );
+
+    delete from public.payroll_statement_rows statement_row
+    where statement_row.import_id = import_id_value
+      and statement_row.tenant_id = tenant_id_value;
+
+    update public.payroll_statement_imports import_row
+    set account_fingerprint = account_fingerprint_value,
+        erp_account_id = erp_account_id_value,
+        source_metadata = source_metadata_value,
+        parser_name = parser_name_value,
+        parser_version = parser_version_value,
+        source_type = source_type_value,
+        row_count = 0,
+        revision = revision_value,
+        create_payload_hash = payload_hash_value,
+        import_receipt = null,
+        updated_at = statement_timestamp()
+    where import_row.id = import_id_value
+      and import_row.tenant_id = tenant_id_value;
+  else
+    insert into public.payroll_statement_imports (
+      tenant_id,
+      file_sha256,
+      account_fingerprint,
+      erp_account_id,
+      source_metadata,
+      parser_name,
+      parser_version,
+      source_type,
+      revision,
+      create_operation_key,
+      create_payload_hash,
+      created_by
+    )
+    values (
+      tenant_id_value,
+      file_sha256_value,
+      account_fingerprint_value,
+      erp_account_id_value,
+      source_metadata_value,
+      parser_name_value,
+      parser_version_value,
+      source_type_value,
+      revision_value,
+      operation_key_value,
+      payload_hash_value,
+      auth.uid()
+    )
+    returning id into import_id_value;
+  end if;
+
+  for row_value in
+    select row_element.value
+    from jsonb_array_elements(p_rows) with ordinality row_element(value, n)
+    order by row_element.n
+  loop
+    if jsonb_typeof(row_value) <> 'object' then
+      raise exception 'payroll_statement_row_must_be_object'
+        using errcode = '22023';
+    end if;
+
+    row_ordinal_value := nullif(
+      coalesce(
+        row_value->>'ordinal',
+        row_value->>'source_ordinal'
+      ),
+      ''
+    )::integer;
+    page_number_value := nullif(
+      coalesce(
+        row_value->>'page',
+        row_value->>'page_number'
+      ),
+      ''
+    )::integer;
+    source_line_start_value :=
+      nullif(row_value->>'source_line_start', '')::integer;
+    source_line_end_value :=
+      nullif(row_value->>'source_line_end', '')::integer;
+    supplied_source_occurrence_value :=
+      nullif(row_value->>'source_occurrence', '')::integer;
+    source_occurrence_value :=
+      coalesce(supplied_source_occurrence_value, 1);
+    transaction_date_value := nullif(
+      coalesce(
+        row_value->>'transaction_date',
+        row_value->>'booking_date'
+      ),
+      ''
+    )::date;
+    direction_value :=
+      nullif(lower(trim(coalesce(row_value->>'direction', ''))), '');
+    amount_value := nullif(
+      coalesce(
+        row_value->>'amount',
+        case
+          when direction_value = 'debit'
+            then row_value->>'debit_amount_clp'
+          when direction_value = 'credit'
+            then row_value->>'credit_amount_clp'
+          else null
+        end
+      ),
+      ''
+    )::numeric;
+    description_observed_value :=
+      nullif(trim(row_value->>'description_observed'), '');
+    beneficiary_observed_value :=
+      nullif(trim(row_value->>'beneficiary_observed'), '');
+    document_observed_value := nullif(
+      trim(
+        coalesce(
+          row_value->>'document_observed',
+          row_value->>'document_number'
+        )
+      ),
+      ''
+    );
+    warnings_value := coalesce(
+      row_value->'warnings',
+      row_value->'warning_codes',
+      '[]'::jsonb
+    );
+
+    if jsonb_typeof(warnings_value) <> 'array' then
+      raise exception 'payroll_statement_invalid_row_%', row_ordinal_value
+        using errcode = '22023';
+    end if;
+
+    if row_ordinal_value not between 1 and 2000
+       or (
+         page_number_value is not null
+         and page_number_value not between 1 and 10000
+       )
+       or (
+         (source_line_start_value is null)
+           <> (source_line_end_value is null)
+       )
+       or (
+         source_line_start_value is not null
+         and (
+           source_line_start_value not between 1 and 1000000
+           or source_line_end_value not between
+                source_line_start_value and 1000000
+         )
+       )
+       or source_occurrence_value not between 1 and 2000
+       or (
+         transaction_date_value is not null
+         and transaction_date_value not between
+           date '1900-01-01' and date '2100-12-31'
+       )
+       or (
+         direction_value is not null
+         and direction_value not in ('debit', 'credit', 'unknown')
+       )
+       or (
+         amount_value is not null
+         and (
+           amount_value::text = 'NaN'
+           or amount_value <= 0
+           or amount_value > 999999999999.99
+           or round(amount_value, 2) <> amount_value
+         )
+       )
+       or (
+         description_observed_value is null
+         and beneficiary_observed_value is null
+       )
+       or char_length(coalesce(description_observed_value, '')) > 500
+       or char_length(coalesce(beneficiary_observed_value, '')) > 200
+       or char_length(coalesce(document_observed_value, '')) > 100
+       or octet_length(warnings_value::text) > 8192
+       or exists (
+         select 1
+         from jsonb_array_elements(warnings_value) warning_element
+         where jsonb_typeof(warning_element) <> 'string'
+            or char_length(warning_element #>> '{}') not between 1 and 100
+            or (warning_element #>> '{}') !~ '^[a-z0-9_:-]+$'
+       ) then
+      raise exception 'payroll_statement_invalid_row_%', row_ordinal_value
+        using errcode = '22023';
+    end if;
+
+    if transaction_date_value is null
+       and not (
+         warnings_value @> '["missing_transaction_date"]'::jsonb
+       ) then
+      warnings_value :=
+        warnings_value || '["missing_transaction_date"]'::jsonb;
+    end if;
+
+    if direction_value is null
+       and not (warnings_value @> '["missing_direction"]'::jsonb) then
+      warnings_value := warnings_value || '["missing_direction"]'::jsonb;
+    elsif direction_value = 'unknown'
+       and not (warnings_value @> '["unknown_direction"]'::jsonb) then
+      warnings_value := warnings_value || '["unknown_direction"]'::jsonb;
+    end if;
+
+    if amount_value is null
+       and not (warnings_value @> '["missing_amount"]'::jsonb) then
+      warnings_value := warnings_value || '["missing_amount"]'::jsonb;
+    end if;
+
+    if (
+      transaction_date_value is null
+      or direction_value is null
+      or direction_value = 'unknown'
+      or amount_value is null
+    ) and not (warnings_value @> '["incomplete_evidence"]'::jsonb) then
+      warnings_value := warnings_value || '["incomplete_evidence"]'::jsonb;
+    end if;
+
+    if statement_start_value is not null
+       and transaction_date_value is not null
+       and transaction_date_value not between
+         statement_start_value and statement_end_value
+       and not (
+         warnings_value @> '["out_of_statement_range"]'::jsonb
+       ) then
+      warnings_value :=
+        warnings_value || '["out_of_statement_range"]'::jsonb;
+    end if;
+
+    if jsonb_array_length(warnings_value) > 20
+       or octet_length(warnings_value::text) > 8192 then
+      raise exception 'payroll_statement_invalid_row_%', row_ordinal_value
+        using errcode = '22023';
+    end if;
+
+    description_normalized_value :=
+      public.normalize_payroll_statement_text(
+        description_observed_value
+      );
+    beneficiary_normalized_value :=
+      public.normalize_payroll_statement_text(
+        beneficiary_observed_value
+      );
+    document_normalized_value :=
+      public.normalize_payroll_statement_text(
+        document_observed_value
+      );
+
+    if row_value ? 'description_normalized'
+       and nullif(row_value->>'description_normalized', '')
+            is distinct from description_normalized_value then
+      raise exception
+        'payroll_statement_description_normalization_mismatch_%',
+        row_ordinal_value
+        using errcode = '22023';
+    end if;
+
+    if row_value ? 'beneficiary_normalized'
+       and nullif(row_value->>'beneficiary_normalized', '')
+            is distinct from beneficiary_normalized_value then
+      raise exception
+        'payroll_statement_beneficiary_normalization_mismatch_%',
+        row_ordinal_value
+        using errcode = '22023';
+    end if;
+
+    base_fingerprint_value := encode(
+      extensions.digest(
+        convert_to(
+          concat_ws(
+            '|',
+            account_fingerprint_value,
+            coalesce(transaction_date_value::text, ''),
+            case
+              when direction_value = 'unknown' then ''
+              else coalesce(direction_value, '')
+            end,
+            coalesce(
+              to_char(amount_value, 'FM999999999999990.00'),
+              ''
+            ),
+            coalesce(description_normalized_value, ''),
+            coalesce(beneficiary_normalized_value, ''),
+            coalesce(document_normalized_value, '')
+          ),
+          'UTF8'
+        ),
+        'sha256'
+      ),
+      'hex'
+    );
+
+    select count(*)::integer + 1
+    into expected_source_occurrence_value
+    from public.payroll_statement_rows prior_row
+    where prior_row.import_id = import_id_value
+      and prior_row.base_fingerprint = base_fingerprint_value;
+
+    if supplied_source_occurrence_value is not null
+       and supplied_source_occurrence_value
+            <> expected_source_occurrence_value then
+      raise exception
+        'payroll_statement_source_occurrence_mismatch_%',
+        row_ordinal_value
+        using
+          errcode = '22023',
+          detail =
+            'source_occurrence must be the deterministic occurrence '
+            || 'of the normalized row within this import';
+    end if;
+    source_occurrence_value := expected_source_occurrence_value;
+
+    fingerprint_value := encode(
+      extensions.digest(
+        convert_to(
+          concat_ws(
+            '|',
+            account_fingerprint_value,
+            coalesce(transaction_date_value::text, ''),
+            case
+              when direction_value = 'unknown' then ''
+              else coalesce(direction_value, '')
+            end,
+            coalesce(
+              to_char(amount_value, 'FM999999999999990.00'),
+              ''
+            ),
+            coalesce(description_normalized_value, ''),
+            coalesce(beneficiary_normalized_value, ''),
+            coalesce(document_normalized_value, ''),
+            source_occurrence_value::text
+          ),
+          'UTF8'
+        ),
+        'sha256'
+      ),
+      'hex'
+    );
+    supplied_fingerprint_value := lower(
+      nullif(
+        trim(
+          coalesce(
+            row_value->>'fingerprint',
+            row_value->>'source_fingerprint'
+          )
+        ),
+        ''
+      )
+    );
+
+    if supplied_fingerprint_value is not null
+       and supplied_fingerprint_value <> fingerprint_value then
+      raise exception 'payroll_statement_fingerprint_mismatch_%',
+        row_ordinal_value
+        using errcode = '22023';
+    end if;
+
+    insert into public.payroll_statement_rows (
+      tenant_id,
+      import_id,
+      row_ordinal,
+      page_number,
+      source_line_start,
+      source_line_end,
+      source_occurrence,
+      transaction_date,
+      direction,
+      amount,
+      description_observed,
+      beneficiary_observed,
+      document_observed,
+      description_normalized,
+      beneficiary_normalized,
+      base_fingerprint,
+      fingerprint,
+      warnings
+    )
+    values (
+      tenant_id_value,
+      import_id_value,
+      row_ordinal_value,
+      page_number_value,
+      source_line_start_value,
+      source_line_end_value,
+      source_occurrence_value,
+      transaction_date_value,
+      direction_value,
+      amount_value,
+      description_observed_value,
+      beneficiary_observed_value,
+      document_observed_value,
+      description_normalized_value,
+      beneficiary_normalized_value,
+      base_fingerprint_value,
+      fingerprint_value,
+      warnings_value
+    );
+  end loop;
+
+  select count(*)::integer
+  into row_count_value
+  from public.payroll_statement_rows statement_row
+  where statement_row.import_id = import_id_value;
+
+  import_receipt_value := jsonb_build_object(
+    'import_id',
+    import_id_value,
+    'status',
+    'review',
+    'revision',
+    revision_value,
+    'revised',
+    is_revision_value,
+    'row_count',
+    row_count_value,
+    'rows',
+    (
+      select jsonb_agg(
+        jsonb_build_object(
+          'row_id',
+          statement_row.id,
+          'fingerprint',
+          statement_row.fingerprint,
+          'base_fingerprint',
+          statement_row.base_fingerprint,
+          'ordinal',
+          statement_row.row_ordinal
+        )
+        order by statement_row.row_ordinal
+      )
+      from public.payroll_statement_rows statement_row
+      where statement_row.import_id = import_id_value
+    ),
+    'file_sha256',
+    file_sha256_value,
+    'account_fingerprint',
+    account_fingerprint_value,
+    'erp_account_id',
+    erp_account_id_value,
+    'payload_hash',
+    payload_hash_value
+  );
+
+  update public.payroll_statement_imports import_row
+  set row_count = row_count_value,
+      import_receipt = import_receipt_value,
+      updated_at = statement_timestamp()
+  where import_row.id = import_id_value;
+
+  insert into public.payroll_statement_import_operations (
+    tenant_id,
+    import_id,
+    operation_key,
+    payload_hash,
+    revision,
+    receipt,
+    created_by
+  )
+  values (
+    tenant_id_value,
+    import_id_value,
+    operation_key_value,
+    payload_hash_value,
+    revision_value,
+    import_receipt_value,
+    auth.uid()
+  );
+
+  if is_revision_value then
+    delete from public.payroll_statement_command_contexts command_context
+    where command_context.transaction_id = txid_current()
+      and command_context.import_id = import_id_value
+      and command_context.command = 'import_revision';
+  end if;
+
+  return import_receipt_value;
+exception
+  when unique_violation then
+    get stacked diagnostics
+      violated_constraint_name = constraint_name;
+    if violated_constraint_name in (
+      'payroll_statement_rows_import_id_row_ordinal_key',
+      'payroll_statement_rows_import_id_fingerprint_key'
+    ) then
+      raise exception 'payroll_statement_indistinguishable_duplicate_row'
+        using
+          errcode = '23505',
+          detail = 'Exact statement rows require a stable bank document id';
+    elsif violated_constraint_name in (
+      'payroll_statement_import_operations_tenant_id_operation_key_key',
+      'ux_payroll_statement_imports_tenant_file',
+      'ux_payroll_statement_imports_create_operation'
+    ) then
+      raise exception 'payroll_statement_duplicate_row_or_operation'
+        using errcode = '23505';
+    else
+      raise;
+    end if;
+end;
+$$;
+
+create or replace function public.save_payroll_voucher_draft(
+  p_voucher_id uuid,
+  p_operation_key text,
+  p_expected_reconciliation_version bigint,
+  p_header jsonb,
+  p_lines jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+  operation_key_value text := trim(coalesce(p_operation_key, ''));
+  header_value jsonb := coalesce(p_header, '{}'::jsonb);
+  lines_value jsonb := coalesce(p_lines, '[]'::jsonb);
+  payload_hash_value text;
+  existing_operation public.payroll_voucher_draft_operations%rowtype;
+  voucher_row public.payroll_vouchers%rowtype;
+  voucher_id_value uuid := p_voucher_id;
+  voucher_number_value text;
+  next_voucher_number_value integer;
+  period_start_value date;
+  period_end_value date;
+  period_label_value text;
+  notes_value text;
+  line_value jsonb;
+  line_ordinal_value integer;
+  line_id_value uuid;
+  employee_id_value uuid;
+  employee_name_value text;
+  worked_hours_value numeric;
+  overtime_hours_value numeric;
+  hourly_rate_value numeric;
+  overtime_rate_value numeric;
+  regular_amount_value numeric(12,2);
+  overtime_amount_value numeric(12,2);
+  total_amount_value numeric(12,2);
+  payment_method_value text;
+  payment_method_id_value uuid;
+  payment_account_id_value uuid;
+  method_account_id_value uuid;
+  salary_account_id_value uuid;
+  is_included_value boolean;
+  total_hours_value numeric(10,2);
+  voucher_total_value numeric(12,2);
+  employee_count_value integer;
+  reconciliation_version_value bigint;
+  receipt_value jsonb;
+  created_value boolean := p_voucher_id is null;
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  if operation_key_value !~ '^[A-Za-z0-9:_-]{8,200}$' then
+    raise exception 'payroll_draft_invalid_operation_key'
+      using errcode = '22023';
+  end if;
+
+  if jsonb_typeof(header_value) <> 'object'
+     or jsonb_typeof(lines_value) <> 'array'
+     or jsonb_array_length(lines_value) > 2000
+     or not (header_value ? 'period_start')
+     or not (header_value ? 'period_end')
+     or exists (
+       select 1
+       from jsonb_object_keys(header_value) header_key
+       where header_key not in (
+         'period_start',
+         'period_end',
+         'period_label',
+         'notes'
+       )
+     ) then
+    raise exception 'payroll_draft_invalid_payload'
+      using errcode = '22023';
+  end if;
+
+  period_start_value :=
+    nullif(trim(header_value->>'period_start'), '')::date;
+  period_end_value :=
+    nullif(trim(header_value->>'period_end'), '')::date;
+  period_label_value :=
+    nullif(trim(header_value->>'period_label'), '');
+  notes_value := nullif(trim(header_value->>'notes'), '');
+
+  if period_start_value is null
+     or period_end_value is null
+     or period_start_value not between
+       date '1900-01-01' and date '2100-12-31'
+     or period_end_value not between
+       period_start_value and date '2100-12-31'
+     or char_length(coalesce(period_label_value, '')) > 200
+     or char_length(coalesce(notes_value, '')) > 2000
+     or (
+       p_voucher_id is null
+       and p_expected_reconciliation_version is not null
+     )
+     or (
+       p_voucher_id is not null
+       and (
+         p_expected_reconciliation_version is null
+         or p_expected_reconciliation_version < 0
+       )
+     ) then
+    raise exception 'payroll_draft_invalid_header'
+      using errcode = '22023';
+  end if;
+
+  payload_hash_value := encode(
+    extensions.digest(
+      convert_to(
+        jsonb_build_object(
+          'voucher_id',
+          p_voucher_id,
+          'expected_reconciliation_version',
+          p_expected_reconciliation_version,
+          'header',
+          header_value,
+          'lines',
+          lines_value
+        )::text,
+        'UTF8'
+      ),
+      'sha256'
+    ),
+    'hex'
+  );
+
+  -- This is the same tenant lock used by reconciliation and manual settlement.
+  -- It is acquired before any voucher or line lock.
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text || ':payroll-settlement',
+      0
+    )
+  );
+
+  select draft_operation.*
+  into existing_operation
+  from public.payroll_voucher_draft_operations draft_operation
+  where draft_operation.tenant_id = tenant_id_value
+    and draft_operation.operation_key = operation_key_value
+  for update;
+
+  if found then
+    if existing_operation.payload_hash = payload_hash_value then
+      return existing_operation.receipt;
+    end if;
+    raise exception 'payroll_draft_idempotency_conflict'
+      using
+        errcode = 'P0001',
+        detail = 'operation_key already has a different payload';
+  end if;
+
+  if p_voucher_id is not null then
+    select voucher.*
+    into voucher_row
+    from public.payroll_vouchers voucher
+    where voucher.id = p_voucher_id
+      and voucher.tenant_id = tenant_id_value
+    for update;
+
+    if not found then
+      raise exception 'Payroll voucher not found'
+        using errcode = '42501';
+    end if;
+
+    if voucher_row.status <> 'draft' then
+      raise exception 'payroll_draft_not_editable'
+        using errcode = '55000';
+    end if;
+
+    if voucher_row.reconciliation_version
+         <> p_expected_reconciliation_version then
+      raise exception 'payroll_draft_version_conflict'
+        using
+          errcode = '40001',
+          detail = 'reload the complete payroll draft before saving';
+    end if;
+
+    perform voucher_line.id
+    from public.payroll_voucher_lines voucher_line
+    where voucher_line.voucher_id = p_voucher_id
+      and voucher_line.tenant_id = tenant_id_value
+    order by voucher_line.id
+    for update;
+
+    if exists (
+      select 1
+      from public.payroll_statement_decisions decision
+      where decision.voucher_id = p_voucher_id
+    ) or exists (
+      select 1
+      from public.payroll_statement_allocations allocation
+      where allocation.voucher_id = p_voucher_id
+    ) or exists (
+      select 1
+      from public.payroll_voucher_lines voucher_line
+      where voucher_line.voucher_id = p_voucher_id
+        and (
+          voucher_line.expense_id is not null
+          or exists (
+            select 1
+            from public.employee_advance_allocations allocation
+            where allocation.voucher_line_id = voucher_line.id
+          )
+        )
+    ) then
+      raise exception 'payroll_draft_has_settlement_evidence'
+        using errcode = '55000';
+    end if;
+  end if;
+
+  create temporary table if not exists
+    pg_temp.payroll_voucher_draft_lines_input (
+      line_ordinal integer primary key,
+      line_id uuid not null unique,
+      employee_id uuid not null unique,
+      employee_name text not null,
+      worked_hours numeric(10,2) not null,
+      overtime_hours numeric(10,2) not null,
+      hourly_rate numeric(10,2) not null,
+      overtime_rate numeric(10,2) not null,
+      regular_amount numeric(12,2) not null,
+      overtime_amount numeric(12,2) not null,
+      total_amount numeric(12,2) not null,
+      payment_method text,
+      payment_method_id uuid,
+      payment_account_id uuid,
+      salary_account_id uuid,
+      is_included boolean not null
+    )
+    on commit drop;
+  truncate table pg_temp.payroll_voucher_draft_lines_input;
+
+  for line_value, line_ordinal_value in
+    select line_element.value, line_element.n::integer
+    from jsonb_array_elements(lines_value)
+      with ordinality line_element(value, n)
+    order by line_element.n
+  loop
+    if jsonb_typeof(line_value) <> 'object'
+       or exists (
+         select 1
+         from jsonb_object_keys(line_value) line_key
+         where line_key not in (
+           'line_id',
+           'employee_id',
+           'worked_hours',
+           'overtime_hours',
+           'hourly_rate',
+           'overtime_rate',
+           'payment_method',
+           'payment_method_id',
+           'payment_account_id',
+           'salary_account_id',
+           'is_included'
+         )
+       ) then
+      raise exception 'payroll_draft_invalid_line_%', line_ordinal_value
+        using errcode = '22023';
+    end if;
+
+    line_id_value := coalesce(
+      nullif(line_value->>'line_id', '')::uuid,
+      gen_random_uuid()
+    );
+    employee_id_value :=
+      nullif(line_value->>'employee_id', '')::uuid;
+    worked_hours_value := coalesce(
+      nullif(line_value->>'worked_hours', '')::numeric,
+      0
+    );
+    overtime_hours_value := coalesce(
+      nullif(line_value->>'overtime_hours', '')::numeric,
+      0
+    );
+    hourly_rate_value := coalesce(
+      nullif(line_value->>'hourly_rate', '')::numeric,
+      0
+    );
+    overtime_rate_value := coalesce(
+      nullif(line_value->>'overtime_rate', '')::numeric,
+      round(hourly_rate_value * 1.5, 2)
+    );
+    payment_method_value :=
+      lower(nullif(trim(line_value->>'payment_method'), ''));
+    payment_method_id_value :=
+      nullif(line_value->>'payment_method_id', '')::uuid;
+    payment_account_id_value :=
+      nullif(line_value->>'payment_account_id', '')::uuid;
+    salary_account_id_value :=
+      nullif(line_value->>'salary_account_id', '')::uuid;
+    is_included_value := coalesce(
+      nullif(line_value->>'is_included', '')::boolean,
+      true
+    );
+
+    if employee_id_value is null
+       or worked_hours_value::text in ('NaN', 'Infinity', '-Infinity')
+       or overtime_hours_value::text in ('NaN', 'Infinity', '-Infinity')
+       or hourly_rate_value::text in ('NaN', 'Infinity', '-Infinity')
+       or overtime_rate_value::text in ('NaN', 'Infinity', '-Infinity')
+       or worked_hours_value not between 0 and 99999999.99
+       or overtime_hours_value not between 0 and 99999999.99
+       or hourly_rate_value not between 0 and 99999999.99
+       or overtime_rate_value not between 0 and 99999999.99
+       or round(worked_hours_value, 2) <> worked_hours_value
+       or round(overtime_hours_value, 2) <> overtime_hours_value
+       or round(hourly_rate_value, 2) <> hourly_rate_value
+       or round(overtime_rate_value, 2) <> overtime_rate_value
+       or (
+         payment_method_value is not null
+         and payment_method_value !~ '^[a-z0-9_-]{1,50}$'
+       ) then
+      raise exception 'payroll_draft_invalid_line_%', line_ordinal_value
+        using errcode = '22023';
+    end if;
+
+    select trim(employee.first_name || ' ' || employee.last_name)
+    into employee_name_value
+    from public.employees employee
+    where employee.id = employee_id_value
+      and employee.tenant_id = tenant_id_value;
+
+    if not found then
+      raise exception 'Payroll employee not found'
+        using errcode = '42501';
+    end if;
+
+    method_account_id_value := null;
+    if payment_method_id_value is not null then
+      select lower(payment_method.code), payment_method.account_id
+      into payment_method_value, method_account_id_value
+      from public.payment_methods payment_method
+      where payment_method.id = payment_method_id_value
+        and payment_method.tenant_id = tenant_id_value;
+
+      if not found then
+        raise exception 'Payroll payment method not found'
+          using errcode = '42501';
+      end if;
+    end if;
+
+    payment_account_id_value := coalesce(
+      payment_account_id_value,
+      method_account_id_value
+    );
+
+    if payment_account_id_value is not null
+       and not exists (
+         select 1
+         from public.accounts payment_account
+         where payment_account.id = payment_account_id_value
+           and payment_account.tenant_id = tenant_id_value
+           and payment_account.type = 'asset'
+       ) then
+      raise exception 'Payroll payment account not found'
+        using errcode = '42501';
+    end if;
+
+    if method_account_id_value is not null
+       and payment_account_id_value <> method_account_id_value then
+      raise exception 'payroll_draft_payment_account_mismatch_%',
+        line_ordinal_value
+        using errcode = '22023';
+    end if;
+
+    if salary_account_id_value is not null
+       and not exists (
+         select 1
+         from public.accounts salary_account
+         where salary_account.id = salary_account_id_value
+           and salary_account.tenant_id = tenant_id_value
+           and salary_account.type = 'expense'
+       ) then
+      raise exception 'Payroll salary account not found'
+        using errcode = '42501';
+    end if;
+
+    if p_voucher_id is null
+       and line_value ? 'line_id'
+       and nullif(line_value->>'line_id', '') is not null then
+      raise exception 'payroll_draft_new_line_id_must_be_server_owned'
+        using errcode = '22023';
+    end if;
+
+    if p_voucher_id is not null
+       and line_value ? 'line_id'
+       and nullif(line_value->>'line_id', '') is not null
+       and not exists (
+         select 1
+         from public.payroll_voucher_lines voucher_line
+         where voucher_line.id = line_id_value
+           and voucher_line.voucher_id = p_voucher_id
+           and voucher_line.tenant_id = tenant_id_value
+       ) then
+      raise exception 'payroll_draft_line_not_owned'
+        using errcode = '42501';
+    end if;
+
+    regular_amount_value :=
+      round(worked_hours_value * hourly_rate_value, 2);
+    overtime_amount_value :=
+      round(overtime_hours_value * overtime_rate_value, 2);
+    total_amount_value :=
+      regular_amount_value + overtime_amount_value;
+
+    if total_amount_value > 9999999999.99 then
+      raise exception 'payroll_draft_invalid_line_%', line_ordinal_value
+        using errcode = '22023';
+    end if;
+
+    if exists (
+      select 1
+      from pg_temp.payroll_voucher_draft_lines_input draft_line
+      where draft_line.line_id = line_id_value
+         or draft_line.employee_id = employee_id_value
+    ) then
+      raise exception 'payroll_draft_duplicate_line_%', line_ordinal_value
+        using errcode = '23505';
+    end if;
+
+    insert into pg_temp.payroll_voucher_draft_lines_input (
+      line_ordinal,
+      line_id,
+      employee_id,
+      employee_name,
+      worked_hours,
+      overtime_hours,
+      hourly_rate,
+      overtime_rate,
+      regular_amount,
+      overtime_amount,
+      total_amount,
+      payment_method,
+      payment_method_id,
+      payment_account_id,
+      salary_account_id,
+      is_included
+    )
+    values (
+      line_ordinal_value,
+      line_id_value,
+      employee_id_value,
+      employee_name_value,
+      worked_hours_value,
+      overtime_hours_value,
+      hourly_rate_value,
+      overtime_rate_value,
+      regular_amount_value,
+      overtime_amount_value,
+      total_amount_value,
+      payment_method_value,
+      payment_method_id_value,
+      payment_account_id_value,
+      salary_account_id_value,
+      is_included_value
+    );
+  end loop;
+
+  select
+    coalesce(
+      sum(draft_line.worked_hours + draft_line.overtime_hours)
+        filter (where draft_line.is_included),
+      0
+    )::numeric(10,2),
+    coalesce(
+      sum(draft_line.total_amount)
+        filter (where draft_line.is_included),
+      0
+    )::numeric(12,2),
+    count(*) filter (where draft_line.is_included)::integer
+  into total_hours_value, voucher_total_value, employee_count_value
+  from pg_temp.payroll_voucher_draft_lines_input draft_line;
+
+  if p_voucher_id is null then
+    select coalesce(
+      max(
+        substring(voucher.voucher_number from 5)::integer
+      ) filter (
+        where voucher.voucher_number ~ '^NOM-[0-9]+$'
+      ),
+      0
+    ) + 1
+    into next_voucher_number_value
+    from public.payroll_vouchers voucher
+    where voucher.tenant_id = tenant_id_value;
+
+    voucher_number_value :=
+      'NOM-' || lpad(next_voucher_number_value::text, 5, '0');
+    voucher_id_value := gen_random_uuid();
+
+    insert into public.payroll_vouchers (
+      id,
+      tenant_id,
+      voucher_number,
+      period_start,
+      period_end,
+      period_label,
+      total_hours,
+      total_amount,
+      employee_count,
+      status,
+      notes,
+      created_by
+    )
+    values (
+      voucher_id_value,
+      tenant_id_value,
+      voucher_number_value,
+      period_start_value,
+      period_end_value,
+      period_label_value,
+      0,
+      0,
+      0,
+      'draft',
+      notes_value,
+      auth.uid()
+    );
+  else
+    voucher_number_value := voucher_row.voucher_number;
+
+    delete from public.payroll_voucher_lines voucher_line
+    where voucher_line.voucher_id = voucher_id_value
+      and voucher_line.tenant_id = tenant_id_value;
+  end if;
+
+  insert into public.payroll_voucher_lines (
+    id,
+    tenant_id,
+    voucher_id,
+    employee_id,
+    employee_name,
+    worked_hours,
+    overtime_hours,
+    hourly_rate,
+    overtime_rate,
+    regular_amount,
+    overtime_amount,
+    total_amount,
+    payment_method,
+    payment_method_id,
+    payment_account_id,
+    salary_account_id,
+    is_included
+  )
+  select
+    draft_line.line_id,
+    tenant_id_value,
+    voucher_id_value,
+    draft_line.employee_id,
+    draft_line.employee_name,
+    draft_line.worked_hours,
+    draft_line.overtime_hours,
+    draft_line.hourly_rate,
+    draft_line.overtime_rate,
+    draft_line.regular_amount,
+    draft_line.overtime_amount,
+    draft_line.total_amount,
+    draft_line.payment_method,
+    draft_line.payment_method_id,
+    draft_line.payment_account_id,
+    draft_line.salary_account_id,
+    draft_line.is_included
+  from pg_temp.payroll_voucher_draft_lines_input draft_line
+  order by draft_line.line_ordinal;
+
+  update public.payroll_vouchers voucher
+  set period_start = period_start_value,
+      period_end = period_end_value,
+      period_label = period_label_value,
+      total_hours = total_hours_value,
+      total_amount = voucher_total_value,
+      employee_count = employee_count_value,
+      notes = notes_value,
+      updated_at = statement_timestamp()
+  where voucher.id = voucher_id_value
+    and voucher.tenant_id = tenant_id_value
+  returning voucher.reconciliation_version
+  into reconciliation_version_value;
+
+  receipt_value := jsonb_build_object(
+    'operation_key',
+    operation_key_value,
+    'payload_hash',
+    payload_hash_value,
+    'voucher_id',
+    voucher_id_value,
+    'voucher_number',
+    voucher_number_value,
+    'created',
+    created_value,
+    'status',
+    'draft',
+    'reconciliation_version',
+    reconciliation_version_value,
+    'total_hours',
+    total_hours_value,
+    'total_amount',
+    voucher_total_value,
+    'employee_count',
+    employee_count_value,
+    'lines',
+    coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'ordinal',
+            draft_line.line_ordinal,
+            'line_id',
+            draft_line.line_id,
+            'employee_id',
+            draft_line.employee_id
+          )
+          order by draft_line.line_ordinal
+        )
+        from pg_temp.payroll_voucher_draft_lines_input draft_line
+      ),
+      '[]'::jsonb
+    )
+  );
+
+  insert into public.payroll_voucher_draft_operations (
+    tenant_id,
+    operation_key,
+    payload_hash,
+    voucher_id,
+    expected_reconciliation_version,
+    receipt,
+    created_by
+  )
+  values (
+    tenant_id_value,
+    operation_key_value,
+    payload_hash_value,
+    voucher_id_value,
+    p_expected_reconciliation_version,
+    receipt_value,
+    auth.uid()
+  );
+
+  return receipt_value;
+end;
+$$;
+
+-- Draft confirmation is a versioned aggregate command. The immutable
+-- operation receipt is checked before the live row so an exact retry after a
+-- lost acknowledgement returns the original result even if the voucher later
+-- advances to another state.
+create or replace function public.confirm_payroll_voucher_v2(
+  p_voucher_id uuid,
+  p_operation_key text,
+  p_expected_reconciliation_version bigint
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+  operation_key_value text := trim(coalesce(p_operation_key, ''));
+  payload_hash_value text;
+  existing_operation public.payroll_voucher_draft_operations%rowtype;
+  voucher_row public.payroll_vouchers%rowtype;
+  confirmation_result_value boolean;
+  confirmed_status_value text;
+  reconciliation_version_value bigint;
+  receipt_value jsonb;
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  if p_voucher_id is null
+     or operation_key_value !~ '^[A-Za-z0-9:_-]{8,200}$'
+     or p_expected_reconciliation_version is null
+     or p_expected_reconciliation_version < 0 then
+    raise exception 'payroll_voucher_lifecycle_invalid_payload'
+      using errcode = '22023';
+  end if;
+
+  payload_hash_value := encode(
+    extensions.digest(
+      convert_to(
+        jsonb_build_object(
+          'command',
+          'confirm_draft',
+          'voucher_id',
+          p_voucher_id,
+          'expected_reconciliation_version',
+          p_expected_reconciliation_version
+        )::text,
+        'UTF8'
+      ),
+      'sha256'
+    ),
+    'hex'
+  );
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text || ':payroll-settlement',
+      0
+    )
+  );
+
+  select draft_operation.*
+  into existing_operation
+  from public.payroll_voucher_draft_operations draft_operation
+  where draft_operation.tenant_id = tenant_id_value
+    and draft_operation.operation_key = operation_key_value
+  for update;
+
+  if found then
+    if existing_operation.payload_hash = payload_hash_value
+       and existing_operation.receipt->>'operation' = 'confirm_draft' then
+      return existing_operation.receipt;
+    end if;
+    raise exception 'payroll_voucher_lifecycle_idempotency_conflict'
+      using
+        errcode = 'P0001',
+        detail = 'operation_key already has a different payload';
+  end if;
+
+  select voucher.*
+  into voucher_row
+  from public.payroll_vouchers voucher
+  where voucher.id = p_voucher_id
+    and voucher.tenant_id = tenant_id_value
+  for update;
+
+  if not found then
+    raise exception 'Payroll voucher not found'
+      using errcode = '42501';
+  end if;
+
+  if voucher_row.reconciliation_version
+       <> p_expected_reconciliation_version then
+    raise exception 'payroll_voucher_lifecycle_version_conflict'
+      using
+        errcode = '40001',
+        detail = 'reload the complete payroll voucher before continuing';
+  end if;
+
+  if voucher_row.status <> 'draft' then
+    raise exception 'payroll_voucher_is_not_a_draft'
+      using errcode = '55000';
+  end if;
+
+  perform voucher_line.id
+  from public.payroll_voucher_lines voucher_line
+  where voucher_line.voucher_id = p_voucher_id
+    and voucher_line.tenant_id = tenant_id_value
+  order by voucher_line.id
+  for update;
+
+  if not exists (
+    select 1
+    from public.payroll_voucher_lines voucher_line
+    where voucher_line.voucher_id = p_voucher_id
+      and voucher_line.tenant_id = tenant_id_value
+      and voucher_line.is_included is true
+      and voucher_line.total_amount > 0
+  ) then
+    raise exception 'payroll_voucher_has_no_positive_obligations'
+      using errcode = '22023';
+  end if;
+
+  confirmation_result_value :=
+    public.confirm_payroll_voucher_internal(p_voucher_id);
+
+  select voucher.status, voucher.reconciliation_version
+  into confirmed_status_value, reconciliation_version_value
+  from public.payroll_vouchers voucher
+  where voucher.id = p_voucher_id
+    and voucher.tenant_id = tenant_id_value;
+
+  if confirmation_result_value is distinct from true
+     or confirmed_status_value <> 'confirmed' then
+    raise exception 'payroll_voucher_confirmation_not_committed'
+      using errcode = '55000';
+  end if;
+
+  receipt_value := jsonb_build_object(
+    'operation',
+    'confirm_draft',
+    'operation_key',
+    operation_key_value,
+    'payload_hash',
+    payload_hash_value,
+    'voucher_id',
+    p_voucher_id,
+    'confirmed',
+    true,
+    'status',
+    confirmed_status_value,
+    'expected_reconciliation_version',
+    p_expected_reconciliation_version,
+    'reconciliation_version',
+    reconciliation_version_value
+  );
+
+  insert into public.payroll_voucher_draft_operations (
+    tenant_id,
+    operation_key,
+    payload_hash,
+    voucher_id,
+    expected_reconciliation_version,
+    receipt,
+    created_by
+  )
+  values (
+    tenant_id_value,
+    operation_key_value,
+    payload_hash_value,
+    p_voucher_id,
+    p_expected_reconciliation_version,
+    receipt_value,
+    auth.uid()
+  );
+
+  return receipt_value;
+end;
+$$;
+
+create or replace function public.register_employee_advance_v2(
+  p_operation_key text,
+  p_employee_id uuid,
+  p_amount numeric,
+  p_payment_method_id uuid,
+  p_payment_account_id uuid,
+  p_paid_at timestamp with time zone,
+  p_reference text,
+  p_notes text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+  operation_key_value text := trim(coalesce(p_operation_key, ''));
+  payload_hash_value text;
+  existing_operation public.payroll_money_operations%rowtype;
+  employee_advance_id_value uuid;
+  method_account_id_value uuid;
+  tenant_timezone text;
+  prior_timezone text := current_setting('TimeZone');
+  receipt_value jsonb;
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  if operation_key_value !~ '^[A-Za-z0-9:_-]{8,200}$'
+     or p_employee_id is null
+     or p_amount is null
+     or p_amount::text in ('NaN', 'Infinity', '-Infinity')
+     or p_amount <= 0
+     or p_amount > 999999999999.99
+     or round(p_amount, 2) <> p_amount
+     or p_payment_method_id is null
+     or p_payment_account_id is null
+     or p_paid_at is null
+     or p_paid_at > statement_timestamp() + interval '5 minutes'
+     or p_paid_at < timestamp with time zone '1900-01-01 00:00:00+00'
+     or char_length(coalesce(p_reference, '')) > 500
+     or char_length(coalesce(p_notes, '')) > 2000 then
+    raise exception 'payroll_advance_invalid_payload'
+      using errcode = '22023';
+  end if;
+
+  payload_hash_value := encode(
+    extensions.digest(
+      convert_to(
+        jsonb_build_object(
+          'operation_type',
+          'employee_advance',
+          'employee_id',
+          p_employee_id,
+          'amount',
+          p_amount,
+          'payment_method_id',
+          p_payment_method_id,
+          'payment_account_id',
+          p_payment_account_id,
+          'paid_at_epoch_microseconds',
+          round(extract(epoch from p_paid_at) * 1000000)::bigint,
+          'reference',
+          p_reference,
+          'notes',
+          p_notes
+        )::text,
+        'UTF8'
+      ),
+      'sha256'
+    ),
+    'hex'
+  );
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text || ':payroll-settlement',
+      0
+    )
+  );
+
+  select money_operation.*
+  into existing_operation
+  from public.payroll_money_operations money_operation
+  where money_operation.tenant_id = tenant_id_value
+    and money_operation.operation_key = operation_key_value
+  for update;
+
+  if found then
+    if existing_operation.operation_type = 'employee_advance'
+       and existing_operation.payload_hash = payload_hash_value then
+      return existing_operation.receipt;
+    end if;
+    raise exception 'payroll_money_idempotency_conflict'
+      using
+        errcode = 'P0001',
+        detail = 'operation_key already has a different money payload';
+  end if;
+
+  perform employee.id
+  from public.employees employee
+  where employee.id = p_employee_id
+    and employee.tenant_id = tenant_id_value
+    and employee.status = 'active'
+  for update;
+
+  if not found then
+    raise exception 'Payroll employee not found'
+      using errcode = '42501';
+  end if;
+
+  select payment_method.account_id
+  into method_account_id_value
+  from public.payment_methods payment_method
+  where payment_method.id = p_payment_method_id
+    and payment_method.tenant_id = tenant_id_value
+    and payment_method.is_active is true
+  for update;
+
+  if not found then
+    raise exception 'Payroll payment method not found'
+      using errcode = '42501';
+  end if;
+
+  perform payment_account.id
+  from public.accounts payment_account
+  where payment_account.id = p_payment_account_id
+    and payment_account.tenant_id = tenant_id_value
+    and payment_account.is_active is true
+    and payment_account.type = 'asset'
+  for update;
+
+  if not found
+     or (
+       method_account_id_value is not null
+       and method_account_id_value <> p_payment_account_id
+     ) then
+    raise exception 'Payroll payment account not found'
+      using errcode = '42501';
+  end if;
+
+  select coalesce(nullif(trim(tenant.timezone), ''), 'America/Santiago')
+  into tenant_timezone
+  from public.tenants tenant
+  where tenant.id = tenant_id_value;
+
+  perform set_config('TimeZone', tenant_timezone, true);
+
+  insert into public.payroll_money_command_contexts (
+    transaction_id,
+    tenant_id,
+    command,
+    operation_key,
+    actor_id
+  )
+  values (
+    txid_current(),
+    tenant_id_value,
+    'advance_registration',
+    operation_key_value,
+    auth.uid()
+  );
+
+  employee_advance_id_value :=
+    public.register_employee_advance_internal(
+      p_employee_id,
+      p_amount,
+      p_payment_method_id,
+      p_payment_account_id,
+      p_paid_at,
+      p_reference,
+      p_notes
+    );
+
+  delete from public.payroll_money_command_contexts command_context
+  where command_context.transaction_id = txid_current()
+    and command_context.tenant_id = tenant_id_value
+    and command_context.command = 'advance_registration';
+
+  select jsonb_build_object(
+    'operation_key',
+    operation_key_value,
+    'payload_hash',
+    payload_hash_value,
+    'advance_id',
+    advance.id,
+    'employee_id',
+    advance.employee_id,
+    'amount',
+    advance.amount,
+    'payment_method_id',
+    advance.payment_method_id,
+    'payment_account_id',
+    advance.payment_account_id,
+    'paid_at',
+    advance.paid_at,
+    'status',
+    advance.status,
+    'reference',
+    advance.reference
+  )
+  into receipt_value
+  from public.employee_advances advance
+  where advance.id = employee_advance_id_value
+    and advance.tenant_id = tenant_id_value;
+
+  insert into public.payroll_money_operations (
+    tenant_id,
+    operation_type,
+    operation_key,
+    payload_hash,
+    employee_advance_id,
+    receipt,
+    created_by
+  )
+  values (
+    tenant_id_value,
+    'employee_advance',
+    operation_key_value,
+    payload_hash_value,
+    employee_advance_id_value,
+    receipt_value,
+    auth.uid()
+  );
+
+  perform set_config('TimeZone', prior_timezone, true);
+  return receipt_value;
+end;
+$$;
+
+create or replace function public.pay_payroll_voucher_v2(
+  p_voucher_id uuid,
+  p_operation_key text,
+  p_expected_reconciliation_version bigint,
+  p_payment_splits jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+  operation_key_value text := trim(coalesce(p_operation_key, ''));
+  payload_hash_value text;
+  existing_operation public.payroll_money_operations%rowtype;
+  operation_id_value uuid := gen_random_uuid();
+  voucher_row public.payroll_vouchers%rowtype;
+  tenant_timezone text;
+  prior_timezone text := current_setting('TimeZone');
+  context_import_id_value uuid;
+  receipt_value jsonb;
+  payment_count_value integer;
+  payment_total_value numeric(14,2);
+  allocation_count_value integer;
+  allocation_total_value numeric(14,2);
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  if p_voucher_id is null
+     or operation_key_value !~ '^[A-Za-z0-9:_-]{8,200}$'
+     or p_expected_reconciliation_version is null
+     or p_expected_reconciliation_version < 0
+     or p_payment_splits is null
+     or jsonb_typeof(p_payment_splits) <> 'object'
+     or p_payment_splits = '{}'::jsonb then
+    raise exception 'payroll_payment_invalid_payload'
+      using errcode = '22023';
+  end if;
+
+  if pg_column_size(p_payment_splits) > 1048576
+     or exists (
+       select 1
+       from jsonb_each(p_payment_splits) line_split
+       where jsonb_typeof(line_split.value) = 'array'
+         and jsonb_array_length(line_split.value) > 50
+     )
+     or (
+       select coalesce(
+         sum(
+           case
+             when jsonb_typeof(line_split.value) = 'array'
+               then jsonb_array_length(line_split.value)
+             else 1
+           end
+         ),
+         0
+       )
+       from jsonb_each(p_payment_splits) line_split
+     ) > 500 then
+    raise exception 'payroll_payment_payload_limit'
+      using
+        errcode = '22023',
+        detail = 'At most 1 MiB, 50 splits per line, and 500 total splits';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_each(p_payment_splits) line_split
+    where case
+      when jsonb_typeof(line_split.value) <> 'array' then true
+      else jsonb_array_length(line_split.value) = 0
+    end
+  ) then
+    raise exception 'payroll_payment_invalid_splits'
+      using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_each(p_payment_splits) line_split
+    cross join lateral jsonb_array_elements(line_split.value)
+      split(value)
+    where jsonb_typeof(split.value) <> 'object'
+  ) then
+    raise exception 'payroll_payment_invalid_splits'
+      using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_each(p_payment_splits) line_split
+    cross join lateral jsonb_array_elements(line_split.value)
+      split(value)
+    where (
+      coalesce(
+        lower(nullif(trim(split.value->>'kind'), '')),
+        'payment'
+      ) = 'payment'
+      and (
+        coalesce(trim(split.value->>'payment_method_id'), '') !~
+          '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+        or coalesce(trim(split.value->>'payment_account_id'), '') !~
+          '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+      )
+    )
+    or (
+      lower(nullif(trim(split.value->>'kind'), '')) = 'advance'
+      and coalesce(trim(split.value->>'advance_id'), '') !~
+        '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+    )
+  ) then
+    raise exception 'payroll_payment_invalid_splits'
+      using errcode = '22023';
+  end if;
+
+  payload_hash_value := encode(
+    extensions.digest(
+      convert_to(
+        jsonb_build_object(
+          'operation_type',
+          'manual_payroll_payment',
+          'voucher_id',
+          p_voucher_id,
+          'expected_reconciliation_version',
+          p_expected_reconciliation_version,
+          'payment_splits',
+          p_payment_splits
+        )::text,
+        'UTF8'
+      ),
+      'sha256'
+    ),
+    'hex'
+  );
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text || ':payroll-settlement',
+      0
+    )
+  );
+
+  select money_operation.*
+  into existing_operation
+  from public.payroll_money_operations money_operation
+  where money_operation.tenant_id = tenant_id_value
+    and money_operation.operation_key = operation_key_value
+  for update;
+
+  if found then
+    if existing_operation.operation_type = 'manual_payroll_payment'
+       and existing_operation.payload_hash = payload_hash_value then
+      return existing_operation.receipt;
+    end if;
+    raise exception 'payroll_money_idempotency_conflict'
+      using
+        errcode = 'P0001',
+        detail = 'operation_key already has a different money payload';
+  end if;
+
+  select voucher.*
+  into voucher_row
+  from public.payroll_vouchers voucher
+  where voucher.id = p_voucher_id
+    and voucher.tenant_id = tenant_id_value
+  for update;
+
+  if not found then
+    raise exception 'Payroll voucher not found'
+      using errcode = '42501';
+  end if;
+
+  select coalesce(nullif(trim(tenant.timezone), ''), 'America/Santiago')
+  into tenant_timezone
+  from public.tenants tenant
+  where tenant.id = tenant_id_value;
+
+  if voucher_row.status not in ('confirmed', 'partial')
+     or voucher_row.reconciliation_version
+          <> p_expected_reconciliation_version then
+    raise exception 'payroll_payment_version_conflict'
+      using
+        errcode = '40001',
+        detail = 'reload payroll balances before paying';
+  end if;
+
+  perform voucher_line.id
+  from public.payroll_voucher_lines voucher_line
+  where voucher_line.voucher_id = p_voucher_id
+    and voucher_line.tenant_id = tenant_id_value
+  order by voucher_line.id
+  for update;
+
+  -- Keep method/account activity and pairing stable through the legacy insert.
+  perform payment_method.id
+  from public.payment_methods payment_method
+  where payment_method.tenant_id = tenant_id_value
+    and payment_method.id in (
+      select distinct trim(split.value->>'payment_method_id')::uuid
+      from jsonb_each(p_payment_splits) line_split
+      cross join lateral jsonb_array_elements(line_split.value)
+        split(value)
+      where coalesce(
+        lower(nullif(trim(split.value->>'kind'), '')),
+        'payment'
+      ) = 'payment'
+    )
+  order by payment_method.id
+  for update;
+
+  perform payment_account.id
+  from public.accounts payment_account
+  where payment_account.tenant_id = tenant_id_value
+    and payment_account.id in (
+      select distinct trim(split.value->>'payment_account_id')::uuid
+      from jsonb_each(p_payment_splits) line_split
+      cross join lateral jsonb_array_elements(line_split.value)
+        split(value)
+      where coalesce(
+        lower(nullif(trim(split.value->>'kind'), '')),
+        'payment'
+      ) = 'payment'
+    )
+  order by payment_account.id
+  for update;
+
+  if exists (
+    select 1
+    from jsonb_each(p_payment_splits) line_split
+    where line_split.key !~
+      '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+       or jsonb_typeof(line_split.value) <> 'array'
+       or jsonb_array_length(line_split.value) = 0
+       or not exists (
+         select 1
+         from public.payroll_voucher_lines voucher_line
+         where voucher_line.id = line_split.key::uuid
+           and voucher_line.voucher_id = p_voucher_id
+           and voucher_line.tenant_id = tenant_id_value
+           and voucher_line.is_included is true
+           and voucher_line.total_amount > 0
+       )
+  ) or exists (
+    select 1
+    from jsonb_each(p_payment_splits) line_split
+    cross join lateral jsonb_array_elements(line_split.value)
+      split(value)
+    where jsonb_typeof(split.value) <> 'object'
+       or exists (
+         select 1
+         from jsonb_object_keys(split.value) split_key
+         where split_key not in (
+           'kind',
+           'amount',
+           'payment_method_id',
+           'payment_account_id',
+           'payment_date',
+           'reference',
+           'notes',
+           'advance_id'
+         )
+       )
+       or coalesce(
+         nullif(split.value->>'amount', '')::numeric,
+         0
+       )::text in ('NaN', 'Infinity', '-Infinity')
+       or coalesce(nullif(split.value->>'amount', '')::numeric, 0) <= 0
+       or nullif(split.value->>'amount', '')::numeric > 999999999999.99
+       or round(
+         nullif(split.value->>'amount', '')::numeric,
+         2
+       ) <> nullif(split.value->>'amount', '')::numeric
+       or coalesce(
+         lower(nullif(trim(split.value->>'kind'), '')),
+         'payment'
+       ) not in ('payment', 'advance')
+       or (
+         coalesce(
+           lower(nullif(trim(split.value->>'kind'), '')),
+           'payment'
+         ) = 'payment'
+         and (
+           nullif(split.value->>'payment_method_id', '')::uuid is null
+           or nullif(split.value->>'payment_account_id', '')::uuid is null
+           or nullif(split.value->>'payment_date', '')::timestamptz is null
+           or trim(split.value->>'payment_date')
+                !~* '(Z|[+-][0-9]{2}(:[0-9]{2})?)$'
+           or nullif(split.value->>'advance_id', '') is not null
+         )
+       )
+       or (
+         coalesce(
+           lower(nullif(trim(split.value->>'kind'), '')),
+           'payment'
+         ) = 'advance'
+         and (
+           nullif(split.value->>'advance_id', '')::uuid is null
+           or nullif(split.value->>'payment_method_id', '') is not null
+           or nullif(split.value->>'payment_account_id', '') is not null
+           or nullif(split.value->>'payment_date', '') is not null
+           or nullif(split.value->>'reference', '') is not null
+         )
+       )
+       or char_length(coalesce(split.value->>'reference', '')) > 500
+       or char_length(coalesce(split.value->>'notes', '')) > 2000
+  ) or exists (
+    select 1
+    from jsonb_each(p_payment_splits) line_split
+    cross join lateral jsonb_array_elements(line_split.value)
+      split(value)
+    where coalesce(
+      lower(nullif(trim(split.value->>'kind'), '')),
+      'payment'
+    ) = 'payment'
+      and not exists (
+        select 1
+        from public.payment_methods payment_method
+        join public.accounts payment_account
+          on payment_account.id =
+              nullif(split.value->>'payment_account_id', '')::uuid
+         and payment_account.tenant_id = payment_method.tenant_id
+         and payment_account.is_active is true
+         and payment_account.type = 'asset'
+        where payment_method.id =
+            nullif(split.value->>'payment_method_id', '')::uuid
+          and payment_method.tenant_id = tenant_id_value
+          and payment_method.is_active is true
+          and (
+            payment_method.account_id is null
+            or payment_method.account_id = payment_account.id
+          )
+      )
+  ) or exists (
+    select 1
+    from jsonb_each(p_payment_splits) line_split
+    cross join lateral jsonb_array_elements(line_split.value)
+      split(value)
+    where coalesce(
+      lower(nullif(trim(split.value->>'kind'), '')),
+      'payment'
+    ) = 'advance'
+      and not exists (
+        select 1
+        from public.payroll_voucher_lines voucher_line
+        join public.employee_advances advance
+          on advance.id = nullif(split.value->>'advance_id', '')::uuid
+         and advance.tenant_id = voucher_line.tenant_id
+         and advance.employee_id = voucher_line.employee_id
+         and advance.status in ('open', 'partially_applied')
+         and (
+           advance.paid_at at time zone tenant_timezone
+         )::date <= voucher_row.period_end
+        where voucher_line.id = line_split.key::uuid
+          and voucher_line.voucher_id = p_voucher_id
+          and voucher_line.tenant_id = tenant_id_value
+      )
+  ) then
+    raise exception 'payroll_payment_invalid_splits'
+      using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_each(p_payment_splits) line_split
+    join public.payroll_voucher_lines voucher_line
+      on voucher_line.id = line_split.key::uuid
+     and voucher_line.voucher_id = p_voucher_id
+     and voucher_line.tenant_id = tenant_id_value
+    cross join lateral jsonb_array_elements(line_split.value)
+      split(value)
+    group by
+      voucher_line.id,
+      voucher_line.total_amount,
+      voucher_line.expense_id
+    having sum((split.value->>'amount')::numeric)
+      > greatest(
+          voucher_line.total_amount
+          - coalesce(
+              (
+                select sum(payment.amount)
+                from public.expense_payments payment
+                where payment.expense_id = voucher_line.expense_id
+              ),
+              0
+            )
+          - coalesce(
+              (
+                select sum(allocation.amount)
+                from public.employee_advance_allocations allocation
+                where allocation.voucher_line_id = voucher_line.id
+              ),
+              0
+            ),
+          0
+        ) + 0.01
+  ) then
+    raise exception 'payroll_expense_payment_exceeds_line_balance'
+      using errcode = '23514';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_each(p_payment_splits) line_split
+    cross join lateral jsonb_array_elements(line_split.value)
+      split(value)
+    join public.employee_advances advance
+      on advance.id = (split.value->>'advance_id')::uuid
+     and advance.tenant_id = tenant_id_value
+    where lower(trim(split.value->>'kind')) = 'advance'
+    group by advance.id, advance.amount, advance.amount_applied
+    having sum((split.value->>'amount')::numeric)
+      > advance.amount - advance.amount_applied + 0.01
+  ) then
+    raise exception 'payroll_advance_allocation_exceeds_balance'
+      using errcode = '23514';
+  end if;
+
+  perform set_config('TimeZone', tenant_timezone, true);
+
+  create temporary table if not exists
+    pg_temp.payroll_money_before_expense_payments (
+      id uuid primary key
+    )
+    on commit drop;
+  create temporary table if not exists
+    pg_temp.payroll_money_before_advance_allocations (
+      id uuid primary key
+    )
+    on commit drop;
+  truncate table pg_temp.payroll_money_before_expense_payments;
+  truncate table pg_temp.payroll_money_before_advance_allocations;
+
+  insert into pg_temp.payroll_money_before_expense_payments (id)
+  select payment.id
+  from public.payroll_voucher_lines voucher_line
+  join public.expense_payments payment
+    on payment.expense_id = voucher_line.expense_id
+  where voucher_line.voucher_id = p_voucher_id
+    and voucher_line.tenant_id = tenant_id_value;
+
+  insert into pg_temp.payroll_money_before_advance_allocations (id)
+  select allocation.id
+  from public.payroll_voucher_lines voucher_line
+  join public.employee_advance_allocations allocation
+    on allocation.voucher_line_id = voucher_line.id
+  where voucher_line.voucher_id = p_voucher_id
+    and voucher_line.tenant_id = tenant_id_value;
+
+  select min(decision.import_id::text)::uuid
+  into context_import_id_value
+  from public.payroll_statement_decisions decision
+  where decision.tenant_id = tenant_id_value
+    and decision.voucher_id = p_voucher_id;
+
+  insert into public.payroll_money_command_contexts (
+    transaction_id,
+    tenant_id,
+    command,
+    operation_key,
+    actor_id
+  )
+  values (
+    txid_current(),
+    tenant_id_value,
+    'manual_payment',
+    operation_key_value,
+    auth.uid()
+  );
+
+  if context_import_id_value is not null then
+    insert into public.payroll_statement_command_contexts (
+      transaction_id,
+      tenant_id,
+      import_id,
+      command,
+      actor_id
+    )
+    values (
+      txid_current(),
+      tenant_id_value,
+      context_import_id_value,
+      'manual_settlement',
+      auth.uid()
+    );
+  end if;
+
+  perform public.pay_payroll_voucher_internal(
+    p_voucher_id,
+    p_payment_splits
+  );
+
+  if context_import_id_value is not null then
+    delete from public.payroll_statement_command_contexts command_context
+    where command_context.transaction_id = txid_current()
+      and command_context.import_id = context_import_id_value
+      and command_context.command = 'manual_settlement';
+  end if;
+
+  delete from public.payroll_money_command_contexts command_context
+  where command_context.transaction_id = txid_current()
+    and command_context.tenant_id = tenant_id_value
+    and command_context.command = 'manual_payment';
+
+  select voucher.*
+  into voucher_row
+  from public.payroll_vouchers voucher
+  where voucher.id = p_voucher_id
+    and voucher.tenant_id = tenant_id_value;
+
+  select
+    count(*)::integer,
+    coalesce(sum(payment.amount), 0)::numeric(14,2)
+  into payment_count_value, payment_total_value
+  from public.payroll_voucher_lines voucher_line
+  join public.expense_payments payment
+    on payment.expense_id = voucher_line.expense_id
+  where voucher_line.voucher_id = p_voucher_id
+    and voucher_line.tenant_id = tenant_id_value
+    and not exists (
+      select 1
+      from pg_temp.payroll_money_before_expense_payments prior_payment
+      where prior_payment.id = payment.id
+    );
+
+  select
+    count(*)::integer,
+    coalesce(sum(allocation.amount), 0)::numeric(14,2)
+  into allocation_count_value, allocation_total_value
+  from public.payroll_voucher_lines voucher_line
+  join public.employee_advance_allocations allocation
+    on allocation.voucher_line_id = voucher_line.id
+  where voucher_line.voucher_id = p_voucher_id
+    and voucher_line.tenant_id = tenant_id_value
+    and not exists (
+      select 1
+      from pg_temp.payroll_money_before_advance_allocations prior_allocation
+      where prior_allocation.id = allocation.id
+    );
+
+  if payment_count_value + allocation_count_value = 0 then
+    raise exception 'payroll_payment_created_no_movement'
+      using errcode = '22023';
+  end if;
+
+  receipt_value := jsonb_build_object(
+    'operation_key',
+    operation_key_value,
+    'payload_hash',
+    payload_hash_value,
+    'voucher_id',
+    p_voucher_id,
+    'status',
+    voucher_row.status,
+    'reconciliation_version',
+    voucher_row.reconciliation_version,
+    'payment_count',
+    payment_count_value,
+    'payment_total',
+    payment_total_value,
+    'advance_allocation_count',
+    allocation_count_value,
+    'advance_allocation_total',
+    allocation_total_value,
+    'expense_payments',
+    coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'payment_id',
+            payment.id,
+            'voucher_line_id',
+            voucher_line.id,
+            'amount',
+            payment.amount,
+            'payment_method_id',
+            payment.payment_method_id,
+            'payment_account_id',
+            payment.payment_account_id,
+            'payment_date',
+            payment.payment_date,
+            'reference',
+            payment.reference
+          )
+          order by payment.id
+        )
+        from public.payroll_voucher_lines voucher_line
+        join public.expense_payments payment
+          on payment.expense_id = voucher_line.expense_id
+        where voucher_line.voucher_id = p_voucher_id
+          and voucher_line.tenant_id = tenant_id_value
+          and not exists (
+            select 1
+            from pg_temp.payroll_money_before_expense_payments prior_payment
+            where prior_payment.id = payment.id
+          )
+      ),
+      '[]'::jsonb
+    ),
+    'advance_allocations',
+    coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'allocation_id',
+            allocation.id,
+            'voucher_line_id',
+            allocation.voucher_line_id,
+            'advance_id',
+            allocation.advance_id,
+            'amount',
+            allocation.amount,
+            'applied_at',
+            allocation.applied_at
+          )
+          order by allocation.id
+        )
+        from public.payroll_voucher_lines voucher_line
+        join public.employee_advance_allocations allocation
+          on allocation.voucher_line_id = voucher_line.id
+        where voucher_line.voucher_id = p_voucher_id
+          and voucher_line.tenant_id = tenant_id_value
+          and not exists (
+            select 1
+            from pg_temp.payroll_money_before_advance_allocations
+              prior_allocation
+            where prior_allocation.id = allocation.id
+          )
+      ),
+      '[]'::jsonb
+    )
+  );
+
+  insert into public.payroll_money_operations (
+    id,
+    tenant_id,
+    operation_type,
+    operation_key,
+    payload_hash,
+    voucher_id,
+    receipt,
+    created_by
+  )
+  values (
+    operation_id_value,
+    tenant_id_value,
+    'manual_payroll_payment',
+    operation_key_value,
+    payload_hash_value,
+    p_voucher_id,
+    receipt_value,
+    auth.uid()
+  );
+
+  insert into public.payroll_money_operation_movements (
+    tenant_id,
+    operation_id,
+    movement_type,
+    expense_payment_id
+  )
+  select
+    tenant_id_value,
+    operation_id_value,
+    'expense_payment',
+    payment.id
+  from public.payroll_voucher_lines voucher_line
+  join public.expense_payments payment
+    on payment.expense_id = voucher_line.expense_id
+  where voucher_line.voucher_id = p_voucher_id
+    and voucher_line.tenant_id = tenant_id_value
+    and not exists (
+      select 1
+      from pg_temp.payroll_money_before_expense_payments prior_payment
+      where prior_payment.id = payment.id
+    );
+
+  insert into public.payroll_money_operation_movements (
+    tenant_id,
+    operation_id,
+    movement_type,
+    advance_allocation_id
+  )
+  select
+    tenant_id_value,
+    operation_id_value,
+    'advance_allocation',
+    allocation.id
+  from public.payroll_voucher_lines voucher_line
+  join public.employee_advance_allocations allocation
+    on allocation.voucher_line_id = voucher_line.id
+  where voucher_line.voucher_id = p_voucher_id
+    and voucher_line.tenant_id = tenant_id_value
+    and not exists (
+      select 1
+      from pg_temp.payroll_money_before_advance_allocations prior_allocation
+      where prior_allocation.id = allocation.id
+    );
+
+  perform set_config('TimeZone', prior_timezone, true);
+  return receipt_value;
+end;
+$$;
+
+-- A reviewed statement can prove that earned wages were actually paid before
+-- the nominal weekly period_end (for example, a short week ending Wednesday).
+-- Keep the mature manual-settlement rule intact and permit the earlier date
+-- only while the private apply capability is active and the exact immutable
+-- decision backs every movement attribute.
+create or replace function public.pay_payroll_voucher_internal(
+  p_voucher_id uuid,
+  p_payment_splits jsonb
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  v_voucher record;
+  v_line record;
+  v_splits jsonb;
+  v_split jsonb;
+  v_kind text;
+  v_amount numeric(14,2);
+  v_remaining numeric(14,2);
+  v_batch_total numeric(14,2);
+  v_method_id uuid;
+  v_account_id uuid;
+  v_advance record;
+  v_payment_date timestamp with time zone;
+  v_reference text;
+  v_notes text;
+  v_statement_payment_backed boolean;
+  v_statement_future_exception_backed boolean;
+begin
+  select *
+  into v_voucher
+  from public.payroll_vouchers voucher
+  where voucher.id = p_voucher_id
+    and voucher.tenant_id = public.user_tenant_id()
+  for update;
+
+  if not found then
+    raise exception 'Nómina no encontrada';
+  end if;
+  if v_voucher.status not in ('confirmed', 'partial') then
+    raise exception
+      'La nómina debe estar confirmada o parcialmente pagada';
+  end if;
+
+  for v_line in
+    select voucher_line.*
+    from public.payroll_voucher_lines voucher_line
+    where voucher_line.voucher_id = p_voucher_id
+      and voucher_line.is_included is true
+      and voucher_line.total_amount > 0
+  loop
+    perform public.ensure_payroll_line_expense(v_line.id);
+
+    select voucher_line.*
+    into v_line
+    from public.payroll_voucher_lines voucher_line
+    where voucher_line.id = v_line.id;
+
+    select greatest(
+      v_line.total_amount
+      - coalesce(
+          (
+            select sum(payment.amount)
+            from public.expense_payments payment
+            where payment.expense_id = v_line.expense_id
+          ),
+          0
+        )
+      - coalesce(
+          (
+            select sum(allocation.amount)
+            from public.employee_advance_allocations allocation
+            where allocation.voucher_line_id = v_line.id
+          ),
+          0
+        ),
+      0
+    )
+    into v_remaining;
+
+    if p_payment_splits is null then
+      v_splits := jsonb_build_array(
+        jsonb_build_object(
+          'kind',
+          'payment',
+          'payment_method_id',
+          v_line.payment_method_id,
+          'payment_account_id',
+          v_line.payment_account_id,
+          'amount',
+          v_remaining,
+          'payment_date',
+          now()
+        )
+      );
+    else
+      v_splits := p_payment_splits -> v_line.id::text;
+    end if;
+
+    if v_splits is null then
+      continue;
+    end if;
+    if jsonb_typeof(v_splits) <> 'array' then
+      raise exception 'Movimientos inválidos para %', v_line.employee_name;
+    end if;
+
+    v_batch_total := 0;
+    for v_split in
+      select split.value
+      from jsonb_array_elements(v_splits) split(value)
+    loop
+      v_amount := coalesce(nullif(v_split->>'amount', '')::numeric, 0);
+      if v_amount <= 0 then
+        continue;
+      end if;
+
+      v_batch_total := v_batch_total + v_amount;
+      if v_batch_total > v_remaining + 0.01 then
+        raise exception
+          'Los movimientos exceden el saldo de %',
+          v_line.employee_name;
+      end if;
+
+      v_kind := coalesce(nullif(v_split->>'kind', ''), 'payment');
+      v_reference := nullif(v_split->>'reference', '');
+      v_notes := nullif(v_split->>'notes', '');
+
+      if v_kind = 'advance' then
+        select advance.*
+        into v_advance
+        from public.employee_advances advance
+        where advance.id = nullif(v_split->>'advance_id', '')::uuid
+          and advance.tenant_id = v_line.tenant_id
+          and advance.employee_id = v_line.employee_id
+          and advance.status in ('open', 'partially_applied')
+        for update;
+
+        if not found then
+          raise exception
+            'Anticipo no válido para %',
+            v_line.employee_name;
+        end if;
+        if v_amount > v_advance.amount - v_advance.amount_applied + 0.01 then
+          raise exception
+            'La imputación excede el saldo disponible del anticipo';
+        end if;
+
+        insert into public.employee_advance_allocations (
+          tenant_id,
+          advance_id,
+          voucher_line_id,
+          amount,
+          applied_at,
+          notes,
+          created_by
+        )
+        values (
+          v_line.tenant_id,
+          v_advance.id,
+          v_line.id,
+          v_amount,
+          v_voucher.period_end::timestamp with time zone,
+          v_notes,
+          auth.uid()
+        );
+      elsif v_kind = 'payment' then
+        v_method_id := coalesce(
+          nullif(v_split->>'payment_method_id', '')::uuid,
+          v_line.payment_method_id
+        );
+        v_account_id := coalesce(
+          nullif(v_split->>'payment_account_id', '')::uuid,
+          v_line.payment_account_id
+        );
+        if v_method_id is null then
+          raise exception
+            'Falta método de pago para %',
+            v_line.employee_name;
+        end if;
+
+        v_payment_date := coalesce(
+          nullif(v_split->>'payment_date', '')::timestamp with time zone,
+          now()
+        );
+
+        select
+          exists (
+            select 1
+            from public.payroll_statement_command_contexts command_context
+            join public.payroll_statement_decisions decision
+              on decision.import_id = command_context.import_id
+             and decision.tenant_id = command_context.tenant_id
+            where command_context.transaction_id = txid_current()
+              and command_context.command = 'apply'
+              and command_context.tenant_id = v_line.tenant_id
+              and decision.voucher_id = v_voucher.id
+              and decision.voucher_line_id = v_line.id
+              and decision.action in ('bank_payment', 'cash_payment')
+              and decision.applied_amount = v_amount
+              and decision.payment_method_id = v_method_id
+              and decision.payment_account_id = v_account_id
+              and decision.payment_date = v_payment_date::date
+              and decision.movement_reference = v_reference
+          ),
+          exists (
+            select 1
+            from public.payroll_statement_command_contexts command_context
+            join public.payroll_statement_imports statement_import
+              on statement_import.id = command_context.import_id
+             and statement_import.tenant_id = command_context.tenant_id
+            join public.payroll_statement_decisions decision
+              on decision.import_id = command_context.import_id
+             and decision.tenant_id = command_context.tenant_id
+            join public.payroll_statement_rows statement_row
+              on statement_row.id = decision.row_id
+             and statement_row.import_id = decision.import_id
+             and statement_row.tenant_id = decision.tenant_id
+            where command_context.transaction_id = txid_current()
+              and command_context.command = 'apply'
+              and command_context.tenant_id = v_line.tenant_id
+              and decision.voucher_id = v_voucher.id
+              and decision.voucher_line_id = v_line.id
+              and decision.action = 'bank_payment'
+              and decision.applied_amount = v_amount
+              and decision.payment_method_id = v_method_id
+              and decision.payment_account_id = v_account_id
+              and decision.payment_date = v_payment_date::date
+              and decision.movement_reference = v_reference
+              and statement_row.warnings ? 'out_of_statement_range'
+              and v_payment_date::date =
+                (statement_import.source_metadata->>'statement_end')::date + 1
+              and v_payment_date::date <= current_date + 1
+              and v_payment_date::date <=
+                (statement_import.created_at at time zone current_setting(
+                  'TimeZone'
+                ))::date + 1
+          )
+        into
+          v_statement_payment_backed,
+          v_statement_future_exception_backed;
+
+        if v_payment_date > now() + interval '5 minutes'
+           and not v_statement_future_exception_backed then
+          raise exception 'La fecha de pago no puede estar en el futuro';
+        end if;
+        if v_payment_date < v_voucher.period_end::timestamp with time zone
+           and not (
+             v_payment_date
+               >= v_voucher.period_start::timestamp with time zone
+             and v_statement_payment_backed
+           ) then
+          raise exception
+            'Un movimiento anterior al cierre del período debe registrarse como anticipo';
+        end if;
+
+        insert into public.expense_payments (
+          tenant_id,
+          expense_id,
+          payment_method_id,
+          payment_account_id,
+          amount,
+          payment_date,
+          reference,
+          notes
+        )
+        values (
+          v_line.tenant_id,
+          v_line.expense_id,
+          v_method_id,
+          v_account_id,
+          v_amount,
+          v_payment_date,
+          coalesce(
+            v_reference,
+            format('Nómina %s', v_voucher.voucher_number)
+          ),
+          coalesce(
+            v_notes,
+            format('Pago de salario: %s', v_line.employee_name)
+          )
+        );
+      else
+        raise exception
+          'Tipo de movimiento de nómina no válido: %',
+          v_kind;
+      end if;
+    end loop;
+
+    perform public.recalculate_expense_totals(v_line.expense_id);
+  end loop;
+
+  perform public.refresh_payroll_voucher_status(p_voucher_id);
+  return true;
+end;
+$$;
+
+drop function if exists public.apply_payroll_statement_reconciliation(
+  uuid,
+  text,
+  jsonb,
+  jsonb
+);
+
+create or replace function public.apply_payroll_statement_reconciliation(
+  p_import_id uuid,
+  p_operation_key text,
+  p_decisions jsonb,
+  p_expected_voucher_versions jsonb,
+  p_authorized_draft_voucher_ids jsonb default '[]'::jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+  operation_key_value text := trim(coalesce(p_operation_key, ''));
+  expected_versions_value jsonb :=
+    coalesce(p_expected_voucher_versions, '{}'::jsonb);
+  authorized_draft_voucher_ids_value jsonb :=
+    coalesce(p_authorized_draft_voucher_ids, '[]'::jsonb);
+  canonical_authorized_draft_voucher_ids_value jsonb := '[]'::jsonb;
+  payload_hash_value text;
+  import_row public.payroll_statement_imports%rowtype;
+  prior_import public.payroll_statement_imports%rowtype;
+  decision_value jsonb;
+  decision_ordinal_value integer;
+  action_value text;
+  row_id_value uuid;
+  row_fingerprint_value text;
+  prior_decision_id_value uuid;
+  voucher_line_id_value uuid;
+  advance_id_value uuid;
+  payment_method_id_value uuid;
+  payment_account_id_value uuid;
+  applied_amount_value numeric(14,2);
+  payment_date_value date;
+  variance_disposition_value text;
+  manual_confirmation_value boolean;
+  duplicate_override_value boolean;
+  reason_value text;
+  decision_row record;
+  voucher_row record;
+  line_row record;
+  advance_row record;
+  method_row record;
+  account_row record;
+  employee_row record;
+  row_record record;
+  tenant_timezone text;
+  prior_timezone text := current_setting('TimeZone');
+  payment_at_value timestamp with time zone;
+  current_settled_value numeric(14,2);
+  live_line_balance_value numeric(14,2);
+  expected_bank_applied_value numeric(14,2);
+  bank_variance_value numeric(14,2);
+  match_tolerance_value numeric(14,2);
+  requested_line_total_value numeric(14,2);
+  requested_advance_total_value numeric(14,2);
+  touched_voucher_count integer;
+  touched_draft_voucher_count integer;
+  expected_voucher_count integer;
+  authorized_draft_voucher_count integer;
+  split_map_value jsonb;
+  line_splits_value jsonb;
+  receipt_value jsonb;
+  final_status_value text;
+  unresolved_variance_count_value integer;
+  unresolved_variance_total_value numeric(14,2);
+  already_resolved_count_value integer;
+  violated_constraint_name text;
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll statement access denied'
+      using errcode = '42501';
+  end if;
+
+  if p_import_id is null then
+    raise exception 'payroll_statement_import_required'
+      using errcode = '22023';
+  end if;
+
+  if operation_key_value !~ '^[A-Za-z0-9:_-]{8,200}$' then
+    raise exception 'payroll_statement_invalid_operation_key'
+      using errcode = '22023';
+  end if;
+
+  if p_decisions is null
+     or jsonb_typeof(p_decisions) <> 'array'
+     or jsonb_array_length(p_decisions) not between 1 and 4000 then
+    raise exception 'payroll_statement_invalid_decisions'
+      using errcode = '22023';
+  end if;
+
+  if jsonb_typeof(expected_versions_value) <> 'object' then
+    raise exception 'payroll_statement_invalid_expected_versions'
+      using errcode = '22023';
+  end if;
+
+  if jsonb_typeof(authorized_draft_voucher_ids_value) <> 'array'
+     or jsonb_array_length(authorized_draft_voucher_ids_value) > 1000
+     or exists (
+       select 1
+       from jsonb_array_elements(
+         authorized_draft_voucher_ids_value
+       ) authorized(element)
+       where jsonb_typeof(authorized.element) <> 'string'
+          or trim(authorized.element #>> '{}') !~
+            '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+     ) then
+    raise exception 'payroll_statement_invalid_draft_commitment_authorization'
+      using errcode = '22023';
+  end if;
+
+  select coalesce(
+    jsonb_agg(
+      authorized.voucher_id::text
+      order by authorized.voucher_id::text
+    ),
+    '[]'::jsonb
+  )
+  into canonical_authorized_draft_voucher_ids_value
+  from (
+    select distinct value::uuid as voucher_id
+    from jsonb_array_elements_text(
+      authorized_draft_voucher_ids_value
+    ) element(value)
+  ) authorized;
+
+  if jsonb_array_length(authorized_draft_voucher_ids_value)
+       <> jsonb_array_length(
+         canonical_authorized_draft_voucher_ids_value
+       ) then
+    raise exception 'payroll_statement_duplicate_draft_commitment_authorization'
+      using errcode = '22023';
+  end if;
+
+  payload_hash_value := encode(
+    extensions.digest(
+      convert_to(
+        jsonb_build_object(
+          'import_id',
+          p_import_id,
+          'decisions',
+          p_decisions,
+          'expected_voucher_versions',
+          expected_versions_value,
+          'authorized_draft_voucher_ids',
+          canonical_authorized_draft_voucher_ids_value
+        )::text,
+        'UTF8'
+      ),
+      'sha256'
+    ),
+    'hex'
+  );
+
+  select statement_import.*
+  into import_row
+  from public.payroll_statement_imports statement_import
+  where statement_import.id = p_import_id
+  for update;
+
+  if not found
+     or import_row.tenant_id <> tenant_id_value then
+    raise exception 'Payroll statement import not found'
+      using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text
+      || ':payroll-statement-apply:'
+      || operation_key_value,
+      0
+    )
+  );
+
+  select statement_import.*
+  into prior_import
+  from public.payroll_statement_imports statement_import
+  where statement_import.tenant_id = tenant_id_value
+    and statement_import.apply_operation_key = operation_key_value
+    and statement_import.id <> p_import_id
+  for update;
+
+  if found then
+    raise exception 'payroll_statement_apply_idempotency_conflict'
+      using
+        errcode = 'P0001',
+        detail = 'operation_key belongs to another import';
+  end if;
+
+  if import_row.apply_operation_key is not null then
+    if import_row.apply_operation_key = operation_key_value then
+      if import_row.apply_payload_hash = payload_hash_value then
+        return import_row.apply_receipt;
+      end if;
+      raise exception 'payroll_statement_apply_idempotency_conflict'
+        using
+          errcode = 'P0001',
+          detail = 'operation_key already has a different payload';
+    end if;
+    raise exception 'payroll_statement_import_already_applied'
+      using
+        errcode = 'P0001',
+        detail = 'an import has one final reviewed apply operation';
+  end if;
+
+  if import_row.status <> 'review' then
+    raise exception 'payroll_statement_import_not_in_review'
+      using errcode = '55000';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text || ':payroll-settlement',
+      0
+    )
+  );
+
+  -- A parser pass remains review-only and may correct a misread account hash
+  -- or reviewed ERP account. The stable one-to-one mapping becomes
+  -- authoritative only in the same transaction as a successful apply.
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text
+      || ':payroll-statement-account:'
+      || import_row.erp_account_id::text,
+      0
+    )
+  );
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text
+      || ':payroll-statement-account-fingerprint:'
+      || import_row.account_fingerprint,
+      0
+    )
+  );
+
+  insert into public.payroll_statement_account_mappings (
+    tenant_id,
+    erp_account_id,
+    account_fingerprint,
+    created_by
+  )
+  values (
+    tenant_id_value,
+    import_row.erp_account_id,
+    import_row.account_fingerprint,
+    auth.uid()
+  )
+  on conflict do nothing;
+
+  if not exists (
+    select 1
+    from public.payroll_statement_account_mappings account_mapping
+    where account_mapping.tenant_id = tenant_id_value
+      and account_mapping.erp_account_id = import_row.erp_account_id
+      and account_mapping.account_fingerprint =
+        import_row.account_fingerprint
+  ) then
+    raise exception 'payroll_statement_account_fingerprint_mismatch'
+      using
+        errcode = '23514',
+        detail =
+          'A successful prior reconciliation confirmed another account hash';
+  end if;
+
+  insert into public.payroll_statement_command_contexts (
+    transaction_id,
+    tenant_id,
+    import_id,
+    command,
+    actor_id
+  )
+  values (
+    txid_current(),
+    tenant_id_value,
+    p_import_id,
+    'apply',
+    auth.uid()
+  );
+
+  for decision_value in
+    select decision_element.value
+    from jsonb_array_elements(p_decisions)
+      with ordinality decision_element(value, n)
+    order by decision_element.n
+  loop
+    if jsonb_typeof(decision_value) <> 'object' then
+      raise exception 'payroll_statement_decision_must_be_object'
+        using errcode = '22023';
+    end if;
+
+    decision_ordinal_value :=
+      nullif(decision_value->>'ordinal', '')::integer;
+    action_value :=
+      lower(trim(coalesce(decision_value->>'action', '')));
+    row_id_value := nullif(decision_value->>'row_id', '')::uuid;
+    row_fingerprint_value := lower(
+      nullif(
+        trim(
+          coalesce(
+            decision_value->>'row_fingerprint',
+            decision_value->>'source_fingerprint'
+          )
+        ),
+        ''
+      )
+    );
+    if row_id_value is null and row_fingerprint_value is not null then
+      select statement_row.id
+      into row_id_value
+      from public.payroll_statement_rows statement_row
+      where statement_row.import_id = p_import_id
+        and statement_row.tenant_id = tenant_id_value
+        and statement_row.fingerprint = row_fingerprint_value;
+
+      if not found then
+        raise exception 'Payroll statement row fingerprint not found'
+          using errcode = '22023';
+      end if;
+    end if;
+    prior_decision_id_value :=
+      nullif(decision_value->>'prior_decision_id', '')::uuid;
+    voucher_line_id_value :=
+      nullif(decision_value->>'voucher_line_id', '')::uuid;
+    advance_id_value :=
+      nullif(decision_value->>'advance_id', '')::uuid;
+    payment_method_id_value :=
+      nullif(decision_value->>'payment_method_id', '')::uuid;
+    payment_account_id_value :=
+      nullif(decision_value->>'payment_account_id', '')::uuid;
+    applied_amount_value :=
+      nullif(
+        coalesce(
+          decision_value->>'applied_amount',
+          decision_value->>'amount'
+        ),
+        ''
+      )::numeric;
+    payment_date_value :=
+      nullif(decision_value->>'payment_date', '')::date;
+    variance_disposition_value :=
+      lower(nullif(trim(decision_value->>'variance_disposition'), ''));
+    manual_confirmation_value := coalesce(
+      nullif(decision_value->>'manual_confirmation', '')::boolean,
+      false
+    );
+    duplicate_override_value := coalesce(
+      nullif(decision_value->>'duplicate_override', '')::boolean,
+      false
+    );
+    reason_value := nullif(
+      trim(
+        coalesce(
+          decision_value->>'reason',
+          decision_value->>'note'
+        )
+      ),
+      ''
+    );
+
+    if decision_ordinal_value not between 1 and 4000
+       or action_value not in (
+         'bank_payment',
+         'cash_payment',
+         'advance_allocation',
+         'not_paid',
+         'ignore',
+         'hold',
+         'already_resolved'
+       )
+       or char_length(coalesce(reason_value, '')) > 1000
+       or (
+         applied_amount_value is not null
+         and (
+           applied_amount_value::text = 'NaN'
+           or applied_amount_value <= 0
+           or applied_amount_value > 999999999999.99
+           or round(applied_amount_value, 2) <> applied_amount_value
+         )
+       ) then
+      raise exception 'payroll_statement_invalid_decision_%',
+        decision_ordinal_value
+        using errcode = '22023';
+    end if;
+
+    insert into public.payroll_statement_decisions (
+      tenant_id,
+      import_id,
+      operation_key,
+      decision_ordinal,
+      action,
+      row_id,
+      row_fingerprint,
+      prior_decision_id,
+      voucher_line_id,
+      advance_id,
+      payment_method_id,
+      payment_account_id,
+      applied_amount,
+      payment_date,
+      variance_disposition,
+      manual_confirmation,
+      duplicate_override,
+      reason,
+      decided_by
+    )
+    values (
+      tenant_id_value,
+      p_import_id,
+      operation_key_value,
+      decision_ordinal_value,
+      action_value,
+      row_id_value,
+      row_fingerprint_value,
+      prior_decision_id_value,
+      voucher_line_id_value,
+      advance_id_value,
+      payment_method_id_value,
+      payment_account_id_value,
+      applied_amount_value,
+      payment_date_value,
+      variance_disposition_value,
+      manual_confirmation_value,
+      duplicate_override_value,
+      reason_value,
+      auth.uid()
+    );
+  end loop;
+
+  -- Every imported row must receive one explicit reviewed disposition.
+  if exists (
+    select 1
+    from public.payroll_statement_rows statement_row
+    left join public.payroll_statement_decisions decision
+      on decision.row_id = statement_row.id
+     and decision.import_id = statement_row.import_id
+    where statement_row.import_id = p_import_id
+      and decision.id is null
+  ) or exists (
+    select 1
+    from public.payroll_statement_decisions decision
+    left join public.payroll_statement_rows statement_row
+      on statement_row.id = decision.row_id
+     and statement_row.import_id = decision.import_id
+    where decision.import_id = p_import_id
+      and decision.row_id is not null
+      and statement_row.id is null
+  ) then
+    raise exception 'payroll_statement_every_row_requires_a_decision'
+      using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1
+    from public.payroll_statement_decisions decision
+    where decision.import_id = p_import_id
+      and (
+        (
+          decision.action in (
+            'bank_payment',
+            'ignore',
+            'hold',
+            'already_resolved'
+          )
+          and decision.row_id is null
+        )
+        or (
+          decision.action in (
+            'cash_payment',
+            'advance_allocation',
+            'not_paid'
+          )
+          and decision.row_id is not null
+        )
+        or (
+          decision.action in (
+            'bank_payment',
+            'cash_payment',
+            'advance_allocation',
+            'not_paid'
+          )
+          and decision.voucher_line_id is null
+        )
+        or (
+          decision.action in ('ignore', 'hold', 'already_resolved')
+          and decision.voucher_line_id is not null
+        )
+        or (
+          decision.action in ('ignore', 'hold', 'already_resolved')
+          and decision.reason is null
+        )
+        or (
+          decision.action = 'already_resolved'
+          and decision.prior_decision_id is null
+        )
+        or (
+          decision.action <> 'already_resolved'
+          and decision.prior_decision_id is not null
+        )
+        or (
+          decision.duplicate_override is true
+          and decision.action <> 'bank_payment'
+        )
+      )
+  ) then
+    raise exception 'payroll_statement_decision_shape_invalid'
+      using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1
+    from public.payroll_statement_decisions not_paid_decision
+    join public.payroll_statement_decisions settlement_decision
+      on settlement_decision.import_id = not_paid_decision.import_id
+     and settlement_decision.voucher_line_id =
+          not_paid_decision.voucher_line_id
+     and settlement_decision.action in (
+       'bank_payment',
+       'cash_payment',
+       'advance_allocation'
+     )
+    where not_paid_decision.import_id = p_import_id
+      and not_paid_decision.action = 'not_paid'
+  ) then
+    raise exception 'payroll_statement_not_paid_conflicts_with_settlement'
+      using errcode = '22023';
+  end if;
+
+  -- Row locks are deterministic even for two overlapping statement imports.
+  perform statement_row.id
+  from public.payroll_statement_rows statement_row
+  join public.payroll_statement_decisions decision
+    on decision.row_id = statement_row.id
+  where decision.import_id = p_import_id
+  order by statement_row.id
+  for update of statement_row;
+
+  if exists (
+    select 1
+    from public.payroll_statement_decisions decision
+    join public.payroll_statement_rows statement_row
+      on statement_row.id = decision.row_id
+    where decision.import_id = p_import_id
+      and decision.row_fingerprint is not null
+      and decision.row_fingerprint <> statement_row.fingerprint
+  ) then
+    raise exception 'payroll_statement_decision_fingerprint_mismatch'
+      using errcode = '22023';
+  end if;
+
+  update public.payroll_statement_decisions decision
+  set row_fingerprint = statement_row.fingerprint,
+      bank_amount = statement_row.amount
+  from public.payroll_statement_rows statement_row
+  where decision.import_id = p_import_id
+    and statement_row.id = decision.row_id;
+
+  if exists (
+    select 1
+    from public.payroll_statement_decisions current_decision
+    left join public.payroll_statement_decisions prior_decision
+      on prior_decision.id = current_decision.prior_decision_id
+     and prior_decision.tenant_id = current_decision.tenant_id
+     and prior_decision.import_id <> current_decision.import_id
+     and prior_decision.row_fingerprint =
+          current_decision.row_fingerprint
+     and prior_decision.action <> 'already_resolved'
+     and prior_decision.outcome in ('applied', 'acknowledged', 'held')
+    where current_decision.import_id = p_import_id
+      and current_decision.action = 'already_resolved'
+      and prior_decision.id is null
+  ) then
+    raise exception 'payroll_statement_prior_resolution_invalid'
+      using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1
+    from public.payroll_statement_decisions current_decision
+    join public.payroll_statement_decisions prior_decision
+      on prior_decision.tenant_id = current_decision.tenant_id
+     and prior_decision.row_fingerprint =
+          current_decision.row_fingerprint
+     and prior_decision.import_id <> current_decision.import_id
+     and prior_decision.outcome in ('applied', 'acknowledged', 'held')
+    where current_decision.import_id = p_import_id
+      and current_decision.row_fingerprint is not null
+      and current_decision.action <> 'already_resolved'
+  ) then
+    raise exception 'payroll_statement_row_already_resolved'
+      using errcode = 'P0001';
+  end if;
+
+  -- Occurrence disambiguates identical rows only inside one source document.
+  -- If that normalized base already produced a bank allocation in an earlier
+  -- import, another occurrence is never an automatic match. The reviewer must
+  -- preserve a separate duplicate override flag plus the universal bank reason.
+  if exists (
+    select 1
+    from public.payroll_statement_decisions current_decision
+    join public.payroll_statement_rows current_row
+      on current_row.id = current_decision.row_id
+     and current_row.import_id = current_decision.import_id
+    join public.payroll_statement_rows prior_row
+      on prior_row.tenant_id = current_row.tenant_id
+     and prior_row.base_fingerprint = current_row.base_fingerprint
+     and prior_row.import_id <> current_row.import_id
+    join public.payroll_statement_decisions prior_decision
+      on prior_decision.row_id = prior_row.id
+     and prior_decision.import_id = prior_row.import_id
+     and prior_decision.tenant_id = prior_row.tenant_id
+     and prior_decision.action = 'bank_payment'
+     and prior_decision.outcome = 'applied'
+    join public.payroll_statement_allocations prior_allocation
+      on prior_allocation.decision_id = prior_decision.id
+     and prior_allocation.row_id = prior_row.id
+     and prior_allocation.tenant_id = prior_row.tenant_id
+     and prior_allocation.action = 'bank_payment'
+    where current_decision.import_id = p_import_id
+      and current_decision.action = 'bank_payment'
+      and current_decision.duplicate_override is not true
+  ) then
+    raise exception
+      'payroll_statement_ambiguous_repeated_row_requires_override'
+      using
+        errcode = '22023',
+        detail =
+          'A prior bank allocation used the same normalized row base';
+  end if;
+
+  if exists (
+    select 1
+    from public.payroll_statement_decisions current_decision
+    join public.payroll_statement_rows current_row
+      on current_row.id = current_decision.row_id
+     and current_row.import_id = current_decision.import_id
+    where current_decision.import_id = p_import_id
+      and current_decision.action = 'bank_payment'
+      and current_decision.duplicate_override is true
+      and not exists (
+        select 1
+        from public.payroll_statement_rows prior_row
+        join public.payroll_statement_decisions prior_decision
+          on prior_decision.row_id = prior_row.id
+         and prior_decision.import_id = prior_row.import_id
+         and prior_decision.tenant_id = prior_row.tenant_id
+         and prior_decision.action = 'bank_payment'
+         and prior_decision.outcome = 'applied'
+        join public.payroll_statement_allocations prior_allocation
+          on prior_allocation.decision_id = prior_decision.id
+         and prior_allocation.row_id = prior_row.id
+         and prior_allocation.tenant_id = prior_row.tenant_id
+         and prior_allocation.action = 'bank_payment'
+        where prior_row.tenant_id = current_row.tenant_id
+          and prior_row.base_fingerprint = current_row.base_fingerprint
+          and prior_row.import_id <> current_row.import_id
+      )
+  ) then
+    raise exception
+      'payroll_statement_duplicate_override_without_prior_allocation'
+      using errcode = '22023';
+  end if;
+
+  update public.payroll_statement_decisions decision
+  set voucher_id = voucher_line.voucher_id,
+      employee_id = voucher_line.employee_id
+  from public.payroll_voucher_lines voucher_line
+  where decision.import_id = p_import_id
+    and voucher_line.id = decision.voucher_line_id
+    and voucher_line.tenant_id = tenant_id_value;
+
+  if exists (
+    select 1
+    from public.payroll_statement_decisions decision
+    where decision.import_id = p_import_id
+      and decision.voucher_line_id is not null
+      and (
+        decision.voucher_id is null
+        or decision.employee_id is null
+      )
+  ) then
+    raise exception 'Payroll voucher line not found'
+      using errcode = '42501';
+  end if;
+
+  perform voucher.id
+  from public.payroll_vouchers voucher
+  join (
+    select distinct decision.voucher_id
+    from public.payroll_statement_decisions decision
+    where decision.import_id = p_import_id
+      and decision.voucher_id is not null
+  ) selected on selected.voucher_id = voucher.id
+  where voucher.tenant_id = tenant_id_value
+  order by voucher.id
+  for update of voucher;
+
+  perform advance.id
+  from public.employee_advances advance
+  join public.payroll_statement_decisions decision
+    on decision.advance_id = advance.id
+  where decision.import_id = p_import_id
+    and advance.tenant_id = tenant_id_value
+  order by advance.id
+  for update of advance;
+
+  perform voucher_line.id
+  from public.payroll_voucher_lines voucher_line
+  join public.payroll_statement_decisions decision
+    on decision.voucher_line_id = voucher_line.id
+  where decision.import_id = p_import_id
+    and voucher_line.tenant_id = tenant_id_value
+  order by voucher_line.id
+  for update of voucher_line;
+
+  perform employee.id
+  from public.employees employee
+  join (
+    select distinct decision.employee_id
+    from public.payroll_statement_decisions decision
+    where decision.import_id = p_import_id
+      and decision.employee_id is not null
+  ) selected on selected.employee_id = employee.id
+  where employee.tenant_id = tenant_id_value
+  order by employee.id
+  for update of employee;
+
+  perform payment_method.id
+  from public.payment_methods payment_method
+  join (
+    select distinct decision.payment_method_id
+    from public.payroll_statement_decisions decision
+    where decision.import_id = p_import_id
+      and decision.payment_method_id is not null
+  ) selected on selected.payment_method_id = payment_method.id
+  where payment_method.tenant_id = tenant_id_value
+  order by payment_method.id
+  for update of payment_method;
+
+  perform locked_account.id
+  from public.accounts locked_account
+  where locked_account.tenant_id = tenant_id_value
+    and (
+      locked_account.id = import_row.erp_account_id
+      or locked_account.id in (
+        select decision.payment_account_id
+        from public.payroll_statement_decisions decision
+        where decision.import_id = p_import_id
+          and decision.payment_account_id is not null
+      )
+    )
+  order by locked_account.id
+  for update of locked_account;
+
+  -- A draft confirmation recognizes every included positive liability. Require
+  -- an explicit settlement or not-paid decision for every such line before the
+  -- aggregate can leave draft.
+  if exists (
+    select 1
+    from public.payroll_vouchers voucher
+    join public.payroll_statement_decisions selected_decision
+      on selected_decision.voucher_id = voucher.id
+     and selected_decision.import_id = p_import_id
+    join public.payroll_voucher_lines voucher_line
+      on voucher_line.voucher_id = voucher.id
+     and voucher_line.tenant_id = voucher.tenant_id
+    where voucher.tenant_id = tenant_id_value
+      and voucher.status = 'draft'
+      and voucher_line.is_included is true
+      and voucher_line.total_amount > 0
+      and not exists (
+        select 1
+        from public.payroll_statement_decisions coverage_decision
+        where coverage_decision.import_id = p_import_id
+          and coverage_decision.voucher_line_id = voucher_line.id
+          and coverage_decision.action in (
+            'bank_payment',
+            'cash_payment',
+            'advance_allocation',
+            'not_paid'
+          )
+      )
+  ) then
+    raise exception 'payroll_statement_draft_requires_every_line_decision'
+      using errcode = '22023';
+  end if;
+
+  select count(distinct decision.voucher_id)::integer
+  into touched_voucher_count
+  from public.payroll_statement_decisions decision
+  where decision.import_id = p_import_id
+    and decision.voucher_id is not null;
+
+  select count(*)::integer
+  into expected_voucher_count
+  from jsonb_object_keys(expected_versions_value);
+
+  select count(distinct decision.voucher_id)::integer
+  into touched_draft_voucher_count
+  from public.payroll_statement_decisions decision
+  join public.payroll_vouchers voucher
+    on voucher.id = decision.voucher_id
+   and voucher.tenant_id = tenant_id_value
+  where decision.import_id = p_import_id
+    and voucher.status = 'draft';
+
+  authorized_draft_voucher_count := jsonb_array_length(
+    canonical_authorized_draft_voucher_ids_value
+  );
+
+  if authorized_draft_voucher_count <> touched_draft_voucher_count
+     or exists (
+       select 1
+       from public.payroll_statement_decisions decision
+       join public.payroll_vouchers voucher
+         on voucher.id = decision.voucher_id
+        and voucher.tenant_id = tenant_id_value
+       where decision.import_id = p_import_id
+         and voucher.status = 'draft'
+         and not (
+           canonical_authorized_draft_voucher_ids_value
+             ? voucher.id::text
+         )
+     )
+     or exists (
+       select 1
+       from jsonb_array_elements_text(
+         canonical_authorized_draft_voucher_ids_value
+       ) authorized(voucher_id)
+       where not exists (
+         select 1
+         from public.payroll_statement_decisions decision
+         join public.payroll_vouchers voucher
+           on voucher.id = decision.voucher_id
+          and voucher.tenant_id = tenant_id_value
+         where decision.import_id = p_import_id
+           and voucher.status = 'draft'
+           and voucher.id::text = authorized.voucher_id
+       )
+     ) then
+    raise exception 'payroll_statement_draft_commitment_authorization_mismatch'
+      using
+        errcode = '22023',
+        detail =
+          'authorized draft voucher ids must exactly match touched drafts';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_array_elements_text(
+      canonical_authorized_draft_voucher_ids_value
+    ) authorized(voucher_id)
+    join public.payroll_vouchers voucher
+      on voucher.id::text = authorized.voucher_id
+     and voucher.tenant_id = tenant_id_value
+    where not exists (
+      select 1
+      from public.payroll_voucher_lines voucher_line
+      where voucher_line.voucher_id = voucher.id
+        and voucher_line.tenant_id = voucher.tenant_id
+        and voucher_line.is_included is true
+        and voucher_line.total_amount > 0
+    )
+  ) then
+    raise exception 'payroll_statement_draft_has_no_positive_obligations'
+      using errcode = '22023';
+  end if;
+
+  if expected_voucher_count <> touched_voucher_count
+     or exists (
+       select 1
+       from public.payroll_statement_decisions decision
+       join public.payroll_vouchers voucher
+         on voucher.id = decision.voucher_id
+       where decision.import_id = p_import_id
+         and decision.voucher_id is not null
+         and (
+           not expected_versions_value ? decision.voucher_id::text
+           or (
+             expected_versions_value->>decision.voucher_id::text
+           )::bigint <> voucher.reconciliation_version
+         )
+     )
+     or exists (
+       select 1
+       from jsonb_object_keys(expected_versions_value) expected(voucher_id)
+       where not exists (
+         select 1
+         from public.payroll_statement_decisions decision
+         where decision.import_id = p_import_id
+           and decision.voucher_id::text = expected.voucher_id
+       )
+     ) then
+    raise exception 'payroll_statement_voucher_version_conflict'
+      using
+        errcode = '40001',
+        detail = 'reload payroll liabilities before applying';
+  end if;
+
+  select tenant.timezone
+  into tenant_timezone
+  from public.tenants tenant
+  where tenant.id = tenant_id_value
+    and tenant.is_active is true;
+
+  if tenant_timezone is null
+     or not exists (
+       select 1
+       from pg_catalog.pg_timezone_names timezone_row
+       where timezone_row.name = tenant_timezone
+     ) then
+    raise exception 'Payroll timezone invalid'
+      using errcode = '22023';
+  end if;
+
+  for decision_row in
+    select decision.*
+    from public.payroll_statement_decisions decision
+    where decision.import_id = p_import_id
+    order by decision.decision_ordinal
+  loop
+    if decision_row.row_id is not null then
+      select statement_row.*
+      into row_record
+      from public.payroll_statement_rows statement_row
+      where statement_row.id = decision_row.row_id
+        and statement_row.import_id = p_import_id
+        and statement_row.tenant_id = tenant_id_value;
+
+      if (
+        row_record.transaction_date is null
+        or row_record.direction is null
+        or row_record.direction = 'unknown'
+        or row_record.amount is null
+      ) and (
+        decision_row.action not in (
+          'ignore',
+          'hold',
+          'already_resolved'
+        )
+        or decision_row.manual_confirmation is not true
+        or decision_row.reason is null
+      ) then
+        raise exception
+          'payroll_statement_incomplete_evidence_requires_review_%',
+          decision_row.decision_ordinal
+          using
+            errcode = '22023',
+            detail =
+              'Incomplete OCR evidence can only be ignored or held '
+              || 'after explicit human confirmation';
+      end if;
+    end if;
+
+    if decision_row.voucher_line_id is not null then
+      select
+        voucher_line.*,
+        voucher.status as voucher_status,
+        voucher.period_start,
+        voucher.period_end,
+        voucher.voucher_number
+      into line_row
+      from public.payroll_voucher_lines voucher_line
+      join public.payroll_vouchers voucher
+        on voucher.id = voucher_line.voucher_id
+       and voucher.tenant_id = voucher_line.tenant_id
+      where voucher_line.id = decision_row.voucher_line_id
+        and voucher_line.tenant_id = tenant_id_value;
+
+      if not found
+         or line_row.is_included is not true
+         or line_row.total_amount <= 0 then
+        raise exception 'Payroll voucher line is not payable'
+          using errcode = '22023';
+      end if;
+
+      select employee.*
+      into employee_row
+      from public.employees employee
+      where employee.id = line_row.employee_id
+        and employee.tenant_id = tenant_id_value;
+
+      if not found then
+        raise exception 'Payroll employee not found'
+          using errcode = '42501';
+      end if;
+    end if;
+
+    if decision_row.payment_method_id is not null then
+      select payment_method.*
+      into method_row
+      from public.payment_methods payment_method
+      where payment_method.id = decision_row.payment_method_id
+        and payment_method.tenant_id = tenant_id_value
+        and payment_method.is_active is true;
+
+      if not found then
+        raise exception 'Payroll payment method not found'
+          using errcode = '42501';
+      end if;
+    end if;
+
+    if decision_row.payment_account_id is not null then
+      select selected_account.*
+      into account_row
+      from public.accounts selected_account
+      where selected_account.id = decision_row.payment_account_id
+        and selected_account.tenant_id = tenant_id_value
+        and selected_account.is_active is true
+        and selected_account.type = 'asset';
+
+      if not found then
+        raise exception 'Payroll payment account not found'
+          using errcode = '42501';
+      end if;
+    end if;
+
+    if decision_row.action = 'bank_payment' then
+      select
+        coalesce(
+          (
+            select sum(payment.amount)
+            from public.expense_payments payment
+            where payment.expense_id = line_row.expense_id
+          ),
+          0
+        )
+        + coalesce(
+          (
+            select sum(allocation.amount)
+            from public.employee_advance_allocations allocation
+            where allocation.voucher_line_id = line_row.id
+          ),
+          0
+        )
+      into current_settled_value;
+
+      live_line_balance_value := greatest(
+        line_row.total_amount - current_settled_value,
+        0
+      );
+      expected_bank_applied_value := least(
+        row_record.amount,
+        live_line_balance_value
+      );
+      bank_variance_value :=
+        row_record.amount - live_line_balance_value;
+      match_tolerance_value := greatest(
+        1::numeric,
+        least(
+          500::numeric,
+          ceil(live_line_balance_value * 0.01)
+        )
+      );
+
+      if row_record.direction <> 'debit'
+         or decision_row.applied_amount is null
+         or live_line_balance_value <= 0
+         or decision_row.applied_amount
+              <> expected_bank_applied_value
+         or decision_row.payment_method_id is null
+         or decision_row.payment_account_id is null
+         or coalesce(lower(method_row.code), '') <> 'transfer'
+         or method_row.account_id <> decision_row.payment_account_id
+         or decision_row.payment_account_id <> import_row.erp_account_id
+         or decision_row.advance_id is not null
+         or (
+           line_row.payment_method_id is not null
+           and line_row.payment_method_id
+                <> decision_row.payment_method_id
+           and (
+             employee_row.preferred_payment_method_id
+               is distinct from decision_row.payment_method_id
+             or exists (
+               select 1
+               from public.payment_methods snapshot_method
+               join public.accounts snapshot_account
+                 on snapshot_account.id = snapshot_method.account_id
+                and snapshot_account.tenant_id =
+                    snapshot_method.tenant_id
+                and snapshot_account.is_active is true
+                and snapshot_account.type = 'asset'
+               where snapshot_method.id =
+                   line_row.payment_method_id
+                 and snapshot_method.tenant_id = tenant_id_value
+                 and snapshot_method.is_active is true
+                 and lower(snapshot_method.code) in ('transfer', 'cash')
+             )
+           )
+         )
+         or (
+           line_row.payment_method_id is null
+           and nullif(
+             lower(trim(coalesce(line_row.payment_method::text, ''))),
+             ''
+           ) is not null
+           and lower(
+             coalesce(line_row.payment_method::text, '')
+           ) <> 'transfer'
+         )
+         or (
+           line_row.payment_method_id is null
+           and nullif(
+             lower(trim(coalesce(line_row.payment_method::text, ''))),
+             ''
+           ) is null
+           and (
+             (
+               employee_row.preferred_payment_method_id is not null
+               and employee_row.preferred_payment_method_id
+                    <> decision_row.payment_method_id
+             )
+             or (
+               employee_row.preferred_payment_method_id is null
+               and lower(
+                 coalesce(
+                   employee_row.preferred_payment_method::text,
+                   ''
+                 )
+               ) <> 'transfer'
+             )
+           )
+         )
+         or (
+           line_row.payment_account_id is not null
+           and line_row.payment_account_id
+                <> decision_row.payment_account_id
+           and (
+             line_row.payment_method_id is null
+             or (
+               line_row.payment_method_id
+                 <> decision_row.payment_method_id
+               and (
+                 employee_row.preferred_payment_method_id
+                   is distinct from decision_row.payment_method_id
+                 or exists (
+                   select 1
+                   from public.payment_methods snapshot_method
+                   join public.accounts snapshot_account
+                     on snapshot_account.id = snapshot_method.account_id
+                    and snapshot_account.tenant_id =
+                        snapshot_method.tenant_id
+                    and snapshot_account.is_active is true
+                    and snapshot_account.type = 'asset'
+                   where snapshot_method.id =
+                       line_row.payment_method_id
+                     and snapshot_method.tenant_id = tenant_id_value
+                     and snapshot_method.is_active is true
+                     and lower(snapshot_method.code)
+                       in ('transfer', 'cash')
+                 )
+               )
+             )
+           )
+         )
+         or row_record.transaction_date < line_row.period_start
+         or row_record.transaction_date > line_row.period_end + 5
+         or (
+           decision_row.payment_date is not null
+           and decision_row.payment_date <> row_record.transaction_date
+         ) then
+        raise exception 'payroll_statement_invalid_bank_payment_%',
+          decision_row.decision_ordinal
+          using errcode = '22023';
+      end if;
+
+      payment_at_value :=
+        row_record.transaction_date::timestamp without time zone
+          at time zone tenant_timezone;
+      if payment_at_value > statement_timestamp() + interval '5 minutes'
+         and not coalesce(
+           (
+             row_record.transaction_date =
+               nullif(
+                 import_row.source_metadata->>'statement_end',
+                 ''
+               )::date + 1
+             and row_record.transaction_date <=
+               (
+                 import_row.created_at at time zone tenant_timezone
+               )::date + 1
+             and row_record.warnings
+                   @> '["out_of_statement_range"]'::jsonb
+             and decision_row.manual_confirmation is true
+             and decision_row.reason is not null
+           ),
+           false
+         ) then
+        raise exception 'payroll_statement_bank_payment_is_future_%',
+          decision_row.decision_ordinal
+          using errcode = '22023';
+      end if;
+
+      if bank_variance_value = 0 then
+        if decision_row.variance_disposition is distinct from 'exact' then
+          raise exception 'payroll_statement_exact_disposition_required_%',
+            decision_row.decision_ordinal
+            using errcode = '22023';
+        end if;
+      elsif bank_variance_value < 0 then
+        -- A debit below the live liability is an intentional partial payment,
+        -- never a fuzzy match. Applying exactly the statement debit preserves
+        -- the residual voucher/expense balance for a later settlement.
+        if decision_row.variance_disposition is distinct from 'partial'
+           or decision_row.applied_amount <> row_record.amount
+           or row_record.amount >= live_line_balance_value
+           or decision_row.manual_confirmation is not true
+           or decision_row.reason is null then
+          raise exception 'payroll_statement_partial_requires_review_%',
+            decision_row.decision_ordinal
+            using errcode = '22023';
+        end if;
+      else
+        -- A debit above the liability may only use the existing bounded
+        -- tolerance. The excess remains an explicitly reviewed variance and
+        -- is never posted to the payroll obligation.
+        if bank_variance_value > match_tolerance_value then
+          raise exception 'payroll_statement_variance_outside_tolerance_%',
+            decision_row.decision_ordinal
+            using errcode = '22023';
+        end if;
+
+        if decision_row.variance_disposition
+             is distinct from 'unresolved'
+           or decision_row.manual_confirmation is not true
+           or decision_row.reason is null then
+          raise exception 'payroll_statement_variance_requires_review_%',
+            decision_row.decision_ordinal
+            using errcode = '22023';
+        end if;
+      end if;
+
+      if jsonb_array_length(row_record.warnings) > 0
+         and (
+           decision_row.manual_confirmation is not true
+           or decision_row.reason is null
+         ) then
+        raise exception 'payroll_statement_warning_requires_review_%',
+          decision_row.decision_ordinal
+          using errcode = '22023';
+      end if;
+
+      if decision_row.manual_confirmation is not true
+         or decision_row.reason is null then
+        raise exception 'payroll_statement_bank_payment_requires_review_%',
+          decision_row.decision_ordinal
+          using
+            errcode = '22023',
+            detail =
+              'Every bank allocation requires a human confirmation '
+              || 'and an audit reason';
+      end if;
+
+      if exists (
+        select 1
+        from public.payroll_statement_allocations allocation
+        where allocation.tenant_id = tenant_id_value
+          and allocation.row_fingerprint = row_record.fingerprint
+      ) then
+        raise exception 'payroll_statement_row_already_applied'
+          using errcode = 'P0001';
+      end if;
+
+      update public.payroll_statement_decisions decision
+      set payment_date = row_record.transaction_date,
+          bank_amount = row_record.amount,
+          variance = bank_variance_value,
+          movement_reference = 'payroll-statement:' || decision.id::text
+      where decision.id = decision_row.id;
+    elsif decision_row.action = 'cash_payment' then
+      if decision_row.manual_confirmation is not true
+         or decision_row.applied_amount is null
+         or decision_row.payment_date is null
+         or decision_row.payment_method_id is null
+         or decision_row.payment_account_id is null
+         or coalesce(lower(method_row.code), '') <> 'cash'
+         or method_row.account_id <> decision_row.payment_account_id
+         or decision_row.advance_id is not null
+         or (
+           line_row.payment_method_id is not null
+           and line_row.payment_method_id
+                <> decision_row.payment_method_id
+           and (
+             employee_row.preferred_payment_method_id
+               is distinct from decision_row.payment_method_id
+             or exists (
+               select 1
+               from public.payment_methods snapshot_method
+               join public.accounts snapshot_account
+                 on snapshot_account.id = snapshot_method.account_id
+                and snapshot_account.tenant_id =
+                    snapshot_method.tenant_id
+                and snapshot_account.is_active is true
+                and snapshot_account.type = 'asset'
+               where snapshot_method.id =
+                   line_row.payment_method_id
+                 and snapshot_method.tenant_id = tenant_id_value
+                 and snapshot_method.is_active is true
+                 and lower(snapshot_method.code) in ('transfer', 'cash')
+             )
+           )
+         )
+         or (
+           line_row.payment_method_id is null
+           and nullif(
+             lower(trim(coalesce(line_row.payment_method::text, ''))),
+             ''
+           ) is not null
+           and lower(
+             coalesce(line_row.payment_method::text, '')
+           ) <> 'cash'
+         )
+         or (
+           line_row.payment_method_id is null
+           and nullif(
+             lower(trim(coalesce(line_row.payment_method::text, ''))),
+             ''
+           ) is null
+           and (
+             (
+               employee_row.preferred_payment_method_id is not null
+               and employee_row.preferred_payment_method_id
+                    <> decision_row.payment_method_id
+             )
+             or (
+               employee_row.preferred_payment_method_id is null
+               and lower(
+                 coalesce(
+                   employee_row.preferred_payment_method::text,
+                   ''
+                 )
+               ) <> 'cash'
+             )
+           )
+         )
+         or (
+           line_row.payment_account_id is not null
+           and line_row.payment_account_id
+                <> decision_row.payment_account_id
+           and (
+             line_row.payment_method_id is null
+             or (
+               line_row.payment_method_id
+                 <> decision_row.payment_method_id
+               and (
+                 employee_row.preferred_payment_method_id
+                   is distinct from decision_row.payment_method_id
+                 or exists (
+                   select 1
+                   from public.payment_methods snapshot_method
+                   join public.accounts snapshot_account
+                     on snapshot_account.id = snapshot_method.account_id
+                    and snapshot_account.tenant_id =
+                        snapshot_method.tenant_id
+                    and snapshot_account.is_active is true
+                    and snapshot_account.type = 'asset'
+                   where snapshot_method.id =
+                       line_row.payment_method_id
+                     and snapshot_method.tenant_id = tenant_id_value
+                     and snapshot_method.is_active is true
+                     and lower(snapshot_method.code)
+                       in ('transfer', 'cash')
+                 )
+               )
+             )
+           )
+         )
+         or decision_row.payment_date < line_row.period_start
+         or decision_row.payment_date > line_row.period_end + 5 then
+        raise exception 'payroll_statement_invalid_cash_confirmation_%',
+          decision_row.decision_ordinal
+          using errcode = '22023';
+      end if;
+
+      payment_at_value :=
+        decision_row.payment_date::timestamp without time zone
+          at time zone tenant_timezone;
+      if payment_at_value > statement_timestamp() + interval '5 minutes' then
+        raise exception 'payroll_statement_cash_payment_is_future_%',
+          decision_row.decision_ordinal
+          using errcode = '22023';
+      end if;
+
+      update public.payroll_statement_decisions decision
+      set variance_disposition = 'not_applicable',
+          movement_reference = 'payroll-statement:' || decision.id::text
+      where decision.id = decision_row.id;
+    elsif decision_row.action = 'advance_allocation' then
+      if decision_row.advance_id is null
+         or decision_row.applied_amount is null
+         or decision_row.payment_method_id is not null
+         or decision_row.payment_account_id is not null
+         or decision_row.payment_date is not null
+         or decision_row.variance_disposition is not null then
+        raise exception 'payroll_statement_invalid_advance_allocation_%',
+          decision_row.decision_ordinal
+          using errcode = '22023';
+      end if;
+
+      select advance.*
+      into advance_row
+      from public.employee_advances advance
+      where advance.id = decision_row.advance_id
+        and advance.tenant_id = tenant_id_value
+        and advance.employee_id = line_row.employee_id
+        and advance.status in ('open', 'partially_applied')
+        and (
+          advance.paid_at at time zone tenant_timezone
+        )::date <= line_row.period_end;
+
+      if not found then
+        raise exception 'Payroll advance not found'
+          using errcode = '42501';
+      end if;
+
+      update public.payroll_statement_decisions decision
+      set variance_disposition = 'not_applicable',
+          movement_reference = 'payroll-statement:' || decision.id::text
+      where decision.id = decision_row.id;
+    elsif decision_row.action = 'not_paid' then
+      if decision_row.manual_confirmation is not true
+         or decision_row.reason is null
+         or decision_row.applied_amount is not null
+         or decision_row.payment_method_id is not null
+         or decision_row.payment_account_id is not null
+         or decision_row.payment_date is not null
+         or decision_row.variance_disposition is not null
+         or decision_row.advance_id is not null then
+        raise exception 'payroll_statement_invalid_not_paid_%',
+          decision_row.decision_ordinal
+          using errcode = '22023';
+      end if;
+    elsif decision_row.action in (
+      'ignore',
+      'hold',
+      'already_resolved'
+    ) then
+      if decision_row.applied_amount is not null
+         or decision_row.payment_method_id is not null
+         or decision_row.payment_account_id is not null
+         or decision_row.payment_date is not null
+         or decision_row.variance_disposition is not null
+         or decision_row.advance_id is not null
+         or decision_row.reason is null then
+        raise exception 'payroll_statement_invalid_row_disposition_%',
+          decision_row.decision_ordinal
+          using errcode = '22023';
+      end if;
+    end if;
+  end loop;
+
+  -- Validate all selected movements against the live, locked liability. The
+  -- internal payment command revalidates the same invariant while inserting.
+  for line_row in
+    select voucher_line.*
+    from public.payroll_voucher_lines voucher_line
+    join (
+      select distinct decision.voucher_line_id
+      from public.payroll_statement_decisions decision
+      where decision.import_id = p_import_id
+        and decision.voucher_line_id is not null
+    ) selected on selected.voucher_line_id = voucher_line.id
+    order by voucher_line.id
+  loop
+    select coalesce(sum(decision.applied_amount), 0)
+    into requested_line_total_value
+    from public.payroll_statement_decisions decision
+    where decision.import_id = p_import_id
+      and decision.voucher_line_id = line_row.id
+      and decision.action in (
+        'bank_payment',
+        'cash_payment',
+        'advance_allocation'
+      );
+
+    select
+      coalesce(
+        (
+          select sum(payment.amount)
+          from public.expense_payments payment
+          where payment.expense_id = line_row.expense_id
+        ),
+        0
+      )
+      + coalesce(
+        (
+          select sum(allocation.amount)
+          from public.employee_advance_allocations allocation
+          where allocation.voucher_line_id = line_row.id
+        ),
+        0
+      )
+    into current_settled_value;
+
+    if requested_line_total_value
+         > line_row.total_amount - current_settled_value + 0.01 then
+      raise exception 'payroll_statement_movements_exceed_live_balance'
+        using errcode = '22023';
+    end if;
+  end loop;
+
+  for advance_row in
+    select advance.*
+    from public.employee_advances advance
+    join (
+      select distinct decision.advance_id
+      from public.payroll_statement_decisions decision
+      where decision.import_id = p_import_id
+        and decision.advance_id is not null
+    ) selected on selected.advance_id = advance.id
+    order by advance.id
+  loop
+    select coalesce(sum(decision.applied_amount), 0)
+    into requested_advance_total_value
+    from public.payroll_statement_decisions decision
+    where decision.import_id = p_import_id
+      and decision.advance_id = advance_row.id;
+
+    if requested_advance_total_value
+         > advance_row.amount - advance_row.amount_applied + 0.01 then
+      raise exception 'payroll_statement_advance_balance_exceeded'
+        using errcode = '22023';
+    end if;
+  end loop;
+
+  -- The mature payroll internals cast period_end to timestamptz. Pin the
+  -- transaction-local timezone to the tenant so civil dates do not depend on
+  -- the device/session timezone.
+  perform set_config('TimeZone', tenant_timezone, true);
+
+  for voucher_row in
+    select voucher.*
+    from public.payroll_vouchers voucher
+    join (
+      select distinct decision.voucher_id
+      from public.payroll_statement_decisions decision
+      where decision.import_id = p_import_id
+        and decision.voucher_id is not null
+    ) selected on selected.voucher_id = voucher.id
+    order by voucher.id
+  loop
+    if voucher_row.status = 'draft' then
+      if not (
+        canonical_authorized_draft_voucher_ids_value
+          ? voucher_row.id::text
+      ) then
+        raise exception
+          'payroll_statement_draft_commitment_authorization_mismatch'
+          using errcode = '22023';
+      end if;
+      perform public.confirm_payroll_voucher_internal(voucher_row.id);
+    elsif voucher_row.status not in ('confirmed', 'partial') then
+      raise exception 'Payroll voucher is not open for reconciliation'
+        using errcode = '22023';
+    end if;
+  end loop;
+
+  for voucher_row in
+    select voucher.*
+    from public.payroll_vouchers voucher
+    join (
+      select distinct decision.voucher_id
+      from public.payroll_statement_decisions decision
+      where decision.import_id = p_import_id
+        and decision.action in (
+          'bank_payment',
+          'cash_payment',
+          'advance_allocation'
+        )
+    ) selected on selected.voucher_id = voucher.id
+    order by voucher.id
+  loop
+    split_map_value := '{}'::jsonb;
+
+    for voucher_line_id_value in
+      select distinct decision.voucher_line_id
+      from public.payroll_statement_decisions decision
+      where decision.import_id = p_import_id
+        and decision.voucher_id = voucher_row.id
+        and decision.action in (
+          'bank_payment',
+          'cash_payment',
+          'advance_allocation'
+        )
+      order by decision.voucher_line_id
+    loop
+      select jsonb_agg(
+        case
+          when decision.action = 'advance_allocation' then
+            jsonb_build_object(
+              'kind',
+              'advance',
+              'advance_id',
+              decision.advance_id,
+              'amount',
+              decision.applied_amount,
+              'notes',
+              decision.movement_reference
+            )
+          else
+            jsonb_build_object(
+              'kind',
+              'payment',
+              'payment_method_id',
+              decision.payment_method_id,
+              'payment_account_id',
+              decision.payment_account_id,
+              'amount',
+              decision.applied_amount,
+              'payment_date',
+              decision.payment_date::timestamp without time zone
+                at time zone tenant_timezone,
+              'reference',
+              decision.movement_reference,
+              'notes',
+              'Payroll statement reconciliation '
+                || p_import_id::text
+            )
+        end
+        order by decision.decision_ordinal
+      )
+      into line_splits_value
+      from public.payroll_statement_decisions decision
+      where decision.import_id = p_import_id
+        and decision.voucher_line_id = voucher_line_id_value
+        and decision.action in (
+          'bank_payment',
+          'cash_payment',
+          'advance_allocation'
+        );
+
+      split_map_value := jsonb_set(
+        split_map_value,
+        array[voucher_line_id_value::text],
+        line_splits_value,
+        true
+      );
+    end loop;
+
+    perform public.pay_payroll_voucher_internal(
+      voucher_row.id,
+      split_map_value
+    );
+  end loop;
+
+  update public.payroll_statement_decisions decision
+  set result_expense_payment_id = payment.id
+  from public.payroll_voucher_lines voucher_line
+  join public.expense_payments payment
+    on payment.expense_id = voucher_line.expense_id
+  where decision.import_id = p_import_id
+    and decision.action in ('bank_payment', 'cash_payment')
+    and voucher_line.id = decision.voucher_line_id
+    and payment.tenant_id = tenant_id_value
+    and payment.reference = decision.movement_reference;
+
+  update public.payroll_statement_decisions decision
+  set result_advance_allocation_id = allocation.id
+  from public.employee_advance_allocations allocation
+  where decision.import_id = p_import_id
+    and decision.action = 'advance_allocation'
+    and allocation.tenant_id = tenant_id_value
+    and allocation.voucher_line_id = decision.voucher_line_id
+    and allocation.advance_id = decision.advance_id
+    and allocation.notes = decision.movement_reference;
+
+  if exists (
+    select 1
+    from public.payroll_statement_decisions decision
+    where decision.import_id = p_import_id
+      and (
+        (
+          decision.action in ('bank_payment', 'cash_payment')
+          and decision.result_expense_payment_id is null
+        )
+        or (
+          decision.action = 'advance_allocation'
+          and decision.result_advance_allocation_id is null
+        )
+      )
+  ) then
+    raise exception 'payroll_statement_result_link_missing'
+      using errcode = '55000';
+  end if;
+
+  insert into public.payroll_statement_allocations (
+    tenant_id,
+    import_id,
+    decision_id,
+    action,
+    row_id,
+    row_fingerprint,
+    voucher_id,
+    voucher_line_id,
+    employee_id,
+    expense_payment_id,
+    employee_advance_allocation_id,
+    bank_amount,
+    applied_amount,
+    variance,
+    variance_disposition,
+    payment_date,
+    movement_reference,
+    applied_by
+  )
+  select
+    decision.tenant_id,
+    decision.import_id,
+    decision.id,
+    decision.action,
+    decision.row_id,
+    decision.row_fingerprint,
+    decision.voucher_id,
+    decision.voucher_line_id,
+    decision.employee_id,
+    decision.result_expense_payment_id,
+    decision.result_advance_allocation_id,
+    case
+      when decision.action = 'bank_payment' then decision.bank_amount
+      else null
+    end,
+    decision.applied_amount,
+    case
+      when decision.action = 'bank_payment' then decision.variance
+      else null
+    end,
+    coalesce(decision.variance_disposition, 'not_applicable'),
+    decision.payment_date,
+    decision.movement_reference,
+    auth.uid()
+  from public.payroll_statement_decisions decision
+  where decision.import_id = p_import_id
+    and decision.action in (
+      'bank_payment',
+      'cash_payment',
+      'advance_allocation'
+    );
+
+  update public.payroll_statement_decisions decision
+  set outcome = case
+    when decision.action in (
+      'bank_payment',
+      'cash_payment',
+      'advance_allocation'
+    ) then 'applied'
+    when decision.action = 'hold' then 'held'
+    else 'acknowledged'
+  end
+  where decision.import_id = p_import_id;
+
+  select
+    count(*)::integer,
+    coalesce(sum(decision.variance), 0)::numeric(14,2)
+  into
+    unresolved_variance_count_value,
+    unresolved_variance_total_value
+  from public.payroll_statement_decisions decision
+  where decision.import_id = p_import_id
+    and decision.action = 'bank_payment'
+    and decision.variance_disposition = 'unresolved'
+    and decision.variance <> 0;
+
+  select count(*)::integer
+  into already_resolved_count_value
+  from public.payroll_statement_decisions decision
+  where decision.import_id = p_import_id
+    and decision.action = 'already_resolved';
+
+  final_status_value := case
+    when exists (
+      select 1
+      from public.payroll_statement_decisions decision
+      where decision.import_id = p_import_id
+        and decision.action = 'hold'
+    ) then 'held'
+    when unresolved_variance_count_value > 0
+      then 'applied_with_variances'
+    else 'applied'
+  end;
+
+  receipt_value := jsonb_build_object(
+    'import_id',
+    p_import_id,
+    'status',
+    final_status_value,
+    'revision',
+    import_row.revision,
+    'hold_is_terminal',
+    final_status_value = 'held',
+    'operation_key',
+    operation_key_value,
+    'payload_hash',
+    payload_hash_value,
+    'decision_count',
+    (
+      select count(*)
+      from public.payroll_statement_decisions decision
+      where decision.import_id = p_import_id
+    ),
+    'allocation_count',
+    (
+      select count(*)
+      from public.payroll_statement_allocations allocation
+      where allocation.import_id = p_import_id
+    ),
+    'already_resolved_count',
+    already_resolved_count_value,
+    'unresolved_variance_count',
+    unresolved_variance_count_value,
+    'unresolved_variance_total',
+    unresolved_variance_total_value,
+    'committed_voucher_ids',
+    canonical_authorized_draft_voucher_ids_value,
+    'voucher_versions',
+    coalesce(
+      (
+        select jsonb_object_agg(
+          voucher.id::text,
+          voucher.reconciliation_version
+          order by voucher.id::text
+        )
+        from public.payroll_vouchers voucher
+        where voucher.id in (
+          select decision.voucher_id
+          from public.payroll_statement_decisions decision
+          where decision.import_id = p_import_id
+            and decision.voucher_id is not null
+        )
+      ),
+      '{}'::jsonb
+    )
+  );
+
+  update public.payroll_statement_imports statement_import
+  set status = final_status_value,
+      apply_operation_key = operation_key_value,
+      apply_payload_hash = payload_hash_value,
+      apply_receipt = receipt_value,
+      applied_by = auth.uid(),
+      applied_at = statement_timestamp(),
+      updated_at = statement_timestamp()
+  where statement_import.id = p_import_id
+    and statement_import.tenant_id = tenant_id_value;
+
+  delete from public.payroll_statement_command_contexts command_context
+  where command_context.transaction_id = txid_current()
+    and command_context.import_id = p_import_id
+    and command_context.command = 'apply';
+
+  perform set_config('TimeZone', prior_timezone, true);
+  return receipt_value;
+exception
+  when unique_violation then
+    get stacked diagnostics
+      violated_constraint_name = constraint_name;
+    if violated_constraint_name in (
+      'ux_payroll_statement_decisions_resolved_fingerprint',
+      'ux_payroll_statement_allocations_tenant_fingerprint'
+    ) then
+      raise exception 'payroll_statement_row_or_operation_already_applied'
+        using errcode = '23505';
+    elsif violated_constraint_name in (
+      'ux_payroll_statement_imports_apply_operation',
+      'payroll_statement_decisions_import_id_decision_ordinal_key',
+      'payroll_statement_decisions_import_id_row_id_key'
+    ) then
+      raise exception 'payroll_statement_apply_idempotency_conflict'
+        using errcode = '23505';
+    else
+      raise;
+    end if;
+end;
+$$;
+
+-- Legacy money wrappers are owner-side compatibility shims only. They still
+-- serialize on the same tenant lock and mint an unforgeable transient
+-- capability so their internal implementation cannot bypass the DML guards.
+create or replace function public.register_employee_advance(
+  p_employee_id uuid,
+  p_amount numeric,
+  p_payment_method_id uuid,
+  p_payment_account_id uuid default null,
+  p_paid_at timestamp with time zone default statement_timestamp(),
+  p_reference text default null,
+  p_notes text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+  tenant_timezone text;
+  prior_timezone text := current_setting('TimeZone');
+  result_value uuid;
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text || ':payroll-settlement',
+      0
+    )
+  );
+
+  select coalesce(nullif(trim(tenant.timezone), ''), 'America/Santiago')
+  into tenant_timezone
+  from public.tenants tenant
+  where tenant.id = tenant_id_value;
+  perform set_config('TimeZone', tenant_timezone, true);
+
+  insert into public.payroll_money_command_contexts (
+    transaction_id,
+    tenant_id,
+    command,
+    operation_key,
+    actor_id
+  )
+  values (
+    txid_current(),
+    tenant_id_value,
+    'advance_registration',
+    'legacy-advance:' || gen_random_uuid()::text,
+    auth.uid()
+  );
+
+  result_value := public.register_employee_advance_internal(
+    p_employee_id,
+    p_amount,
+    p_payment_method_id,
+    p_payment_account_id,
+    p_paid_at,
+    p_reference,
+    p_notes
+  );
+
+  perform set_config('TimeZone', prior_timezone, true);
+
+  delete from public.payroll_money_command_contexts command_context
+  where command_context.transaction_id = txid_current()
+    and command_context.tenant_id = tenant_id_value
+    and command_context.command = 'advance_registration';
+
+  return result_value;
+end;
+$$;
+
+-- Serialize the established manual payment path with reconciliation and reject
+-- unaudited reversals once statement evidence exists.
+create or replace function public.pay_payroll_voucher(
+  p_voucher_id uuid,
+  p_payment_splits jsonb
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+  tenant_timezone text;
+  prior_timezone text := current_setting('TimeZone');
+  context_import_id_value uuid;
+  result_value boolean;
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text || ':payroll-settlement',
+      0
+    )
+  );
+
+  select coalesce(nullif(trim(tenant.timezone), ''), 'America/Santiago')
+  into tenant_timezone
+  from public.tenants tenant
+  where tenant.id = tenant_id_value;
+  perform set_config('TimeZone', tenant_timezone, true);
+
+  insert into public.payroll_money_command_contexts (
+    transaction_id,
+    tenant_id,
+    command,
+    operation_key,
+    actor_id
+  )
+  values (
+    txid_current(),
+    tenant_id_value,
+    'manual_payment',
+    'legacy-payment:' || p_voucher_id::text,
+    auth.uid()
+  );
+
+  select min(decision.import_id::text)::uuid
+  into context_import_id_value
+  from public.payroll_statement_decisions decision
+  where decision.tenant_id = tenant_id_value
+    and decision.voucher_id = p_voucher_id;
+
+  if context_import_id_value is not null then
+    insert into public.payroll_statement_command_contexts (
+      transaction_id,
+      tenant_id,
+      import_id,
+      command,
+      actor_id
+    )
+    values (
+      txid_current(),
+      tenant_id_value,
+      context_import_id_value,
+      'manual_settlement',
+      auth.uid()
+    );
+  end if;
+
+  result_value := public.pay_payroll_voucher_internal(
+    p_voucher_id,
+    p_payment_splits
+  );
+
+  perform set_config('TimeZone', prior_timezone, true);
+
+  delete from public.payroll_money_command_contexts command_context
+  where command_context.transaction_id = txid_current()
+    and command_context.tenant_id = tenant_id_value
+    and command_context.command = 'manual_payment';
+
+  if context_import_id_value is not null then
+    delete from public.payroll_statement_command_contexts command_context
+    where command_context.transaction_id = txid_current()
+      and command_context.import_id = context_import_id_value
+      and command_context.command = 'manual_settlement';
+  end if;
+
+  return result_value;
+end;
+$$;
+
+create or replace function public.pay_payroll_voucher(
+  p_voucher_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+  tenant_timezone text;
+  prior_timezone text := current_setting('TimeZone');
+  context_import_id_value uuid;
+  result_value boolean;
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text || ':payroll-settlement',
+      0
+    )
+  );
+
+  select coalesce(nullif(trim(tenant.timezone), ''), 'America/Santiago')
+  into tenant_timezone
+  from public.tenants tenant
+  where tenant.id = tenant_id_value;
+  perform set_config('TimeZone', tenant_timezone, true);
+
+  insert into public.payroll_money_command_contexts (
+    transaction_id,
+    tenant_id,
+    command,
+    operation_key,
+    actor_id
+  )
+  values (
+    txid_current(),
+    tenant_id_value,
+    'manual_payment',
+    'legacy-payment:' || p_voucher_id::text,
+    auth.uid()
+  );
+
+  select min(decision.import_id::text)::uuid
+  into context_import_id_value
+  from public.payroll_statement_decisions decision
+  where decision.tenant_id = tenant_id_value
+    and decision.voucher_id = p_voucher_id;
+
+  if context_import_id_value is not null then
+    insert into public.payroll_statement_command_contexts (
+      transaction_id,
+      tenant_id,
+      import_id,
+      command,
+      actor_id
+    )
+    values (
+      txid_current(),
+      tenant_id_value,
+      context_import_id_value,
+      'manual_settlement',
+      auth.uid()
+    );
+  end if;
+
+  result_value :=
+    public.pay_payroll_voucher_internal(p_voucher_id, null);
+
+  perform set_config('TimeZone', prior_timezone, true);
+
+  delete from public.payroll_money_command_contexts command_context
+  where command_context.transaction_id = txid_current()
+    and command_context.tenant_id = tenant_id_value
+    and command_context.command = 'manual_payment';
+
+  if context_import_id_value is not null then
+    delete from public.payroll_statement_command_contexts command_context
+    where command_context.transaction_id = txid_current()
+      and command_context.import_id = context_import_id_value
+      and command_context.command = 'manual_settlement';
+  end if;
+
+  return result_value;
+end;
+$$;
+
+create or replace function public.revert_payroll_payment(
+  p_voucher_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+  result_value boolean;
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text || ':payroll-settlement',
+      0
+    )
+  );
+
+  if exists (
+    select 1
+    from public.payroll_statement_decisions decision
+    where decision.tenant_id = tenant_id_value
+      and decision.voucher_id = p_voucher_id
+  ) or exists (
+    select 1
+    from public.payroll_money_operations money_operation
+    where money_operation.tenant_id = tenant_id_value
+      and money_operation.voucher_id = p_voucher_id
+  ) then
+    raise exception 'payroll_reconciliation_requires_audited_reversal'
+      using errcode = '55000';
+  end if;
+
+  insert into public.payroll_money_command_contexts (
+    transaction_id,
+    tenant_id,
+    command,
+    operation_key,
+    actor_id
+  )
+  values (
+    txid_current(),
+    tenant_id_value,
+    'legacy_reversal',
+    'legacy-reversal:' || p_voucher_id::text,
+    auth.uid()
+  );
+
+  result_value := public.revert_payroll_payment_internal(p_voucher_id);
+
+  delete from public.payroll_money_command_contexts command_context
+  where command_context.transaction_id = txid_current()
+    and command_context.tenant_id = tenant_id_value
+    and command_context.command = 'legacy_reversal';
+
+  return result_value;
+end;
+$$;
+
+create or replace function public.revert_payroll_to_draft(
+  p_voucher_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+  result_value boolean;
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text || ':payroll-settlement',
+      0
+    )
+  );
+
+  if exists (
+    select 1
+    from public.payroll_statement_decisions decision
+    where decision.tenant_id = tenant_id_value
+      and decision.voucher_id = p_voucher_id
+  ) or exists (
+    select 1
+    from public.payroll_money_operations money_operation
+    where money_operation.tenant_id = tenant_id_value
+      and money_operation.voucher_id = p_voucher_id
+  ) then
+    raise exception 'payroll_reconciliation_requires_audited_reversal'
+      using errcode = '55000';
+  end if;
+
+  insert into public.payroll_money_command_contexts (
+    transaction_id,
+    tenant_id,
+    command,
+    operation_key,
+    actor_id
+  )
+  values (
+    txid_current(),
+    tenant_id_value,
+    'legacy_reversal',
+    'legacy-reversal:' || p_voucher_id::text,
+    auth.uid()
+  );
+
+  result_value := public.revert_payroll_to_draft_internal(p_voucher_id);
+
+  delete from public.payroll_money_command_contexts command_context
+  where command_context.transaction_id = txid_current()
+    and command_context.tenant_id = tenant_id_value
+    and command_context.command = 'legacy_reversal';
+
+  return result_value;
+end;
+$$;
+
+-- Draft deletion is a server-owned aggregate command. It rejects any evidence
+-- of settlement and removes orphanable draft expenses after voucher-line
+-- cascade. Confirmed/partial/paid vouchers remain immutable through this path.
+create or replace function public.delete_payroll_voucher_draft(
+  p_voucher_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+  voucher_row public.payroll_vouchers%rowtype;
+  expense_ids_value uuid[];
+  deleted_expense_count integer := 0;
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text || ':payroll-settlement',
+      0
+    )
+  );
+
+  select voucher.*
+  into voucher_row
+  from public.payroll_vouchers voucher
+  where voucher.id = p_voucher_id
+    and voucher.tenant_id = tenant_id_value
+  for update;
+
+  if not found then
+    raise exception 'Payroll voucher not found'
+      using errcode = 'P0002';
+  end if;
+
+  if voucher_row.status <> 'draft' then
+    raise exception 'Only a draft payroll voucher can be deleted'
+      using errcode = '22023';
+  end if;
+
+  perform voucher_line.id
+  from public.payroll_voucher_lines voucher_line
+  where voucher_line.voucher_id = p_voucher_id
+    and voucher_line.tenant_id = tenant_id_value
+  order by voucher_line.id
+  for update;
+
+  if exists (
+    select 1
+    from public.payroll_voucher_lines voucher_line
+    join public.expense_payments payment
+      on payment.expense_id = voucher_line.expense_id
+    where voucher_line.voucher_id = p_voucher_id
+  ) or exists (
+    select 1
+    from public.payroll_voucher_lines voucher_line
+    join public.employee_advance_allocations allocation
+      on allocation.voucher_line_id = voucher_line.id
+    where voucher_line.voucher_id = p_voucher_id
+  ) or exists (
+    select 1
+    from public.payroll_statement_decisions decision
+    where decision.voucher_id = p_voucher_id
+  ) then
+    raise exception 'A payroll voucher with settlement evidence cannot be deleted'
+      using errcode = '55000';
+  end if;
+
+  select array_agg(voucher_line.expense_id order by voucher_line.expense_id)
+  into expense_ids_value
+  from public.payroll_voucher_lines voucher_line
+  where voucher_line.voucher_id = p_voucher_id
+    and voucher_line.expense_id is not null;
+
+  delete from public.payroll_vouchers voucher
+  where voucher.id = p_voucher_id
+    and voucher.tenant_id = tenant_id_value;
+
+  if expense_ids_value is not null then
+    delete from public.expenses expense
+    where expense.tenant_id = tenant_id_value
+      and expense.id = any(expense_ids_value);
+    get diagnostics deleted_expense_count = row_count;
+  end if;
+
+  return jsonb_build_object(
+    'voucher_id',
+    p_voucher_id,
+    'deleted',
+    true,
+    'deleted_expense_count',
+    deleted_expense_count
+  );
+end;
+$$;
+
+-- Deletion keeps its operation receipt after the aggregate disappears. Exact
+-- replay is therefore resolved before attempting to load the deleted voucher.
+create or replace function public.delete_payroll_voucher_draft_v2(
+  p_voucher_id uuid,
+  p_operation_key text,
+  p_expected_reconciliation_version bigint
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  tenant_id_value uuid := public.erp_member_tenant_id();
+  operation_key_value text := trim(coalesce(p_operation_key, ''));
+  payload_hash_value text;
+  existing_operation public.payroll_voucher_draft_operations%rowtype;
+  voucher_row public.payroll_vouchers%rowtype;
+  deletion_result_value jsonb;
+  receipt_value jsonb;
+begin
+  if tenant_id_value is null
+     or not public.can_manage_tenant_payroll(tenant_id_value) then
+    raise exception 'Payroll access denied'
+      using errcode = '42501';
+  end if;
+
+  if p_voucher_id is null
+     or operation_key_value !~ '^[A-Za-z0-9:_-]{8,200}$'
+     or p_expected_reconciliation_version is null
+     or p_expected_reconciliation_version < 0 then
+    raise exception 'payroll_voucher_lifecycle_invalid_payload'
+      using errcode = '22023';
+  end if;
+
+  payload_hash_value := encode(
+    extensions.digest(
+      convert_to(
+        jsonb_build_object(
+          'command',
+          'delete_draft',
+          'voucher_id',
+          p_voucher_id,
+          'expected_reconciliation_version',
+          p_expected_reconciliation_version
+        )::text,
+        'UTF8'
+      ),
+      'sha256'
+    ),
+    'hex'
+  );
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      tenant_id_value::text || ':payroll-settlement',
+      0
+    )
+  );
+
+  select draft_operation.*
+  into existing_operation
+  from public.payroll_voucher_draft_operations draft_operation
+  where draft_operation.tenant_id = tenant_id_value
+    and draft_operation.operation_key = operation_key_value
+  for update;
+
+  if found then
+    if existing_operation.payload_hash = payload_hash_value
+       and existing_operation.receipt->>'operation' = 'delete_draft' then
+      return existing_operation.receipt;
+    end if;
+    raise exception 'payroll_voucher_lifecycle_idempotency_conflict'
+      using
+        errcode = 'P0001',
+        detail = 'operation_key already has a different payload';
+  end if;
+
+  select voucher.*
+  into voucher_row
+  from public.payroll_vouchers voucher
+  where voucher.id = p_voucher_id
+    and voucher.tenant_id = tenant_id_value
+  for update;
+
+  if not found then
+    raise exception 'Payroll voucher not found'
+      using errcode = '42501';
+  end if;
+
+  if voucher_row.reconciliation_version
+       <> p_expected_reconciliation_version then
+    raise exception 'payroll_voucher_lifecycle_version_conflict'
+      using
+        errcode = '40001',
+        detail = 'reload the complete payroll voucher before continuing';
+  end if;
+
+  if voucher_row.status <> 'draft' then
+    raise exception 'payroll_voucher_is_not_a_draft'
+      using errcode = '55000';
+  end if;
+
+  deletion_result_value :=
+    public.delete_payroll_voucher_draft(p_voucher_id);
+
+  receipt_value := deletion_result_value || jsonb_build_object(
+    'operation',
+    'delete_draft',
+    'operation_key',
+    operation_key_value,
+    'payload_hash',
+    payload_hash_value,
+    'voucher_id',
+    p_voucher_id,
+    'expected_reconciliation_version',
+    p_expected_reconciliation_version,
+    'deleted_reconciliation_version',
+    voucher_row.reconciliation_version
+  );
+
+  insert into public.payroll_voucher_draft_operations (
+    tenant_id,
+    operation_key,
+    payload_hash,
+    voucher_id,
+    expected_reconciliation_version,
+    receipt,
+    created_by
+  )
+  values (
+    tenant_id_value,
+    operation_key_value,
+    payload_hash_value,
+    null,
+    p_expected_reconciliation_version,
+    receipt_value,
+    auth.uid()
+  );
+
+  return receipt_value;
+end;
+$$;
+
+revoke all on function public.create_payroll_statement_import(
+  text,
+  text,
+  jsonb,
+  jsonb
+) from public, anon, authenticated, service_role;
+revoke all on function public.save_payroll_voucher_draft(
+  uuid,
+  text,
+  bigint,
+  jsonb,
+  jsonb
+) from public, anon, authenticated, service_role;
+revoke all on function public.confirm_payroll_voucher_v2(
+  uuid,
+  text,
+  bigint
+) from public, anon, authenticated, service_role;
+revoke all on function public.pay_payroll_voucher_v2(
+  uuid,
+  text,
+  bigint,
+  jsonb
+) from public, anon, authenticated, service_role;
+revoke all on function public.register_employee_advance_v2(
+  text,
+  uuid,
+  numeric,
+  uuid,
+  uuid,
+  timestamp with time zone,
+  text,
+  text
+) from public, anon, authenticated, service_role;
+revoke all on function public.apply_payroll_statement_reconciliation(
+  uuid,
+  text,
+  jsonb,
+  jsonb,
+  jsonb
+) from public, anon, authenticated, service_role;
+revoke all on function public.delete_payroll_voucher_draft(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.delete_payroll_voucher_draft_v2(
+  uuid,
+  text,
+  bigint
+) from public, anon, authenticated, service_role;
+revoke all on function public.confirm_payroll_voucher(uuid)
+  from public, anon, authenticated, service_role;
+
+grant execute on function public.create_payroll_statement_import(
+  text,
+  text,
+  jsonb,
+  jsonb
+) to authenticated;
+grant execute on function public.save_payroll_voucher_draft(
+  uuid,
+  text,
+  bigint,
+  jsonb,
+  jsonb
+) to authenticated;
+grant execute on function public.confirm_payroll_voucher_v2(
+  uuid,
+  text,
+  bigint
+) to authenticated;
+grant execute on function public.pay_payroll_voucher_v2(
+  uuid,
+  text,
+  bigint,
+  jsonb
+) to authenticated;
+grant execute on function public.register_employee_advance_v2(
+  text,
+  uuid,
+  numeric,
+  uuid,
+  uuid,
+  timestamp with time zone,
+  text,
+  text
+) to authenticated;
+grant execute on function public.apply_payroll_statement_reconciliation(
+  uuid,
+  text,
+  jsonb,
+  jsonb,
+  jsonb
+) to authenticated;
+grant execute on function public.delete_payroll_voucher_draft_v2(
+  uuid,
+  text,
+  bigint
+) to authenticated;
+grant execute on function public.delete_payroll_voucher_draft(uuid)
+  to service_role;
+grant execute on function public.confirm_payroll_voucher(uuid)
+  to service_role;
+
+-- Header plus complete-line draft writes are a single server-owned command.
+-- This closes the insert-after-apply race that exists when a REST line write
+-- can pass its BEFORE guard and wait on the line-to-header AFTER trigger.
+revoke insert, update, delete on table public.payroll_vouchers
+  from public, anon, authenticated, service_role;
+revoke insert, update, delete on table public.payroll_voucher_lines
+  from public, anon, authenticated, service_role;
+revoke insert, update, delete on table public.employee_advances
+  from public, anon, authenticated, service_role;
+revoke insert, update, delete on table public.employee_advance_allocations
+  from public, anon, authenticated, service_role;
+
+-- Money-moving client entrypoints require an idempotency key. The legacy
+-- wrappers remain callable by owner-side routines only.
+revoke all on function public.pay_payroll_voucher(uuid, jsonb)
+  from public, anon, authenticated, service_role;
+revoke all on function public.pay_payroll_voucher(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.register_employee_advance(
+  uuid,
+  numeric,
+  uuid,
+  uuid,
+  timestamp with time zone,
+  text,
+  text
+) from public, anon, authenticated, service_role;
+
+comment on table public.payroll_statement_imports is
+  'Payroll-only review receipt for a statement digest. Raw file bytes, account number, holder, RUT, and balances are rejected from metadata; only a stable local account hash and reviewed ERP account UUID are retained.';
+comment on table public.payroll_statement_import_operations is
+  'Immutable idempotency history for current and superseded OCR review revisions.';
+comment on table public.payroll_statement_rows is
+  'Sensitive payroll-only parser/OCR observations. Bank descriptions can themselves contain identifiers; warning payloads are restricted to short codes. Importing a row has no payment side effect.';
+comment on table public.payroll_statement_decisions is
+  'Explicit reviewed row and cash decisions for one atomic final operation. hold is a terminal retained disposition, not a resumable pause.';
+comment on table public.payroll_statement_allocations is
+  'Immutable evidence linking an applied reconciliation decision to the resulting payroll settlement.';
+comment on table public.payroll_voucher_draft_operations is
+  'Immutable idempotency receipts for atomic payroll draft creation, replacement, confirmation, and deletion.';
+comment on table public.payroll_money_operations is
+  'Immutable idempotency receipts for manual payroll settlements and employee advances. A tenant operation key identifies exactly one money payload.';
+comment on table public.payroll_money_operation_movements is
+  'Tenant-safe immutable links from a manual payroll money receipt to every expense payment or advance allocation it created.';
+comment on function public.save_payroll_voucher_draft(
+  uuid,
+  text,
+  bigint,
+  jsonb,
+  jsonb
+) is
+  'Creates or replaces one draft header plus its complete line snapshot under the payroll settlement lock. Totals and line IDs are server-owned, and retries return the original receipt.';
+comment on function public.confirm_payroll_voucher_v2(
+  uuid,
+  text,
+  bigint
+) is
+  'Confirms one exact draft version and returns an immutable receipt on every exact operation-key replay.';
+comment on function public.pay_payroll_voucher_v2(
+  uuid,
+  text,
+  bigint,
+  jsonb
+) is
+  'Idempotent manual payroll settlement command with exact voucher version, stored payload hash, and movement receipt.';
+comment on function public.register_employee_advance_v2(
+  text,
+  uuid,
+  numeric,
+  uuid,
+  uuid,
+  timestamp with time zone,
+  text,
+  text
+) is
+  'Idempotent employee advance command with a reviewed payment account and stored money receipt.';
+comment on function public.create_payroll_statement_import(
+  text,
+  text,
+  jsonb,
+  jsonb
+) is
+  'Idempotently stores or revises review-only rows for one statement digest. A revision atomically invalidates prior row IDs while still in review and never pays payroll.';
+comment on function public.apply_payroll_statement_reconciliation(
+  uuid,
+  text,
+  jsonb,
+  jsonb,
+  jsonb
+) is
+  'Atomically applies explicit reviewed payroll decisions with stable account-scoped row dedupe, live balances, tenant locks, voucher-version checks, and an exact allow-list for draft vouchers the operator authorized to commit. The receipt returns committed_voucher_ids. A manually confirmed partial debit posts exactly the bank amount and leaves the residual obligation open; bounded overpayment variance remains unresolved and is not a full bank-ledger reconciliation.';
+comment on function public.delete_payroll_voucher_draft(uuid) is
+  'Service-only legacy aggregate deletion used behind the versioned public command.';
+comment on function public.delete_payroll_voucher_draft_v2(
+  uuid,
+  text,
+  bigint
+) is
+  'Deletes one exact locked draft version only without settlement evidence; its immutable receipt survives the aggregate deletion.';
 commit;
+
+-- Tenant-scoped public checkout capabilities and immutable storefront
+-- identity snapshots. Keep the bootstrap mirror byte-identical to the
+-- deployable migration through psql's relative include.
+\ir ../migrations/20260728220000_harden_public_checkout_capabilities.sql
+
+-- Fail-closed, revisioned Viñabike storefront publication ledger.
+\ir ../migrations/20260728230000_add_storefront_publication_contract.sql
+
+-- Transactional Website Builder page-block replacement.
+\ir ../migrations/20260729010000_atomic_replace_page_blocks.sql
+
+-- Payroll beneficiary aliases and tenant-safe, movement-level settlement
+-- evidence, including the bounded applied bank-row observation and page/line
+-- locator used by the canonical Nóminas queue and history surfaces.
+\ir ../migrations/20260729173000_add_payroll_settlement_evidence_read_model.sql
+
+-- Explicit, idempotent beneficiary-alias learning after an authoritative
+-- payroll reconciliation result.
+\ir ../migrations/20260729190000_learn_payroll_beneficiary_alias.sql
+
+-- Server-owned weekly Payroll preparation from canonical Attendance data,
+-- with exact idempotency receipts and one active voucher per tenant/week.
+\ir ../migrations/20260729210000_prepare_payroll_voucher_draft_v2.sql
+
+-- Bounded, payroll-authorized keyset pages for the employee advance ledger
+-- and paid/voided Payroll history headers.
+\ir ../migrations/20260729220000_add_payroll_audit_pagination_read_models.sql
+
+-- Authority-bound Website Builder editor read projection (RPC) plus the
+-- private-row read hardening for website_pages/website_blocks.
+\ir ../migrations/20260730091630_harden_website_editor_reads.sql

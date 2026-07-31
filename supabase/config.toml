@@ -475,7 +475,14 @@ allow_dynamic_registration = false
 
 [functions.google-oauth-callback]
 # Google redirects the browser back here without a Supabase Authorization header.
+# POST start/status requests still revalidate website settings authority inside
+# the function; only the one-time GET callback relies on its expiring state.
 verify_jwt = false
+
+[functions.google-product-diagnostics]
+# Search Console and Merchant operations use server credentials, so the
+# gateway and function both require an authorized ERP caller.
+verify_jwt = true
 
 [functions.admin-user-management]
 # Account administration is an authenticated ERP-only surface. The function
@@ -564,6 +571,11 @@ verify_jwt = true
 [functions.mercadopago-expire-preferences]
 # pg_cron invokes this worker with a dedicated constant-time checked secret.
 # It never accepts a browser JWT and all database writes use service-only RPCs.
+verify_jwt = false
+
+[functions.dispatch-storefront-publication]
+# pg_cron invokes this server-owned dispatcher with a dedicated secret. Browser
+# JWTs and caller-controlled tenant, target, repository, ref or URL are rejected.
 verify_jwt = false
 
 [edge_runtime]

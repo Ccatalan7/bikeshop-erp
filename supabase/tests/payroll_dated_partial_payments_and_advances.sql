@@ -3,7 +3,7 @@ begin;
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
 
-select plan(9);
+select plan(12);
 
 insert into public.tenants (id, shop_name)
 values ('71111111-1111-4111-8111-111111111111', 'Payroll Ledger Test');
@@ -48,6 +48,71 @@ values (
   '72222222-2222-4222-8222-222222222224',
   '73333333-3333-4333-8333-333333333333'
 );
+
+-- Keep deterministic ERP identity evidence even though this legacy ledger
+-- regression intentionally builds its business fixture through privileged SQL.
+-- Client authorization and RPC-only mutation are covered by the reconciliation
+-- contract suite; triggers and accounting projections remain enabled here.
+set local session_replication_role = replica;
+
+insert into auth.users (
+  id,
+  aud,
+  role,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  banned_until,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  created_at,
+  updated_at
+)
+values (
+  '70000000-0000-4000-8000-000000000001',
+  'authenticated',
+  'authenticated',
+  'payroll-accountant@example.invalid',
+  '',
+  now(),
+  null,
+  '{"account_type":"erp_staff"}'::jsonb,
+  '{}'::jsonb,
+  now(),
+  now()
+);
+
+insert into public.user_profiles (
+  id,
+  user_id,
+  tenant_id,
+  role,
+  permissions,
+  is_active
+)
+values (
+  '70000000-0000-4000-8000-000000000002',
+  '70000000-0000-4000-8000-000000000001',
+  '71111111-1111-4111-8111-111111111111',
+  'accountant',
+  '{"access_accounting":true}'::jsonb,
+  true
+);
+
+set local session_replication_role = origin;
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"70000000-0000-4000-8000-000000000001","role":"authenticated"}',
+  true
+);
+select set_config(
+  'request.jwt.claim.sub',
+  '70000000-0000-4000-8000-000000000001',
+  true
+);
+set local role authenticated;
+reset role;
 
 insert into public.payroll_vouchers (
   id, tenant_id, voucher_number, period_start, period_end, period_label,
@@ -123,11 +188,32 @@ values (
   56000
 );
 
--- Tenant bootstrap triggers may set request.jwt.claim.sub for their own work.
--- Clear it before exercising journal-number generation as an admin test.
-select set_config('request.jwt.claim.sub', '', true);
-select public.create_expense_journal_entry(
-  '76666666-6666-4666-8666-666666666666'
+select set_config(
+  'test.payroll.accrual_operation_id',
+  (
+    select entry.operation_id::text
+    from public.journal_entries entry
+    where entry.tenant_id = '71111111-1111-4111-8111-111111111111'
+      and entry.source_module = 'expenses'
+      and entry.source_document_id =
+        '76666666-6666-4666-8666-666666666666'
+  ),
+  true
+);
+
+insert into public.payroll_money_command_contexts (
+  transaction_id,
+  tenant_id,
+  command,
+  operation_key,
+  actor_id
+)
+values (
+  txid_current(),
+  '71111111-1111-4111-8111-111111111111',
+  'advance_registration',
+  'ledger-advance-fixture-0001',
+  '70000000-0000-4000-8000-000000000001'
 );
 
 insert into public.employee_advances (
@@ -143,6 +229,9 @@ values (
   'MBT-ADVANCE-TEST'
 );
 
+delete from public.payroll_money_command_contexts
+where transaction_id = txid_current();
+
 select ok(
   exists (
     select 1 from public.journal_entries
@@ -153,6 +242,21 @@ select ok(
        and total_credit = 20500
   ),
   'advance creates a balanced journal entry on its actual payment date'
+);
+
+insert into public.payroll_money_command_contexts (
+  transaction_id,
+  tenant_id,
+  command,
+  operation_key,
+  actor_id
+)
+values (
+  txid_current(),
+  '71111111-1111-4111-8111-111111111111',
+  'manual_payment',
+  'ledger-allocation-fixture-0001',
+  '70000000-0000-4000-8000-000000000001'
 );
 
 insert into public.employee_advance_allocations (
@@ -166,6 +270,9 @@ values (
   20500,
   '2026-05-31 12:00:00+00'
 );
+
+delete from public.payroll_money_command_contexts
+where transaction_id = txid_current();
 
 select ok(
   exists (
@@ -188,6 +295,70 @@ select ok(
   'advance allocation partially settles the payroll obligation'
 );
 
+select is(
+  (
+    select entry.operation_id::text
+    from public.journal_entries entry
+    where entry.tenant_id = '71111111-1111-4111-8111-111111111111'
+      and entry.source_module = 'expenses'
+      and entry.source_document_id =
+        '76666666-6666-4666-8666-666666666666'
+  ),
+  current_setting('test.payroll.accrual_operation_id'),
+  'advance allocation preserves the immutable accrual operation lineage'
+);
+
+select ok(
+  exists (
+    select 1
+    from public.inventory_accounting_operations operation
+    where operation.tenant_id =
+      '71111111-1111-4111-8111-111111111111'
+      and operation.document_type = 'expense'
+      and operation.document_id =
+        '76666666-6666-4666-8666-666666666666'
+      and operation.action = 'update'
+      and operation.outcome = 'completed'
+      and (operation.before_snapshot->>'amount_paid')::numeric = 0
+      and (
+        operation.context->'expense_after'->>'amount_paid'
+      )::numeric = 20500
+  ),
+  'nested totals-only expense trace completes with the settled header'
+);
+
+select ok(
+  exists (
+    select 1
+    from public.inventory_accounting_checkpoints checkpoint
+    where checkpoint.tenant_id =
+      '71111111-1111-4111-8111-111111111111'
+      and checkpoint.phase = 'source_snapshotted'
+      and checkpoint.entity_type = 'expense'
+      and checkpoint.entity_id =
+        '76666666-6666-4666-8666-666666666666'
+      and (checkpoint.payload->>'cash_payment_total')::numeric = 0
+      and (checkpoint.payload->>'advance_allocation_total')::numeric = 20500
+      and (checkpoint.payload->>'payment_total')::numeric = 20500
+  ),
+  'expense trace records cash and advance settlement evidence separately'
+);
+
+insert into public.payroll_money_command_contexts (
+  transaction_id,
+  tenant_id,
+  command,
+  operation_key,
+  actor_id
+)
+values (
+  txid_current(),
+  '71111111-1111-4111-8111-111111111111',
+  'manual_payment',
+  'ledger-payment-fixture-0001',
+  '70000000-0000-4000-8000-000000000001'
+);
+
 insert into public.expense_payments (
   id, tenant_id, expense_id, payment_method_id, amount, payment_date, reference
 )
@@ -200,6 +371,9 @@ values (
   '2026-06-01 20:03:00+00',
   'MBT-FINAL-TEST'
 );
+
+delete from public.payroll_money_command_contexts
+where transaction_id = txid_current();
 
 select ok(
   exists (
@@ -246,11 +420,29 @@ select ok(
   'salary payable liability is fully cleared after advance allocation and final payment'
 );
 
+insert into public.payroll_money_command_contexts (
+  transaction_id,
+  tenant_id,
+  command,
+  operation_key,
+  actor_id
+)
+values (
+  txid_current(),
+  '71111111-1111-4111-8111-111111111111',
+  'legacy_reversal',
+  'ledger-reversal-fixture-0001',
+  '70000000-0000-4000-8000-000000000001'
+);
+
 delete from public.expense_payments
 where id = '7aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 delete from public.employee_advance_allocations
 where id = '79999999-9999-4999-8999-999999999999';
+
+delete from public.payroll_money_command_contexts
+where transaction_id = txid_current();
 
 select ok(
   exists (
@@ -272,6 +464,10 @@ select ok(
   ),
   'reverting the allocation restores the advance balance'
 );
+
+reset role;
+select set_config('request.jwt.claims', '{}', true);
+select set_config('request.jwt.claim.sub', '', true);
 
 select * from finish();
 

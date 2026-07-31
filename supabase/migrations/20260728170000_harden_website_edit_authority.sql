@@ -1,0 +1,202 @@
+-- Website Builder mutations change the tenant's public storefront and SEO
+-- surface. Tenant membership alone is not sufficient authority: every writer
+-- must pass the same DB-backed edit_settings contract already used by
+-- website_settings.
+
+begin;
+
+create or replace function public.replace_website_category_visibility(
+  p_tenant_id uuid,
+  p_visible_category_ids uuid[] default '{}'::uuid[]
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  v_caller_id uuid := auth.uid();
+  v_caller_tenant_id uuid := public.user_tenant_id();
+  v_requested_ids uuid[];
+  v_before_ids uuid[];
+  v_added_ids uuid[];
+  v_removed_ids uuid[];
+  v_invalid_ids uuid[];
+  v_changed_at timestamptz := clock_timestamp();
+begin
+  if v_caller_id is null
+     or p_tenant_id is null
+     or v_caller_tenant_id is distinct from p_tenant_id
+     or not public.can_edit_tenant_settings(p_tenant_id) then
+    raise exception 'website_category_publication_tenant_forbidden'
+      using errcode = '42501';
+  end if;
+
+  if array_position(p_visible_category_ids, null) is not null then
+    raise exception 'website_category_publication_invalid_category'
+      using errcode = '22023';
+  end if;
+
+  select coalesce(
+    array_agg(requested.category_id order by requested.category_id),
+    '{}'::uuid[]
+  )
+  into v_requested_ids
+  from (
+    select distinct category_id
+    from unnest(
+      coalesce(p_visible_category_ids, '{}'::uuid[])
+    ) as requested_id(category_id)
+  ) requested;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      'website_category_publication:' || p_tenant_id::text,
+      0
+    )
+  );
+
+  select coalesce(
+    array_agg(requested.category_id order by requested.category_id),
+    '{}'::uuid[]
+  )
+  into v_invalid_ids
+  from unnest(v_requested_ids) requested(category_id)
+  left join public.product_categories category
+    on category.id = requested.category_id
+   and category.tenant_id = p_tenant_id
+   and category.is_active is true
+  where category.id is null;
+
+  if cardinality(v_invalid_ids) > 0 then
+    raise exception 'website_category_publication_invalid_category'
+      using errcode = '22023';
+  end if;
+
+  select coalesce(
+    array_agg(category.id order by category.id),
+    '{}'::uuid[]
+  )
+  into v_before_ids
+  from public.product_categories category
+  where category.tenant_id = p_tenant_id
+    and category.show_on_website is true;
+
+  select coalesce(
+    array_agg(category_id order by category_id),
+    '{}'::uuid[]
+  )
+  into v_added_ids
+  from (
+    select unnest(v_requested_ids) as category_id
+    except
+    select unnest(v_before_ids) as category_id
+  ) added;
+
+  select coalesce(
+    array_agg(category_id order by category_id),
+    '{}'::uuid[]
+  )
+  into v_removed_ids
+  from (
+    select unnest(v_before_ids) as category_id
+    except
+    select unnest(v_requested_ids) as category_id
+  ) removed;
+
+  update public.product_categories category
+  set show_on_website = category.id = any(v_requested_ids),
+      updated_at = v_changed_at
+  where category.tenant_id = p_tenant_id
+    and category.show_on_website is distinct from (
+      category.id = any(v_requested_ids)
+    );
+
+  if cardinality(v_added_ids) > 0 or cardinality(v_removed_ids) > 0 then
+    insert into public.user_activity_log (
+      tenant_id,
+      user_id,
+      action,
+      details,
+      performed_by,
+      created_at
+    )
+    values (
+      p_tenant_id,
+      v_caller_id,
+      'website_category_publication_replaced',
+      jsonb_build_object(
+        'before_ids', to_jsonb(v_before_ids),
+        'after_ids', to_jsonb(v_requested_ids),
+        'added_ids', to_jsonb(v_added_ids),
+        'removed_ids', to_jsonb(v_removed_ids)
+      ),
+      v_caller_id,
+      v_changed_at
+    );
+  end if;
+
+  return jsonb_build_object(
+    'visible_ids', to_jsonb(v_requested_ids),
+    'added_ids', to_jsonb(v_added_ids),
+    'removed_ids', to_jsonb(v_removed_ids),
+    'changed_at', v_changed_at
+  );
+end;
+$$;
+
+revoke all on function public.replace_website_category_visibility(uuid, uuid[])
+  from public, anon;
+grant execute on function public.replace_website_category_visibility(uuid, uuid[])
+  to authenticated;
+
+drop policy if exists "website_pages_insert" on public.website_pages;
+drop policy if exists "website_pages_update" on public.website_pages;
+drop policy if exists "website_pages_delete" on public.website_pages;
+
+create policy "website_pages_insert"
+on public.website_pages
+for insert
+to authenticated
+with check (public.can_edit_tenant_settings(tenant_id));
+
+create policy "website_pages_update"
+on public.website_pages
+for update
+to authenticated
+using (public.can_edit_tenant_settings(tenant_id))
+with check (public.can_edit_tenant_settings(tenant_id));
+
+create policy "website_pages_delete"
+on public.website_pages
+for delete
+to authenticated
+using (
+  public.can_edit_tenant_settings(tenant_id)
+  and is_system = false
+);
+
+drop policy if exists "website_blocks_insert" on public.website_blocks;
+drop policy if exists "website_blocks_update" on public.website_blocks;
+drop policy if exists "website_blocks_delete" on public.website_blocks;
+
+create policy "website_blocks_insert"
+on public.website_blocks
+for insert
+to authenticated
+with check (public.can_edit_tenant_settings(tenant_id));
+
+create policy "website_blocks_update"
+on public.website_blocks
+for update
+to authenticated
+using (public.can_edit_tenant_settings(tenant_id))
+with check (public.can_edit_tenant_settings(tenant_id));
+
+create policy "website_blocks_delete"
+on public.website_blocks
+for delete
+to authenticated
+using (public.can_edit_tenant_settings(tenant_id));
+
+commit;
