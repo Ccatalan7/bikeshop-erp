@@ -340,9 +340,33 @@ class PayrollVisualTokens {
 
   // ── Avatars / chrome details ─────────────────────────────────────────────
 
-  Color get avatarCyan => roles?.avatarA ?? scheme.primary;
-  Color get avatarSky => roles?.avatarB ?? scheme.secondary;
-  Color get avatarAmber => roles?.avatarD ?? scheme.tertiary;
+  /// Los tres tonos de avatar.
+  ///
+  /// **En oscuro pierden su matiz a propósito** (turno 7 de Design). El avatar
+  /// cyan y el acento de Pacific son casi el mismo color, así que una persona
+  /// parecía un control: la identidad la tiene que llevar la inicial, no el
+  /// círculo. En oscuro son tres pasos neutros del mismo tono del preset, con
+  /// croma casi nulo; en claro se conservan los matices del turno 4.
+  Color get avatarCyan =>
+      _isDark ? _neutralAvatar(0.46) : (roles?.avatarA ?? scheme.primary);
+  Color get avatarSky =>
+      _isDark ? _neutralAvatar(0.40) : (roles?.avatarB ?? scheme.secondary);
+  Color get avatarAmber =>
+      _isDark ? _neutralAvatar(0.34) : (roles?.avatarD ?? scheme.tertiary);
+
+  bool get _isDark => scheme.brightness == Brightness.dark;
+
+  /// Un paso neutro derivado del tono del preset. `lightness` es el valor que
+  /// Design especifica por paso (0.46 / 0.40 / 0.34); el croma se aplasta para
+  /// que el círculo nunca compita con un control accionable.
+  Color _neutralAvatar(double lightness) {
+    final hsl = HSLColor.fromColor(brand);
+    return hsl
+        .withSaturation((hsl.saturation * 0.12).clamp(0.0, 0.12))
+        .withLightness(lightness)
+        .toColor();
+  }
+
   Color get groupLabor => roles?.avatarC ?? scheme.secondary;
   Color get railAttentionDot => roles?.shell.attention ?? scheme.error;
   Color get dirtyTabDot => roles?.shell.dirty ?? scheme.tertiary;
@@ -428,8 +452,15 @@ class PayrollVisualTokens {
   TextStyle get numBar =>
       _mono(size: 21, weight: FontWeight.w700, height: 1.15, color: ink);
 
-  TextStyle avatarInitials(double size) =>
-      _body(size: size, weight: FontWeight.w600, height: 1, color: shell);
+  /// En oscuro la inicial ES la identidad —el círculo perdió su matiz— así que
+  /// tiene que leerse. La tinta fija `shell` es navy casi negro: sobre un
+  /// avatar neutro oscuro desaparecería. Se elige contra el fondo real.
+  TextStyle avatarInitials(double size) => _body(
+        size: size,
+        weight: FontWeight.w600,
+        height: 1,
+        color: _isDark ? onShell : shell,
+      );
 
   TextStyle railLogo(double size, {Color? color}) => _heading(
         size: size,
