@@ -1,0 +1,201 @@
+#!/bin/bash
+# Owner of the canonical macOS debug session for agent-driven verification.
+#
+#   native_session.sh start     # launch `flutter run -d macos` inside screen
+#   native_session.sh status    # session + app + VM service state
+#   native_session.sh reload    # hot reload  (r)  ~2-5 s
+#   native_session.sh restart   # hot restart (R)  ~3-5 s
+#   native_session.sh log [n]   # tail the run log
+#   native_session.sh errors    # only compile/exception lines
+#   native_session.sh doctor    # WHY it is not responding (wedged compiler…)
+#   native_session.sh stop      # end the session it owns
+#
+# Read docs/development/AGENT_MACOS_APP_CONTROL.md before using this.
+#
+# Hard rules encoded here (they cost real time when broken):
+#   - Only ONE Flutter session may be alive. `start` refuses if one exists.
+#   - `flutter run` must keep a TTY. Piping it to `tee` silently disables the
+#     single-key commands, so logging goes through screen's own logfile.
+#   - Keystrokes need an explicit window: `screen -S <s> -p 0 -X stuff`.
+#     Without `-p 0` the key is swallowed and the reload never happens.
+#   - This script never pattern-kills Flutter/Dart; it only stops the exact
+#     screen session it created.
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT" || exit 1
+
+SESSION="${NATIVE_SESSION_NAME:-payroll}"
+RUN_DIR="$REPO_ROOT/.tmp/native-session"
+LOG="${NATIVE_SESSION_LOG:-$RUN_DIR/run.log}"
+SCREENRC="$RUN_DIR/screenrc"
+FLUTTER="$REPO_ROOT/.fvm/flutter_sdk/bin/flutter"
+TARGET="${NATIVE_SESSION_TARGET:-lib/main.dart}"
+DEBUG_APP_GLOB="build/macos/Build/Products/Debug/vinabike_erp.app/Contents/MacOS/vinabike_erp"
+
+app_pid() { pgrep -f "$DEBUG_APP_GLOB" | head -1; }
+# `screen -ls` exits 1 even when sessions exist, so under `set -o pipefail` a
+# direct `screen -ls | grep -q` pipeline always reports "no session" — which
+# silently disabled reload/restart/stop AND let `start` open a second session.
+# Capture the listing first so only grep decides the status.
+session_alive() {
+  local listing
+  listing="$(screen -ls 2>/dev/null | tr -d "\r")"
+  printf '%s\n' "$listing" | grep -q "\.${SESSION}[[:space:]]"
+}
+
+vm_uri() {
+  grep -a "Dart VM Service on macOS is available at:" "$LOG" 2>/dev/null |
+    tail -1 | sed 's/.*at: //' | tr -d ' \r\n'
+}
+
+# `grep -c` prints the count but exits 1 when it is zero, so the old
+# `grep -ac … || echo 0` emitted TWO lines ("0\n0") and every numeric test
+# died with "integer expression expected". Let grep print, ignore its status.
+marker_count() { # marker_count <pattern>
+  local n
+  n="$(grep -ac "$1" "$LOG" 2>/dev/null || true)"
+  printf '%s' "${n:-0}"
+}
+
+send_key() {
+  session_alive || { echo "no hay sesión '$SESSION'; usa start" >&2; return 1; }
+  screen -S "$SESSION" -p 0 -X stuff "$1"
+}
+
+wait_for() { # wait_for <regex> <seconds>
+  local pattern="$1" limit="$2" start
+  start=$(date +%s)
+  until grep -aq "$pattern" "$LOG" 2>/dev/null; do
+    [ $(( $(date +%s) - start )) -ge "$limit" ] && return 1
+    sleep 1
+  done
+  return 0
+}
+
+case "${1:-}" in
+  start)
+    if session_alive; then
+      echo "ya existe la sesión '$SESSION'. Usa reload/restart, o stop primero." >&2
+      exit 1
+    fi
+    other="$(app_pid)"
+    if [ -n "$other" ]; then
+      echo "hay una app debug viva (pid $other) sin sesión screen." >&2
+      echo "ciérrala desde su ventana (o desde VS Code) antes de continuar." >&2
+      exit 1
+    fi
+    mkdir -p "$RUN_DIR"
+    : > "$LOG"
+    # screen 4.x (el de macOS) no acepta -Logfile: el destino se declara aquí.
+    printf 'logfile %s\nlogfile flush 1\ndeflog on\n' "$LOG" > "$SCREENRC"
+    screen -c "$SCREENRC" -dmS "$SESSION" "$FLUTTER" run -d macos -t "$TARGET"
+    echo "compilando… (primer arranque ~1-2 min, luego los reload son de segundos)"
+    if wait_for "Flutter run key commands" 900; then
+      echo "app arriba · pid $(app_pid) · VM $(vm_uri)"
+    else
+      echo "no llegó a arrancar; revisa: $0 errors" >&2
+      exit 1
+    fi
+    ;;
+
+  status)
+    session_alive && echo "screen: viva ($SESSION)" || echo "screen: no existe"
+    pid="$(app_pid)"
+    [ -n "$pid" ] && echo "app:    pid $pid" || echo "app:    no corre"
+    uri="$(vm_uri)"
+    [ -n "$uri" ] && echo "vm:     $uri" || echo "vm:     sin URI en el log"
+    ;;
+
+  reload|restart)
+    key='r'; label='Reloaded'
+    [ "$1" = "restart" ] && { key='R'; label='Restarted application in'; }
+    before=$(marker_count "$label")
+    send_key "$key" || exit 1
+    start=$(date +%s)
+    while [ "$(marker_count "$label")" -le "$before" ]; do
+      if [ $(( $(date +%s) - start )) -ge 90 ]; then
+        # "sin respuesta" no dice nada: la causa hay que nombrarla. Las tres
+        # que existen se distinguen sin ambigüedad desde acá.
+        echo "el reload no confirmó en 90 s. Causa:" >&2
+        "$0" doctor >&2
+        exit 1
+      fi
+      sleep 1
+    done
+    grep -a "$label" "$LOG" | tail -1
+    ;;
+
+  # Por qué no responde la sesión. Existe porque el 2026-07-31 un compilador
+  # trabado se leyó como "el dueño tiene tomada la sesión" y se perdió una
+  # ronda entera mirando el síntoma equivocado.
+  doctor)
+    session_alive || { echo "  · no hay sesión '$SESSION'. Usa: $0 start"; exit 0; }
+    pid="$(app_pid)"
+    [ -n "$pid" ] || echo "  · la app no corre aunque el screen existe: $0 stop && $0 start"
+
+    # 1. ¿El log sigue vivo? screen escribe cada segundo mientras haya salida.
+    if [ -f "$LOG" ]; then
+      age=$(( $(date +%s) - $(stat -f %m "$LOG") ))
+      if [ "$age" -gt 60 ]; then
+        echo "  · el log lleva ${age}s sin crecer (última línea: $(tail -c 200 "$LOG" | tr -d '\r' | tail -1))"
+      fi
+    fi
+
+    # 2. ¿Hay un reload colgado? Se reconoce por el log: la última línea quedó
+    #    en el spinner y nunca llegó su "Reloaded".
+    #
+    #    Este diagnóstico es de SÓLO LECTURA a propósito. La primera versión
+    #    pedía un `reloadSources` al VM service para "comprobar", y eso disparaba
+    #    un segundo reload encima del que ya corría: los dos morían con
+    #    "Error while starting Kernel isolate task" y el doctor reportaba
+    #    trabado un compilador que él mismo acababa de trabar. **Nunca
+    #    diagnostiques con una llamada que muta.**
+    last="$(tail -c 400 "$LOG" 2>/dev/null | tr -d '\r' | tail -1)"
+    case "$last" in
+      *"Performing hot reload"*|*"Performing hot restart"*)
+        echo "  · hay un reload EN CURSO o colgado (el log terminó en el spinner)."
+        echo "    NO mandes otro: dos reloads simultáneos se matan entre sí."
+        echo "    Espera, y si no avanza en ~2 min: $0 stop && $0 start" ;;
+    esac
+
+    uri="$(vm_uri)"
+    if [ -n "$uri" ]; then
+      # Sólo lectura: confirma que la app respira, sin tocar el compilador.
+      if python3 - "$uri" <<'PY' >/dev/null 2>&1
+import json, sys, urllib.request
+uri = sys.argv[1].strip().rstrip('/')
+with urllib.request.urlopen(f"{uri}/getVM", timeout=15) as response:
+    json.load(response)['result']['isolates'][0]['id']
+PY
+      then
+        echo "  · el VM service responde (la app está viva)"
+      else
+        echo "  · el VM service no responde: $0 stop && $0 start"
+      fi
+    fi
+
+    # 3. ¿Hay alguien mirando? Informativo: NO impide recargar, y confundirlo
+    #    con la causa fue justamente el error del 31/07.
+    if screen -ls 2>/dev/null | tr -d '\r' | grep -q "\.${SESSION}[[:space:]].*Attached"; then
+      echo "  · hay un 'screen -x $SESSION' abierto (informativo: no bloquea el reload)"
+    fi
+    ;;
+
+  log)   tail -n "${2:-40}" "$LOG" ;;
+  errors)
+    grep -aiE "Compiler message|^lib/.*(Error|error:)|EXCEPTION|Unhandled|overflowed" \
+      "$LOG" 2>/dev/null | tail -n "${2:-20}"
+    ;;
+
+  stop)
+    session_alive || { echo "no hay sesión '$SESSION'"; exit 0; }
+    screen -S "$SESSION" -X quit
+    echo "sesión '$SESSION' cerrada"
+    ;;
+
+  *)
+    sed -n '2,20p' "$0"
+    exit 1
+    ;;
+esac
