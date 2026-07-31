@@ -77,7 +77,9 @@ void main() {
     expect(
       workflow,
       contains(
-        "if: \${{ github.event_name == 'workflow_dispatch' && "
+        "if: \${{ always() && !cancelled() && "
+        "needs.build.result == 'success' && "
+        "github.event_name == 'workflow_dispatch' && "
         "inputs.release_target != 'android' && "
         "inputs.publish_release == true }}",
       ),

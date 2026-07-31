@@ -319,7 +319,7 @@ jobs:
           retention-days: 7
 
   publish:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release == true }}
+    if: ${{ always() && !cancelled() && needs.build.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.publish_release == true }}
     needs: build
     name: Publish verified coworker update
     runs-on: ubuntu-latest

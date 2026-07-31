@@ -811,6 +811,14 @@ run once, but must not dispatch an unbounded replacement. Standalone macOS or
 Windows workflow dispatches carry no qualification proof and therefore retain
 their own complete integrity fallback.
 
+2026-07-31 correction: qualification mode deliberately leaves the workflow's
+internal integrity fallback job skipped. A protected desktop publish job after
+the build must therefore use `always() && !cancelled()`, require
+`needs.build.result == 'success'`, and then evaluate the explicit publish
+request. Without that transitive-skip guard, GitHub can report the workflow as
+successful after packaging while silently skipping the Production publication
+job. Keep this contract frozen for both macOS and Windows.
+
 Do not collapse the platform security boundaries merely because their tasks run
 together. `MACOS_UPDATE_SIGNING_KEY`, the Android JKS/passwords, and
 `SUPABASE_RELEASE_SECRET` remain available only to their protected GitHub
