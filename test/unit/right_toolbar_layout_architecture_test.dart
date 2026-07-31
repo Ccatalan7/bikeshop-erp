@@ -19,7 +19,11 @@ void main() {
     );
     expect(
       mainSource,
-      contains('Expanded(child: _buildWorkspaceStack())'),
+      contains('Expanded(child: workspaceStack)'),
+    );
+    expect(
+      mainSource,
+      contains('padding: const EdgeInsets.only(top: topInset)'),
     );
     expect(
       mainSource,
@@ -29,6 +33,10 @@ void main() {
           multiLine: true,
         ),
       ),
+    );
+    expect(
+      mainSource,
+      contains('const topInset = WorkspaceShellScope.workspaceBarHeight'),
     );
     expect(registry, contains('Right toolbar shell'));
     expect(registry, contains('stretch the hosting row vertically'));

@@ -13,7 +13,8 @@ void main() {
       }
     });
 
-    test('allows an explicitly delegated permission without widening roles', () {
+    test('allows an explicitly delegated permission without widening roles',
+        () {
       expect(
         _profile(
           role: 'employee',
@@ -22,6 +23,29 @@ void main() {
         isTrue,
       );
       expect(_profile(role: 'employee').canManageUsers, isFalse);
+    });
+  });
+
+  group('CurrentUserProfile.canAccessAccounting', () {
+    test('matches the canonical accounting authority roles', () {
+      for (final role in const ['owner', 'admin', 'manager', 'accountant']) {
+        expect(
+          _profile(role: role).canAccessAccounting,
+          isTrue,
+          reason: '$role must reach the canonical accounting boundary',
+        );
+      }
+    });
+
+    test('allows only an explicitly delegated non-accounting role', () {
+      expect(
+        _profile(
+          role: 'mechanic',
+          permissions: const {'access_accounting': true},
+        ).canAccessAccounting,
+        isTrue,
+      );
+      expect(_profile(role: 'mechanic').canAccessAccounting, isFalse);
     });
   });
 }

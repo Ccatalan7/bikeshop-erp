@@ -18,6 +18,7 @@ void main() {
     ).readAsStringSync();
     final password = File('lib/shared/services/self_password_service.dart')
         .readAsStringSync();
+    final main_ = File('lib/main.dart').readAsStringSync();
 
     expect(router, contains("path: '/profile'"));
     expect(router, contains('erp.MyProfilePage()'));
@@ -30,6 +31,27 @@ void main() {
     expect(service, contains("rpc('get_my_erp_profile')"));
     expect(service, contains("'update_my_employee_contact'"));
     expect(service, contains("'emergency_contact_phone'"));
+
+    // Labor self-service is scoped by the proven employee link, and the
+    // profile is its only ERP host. Worker Space stays a separate principal.
+    final selfService = File(
+      'lib/shared/services/employee_self_service_service.dart',
+    ).readAsStringSync();
+    final profilePage =
+        File('lib/shared/pages/my_profile_page.dart').readAsStringSync();
+    expect(selfService, contains('EmployeeLinkState.linked'));
+    expect(selfService, contains("rpc(\n      'get_my_employee_self_service'"));
+    expect(selfService, isNot(contains(".from('planned_shifts')")));
+    expect(selfService, isNot(contains(".from('attendances')")));
+    expect(selfService, isNot(contains(".from('payroll_vouchers')")));
+    expect(selfService, isNot(contains("'p_tenant_id'")));
+    expect(selfService, isNot(contains("'p_employee_id'")));
+    expect(selfService, isNot(contains('worker_portal_employee_id')));
+    expect(profilePage, isNot(contains('.toLocal()')));
+    expect(profilePage, contains('attendance.workedDurationInWeek'));
+    expect(profilePage, contains('EmployeeSelfServiceService'));
+    expect(profilePage, contains('_visibleSections'));
+    expect(main_, contains('EmployeeSelfServiceService'));
     expect(password, contains('reauthenticate()'));
     expect(password, contains('nonce:'));
     expect(password, contains('SignOutScope.others'));

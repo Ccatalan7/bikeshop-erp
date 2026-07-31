@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../support/library_source.dart';
 
 void main() {
   test('product form keeps unclassified drafts but fails closed on publication',
@@ -39,9 +40,7 @@ void main() {
     final catalog = File(
       'lib/modules/website/pages/product_website_visibility_page.dart',
     ).readAsStringSync();
-    final websiteService = File(
-      'lib/modules/website/services/website_service.dart',
-    ).readAsStringSync();
+    final websiteService = readLibrarySource('lib/modules/website/services/website_service.dart');
     final bulkService = File(
       'lib/modules/inventory/services/bulk_product_edit_service.dart',
     ).readAsStringSync();

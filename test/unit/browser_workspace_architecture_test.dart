@@ -39,10 +39,32 @@ void main() {
     final releaseEntitlements = File(
       'macos/Runner/Release.entitlements',
     ).readAsStringSync();
+    final macosProject = File(
+      'macos/Runner.xcodeproj/project.pbxproj',
+    ).readAsStringSync();
+    final iosDebugEntitlements = File(
+      'ios/Runner/DebugProfile.entitlements',
+    ).readAsStringSync();
+    final iosReleaseEntitlements = File(
+      'ios/Runner/Release.entitlements',
+    ).readAsStringSync();
+    final iosProject = File(
+      'ios/Runner.xcodeproj/project.pbxproj',
+    ).readAsStringSync();
+    final androidManifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
     final app = File('lib/main.dart').readAsStringSync();
     final registry = File(
       'docs/architecture/canonical-ui-surfaces.md',
     ).readAsStringSync();
+    final emptyKeychainAccessGroups = RegExp(
+      r'<key>keychain-access-groups</key>\s*'
+      r'<array(?:\s*/>|\s*>\s*</array>)',
+    );
+    final macosSandboxEnabled = RegExp(
+      r'<key>com\.apple\.security\.app-sandbox</key>\s*<true\s*/>',
+    );
 
     expect(profile, contains('userDataFolder: userDataDirectory'));
     expect(profile, contains('_windowsEnvironments.putIfAbsent'));
@@ -95,8 +117,38 @@ void main() {
     );
     expect(supplierCredentialResolver, contains("startsWith('www.')"));
     expect(pubspec, contains('flutter_secure_storage: ^10.3.1'));
+    expect(androidManifest, contains('android:allowBackup="false"'));
+    expect(androidManifest, isNot(contains('android:allowBackup="true"')));
     expect(debugEntitlements, isNot(contains('keychain-access-groups')));
     expect(releaseEntitlements, isNot(contains('keychain-access-groups')));
+    expect(iosDebugEntitlements, matches(emptyKeychainAccessGroups));
+    expect(iosReleaseEntitlements, matches(emptyKeychainAccessGroups));
+    expect(debugEntitlements, matches(macosSandboxEnabled));
+    expect(releaseEntitlements, matches(macosSandboxEnabled));
+    expect(
+      RegExp(
+        r'CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile\.entitlements;',
+      ).allMatches(macosProject),
+      hasLength(2),
+    );
+    expect(
+      RegExp(
+        r'CODE_SIGN_ENTITLEMENTS = Runner/Release\.entitlements;',
+      ).allMatches(macosProject),
+      hasLength(1),
+    );
+    expect(
+      RegExp(
+        r'CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile\.entitlements;',
+      ).allMatches(iosProject),
+      hasLength(2),
+    );
+    expect(
+      RegExp(
+        r'CODE_SIGN_ENTITLEMENTS = Runner/Release\.entitlements;',
+      ).allMatches(iosProject),
+      hasLength(1),
+    );
     expect(
       browser,
       isNot(contains('onPermissionRequest: (controller, request) async {')),

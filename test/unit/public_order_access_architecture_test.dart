@@ -2,11 +2,13 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/library_source.dart';
+
 String source(String path) => File(path).readAsStringSync();
 
 void main() {
   test('public checkout and confirmation share the opaque token contract', () {
-    final service = source(
+    final service = readLibrarySource(
       'lib/modules/website/services/website_service.dart',
     );
     final checkout = source('lib/public_store/pages/checkout_page.dart');
@@ -18,18 +20,26 @@ void main() {
     expect(service, contains('get_public_online_order_by_access_token'));
     expect(service, isNot(contains("rpc('get_public_online_order',")));
 
-    final saveToken = checkout.indexOf('PublicOrderAccessTokenStore.save(');
-    final createPreference = checkout.indexOf(
+    // Whitespace-normalized so the ordering contract never depends on
+    // formatter line breaks.
+    final normalizedCheckout = checkout.replaceAll(RegExp(r'\s+'), ' ');
+    final saveToken =
+        normalizedCheckout.indexOf('await store.saveOrderAccess(');
+    final createPreference = normalizedCheckout.indexOf(
       'mercadopagoService.createPreference(',
     );
-    final confirmationNavigation = checkout.indexOf(
-      "context.go('/tienda/pedido/\$orderId')",
+    // Confirmation navigation goes through the canonical storefront
+    // navigation boundary, not a raw context.go.
+    final confirmationNavigation = normalizedCheckout.indexOf(
+      'await PublicStoreLayout.navigateToHref( context, '
+      "'/tienda/pedido/\${checkoutAccess.orderId}',",
     );
     expect(saveToken, greaterThan(0));
     expect(createPreference, greaterThan(saveToken));
     expect(confirmationNavigation, greaterThan(saveToken));
 
-    expect(confirmation, contains('PublicOrderAccessTokenStore.read'));
+    expect(confirmation, contains('readOrderAccess('));
+    expect(confirmation, contains('saveOrderAccess('));
     expect(confirmation, contains('orderAccessToken:'));
   });
 
@@ -37,7 +47,7 @@ void main() {
     final confirmation = source(
       'lib/public_store/pages/order_confirmation_page.dart',
     );
-    final layout = source(
+    final layout = readLibrarySource(
       'lib/public_store/widgets/public_store_layout.dart',
     );
 
@@ -168,7 +178,15 @@ void main() {
     expect(registry, contains('| Public checkout access |'));
     expect(registry, contains('| Public order confirmation |'));
     expect(registry, contains('| Public Mercado Pago authorization |'));
-    expect(registry, contains('The bearer token never enters route/query'));
+    expect(
+      registry,
+      matches(
+        RegExp(
+          r'bearer token[^.\n]*never enters route/query',
+          caseSensitive: false,
+        ),
+      ),
+    );
   });
 
   test('cancelled public orders cannot masquerade as pending payments', () {

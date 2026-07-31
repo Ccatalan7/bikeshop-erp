@@ -51,6 +51,9 @@ void main() {
       {
         'lib/modules/settings/services/company_profile_service.dart',
         'lib/public_store/widgets/public_store_layout.dart',
+        // Destination audit reads its own tenant's subdomain/custom_domain
+        // with .eq('id', tenantId) — an authenticated own-tenant surface.
+        'lib/modules/website/services/website_destination_audit_service.dart',
         'lib/shared/services/current_user_profile_service.dart',
         'lib/shared/services/tenant_detection_service.dart',
         'lib/shared/services/tenant_service.dart',

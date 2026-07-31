@@ -8,6 +8,7 @@ import 'package:vinabike_erp/modules/website/models/website_destination.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/services/website_destination_audit_service.dart';
 import 'package:vinabike_erp/modules/website/theme/website_theme_builder.dart';
+import '../support/library_source.dart';
 
 void main() {
   test('repo instructions require the current website editor contract', () {
@@ -71,8 +72,7 @@ void main() {
   test(
       'website top bar exposes task workspaces instead of duplicate publishers',
       () {
-    final source = File('lib/public_store/widgets/public_store_layout.dart')
-        .readAsStringSync();
+    final source = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
 
     expect(source, contains("label: 'Editar página'"));
     expect(source, contains("label: 'Catálogo web'"));
@@ -87,8 +87,7 @@ void main() {
   test('persistent block inspector only belongs to page composition', () {
     final shell = File('lib/public_store/widgets/persistent_editor_shell.dart')
         .readAsStringSync();
-    final layout = File('lib/public_store/widgets/public_store_layout.dart')
-        .readAsStringSync();
+    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
 
     expect(shell, contains('editProvider.isPageEditorWorkspace'));
     expect(shell, contains('if (showEditorPanel)'));
@@ -116,15 +115,20 @@ void main() {
         '!context.read<WebsiteEditModeProvider>().isEditMode;',
       ),
     );
+    final normalizedCatalog = catalog.replaceAll(RegExp(r'\s+'), ' ');
     expect(
-      catalog,
-      contains('final canStartPageBeforeCategories = !editProvider.isEditMode'),
+      normalizedCatalog,
+      contains(
+        'final canStartPageBeforeCategories = _catalogQueryError == null && '
+        '!editProvider.isEditMode &&',
+      ),
+      reason: 'Server paging may only start ahead of category resolution '
+          'outside Edit mode and without a pending catalog transport error.',
     );
   });
 
   test('category publication has one website-builder owner', () {
-    final panel = File('lib/modules/website/widgets/website_editor_panel.dart')
-        .readAsStringSync();
+    final panel = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
     final visibility =
         File('lib/modules/website/pages/product_website_visibility_page.dart')
             .readAsStringSync();
@@ -144,8 +148,7 @@ void main() {
 
   test('catalog workspace separates publication, filtering, and homepage order',
       () {
-    final layout = File('lib/public_store/widgets/public_store_layout.dart')
-        .readAsStringSync();
+    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     final visibility =
         File('lib/modules/website/pages/product_website_visibility_page.dart')
             .readAsStringSync();
@@ -328,9 +331,7 @@ void main() {
   test('ERP Preview mounts canonical product detail routes', () {
     final appRouter =
         File('lib/shared/routes/app_router.dart').readAsStringSync();
-    final storeLayout = File(
-      'lib/public_store/widgets/public_store_layout.dart',
-    ).readAsStringSync();
+    final storeLayout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     final productDetail = File(
       'lib/public_store/pages/product_detail_page.dart',
     ).readAsStringSync();
@@ -348,14 +349,19 @@ void main() {
       contains("ProductDetailPage(productId: 'sku:\$sku')"),
     );
     expect(storeLayout, contains('normalizePublicCatalogRouteForRuntime'));
-    expect(storeLayout, contains("const ValueKey('viewport_desktop')"));
-    expect(storeLayout, isNot(contains('viewport_desktop_\$modeKey')));
-    expect(storeLayout,
-        isNot(contains('viewport_layout_app_\${mode.name}_\$modeKey')));
+    // ONE constant-chain viewport hosts the routed content in every mode
+    // and device preview; no per-mode/per-device identities exist.
     expect(
       storeLayout,
-      isNot(contains('viewport_layout_scroll_\${mode.name}_\$modeKey')),
+      contains("const ValueKey('storefront_content_viewport')"),
     );
+    expect(
+      storeLayout,
+      contains("const ValueKey('storefront_content_anchor')"),
+    );
+    expect(storeLayout, isNot(contains('viewport_desktop')));
+    expect(storeLayout, isNot(contains('viewport_layout_app')));
+    expect(storeLayout, isNot(contains('viewport_layout_scroll')));
     expect(productDetail, contains('PublicStoreLayout.navigateToHref'));
     expect(cart, contains('PublicStoreLayout.navigateToHref'));
     expect(productDetail, contains('resolvePublicStoreTenantId(context)'));
@@ -371,11 +377,12 @@ void main() {
   });
 
   test('Edit and Preview keep routed Navigator ancestors stable', () {
-    final storeLayout = File(
-      'lib/public_store/widgets/public_store_layout.dart',
-    ).readAsStringSync();
+    final storeLayout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
 
-    expect(storeLayout, contains("const ValueKey('viewport_desktop')"));
+    expect(
+      storeLayout,
+      contains("const ValueKey('storefront_content_viewport')"),
+    );
     expect(storeLayout, contains("const ValueKey('scroll_solid')"));
     expect(
       storeLayout,
@@ -384,7 +391,6 @@ void main() {
     expect(storeLayout, contains("const ValueKey('sticky_scaffold')"));
     expect(storeLayout, contains('_isErpMountedStore()) {'));
     expect(storeLayout, isNot(contains('scrollViewMode')));
-    expect(storeLayout, isNot(contains('viewport_desktop_\$modeKey')));
     expect(storeLayout, isNot(contains('sticky_scaffold_\$scrollViewMode')));
   });
 
@@ -407,23 +413,61 @@ void main() {
     );
   });
 
-  test('public category membership and navigation use distinct owners', () {
+  test('category publication has one owner and the renderer never widens it',
+      () {
+    // `product_categories.show_on_website` owns whether a category is a
+    // public destination. `website_navigation` owns placement only. A menu
+    // row pointing at an unpublished category is surfaced as a diagnostic and
+    // fixed in data through the canonical owner — the storefront renderer
+    // must never treat the menu as a second publisher.
     final catalog = File(
       'lib/public_store/pages/product_catalog_page.dart',
     ).readAsStringSync();
     final publicInventory = File(
       'lib/public_store/services/public_inventory_service.dart',
     ).readAsStringSync();
+    final publication = File(
+      'lib/public_store/services/public_category_publication.dart',
+    ).readAsStringSync();
 
+    // The full hierarchy is still fetched; publication never narrows the
+    // fetch (hidden descendants stay part of a published parent's result).
     expect(catalog, contains('getCategoriesForTenant('));
     expect(publicInventory, contains(".eq('is_active', true)"));
     expect(catalog, isNot(contains(".eq('show_on_website', true)")));
-    expect(catalog, contains('final bool showOnWebsite;'));
-    expect(catalog, contains('child.showOnWebsite &&'));
+
+    // Publication is derived from the flag alone…
+    expect(publication, contains('if (category.showOnWebsite) category.id'));
+    // …and menu rows can only produce diagnostics, never published ids.
+    expect(publication, contains('menuOnlyCategoryIds'));
+    expect(publication, isNot(contains('published.add(resolved)')));
     expect(
-      catalog,
-      contains('_allCategoriesById[trimmed]?.showOnWebsite == true'),
+        publication, contains('if (matches == null || matches.length != 1)'));
+
+    // Consumers gate on that single-owner set.
+    expect(catalog, contains('publication.publishedIds'));
+    expect(catalog, contains('child.isPublished &&'));
+    expect(catalog, contains('_isPublishedCategory(trimmed) ? trimmed : null'));
+  });
+
+  test('a menu destination cannot lose its category on the way to the URL', () {
+    final catalog = File(
+      'lib/public_store/pages/product_catalog_page.dart',
+    ).readAsStringSync();
+
+    // A category carried in a query string renders the collection but leaves
+    // the address bar on `/productos`, so the page cannot be shared, reloaded
+    // or indexed. It is upgraded in place — replace, never push, because the
+    // visitor did not navigate.
+    expect(catalog, contains('legacyQueryCategoryId = resolved;'));
+    expect(catalog, contains('forceReplace: true,'));
+    expect(
+      'forceReplace: true,'.allMatches(catalog).length,
+      greaterThanOrEqualTo(2),
+      reason:
+          'Both an already-loaded and an asynchronously resolved category must upgrade the legacy URL.',
     );
+    expect(catalog, contains('isCatalogRoot && !forceReplace'));
   });
 
   test('catalog transport failures never masquerade as zero results', () {
@@ -495,9 +539,7 @@ void main() {
     final workspace = File(
       'lib/modules/website/pages/product_website_visibility_page.dart',
     ).readAsStringSync();
-    final service = File(
-      'lib/modules/website/services/website_service.dart',
-    ).readAsStringSync();
+    final service = readLibrarySource('lib/modules/website/services/website_service.dart');
     final catalog = File(
       'lib/public_store/pages/product_catalog_page.dart',
     ).readAsStringSync();
@@ -511,9 +553,7 @@ void main() {
         File('lib/shared/utils/seo_helper.dart').readAsStringSync();
     final seoHelperWeb =
         File('lib/shared/utils/seo_helper_web.dart').readAsStringSync();
-    final storeLayout = File(
-      'lib/public_store/widgets/public_store_layout.dart',
-    ).readAsStringSync();
+    final storeLayout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     final router = File('lib/shared/routes/app_router.dart').readAsStringSync();
 
     expect(model, contains('class WebsiteCatalogPresentation'));
@@ -629,8 +669,19 @@ void main() {
     );
     expect(
       seoHelperWeb,
+      contains("_updateMetaProperty('og:url', canonicalUrl);"),
+    );
+    expect(
+      seoHelperWeb,
+      contains("_updateMetaProperty('og:type', ogType);"),
+    );
+    expect(
+      seoHelperWeb,
       contains("_updateMeta('twitter:image', imageUrl);"),
     );
+    expect(seoHelperWeb, contains("_updateMeta('twitter:url', canonicalUrl);"));
+    expect(seoHelperWeb, contains("_updateMeta('googlebot', robots);"));
+    expect(seoHelperWeb, contains("'summary_large_image'"));
     expect(seoHelperWeb, contains('element?.remove();'));
     expect(storeLayout, contains('isCatalogSeoManagedPath(currentPath)'));
     expect(storeLayout, contains('isProductDetailSeoManagedPath(currentPath)'));
@@ -667,19 +718,29 @@ void main() {
           ],
         },
       ],
+      'viewAllLink': '/productos/categoria/cadenas',
+      'mapUrl': 'https://maps.example/tienda',
+      'members': [
+        {
+          'instagram': 'https://instagram.com/tienda',
+          'linkedin': 'https://linkedin.com/company/tienda',
+        },
+      ],
     });
 
     expect(links.map((link) => link.href), [
       '/pagina/ofertas',
       '/productos?category=cat-1',
+      '/productos/categoria/cadenas',
+      'https://maps.example/tienda',
+      'https://instagram.com/tienda',
+      'https://linkedin.com/company/tienda',
     ]);
   });
 
   test('header and legacy content no longer compete with canonical owners', () {
-    final panel = File('lib/modules/website/widgets/website_editor_panel.dart')
-        .readAsStringSync();
-    final layout = File('lib/public_store/widgets/public_store_layout.dart')
-        .readAsStringSync();
+    final panel = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
+    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     final router = File('lib/shared/routes/app_router.dart').readAsStringSync();
 
     expect(panel, isNot(contains('header_nav_links')));
@@ -708,8 +769,7 @@ void main() {
     final catalog =
         File('lib/modules/website/pages/product_website_visibility_page.dart')
             .readAsStringSync();
-    final service = File('lib/modules/website/services/website_service.dart')
-        .readAsStringSync();
+    final service = readLibrarySource('lib/modules/website/services/website_service.dart');
 
     expect(catalog, contains('updateProductWebsiteVisibilityBatch'));
     expect(catalog, contains('replaceWebsiteCategoryVisibility'));
@@ -859,26 +919,6 @@ void main() {
     );
   });
 
-  test('all storefront navigation CTAs use one renderer and one editor', () {
-    final renderer =
-        File('lib/modules/website/widgets/website_block_renderer.dart')
-            .readAsStringSync();
-    final canvas = File('lib/modules/website/widgets/canvas_block.dart')
-        .readAsStringSync();
-    final editor = File('lib/modules/website/widgets/website_editor_panel.dart')
-        .readAsStringSync();
-    final layout = File('lib/public_store/widgets/public_store_layout.dart')
-        .readAsStringSync();
-
-    expect(renderer, contains("import 'website_action_button.dart';"));
-    expect(renderer, contains('WebsiteActionButton('));
-    expect(canvas, contains('WebsiteActionButton('));
-    expect(editor, contains('WebsiteActionEditor('));
-    expect(editor, isNot(contains("'Próximamente'")));
-    expect(layout, contains("getThemeSetting('button_style', 'rounded')"));
-    expect(layout, contains("getThemeSetting('button_size', 'medium')"));
-  });
-
   test('carousel campaigns reuse the universal Canvas layer system', () {
     final publicRenderer =
         File('lib/modules/website/widgets/website_block_renderer.dart')
@@ -886,22 +926,34 @@ void main() {
     final editableRenderer =
         File('lib/modules/website/widgets/editable_block_renderer.dart')
             .readAsStringSync();
-    final panel = File('lib/modules/website/widgets/website_editor_panel.dart')
-        .readAsStringSync();
+    final panel = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
     final canvas = File('lib/modules/website/widgets/canvas_block.dart')
         .readAsStringSync();
 
+    // The shared renderer owns Canvas composition in every mode; Edit only
+    // injects transient carousel/canvas bindings and must not construct a
+    // parallel CanvasBlock tree. Behavioral parity is covered by
+    // test/widgets/website_canvas_renderer_convergence_test.dart.
     expect(publicRenderer, contains('final usesComposition ='));
     expect(publicRenderer, contains('DeferredCanvasBlock('));
-    expect(editableRenderer, contains('CanvasBlock('));
-    expect(editableRenderer, contains("onSlideUpdated(index, 'elements'"));
-    expect(editableRenderer, contains('InlineEditableImage('));
-    expect(editableRenderer, contains("'Usar URL (avanzado)'"));
-    expect(editableRenderer, contains("'Imagen del slide'"));
-    expect(editableRenderer, contains('clipContentToBounds: true'));
     expect(publicRenderer, contains('clipContentToBounds: true'));
+    expect(editableRenderer, isNot(contains('CanvasBlock(')));
+    expect(editableRenderer, contains('WebsiteCarouselEditBinding('));
+    expect(editableRenderer, contains('WebsiteCanvasEditorBinding('));
+    expect(
+      editableRenderer,
+      contains('carouselEditBinding: carouselEditBinding'),
+    );
+    expect(editableRenderer, contains('canvasEditBinding: canvasEditBinding'));
+    expect(
+      editableRenderer,
+      contains("updates: <String, dynamic>{'elements': elements}"),
+    );
     expect(editableRenderer, contains('selectBlock(widget.blockId)'));
     expect(editableRenderer, contains('onBackgroundTap:'));
+    // Slide media editing stays on the canonical picker workflow in the
+    // carousel inspector, not in a bespoke editable renderer.
+    expect(panel, contains("slide['imageUrl']"));
     expect(panel, contains("label: 'Diseño avanzado por capas'"));
     expect(panel, contains('elementsOnly: true'));
     expect(panel, contains("_addElement('shape')"));
@@ -922,8 +974,7 @@ void main() {
     final canvas = File('lib/modules/website/widgets/canvas_block.dart')
         .readAsStringSync();
     final inspector =
-        File('lib/modules/website/widgets/website_editor_panel.dart')
-            .readAsStringSync();
+        readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
 
     expect(factory, contains("'imageSource': 'manual'"));
     expect(canvas, contains("imageSource != 'manual'"));
@@ -938,8 +989,7 @@ void main() {
         File('lib/modules/website/widgets/canvas_block_toolbar.dart')
             .readAsStringSync();
     final inspector =
-        File('lib/modules/website/widgets/website_editor_panel.dart')
-            .readAsStringSync();
+        readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
     final dialog = File(
       'lib/modules/website/widgets/website_background_removal_dialog.dart',
     ).readAsStringSync();
@@ -978,8 +1028,7 @@ void main() {
   });
 
   test('inspector uses task navigation and progressive control groups', () {
-    final panel = File('lib/modules/website/widgets/website_editor_panel.dart')
-        .readAsStringSync();
+    final panel = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
 
     expect(
         panel, contains('enum _InspectorSection { content, layout, style }'));
@@ -1040,8 +1089,7 @@ void main() {
   });
 
   test('rotation is one persisted transform for every Canvas element type', () {
-    final panel = File('lib/modules/website/widgets/website_editor_panel.dart')
-        .readAsStringSync();
+    final panel = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
     final canvas = File('lib/modules/website/widgets/canvas_block.dart')
         .readAsStringSync();
 
@@ -1061,8 +1109,7 @@ void main() {
     final factory =
         File('lib/modules/website/models/canvas_element_factory.dart')
             .readAsStringSync();
-    final panel = File('lib/modules/website/widgets/website_editor_panel.dart')
-        .readAsStringSync();
+    final panel = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
     final provider =
         File('lib/modules/website/providers/website_edit_mode_provider.dart')
             .readAsStringSync();

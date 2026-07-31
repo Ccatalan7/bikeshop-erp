@@ -70,4 +70,40 @@ void main() {
       );
     });
   });
+
+  group('chooseErpMountedStoreTenantId', () {
+    test('authenticated ERP authority wins over a storefront scope', () {
+      expect(
+        chooseErpMountedStoreTenantId(
+          authenticatedTenantId: ' erp-tenant ',
+          focusedHostScopeTenantId: 'detected-tenant',
+          hasAuthenticatedTenantOwner: true,
+        ),
+        'erp-tenant',
+      );
+    });
+
+    test('fails closed when the authenticated owner has no tenant', () {
+      expect(
+        chooseErpMountedStoreTenantId(
+          authenticatedTenantId: null,
+          focusedHostScopeTenantId: 'detected-tenant',
+          hasAuthenticatedTenantOwner: true,
+        ),
+        isNull,
+      );
+    });
+
+    test('focused hosts may supply the provider scope without TenantService',
+        () {
+      expect(
+        chooseErpMountedStoreTenantId(
+          authenticatedTenantId: null,
+          focusedHostScopeTenantId: ' focused-tenant ',
+          hasAuthenticatedTenantOwner: false,
+        ),
+        'focused-tenant',
+      );
+    });
+  });
 }

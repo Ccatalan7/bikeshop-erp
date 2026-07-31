@@ -6,6 +6,7 @@ import 'package:vinabike_erp/modules/website/models/website_catalog_presentation
 import 'package:vinabike_erp/modules/website/models/website_catalog_query.dart';
 import 'package:vinabike_erp/modules/website/models/website_destination.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
+import 'package:vinabike_erp/public_store/services/public_category_publication.dart';
 import 'package:vinabike_erp/public_store/theme/public_store_theme.dart';
 import 'package:vinabike_erp/public_store/widgets/mega_menu.dart';
 
@@ -14,6 +15,7 @@ void main() {
     required String id,
     required String label,
     String? linkValue,
+    NavLinkType linkType = NavLinkType.page,
     List<WebsiteNavigation> children = const [],
   }) {
     final now = DateTime(2026, 7, 22);
@@ -21,7 +23,7 @@ void main() {
       id: id,
       tenantId: 'tenant-1',
       label: label,
-      linkType: NavLinkType.page,
+      linkType: linkType,
       linkValue: linkValue ?? '/$id',
       createdAt: now,
       updatedAt: now,
@@ -64,6 +66,7 @@ void main() {
     Size surfaceSize = const Size(1200, 760),
     Map<String, MegaMenuBranchPresentation> branchPresentations =
         const <String, MegaMenuBranchPresentation>{},
+    bool Function(WebsiteNavigation navigation)? canNavigate,
   }) async {
     await tester.binding.setSurfaceSize(surfaceSize);
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -95,6 +98,7 @@ void main() {
                 panelRailBackgroundColor: menuRail,
                 panelRailForegroundColor: Colors.white,
                 branchPresentations: branchPresentations,
+                canNavigate: canNavigate,
                 onNavigate: (href, _) => onNavigate(href),
               ),
             ),
@@ -179,6 +183,122 @@ void main() {
 
     expect(find.text('VER TODO'), findsNothing);
     expect(navigations, isEmpty);
+  });
+
+  testWidgets(
+      'publication projection hides invalid leaves and disables structural CTAs',
+      (tester) async {
+    const chainsId = '11111111-1111-4111-8111-111111111111';
+    const sprocketsId = '22222222-2222-4222-8222-222222222222';
+    const drivetrainId = '33333333-3333-4333-8333-333333333333';
+    final chains = navigation(
+      id: 'chains',
+      label: 'Cadenas',
+      linkType: NavLinkType.category,
+      linkValue: chainsId,
+    );
+    final sprockets = navigation(
+      id: 'sprockets',
+      label: 'Piñones',
+      linkType: NavLinkType.category,
+      linkValue: sprocketsId,
+    );
+    final drivetrain = navigation(
+      id: 'drivetrain',
+      label: 'Transmisión',
+      linkType: NavLinkType.category,
+      linkValue: drivetrainId,
+      children: [chains, sprockets],
+    );
+    final authoredParent = navigation(
+      id: 'components',
+      label: 'Componentes',
+      linkValue: '/productos',
+      children: [drivetrain],
+    );
+    final publication = PublicCategoryPublication.resolve(
+      categories: const [
+        PublicCategoryDescriptor(
+          id: chainsId,
+          name: 'Cadenas',
+          fullPath: 'Componentes / Transmisión / Cadenas',
+          showOnWebsite: true,
+        ),
+        PublicCategoryDescriptor(
+          id: sprocketsId,
+          name: 'Piñones',
+          fullPath: 'Componentes / Transmisión / Piñones',
+          showOnWebsite: false,
+        ),
+        PublicCategoryDescriptor(
+          id: drivetrainId,
+          name: 'Transmisión',
+          fullPath: 'Componentes / Transmisión',
+          showOnWebsite: false,
+        ),
+      ],
+      navigation: [authoredParent],
+    );
+    final projection = PublicCategoryNavigationProjection(publication);
+    parent = projection.forDesktop([authoredParent]).single;
+    children = parent.children;
+    final navigations = <String>[];
+
+    await pumpMenu(
+      tester,
+      onNavigate: navigations.add,
+      canNavigate: projection.canNavigate,
+    );
+
+    await tester.tap(find.text('Componentes'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'TRANSMISIÓN'));
+    await tester.pumpAndSettle();
+    await revealBranch(tester);
+
+    expect(navigations, isEmpty);
+    expect(find.text('Cadenas'), findsOneWidget);
+    expect(find.text('Piñones'), findsNothing);
+    expect(find.text('Explorar Transmisión'), findsNothing);
+    expect(find.text('VER TODO'), findsOneWidget);
+  });
+
+  testWidgets(
+      'an open overlay reprojects after build without marking itself dirty during build',
+      (tester) async {
+    await pumpMenu(tester, onNavigate: (_) {});
+    await tester.tap(find.text('Componentes'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('mega-menu-panel')),
+      findsOneWidget,
+    );
+
+    final brakes = navigation(
+      id: 'brakes',
+      label: 'Frenos',
+      linkValue: '/productos/categoria/frenos',
+    );
+    final replacementBranch = navigation(
+      id: 'braking',
+      label: 'Frenado',
+      linkValue: '/productos/categoria/frenado',
+      children: [brakes],
+    );
+    parent = navigation(
+      id: 'components',
+      label: 'Componentes',
+      linkValue: '/productos',
+      children: [replacementBranch],
+    );
+    children = parent.children;
+
+    await pumpMenu(tester, onNavigate: (_) {});
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('FRENADO'), findsOneWidget);
+    expect(find.text('TRANSMISIÓN'), findsNothing);
   });
 
   testWidgets('active branch consumes media keyed by navigation id',
@@ -663,7 +783,9 @@ void main() {
     );
     expect(inclusiveParentDestination, findsOneWidget);
     expect(optionsExplorer, findsOneWidget);
-    expect(find.text('VER SUBCATEGORÍAS'), findsOneWidget);
+    // The caption now carries the branch depth, so a visitor can see how far
+    // a branch goes before entering it.
+    expect(find.text('2 SUBCATEGORÍAS'), findsOneWidget);
 
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await mouse.addPointer(location: Offset.zero);
@@ -672,7 +794,7 @@ void main() {
     await tester.pump();
     expect(find.text('Guías de cadenas'), findsNothing);
     expect(
-      tester.widget<Text>(find.text('VER SUBCATEGORÍAS')).style?.color,
+      tester.widget<Text>(find.text('2 SUBCATEGORÍAS')).style?.color,
       PublicStoreTheme.info,
     );
 
@@ -822,6 +944,18 @@ void main() {
           ),
         ),
       ),
+    );
+
+    final trigger = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, 'Componentes'),
+    );
+    expect(
+      trigger.style?.backgroundColor?.resolve({WidgetState.hovered}),
+      const Color(0xFF17231C).withValues(alpha: 0.08),
+    );
+    expect(
+      trigger.style?.backgroundColor?.resolve(<WidgetState>{}),
+      Colors.transparent,
     );
 
     await tester.tap(find.text('Componentes'));

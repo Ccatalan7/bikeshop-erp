@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/website/theme/website_commerce_theme.dart';
 import 'package:vinabike_erp/modules/website/theme/website_theme_builder.dart';
 import 'package:vinabike_erp/public_store/theme/public_store_surface_theme.dart';
+import '../support/library_source.dart';
 
 void main() {
   double contrastRatio(Color a, Color b) {
@@ -118,12 +119,8 @@ void main() {
     expect(commerce.textPrimary, text);
     expect(commerce.line, line);
 
-    final editorSource = File(
-      'lib/modules/website/widgets/website_editor_panel.dart',
-    ).readAsStringSync();
-    final layoutSource = File(
-      'lib/public_store/widgets/public_store_layout.dart',
-    ).readAsStringSync();
+    final editorSource = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
+    final layoutSource = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     final detailSource = File(
       'lib/public_store/pages/product_detail_page.dart',
     ).readAsStringSync();

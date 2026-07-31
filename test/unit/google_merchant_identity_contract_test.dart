@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/library_source.dart';
+
 void main() {
   test('storefront and feed never reinterpret retailer SKU as MPN', () {
     final feed = File(
@@ -196,7 +198,14 @@ void main() {
       'lib/public_store/widgets/public_store_layout.dart',
       'supabase/functions/google-merchant-feed/index.ts',
       'scripts/generate_product_seo_snapshots.dart',
-    ].map((path) => File(path).readAsStringSync()).join('\n');
+    ].map((path) {
+      // The layout is a partitioned library; every other entry is a plain
+      // physical file (pages, edge TS, scripts) and stays a direct read.
+      if (path == 'lib/public_store/widgets/public_store_layout.dart') {
+        return readLibrarySource(path);
+      }
+      return File(path).readAsStringSync();
+    }).join('\n');
 
     expect(publicSources, contains('Chile continental'));
     expect(publicSources.toLowerCase(), isNot(contains('todo chile')));

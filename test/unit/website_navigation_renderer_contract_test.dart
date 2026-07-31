@@ -1,18 +1,15 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../support/library_source.dart';
 
 void main() {
   test('navigation width control selects the saved desktop renderer', () {
     final editor = File(
       'lib/modules/website/pages/navigation_management_page.dart',
     ).readAsStringSync();
-    final layout = File(
-      'lib/public_store/widgets/public_store_layout.dart',
-    ).readAsStringSync();
-    final inspector = File(
-      'lib/modules/website/widgets/website_editor_panel.dart',
-    ).readAsStringSync();
+    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final inspector = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
 
     expect(editor, contains('cssClass: _resolvedCssClass()'));
     expect(editor, contains("token.toLowerCase() != 'megamenu'"));
@@ -70,7 +67,18 @@ void main() {
         ),
       ),
     );
-    expect(layout, contains('final isDesktopHeader = screenWidth >= 1080'));
+    expect(
+      layout,
+      matches(
+        RegExp(
+          r'final headerGeometry\s*=\s*'
+          r'PublicStoreHeaderGeometry\.resolve\(screenWidth\)',
+          multiLine: true,
+        ),
+      ),
+    );
+    expect(
+        layout, contains('final isDesktopHeader = headerGeometry.isDesktop'));
     expect(
       inspector,
       matches(
@@ -151,9 +159,15 @@ void main() {
       source,
       contains("'mega-menu-card-navigate-\${widget.navigationId}'"),
     );
-    expect(source, contains('Ver subcategorías de'));
-    expect(source, contains('Ver categoría \${widget.label}'));
-    expect(source, contains("'VER SUBCATEGORÍAS'"));
+    expect(source, contains('Ver las \$childCount subcategorías de'));
+    expect(source, contains('Ver productos de \${widget.label}'));
+    // Each control names its own destination; the caption also carries the
+    // child count so branch depth is visible before entering it.
+    expect(source, contains("'\$childCount SUBCATEGORÍAS'"));
+    // A plain leaf keeps a single control; only its artwork names the
+    // destination, so the caption never repeats it.
+    expect(source, contains("'Ver productos'"));
+    expect(source, contains('showActionCaption'));
     expect(source, contains('VER TODO EN \${levelOwner.label.toUpperCase()}'));
     expect(source, contains('onHover: hasChildren'));
     expect(source, contains('onFocusChange: hasChildren'));
@@ -224,9 +238,7 @@ void main() {
   });
 
   test('mega-menu category artwork resolves from typed destinations', () {
-    final layout = File(
-      'lib/public_store/widgets/public_store_layout.dart',
-    ).readAsStringSync();
+    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     final menu = File(
       'lib/public_store/widgets/mega_menu.dart',
     ).readAsStringSync();
@@ -276,9 +288,7 @@ void main() {
 
   test('empty navigation exposes its canonical editor instead of fake links',
       () {
-    final layout = File(
-      'lib/public_store/widgets/public_store_layout.dart',
-    ).readAsStringSync();
+    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
 
     expect(layout, contains('Configurar navegación'));
     expect(
@@ -286,5 +296,50 @@ void main() {
       contains('WebsiteWorkspacePanel.navigation'),
     );
     expect(layout, isNot(contains('Widget _buildNavLink(')));
+  });
+
+  test('category publication gates menus, CMS cards, and stale CTA clicks', () {
+    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final blocks = File(
+      'lib/modules/website/widgets/website_block_renderer.dart',
+    ).readAsStringSync();
+    final catalog = File(
+      'lib/public_store/pages/product_catalog_page.dart',
+    ).readAsStringSync();
+
+    expect(layout, contains('PublicCategoryNavigationProjection('));
+    expect(layout, contains('categoryNavigationProjection.forDesktop('));
+    expect(layout, contains('categoryNavigationProjection.forMobile('));
+    expect(layout, contains('if (!_allowsPublicHref(normalized))'));
+    expect(
+      layout,
+      contains('internalOrigins: _storefrontInternalOrigins'),
+    );
+    expect(blocks, contains('isNavigationEligible'));
+    expect(blocks, isNot(contains('independent of DB')));
+    expect(blocks, isNot(contains('_useManualCategories')));
+    expect(
+      catalog,
+      contains('forceCategoryRefresh: categorySnapshot == null'),
+      reason: 'A published cache event must not recursively force the origin.',
+    );
+  });
+
+  test('no lib file issues a direct DELETE against website_navigation', () {
+    final violations = <String>[];
+    for (final entity in Directory('lib').listSync(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) continue;
+      final source = entity.readAsStringSync().replaceAll(RegExp(r'\s+'), '');
+      if (source.contains(".from('website_navigation').delete(")) {
+        violations.add(entity.path);
+      }
+    }
+    expect(
+      violations,
+      isEmpty,
+      reason: 'delete_website_navigation (authority-bound, idempotent RPC) '
+          'is the ONLY delete owner: a direct DELETE silently filters to '
+          'zero rows under a stale grant.',
+    );
   });
 }

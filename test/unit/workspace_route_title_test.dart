@@ -19,4 +19,22 @@ void main() {
       expect(getRouteTitle('/taller/pega/job-123/editar'), 'Editar Trabajo');
     });
   });
+
+  group('getRouteTitle payroll routes', () {
+    test('keeps the canonical payroll workspace title localized', () {
+      expect(getRouteTitle('/hr/payroll'), 'Nóminas');
+      expect(getRouteTitle('/hr/payroll?scope=history'), 'Nóminas');
+    });
+
+    test('keeps reconciliation distinct from the payroll queue', () {
+      expect(
+        getRouteTitle('/hr/payroll/reconcile'),
+        'Conciliar nóminas',
+      );
+      expect(
+        getRouteTitle('/hr/payroll/reconcile?import=statement-1'),
+        'Conciliar nóminas',
+      );
+    });
+  });
 }

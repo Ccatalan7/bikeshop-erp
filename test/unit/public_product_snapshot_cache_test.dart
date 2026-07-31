@@ -139,6 +139,18 @@ void main() {
         ),
         isFalse,
       );
+
+      expect(
+        retained.isOriginFresh(
+          const Duration(seconds: 8),
+          now: () => retained.originValidatedAt!.subtract(
+            const Duration(seconds: 1),
+          ),
+        ),
+        isFalse,
+        reason:
+            'A clock rollback must not turn future evidence into authority.',
+      );
     });
 
     test('markOriginStale revokes authority without erasing paint data', () {

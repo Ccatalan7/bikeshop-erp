@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../support/library_source.dart';
 
 void main() {
   const routedPages = <String>[
@@ -130,9 +131,7 @@ void main() {
     final model = File(
       'lib/modules/website/models/website_models.dart',
     ).readAsStringSync();
-    final service = File(
-      'lib/modules/website/services/website_service.dart',
-    ).readAsStringSync();
+    final service = readLibrarySource('lib/modules/website/services/website_service.dart');
     final orders = File(
       'lib/modules/website/pages/online_orders_page.dart',
     ).readAsStringSync();

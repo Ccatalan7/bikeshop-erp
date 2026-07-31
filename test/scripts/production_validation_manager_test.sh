@@ -33,6 +33,45 @@ assert_not_equal() {
     fail "$label: values unexpectedly matched"
 }
 
+credential_value() {
+  printf '%s\n' 'fake-production-password'
+}
+
+psql() {
+  printf '%s\n' '2001:db8::1/128	5432	postgres	postgres'
+}
+
+PGHOST="untrusted.example"
+PGPORT="6543"
+PGDATABASE="other"
+PGUSER="postgres.not-production"
+production_validation_guard_production_connection
+assert_equal \
+  "$PGHOST" \
+  "db.xzdvtzdqjeyqxnkqprtf.supabase.co" \
+  "production validation direct host"
+assert_equal "$PGPORT" "5432" "production validation direct port"
+assert_equal "$PGDATABASE" "postgres" "production validation database"
+assert_equal "$PGUSER" "postgres" "production validation direct user"
+assert_equal \
+  "$PGCONNECT_TIMEOUT" \
+  "10" \
+  "production validation direct connect timeout"
+[[ "$PGOPTIONS" == *"default_transaction_read_only=on"* ]] ||
+  fail "production validation direct connection lost read-only PGOPTIONS"
+[[ "$PGHOST" != *"pooler.supabase.com"* ]] ||
+  fail "production validation unexpectedly selected the shared pooler"
+production_validation_clear_remote_connection
+
+psql() {
+  printf '%s\n' '10.0.0.8	5432	postgres	postgres'
+}
+if (production_validation_guard_production_connection) >/dev/null 2>&1; then
+  fail "production validation accepted a non-IPv6 direct connection"
+fi
+production_validation_clear_remote_connection
+unset -f psql credential_value
+
 help_output="$(
   bash "$ROOT_DIR/scripts/db/production_validation.sh" --help
 )"
@@ -201,6 +240,12 @@ if rg -n \
   "$ROOT_DIR/scripts/db/production_validation.sh" \
   >/dev/null; then
   fail "manager contains a raw Supabase CLI invocation"
+fi
+if rg -n \
+  'configure_remote_pg|pooler\\.supabase\\.com' \
+  "$ROOT_DIR/scripts/db/production_validation.sh" \
+  >/dev/null; then
+  fail "manager contains a production-validation pooler fallback"
 fi
 
 echo "production validation manager shell tests passed"

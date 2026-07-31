@@ -36,7 +36,7 @@ void main() {
   test('workspace and toolbar chrome share the canonical 900px boundary', () {
     expect(
       RegExp(r'ResponsiveViewport\.usesCompactShell\(').allMatches(mainSource),
-      hasLength(2),
+      hasLength(1),
     );
     expect(
       mainLayoutSource,
@@ -90,21 +90,22 @@ void main() {
     expect(zoomServiceSource, isNot(contains('desktopZoomMinWidth')));
   });
 
-  test('desktop tab slot toggles without remounting the workspace shell', () {
+  test('stable shell owns desktop tabs without remounting route state', () {
     final rootChrome = _between(
       mainSource,
-      '// Desktop keeps the multitasking tab strip.',
+      'return Scaffold(',
       'const QueryPerformanceGauge()',
     );
+    final shell = _between(
+      mainSource,
+      'class _WorkspaceShellState',
+      'class _WorkspaceRouterView',
+    );
 
-    expect(rootChrome, contains('return Column('));
+    expect(rootChrome, isNot(contains('WorkspaceTabBar')));
     expect(
       rootChrome,
-      contains(
-        'compact\n'
-        '                                      ? const SizedBox.shrink()\n'
-        '                                      : const WorkspaceTabBar()',
-      ),
+      contains('_WorkspaceShell('),
     );
     expect(
       RegExp(r'_WorkspaceShell\(').allMatches(rootChrome),
@@ -113,9 +114,37 @@ void main() {
     );
     expect(
       rootChrome,
-      contains("ValueKey(\n                                        "
-          "'authenticated-workspace-shell'"),
+      contains("'authenticated-workspace-shell'"),
     );
+    expect(shell, contains('if (compact) {'));
+    expect(shell, contains("ValueKey('workspace-tab-bar-placement')"));
+    expect(shell, contains('left: navigationWidth'));
+    expect(shell, contains('height: topInset'));
+    expect(shell, contains('child: const WorkspaceTabBar()'));
+    expect(
+      shell,
+      contains('const topInset = WorkspaceShellScope.workspaceBarHeight'),
+    );
+  });
+
+  test('desktop rail actions expose hover, focus, semantics and keyboard tap',
+      () {
+    final destination = _between(
+      mainLayoutSource,
+      'class _RailDestination extends StatelessWidget',
+      'class _RailBadge extends StatelessWidget',
+    );
+
+    expect(
+      destination,
+      contains('WorkspaceChromeStyle.maybeOf(context)'),
+    );
+    expect(destination, contains('button: true'));
+    expect(destination, contains('child: InkWell('));
+    expect(destination, contains('canRequestFocus: enabled && onTap != null'));
+    expect(destination, contains('hoverColor:'));
+    expect(destination, contains('focusColor:'));
+    expect(destination, isNot(contains('GestureDetector(')));
   });
 
   test('compact tool workspace overlays but does not replace the route stack',
@@ -142,7 +171,7 @@ void main() {
       compactShell,
       matches(
         RegExp(
-          r'children:\s*\[\s*_buildWorkspaceStack\(\),\s*'
+          r'children:\s*\[\s*_buildWorkspaceStack\(topInset:\s*0\),\s*'
           r'Positioned\.fill\(\s*child:\s*Offstage\(',
           multiLine: true,
         ),
@@ -190,7 +219,7 @@ void main() {
     );
     expect(
       mainLayoutSource,
-      contains('final visibleTools = ToolbarTool.values.where((tool)'),
+      contains('final visibleTools = resolveVisibleToolbarTools('),
     );
     expect(
       mainLayoutSource,
@@ -261,8 +290,7 @@ void main() {
       'Widget _buildCompactDrawerHeader(',
       'Widget _buildDrawerModeSwitch(',
     );
-    expect(drawerHeader, contains('width: 48'));
-    expect(drawerHeader, contains('height: 48'));
+    expect(drawerHeader, contains('minimumSize: const Size(48, 48)'));
 
     final modeSwitch = _between(
       mainLayoutSource,
@@ -270,14 +298,22 @@ void main() {
       'Widget _buildDrawerModeButton(',
     );
     expect(modeSwitch, contains('height: 56'));
-    expect(modeSwitch, contains('padding: const EdgeInsets.all(4)'));
+    expect(
+      modeSwitch,
+      contains(
+        'padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3)',
+      ),
+    );
 
     const modeSwitchHeight = 56.0;
-    const modeSwitchPadding = 4.0;
+    const modeSwitchVerticalPadding = 3.0;
+    const modeSwitchBorder = 1.0;
     expect(
-      modeSwitchHeight - (modeSwitchPadding * 2),
+      modeSwitchHeight -
+          (modeSwitchVerticalPadding * 2) -
+          (modeSwitchBorder * 2),
       48,
-      reason: 'The mode InkWell must receive a full 48px touch target.',
+      reason: 'The mode InkWell must receive a full 48px content target.',
     );
 
     expect(

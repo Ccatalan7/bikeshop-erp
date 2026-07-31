@@ -50,9 +50,30 @@ void main() {
         resolvedBrand: 'Shimano',
         categoryPath: 'Componentes / Transmisión / Cadenas',
       );
+      final editorDraftProjection = PublicCommerceProductProjection.fromDraft(
+        id: 'product-1',
+        sku: 'SKU-1',
+        catalogTitle: 'Nombre catálogo',
+        websiteTitle: 'Nombre web',
+        merchantTitle: 'Nombre comercio',
+        catalogDescription: 'Descripción catálogo',
+        websiteDescription: 'Descripción web',
+        merchantDescription: 'Descripción comercio',
+        price: 12990,
+        currency: 'clp',
+        brand: 'Shimano',
+        categoryId: 'category-1',
+        categoryPath: 'Componentes / Transmisión / Cadenas',
+      );
 
       expect(runtimeProjection.toContractJson(),
           equals(deployProjection.toContractJson()));
+      expect(editorDraftProjection.title, deployProjection.title);
+      expect(editorDraftProjection.description, deployProjection.description);
+      expect(editorDraftProjection.price, deployProjection.price);
+      expect(editorDraftProjection.currency, deployProjection.currency);
+      expect(editorDraftProjection.brand, deployProjection.brand);
+      expect(editorDraftProjection.categoryPath, deployProjection.categoryPath);
       expect(
         deployProjection.toContractJson(),
         equals({
@@ -77,6 +98,29 @@ void main() {
           'merchant_issues': <String>[],
         }),
       );
+    });
+
+    test('draft drops a denormalized category path without a category owner',
+        () {
+      final editorDraftProjection = PublicCommerceProductProjection.fromDraft(
+        catalogTitle: 'Producto legacy',
+        catalogDescription: 'Descripción factual.',
+        price: 9990,
+        categoryPath: 'Componentes / Transmisión / Piñones',
+      );
+      final deployProjection = PublicCommerceProductProjection.fromJson(
+        {
+          'name': 'Producto legacy',
+          'description': 'Descripción factual.',
+          'price': 9990,
+          'category_name': 'Componentes / Transmisión / Piñones',
+        },
+        categoryPath: 'Componentes / Transmisión / Piñones',
+      );
+
+      expect(editorDraftProjection.categoryId, isEmpty);
+      expect(editorDraftProjection.categoryPath, isEmpty);
+      expect(editorDraftProjection.categoryPath, deployProjection.categoryPath);
     });
 
     test('optimized and original primary variants render as one gallery image',
@@ -205,6 +249,73 @@ void main() {
           'missing_product_identifiers',
         ]),
       );
+    });
+
+    test('SEO fallback is factual and shared without changing eligibility', () {
+      final projection = PublicCommerceProductProjection.fromJson(
+        {
+          'id': 'product-without-copy',
+          'name': 'Biela izquierda aluminio 170 mm',
+          'description': '',
+          'price': 7990,
+          'stock_quantity': 1,
+          'track_stock': true,
+          'image_url': 'https://cdn.example.com/biela.webp',
+          'brand': 'Genérico',
+          'category_id': 'category-volantes',
+        },
+        categoryPath: 'Componentes / Transmisión / Volantes',
+      );
+
+      expect(
+        buildPublicProductSeoDescription(
+          product: projection,
+          storeName: 'Viñabike',
+        ),
+        'Conoce Biela izquierda aluminio 170 mm — Genérico · '
+        'Componentes / Transmisión / Volantes. Revisa precio, stock y '
+        'opciones de compra en Viñabike.',
+      );
+      expect(
+        projection.merchantIssues,
+        contains(PublicCommerceEligibilityIssue.missingDescription),
+        reason: 'Generic SEO copy must not become canonical catalog content.',
+      );
+    });
+
+    test('SEO fallback is deterministically capped at 320 characters', () {
+      final projection = PublicCommerceProductProjection.fromJson(
+        {
+          'id': 'product-long-seo-fallback',
+          'name': List.generate(
+            45,
+            (index) => 'componente-${index.toString().padLeft(2, '0')}',
+          ).join(' '),
+          'description': '',
+          'price': 7990,
+          'stock_quantity': 1,
+          'track_stock': true,
+          'brand': 'Marca técnica extendida',
+          'category_id': 'category-long-path',
+        },
+        categoryPath:
+            'Componentes / Transmisión / Volantes / Bielas / Repuestos',
+      );
+
+      final first = buildPublicProductSeoDescription(
+        product: projection,
+        storeName: 'Viñabike',
+      );
+      final second = buildPublicProductSeoDescription(
+        product: projection,
+        storeName: 'Viñabike',
+      );
+
+      expect(first, second);
+      expect(first.length, lessThanOrEqualTo(320));
+      expect(first, isNot(endsWith(' ')));
+      expect(first, startsWith('Conoce componente-00 componente-01'));
+      expect(RegExp(r'\s{2,}').hasMatch(first), isFalse);
     });
 
     test('out of stock is a valid Merchant availability', () {

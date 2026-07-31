@@ -4,9 +4,12 @@ import 'dart:ui' show Tristate;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 import 'package:vinabike_erp/shared/models/current_user_profile.dart';
 import 'package:vinabike_erp/shared/pages/my_profile_page.dart';
 import 'package:vinabike_erp/shared/services/current_user_profile_service.dart';
+import 'package:vinabike_erp/shared/services/employee_self_service_service.dart';
 import 'package:vinabike_erp/shared/services/self_password_service.dart';
 
 const _identity = CurrentUserIdentity(
@@ -77,21 +80,36 @@ void main() {
         final sectionContent = find.byKey(
           const ValueKey('erp-profile-section-content'),
         );
+        // Every width renders the section header above its own body. The
+        // navigator is what recomposes: a persistent rail beside the body on
+        // desktop, and a scrollable strip above it on tablet and phone.
+        expect(
+          tester.getTopLeft(sectionContent).dy,
+          greaterThan(tester.getTopLeft(sectionContext).dy),
+          reason: 'The section body follows its own labelled header.',
+        );
+        expect(
+          tester.getTopLeft(sectionContent).dx,
+          closeTo(tester.getTopLeft(sectionContext).dx, 0.01),
+          reason: 'Header and body share one content column.',
+        );
         if (size.width >= 900) {
           expect(
             tester.getTopLeft(sectionContent).dx,
-            greaterThan(tester.getTopLeft(sectionContext).dx + 250),
-            reason: 'Desktop uses a bounded context-plus-data composition.',
+            greaterThan(tester.getTopRight(_sectionNav('personal')).dx),
+            reason: 'Desktop pairs a persistent navigator with the body.',
           );
           expect(
-            tester.getTopLeft(sectionContent).dy,
-            closeTo(tester.getTopLeft(sectionContext).dy, 0.01),
+            tester.getTopLeft(_sectionNav('security')).dy,
+            greaterThan(tester.getTopLeft(_sectionNav('personal')).dy),
+            reason: 'The desktop navigator stacks its sections vertically.',
           );
         } else {
           expect(
-            tester.getTopLeft(sectionContent).dy,
-            greaterThan(tester.getBottomLeft(sectionContext).dy),
-            reason: 'Tablet and phone keep one canonical content column.',
+            tester.getTopLeft(sectionContext).dy,
+            greaterThan(tester.getBottomLeft(_sectionNav('personal')).dy),
+            reason: 'Compact keeps one canonical content column below the '
+                'section navigator.',
           );
         }
 
@@ -588,6 +606,125 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  for (final size in const [Size(384, 824), Size(1440, 900)]) {
+    testWidgets(
+      'linked identity reaches its own labor sections at '
+      '${size.width.toInt()}x${size.height.toInt()}',
+      (tester) async {
+        _configureView(tester, size);
+        final service = await _loadedService(_ProfileWidgetGateway());
+        addTearDown(service.dispose);
+
+        await _pumpProfile(tester, service: service);
+
+        await _tapProfileSection(tester, 'shifts');
+        expect(
+          find.byKey(const ValueKey('erp-profile-work-shifts')),
+          findsOneWidget,
+        );
+        // Own assignment and published team coverage stay separate.
+        expect(find.textContaining('Turno taller'), findsOneWidget);
+        expect(find.text('Mis turnos'), findsOneWidget);
+        expect(find.text('Cobertura del equipo esta semana'), findsOneWidget);
+        expect(
+          find.textContaining('Katherine Johnson'),
+          findsNothing,
+          reason: 'Team coverage stays behind its labelled disclosure.',
+        );
+        expect(find.text('Horario base'), findsOneWidget);
+        expect(find.text('Solicitudes de cambio'), findsOneWidget);
+
+        await _tapProfileSection(tester, 'attendance');
+        expect(
+          find.byKey(const ValueKey('erp-profile-work-attendance')),
+          findsOneWidget,
+        );
+        expect(find.text('Planificado'), findsOneWidget);
+        expect(find.text('Trabajado'), findsOneWidget);
+        expect(find.text('Diferencia'), findsOneWidget);
+
+        await _tapProfileSection(tester, 'payroll');
+        expect(
+          find.byKey(const ValueKey('erp-profile-work-payroll')),
+          findsOneWidget,
+        );
+        expect(find.text('Junio 2026'), findsOneWidget);
+        expect(find.text('Pagada'), findsOneWidget);
+
+        for (final section in const ['shifts', 'attendance', 'payroll']) {
+          final targetSize = tester.getSize(_sectionNav(section));
+          expect(targetSize.width, greaterThanOrEqualTo(48));
+          expect(targetSize.height, greaterThanOrEqualTo(48));
+        }
+
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('unlinked identity never exposes labor sections', (tester) async {
+    _configureView(tester, const Size(1440, 900));
+    final service = await _loadedService(
+      _ProfileWidgetGateway(linkedEmployee: false),
+    );
+    addTearDown(service.dispose);
+
+    await _pumpProfile(tester, service: service);
+
+    for (final section in const ['shifts', 'attendance', 'payroll']) {
+      expect(
+        _sectionNav(section),
+        findsNothing,
+        reason: 'An identity without an employee record has no labor data.',
+      );
+    }
+    expect(_sectionNav('personal'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('failed labor read stays explicit and retryable', (tester) async {
+    _configureView(tester, const Size(1440, 900));
+    final service = await _loadedService(_ProfileWidgetGateway());
+    addTearDown(service.dispose);
+
+    final work = EmployeeSelfServiceService(
+      gateway: _SelfServiceWidgetGateway(failing: true),
+    );
+    await _pumpProfile(tester, service: service, selfService: work);
+
+    await _tapProfileSection(tester, 'shifts');
+    expect(
+      find.byKey(const ValueKey('erp-profile-work-unavailable')),
+      findsOneWidget,
+    );
+    expect(find.text('Reintentar'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('erp-profile-work-shifts')),
+      findsNothing,
+      reason: 'A failed labor read is never rendered as an empty week.',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('empty week renders an explicit state, not a blank panel',
+      (tester) async {
+    _configureView(tester, const Size(384, 824));
+    final service = await _loadedService(_ProfileWidgetGateway());
+    addTearDown(service.dispose);
+
+    final work = EmployeeSelfServiceService(
+      gateway: _SelfServiceWidgetGateway(empty: true),
+    );
+    await _pumpProfile(tester, service: service, selfService: work);
+
+    await _tapProfileSection(tester, 'shifts');
+    expect(find.text('Semana sin turnos'), findsOneWidget);
+
+    await _tapProfileSection(tester, 'payroll');
+    expect(find.text('Sin liquidaciones emitidas'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<CurrentUserProfileService> _loadedService(
@@ -613,11 +750,19 @@ Future<void> _pumpProfile(
   required CurrentUserProfileService service,
   GlobalKey<MyProfileContentState>? contentKey,
   ValueChanged<bool>? onNavigationStateChanged,
+  EmployeeSelfServiceService? selfService,
   bool settle = true,
 }) async {
+  final work = selfService ??
+      EmployeeSelfServiceService(gateway: _SelfServiceWidgetGateway());
+  addTearDown(work.dispose);
+  await work.synchronize(profile: service.profile);
   await tester.pumpWidget(
-    ChangeNotifierProvider.value(
-      value: service,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: service),
+        ChangeNotifierProvider.value(value: work),
+      ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         builder: (context, child) {
@@ -666,6 +811,166 @@ Finder _textFormFieldWithLabel(String label) {
     of: find.text(label),
     matching: find.byType(TextFormField),
   );
+}
+
+/// Deterministic labor payload: one shift, one attendance and one settled
+/// payroll line inside the week the profile renders by default.
+class _SelfServiceWidgetGateway implements EmployeeSelfServiceGateway {
+  _SelfServiceWidgetGateway({this.empty = false, this.failing = false});
+
+  final bool empty;
+  final bool failing;
+
+  @override
+  Future<Map<String, dynamic>> getSnapshot({
+    required DateTime? weekAnchor,
+  }) async {
+    if (failing) throw StateError('self-service unavailable');
+    final weekStart = EmployeeSelfServiceService.startOfWeek(
+      weekAnchor ?? DateTime.now(),
+    );
+    final weekEnd = weekStart.add(const Duration(days: 7));
+    tzdata.initializeTimeZones();
+    final location = tz.getLocation('America/Santiago');
+    final weekStartAt = tz.TZDateTime(
+      location,
+      weekStart.year,
+      weekStart.month,
+      weekStart.day,
+    ).toUtc();
+    final weekEndAt = tz.TZDateTime(
+      location,
+      weekEnd.year,
+      weekEnd.month,
+      weekEnd.day,
+    ).toUtc();
+    final day = weekStart.add(const Duration(days: 1));
+    final dayStart = tz.TZDateTime(
+      location,
+      day.year,
+      day.month,
+      day.day,
+      9,
+    ).toUtc();
+
+    return {
+      'user_id': 'user-a',
+      'tenant_id': 'tenant-a',
+      'employee_id': 'employee-a',
+      'timezone': 'America/Santiago',
+      'week_start': _dateOnly(weekStart),
+      'week_end': _dateOnly(weekEnd),
+      'week_start_at': weekStartAt.toIso8601String(),
+      'week_end_at': weekEndAt.toIso8601String(),
+      'is_current_week': weekAnchor == null,
+      'my_shifts': empty
+          ? const <dynamic>[]
+          : [
+              {
+                'id': 'shift-a',
+                'employee_id': 'employee-a',
+                'title': 'Turno taller',
+                'start_at': dayStart.toIso8601String(),
+                'end_at':
+                    dayStart.add(const Duration(hours: 9)).toIso8601String(),
+                'status': 'published',
+                'source': 'manual',
+                'store_hours_validated': true,
+                'role_name': 'Mecánico',
+                'planned_minutes_in_week': 540,
+              },
+            ],
+      'team_shifts': empty
+          ? const <dynamic>[]
+          : [
+              {
+                'id': 'shift-b',
+                'employee_id': 'employee-z',
+                'start_at':
+                    dayStart.add(const Duration(hours: 1)).toIso8601String(),
+                'end_at':
+                    dayStart.add(const Duration(hours: 10)).toIso8601String(),
+                'status': 'published',
+                'source': 'manual',
+                'store_hours_validated': true,
+                'employee_name': 'Katherine Johnson',
+                'employee_job_title': 'Vendedora',
+                'planned_minutes_in_week': 540,
+              },
+            ],
+      'attendances': empty
+          ? const <dynamic>[]
+          : [
+              {
+                'id': 'attendance-a',
+                'employee_id': 'employee-a',
+                'check_in': dayStart.toIso8601String(),
+                'check_out': dayStart
+                    .add(const Duration(hours: 8, minutes: 30))
+                    .toIso8601String(),
+                'worked_hours': 8.0,
+                'worked_minutes_in_week': 480,
+                'overtime_hours': 0.0,
+                'break_minutes': 30,
+                'status': 'approved',
+              },
+            ],
+      'payroll_lines': empty
+          ? const <dynamic>[]
+          : [
+              {
+                'id': 'line-a',
+                'employee_id': 'employee-a',
+                'voucher_id': 'voucher-a',
+                'worked_hours': 176.0,
+                'overtime_hours': 4.0,
+                'regular_amount': 900000.0,
+                'overtime_amount': 40000.0,
+                'total_amount': 940000.0,
+                'payment_method': 'transfer',
+                'voucher': {
+                  'id': 'voucher-a',
+                  'voucher_number': 'LIQ-0001',
+                  'period_start': '2026-06-01',
+                  'period_end': '2026-06-30',
+                  'period_label': 'Junio 2026',
+                  'status': 'paid',
+                  'paid_at': '2026-07-05T12:00:00Z',
+                },
+              },
+            ],
+      'change_requests': empty
+          ? const <dynamic>[]
+          : [
+              {
+                'id': 'request-a',
+                'employee_id': 'employee-a',
+                'request_type': 'update',
+                'status': 'pending',
+                'worker_note': 'Necesito cambiar el turno del martes',
+                'created_at': '2026-07-20T12:00:00Z',
+              },
+            ],
+      'default_shift_blocks': empty
+          ? const <dynamic>[]
+          : [
+              {
+                'id': 'block-a',
+                'employee_id': 'employee-a',
+                'day_of_week': 2,
+                'start_time': '09:00:00',
+                'end_time': '18:00:00',
+                'role_name': 'Mecánico',
+              },
+            ],
+    };
+  }
+
+  String _dateOnly(DateTime value) {
+    final month = value.month.toString().padLeft(2, '0');
+    final day = value.day.toString().padLeft(2, '0');
+    return '${value.year}-$month-$day';
+  }
 }
 
 class _ProfileWidgetGateway implements CurrentUserProfileGateway {

@@ -96,24 +96,26 @@ void main() {
       expect(movement.hasNavigableReference, isTrue);
     });
 
-    test('receipt reference opens the formal receipt route directly', () {
+    test('receipt is inspected before its formal document route opens', () {
       final source = File(
         'lib/modules/inventory/pages/stock_movements_page.dart',
       ).readAsStringSync();
-      final navigation = source.substring(
+      final inspection = source.substring(
         source.indexOf('Future<void> _navigateToReference'),
         source.indexOf('Future<void> _loadOperationTrace'),
       );
-
-      expect(navigation, contains('movement.navigableReferenceId'));
-      expect(navigation, contains('movement.isPurchaseReceiptMovement'));
-      expect(
-        navigation,
-        contains("'/purchases/receipts/\${Uri.encodeComponent(referenceId)}'"),
+      final documentRoute = source.substring(
+        source.indexOf('void _openLinkedDocumentRoute'),
+        source.indexOf('Future<void> _navigateToReference'),
       );
+
+      expect(inspection, contains('movement.navigableReferenceId'));
+      expect(inspection, contains('_selectedLinkedMovement = movement'));
+      expect(inspection, contains('_loadOperationTrace(movement)'));
+      expect(documentRoute, contains('movement.isPurchaseReceiptMovement'));
       expect(
-        navigation.indexOf("'/purchases/receipts/"),
-        lessThan(navigation.indexOf('getPurchaseInvoice(referenceId)')),
+        documentRoute,
+        contains("'/purchases/receipts/\${Uri.encodeComponent(referenceId)}'"),
       );
     });
   });

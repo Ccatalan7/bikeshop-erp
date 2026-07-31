@@ -1,12 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../support/library_source.dart';
 
 void main() {
   test('bootstrap requests an active CMS page origin revalidation', () {
-    final service = File(
-      'lib/modules/website/services/website_service.dart',
-    ).readAsStringSync();
+    final service = readLibrarySource('lib/modules/website/services/website_service.dart');
     final bootstrap = File(
       'lib/public_store/widgets/public_store_bootstrap.dart',
     ).readAsStringSync();

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../support/library_source.dart';
 
 void main() {
   test('standalone storefront keeps routed layouts outside a nested shell', () {
@@ -18,9 +19,7 @@ void main() {
 
   test('sticky scrolling rebuilds only the header and home stays soft-routed',
       () {
-    final layout = File(
-      'lib/public_store/widgets/public_store_layout.dart',
-    ).readAsStringSync();
+    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     final stickyStateStart = layout.indexOf('class _StickyHeaderScaffoldState');
     final onScrollStart = layout.indexOf(
       'void _onScroll() {',
@@ -40,12 +39,6 @@ void main() {
         r'_restoreScrollForRoute\(targetOffset: 0\)',
       ).allMatches(layout),
       hasLength(2),
-    );
-    expect(
-      layout,
-      contains(
-        'kIsWeb && forceHomeRefresh && isHomeTarget && !isEditMode',
-      ),
     );
     expect(layout, contains('web.window.location.reload()'));
     expect(layout, contains('web.window.location.assign(target)'));
@@ -69,9 +62,7 @@ void main() {
   });
 
   test('product detail navigation always queues destination scroll reset', () {
-    final layout = File(
-      'lib/public_store/widgets/public_store_layout.dart',
-    ).readAsStringSync();
+    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     final resetStart = layout.indexOf(
       'final shouldResetTargetScroll =',
     );

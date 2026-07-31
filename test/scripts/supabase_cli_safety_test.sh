@@ -263,6 +263,9 @@ FAKE_REPO="$TEST_TMP/repo"
 mkdir -p "$FAKE_REPO/scripts/db" "$FAKE_REPO/supabase/.temp"
 cp "$ROOT_DIR/scripts/db/query.sh" "$ROOT_DIR/scripts/db/lib.sh" \
   "$FAKE_REPO/scripts/db/"
+# Keep the hermetic fake psql ahead of any host libpq installation.
+sed -i.bak 's#export PATH="/opt/homebrew/opt/libpq/bin:$PATH"#export PATH="$PATH"#' \
+  "$FAKE_REPO/scripts/db/lib.sh"
 printf '%s\n' "not-production" >"$FAKE_REPO/supabase/.temp/project-ref"
 rm -f "$FAKE_EXTERNAL_ACCESS_LOG"
 if production_identity_output="$(
@@ -277,6 +280,30 @@ assert_contains "$production_identity_output" \
   "Linked project is not the approved production project"
 [[ ! -e "$FAKE_EXTERNAL_ACCESS_LOG" ]] ||
   fail "Production identity mismatch reached psql."
+[[ -f "$FAKE_REPO/.tmp/db/journal.jsonl" ]] ||
+  fail "Production identity rejection was not journaled."
+tail -1 "$FAKE_REPO/.tmp/db/journal.jsonl" |
+  grep -F '"exit_status":1' >/dev/null ||
+  fail "Production identity rejection journal has the wrong status."
+
+printf '%s\n' "xzdvtzdqjeyqxnkqprtf" \
+  >"$FAKE_REPO/supabase/.temp/project-ref"
+printf '%s\n' "select 1;" >"$TEST_TMP/hosted-read.sql"
+rm -f "$FAKE_EXTERNAL_ACCESS_LOG"
+if SUPABASE_DB_PASSWORD=fake-password \
+  PATH="$FAKE_BIN_DIR:$PATH" \
+  FAKE_EXTERNAL_ACCESS_LOG="$FAKE_EXTERNAL_ACCESS_LOG" \
+  bash "$FAKE_REPO/scripts/db/query.sh" production \
+    --file "$TEST_TMP/hosted-read.sql" >/dev/null 2>&1; then
+  fail "Hosted file read unexpectedly ignored the fake psql failure."
+else
+  hosted_file_status=$?
+fi
+[[ "$hosted_file_status" -eq 99 ]] ||
+  fail "Hosted file read returned $hosted_file_status instead of psql status 99."
+tail -1 "$FAKE_REPO/.tmp/db/journal.jsonl" |
+  grep -F '"exit_status":99' >/dev/null ||
+  fail "Hosted file read did not journal the psql exit status."
 
 rm -f "$FAKE_EXTERNAL_ACCESS_LOG"
 if staging_identity_output="$(

@@ -48,7 +48,7 @@ void main() {
       );
     });
 
-    test('pending Mercado Pago state does not invite a duplicate payment', () {
+    test('pending Mercado Pago state offers the replayable payment action', () {
       final presentation = OrderConfirmationPolicy.resolve(
         _order(
           status: 'pending',
@@ -60,11 +60,11 @@ void main() {
       expect(presentation, OrderConfirmationState.pending);
       expect(
         OrderConfirmationPolicy.allowsPaymentAction(presentation),
-        isFalse,
+        isTrue,
       );
     });
 
-    test('only a failed Mercado Pago outcome can expose retry', () {
+    test('a failed Mercado Pago outcome also exposes retry', () {
       final presentation = OrderConfirmationPolicy.resolve(
         _order(
           status: 'pending',

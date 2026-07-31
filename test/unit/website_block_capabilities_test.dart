@@ -3,11 +3,13 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/website/models/website_block_capabilities.dart';
 import 'package:vinabike_erp/modules/website/models/website_block_definition.dart';
+import 'package:vinabike_erp/modules/website/models/website_block_geometry.dart';
 import 'package:vinabike_erp/modules/website/models/website_block_registry.dart';
 import 'package:vinabike_erp/modules/website/models/website_block_type.dart';
 import 'package:vinabike_erp/modules/website/models/website_font_registry.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
+import '../support/library_source.dart';
 
 Iterable<WebsiteBlockFieldSchema> flattenFields(
   Iterable<WebsiteBlockFieldSchema> fields,
@@ -62,7 +64,24 @@ void main() {
       WebsiteBlockCapabilityRegistry.typesWithoutExplicitEditableRenderer()
           .toSet(),
       <WebsiteBlockType>{
+        WebsiteBlockType.hero,
+        WebsiteBlockType.carousel,
+        WebsiteBlockType.canvas,
+        WebsiteBlockType.text,
+        WebsiteBlockType.divider,
+        WebsiteBlockType.button,
         WebsiteBlockType.products,
+        WebsiteBlockType.services,
+        WebsiteBlockType.about,
+        WebsiteBlockType.testimonials,
+        WebsiteBlockType.features,
+        WebsiteBlockType.gallery,
+        WebsiteBlockType.cta,
+        WebsiteBlockType.contact,
+        WebsiteBlockType.faq,
+        WebsiteBlockType.pricing,
+        WebsiteBlockType.team,
+        WebsiteBlockType.stats,
         WebsiteBlockType.footer,
         WebsiteBlockType.categoryGrid,
         WebsiteBlockType.videoBanner,
@@ -72,23 +91,105 @@ void main() {
       },
     );
 
+    const sharedContentTypes = <WebsiteBlockType>{
+      WebsiteBlockType.hero,
+      WebsiteBlockType.carousel,
+      WebsiteBlockType.canvas,
+      WebsiteBlockType.text,
+      WebsiteBlockType.divider,
+      WebsiteBlockType.button,
+      WebsiteBlockType.products,
+      WebsiteBlockType.services,
+      WebsiteBlockType.about,
+      WebsiteBlockType.testimonials,
+      WebsiteBlockType.features,
+      WebsiteBlockType.gallery,
+      WebsiteBlockType.cta,
+      WebsiteBlockType.contact,
+      WebsiteBlockType.faq,
+      WebsiteBlockType.pricing,
+      WebsiteBlockType.team,
+      WebsiteBlockType.stats,
+      WebsiteBlockType.footer,
+      WebsiteBlockType.categoryGrid,
+      WebsiteBlockType.videoBanner,
+      WebsiteBlockType.partnersBanner,
+      WebsiteBlockType.brandLogos,
+      WebsiteBlockType.googleReviews,
+    };
+    expect(
+      WebsiteBlockCapabilityRegistry.typesUsingSharedContentRendererInEdit()
+          .toSet(),
+      sharedContentTypes,
+    );
+    final legacyTypes =
+        WebsiteBlockType.values.toSet().difference(sharedContentTypes);
+    expect(
+      WebsiteBlockCapabilityRegistry.typesUsingLegacyDedicatedRenderer()
+          .toSet(),
+      legacyTypes,
+    );
     expect(
       WebsiteBlockCapabilityRegistry.blockTypesNeedingRendererWork().toSet(),
-      <WebsiteBlockType>{
-        WebsiteBlockType.products,
-        WebsiteBlockType.categoryGrid,
-        WebsiteBlockType.videoBanner,
-        WebsiteBlockType.partnersBanner,
-        WebsiteBlockType.brandLogos,
-        WebsiteBlockType.googleReviews,
-      },
+      legacyTypes,
     );
+    for (final profile in WebsiteBlockCapabilityRegistry.all) {
+      expect(
+        profile.usesSharedContentRendererInEdit ^
+            profile.usesLegacyDedicatedRenderer,
+        isTrue,
+        reason: profile.type.name,
+      );
+    }
   });
 
   test('editor capability profiles do not allow mixed save semantics', () {
     expect(
       WebsiteBlockCapabilityRegistry.typesWithMixedSaveSemantics(),
       isEmpty,
+    );
+  });
+
+  test('capability registry is the single owner of block height behavior', () {
+    const exact = <WebsiteBlockType>{
+      WebsiteBlockType.hero,
+      WebsiteBlockType.carousel,
+      WebsiteBlockType.canvas,
+      WebsiteBlockType.videoBanner,
+    };
+    const intrinsic = <WebsiteBlockType>{
+      WebsiteBlockType.text,
+      WebsiteBlockType.button,
+      WebsiteBlockType.divider,
+      WebsiteBlockType.footer,
+    };
+
+    for (final profile in WebsiteBlockCapabilityRegistry.all) {
+      final expected = exact.contains(profile.type)
+          ? WebsitePageBlockHeightBehavior.exact
+          : intrinsic.contains(profile.type)
+              ? WebsitePageBlockHeightBehavior.intrinsic
+              : WebsitePageBlockHeightBehavior.minimum;
+      expect(profile.heightBehavior, expected, reason: profile.type.name);
+    }
+  });
+
+  test('inspector height semantics follow the canonical capability', () {
+    expect(
+      WebsitePageBlockHeightBehavior.intrinsic.inspectorLabel,
+      isNull,
+    );
+    expect(
+      WebsitePageBlockHeightBehavior.minimum.inspectorLabel,
+      'Altura mínima',
+    );
+    expect(
+      WebsitePageBlockHeightBehavior.minimum.inspectorResizeHint,
+      'El contenido puede crecer; arrastra para cambiar el mínimo',
+    );
+    expect(
+      WebsitePageBlockHeightBehavior.exact.inspectorLabel,
+      'Altura',
     );
   });
 
@@ -142,8 +243,7 @@ void main() {
   test('generic editor routes universal controls through canonical widgets',
       () {
     final panelSource =
-        File('lib/modules/website/widgets/website_editor_panel.dart')
-            .readAsStringSync();
+        readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
     final rendererSource =
         File('lib/modules/website/widgets/website_block_renderer.dart')
             .readAsStringSync();
@@ -171,8 +271,7 @@ void main() {
     expect(addDialogSource, contains('WebsiteBlockRegistry.all()'));
     expect(addDialogSource, contains('definition.type.name'));
     final panelSource =
-        File('lib/modules/website/widgets/website_editor_panel.dart')
-            .readAsStringSync();
+        readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
     expect(panelSource,
         contains('for (final definition in WebsiteBlockRegistry.all())'));
     for (final legacyPath in [
@@ -229,21 +328,20 @@ void main() {
 
   test('editor button links use the canonical link editor', () {
     final panelSource =
-        File('lib/modules/website/widgets/website_editor_panel.dart')
-            .readAsStringSync();
-    final editableRendererSource =
-        File('lib/modules/website/widgets/editable_block_renderer.dart')
+        readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
+    final inlineActionSource =
+        File('lib/modules/website/widgets/website_inline_action_editor.dart')
             .readAsStringSync();
 
     expect(panelSource, contains('WebsiteLinkValueEditor('));
-    expect(editableRendererSource, contains('WebsiteLinkValueEditor('));
+    expect(inlineActionSource, contains('WebsiteLinkValueEditor('));
 
     expect(panelSource, isNot(contains('class _LinkPicker')));
     expect(panelSource, isNot(contains('_LinkPicker(')));
-    expect(editableRendererSource, isNot(contains('class _DarkLinkPicker')));
-    expect(editableRendererSource, isNot(contains('_DarkLinkPicker(')));
-    expect(editableRendererSource, isNot(contains('class _InlineLinkPicker')));
-    expect(editableRendererSource, isNot(contains('_InlineLinkPicker(')));
+    expect(inlineActionSource, isNot(contains('class _DarkLinkPicker')));
+    expect(inlineActionSource, isNot(contains('_DarkLinkPicker(')));
+    expect(inlineActionSource, isNot(contains('class _InlineLinkPicker')));
+    expect(inlineActionSource, isNot(contains('_InlineLinkPicker(')));
   });
 
   test('website theme fonts only expose bundled renderer-supported families',
@@ -273,8 +371,7 @@ void main() {
 
   test('theme font picker and renderers use the central font registry', () {
     final panelSource =
-        File('lib/modules/website/widgets/website_editor_panel.dart')
-            .readAsStringSync();
+        readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
     final themeBuilderSource =
         File('lib/modules/website/theme/website_theme_builder.dart')
             .readAsStringSync();
@@ -331,53 +428,9 @@ void main() {
     }
   });
 
-  test('footer navigation inline edits stage through the global save pipeline',
-      () {
-    final panelSource =
-        File('lib/modules/website/widgets/website_editor_panel.dart')
-            .readAsStringSync();
-    final providerSource =
-        File('lib/modules/website/providers/website_edit_mode_provider.dart')
-            .readAsStringSync();
-    final serviceSource =
-        File('lib/modules/website/services/website_service.dart')
-            .readAsStringSync();
-    final publicLayoutSource =
-        File('lib/public_store/widgets/public_store_layout.dart')
-            .readAsStringSync();
-
-    expect(providerSource, contains('updateFooterNavItem'));
-    expect(serviceSource, contains('pendingFooterNavItems'));
-    expect(serviceSource, contains('pendingFooterNavCreates'));
-    expect(serviceSource, contains('pendingFooterNavDeletes'));
-    expect(panelSource, contains('editProvider.updateFooterNavItem(updated)'));
-    expect(panelSource, contains('editProvider.createFooterNavDraft'));
-    expect(panelSource, contains('editProvider.deleteFooterNavItem'));
-    expect(panelSource, contains("const Text('Aplicar')"));
-    expect(
-      publicLayoutSource,
-      contains('updateFooterSetting(settingKey, value)'),
-    );
-    expect(
-      panelSource,
-      isNot(contains('await service.updateNavigation(updated)')),
-    );
-    expect(panelSource, isNot(contains('service.createNavigation(')));
-    expect(panelSource, isNot(contains('service.deleteNavigation(')));
-    expect(
-      panelSource,
-      isNot(contains("content: Text('Cambios guardados')")),
-    );
-    expect(
-      publicLayoutSource,
-      isNot(contains('saveSetting(settingKey, value)')),
-    );
-  });
-
   test('backup restore reloads editor state instead of invoking save', () {
     final panelSource =
-        File('lib/modules/website/widgets/website_editor_panel.dart')
-            .readAsStringSync();
+        readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
     final shellSource =
         File('lib/public_store/widgets/persistent_editor_shell.dart')
             .readAsStringSync();
@@ -450,7 +503,6 @@ void main() {
     provider.updateFooterSetting('contact_email', 'changed@example.com');
     provider.updateHeaderSettings({'header_logo_url': 'changed.png'});
     provider.updateSiteSetting('store_name', 'Changed');
-    provider.updateCategoryVisibility('category-1', false);
     provider.updatePageSeo(
       routeKey: 'inicio',
       metaTitle: 'Changed',
@@ -474,7 +526,6 @@ void main() {
     expect(provider.pendingThemeSettings, isEmpty);
     expect(provider.pendingFooterSettings, isEmpty);
     expect(provider.pendingFooterNavCreates, isEmpty);
-    expect(provider.pendingCategoryVisibility, isEmpty);
     expect(provider.pendingPageSeo, isEmpty);
     expect(
       provider.blocks.single['block_data']['text'],

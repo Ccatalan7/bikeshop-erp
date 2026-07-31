@@ -244,6 +244,7 @@ class _StockMovementHarnessState extends State<_StockMovementHarness> {
     return StockMovementsResponsiveFrame(
       isRecentMode: _isRecentMode,
       hasSelectedProduct: _hasSelectedProduct,
+      recentScopeLabel: '01/07/26 – 31/07/26',
       desktopHeader: const SizedBox(
         key: ValueKey('stock-desktop-header'),
         height: 64,

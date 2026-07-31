@@ -12,6 +12,7 @@ void main() {
     final deferredCommerce = File(
       'lib/public_store/routes/deferred_commerce_routes.dart',
     ).readAsStringSync();
+    final standaloneMain = File('lib/main_store.dart').readAsStringSync();
 
     expect(router, contains("import 'deferred_customer_route_page.dart';"));
     expect(
@@ -39,5 +40,14 @@ void main() {
     );
     expect(deferredCommerce, contains('CheckoutPage'));
     expect(deferredCommerce, contains('MercadoPagoService'));
+    expect(deferredCommerce, contains('CheckoutSessionStore.platform()'));
+    expect(
+      standaloneMain,
+      isNot(contains("services/checkout_session_store.dart")),
+    );
+    expect(
+      standaloneMain,
+      isNot(contains('CheckoutSessionStore.platform()')),
+    );
   });
 }

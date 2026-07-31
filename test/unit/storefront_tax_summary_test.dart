@@ -95,6 +95,42 @@ void main() {
       );
       expect(summary.checkoutBlockMessage, contains('Sin tasa'));
     });
+
+    test('keeps known gross separate from an invalid fiscal breakdown', () {
+      const inputs = [
+        StorefrontTaxLineInput(
+          label: 'Sin tasa',
+          grossUnitPrice: 1000,
+          quantity: 2,
+          taxRate: null,
+        ),
+        StorefrontTaxLineInput(
+          label: 'Afecto',
+          grossUnitPrice: 1190,
+          quantity: 1,
+          taxRate: 19,
+        ),
+      ];
+
+      final summary = StorefrontTaxSummary.calculate(inputs);
+
+      expect(summary.isValid, isFalse);
+      expect(StorefrontTaxSummary.calculateGrossAmount(inputs), 3190);
+    });
+
+    test('does not invent a gross amount from unsafe monetary input', () {
+      expect(
+        StorefrontTaxSummary.calculateGrossAmount(const [
+          StorefrontTaxLineInput(
+            label: 'Precio fraccional',
+            grossUnitPrice: 1000.5,
+            quantity: 1,
+            taxRate: null,
+          ),
+        ]),
+        isNull,
+      );
+    });
   });
 
   test('CartProvider totals come from each product tax classification', () {
@@ -131,8 +167,10 @@ void main() {
       ));
 
     expect(cart.hasValidTaxClassification, isFalse);
-    expect(cart.subtotal, 0);
-    expect(cart.ivaAmount, 0);
+    expect(cart.grossMerchandiseAmountClp, 1000);
+    expect(cart.total, isNull);
+    expect(cart.subtotal, isNull);
+    expect(cart.ivaAmount, isNull);
     expect(cart.taxCheckoutBlockMessage, contains('Producto sin tasa'));
   });
 }

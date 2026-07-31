@@ -150,7 +150,6 @@ void main() {
     for (final tooltip in const [
       "tooltip: 'Buscar trabajos'",
       "tooltip: 'Cerrar búsqueda'",
-      "tooltip: 'Limpiar búsqueda'",
       "tooltip: 'Más acciones'",
     ]) {
       expect(
@@ -160,6 +159,12 @@ void main() {
             'Icon-only Jobs app bar controls need a tooltip and semantics label.',
       );
     }
+    expect(
+      mobileChrome,
+      contains("tooltip: 'Limpiar búsqueda'"),
+      reason:
+          'The shell-owned search field must keep its icon-only clear action labeled.',
+    );
   });
 
   test('compact jobs chrome follows the canonical responsive width matrix', () {
@@ -338,13 +343,20 @@ void main() {
       'class MainLayout extends StatefulWidget',
     );
     expect(compactHeaderContract, contains('required this.title'));
+    expect(compactHeaderContract, contains('this.search'));
     expect(compactHeaderContract, contains('this.actions = const <Widget>[]'));
-    expect(compactHeaderContract, contains('final Widget title;'));
+    expect(compactHeaderContract, contains('final String title;'));
+    expect(
+      compactHeaderContract,
+      contains('final MainLayoutCompactSearch? search;'),
+    );
     expect(compactHeaderContract, contains('final List<Widget> actions;'));
-    expect(mainLayout, contains('title: widget.compactHeader?.title ??'));
+    expect(mainLayout, contains('final search = header?.search;'));
+    expect(mainLayout, contains('color: chrome.foreground'));
+    expect(mainLayout, contains('fillColor: chrome.raised'));
     expect(
       mainLayout,
-      contains('actions: widget.compactHeader?.actions ?? const <Widget>[]'),
+      contains('...?widget.compactHeader?.actions'),
     );
 
     final jobsHeader = _section(
@@ -365,7 +377,7 @@ void main() {
     );
     expect(jobsHeader, contains("'Planificación operativa'"));
     expect(jobsHeader, contains("tooltip: 'Cambiar vista del taller'"));
-    expect(jobsHeader, contains('title: TextField('));
+    expect(jobsHeader, contains('search: MainLayoutCompactSearch('));
     expect(jobsHeader, contains("ValueKey('workshop-mobile-search-field')"));
     expect(jobsHeader, contains('controller: _mobileSearchController'));
     expect(jobsHeader, contains('onChanged: _updateMobileSearch'));

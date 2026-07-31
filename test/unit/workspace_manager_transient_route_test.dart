@@ -9,6 +9,16 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  test('ERP storefront does not reserve absent application navigation', () {
+    expect(workspaceRouteUsesAppNavigation('/tienda?edit=true'), isFalse);
+    expect(
+      workspaceRouteUsesAppNavigation('/tienda/productos/categoria/cadenas'),
+      isFalse,
+    );
+    expect(workspaceRouteUsesAppNavigation('/website'), isTrue);
+    expect(workspaceRouteUsesAppNavigation('/hr/payroll'), isTrue);
+  });
+
   test('openRequest is excluded from the durable workspace route identity', () {
     final route = workspaceRouteIdentity(
       '/mail?providerId=gmail&messageId=message-42&openRequest=request-a',

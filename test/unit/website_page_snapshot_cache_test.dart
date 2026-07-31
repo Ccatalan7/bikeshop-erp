@@ -97,6 +97,24 @@ void main() {
     expect(revisionOf(cache.peek('tenant-a\u0000privacidad')), 2);
   });
 
+  test('invalidation without replacement is not authoritative absence',
+      () async {
+    final cache = WebsitePageSnapshotCache();
+    final gate = Completer<CachedPageSnapshot?>();
+    final load = cache.revalidate(
+      'tenant-a\u0000borrador',
+      () => gate.future,
+    );
+
+    cache.invalidateKey('tenant-a\u0000borrador');
+    gate.complete(null);
+
+    await expectLater(
+      load,
+      throwsA(isA<PageSnapshotInvalidatedException>()),
+    );
+  });
+
   test('retention is bounded and least recently used entry is evicted',
       () async {
     final cache = WebsitePageSnapshotCache(capacity: 2);

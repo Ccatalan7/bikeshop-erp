@@ -43,6 +43,24 @@ void main() {
     }
   });
 
+  test('desktop and compact shells share one permission projection', () {
+    final withoutHr = resolveVisibleToolbarTools(
+      canManageHr: false,
+      performanceEnabled: true,
+      performancePinned: true,
+    );
+    expect(withoutHr, isNot(contains(ToolbarTool.kiosk)));
+    expect(withoutHr, contains(ToolbarTool.performance));
+
+    final withHrWithoutGauge = resolveVisibleToolbarTools(
+      canManageHr: true,
+      performanceEnabled: true,
+      performancePinned: false,
+    );
+    expect(withHrWithoutGauge, contains(ToolbarTool.kiosk));
+    expect(withHrWithoutGauge, isNot(contains(ToolbarTool.performance)));
+  });
+
   testWidgets(
     'compact toolbar is zero-sized while inactive and closes through Back',
     (tester) async {
