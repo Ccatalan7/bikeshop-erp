@@ -24,6 +24,14 @@ verify:
     #!/usr/bin/env bash
     exec bash scripts/dev/verify.sh full
 
+db-preflight:
+    #!/usr/bin/env bash
+    exec bash scripts/db/preflight.sh
+
+db-help:
+    #!/usr/bin/env bash
+    bash scripts/db/query.sh --help || true
+
 db-start:
     #!/usr/bin/env bash
     exec bash scripts/db/ensure_local.sh
@@ -77,6 +85,22 @@ e2e:
     #!/usr/bin/env bash
     echo "Staging E2E is suspended: staging is not production-authoritative." >&2
     exit 64
+
+preview-erp *args:
+    #!/usr/bin/env bash
+    exec bash scripts/dev/web_preview.sh {{args}} --erp
+
+preview-store *args:
+    #!/usr/bin/env bash
+    exec bash scripts/dev/web_preview.sh {{args}} --store --release
+
+preview-store-debug *args:
+    #!/usr/bin/env bash
+    exec bash scripts/dev/web_preview.sh {{args}} --store
+
+preview-stop:
+    #!/usr/bin/env bash
+    exec bash scripts/dev/web_preview.sh stop --all
 
 build-erp:
     #!/usr/bin/env bash

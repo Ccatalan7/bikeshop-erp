@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+payload="$(cat)"
+tool_name="$(jq -r '.tool_name // ""' <<<"$payload")"
+command_text="$(jq -r '.tool_input.command // ""' <<<"$payload")"
+
+if [[ "$tool_name" != "Bash" || -z "$command_text" ]]; then
+  exit 0
+fi
+
+deny() {
+  local reason="$1"
+  jq -n --arg reason "$reason" '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: $reason
+    }
+  }'
+  exit 0
+}
+
+# Normalize quoting and line breaks for conservative command inspection. This
+# intentionally also sees commands nested in `sh -c`/`bash -c`; the hook is the
+# last safety boundary when Claude Desktop starts in bypassPermissions mode.
+command_scan="$(
+  printf '%s' "$command_text" |
+    tr '\r\n\t' '   ' |
+    sed "s/[\"']/ /g"
+)"
+tool_boundary='(^|[[:space:];|&()])([^[:space:];|&()]*/)?'
+# Only documented Git global options may precede the top-level subcommand.
+# An arbitrary "some tokens, then push" prefix confuses command arguments with
+# the subcommand (for example, `git stash push` used to look like `git push`).
+git_global_argument='(-[cC][[:space:]]+[^[:space:];|&()]+|-[cC][^[:space:];|&()]+|--(git-dir|work-tree|namespace|super-prefix|config-env|exec-path|attr-source)(=[^[:space:];|&()]+|[[:space:]]+[^[:space:];|&()]+)|--(bare|no-pager|paginate|no-replace-objects|no-lazy-fetch|no-optional-locks|no-advice|literal-pathspecs|glob-pathspecs|noglob-pathspecs|icase-pathspecs)|-[pP])'
+git_command="${tool_boundary}git[[:space:]]+(${git_global_argument}[[:space:]]+)*"
+
+command_matches() {
+  printf '%s' "$command_scan" | grep -Eq -- "$1"
+}
+
+# The Claude Desktop local agent currently starts in bypassPermissions mode.
+# PreToolUse hooks still execute in that mode, so this is the durable boundary
+# for actions that require an explicit owner decision or a safer operator.
+if command_matches "${git_command}(commit|push|restore|rebase)([[:space:]]|$)" ||
+   command_matches "${tool_boundary}gh[[:space:]]+([^;|&()]+[[:space:]]+)*pr[[:space:]]+create([[:space:]]|$)"; then
+  deny "Commit, push, PR creation, restore, and history rewrites are owner-controlled. Hand the exact command and evidence back to Codex/the owner."
+fi
+
+# `git checkout name` is inherently ambiguous: when `name` is not a branch it
+# can be a path restore, and `checkout TREE PATH` needs no `--` separator.
+# Branch movement remains available through the unambiguous `git switch`.
+if command_matches "${git_command}checkout([[:space:]]|$)"; then
+  deny "Git checkout can restore paths and discard shared changes. Use git switch for branch changes."
+fi
+
+if command_matches "${git_command}stash([[:space:]]|$)" ||
+   command_matches "${git_command}reset[[:space:]]+[^;|&()]*--hard([[:space:]]|$)" ||
+   command_matches "${git_command}clean[[:space:]]+[^;|&()]*(-[^[:space:];|&()]*f[^[:space:];|&()]*|--force)([[:space:]]|$)" ||
+   command_matches "${git_command}switch[[:space:]]+([^;|&()]*[[:space:]])?(-f|--force|--discard-changes|-C[^[:space:];|&()]*)([[:space:]]|$)" ||
+   command_matches "${git_command}branch[[:space:]]+([^;|&()]*[[:space:]])?-D([[:space:]]|$)"; then
+  deny "Destructive Git cleanup is forbidden in the shared checkout."
+fi
+
+if command_matches "${tool_boundary}rm[[:space:]]+[^;|&()]*(-[^[:space:];|&()]*[rR][^[:space:];|&()]*|--recursive)([[:space:]]|$)" ||
+   command_matches "${tool_boundary}find[[:space:]]+[^;|&()]*[[:space:]]-delete([[:space:]]|$)" ||
+   command_matches "${tool_boundary}(kill|killall|pkill)([[:space:]]|$)"; then
+  deny "Recursive deletion and generic process signaling are blocked. Use the canonical preview owner or a recoverable, exact target."
+fi
+
+if command_matches "${tool_boundary}psql([[:space:]]|$)" ||
+   command_matches "${tool_boundary}supabase[[:space:]]+([^;|&()]+[[:space:]]+)*(db|migration)([[:space:]]|$)"; then
+  deny "Raw SQL and Supabase database commands bypass the audited repository database contract."
+fi
+
+if [[ "$command_scan" == *"production"* &&
+      "$command_scan" == *"--allow-pii"* &&
+      ( "$command_scan" == *"scripts/db/query.sh"* ||
+        "$command_scan" == *"just db-query"* ) ]]; then
+  deny "Hosted PII override is not pre-approved. Hand the exact columns and necessity back to Codex/the owner."
+fi
+
+if [[ "$command_scan" == *"production"* &&
+      "$command_scan" == *"--write"* &&
+      ( "$command_scan" == *"scripts/db/query.sh"* ||
+        "$command_scan" == *"just db-query"* ) ]]; then
+  deny "Production database writes require explicit owner authorization and must be executed through the guarded workflow by Codex."
+fi
+
+if [[ "$command_scan" == *"scripts/db/production_validation.sh refresh"* ]]; then
+  deny "Refreshing the production-derived database cache is an external read with operational impact; hand it back to Codex."
+fi
+
+if command_matches "${tool_boundary}firebase[[:space:]]+([^;|&()]+[[:space:]]+)*deploy([[:space:]]|$)" ||
+   command_matches "${tool_boundary}supabase[[:space:]]+([^;|&()]+[[:space:]]+)*functions[[:space:]]+deploy([[:space:]]|$)" ||
+   [[ "$command_scan" == *"scripts/deploy.sh"* ]] ||
+   [[ "$command_scan" == *"scripts/release/"* ]] ||
+   [[ "$command_scan" == *"scripts/publish_"* ]]; then
+  deny "Deployment, release, and publication are owner-controlled external mutations."
+fi

@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "//": "Ports are fixed on purpose. Browser storage is per origin, so a rotating port starts every restart from empty storage and drops the signed-in Supabase session; the /auth/callback OAuth redirect is also registered per origin. Never set autoPort here.",
+      "name": "erp-web",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "scripts/dev/web_preview.sh",
+        "start",
+        "--erp"
+      ],
+      "port": 54330,
+      "autoPort": false
+    },
+    {
+      "//": "Storefront preview from the RELEASE bundle via the single preview owner (scripts/dev/web_preview.sh). One compiled file that boots in seconds; missing assets 404 so readiness checks cannot false-pass. Rebuild after code changes: bash scripts/dev/web_preview.sh build --store --release. Debug/DWDS: bash scripts/dev/web_preview.sh start --store (stop this first, same port).",
+      "name": "erp-store",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "scripts/dev/web_preview.sh",
+        "serve-release",
+        "--store"
+      ],
+      "port": 54331,
+      "autoPort": false
+    }
+  ]
+}

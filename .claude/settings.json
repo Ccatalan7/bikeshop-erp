@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "skipWorkflowUsageWarning": false,
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "0"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git rev-parse *)",
+      "Bash(git rev-list *)",
+      "Bash(rg *)",
+      "Bash(fvm dart format *)",
+      "Bash(fvm flutter analyze *)",
+      "Bash(fvm flutter test *)",
+      "Bash(.fvm/flutter_sdk/bin/dart format *)",
+      "Bash(.fvm/flutter_sdk/bin/flutter analyze *)",
+      "Bash(.fvm/flutter_sdk/bin/flutter test *)",
+      "Bash(bash scripts/dev/web_preview.sh *)",
+      "Bash(just db-preflight)",
+      "Bash(just db-help)",
+      "Bash(just db-status)",
+      "Bash(just db-start)",
+      "Bash(just db-test *)",
+      "Bash(just db-query local *)",
+      "Bash(just db-query-file local *)",
+      "Bash(just db-trace local *)",
+      "Bash(just db-fingerprint)",
+      "Bash(just db-fingerprint local)",
+      "Bash(just db-health)",
+      "Bash(just db-health local)",
+      "Bash(just db-smoke)",
+      "Bash(just db-smoke local)",
+
+      "Bash(bash scripts/db/preflight.sh)",
+      "Bash(bash scripts/db/status.sh)",
+      "Bash(bash scripts/db/ensure_local.sh)",
+      "Bash(bash scripts/db/query.sh --help)",
+      "Bash(bash scripts/db/query.sh local *)",
+      "Bash(bash scripts/db/test.sh *)",
+      "Bash(bash scripts/db/trace.sh *)",
+      "Bash(bash scripts/db/drift.sh *)",
+      "Bash(bash scripts/db/health.sh *)",
+      "Bash(bash scripts/db/smoke.sh *)",
+      "Bash(bash scripts/db/production_validation.sh reuse *)",
+      "Bash(bash scripts/db/production_validation.sh test *)",
+
+      "Bash(scripts/supabase_cli.sh --version)",
+      "Bash(scripts/supabase_cli.sh projects list *)",
+      "Bash(scripts/supabase_cli.sh secrets list *)",
+      "Bash(scripts/supabase_cli.sh backups list *)"
+    ],
+    "ask": [
+      "Bash(git commit *)",
+      "Bash(git push)",
+      "Bash(git push *)",
+      "Bash(gh pr create *)",
+      "Bash(git restore *)",
+      "Bash(rm -rf *)",
+      "Bash(kill *)",
+      "Bash(killall *)",
+      "Bash(pkill *)",
+      "Bash(firebase deploy *)",
+      "Bash(supabase functions deploy *)",
+      "Bash(bash scripts/deploy.sh *)",
+      "Bash(scripts/deploy.sh *)",
+      "Bash(bash scripts/release/*)",
+      "Bash(scripts/release/*)",
+      "Bash(bash scripts/publish_*)",
+      "Bash(scripts/publish_*)",
+      "Bash(just db-query production *--write*)",
+      "Bash(bash scripts/db/query.sh production *--write*)"
+    ],
+    "deny": [
+      "Bash(supabase db *)",
+      "Bash(supabase migration *)",
+      "Bash(psql *)",
+      "Bash(bash scripts/db/production_validation.sh refresh *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean -f*)",
+      "Bash(git checkout)",
+      "Bash(git checkout *)",
+      "Bash(git stash)",
+      "Bash(git stash *)",
+      "Bash(git rebase *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-context.sh\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-dangerous-bash.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

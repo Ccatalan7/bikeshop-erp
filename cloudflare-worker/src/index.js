@@ -17,6 +17,17 @@ const ALLOWED_TENANTS = [
     '5443b130-cc28-45af-a420-cd500b288890', // vinabike
 ];
 
+export function isTenantOwnedStoreData(data, expectedTenantId) {
+    return Boolean(
+        data
+        && typeof data === 'object'
+        && !Array.isArray(data)
+        && typeof expectedTenantId === 'string'
+        && expectedTenantId.length > 0
+        && data.tenant_id === expectedTenantId
+    );
+}
+
 export default {
     async fetch(request, env, ctx) {
         // Only handle POST requests to our cache endpoint
@@ -99,25 +110,36 @@ async function handlePublicStoreData(request, env, ctx) {
 
         // Check cache first
         const cache = caches.default;
-        let response = await cache.match(cacheKey);
+        const response = await cache.match(cacheKey);
 
         if (response) {
-            // Cache HIT - return cached response with indicator
-            console.log(`Cache HIT for tenant ${tenantId}`);
-            // Clone before reading so we don't consume the cached body stream.
-            const cachedData = await response.clone().json();
-            return new Response(JSON.stringify({
-                ...cachedData,
-                _cache: 'HIT',
-                _edge: request.cf?.colo || 'unknown'
-            }), {
-                headers: {
-                    ...corsHeaders(),
-                    'Content-Type': 'application/json',
-                    'X-Cache': 'HIT',
-                    'X-Edge-Location': request.cf?.colo || 'unknown'
-                }
-            });
+            let cachedData = null;
+            try {
+                // Clone before reading so we don't consume the cached body stream.
+                cachedData = await response.clone().json();
+            } catch (_) {
+                // A malformed legacy entry is untrusted and repaired below.
+            }
+
+            if (isTenantOwnedStoreData(cachedData, tenantId)) {
+                console.log(`Cache HIT for tenant ${tenantId}`);
+                return new Response(JSON.stringify({
+                    ...cachedData,
+                    _cache: 'HIT',
+                    _edge: request.cf?.colo || 'unknown'
+                }), {
+                    headers: {
+                        ...corsHeaders(),
+                        'Content-Type': 'application/json',
+                        'X-Cache': 'HIT',
+                        'X-Edge-Location': request.cf?.colo || 'unknown',
+                        'X-Tenant-ID': tenantId
+                    }
+                });
+            }
+
+            console.warn(`Discarding tenant-mismatched cache entry for ${tenantId}`);
+            await cache.delete(cacheKey);
         }
 
         // Cache MISS - fetch from Supabase
@@ -143,6 +165,13 @@ async function handlePublicStoreData(request, env, ctx) {
         }
 
         const data = await supabaseResponse.json();
+        if (!isTenantOwnedStoreData(data, tenantId)) {
+            console.error(`Supabase returned data without the requested tenant identity for ${tenantId}`);
+            return new Response(JSON.stringify({ error: 'Tenant identity mismatch' }), {
+                status: 502,
+                headers: corsHeaders()
+            });
+        }
 
         // Prepare response for caching
         const responseToCache = new Response(JSON.stringify(data), {
@@ -165,7 +194,8 @@ async function handlePublicStoreData(request, env, ctx) {
                 ...corsHeaders(),
                 'Content-Type': 'application/json',
                 'X-Cache': 'MISS',
-                'X-Edge-Location': request.cf?.colo || 'unknown'
+                'X-Edge-Location': request.cf?.colo || 'unknown',
+                'X-Tenant-ID': tenantId
             }
         });
 
@@ -194,6 +224,7 @@ function corsHeaders() {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Expose-Headers': 'X-Cache, X-Edge-Location, X-Tenant-ID',
         'Content-Type': 'application/json'
     };
 }
