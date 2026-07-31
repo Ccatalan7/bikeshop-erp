@@ -77,9 +77,23 @@ void main() {
     );
     expect(form, isNot(contains('DropdownButtonFormField<JobStatus>')));
     expect(form, isNot(contains('DropdownButtonFormField<JobStatusCustom>')));
-    expect(
+    final mobileStatusAction = _section(
       table,
-      contains('job.isSaleWorkflow ? null : () => _showStatusMenu(job)'),
+      start: 'Widget _buildMobileStatusAction({',
+      end: 'Widget _buildMobileFinancialSummary({',
+    );
+    final saleBranch = _section(
+      mobileStatusAction,
+      start: '} else if (job.isSaleWorkflow) {',
+      end: '} else if (job.isStandaloneQuotation) {',
+    );
+    expect(saleBranch, isNot(contains('_showStatusMenu(job)')));
+    expect(saleBranch, contains('_MobileWorkshopSurface.invoice'));
+    expect(
+      _occurrences(mobileStatusAction, '_showStatusMenu(job)'),
+      2,
+      reason:
+          'Only standalone quotations and operational jobs expose the status menu.',
     );
   });
 
@@ -170,3 +184,18 @@ void main() {
     );
   });
 }
+
+String _section(
+  String source, {
+  required String start,
+  required String end,
+}) {
+  final startIndex = source.indexOf(start);
+  final endIndex = source.indexOf(end, startIndex + start.length);
+  expect(startIndex, greaterThanOrEqualTo(0), reason: 'Missing $start');
+  expect(endIndex, greaterThan(startIndex), reason: 'Missing $end');
+  return source.substring(startIndex, endIndex);
+}
+
+int _occurrences(String source, String needle) =>
+    RegExp(RegExp.escape(needle)).allMatches(source).length;

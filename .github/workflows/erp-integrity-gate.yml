@@ -2,7 +2,17 @@ name: ERP Integrity Gate
 
 on:
   workflow_call:
+    inputs:
+      expected_commit:
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact commit requested by the paired release qualifier
+        required: true
+        type: string
   push:
     branches:
       - smartpegas1.0
@@ -36,6 +46,23 @@ jobs:
     timeout-minutes: 45
 
     steps:
+      - name: Bind a dispatched qualification to this workflow source
+        if: ${{ inputs.expected_commit != '' }}
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'The requested integrity source binding is invalid.' >&2
+            exit 1
+          fi
+          if [[ "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]]; then
+            echo 'The integrity workflow source does not match the requested commit.' >&2
+            exit 1
+          fi
+          echo 'The ERP Integrity Gate is bound to the requested commit.'
+
       - name: Check out repository
         uses: actions/checkout@v7
         with:

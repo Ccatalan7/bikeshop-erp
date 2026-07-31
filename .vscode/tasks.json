@@ -90,6 +90,7 @@
 			"dependsOrder": "sequence",
 			"dependsOn": [
 				"🔒 Prepare ERP Update (shared commit)",
+				"✅ Qualify ERP Update (exact SHA)",
 				"🚀 Publish Prepared ERP Platforms"
 			],
 			"problemMatcher": [],
@@ -102,6 +103,21 @@
 			"label": "🔒 Prepare ERP Update (shared commit)",
 			"type": "shell",
 			"command": "bash scripts/releases/prepare_erp_update.sh",
+			"problemMatcher": [],
+			"hide": true,
+			"runOptions": {
+				"instanceLimit": 1
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true
+			}
+		},
+		{
+			"label": "✅ Qualify ERP Update (exact SHA)",
+			"type": "shell",
+			"command": "node scripts/releases/qualify_erp_update.mjs --prepared-state auto",
 			"problemMatcher": [],
 			"hide": true,
 			"runOptions": {
@@ -154,6 +170,7 @@
 			"dependsOrder": "sequence",
 			"dependsOn": [
 				"🔒 Prepare Windows + Android ERP Update",
+				"✅ Qualify Windows + Android ERP Update (exact SHA)",
 				"🚀 Publish Prepared Windows + Android Platforms"
 			],
 			"problemMatcher": [],
@@ -166,6 +183,21 @@
 			"label": "🔒 Prepare Windows + Android ERP Update",
 			"type": "shell",
 			"command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/releases/prepare_windows_android_update.ps1",
+			"problemMatcher": [],
+			"hide": true,
+			"runOptions": {
+				"instanceLimit": 1
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true
+			}
+		},
+		{
+			"label": "✅ Qualify Windows + Android ERP Update (exact SHA)",
+			"type": "shell",
+			"command": "node scripts/releases/qualify_erp_update.mjs --prepared-state .git/vinabike-windows-android-publish-state.json",
 			"problemMatcher": [],
 			"hide": true,
 			"runOptions": {

@@ -150,6 +150,8 @@ void main() {
     expect(workflow, contains('release_notes_from_commit:'));
     expect(workflow, contains('release_notes_candidate_b64:'));
     expect(workflow, contains('release_notes_candidate_sha256:'));
+    expect(workflow, contains('integrity_run_id:'));
+    expect(workflow, contains('integrity_run_attempt:'));
     expect(
       workflow,
       contains(
@@ -158,7 +160,13 @@ void main() {
     );
     expect(workflow, contains('environment: Production'));
     expect(workflow, contains('cancel-in-progress: false'));
-    expect(workflow, contains(r'if: ${{ inputs.publish_release == true }}'));
+    expect(workflow, contains('always() && !cancelled()'));
+    expect(workflow, contains("inputs.integrity_run_id == ''"));
+    expect(workflow, contains("inputs.integrity_run_id != ''"));
+    expect(workflow, contains('needs.integrity.result'));
+    expect(workflow, contains('needs.qualification.result'));
+    expect(workflow, contains('verify_integrity_qualification.mjs'));
+    expect(workflow, contains('actions: read'));
     expect(workflow, contains('contents: read'));
     expect(workflow, isNot(contains('contents: write')));
     expect(
@@ -178,6 +186,16 @@ void main() {
       expect(workflow.indexOf(secret), greaterThan(productionBoundary));
     }
     expect(workflow, contains('generate_release_notes.mjs'));
+    expect(
+      compactWorkflow,
+      contains(
+        r'git merge-base --is-ancestor "$notes_base" "$android_commit"',
+      ),
+    );
+    expect(
+      workflow,
+      contains('VINABIKE_ANDROID_RELEASE_NOTES_FROM_COMMIT:'),
+    );
     expect(workflow, contains('CODEX_RELEASE_NOTES_CANDIDATE_B64='));
     expect(workflow, contains("CODEX_CANDIDATE_B64=''"));
     expect(
@@ -203,6 +221,11 @@ void main() {
     final compactPublisher = normalized(publisher);
 
     expect(publisher, contains('--ci-exact-sha'));
+    expect(publisher, contains('VINABIKE_ANDROID_RELEASE_NOTES_FROM_COMMIT'));
+    expect(
+      publisher,
+      contains('.release_notes.from_commit == \$expected_from_commit'),
+    );
     expect(publisher, isNot(contains('--prepared-state')));
     expect(
       compactPublisher,

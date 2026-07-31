@@ -72,7 +72,7 @@ erp_update_load_state() {
   if ! jq -e \
     --arg target "$required_target" \
     '
-      .schema_version == 2
+      .schema_version == 3
       and (.targets | type == "array")
       and (.targets | index($target) != null)
       and (.repository_root | type == "string" and length > 0)
@@ -87,6 +87,19 @@ erp_update_load_state() {
       )
       and (.release_notes.candidate_b64 | type == "string")
       and (.release_notes.candidate_sha256 | type == "string")
+      and (.qualification | type == "object")
+      and .qualification.repository == "Ccatalan7/bikeshop-erp"
+      and .qualification.workflow_path == ".github/workflows/erp-integrity-gate.yml"
+      and (.qualification.workflow_id | type == "number" and floor == . and . > 0)
+      and (.qualification.run_id | type == "number" and floor == . and . > 0)
+      and (.qualification.run_attempt | type == "number" and floor == . and . > 0)
+      and .qualification.head_sha == .head_sha
+      and .qualification.branch == .branch
+      and (
+        .qualification.completed_at
+        | type == "string"
+          and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$")
+      )
     ' >/dev/null <<< "$state_json"; then
     echo 'Prepared ERP update state is malformed or does not authorize this platform.' >&2
     return 1
@@ -109,6 +122,19 @@ erp_update_load_state() {
   )"
   ERP_UPDATE_STATE_RELEASE_NOTES_CANDIDATE_SHA256="$(
     jq -r '.release_notes.candidate_sha256' <<< "$state_json"
+  )"
+  # These globals are the sourced helper's validated output contract.
+  # shellcheck disable=SC2034
+  ERP_UPDATE_STATE_INTEGRITY_WORKFLOW_ID="$(
+    jq -r '.qualification.workflow_id' <<< "$state_json"
+  )"
+  # shellcheck disable=SC2034
+  ERP_UPDATE_STATE_INTEGRITY_RUN_ID="$(
+    jq -r '.qualification.run_id' <<< "$state_json"
+  )"
+  # shellcheck disable=SC2034
+  ERP_UPDATE_STATE_INTEGRITY_RUN_ATTEMPT="$(
+    jq -r '.qualification.run_attempt' <<< "$state_json"
   )"
 
   now_epoch="$(date +%s)"

@@ -40,11 +40,23 @@ jq -Rrs '
   | . as $failure
   | ($tests[($failure.testID | tostring)] // {}) as $test
   | (($test.root_url // $test.url // "unknown") | sub("^file://"; "")) as $path
-  | (($failure.error // "Unknown failure")
-      | split("\n  Actual:")[0]
+  | ([
+      $events[]
+      | select(.type == "print")
+      | select((.testID | tostring) == ($failure.testID | tostring))
+      | select((.message // "") | contains("EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK"))
+      | .message
+    ] | last // "") as $framework_exception
+  | (if (($failure.error // "") | startswith("Test failed. See exception logs above"))
+      and $framework_exception != ""
+    then $framework_exception
+    else ($failure.error // "Unknown failure")
+    end) as $diagnostic_source
+  | ($diagnostic_source
+      | gsub("═+╡?"; " ")
       | gsub("[\\r\\n\\t ]+"; " ")
-      | .[0:600]) as $expected
-  | (($failure.stackTrace // "")
+      | .[0:1200]) as $expected
+  | ((($failure.stackTrace // "") + "\n" + $framework_exception)
       | split("\n")
       | map(select(test("(^|/)test/")))
       | .[0] // "") as $location

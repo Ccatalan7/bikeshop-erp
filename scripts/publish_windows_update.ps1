@@ -126,7 +126,7 @@ function Read-PreparedErpUpdateState {
     $createdEpochValue = Get-ObjectProperty $state 'created_epoch'
 
     if (
-        $schemaVersion -ne 2 -or
+        $schemaVersion -ne 3 -or
         $targets -notcontains 'windows' -or
         [string]::IsNullOrWhiteSpace($stateRepositoryRoot) -or
         $remote -ne 'origin' -or
@@ -199,6 +199,51 @@ function Read-PreparedErpUpdateState {
         }
     }
 
+    $qualification = Get-ObjectProperty $state 'qualification'
+    if ($null -eq $qualification) {
+        throw 'Prepared ERP update state is missing integrity qualification.'
+    }
+    $integrityRepository = [string](
+        Get-ObjectProperty $qualification 'repository'
+    )
+    $integrityWorkflowPath = [string](
+        Get-ObjectProperty $qualification 'workflow_path'
+    )
+    $integrityHeadSha = [string](
+        Get-ObjectProperty $qualification 'head_sha'
+    )
+    $integrityBranch = [string](
+        Get-ObjectProperty $qualification 'branch'
+    )
+    $integrityCompletedAt = [string](
+        Get-ObjectProperty $qualification 'completed_at'
+    )
+    try {
+        $integrityWorkflowId = [int64](
+            Get-ObjectProperty $qualification 'workflow_id'
+        )
+        $integrityRunId = [int64](
+            Get-ObjectProperty $qualification 'run_id'
+        )
+        $integrityRunAttempt = [int64](
+            Get-ObjectProperty $qualification 'run_attempt'
+        )
+    } catch {
+        throw 'Prepared ERP update integrity qualification is malformed.'
+    }
+    if (
+        $integrityRepository -ne 'Ccatalan7/bikeshop-erp' -or
+        $integrityWorkflowPath -ne '.github/workflows/erp-integrity-gate.yml' -or
+        $integrityWorkflowId -lt 1 -or
+        $integrityRunId -lt 1 -or
+        $integrityRunAttempt -lt 1 -or
+        $integrityHeadSha -ne $headSha -or
+        $integrityBranch -ne $branch -or
+        $integrityCompletedAt -notmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$'
+    ) {
+        throw 'Prepared ERP update integrity qualification is malformed or stale.'
+    }
+
     return [pscustomobject]@{
         StatePath = $statePath
         RepositoryRoot = [System.IO.Path]::GetFullPath($stateRepositoryRoot)
@@ -208,6 +253,9 @@ function Read-PreparedErpUpdateState {
         ReleaseNotesFromCommit = $fromCommit
         ReleaseNotesCandidateBase64 = $candidateBase64
         ReleaseNotesCandidateSha256 = $candidateSha256
+        IntegrityWorkflowId = [string]$integrityWorkflowId
+        IntegrityRunId = [string]$integrityRunId
+        IntegrityRunAttempt = [string]$integrityRunAttempt
     }
 }
 
@@ -706,6 +754,8 @@ $preparedUpdate = $null
 $releaseNotesFromCommit = ''
 $releaseNotesCandidateBase64 = ''
 $releaseNotesCandidateSha256 = ''
+$integrityRunId = ''
+$integrityRunAttempt = ''
 
 if ($CheckReleaseBranch) {
     Write-Host 'Windows Production branch boundary is ready.'
@@ -734,6 +784,8 @@ if (-not [string]::IsNullOrWhiteSpace($PreparedState)) {
     $releaseNotesCandidateSha256 = (
         $preparedUpdate.ReleaseNotesCandidateSha256
     )
+    $integrityRunId = $preparedUpdate.IntegrityRunId
+    $integrityRunAttempt = $preparedUpdate.IntegrityRunAttempt
     Write-Host "Prepared source: $headSha"
     Write-Host 'Git staging, commit, and push are owned by the shared preparation step.'
 } else {
@@ -822,9 +874,16 @@ $notesBaseIdentity = if (
 } else {
     $releaseNotesFromCommit
 }
+$integrityTitleIdentity = if (
+    [string]::IsNullOrWhiteSpace($integrityRunId)
+) {
+    'self'
+} else {
+    $integrityRunId
+}
 $expectedRunTitle = (
     "Windows publish · $headSha · notes $notesTitleIdentity" +
-    " · from $notesBaseIdentity"
+    " · from $notesBaseIdentity · integrity $integrityTitleIdentity"
 )
 $run = Find-ActiveWorkflowRun `
     -Branch $branch `
@@ -847,6 +906,8 @@ if ($run) {
         release_notes_from_commit = $releaseNotesFromCommit
         release_notes_candidate_b64 = $releaseNotesCandidateBase64
         release_notes_candidate_sha256 = $releaseNotesCandidateSha256
+        integrity_run_id = $integrityRunId
+        integrity_run_attempt = $integrityRunAttempt
     }
     $workflowInputsJson = $workflowInputs |
         ConvertTo-Json -Compress

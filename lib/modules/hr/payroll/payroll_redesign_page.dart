@@ -1713,14 +1713,14 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Cerrar respaldo de pago',
-      barrierColor: visual.shell.withValues(alpha: 0.4),
+      barrierColor: visual.overlayVeil,
       transitionDuration: PayrollTokens.base,
       pageBuilder: (dialogContext, _, __) => Align(
         alignment: Alignment.centerRight,
         child: _adaptivePayrollPanel(
           dialogContext,
           desktopWidth: 520,
-          background: visual.canvas,
+          background: visual.surfaceOverlay,
           child: PayrollPaymentEvidenceSurface(
             value: PayrollPaymentEvidenceVM(
               personName: line.employeeName,
@@ -1851,19 +1851,35 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
             final width = compact || desktopWidth > constraints.maxWidth
                 ? constraints.maxWidth
                 : desktopWidth;
+            // Un panel flotante necesita las cuatro cosas juntas: capa propia,
+            // borde, sombra y el velo que va detrás. Antes era un `Material`
+            // pelado pintado con `canvas` — que en oscuro ES el fondo de la
+            // página, así que el panel no tenía límite alguno: flotaba sobre
+            // un color idéntico al suyo. La sombra sola tampoco bastaba,
+            // porque sin velo debajo no se ve.
+            final radius = compact
+                ? BorderRadius.zero
+                : const BorderRadius.horizontal(left: Radius.circular(14));
             return Align(
               alignment:
                   compact ? Alignment.bottomCenter : Alignment.centerRight,
-              child: Material(
-                color: background,
-                clipBehavior: Clip.antiAlias,
-                borderRadius: compact
-                    ? BorderRadius.zero
-                    : const BorderRadius.horizontal(left: Radius.circular(14)),
-                child: SizedBox(
-                  width: width,
-                  height: constraints.maxHeight,
-                  child: child,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: radius,
+                  boxShadow: visual.overlay,
+                ),
+                child: Material(
+                  color: background,
+                  clipBehavior: Clip.antiAlias,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: radius,
+                    side: BorderSide(color: visual.borderStrong),
+                  ),
+                  child: SizedBox(
+                    width: width,
+                    height: constraints.maxHeight,
+                    child: child,
+                  ),
                 ),
               ),
             );
@@ -2046,7 +2062,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       context: context,
       barrierDismissible: false,
       barrierLabel: 'Cerrar',
-      barrierColor: visual.shell.withValues(alpha: 0.4),
+      barrierColor: visual.overlayVeil,
       transitionDuration: PayrollTokens.base,
       pageBuilder: (dialogContext, _, __) {
         return Align(
@@ -2172,7 +2188,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                     child: _adaptivePayrollPanel(
                       dialogContext,
                       desktopWidth: 540,
-                      background: visual.surface,
+                      background: visual.surfaceOverlay,
                       child: PayrollPaymentComposer(
                         personName: line.employeeName,
                         initials: _initialsOf(line.employeeName),
@@ -2323,7 +2339,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       context: context,
       barrierDismissible: false,
       barrierLabel: 'Cerrar',
-      barrierColor: visual.shell.withValues(alpha: 0.4),
+      barrierColor: visual.overlayVeil,
       transitionDuration: PayrollTokens.base,
       pageBuilder: (dialogContext, _, __) {
         return Align(
@@ -2435,7 +2451,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                 child: _adaptivePayrollPanel(
                   dialogContext,
                   desktopWidth: 390,
-                  background: visual.canvas,
+                  background: visual.surfaceOverlay,
                   child: PayrollCashSurface(
                     weekLabel: 'Semana ${_isoWeek(week.periodStart)}',
                     personName: line.employeeName,

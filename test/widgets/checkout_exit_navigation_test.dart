@@ -6,10 +6,12 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
 import 'package:vinabike_erp/public_store/providers/cart_provider.dart';
 import 'package:vinabike_erp/public_store/providers/public_store_tenant_provider.dart';
 import 'package:vinabike_erp/public_store/services/checkout_exit_guard.dart';
+import 'package:vinabike_erp/public_store/services/public_inventory_service.dart';
 import 'package:vinabike_erp/public_store/services/public_store_scroll_state.dart';
 import 'package:vinabike_erp/public_store/theme/public_store_theme.dart';
 import 'package:vinabike_erp/public_store/widgets/public_store_layout.dart';
@@ -126,7 +128,6 @@ void main() {
       );
     },
   );
-
 }
 
 Future<_StorefrontHarness> _pumpStorefront(WidgetTester tester) async {
@@ -135,7 +136,9 @@ Future<_StorefrontHarness> _pumpStorefront(WidgetTester tester) async {
 
   final guard = CheckoutExitGuard();
   final website = WebsiteService();
+  final editMode = WebsiteEditModeProvider();
   final cart = CartProvider();
+  final inventory = PublicInventoryService();
   final scroll = PublicStoreScrollState();
   final tenant = PublicStoreTenantProvider(TenantDetectionService())
     ..setTenant(
@@ -168,7 +171,9 @@ Future<_StorefrontHarness> _pumpStorefront(WidgetTester tester) async {
   addTearDown(router.dispose);
   addTearDown(guard.dispose);
   addTearDown(website.dispose);
+  addTearDown(editMode.dispose);
   addTearDown(cart.dispose);
+  addTearDown(inventory.dispose);
   addTearDown(tenant.dispose);
 
   await tester.pumpWidget(
@@ -176,7 +181,9 @@ Future<_StorefrontHarness> _pumpStorefront(WidgetTester tester) async {
       providers: [
         ChangeNotifierProvider.value(value: guard),
         ChangeNotifierProvider.value(value: website),
+        ChangeNotifierProvider.value(value: editMode),
         ChangeNotifierProvider.value(value: cart),
+        ChangeNotifierProvider.value(value: inventory),
         ChangeNotifierProvider.value(value: tenant),
         Provider.value(value: scroll),
       ],

@@ -25,8 +25,9 @@ void main() {
     expect(
       RegExp(r'CurrentUserProfileNavigation\.open\(context\)')
           .allMatches(layout),
-      hasLength(2),
+      hasLength(3),
     );
+    expect(layout, contains("ValueKey('mobile-drawer-identity')"));
     expect(
       RegExp(r'CurrentUserProfileNavigation\.open\(context\)')
           .allMatches(dashboard),

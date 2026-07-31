@@ -64,7 +64,12 @@ void main() {
           expect(tokens.brand, roles.shell.accent);
           expect(tokens.successSoft, roles.success.container);
           expect(tokens.warningSoft, roles.warning.container);
-          expect(tokens.dangerSoft, scheme.errorContainer);
+          // `danger` era el único de los cuatro que esquivaba el rol y leía
+          // `scheme.errorContainer`, así que un preset que ajustara su rojo
+          // semántico no movía la píldora de peligro de Nóminas.
+          expect(tokens.dangerSoft, roles.danger.container);
+          expect(tokens.dangerFg, roles.danger.onContainer);
+          expect(tokens.dangerBorder, roles.danger.border);
 
           _expectContrast(tokens.ink, tokens.surface);
           _expectContrast(tokens.successFg, tokens.successSoft);
@@ -77,6 +82,82 @@ void main() {
             expect(tokens.surface, isNot(Colors.black));
             expect(tokens.surfaceSunken, isNot(Colors.black));
           }
+        });
+      }
+    }
+  });
+
+  group('un sheet nunca se confunde con el fondo de la página', () {
+    for (final preset in AppearancePresets.all) {
+      for (final brightness in Brightness.values) {
+        testWidgets('${preset.code}/${brightness.name}', (tester) async {
+          late PayrollVisualTokens tokens;
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: AppTheme.resolve(preset: preset, brightness: brightness),
+              home: Builder(
+                builder: (context) {
+                  tokens = PayrollVisualTokens.of(context);
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          );
+          final cell = '${preset.code}/${brightness.name}';
+
+          // Los sheets se pintaban con `canvas`, que en oscuro ES el fondo de
+          // la página: el panel quedaba sin límite, flotando sobre un color
+          // idéntico al suyo.
+          expect(tokens.surfaceOverlay, isNot(tokens.canvas),
+              reason: '$cell: el sheet no puede ser el fondo de la página');
+          expect(tokens.surfaceOverlay, isNot(tokens.surfaceSunken),
+              reason: '$cell: el sheet no puede ser la capa hundida');
+          // Y tampoco puede caer en la zona de la fila seleccionada: ahí un
+          // modal parecería una fila marcada (turno 7 de Design).
+          expect(tokens.surfaceOverlay, isNot(tokens.surfaceSelected),
+              reason: '$cell: el sheet no puede ser la fila seleccionada');
+          // El velo tiene que ser translúcido: opaco taparía la página, y
+          // sin velo la sombra del panel no se ve sobre oscuro.
+          expect(tokens.overlayVeil.a, greaterThan(0.0), reason: cell);
+          expect(tokens.overlayVeil.a, lessThan(1.0), reason: cell);
+        });
+      }
+    }
+  });
+
+  group('la escalera de elevación nunca se invierte', () {
+    for (final preset in AppearancePresets.all) {
+      for (final brightness in Brightness.values) {
+        testWidgets('${preset.code}/${brightness.name}', (tester) async {
+          late PayrollVisualTokens tokens;
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: AppTheme.resolve(preset: preset, brightness: brightness),
+              home: Builder(
+                builder: (context) {
+                  tokens = PayrollVisualTokens.of(context);
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          );
+
+          final raised = tokens.raised.single.color.a;
+          final moneyBar = tokens.moneyBar.single.color.a;
+          final overlay = tokens.overlay.single.color.a;
+          final cell = '${preset.code}/${brightness.name}';
+
+          // Un modal SIEMPRE proyecta más que una tarjeta. Los tres peldaños
+          // fijaban un alpha absoluto y en claro quedaba raised 0.30 >
+          // moneyBar 0.24 > overlay 0.20: una tarjeta con más sombra que un
+          // modal, en 15 sitios.
+          expect(overlay, greaterThan(raised),
+              reason: '$cell: el overlay debe superar a raised');
+          expect(overlay, greaterThan(moneyBar),
+              reason: '$cell: el overlay debe superar a la barra monetaria');
+          // Y la proporción entre peldaños es la de Design, no una inventada.
+          expect(raised / overlay, closeTo(0.268, 0.02), reason: cell);
+          expect(moneyBar / overlay, closeTo(0.232, 0.02), reason: cell);
         });
       }
     }

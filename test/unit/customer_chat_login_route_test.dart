@@ -11,8 +11,11 @@ void main() {
       'lib/public_store/pages/customer_account_page.dart',
     ).readAsStringSync();
 
-    expect(chatSource, contains("context.go('/cuenta/login')"));
-    expect(accountSource, contains("context.go('/cuenta/login')"));
+    final canonicalLoginNavigation = RegExp(
+      r'''PublicStoreLayout\.navigateToHref\(\s*context,\s*['"]/cuenta/login['"]\s*\)''',
+    );
+    expect(chatSource, matches(canonicalLoginNavigation));
+    expect(accountSource, matches(canonicalLoginNavigation));
 
     final legacyLoginNavigation = RegExp(
       r'''context\.(?:go|push|replace)\(\s*['"]/login['"]''',
@@ -38,7 +41,7 @@ void main() {
       source,
       matches(
         RegExp(
-          r'''onPressed:\s*_checkoutLocked\s*\?\s*null\s*:\s*\(\)\s*=>\s*context\.go\('/tienda/cuenta/direcciones'\)''',
+          r'''onPressed:\s*_checkoutLocked\s*\?\s*null\s*:\s*\(\)\s*=>\s*PublicStoreLayout\.navigateToHref\(\s*context,\s*['"]/tienda/cuenta/direcciones['"],?\s*\)''',
         ),
       ),
     );

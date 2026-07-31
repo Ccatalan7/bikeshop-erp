@@ -130,18 +130,30 @@ Cmd+Shift+B -> Publish ERP Update (macOS + Android)
 
 Its preparation task checks the desktop `Production` branch boundary, safely
 fast-forwards a behind local branch when Git can do so without disturbing local
-work, normalizes Flutter dependencies, stages all Source Control changes,
-creates at most one new commit, prepares one bounded shared Codex candidate,
-pushes once, and writes a short-lived exact-SHA handoff inside `.git`. A
-diverged history or overlapping local change stops before publication. VS Code
-then starts the macOS and protected Android GitHub publishers in parallel in
-separate terminal panes. Each publisher revalidates the clean checkout, branch,
-exact local commit, live remote branch, note range, and candidate checksum
-before entering its own signing and publication path.
+work, normalizes Flutter dependencies, stages all Source Control changes, and
+creates at most one new commit. It then validates the latest prior successful
+Android Actions evidence artifact and combines its exact commit with the latest
+applicable macOS release. The older ancestral commit, or their one unique safe
+merge base, becomes the common `Novedades` baseline; an expired, missing,
+non-ancestral, or ambiguous Android history fails closed. Preparation uses that
+range for one bounded shared Codex candidate, pushes once, and writes a
+short-lived schema-v2 exact-SHA handoff inside `.git`. A diverged history or
+overlapping local change stops before publication.
+VS Code then waits for one exact-SHA `ERP Integrity Gate`: it
+reuses the push-triggered run when present, or dispatches that gate once when
+path filters created no run. A successful live run upgrades the handoff to
+schema v3 with its run and attempt proof. Only then does VS Code start the
+macOS and protected Android GitHub publishers in parallel in separate terminal
+panes. Each publisher revalidates the clean checkout, branch, exact local
+commit, live remote branch, note range, candidate checksum, and proof binding;
+each protected workflow independently queries GitHub Actions before building.
 
 The two outcomes remain independent. A successful macOS publication is not
 rolled back when Android fails, and a retry recognizes an already-published
 macOS manifest for the same commit instead of creating another macOS release.
+The same-commit Android retry is accepted only when its published manifest uses
+the exact prepared `from_commit`, so valid-looking evidence from another range
+cannot hide different `Novedades`.
 Android signing material and the Supabase release credential remain only in the
 protected GitHub `Production` environment. The Android terminal downloads and
 validates a bounded Actions evidence artifact containing the exact final
@@ -178,6 +190,12 @@ candidate instead of asking Codex a second time. It skips only duplicate Git
 stage, commit, push, and note-generation work; protected CI, release-note
 validation, signing, waiting, failure diagnostics, and exact publication
 verification remain unchanged.
+
+A same-commit application-test failure is reported immediately when the task
+is retried; the qualifier does not run the same known failure three times.
+Cancelled, timed-out, stale, or startup-failed qualification may rerun the same
+GitHub run once. The standalone macOS task supplies no shared proof and keeps
+the complete integrity gate as its safe fallback.
 
 The optional local Codex step is deliberately bounded. It runs only when
 `codex login status` confirms ChatGPT authentication and never receives
@@ -241,9 +259,11 @@ displayed macOS notes belong to the same trust boundary as the archive.
 
 The normal publish task no longer installs Node packages, resolves Flutter,
 runs analyzer/tests, or compiles web locally before commit. GitHub Actions is
-the one authoritative release gate: it regenerates the tracked spreadsheet
+one authoritative release gate for the exact commit: it regenerates the tracked spreadsheet
 assets, verifies that they match the commit, runs analyzer, the complete Flutter
-test suite and the ERP web build, then performs the clean native macOS build,
+test suite and the ERP web build. The paired task proves that gate once and both
+platform workflows verify the proof live; the standalone task runs it inside
+its own workflow. After qualification, CI performs the clean native macOS build,
 bundle validation, packaging, signing, and protected publication. This removes
 the duplicated macOS-only local gauntlet without bypassing any condition that
 guards a coworker update.

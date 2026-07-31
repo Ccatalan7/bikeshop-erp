@@ -22,6 +22,7 @@ CHECK_ONLY=false
 PREPARE_VERSION=false
 CI_EXACT_SHA=''
 RELEASE_NOTES_JSON_PATH="${VINABIKE_ANDROID_RELEASE_NOTES_PATH:-}"
+RELEASE_NOTES_FROM_COMMIT="${VINABIKE_ANDROID_RELEASE_NOTES_FROM_COMMIT:-}"
 RELEASE_EVIDENCE_PATH="${VINABIKE_ANDROID_RELEASE_EVIDENCE_PATH:-}"
 
 while [[ $# -gt 0 ]]; do
@@ -79,6 +80,10 @@ fi
 if [[ -n "$CI_EXACT_SHA" ]]; then
   if [[ ! "$CI_EXACT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
     echo 'The CI source binding must be a full lowercase Git commit.' >&2
+    exit 64
+  fi
+  if [[ ! "$RELEASE_NOTES_FROM_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+    echo 'The protected Android Novedades base must be a full lowercase Git commit.' >&2
     exit 64
   fi
   if [[ "$(git rev-parse HEAD)" != "$CI_EXACT_SHA" ]]; then
@@ -324,11 +329,13 @@ load_latest_android_release() {
 validate_complete_release_manifest() {
   local manifest_json="$1"
   local expected_commit="$2"
+  local expected_from_commit="$3"
 
   jq -e \
     --arg tenant_id "$TENANT_ID" \
     --arg package_name "$PACKAGE_NAME" \
     --arg expected_commit "$expected_commit" \
+    --arg expected_from_commit "$expected_from_commit" \
     '
       (
         (. | keys | sort) == [
@@ -429,7 +436,7 @@ validate_complete_release_manifest() {
         and .release_notes.schema_version == 1
         and .release_notes.locale == "es-CL"
         and (.release_notes.source == "ai" or .release_notes.source == "fallback")
-        and (.release_notes.from_commit | type == "string" and test("^[0-9a-f]{40}$"))
+        and .release_notes.from_commit == $expected_from_commit
         and .release_notes.to_commit == $expected_commit
         and (.release_notes.title | type == "string" and length > 0 and length <= 80)
         and (.release_notes.summary | type == "string" and length > 0 and length <= 280)
@@ -492,7 +499,8 @@ prepare_ci_version() {
   ]]; then
     validate_complete_release_manifest \
       "$LATEST_ANDROID_RELEASE_JSON" \
-      "$CI_EXACT_SHA"
+      "$CI_EXACT_SHA" \
+      "$RELEASE_NOTES_FROM_COMMIT"
     write_release_evidence "$LATEST_ANDROID_RELEASE_JSON"
     echo "Android ${LATEST_ANDROID_VERSION_NAME}+${LATEST_ANDROID_BUILD_NUMBER} is already published from commit $CI_EXACT_SHA."
     exit 0
@@ -750,6 +758,7 @@ if [[ -n "$RELEASE_NOTES_JSON_PATH" ]]; then
   fi
   jq -e \
     --arg head "$GIT_COMMIT" \
+    --arg base "$RELEASE_NOTES_FROM_COMMIT" \
     '
       (. | keys | sort) == ["release_notes"]
       and (.release_notes | keys | sort) == [
@@ -765,7 +774,13 @@ if [[ -n "$RELEASE_NOTES_JSON_PATH" ]]; then
       and .release_notes.schema_version == 1
       and .release_notes.locale == "es-CL"
       and (.release_notes.source == "ai" or .release_notes.source == "fallback")
-      and (.release_notes.from_commit | type == "string" and test("^[0-9a-f]{40}$"))
+      and (
+        .release_notes.from_commit
+        | type == "string" and test("^[0-9a-f]{40}$")
+      )
+      and (
+        $base == "" or .release_notes.from_commit == $base
+      )
       and .release_notes.to_commit == $head
       and (.release_notes.title | type == "string" and length > 0 and length <= 80)
       and (.release_notes.summary | type == "string" and length > 0 and length <= 280)
@@ -1092,7 +1107,8 @@ if (( version_status == 2 )); then
   if [[ -n "$CI_EXACT_SHA" ]]; then
     validate_complete_release_manifest \
       "$LATEST_ANDROID_RELEASE_JSON" \
-      "$GIT_COMMIT"
+      "$GIT_COMMIT" \
+      "$RELEASE_NOTES_FROM_COMMIT"
     write_release_evidence "$LATEST_ANDROID_RELEASE_JSON"
   fi
   echo "Android ${VERSION_NAME}+${VERSION_CODE} was published while this APK was building."
@@ -1164,7 +1180,8 @@ case "$existing_manifest_status" in
       existing_manifest_json="$(cat "$existing_manifest_path")"
       validate_complete_release_manifest \
         "$existing_manifest_json" \
-        "$GIT_COMMIT"
+        "$GIT_COMMIT" \
+        "$RELEASE_NOTES_FROM_COMMIT"
       RELEASE_NOTES_JSON="$(
         jq -c '.release_notes' "$existing_manifest_path"
       )"
@@ -1239,7 +1256,10 @@ fi
 
 LATEST_ANDROID_RELEASE_JSON="$(cat "$TEMP_DIR/latest-readback.json")"
 if [[ -n "$CI_EXACT_SHA" ]]; then
-  validate_complete_release_manifest "$LATEST_ANDROID_RELEASE_JSON" "$GIT_COMMIT"
+  validate_complete_release_manifest \
+    "$LATEST_ANDROID_RELEASE_JSON" \
+    "$GIT_COMMIT" \
+    "$RELEASE_NOTES_FROM_COMMIT"
   write_release_evidence "$LATEST_ANDROID_RELEASE_JSON"
 fi
 

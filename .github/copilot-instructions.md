@@ -742,12 +742,17 @@ Primary files:
 - `scripts/releases/prepare_erp_update.sh` owns the one shared stage, commit,
   push, and exact-SHA handoff for the top-level
   `Publish ERP Update (macOS + Android)` VS Code task.
+- `scripts/releases/qualify_erp_update.mjs` waits for the push-triggered
+  exact-SHA ERP Integrity Gate, dispatches that gate once when path filters did
+  not create a run, and upgrades the private handoff with successful live proof.
 - `scripts/releases/erp_update_state.sh` validates that short-lived handoff
   from inside `.git`; platform publishers may read it but must never use it to
   share or relocate signing credentials.
 - `scripts/run_flutter_test_gate.sh` is the shared machine-readable Flutter
   test gate. It prints the exact failed test, file, expectation, and stack
-  location without burying the failure beneath widget debug output.
+  location without burying the failure beneath widget debug output. For the
+  generic widget-test error, it extracts only the bounded Flutter framework
+  exception tied to that same test ID.
 - `docs/MACOS_DESKTOP_DISTRIBUTION.md` is the coworker and operator runbook.
 
 The normal macOS publish task intentionally mirrors the Windows developer flow:
@@ -772,11 +777,39 @@ or overlapping local changes must stop before publication. Preparation creates
 at most one new commit, asks the locally authenticated Codex CLI at most once
 for one shared candidate, pushes that commit once, and writes a private
 schema-v2 exact-SHA state file under the current Git directory. Only after
-preparation succeeds does VS Code launch the selected desktop GitHub Actions
-publisher and the protected Android GitHub Actions publisher in parallel, each
-in its own dedicated terminal pane. Both children must revalidate the state
-age, repository, clean worktree, branch, local `HEAD`, live remote branch,
-release-note base, and candidate checksum.
+preparation succeeds, a single qualifier waits a bounded time for the
+push-triggered exact-SHA `ERP Integrity Gate`. If path filters did not create
+one, it rechecks for queued/in-progress evidence and dispatches the gate once
+with `expected_commit`. A successful live run upgrades schema v2 to schema v3
+with repository, workflow, run, attempt, branch, and commit proof. Only then
+does VS Code launch the selected desktop GitHub Actions publisher and the
+protected Android GitHub Actions publisher in parallel, each in its own
+dedicated terminal pane. Both children must revalidate the state age,
+repository, clean worktree, branch, local `HEAD`, live remote branch,
+release-note base, candidate checksum, and qualification binding. Each
+platform workflow then queries GitHub Actions independently and accepts that
+proof only when the canonical integrity workflow completed successfully for
+the exact repository, branch, commit, and attempt.
+
+The paired release-note base must cover both installed channels, not merely the
+desktop channel that launched the task. Resolve the latest applicable desktop
+release and the latest prior successful Android publication artifact, then use
+the older ancestor or their one unique safe merge base. Missing, expired,
+non-ancestral, or ambiguous Android evidence fails closed before publication.
+On a same-commit retry, Android evidence must match the exact prepared
+`from_commit`; a well-formed manifest from another range is not idempotent
+success. A schema-v3 state is the qualified form of the same schema-v2 handoff,
+so exact-SHA/base Codex-candidate reuse must accept both forms.
+
+2026-07-31 correction: a paired release must not call the complete integrity
+workflow once per platform in addition to the push gate. The only valid order
+is Prepare -> Qualify once -> parallel platform publishers. A completed
+same-SHA application-test failure is cached and diagnosed immediately on the
+next attempt; never spend another full run proving the identical failure.
+Cancellation, timeout, stale, or startup failure may rerun the same workflow
+run once, but must not dispatch an unbounded replacement. Standalone macOS or
+Windows workflow dispatches carry no qualification proof and therefore retain
+their own complete integrity fallback.
 
 Do not collapse the platform security boundaries merely because their tasks run
 together. `MACOS_UPDATE_SIGNING_KEY`, the Android JKS/passwords, and
@@ -892,6 +925,9 @@ The VS Code Problems count and `flutter analyze` do not execute the test suite
 and are not release evidence. New or edited source-reading contract tests must
 assert behavior or normalize irrelevant whitespace; never make a release gate
 depend on formatter-specific line breaks or indentation.
+Do not commit an explicitly known-red application test baseline as
+release-ready: the paired qualifier correctly treats that exact-SHA failure as
+terminal until a new repair commit exists.
 
 ### Windows Current Architecture
 

@@ -6,6 +6,11 @@ re-discovering the same five traps. Read this before touching UI.
 
 Verified working on 2026-07-30 (macOS 25.5, Flutter 3.38.5 via FVM).
 
+> **El procedimiento vive en
+> [`AGENT_VISUAL_WORKFLOW.md`](AGENT_VISUAL_WORKFLOW.md).** Este archivo
+> es la referencia de cada herramienta y de las trampas que encierra.
+> Si vienes a probar la app o a compararla con un frame, empieza por allá.
+
 ## The three surfaces, and when to use each
 
 | Surface | Loop | Use it for |
@@ -83,12 +88,81 @@ from the same session:
 ```bash
 scripts/dev/app_control.sh shot out.png      # the app's own rendered frame
 scripts/dev/app_control.sh geometry          # pid · window · frame size
-scripts/dev/app_control.sh click X Y         # coordinates read off `shot`
+scripts/dev/app_control.sh click X Y         # current `shot` only; never reuse
 scripts/dev/app_control.sh scroll X Y -5
 scripts/dev/app_control.sh drag X Y X2 Y2
 scripts/dev/app_control.sh type "texto"
 scripts/dev/app_control.sh key 36            # 36 return · 53 esc · 48 tab
 ```
+
+### Tap by identity; pixels are a one-frame fallback (2026-07-31)
+
+```bash
+scripts/dev/app_control.sh find --label "Confirmar semana"
+scripts/dev/app_control.sh find --key payroll-confirm-week
+scripts/dev/app_control.sh tap  --key payroll-confirm-week
+```
+
+**Why a reused `click X Y` keeps missing.** `shot` returns physical pixels —
+1360×757 on one run, 3024×1632 on a Retina display, 2312×1410 after a resize —
+while Flutter hit testing uses logical coordinates. The script bridges those
+spaces for the **current** frame: the normal app backend queries the live DPR
+and divides the physical frame coordinates before creating `PointerEvent`s;
+the OS backend maps the same physical pixels into the current window and title
+bar. That translation does not make a saved coordinate durable. Navigation,
+layout, resize, display/DPR changes or an app restart can move the target, so a
+coordinate read from an earlier capture is stale. On an app running against
+**production**, reusing one caused the 2026-07-30 navigation tap to land on
+`Quitar de la semana` and write for real.
+
+`find` resolves the target from the live element tree by `ValueKey<String>` or
+by semantic/`Text` label, and prints its real rectangle in logical coordinates.
+`tap` locates and taps in one step, and **prints what it hit** — so you keep
+awareness of where the event landed instead of inferring it.
+
+Three properties that matter:
+
+- **Ambiguity is an error, not a coin flip.** With more than one candidate
+  `tap` refuses and lists them. `--index N` is a zero-based integer into that
+  list; a missing index for multiple matches, non-integer, negative, or
+  out-of-range value is rejected before any pointer event is sent.
+- **The target must be live and usable now.** Its chosen point must be inside
+  the current logical viewport and its branch must win the live hit test.
+  Offstage, ignored, absorbed, semantics-disabled, disabled-button, covered,
+  off-viewport, detached, and zero-size candidates are not returned.
+- **Coordinates expire.** If an identity does not exist, take a fresh `shot`
+  and use its point immediately. Never carry a coordinate across navigation,
+  layout changes, resize, display/DPR changes, reload, or restart.
+
+Keep `click X Y` for what has no identity — a canvas, a chart, a spot inside an
+image — and for testing the OS event path itself. For anything with a key or a
+label, use `tap`; never reuse a coordinate from an earlier frame.
+
+### Two ways of seeing, and they answer different questions
+
+```bash
+scripts/dev/app_control.sh shot out.png          # cómo se VE
+scripts/dev/app_control.sh read                  # qué ESTÁ
+scripts/dev/app_control.sh read --filter pagar
+```
+
+`shot` returns the exact rendered frame through the VM service — real pixels,
+not a photo of a screen. It is the only way to judge design fidelity, and it
+stays mandatory for that: comparing a frame against the app is what this whole
+contract is built on.
+
+But a picture does not say what *is*. Whether a button is disabled, a row
+selected, a field focused, a disclosure open — reading those off colour is
+inference, and inference is how an agent ends up asserting something false.
+
+`read` walks the **semantics tree**, the same structure Flutter hands to
+VoiceOver, so it reflects the app as a person who is not looking at it receives
+it. It prints label, value, state flags and size, indented by hierarchy, and
+costs text instead of an image. `--filter` narrows it to one region.
+
+Use both: **structure from `read`, appearance from `shot`.** When they
+disagree, the semantics tree is what a screen reader will announce — that
+disagreement is itself the bug.
 
 ### Two input backends — the default does not touch the owner's cursor
 
@@ -125,10 +199,11 @@ How the CGEvent backend works, and why it is not obvious:
   ignored by the Flutter window — it looks like nothing happened. The Swift
   driver in `scripts/dev/mouse_events.swift` posts real HID events; the script
   compiles it on demand into `.tmp/dev-tools/mouse`.
-- **Coordinates are frame coordinates** — the same numbers you read off the
-  screenshot. The script derives the scale itself, because the frame comes at
-  device pixels (DPR 1 or 2 depending on the display) while the window frame
-  is in points, and the title bar offsets Y.
+- **Coordinates begin as physical frame pixels** — the same numbers read from
+  the current `shot`. The default app backend queries the live DPR and converts
+  them to Flutter logical coordinates. The CGEvent backend independently maps
+  them into current window points and offsets Y for the title bar. Neither
+  mapping permits coordinate reuse after the rendered state or geometry moves.
 - **Always target the debug app by executable path**, never by process name.
   An installed build (`~/Applications/Vinabike`) shares the name
   `vinabike_erp`; targeting by name silently drives the old app and every

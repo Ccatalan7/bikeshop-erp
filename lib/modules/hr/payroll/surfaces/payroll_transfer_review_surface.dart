@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../theme/payroll_tokens.dart';
-import 'payroll_accent_action.dart';
 
 /// Claude Design 2c — building blocks of the transfer-review step.
 ///
@@ -750,34 +749,6 @@ class PayrollDecisionOptionCard extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Advance CTA shown inside the pending card once the current question is
-/// answered — the Design "Guardar decisión" slot. Decisions themselves apply
-/// immediately (idempotent single source of truth); this action only moves
-/// the viewport to the next question.
-class PayrollNextQuestionAction extends StatelessWidget {
-  const PayrollNextQuestionAction({
-    super.key,
-    required this.label,
-    required this.onTap,
-  });
-
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 190,
-      child: PayrollAccentAction(
-        label: label,
-        onTap: onTap,
-        height: 32,
-        fontSize: 11.5,
       ),
     );
   }

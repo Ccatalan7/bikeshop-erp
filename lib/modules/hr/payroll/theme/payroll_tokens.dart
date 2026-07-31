@@ -58,6 +58,7 @@ class PayrollTokens {
   static const Color avatarCyan = Color(0xFF6FD1F6); // Lucas
   static const Color avatarSky = Color(0xFF9BE1FA); // Vicente
   static const Color avatarAmber = Color(0xFFF5D08A); // Guillermo
+
   static const Color groupLabor = Color(0xFF6B4FC2); // grupo "Servicios"
 
   // ── Chrome (spec.tokens) ──────────────────────────────────────────────────
@@ -280,6 +281,22 @@ class PayrollVisualTokens {
   Color get surface => scheme.surface;
   Color get surfaceSunken => scheme.surfaceContainerLow;
 
+  /// La quinta capa del turno 7 de Design: el relleno de un sheet o panel
+  /// flotante.
+  ///
+  /// Existe porque los sheets se pintaban con `canvas` o con `surface`, y en
+  /// oscuro `canvas` **es** el fondo de la página: el panel quedaba sin límite,
+  /// flotando sobre un color idéntico al suyo. Design es explícito en que la
+  /// elevación no se resuelve subiendo el relleno hasta la zona de la fila
+  /// seleccionada —ahí un modal parecería una fila marcada— sino con velo,
+  /// capa propia, borde y sombra juntos.
+  Color get surfaceOverlay => scheme.surfaceContainerHigh;
+
+  /// El velo detrás de un sheet. Es lo que hace que su sombra exista: sin algo
+  /// oscuro debajo, una sombra sobre fondo oscuro no se ve.
+  Color get overlayVeil =>
+      (roles?.scrim ?? scheme.scrim).withValues(alpha: 0.55);
+
   /// Selected-surface treatment owned by the canonical role set; no local
   /// alpha/brightness mixing (Codex review 2026-07-30).
   Color get surfaceSelected =>
@@ -316,9 +333,16 @@ class PayrollVisualTokens {
       roles?.warning.onContainer ?? scheme.onTertiaryContainer;
   Color get warningSoft => roles?.warning.container ?? scheme.tertiaryContainer;
   Color get warningBorder => roles?.warning.border ?? scheme.outline;
-  Color get dangerFg => scheme.onErrorContainer;
-  Color get dangerSoft => scheme.errorContainer;
-  Color get dangerBorder => Color.alphaBlend(
+  // `danger` era el ÚNICO de los cuatro tonos de estado que esquivaba el rol:
+  // leía `scheme.onErrorContainer/errorContainer` y mezclaba su borde a mano,
+  // mientras success, warning y neutral sí pasaban por `roles`. El rol existe
+  // y está poblado con paleta explícita clara y oscura, así que un preset que
+  // ajustara su rojo semántico no movía la píldora de peligro de Nóminas.
+  Color get dangerFg => roles?.danger.onContainer ?? scheme.onErrorContainer;
+  Color get dangerSoft => roles?.danger.container ?? scheme.errorContainer;
+  Color get dangerBorder =>
+      roles?.danger.border ??
+      Color.alphaBlend(
         scheme.error.withValues(alpha: 0.56),
         scheme.surface,
       );
@@ -347,25 +371,21 @@ class PayrollVisualTokens {
   /// parecía un control: la identidad la tiene que llevar la inicial, no el
   /// círculo. En oscuro son tres pasos neutros del mismo tono del preset, con
   /// croma casi nulo; en claro se conservan los matices del turno 4.
-  Color get avatarCyan =>
-      _isDark ? _neutralAvatar(0.46) : (roles?.avatarA ?? scheme.primary);
-  Color get avatarSky =>
-      _isDark ? _neutralAvatar(0.40) : (roles?.avatarB ?? scheme.secondary);
-  Color get avatarAmber =>
-      _isDark ? _neutralAvatar(0.34) : (roles?.avatarD ?? scheme.tertiary);
+  // PENDIENTE (turno 7 de Design): en oscuro los avatares deberían perder su
+  // matiz, porque `avatarA` oscuro (#7DD3FC) y el acento de Pacific (#67E0E8)
+  // son casi el mismo color y una persona parece un control accionable.
+  //
+  // Se intentó neutralizarlos ACÁ y el guard de inventario congelado lo
+  // rechazó, con razón: el choque no es de Nóminas, es del set de roles —
+  // cualquier módulo que pinte avatares en Pacific oscuro lo tiene igual. La
+  // corrección nace en `VinabikeThemeResolver`, con su auditoría de
+  // consumidores no-Payroll y regresión de 2 presets × 2 modos, y Payroll la
+  // consume sin cambiar una línea.
+  Color get avatarCyan => roles?.avatarA ?? scheme.primary;
+  Color get avatarSky => roles?.avatarB ?? scheme.secondary;
+  Color get avatarAmber => roles?.avatarD ?? scheme.tertiary;
 
   bool get _isDark => scheme.brightness == Brightness.dark;
-
-  /// Un paso neutro derivado del tono del preset. `lightness` es el valor que
-  /// Design especifica por paso (0.46 / 0.40 / 0.34); el croma se aplasta para
-  /// que el círculo nunca compita con un control accionable.
-  Color _neutralAvatar(double lightness) {
-    final hsl = HSLColor.fromColor(brand);
-    return hsl
-        .withSaturation((hsl.saturation * 0.12).clamp(0.0, 0.12))
-        .withLightness(lightness)
-        .toColor();
-  }
 
   Color get groupLabor => roles?.avatarC ?? scheme.secondary;
   Color get railAttentionDot => roles?.shell.attention ?? scheme.error;
@@ -484,9 +504,25 @@ class PayrollVisualTokens {
   Color get _shadow =>
       roles?.shadow ?? theme.shadowColor.withValues(alpha: 0.2);
 
+  /// Un peldaño de la escalera de elevación, atenuando el rol de sombra.
+  ///
+  /// `withValues(alpha:)` **reemplaza** el alpha, no lo gradúa — y ahí estaba el
+  /// defecto: los tres peldaños fijaban un alpha absoluto (`raised` 0.30,
+  /// `moneyBar` 0.24) mientras `overlay` dejaba el del rol (0.20 en claro). En
+  /// claro la escalera quedaba **invertida**: una tarjeta proyectaba más sombra
+  /// que un modal, en 15 sitios.
+  ///
+  /// La proporción sale de las constantes congeladas de Design, normalizadas
+  /// contra `overlay`: raised `0x0F`/`0x38` = 0.268 · moneyBar `0x0D`/`0x38` =
+  /// 0.232 · overlay 1.0. Así la intensidad la sigue poniendo el preset —más
+  /// marcada en oscuro, donde el rol vale 0.48— y la relación entre peldaños la
+  /// sigue poniendo Design.
+  Color _elevation(double ratio) =>
+      _shadow.withValues(alpha: (_shadow.a * ratio).clamp(0.0, 1.0));
+
   List<BoxShadow> get raised => <BoxShadow>[
         BoxShadow(
-          color: _shadow.withValues(alpha: 0.3),
+          color: _elevation(0.268),
           blurRadius: 2,
           offset: const Offset(0, 1),
         ),
@@ -494,7 +530,7 @@ class PayrollVisualTokens {
 
   List<BoxShadow> get moneyBar => <BoxShadow>[
         BoxShadow(
-          color: _shadow.withValues(alpha: 0.24),
+          color: _elevation(0.232),
           blurRadius: 8,
           offset: const Offset(0, -2),
         ),

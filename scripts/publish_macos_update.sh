@@ -13,6 +13,8 @@ PREPARED_STATE_REQUEST=''
 RELEASE_NOTES_CANDIDATE_B64=''
 RELEASE_NOTES_CANDIDATE_SHA256=''
 RELEASE_NOTES_FROM_COMMIT=''
+INTEGRITY_RUN_ID=''
+INTEGRITY_RUN_ATTEMPT=''
 release_notes_temp_dir=''
 
 # shellcheck source=scripts/releases/erp_update_state.sh
@@ -555,6 +557,8 @@ if [[ -n "$PREPARED_STATE_REQUEST" ]]; then
   RELEASE_NOTES_FROM_COMMIT="$ERP_UPDATE_STATE_RELEASE_NOTES_FROM_COMMIT"
   RELEASE_NOTES_CANDIDATE_B64="$ERP_UPDATE_STATE_RELEASE_NOTES_CANDIDATE_B64"
   RELEASE_NOTES_CANDIDATE_SHA256="$ERP_UPDATE_STATE_RELEASE_NOTES_CANDIDATE_SHA256"
+  INTEGRITY_RUN_ID="$ERP_UPDATE_STATE_INTEGRITY_RUN_ID"
+  INTEGRITY_RUN_ATTEMPT="$ERP_UPDATE_STATE_INTEGRITY_RUN_ATTEMPT"
   step "Using shared ERP update commit $head_sha"
 
   if published_run_id="$(
@@ -606,7 +610,8 @@ fi
 
 notes_title_identity="${RELEASE_NOTES_CANDIDATE_SHA256:-fallback}"
 notes_base_identity="${RELEASE_NOTES_FROM_COMMIT:-auto}"
-expected_run_title="macOS publish · ${head_sha} · notes ${notes_title_identity} · from ${notes_base_identity}"
+integrity_title_identity="${INTEGRITY_RUN_ID:-self}"
+expected_run_title="macOS publish · ${head_sha} · notes ${notes_title_identity} · from ${notes_base_identity} · integrity ${integrity_title_identity}"
 runs_json="$(get_workflow_runs)"
 active_run="$(
   jq -c \
@@ -640,13 +645,17 @@ else
     --arg release_notes_from_commit "$RELEASE_NOTES_FROM_COMMIT" \
     --arg release_notes_candidate_b64 "$RELEASE_NOTES_CANDIDATE_B64" \
     --arg release_notes_candidate_sha256 "$RELEASE_NOTES_CANDIDATE_SHA256" \
+    --arg integrity_run_id "$INTEGRITY_RUN_ID" \
+    --arg integrity_run_attempt "$INTEGRITY_RUN_ATTEMPT" \
     '{
       release_target: "macos",
       publish_release: "true",
       expected_commit: $expected_commit,
       release_notes_from_commit: $release_notes_from_commit,
       release_notes_candidate_b64: $release_notes_candidate_b64,
-      release_notes_candidate_sha256: $release_notes_candidate_sha256
+      release_notes_candidate_sha256: $release_notes_candidate_sha256,
+      integrity_run_id: $integrity_run_id,
+      integrity_run_attempt: $integrity_run_attempt
     }' \
     | gh workflow run "$WORKFLOW" \
         --repo "$REPO" \

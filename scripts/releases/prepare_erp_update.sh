@@ -84,18 +84,25 @@ prepare_shared_release_notes() {
   local head_commit="$1"
   local codex_binary
   local git_binary
+  local desktop_release_notes_from_commit
   local candidate_file
   local compact_candidate_file
   local private_log
 
   release_notes_candidate_b64=''
   release_notes_candidate_sha256=''
-  release_notes_from_commit="$(
+  desktop_release_notes_from_commit="$(
     GH_REPO='Ccatalan7/bikeshop-erp' \
       bash scripts/releases/resolve_previous_release_commit.sh \
         macos-v \
         macos-release-manifest.json \
         "$head_commit"
+  )"
+  release_notes_from_commit="$(
+    node scripts/releases/resolve_paired_release_notes_base.mjs \
+      --branch "$branch" \
+      --head-commit "$head_commit" \
+      --desktop-commit "$desktop_release_notes_from_commit"
   )"
   if [[
     ! "$release_notes_from_commit" =~ ^[0-9a-f]{40}$ ||
@@ -213,7 +220,7 @@ prepare_shared_release_notes() {
 }
 
 for required in \
-  awk base64 bash chmod date env git gh head jq mktemp mv rm sed shasum tr; do
+  awk base64 bash chmod date env git gh head jq mktemp mv node rm sed shasum tr; do
   require_command "$required"
 done
 

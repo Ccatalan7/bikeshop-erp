@@ -141,7 +141,7 @@ void main() {
             ),
           ),
           GoRoute(
-            path: '/tienda/pedido/:id',
+            path: '/pedido/:id',
             builder: (_, state) => Scaffold(
               body: Text(
                 'confirmation:${state.pathParameters['id']}',
@@ -294,7 +294,7 @@ void main() {
             ),
           ),
           GoRoute(
-            path: '/tienda/pedido/:id',
+            path: '/pedido/:id',
             builder: (_, state) => Scaffold(
               body: Text(
                 'confirmation:${state.pathParameters['id']}',
@@ -369,9 +369,10 @@ void main() {
       await tester.pump();
       await tester.tap(find.text('REALIZAR PEDIDO'));
 
-      for (var i = 0; i < 12; i += 1) {
-        await tester.pump();
-      }
+      await _pumpUntilFound(
+        tester,
+        find.text('confirmation:order-retry'),
+      );
 
       expect(website.createOrderCalls, 1);
       expect(
@@ -500,6 +501,14 @@ void main() {
       expect(await checkoutStore.read(_tenantId), isNull);
     },
   );
+}
+
+Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
+  for (var attempt = 0; attempt < 30; attempt += 1) {
+    await tester.pump(const Duration(milliseconds: 10));
+    if (finder.evaluate().isNotEmpty) return;
+  }
+  fail('Timed out waiting for the expected widget.');
 }
 
 CheckoutSessionSnapshot _snapshot(DateTime savedAt) {

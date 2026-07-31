@@ -17,10 +17,17 @@ before the first command of a task, not to restate it.
 | Any UI or frontend | `.github/GUI_DESIGN_PRINCIPLES.md` |
 | Mobile, tablet, compact, adaptive, responsive UI | the GUI guide **and** `.github/GUI_MOBILE_DESIGN_PRINCIPLES.md` |
 | Business-workflow UI | `docs/architecture/canonical-ui-surfaces.md`, and update its registry when a surface changes |
+| **Probar la app y compararla con Design** (sesión de debug, clics, lectura de pantalla, frames) | `docs/development/AGENT_VISUAL_WORKFLOW.md` — es el procedimiento; el runbook macOS es la referencia de cada herramienta |
 | Running, clicking and screenshotting the app; reading the Design window | `docs/development/AGENT_MACOS_APP_CONTROL.md` |
 | Palettes, light/dark, semantic roles | `docs/architecture/appearance-palette-contract.md` |
 | **Any visual value, or any shared component** | `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md` — read it through `DesignSync`, never off a screenshot |
 | Bike workshop architecture | `BIKE_WORKSHOP_MASTER_SCHEMA.md`, updated in the same task when behavior/schema/data-flow changes |
+
+**Un frame de Design no se acepta a ciegas.** Design manda el *look*; que
+funcione, que se entienda, que se navegue, las palabras y la armonía con el
+resto del ERP los aporta el agente — en escritorio y en móvil. La compuerta de
+seis dimensiones y cómo se registra están en
+`docs/development/AGENT_VISUAL_WORKFLOW.md` §5.b, y es obligatoria por frame.
 
 Historical prompts, screenshots, feature plans, existing widgets, and aesthetic
 snapshot tests do not override the two canonical GUI guides. Do not treat their

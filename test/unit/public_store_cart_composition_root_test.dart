@@ -89,11 +89,14 @@ void main() {
     final bootstrap = File(
       'lib/public_store/widgets/public_store_bootstrap.dart',
     ).readAsStringSync();
+    final erpBoundary = File(
+      'lib/public_store/widgets/erp_mounted_storefront_scope_boundary.dart',
+    ).readAsStringSync();
     final router = File('lib/shared/routes/app_router.dart').readAsStringSync();
 
     final canonicalHelper = _section(
       bootstrap,
-      start: 'Future<void> restorePublicStoreCart(',
+      start: 'Future<void> restorePublicStoreCartForTenant(',
       end: '/// SIMPLE bootstrap widget for public store',
     );
     expect(_occurrences(canonicalHelper, 'getProductPageForTenant('), 1);
@@ -109,58 +112,48 @@ void main() {
     expect(standaloneRestore, isNot(contains('getProductPageForTenant(')));
     expect(standaloneRestore, isNot(contains('CartProvider>().restore(')));
 
-    final erpShellInitialization = _section(
-      router,
-      start: 'class _PublicStoreShellState',
-      end: 'class _PublicStoreCartReadyGate',
-    );
-    expect(
-      _occurrences(erpShellInitialization, 'restorePublicStoreCart('),
-      1,
-    );
-    expect(
-      erpShellInitialization,
-      contains(
-        RegExp(
-          r'final websiteLoad =[\s\S]*'
-          r'final categoryPublicationPreflight =[\s\S]*'
-          r'await restorePublicStoreCart\([\s\S]*'
-          r'await categoryPublicationPreflight[\s\S]*'
-          r'_cartScopeReady = true[\s\S]*'
-          r'await websiteLoad',
-        ),
-      ),
+    final erpScopeInitialization = _section(
+      erpBoundary,
+      start: 'Future<void> _synchronize(',
+      end: '@override\n  void dispose()',
     );
     expect(
       _occurrences(
-        erpShellInitialization,
-        'getCategoriesForTenant(',
+        erpScopeInitialization,
+        'restorePublicStoreCartForTenant(',
       ),
       1,
     );
     expect(
-      erpShellInitialization,
-      isNot(contains('getProductPageForTenant(')),
-    );
-    expect(
-      erpShellInitialization,
-      isNot(contains('CartProvider>().restore(')),
-    );
-
-    final directCheckoutGate = _section(
-      router,
-      start: 'class _PublicStoreCartReadyGateState',
-      end: 'class AppRouter',
-    );
-    expect(
-      directCheckoutGate,
+      erpScopeInitialization,
       contains(
         RegExp(
-          r'await restorePublicStoreCart\([\s\S]*'
-          r'setState\(\(\) => _isReady = true\)',
+          r'await Future\.wait\(\[[\s\S]*'
+          r'restorePublicStoreCartForTenant\([\s\S]*'
+          r'if \(onTenantReady != null\) onTenantReady\(authority\.tenantId\)',
         ),
       ),
     );
+    expect(
+      erpScopeInitialization,
+      contains('_isReady = true'),
+    );
+    expect(
+      erpScopeInitialization,
+      isNot(contains('getProductPageForTenant(')),
+    );
+    expect(
+      erpScopeInitialization,
+      isNot(contains('CartProvider>().restore(')),
+    );
+
+    final erpShell = _section(
+      router,
+      start: 'class _PublicStoreShell extends StatelessWidget',
+      end: 'class AppRouter',
+    );
+    expect(erpShell, contains('ErpMountedStorefrontScopeBoundary('));
+    expect(erpShell, contains('getCategoriesForTenant('));
 
     final legacyCheckoutRoute = _section(
       router,
@@ -169,8 +162,9 @@ void main() {
     );
     expect(
       legacyCheckoutRoute,
-      contains('_PublicStoreCartReadyGate(child: CheckoutPage())'),
+      contains('ErpMountedStorefrontScopeBoundary('),
     );
+    expect(legacyCheckoutRoute, contains('child: const CheckoutPage()'));
   });
 }
 

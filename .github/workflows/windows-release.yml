@@ -5,6 +5,7 @@ run-name: >-
   · ${{ github.sha }}
   · notes ${{ inputs.release_notes_candidate_sha256 || 'fallback' }}
   · from ${{ inputs.release_notes_from_commit || 'auto' }}
+  · integrity ${{ inputs.integrity_run_id || 'self' }}
 
 on:
   push:
@@ -49,8 +50,19 @@ on:
         required: false
         type: string
         default: ""
+      integrity_run_id:
+        description: Successful exact-SHA ERP Integrity Gate run
+        required: false
+        type: string
+        default: ""
+      integrity_run_attempt:
+        description: Exact successful ERP Integrity Gate attempt
+        required: false
+        type: string
+        default: ""
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -83,12 +95,36 @@ jobs:
           echo 'The workflow is bound to the requested commit.'
 
   integrity:
+    if: ${{ inputs.integrity_run_id == '' }}
+    needs: source-guard
     uses: ./.github/workflows/erp-integrity-gate.yml
 
+  qualification:
+    if: ${{ inputs.integrity_run_id != '' }}
+    needs: source-guard
+    name: Verify shared ERP integrity qualification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the exact release source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Verify the successful exact-SHA integrity run live
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          node scripts/releases/verify_integrity_qualification.mjs
+          --run-id '${{ inputs.integrity_run_id }}'
+          --run-attempt '${{ inputs.integrity_run_attempt }}'
+
   build:
+    if: ${{ always() && !cancelled() && needs.source-guard.result == 'success' && ((inputs.integrity_run_id == '' && needs.integrity.result == 'success') || (inputs.integrity_run_id != '' && needs.qualification.result == 'success')) }}
     needs:
       - source-guard
       - integrity
+      - qualification
     name: Build and package Windows zip
     runs-on: windows-2022
     outputs:

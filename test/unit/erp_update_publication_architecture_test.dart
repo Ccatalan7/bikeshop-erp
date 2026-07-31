@@ -10,6 +10,11 @@ void main() {
   late String macosPublisher;
   late String androidPublisher;
   late String androidWorkflowPublisher;
+  late String qualifier;
+  late String qualificationVerifier;
+  late String pairedNotesBaseResolver;
+  late String macosWorkflow;
+  late String androidWorkflow;
 
   setUpAll(() {
     final tasksDocument =
@@ -27,6 +32,18 @@ void main() {
     androidWorkflowPublisher = File(
       'scripts/releases/publish_android_workflow.mjs',
     ).readAsStringSync();
+    qualifier =
+        File('scripts/releases/qualify_erp_update.mjs').readAsStringSync();
+    qualificationVerifier = File(
+      'scripts/releases/verify_integrity_qualification.mjs',
+    ).readAsStringSync();
+    pairedNotesBaseResolver = File(
+      'scripts/releases/resolve_paired_release_notes_base.mjs',
+    ).readAsStringSync();
+    macosWorkflow =
+        File('.github/workflows/macos-release.yml').readAsStringSync();
+    androidWorkflow =
+        File('.github/workflows/android-release.yml').readAsStringSync();
   });
 
   Map<String, dynamic> task(String label) => tasks.singleWhere(
@@ -44,8 +61,19 @@ void main() {
       topLevel['dependsOn'],
       <String>[
         '🔒 Prepare ERP Update (shared commit)',
+        '✅ Qualify ERP Update (exact SHA)',
         '🚀 Publish Prepared ERP Platforms',
       ],
+    );
+    final qualification = task('✅ Qualify ERP Update (exact SHA)');
+    expect(
+      qualification['command'],
+      'node scripts/releases/qualify_erp_update.mjs --prepared-state auto',
+    );
+    expect(qualification['hide'], isTrue);
+    expect(
+      (qualification['runOptions'] as Map<String, dynamic>)['instanceLimit'],
+      1,
     );
     expect(platformGroup['dependsOrder'], 'parallel');
     expect(
@@ -107,6 +135,18 @@ void main() {
     expect(prepareHelper, contains('release_notes_candidate_sha256'));
     expect(
       prepareHelper,
+      contains('resolve_paired_release_notes_base.mjs'),
+    );
+    expect(
+      pairedNotesBaseResolver,
+      contains('vinabike-erp-android-release-evidence'),
+    );
+    expect(
+      pairedNotesBaseResolver,
+      contains('chooseCommonReleaseNotesBase'),
+    );
+    expect(
+      prepareHelper,
       contains(
         'select(\n'
         '        .schema_version == 1\n'
@@ -122,7 +162,7 @@ void main() {
     expect(stateHelper, contains('test("^[0-9a-f]{40}\$")'));
     expect(stateHelper, contains('git status --porcelain'));
     expect(stateHelper, contains('git ls-remote'));
-    expect(stateHelper, contains('.schema_version == 2'));
+    expect(stateHelper, contains('.schema_version == 3'));
     expect(stateHelper, contains('refs/heads/\$ERP_UPDATE_STATE_BRANCH'));
     expect(stateHelper, contains('actual_head'));
     expect(stateHelper, contains('ERP_UPDATE_STATE_HEAD_SHA'));
@@ -133,6 +173,29 @@ void main() {
     expect(stateHelper, contains('failed its SHA256 binding'));
     expect(stateHelper, contains('git merge-base --is-ancestor'));
     expect(stateHelper, contains('must stay inside the current Git directory'));
+    expect(stateHelper, contains('.qualification.workflow_id'));
+    expect(stateHelper, contains('.qualification.run_id'));
+    expect(stateHelper, contains('.qualification.run_attempt'));
+    expect(stateHelper, contains('.qualification.head_sha == .head_sha'));
+    expect(stateHelper, contains('.qualification.branch == .branch'));
+  });
+
+  test('one exact-SHA qualifier reuses, dispatches, and binds live proof', () {
+    expect(qualifier, contains('discoveryTimeoutMs = 60_000'));
+    expect(qualifier, contains('chooseExactQualificationRun'));
+    expect(qualifier, contains('workflowName === "ERP Integrity Gate"'));
+    expect(qualifier, contains('expected_commit: prepared.state.head_sha'));
+    expect(qualifier, contains('schema_version: 3'));
+    expect(qualifier, contains('workflow_path: INTEGRITY_WORKFLOW_PATH'));
+    expect(qualifier, contains('workflow_id: liveRun.workflow_id'));
+    expect(qualifier, contains('run_attempt: liveRun.run_attempt'));
+    expect(qualifier, contains('head_sha: liveRun.head_sha'));
+    expect(qualifier, contains('branch: liveRun.head_branch'));
+    expect(qualifier, contains('Fix that exact failure before publishing'));
+    expect(qualificationVerifier, contains('run.path !== workflowPath'));
+    expect(qualificationVerifier, contains('run.head_sha !== headSha'));
+    expect(qualificationVerifier, contains('run.head_branch !== branch'));
+    expect(qualificationVerifier, contains('run.conclusion !== "success"'));
   });
 
   test('platform prepared modes retain independent publication paths', () {
@@ -151,7 +214,7 @@ void main() {
 
     expect(
       androidWorkflowPublisher,
-      contains('state.schema_version !== 2'),
+      contains('state.schema_version !== 3'),
     );
     expect(
       androidWorkflowPublisher,
@@ -166,6 +229,11 @@ void main() {
     expect(androidWorkflowPublisher, contains('release_target: "android"'));
     expect(
       androidWorkflowPublisher,
+      contains('integrity_run_id: state.integrityRunId'),
+    );
+    expect(macosPublisher, contains('integrity_run_id: \$integrity_run_id'));
+    expect(
+      androidWorkflowPublisher,
       contains('run?.displayTitle === expectedAndroidRunTitle(state)'),
     );
     expect(
@@ -176,6 +244,19 @@ void main() {
       androidWorkflowPublisher,
       contains('validateAndroidManifest'),
     );
+    expect(
+      androidWorkflowPublisher,
+      contains('state.releaseNotesFromCommit'),
+    );
+    for (final workflow in [macosWorkflow, androidWorkflow]) {
+      expect(workflow, contains('actions: read'));
+      expect(workflow, contains('integrity_run_id:'));
+      expect(workflow, contains('integrity_run_attempt:'));
+      expect(workflow, contains('verify_integrity_qualification.mjs'));
+      expect(workflow, contains("inputs.integrity_run_id == ''"));
+      expect(workflow, contains("inputs.integrity_run_id != ''"));
+      expect(workflow, contains('always() && !cancelled()'));
+    }
   });
 
   test('standalone platform tasks remain selectable', () {

@@ -27,6 +27,16 @@ void main() {
               label: '',
               value: value,
               onChanged: onChanged,
+              categoryLoader: () async => const [
+                WebsiteLinkCategoryOptionData(
+                  id: 'cat-1',
+                  name: 'Categoría de prueba',
+                  fullPath: 'Categoría de prueba',
+                  showOnWebsite: true,
+                  markedWebProductCount: 1,
+                  subtreeMarkedWebProductCount: 1,
+                ),
+              ],
             ),
           ),
         ),

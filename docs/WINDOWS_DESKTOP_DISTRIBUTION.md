@@ -72,17 +72,28 @@ independent publishers:
 3. It runs the pinned Flutter dependency normalization, stages the reviewed
    Source Control changes once, creates at most one new commit, and pushes that
    exact commit once.
-4. It asks the locally authenticated Codex CLI once for a bounded,
+4. It validates the latest prior successful Android
+   Actions evidence artifact and combines its commit with the latest applicable
+   Windows release. The older ancestor, or their one unique safe merge base,
+   becomes the common `Novedades` baseline. Missing, expired, non-ancestral, or
+   ambiguous evidence stops safely.
+5. It asks the locally authenticated Codex CLI once for a bounded,
    user-friendly Spanish release-note candidate. Missing login, timeout,
    malformed output, or quota exhaustion leaves the candidate empty and does
    not block the release.
-5. It writes a short-lived, current-user-only Windows+Android handoff inside
+6. It writes a short-lived, current-user-only Windows+Android handoff inside
    `.git`, separate from the macOS paired-release state, binding the branch,
    exact local and remote SHA, release-note base, candidate bytes, and
    candidate SHA256.
-6. VS Code then launches the Windows and Android GitHub publishers in parallel
+7. VS Code waits a bounded time for the push-triggered exact-SHA
+   `ERP Integrity Gate`. If path filters created no run, it rechecks for a
+   queued/in-progress run and dispatches the gate once with the exact expected
+   commit. A successful live run upgrades the private handoff from schema v2
+   to schema v3 with repository, workflow, run, attempt, branch, and SHA proof.
+8. VS Code then launches the Windows and Android GitHub publishers in parallel
    in separate terminal panes. Each child revalidates the state and live source
-   independently before dispatching its own protected workflow.
+   independently, and each protected workflow queries GitHub Actions to verify
+   that exact successful qualification before building.
 
 The shared task does **not** merge signing systems or credentials. Windows and
 Android remain separate GitHub Actions workflows, protected publication jobs,
@@ -91,7 +102,15 @@ succeeds and the other fails, the successful release remains valid; rerunning
 the paired task treats an already-published exact commit as success and retries
 only what is missing. The preparation state keeps and reuses the exact
 SHA-bound Codex candidate for that same commit, so an ordinary partial-success
-retry does not silently rewrite the user-facing summary.
+retry does not silently rewrite the user-facing summary. Candidate reuse accepts
+both the pre-qualification schema-v2 state and the same handoff after its
+schema-v3 qualification upgrade.
+
+A retry after an application-test failure diagnoses the completed same-SHA run
+immediately instead of running the full gate again in both platform workflows.
+Only cancelled, timed-out, stale, or startup-failed qualification may rerun the
+same GitHub run once. `Publish Windows Update (all changes)` carries no shared
+proof and therefore retains its own complete integrity fallback.
 
 The same validated Codex candidate is offered to both protected jobs, so their
 `Novedades` describe the same committed ERP update. Each workflow independently
@@ -100,11 +119,11 @@ Codex is unavailable or the candidate is rejected, the protected release-note
 generator continues through the established sanitized Gemini path and then the
 deterministic fallback.
 
-The first paired Android release uses the latest valid Windows release commit
-as its shared notes baseline because the Windows computer does not receive the
-private Supabase credential needed to inspect the older direct-Android channel.
-That first summary can therefore cover the desktop release range; after paired
-publishing begins, the Windows and Android baselines converge naturally.
+The workstation never receives the private Supabase credential. It derives the
+Android side of the common baseline from the bounded successful Actions evidence
+artifact that was produced only after protected CI read back the exact live
+Supabase manifest. Android CI independently checks that the prepared base is at
+or before its current live release before publishing.
 
 `Publish Windows Update (all changes)` remains available for a Windows-only
 release and keeps its existing standalone behavior.

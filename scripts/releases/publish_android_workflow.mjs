@@ -14,6 +14,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { formatWorkflowFailureSummary } from "./workflow_failure_diagnostics.mjs";
+
+export { formatWorkflowFailureSummary } from "./workflow_failure_diagnostics.mjs";
+
 const REPOSITORY = "Ccatalan7/bikeshop-erp";
 const WORKFLOW = "macos-release.yml";
 const ARTIFACT_NAME = "vinabike-erp-android-release-evidence";
@@ -31,7 +35,9 @@ const MAX_ANDROID_VERSION_CODE = 2_100_000_000;
 const ANDROID_ARM64_VERSION_CODE_OFFSET = 2_000;
 const COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
-const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
+const BASE64_PATTERN =
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
+const INTEGRITY_WORKFLOW_PATH = ".github/workflows/erp-integrity-gate.yml";
 
 class SafeReleaseError extends Error {
   constructor(message) {
@@ -47,12 +53,7 @@ function fail(message) {
 function runCommand(
   command,
   args,
-  {
-    cwd,
-    input,
-    allowFailure = false,
-    maxBuffer = 4 * 1024 * 1024,
-  } = {},
+  { cwd, input, allowFailure = false, maxBuffer = 4 * 1024 * 1024 } = {},
 ) {
   const result = spawnSync(command, args, {
     cwd,
@@ -161,7 +162,9 @@ async function resolveStatePath(repoDir, requestedPath, gitDir) {
     relative === ".." ||
     path.isAbsolute(relative)
   ) {
-    fail("The ERP update state file must stay inside the current Git directory.");
+    fail(
+      "The ERP update state file must stay inside the current Git directory.",
+    );
   }
   return resolved;
 }
@@ -199,7 +202,7 @@ export async function loadPreparedState({
     "Prepared ERP update state is malformed.",
   );
   if (
-    state.schema_version !== 2 ||
+    state.schema_version !== 3 ||
     !Array.isArray(state.targets) ||
     !state.targets.includes("android") ||
     state.remote !== "origin" ||
@@ -221,6 +224,26 @@ export async function loadPreparedState({
     fail("Prepared ERP update state belongs to another repository checkout.");
   }
   const notes = decodeCandidate(state.release_notes, state.head_sha);
+  const qualification = requirePlainObject(
+    state.qualification,
+    "Prepared ERP update state is missing integrity qualification.",
+  );
+  if (
+    qualification.repository !== REPOSITORY ||
+    qualification.workflow_path !== INTEGRITY_WORKFLOW_PATH ||
+    !Number.isSafeInteger(qualification.workflow_id) ||
+    qualification.workflow_id < 1 ||
+    !Number.isSafeInteger(qualification.run_id) ||
+    qualification.run_id < 1 ||
+    !Number.isSafeInteger(qualification.run_attempt) ||
+    qualification.run_attempt < 1 ||
+    qualification.head_sha !== state.head_sha ||
+    qualification.branch !== state.branch ||
+    typeof qualification.completed_at !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T[0-9:.]+Z$/u.test(qualification.completed_at)
+  ) {
+    fail("Prepared ERP update integrity qualification is malformed or stale.");
+  }
   return {
     statePath,
     repositoryRoot,
@@ -230,6 +253,9 @@ export async function loadPreparedState({
     releaseNotesFromCommit: notes.fromCommit,
     releaseNotesCandidateBase64: notes.candidateBase64,
     releaseNotesCandidateSha256: notes.candidateSha256,
+    integrityWorkflowId: String(qualification.workflow_id),
+    integrityRunId: String(qualification.run_id),
+    integrityRunAttempt: String(qualification.run_attempt),
   };
 }
 
@@ -270,84 +296,14 @@ export function assertPreparedSource(state, { run = runCommand } = {}) {
 }
 
 function parseRuns(text) {
-  const parsed = parseJson(text || "[]", "GitHub returned invalid workflow data.");
+  const parsed = parseJson(
+    text || "[]",
+    "GitHub returned invalid workflow data.",
+  );
   if (!Array.isArray(parsed)) {
     fail("GitHub returned invalid workflow data.");
   }
   return parsed;
-}
-
-function cleanGitHubLogLine(value) {
-  const withoutAnsi = String(value ?? "").replace(
-    // GitHub may preserve terminal color codes from the nested workflow.
-    // eslint-disable-next-line no-control-regex
-    /\x1B\[[0-?]*[ -/]*[@-~]/gu,
-    "",
-  );
-  const fields = withoutAnsi.split("\t");
-  const message = fields.length >= 3 ? fields.slice(2).join("\t") : withoutAnsi;
-  return message.replace(
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\s?/u,
-    "",
-  );
-}
-
-export function formatWorkflowFailureSummary(jobsText, failedLog) {
-  let jobs = [];
-  try {
-    const parsed = JSON.parse(jobsText || "{}");
-    jobs = Array.isArray(parsed?.jobs) ? parsed.jobs : [];
-  } catch {
-    jobs = [];
-  }
-
-  const lines = ["Failure summary:"];
-  const failedJobs = jobs.filter((job) => job?.conclusion === "failure");
-  if (failedJobs.length === 0) {
-    lines.push("Failed job: unavailable from GitHub jobs API");
-    lines.push("  Failed step: unavailable from GitHub jobs API");
-  } else {
-    for (const job of failedJobs) {
-      lines.push(`Failed job: ${String(job?.name || "Unnamed GitHub job")}`);
-      const failedSteps = Array.isArray(job?.steps)
-        ? job.steps.filter((step) => step?.conclusion === "failure")
-        : [];
-      if (failedSteps.length === 0) {
-        lines.push("  Failed step: unavailable from GitHub jobs API");
-      } else {
-        for (const step of failedSteps) {
-          lines.push(
-            `  Failed step: ${String(step?.name || "Unnamed GitHub step")}`,
-          );
-        }
-      }
-    }
-  }
-
-  const cleanLogLines = String(failedLog ?? "")
-    .split(/\r?\n/u)
-    .map(cleanGitHubLogLine);
-  const gateStart = cleanLogLines.findIndex((line) =>
-    line.startsWith("[flutter-test-gate] Flutter tests failed."),
-  );
-  if (gateStart >= 0) {
-    const gateEnd = cleanLogLines.findIndex(
-      (line, index) =>
-        index >= gateStart &&
-        line.startsWith("[flutter-test-gate] Nothing was published."),
-    );
-    const boundedEnd =
-      gateEnd >= gateStart
-        ? gateEnd + 1
-        : Math.min(cleanLogLines.length, gateStart + 12);
-    lines.push(...cleanLogLines.slice(gateStart, boundedEnd));
-  } else {
-    lines.push(
-      "[android-update] Nothing was published. Fix the failed step above and run the task again.",
-    );
-  }
-
-  return lines.join("\n").trimEnd();
 }
 
 function expectedAndroidRunTitle(state) {
@@ -356,6 +312,7 @@ function expectedAndroidRunTitle(state) {
     state.headSha,
     `notes ${state.releaseNotesCandidateSha256 || "fallback"}`,
     `from ${state.releaseNotesFromCommit || "auto"}`,
+    `integrity ${state.integrityRunId || "self"}`,
   ].join(" · ");
 }
 
@@ -367,9 +324,13 @@ function isAndroidRun(run, state) {
 }
 
 function newestRun(runs) {
-  return [...runs].sort((left, right) =>
-    String(left?.createdAt ?? "").localeCompare(String(right?.createdAt ?? "")),
-  ).at(-1);
+  return [...runs]
+    .sort((left, right) =>
+      String(left?.createdAt ?? "").localeCompare(
+        String(right?.createdAt ?? ""),
+      ),
+    )
+    .at(-1);
 }
 
 function listRuns(state, run) {
@@ -405,6 +366,8 @@ export function dispatchWorkflow(state, run) {
     release_notes_from_commit: state.releaseNotesFromCommit,
     release_notes_candidate_b64: state.releaseNotesCandidateBase64,
     release_notes_candidate_sha256: state.releaseNotesCandidateSha256,
+    integrity_run_id: state.integrityRunId,
+    integrity_run_attempt: state.integrityRunAttempt,
   };
   run(
     "gh",
@@ -438,11 +401,19 @@ export async function findOrDispatchRun(
   } = {},
 ) {
   const before = listRuns(state, run);
-  const active = newestRun(
+  const successful = newestRun(
     before.filter(
       (candidate) =>
         isAndroidRun(candidate, state) &&
-        candidate.status !== "completed",
+        candidate.status === "completed" &&
+        candidate.conclusion === "success",
+    ),
+  );
+  if (successful) return successful;
+  const active = newestRun(
+    before.filter(
+      (candidate) =>
+        isAndroidRun(candidate, state) && candidate.status !== "completed",
     ),
   );
   if (active) return active;
@@ -466,11 +437,7 @@ export async function findOrDispatchRun(
 
 export async function waitForRun(
   workflowRun,
-  {
-    state,
-    run = runCommand,
-    wait = defaultWait,
-  } = {},
+  { state, run = runCommand, wait = defaultWait } = {},
 ) {
   const runId = String(workflowRun.databaseId ?? "");
   if (!/^[0-9]+$/u.test(runId)) {
@@ -522,14 +489,7 @@ export async function waitForRun(
           ) ?? "";
         const failedLog = run(
           "gh",
-          [
-            "run",
-            "view",
-            runId,
-            "--repo",
-            REPOSITORY,
-            "--log-failed",
-          ],
+          ["run", "view", runId, "--repo", REPOSITORY, "--log-failed"],
           {
             cwd: state.repositoryRoot,
             allowFailure: true,
@@ -547,7 +507,9 @@ export async function waitForRun(
         }
         fail(
           `Android publication failed. Check ${view.url ?? "GitHub Actions"}.\n` +
-            formatWorkflowFailureSummary(jobsJson, failedLog ?? ""),
+            formatWorkflowFailureSummary(jobsJson, failedLog ?? "", {
+              fallbackPrefix: "android-update",
+            }),
         );
       }
       return runId;
@@ -569,9 +531,14 @@ async function findFiles(directory, name) {
   return matches;
 }
 
-export function validateAndroidManifest(manifest, expectedCommit) {
+export function validateAndroidManifest(
+  manifest,
+  expectedCommit,
+  expectedFromCommit,
+) {
   requirePlainObject(manifest, "Android publication evidence is malformed.");
   if (
+    !COMMIT_PATTERN.test(expectedFromCommit ?? "") ||
     manifest.schema_version !== 1 ||
     manifest.package_name !== PACKAGE_NAME ||
     manifest.commit !== expectedCommit ||
@@ -606,7 +573,10 @@ export function validateAndroidManifest(manifest, expectedCommit) {
 
   let totalBytes = 0;
   manifest.apk_parts.forEach((part, index) => {
-    requirePlainObject(part, "Android publication evidence has invalid APK parts.");
+    requirePlainObject(
+      part,
+      "Android publication evidence has invalid APK parts.",
+    );
     const suffix = `.part${String(index).padStart(3, "0")}`;
     if (
       part.object_path !== `${manifest.apk_object_path}${suffix}` ||
@@ -630,7 +600,7 @@ export function validateAndroidManifest(manifest, expectedCommit) {
   if (
     notes.schema_version !== 1 ||
     notes.locale !== "es-CL" ||
-    !COMMIT_PATTERN.test(notes.from_commit) ||
+    notes.from_commit !== expectedFromCommit ||
     notes.to_commit !== expectedCommit ||
     typeof notes.title !== "string" ||
     typeof notes.summary !== "string" ||
@@ -685,6 +655,7 @@ export async function verifyRunEvidence(
         "Android workflow evidence manifest is not valid JSON.",
       ),
       state.headSha,
+      state.releaseNotesFromCommit,
     );
   } finally {
     await rm(privateDirectory, { recursive: true, force: true });

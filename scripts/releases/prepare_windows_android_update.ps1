@@ -142,7 +142,10 @@ function Get-ReusableCodexCandidate {
             Get-ObjectProperty $notes 'candidate_sha256'
         )
         if (
-            (Get-ObjectProperty $state 'schema_version') -ne 2 -or
+            (
+                (Get-ObjectProperty $state 'schema_version') -ne 2 -and
+                (Get-ObjectProperty $state 'schema_version') -ne 3
+            ) -or
             $targets -notcontains 'windows' -or
             $targets -notcontains 'android' -or
             (Get-ObjectProperty $state 'head_sha') -ne $ToCommit -or
@@ -405,7 +408,7 @@ function Get-LocalCodexCandidate {
 
 $git = Require-Command git
 $null = Require-Command gh
-$null = Require-Command node
+$node = Require-Command node
 
 $repoRoot = (git rev-parse --show-toplevel).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($repoRoot)) {
@@ -483,7 +486,23 @@ if (-not [string]::IsNullOrWhiteSpace((git status --porcelain))) {
 }
 
 $headSha = (git rev-parse HEAD).Trim()
-$releaseNotesFromCommit = Get-LatestWindowsReleaseBase -HeadSha $headSha
+$desktopReleaseNotesFromCommit = Get-LatestWindowsReleaseBase -HeadSha $headSha
+$pairedBaseResolver = Join-Path `
+    $repoRoot `
+    'scripts\releases\resolve_paired_release_notes_base.mjs'
+$pairedBaseLines = @(
+    & $node.Source $pairedBaseResolver `
+        --branch $branch `
+        --head-commit $headSha `
+        --desktop-commit $desktopReleaseNotesFromCommit
+)
+if ($LASTEXITCODE -ne 0 -or $pairedBaseLines.Count -ne 1) {
+    throw 'Could not resolve one common Windows and Android release-note baseline.'
+}
+$releaseNotesFromCommit = ([string]$pairedBaseLines[0]).Trim()
+if ($releaseNotesFromCommit -notmatch '^[0-9a-f]{40}$') {
+    throw 'The common Windows and Android release-note baseline is invalid.'
+}
 $statePath = Resolve-ErpUpdateStatePath `
     -RequestedPath $StateFile `
     -RepositoryRoot $repoRoot

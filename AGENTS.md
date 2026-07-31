@@ -20,6 +20,12 @@
   `context.go('<list route>')`. See the return contract in
   `.github/GUI_DESIGN_PRINCIPLES.md` section 6; the guard is
   `test/unit/navigation_return_contract_test.dart`.
+- **Para probar la app y compararla con los diseños de Design, sigue
+  `docs/development/AGENT_VISUAL_WORKFLOW.md`.** Es el procedimiento
+  completo y sin ambigüedad: sesión de debug, tocar por identidad (una
+  coordenada sólo sirve para un objetivo sin identidad, desde el frame actual
+  y sin reutilizarla: la app corre contra producción), leer la pantalla por
+  semántica, traer un frame y compararlo visual y estructuralmente.
 - To see a UI change in a real browser, use `scripts/dev/web_preview.sh` — the
   single owner of preview lifecycle (debug and `--release` modes) — and
   read `docs/development/WEB_PREVIEW.md` first. Open only the URL that script
@@ -62,6 +68,13 @@
   theme roles — the guide's own first rule bans literal hex in widgets. A
   module's screens get their own Design canvas; the guide is not edited to suit
   one module.
+- **Un frame de Design es una propuesta sobre el aspecto, no una orden sobre
+  el producto.** Antes de implementarlo se evalúa contra seis dimensiones —si
+  existe en este negocio, si la palabra es la correcta, si el backend lo
+  permite, si la navegación calza con el ERP, si aguanta claro/oscuro/compacto
+  y si no reinventa un control canónico— y se registra qué se copia, qué se
+  descarta y qué se agrega, con su razón. Ver
+  `docs/development/AGENT_VISUAL_WORKFLOW.md` §5.b.
 - Claude leads every visual and interaction redesign, reconciling that direction
   with the real app, domain truth and the canonical GUI guides. The handoff must
   name the Design page, turn and component ids used; Codex must not

@@ -9,6 +9,30 @@ import '../models/website_destination.dart';
 import '../services/website_destination_audit_service.dart';
 import 'website_workspace_scope.dart';
 
+typedef WebsiteLinkCategoryLoader = Future<List<WebsiteLinkCategoryOptionData>>
+    Function();
+
+@immutable
+class WebsiteLinkCategoryOptionData {
+  const WebsiteLinkCategoryOptionData({
+    required this.id,
+    required this.name,
+    required this.fullPath,
+    required this.showOnWebsite,
+    required this.markedWebProductCount,
+    required this.subtreeMarkedWebProductCount,
+    this.publicSlug,
+  });
+
+  final String id;
+  final String name;
+  final String fullPath;
+  final bool showOnWebsite;
+  final int markedWebProductCount;
+  final int subtreeMarkedWebProductCount;
+  final String? publicSlug;
+}
+
 // ==============================================================================
 // PUBLIC WIDGET: The "Button" that opens the configuration dialog
 // ==============================================================================
@@ -27,6 +51,9 @@ class WebsiteLinkValueEditor extends StatelessWidget {
   final bool dense;
   final bool darkStyle;
 
+  @visibleForTesting
+  final WebsiteLinkCategoryLoader? categoryLoader;
+
   const WebsiteLinkValueEditor({
     super.key,
     required this.label,
@@ -38,6 +65,7 @@ class WebsiteLinkValueEditor extends StatelessWidget {
     this.allowAnchor = true,
     this.dense = false,
     this.darkStyle = false,
+    this.categoryLoader,
     bool showValuePreview = true, // Legacy param, ignored now
   });
 
@@ -51,6 +79,7 @@ class WebsiteLinkValueEditor extends StatelessWidget {
     bool allowExternal = true,
     bool allowAnchor = true,
     bool darkStyle = false,
+    @visibleForTesting WebsiteLinkCategoryLoader? categoryLoader,
   }) {
     final workspace = WebsiteWorkspaceScope.maybeOf(context);
     return showDialog<_WebsiteLinkPickerResult>(
@@ -63,6 +92,7 @@ class WebsiteLinkValueEditor extends StatelessWidget {
           allowExternal: allowExternal,
           allowAnchor: allowAnchor,
           hasWorkspaceScope: workspace != null,
+          categoryLoader: categoryLoader,
         ),
       ),
     ).then((result) {
@@ -178,6 +208,7 @@ class WebsiteLinkValueEditor extends StatelessWidget {
       allowExternal: allowExternal,
       allowAnchor: allowAnchor,
       darkStyle: darkStyle,
+      categoryLoader: categoryLoader,
     );
 
     if (newValue != null && newValue != value) {
@@ -307,6 +338,18 @@ class _CategoryOption {
     required this.publicSlug,
   });
 
+  factory _CategoryOption.fromData(WebsiteLinkCategoryOptionData data) {
+    return _CategoryOption(
+      id: data.id,
+      name: data.name,
+      fullPath: data.fullPath,
+      showOnWebsite: data.showOnWebsite,
+      markedWebProductCount: data.markedWebProductCount,
+      subtreeMarkedWebProductCount: data.subtreeMarkedWebProductCount,
+      publicSlug: data.publicSlug,
+    );
+  }
+
   String get label => fullPath.trim().isEmpty ? name : fullPath;
 
   int countForScope(WebsiteCatalogCategoryScope scope) {
@@ -372,6 +415,7 @@ class _WebsiteLinkConfigurator extends StatefulWidget {
   final bool allowExternal;
   final bool allowAnchor;
   final bool hasWorkspaceScope;
+  final WebsiteLinkCategoryLoader? categoryLoader;
 
   const _WebsiteLinkConfigurator({
     required this.initialValue,
@@ -379,6 +423,7 @@ class _WebsiteLinkConfigurator extends StatefulWidget {
     required this.allowExternal,
     required this.allowAnchor,
     required this.hasWorkspaceScope,
+    this.categoryLoader,
   });
 
   static const Map<String, String> _specialDestinations = {
@@ -700,6 +745,16 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
     });
 
     try {
+      final injectedLoader = widget.categoryLoader;
+      if (injectedLoader != null) {
+        final parsed = (await injectedLoader())
+            .map(_CategoryOption.fromData)
+            .toList(growable: false)
+          ..sort((a, b) => a.label.compareTo(b.label));
+        _applyLoadedCategories(parsed);
+        return;
+      }
+
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) {
         throw Exception('No se pudo determinar tenant_id');
@@ -758,23 +813,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
         ));
       }
       parsed.sort((a, b) => a.label.compareTo(b.label));
-
-      if (!mounted) return;
-      setState(() {
-        _categories = parsed;
-        final selectedToken = _catalogCategoryId;
-        if (selectedToken != null &&
-            !parsed.any((category) => category.id == selectedToken)) {
-          final bySlug = parsed
-              .where(
-                (category) =>
-                    category.publicSlug == websiteCategorySlug(selectedToken),
-              )
-              .firstOrNull;
-          if (bySlug != null) _catalogCategoryId = bySlug.id;
-        }
-        _loadingCategories = false;
-      });
+      _applyLoadedCategories(parsed);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -785,6 +824,25 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
         debugPrint('❌ [WebsiteLinkValueEditor] load categories failed: $e');
       }
     }
+  }
+
+  void _applyLoadedCategories(List<_CategoryOption> categories) {
+    if (!mounted) return;
+    setState(() {
+      _categories = categories;
+      final selectedToken = _catalogCategoryId;
+      if (selectedToken != null &&
+          !categories.any((category) => category.id == selectedToken)) {
+        final bySlug = categories
+            .where(
+              (category) =>
+                  category.publicSlug == websiteCategorySlug(selectedToken),
+            )
+            .firstOrNull;
+        if (bySlug != null) _catalogCategoryId = bySlug.id;
+      }
+      _loadingCategories = false;
+    });
   }
 
   Future<void> _ensureProductsLoaded() async {

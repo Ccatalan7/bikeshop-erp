@@ -6,6 +6,9 @@
 #   app_control.sh click X Y [wait]      # tap in FRAME coordinates
 #   app_control.sh scroll X Y [lines]    # scroll wheel at that point
 #   app_control.sh drag X Y X2 Y2        # press, move, release
+#   app_control.sh read [--filter text]   # semantics tree, optionally filtered
+#   app_control.sh find --key|--label X  # live, hittable targets
+#   app_control.sh tap  --key|--label X  # resolve and tap one live target
 #   app_control.sh type "texto"
 #   app_control.sh key <keycode>         # 36=return 53=esc 48=tab 51=delete
 #   app_control.sh geometry              # pid + window frame + frame size
@@ -16,9 +19,9 @@
 #   - `shot` uses the Dart VM service `_flutter.screenshot`, so it returns the
 #     app's own rendered frame — no Screen Recording permission needed and no
 #     other window can occlude it.
-#   - Click coordinates are the SAME ones you read off `shot`. The window is
-#     larger than the frame (title bar + platform scaling), so this script
-#     derives the mapping instead of letting the caller guess it.
+#   - Coordinates are the physical pixels read from `shot`. The app backend
+#     divides them by the live device-pixel ratio before creating logical
+#     PointerEvents; the OS backend maps them into screen coordinates.
 #   - Input is posted as CGEvents. AppleScript `click at` does not reach a
 #     Flutter window.
 #   - Everything targets the DEBUG app by executable path. Never target by
@@ -84,17 +87,29 @@ def call(method, **params):
 try:
     isolate = call('getVM')['result']['isolates'][0]['id']
     available = call('getIsolate', isolateId=isolate)['result'].get('extensionRPCs', [])
-    if 'ext.vinabike.input.tap' not in available:
+    required = {'ext.vinabike.input.info', 'ext.vinabike.input.tap'}
+    if not required.issubset(available):
         sys.exit(1)                      # build predates the channel
+    info = call('ext.vinabike.input.info', isolateId=isolate).get('result', {})
+    dpr = float(info.get('devicePixelRatio') or 0)
+    if not (dpr > 0):
+        sys.exit(1)
+    logical_x, logical_y = float(x) / dpr, float(y) / dpr
     if verb == 'click':
-        call('ext.vinabike.input.tap', isolateId=isolate, x=x, y=y)
+        call('ext.vinabike.input.tap', isolateId=isolate,
+             x=logical_x, y=logical_y)
     elif verb == 'scroll':
         # The CGEvent driver takes "lines"; positive scrolls the content up.
         # Flutter wants pixels of scroll delta, inverted.
-        call('ext.vinabike.input.scroll', isolateId=isolate, x=x, y=y,
+        call('ext.vinabike.input.scroll', isolateId=isolate,
+             x=logical_x, y=logical_y,
              dy=-float(a if a is not None else -5) * 40)
     elif verb == 'drag':
-        call('ext.vinabike.input.drag', isolateId=isolate, x=x, y=y, x2=a, y2=b)
+        if a is None or b is None:
+            sys.exit(1)
+        call('ext.vinabike.input.drag', isolateId=isolate,
+             x=logical_x, y=logical_y,
+             x2=float(a) / dpr, y2=float(b) / dpr)
     else:
         sys.exit(1)
 except SystemExit:
@@ -168,7 +183,130 @@ case "${1:-}" in
     echo "pid $pid · ventana ${ww}x${wh} @ $wx,$wy · frame ${fw}x${fh}"
     ;;
 
+  # ── Tocar por identidad, no por píxel ─────────────────────────────────────
+  #
+  # `click X Y` obliga a leer coordenadas de una captura, y captura y clic no
+  # viven en el mismo espacio: el frame llega a 1360x757 o a 3024x1632 según
+  # devicePixelRatio y tamaño de ventana. Un reinicio basta para que toda
+  # coordenada guardada apunte a otro lado, y el clic cae donde no debe — que
+  # en una app contra producción es exactamente el accidente del 30/07.
+  #
+  #   app_control.sh find  --key payroll-confirm-week
+  #   app_control.sh find  --label "Confirmar semana"
+  #   app_control.sh tap   --key payroll-confirm-week
+  #
+  # `tap` se niega si hay más de un candidato: tocar "alguno" es como se
+  # dispara una acción que nadie pidió. Para desempatar, `--index N`.
+  # Lee la pantalla como la lee un lector de pantalla: estructura, texto y
+  # ESTADO (deshabilitado, seleccionado, con foco, abierto/cerrado). Una
+  # captura dice cómo se ve; esto dice qué está. Y cuesta texto, no una imagen.
+  #
+  #   app_control.sh read
+  #   app_control.sh read --filter "confirmar"
+  read)
+    shift
+    filter=""
+    if [ $# -gt 0 ]; then
+      if [ "$1" != "--filter" ] || [ $# -ne 2 ] || [ -z "${2:-}" ]; then
+        echo "uso: app_control.sh read [--filter texto]" >&2
+        exit 2
+      fi
+      filter="$2"
+    fi
+    uri="$(vm_uri)"
+    [ -n "$uri" ] || { echo "sin VM service en el log" >&2; exit 1; }
+    python3 - "$uri" "$filter" <<'PY'
+import json, sys, urllib.parse, urllib.request
+uri, filter_text = sys.argv[1].strip().rstrip('/'), sys.argv[2]
+
+def call(name, **params):
+    query = urllib.parse.urlencode({k: v for k, v in params.items() if v != ''})
+    url = f"{uri}/{name}?{query}" if query else f"{uri}/{name}"
+    with urllib.request.urlopen(url, timeout=40) as response:
+        return json.load(response)
+
+isolate = call('getVM')['result']['isolates'][0]['id']
+available = call('getIsolate', isolateId=isolate)['result'].get('extensionRPCs', [])
+if 'ext.vinabike.input.tree' not in available:
+    sys.exit('el build corriendo no expone la lectura de pantalla: reinicia la sesión')
+try:
+    payload = call('ext.vinabike.input.tree', isolateId=isolate,
+                   filter=filter_text)['result']
+except urllib.error.HTTPError as error:
+    sys.exit(error.read().decode())
+for line in payload.get('lines', []):
+    print(line)
+PY
+    ;;
+
+  find|tap)
+    verb="$1"; shift
+    key=""; label=""; index=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --key|--label|--index)
+          option="$1"
+          if [ $# -lt 2 ] || [ -z "${2:-}" ]; then
+            echo "$option requiere un valor" >&2
+            exit 2
+          fi
+          case "$option" in
+            --key) key="$2" ;;
+            --label) label="$2" ;;
+            --index) index="$2" ;;
+          esac
+          shift 2
+          ;;
+        *) echo "argumento desconocido: $1" >&2; exit 2 ;;
+      esac
+    done
+    [ -n "$key$label" ] || { echo "usa --key o --label" >&2; exit 2; }
+    method="ext.vinabike.input.find"
+    [ "$verb" = tap ] && method="ext.vinabike.input.tapOn"
+    uri="$(vm_uri)"
+    [ -n "$uri" ] || { echo "sin VM service en el log" >&2; exit 1; }
+    python3 - "$uri" "$method" "$key" "$label" "$index" <<'PY'
+import json, sys, urllib.parse, urllib.request
+uri, method, key, label, index = (a.strip() for a in sys.argv[1:6])
+uri = uri.rstrip('/')
+
+def call(name, **params):
+    query = urllib.parse.urlencode({k: v for k, v in params.items() if v != ''})
+    url = f"{uri}/{name}?{query}" if query else f"{uri}/{name}"
+    with urllib.request.urlopen(url, timeout=30) as response:
+        return json.load(response)
+
+isolate = call('getVM')['result']['isolates'][0]['id']
+available = call('getIsolate', isolateId=isolate)['result'].get('extensionRPCs', [])
+if method not in available:
+    sys.exit("el build corriendo no expone %s: reinicia la sesión" % method)
+try:
+    result = call(method, isolateId=isolate, key=key, label=label, index=index)
+except urllib.error.HTTPError as error:
+    sys.exit(error.read().decode())
+payload = result.get('result', result)
+if payload.get('ok') is not True:
+    sys.exit(str(payload.get('error') or 'la app rechazó la solicitud'))
+for candidate_index, match in enumerate(payload.get('matches', [payload.get('tapped')])):
+    if not match:
+        continue
+    print("[%d] %-34s %6.0f,%-6.0f %4.0fx%-4.0f  %-18s %s" % (
+        candidate_index,
+        (match.get('key') or '—')[:34],
+        match['centerX'], match['centerY'],
+        match['width'], match['height'],
+        match.get('widget', ''),
+        match.get('label') or '',
+    ))
+PY
+    ;;
+
   click|scroll|drag)
+    case "$1" in
+      click) [ $# -ge 3 ] || { echo "uso: app_control.sh click X Y" >&2; exit 2; } ;;
+      scroll) [ $# -ge 3 ] || { echo "uso: app_control.sh scroll X Y [líneas]" >&2; exit 2; } ;;
+      drag) [ $# -ge 5 ] || { echo "uso: app_control.sh drag X Y X2 Y2" >&2; exit 2; } ;;
+    esac
     # DEFAULT: deliver the gesture INSIDE the app through the debug service
     # extensions in `lib/dev/agent_input.dart`. The owner's cursor never moves,
     # the window does not need focus, and an installed build cannot intercept

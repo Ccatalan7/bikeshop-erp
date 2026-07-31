@@ -39,9 +39,18 @@ void main() {
       topLevel['dependsOn'],
       <String>[
         '🔒 Prepare Windows + Android ERP Update',
+        '✅ Qualify Windows + Android ERP Update (exact SHA)',
         '🚀 Publish Prepared Windows + Android Platforms',
       ],
     );
+    final qualification =
+        task('✅ Qualify Windows + Android ERP Update (exact SHA)');
+    expect(
+      qualification['command'],
+      'node scripts/releases/qualify_erp_update.mjs --prepared-state '
+      '.git/vinabike-windows-android-publish-state.json',
+    );
+    expect(qualification['hide'], isTrue);
     expect(platformGroup['dependsOrder'], 'parallel');
     expect(
       platformGroup['dependsOn'],
@@ -108,11 +117,23 @@ void main() {
     expect(preparation, contains('Get-ReusableCodexCandidate'));
     expect(
       preparation,
+      contains("(Get-ObjectProperty \$state 'schema_version') -ne 2 -and"),
+    );
+    expect(
+      preparation,
+      contains("(Get-ObjectProperty \$state 'schema_version') -ne 3"),
+    );
+    expect(
+      preparation,
       contains('Reusing the exact Codex candidate already bound'),
     );
     expect(preparation, contains('--git-bin \$git.Source |'));
     expect(preparation, contains('Out-Host'));
     expect(preparation, contains('Protect-PrivateStateFile'));
+    expect(
+      preparation,
+      contains('resolve_paired_release_notes_base.mjs'),
+    );
     expect(preparation, contains('SetAccessRuleProtection(\$true, \$false)'));
     expect(preparation, isNot(contains('ANDROID_SIGNING')));
     expect(preparation, isNot(contains('SUPABASE_SERVICE_ROLE')));
@@ -121,7 +142,7 @@ void main() {
   test('prepared Windows publisher revalidates the bounded handoff', () {
     expect(windowsPublisher, contains('[string]\$PreparedState'));
     expect(windowsPublisher, contains('[switch]\$CheckReleaseBranch'));
-    expect(windowsPublisher, contains('\$schemaVersion -ne 2'));
+    expect(windowsPublisher, contains('\$schemaVersion -ne 3'));
     expect(windowsPublisher, contains("\$targets -notcontains 'windows'"));
     expect(windowsPublisher, contains('\$stateAge -gt 21600'));
     expect(
@@ -133,6 +154,11 @@ void main() {
     expect(windowsPublisher, contains('git status --porcelain'));
     expect(windowsPublisher, contains('git merge-base --is-ancestor'));
     expect(windowsPublisher, contains('git ls-remote'));
+    expect(windowsPublisher, contains("'qualification'"));
+    expect(windowsPublisher, contains("'workflow_id'"));
+    expect(windowsPublisher, contains("'run_id'"));
+    expect(windowsPublisher, contains("'run_attempt'"));
+    expect(windowsPublisher, contains('\$integrityHeadSha -ne \$headSha'));
     expect(
       RegExp('Assert-PreparedErpUpdateSource')
           .allMatches(windowsPublisher)
@@ -170,6 +196,11 @@ void main() {
       ),
     );
     expect(windowsPublisher, contains("publish_release = 'true'"));
+    expect(windowsPublisher, contains('integrity_run_id = \$integrityRunId'));
+    expect(
+      windowsPublisher,
+      contains('integrity_run_attempt = \$integrityRunAttempt'),
+    );
     expect(windowsPublisher, contains('ConvertTo-Json -Compress'));
     expect(windowsPublisher, contains('--json'));
     expect(
@@ -263,7 +294,10 @@ void main() {
     expect(runbook, contains('Codex CLI once'));
     expect(runbook, contains('same validated Codex candidate'));
     expect(runbook, contains('separate GitHub Actions workflows'));
-    expect(runbook, contains('first paired Android release'));
+    expect(runbook, contains('common `Novedades` baseline'));
+    expect(runbook, contains('Missing, expired, non-ancestral, or'));
+    expect(runbook, contains('same handoff after its'));
+    expect(runbook, contains('schema-v3 qualification upgrade'));
     expect(runbook, contains('deterministic fallback'));
   });
 }

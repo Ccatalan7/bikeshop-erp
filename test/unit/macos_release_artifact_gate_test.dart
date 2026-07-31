@@ -72,7 +72,8 @@ void main() {
         reason: '$inputName must remain an optional empty dispatch input.',
       );
     }
-    expect(workflow, contains('permissions:\n  contents: read'));
+    expect(
+        workflow, contains('permissions:\n  actions: read\n  contents: read'));
     expect(
       workflow,
       contains(
@@ -307,10 +308,28 @@ void main() {
       integrityWorkflow,
       contains('bash scripts/run_flutter_test_gate.sh flutter'),
     );
+    expect(
+      integrityWorkflow,
+      contains(
+        'workflow_call:\n'
+        '    inputs:\n'
+        '      expected_commit:\n'
+        '        required: false',
+      ),
+    );
+    expect(
+      integrityWorkflow,
+      contains("if: \${{ inputs.expected_commit != '' }}"),
+    );
+    expect(
+      integrityWorkflow,
+      isNot(contains("github.event_name == 'workflow_dispatch'")),
+    );
     expect(workflow, contains('npm run build:spreadsheet-engine'));
 
     final integrityJob = workflow.indexOf('\n  integrity:');
     final sourceGuardJob = workflow.indexOf('\n  source-guard:');
+    final qualificationJob = workflow.indexOf('\n  qualification:');
     final buildJob = workflow.indexOf('\n  build:');
     final buildNeedsSourceGuard = workflow.indexOf(
       '- source-guard',
@@ -320,13 +339,28 @@ void main() {
       '- integrity',
       buildJob,
     );
+    final buildNeedsQualification = workflow.indexOf(
+      '- qualification',
+      buildJob,
+    );
     final publishJob = workflow.indexOf('\n  publish:');
     final publishNeedsBuild = workflow.indexOf('needs: build', publishJob);
     expect(sourceGuardJob, greaterThanOrEqualTo(0));
     expect(integrityJob, greaterThanOrEqualTo(0));
-    expect(buildJob, greaterThan(integrityJob));
+    expect(qualificationJob, greaterThan(integrityJob));
+    expect(buildJob, greaterThan(qualificationJob));
     expect(buildNeedsSourceGuard, greaterThan(buildJob));
     expect(buildNeedsIntegrity, greaterThan(buildJob));
+    expect(buildNeedsQualification, greaterThan(buildNeedsIntegrity));
+    expect(
+      workflow.substring(buildJob, buildNeedsSourceGuard),
+      allOf(
+        contains('always()'),
+        contains('!cancelled()'),
+        contains("inputs.integrity_run_id == ''"),
+        contains("inputs.integrity_run_id != ''"),
+      ),
+    );
     expect(publishJob, greaterThan(buildNeedsIntegrity));
     expect(publishNeedsBuild, greaterThan(publishJob));
   });
@@ -622,7 +656,13 @@ void main() {
     expect(flutterTestGate, contains('test --machine'));
     expect(flutterTestGate, contains('Flutter tests failed. Exact failure'));
     expect(flutterTestGate, contains('FAILED:'));
-    expect(flutterTestGate, contains('split("\\n  Actual:")[0]'));
+    expect(flutterTestGate, contains('.type == "print"'));
+    expect(
+      flutterTestGate,
+      contains('EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK'),
+    );
+    expect(flutterTestGate, contains('.testID | tostring'));
+    expect(flutterTestGate, contains('.[0:1200]'));
     expect(flutterTestGate, contains('Nothing was published.'));
     expect(
       integrityWorkflow,

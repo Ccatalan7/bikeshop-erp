@@ -33,7 +33,8 @@ void main() {
         r'\s+default: false',
       )),
     );
-    expect(workflow, contains('permissions:\n  contents: read'));
+    expect(
+        workflow, contains('permissions:\n  actions: read\n  contents: read'));
     expect(
       workflow,
       contains(
@@ -72,6 +73,29 @@ void main() {
     );
     expect(workflow, contains('tag_name = \$env:RELEASE_TAG'));
     expect(workflow, contains('installer_sha256 = \$installerHash'));
+  });
+
+  test('Windows consumes qualified proof or runs its standalone fallback', () {
+    final integrityJob = workflow.indexOf('\n  integrity:');
+    final qualificationJob = workflow.indexOf('\n  qualification:');
+    final buildJob = workflow.indexOf('\n  build:');
+    expect(integrityJob, greaterThanOrEqualTo(0));
+    expect(qualificationJob, greaterThan(integrityJob));
+    expect(buildJob, greaterThan(qualificationJob));
+    expect(workflow, contains('verify_integrity_qualification.mjs'));
+    expect(workflow, contains("if: \${{ inputs.integrity_run_id == '' }}"));
+    expect(workflow, contains("if: \${{ inputs.integrity_run_id != '' }}"));
+    expect(
+      workflow.substring(buildJob, workflow.indexOf('name:', buildJob)),
+      allOf(
+        contains('always()'),
+        contains('!cancelled()'),
+        contains('needs.integrity.result'),
+        contains('needs.qualification.result'),
+      ),
+    );
+    expect(workflow, contains('- integrity'));
+    expect(workflow, contains('- qualification'));
   });
 
   test('protected publish binds release notes to the selected Windows release',

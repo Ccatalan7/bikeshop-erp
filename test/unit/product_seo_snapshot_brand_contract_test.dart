@@ -97,7 +97,8 @@ void main() {
           .readAsStringSync();
 
       expect(source, contains('image_urls,brand_id,brand,category_id'));
-      expect(source, contains('_fetchProductBrandNames('));
+      expect(source, contains('_fetchProductBrandRows('));
+      expect(source, contains('buildTenantSafeProductBrandNameMap('));
       expect(source, contains("'is_active': 'eq.true'"));
       expect(
         RegExp(r'PublicCommerceProductProjection\.fromJson\(')
