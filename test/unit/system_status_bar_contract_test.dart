@@ -9,12 +9,12 @@ import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 import 'package:vinabike_erp/shared/themes/vinabike_theme_roles.dart';
 import 'package:vinabike_erp/shared/themes/workspace_chrome_theme.dart';
 
-/// La barra de estado del teléfono es parte de la app, no del sistema.
+/// La barra de estado del teléfono es parte del canvas de la app.
 ///
 /// El defecto que fija este contrato: la franja del reloj/wifi/batería salía
-/// **blanca** encima de un header navy. Material 3 deja `statusBarColor`
-/// transparente y Android la rellena con su default claro; en todo `lib/` no
-/// había un solo `SystemUiOverlayStyle` que dijera otra cosa.
+/// **blanca** encima de un header navy. En Android 15+ el color declarado deja
+/// de pintar la franja: el AppBar debe extender su canvas por debajo de ella y
+/// conservar el inset para posicionar su contenido.
 void main() {
   const presets = <AppearancePreset>[
     AppearancePresets.vinabike,
@@ -77,25 +77,42 @@ void main() {
     }
   });
 
-  // El arreglo del 31/07 no cambió nada en el teléfono, y la causa no era el
-  // color: **desde Android 15 (API 35) `Window.setStatusBarColor` está
-  // ignorado**, que es exactamente lo que hay debajo de
-  // `SystemUiOverlayStyle.statusBarColor`. Con `targetSdk = 36` el modo
-  // edge-to-edge es obligatorio, así que la franja la tiene que pintar la app
-  // dibujándose debajo de ella — el `AppBar` del shell extiende su navy hasta
-  // arriba — y para eso hay que pedir `SystemUiMode.edgeToEdge` al arrancar.
-  //
-  // Sin esa llamada la app queda encajada bajo la barra y lo que se ve en la
-  // franja es el `windowBackground` del tema Android, que en claro es blanco.
-  test('la app pide edge-to-edge al arrancar: sin eso el color no se aplica',
-      () {
+  test('edge-to-edge se configura sólo para Android', () {
     final main = File('lib/main.dart').readAsStringSync();
     expect(
-      main.contains('SystemUiMode.edgeToEdge'),
-      isTrue,
-      reason: 'sin edge-to-edge, en Android 15+ la barra de estado la sigue '
-          'pintando el sistema y statusBarColor no tiene ningún efecto',
+      main,
+      contains(
+        'if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)',
+      ),
     );
+    expect(main, contains('SystemUiMode.edgeToEdge'));
+  });
+
+  test('el host delega el inset al dueño adaptativo del shell', () {
+    final main = File('lib/main.dart').readAsStringSync();
+    final host = _between(
+      main,
+      "return Scaffold(\n                    body: Stack(",
+      'const QueryPerformanceGauge()',
+    );
+
+    expect(host, contains('_WorkspaceShell('));
+    expect(
+      host,
+      isNot(contains('SafeArea(')),
+      reason: 'SafeArea elimina MediaQuery.padding.top del descendiente; el '
+          'AppBar deja de extenderse bajo la barra de estado y reaparece la '
+          'franja blanca del Scaffold exterior',
+    );
+
+    final shell = _between(
+      main,
+      'class _WorkspaceShellState',
+      'class _WorkspaceRouterView',
+    );
+    expect(shell, contains('WorkspaceSystemInsetBoundary('));
+    expect(shell, contains('compact: true'));
+    expect(shell, contains('compact: false'));
   });
 
   test('la regla del brillo vive en un solo sitio y se calcula, no se fija',
@@ -114,4 +131,11 @@ void main() {
     );
     expect(vinabikeSystemOverlayStyleFor(claro).statusBarColor, claro);
   });
+}
+
+String _between(String source, String start, String end) {
+  final startIndex = source.indexOf(start);
+  final endIndex = source.indexOf(end, startIndex + start.length);
+  if (startIndex < 0 || endIndex < 0) return '';
+  return source.substring(startIndex, endIndex);
 }

@@ -186,12 +186,14 @@ Future<void> main() async {
     // color que el sistema ya no acepta, y encima de la franja transparente se
     // veía el `windowBackground` del tema Android, que en claro es blanco.
     //
-    // Con edge-to-edge la app se dibuja DEBAJO de la barra y el `AppBar` del
-    // shell extiende su navy hasta arriba, que es lo que se quería. El color
-    // sigue viajando en el overlay style para las versiones de Android donde
-    // todavía se respeta; lo que nunca dejó de funcionar en ninguna es el
-    // brillo de los iconos.
-    if (!kIsWeb) {
+    // Con edge-to-edge la app puede dibujarse DEBAJO de la barra. El inset
+    // superior debe seguir disponible hasta el `AppBar` del shell para que
+    // éste extienda su canvas semántico hasta y=0; consumirlo antes con un
+    // `SafeArea` vuelve a dejar visible el fondo claro del host. El color
+    // sigue viajando en el overlay style para Android antiguos y el brillo de
+    // los iconos sigue siendo dinámico. Esta configuración es Android-only:
+    // iOS y macOS conservan su dueño nativo del system chrome.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
 
@@ -899,15 +901,17 @@ class VinabikeApp extends StatelessWidget {
                   return Scaffold(
                     body: Stack(
                       children: [
-                        SafeArea(
-                          bottom:
-                              false, // Only add top padding for iOS status bar
-                          child: _WorkspaceShell(
-                            key: const ValueKey(
-                              'authenticated-workspace-shell',
-                            ),
-                            authService: authService,
+                        // Do not consume the top system inset here. The
+                        // compact MainLayout AppBar is the single owner that
+                        // both paints behind the status bar and positions its
+                        // toolbar below it. An outer SafeArea would erase the
+                        // descendant MediaQuery.padding.top and expose this
+                        // Scaffold's light canvas above the navy header.
+                        _WorkspaceShell(
+                          key: const ValueKey(
+                            'authenticated-workspace-shell',
                           ),
+                          authService: authService,
                         ),
                         const QueryPerformanceGauge(),
                         const DesktopUpdatePrompt(),
@@ -1802,17 +1806,20 @@ class _WorkspaceShellState extends State<_WorkspaceShell> {
             final toolbar = RightToolbar.compactWorkspace(key: _toolbarKey);
             final hasCompactTool =
                 activeTool != null && activeTool != ToolbarTool.newJob;
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                _buildWorkspaceStack(topInset: 0),
-                Positioned.fill(
-                  child: Offstage(
-                    offstage: !hasCompactTool,
-                    child: toolbar,
+            return WorkspaceSystemInsetBoundary(
+              compact: true,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _buildWorkspaceStack(topInset: 0),
+                  Positioned.fill(
+                    child: Offstage(
+                      offstage: !hasCompactTool,
+                      child: toolbar,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             );
           }
 
@@ -1860,23 +1867,26 @@ class _WorkspaceShellState extends State<_WorkspaceShell> {
             );
           }
 
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              workspaceAndTools,
-              AnimatedPositioned(
-                key: const ValueKey('workspace-tab-bar-placement'),
-                duration: isResizing
-                    ? Duration.zero
-                    : const Duration(milliseconds: 200),
-                curve: Curves.easeOutCubic,
-                left: navigationWidth,
-                top: 0,
-                right: 0,
-                height: topInset,
-                child: const WorkspaceTabBar(),
-              ),
-            ],
+          return WorkspaceSystemInsetBoundary(
+            compact: false,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                workspaceAndTools,
+                AnimatedPositioned(
+                  key: const ValueKey('workspace-tab-bar-placement'),
+                  duration: isResizing
+                      ? Duration.zero
+                      : const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  left: navigationWidth,
+                  top: 0,
+                  right: 0,
+                  height: topInset,
+                  child: const WorkspaceTabBar(),
+                ),
+              ],
+            ),
           );
         },
       ),

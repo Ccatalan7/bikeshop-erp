@@ -33,6 +33,47 @@ class WorkspaceShellScope extends InheritedWidget {
   }
 }
 
+/// Applies platform insets once at the authenticated workspace boundary.
+///
+/// Compact composition deliberately preserves the top inset for its canonical
+/// [AppBar], which paints behind the status bar and positions the toolbar below
+/// it. Wide composition has no AppBar, so the global shell protects its tabs,
+/// navigation, content and tools together. Keeping this decision above routed
+/// modules prevents feature pages from accumulating competing SafeAreas.
+class WorkspaceSystemInsetBoundary extends StatelessWidget {
+  const WorkspaceSystemInsetBoundary({
+    required this.compact,
+    required this.child,
+    super.key,
+  });
+
+  final bool compact;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      return SafeArea(
+        top: false,
+        bottom: false,
+        child: child,
+      );
+    }
+
+    final surface = Theme.of(context).colorScheme.surface;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: vinabikeSystemOverlayStyleFor(surface),
+      child: ColoredBox(
+        color: surface,
+        child: SafeArea(
+          bottom: false,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
 /// Visual roles for controls painted directly on the workspace chrome.
 ///
 /// This is deliberately a plain [InheritedWidget], not a nested [Theme].

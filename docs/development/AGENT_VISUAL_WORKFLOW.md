@@ -578,6 +578,53 @@ Cerré un turno diciendo «sigo ahora mismo, no me detengo» y terminé el turno
 
 ---
 
+## 5.d Lo que sólo se ve en el teléfono
+
+Hay defectos que **no existen** en macOS ni en el navegador y que la batería no
+puede ver. Se descubren mirando la pantalla del dueño, y su causa suele estar
+en la plataforma, no en el widget.
+
+### La barra de estado en Android 15+
+
+`targetSdk` es **36**. Desde **Android 15 (API 35) `Window.setStatusBarColor`
+está ignorado** —el modo edge-to-edge es obligatorio— y eso es exactamente lo
+que hay debajo de `SystemUiOverlayStyle.statusBarColor`. Pedirle un color al
+sistema no hace nada; sobre la franja transparente se ve el `windowBackground`
+del tema Android, que en claro es **blanco**.
+
+**La franja la pinta la app.** Se pide `SystemUiMode.edgeToEdge` al arrancar
+(`lib/main.dart`) y el `AppBar` del shell extiende su fondo hasta arriba. El
+color sigue viajando en el overlay style para versiones donde aún se respeta;
+el brillo de los iconos nunca dejó de funcionar en ninguna.
+
+El 31/07 se «arregló» sólo con el color y **la actualización salió sin cambio
+alguno**. Un contrato lo fija ahora: `system_status_bar_contract_test.dart`
+exige la llamada de edge-to-edge, con la causa escrita al lado.
+
+> **La regla:** cuando algo de chrome del sistema no cambia pese a que el
+> código lo declara, **comprueba primero si la API sigue vigente en el
+> `targetSdk` real**, antes de tocar el widget. `flutter.targetSdkVersion`
+> avanza solo con cada actualización del SDK, así que una API que funcionaba
+> puede quedar ignorada sin que nadie cambie una línea.
+
+### Publicar: dos plataformas, dos anclas distintas
+
+Las novedades se atan a un rango, y **cada plataforma tiene su propio ancla**:
+la última release de macOS y la última de Android no son el mismo commit. Un
+candidato atado a la de Android hace fallar a macOS con
+`The shared release-note base does not match the authoritative macOS range` —
+y no falla el build, falla el paso de novedades, así que se lee como otra cosa.
+
+El ancla real la resuelve el propio `prepare_erp_update.sh` y **la imprime**:
+
+```
+Notes base: fa698597cc50aac657f7eae5eb1387906a70413b
+```
+
+Se construye el candidato contra **esa** base, no contra la que uno supone.
+
+---
+
 ## 6. Qué necesita al dueño
 
 **Commit y push ya no** (2026-07-31: el dueño se los pasó al agente y el guard

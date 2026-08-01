@@ -218,10 +218,10 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
 ///
 /// **Por qué existe.** En el teléfono la barra del sistema —reloj, wifi,
 /// batería— quedaba blanca pegada encima de un header navy: una franja que no
-/// pertenecía a la app. La causa no era el header: Material 3 deja
-/// `statusBarColor` **transparente**, y sin modo edge-to-edge Android rellena
-/// eso con su default claro. En todo `lib/` no había un solo
-/// `SystemUiOverlayStyle`, así que la app nunca dijo de qué color va esa franja.
+/// pertenecía a la app. En Android 15+ la barra es transparente y la app pinta
+/// detrás de ella; este estilo mantiene la compatibilidad anterior y decide el
+/// brillo de iconos contra el canvas real. El host debe conservar el inset
+/// superior hasta el AppBar en vez de consumirlo con un SafeArea exterior.
 ///
 /// El brillo de los iconos **se calcula contra el fondo real** en vez de fijarse
 /// en claro: un preset puede traer un chrome claro, y ahí unos iconos blancos

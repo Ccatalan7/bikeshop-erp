@@ -877,6 +877,41 @@ Every record must contain these exact fields:
   are non-null and schema-enforced. Verify an in-place remote refresh that
   preserves route and widget state on phone and desktop.
 
+### System chrome shares one inset owner with the compact header
+
+- **Problem observed:** On Android 15+, the status bar remained white above a
+  correctly themed compact header even after the app supplied a matching
+  `SystemUiOverlayStyle` and enabled edge-to-edge.
+- **Cause:** A host-level `SafeArea` consumed the top inset and rewrote the
+  descendant `MediaQuery` before the canonical `AppBar` received it. The
+  header therefore began below the transparent system bar, leaving the light
+  outer Scaffold visible in that region. On current target SDKs, changing
+  `statusBarColor` cannot repair that layout boundary.
+- **Approved pattern:** Configure edge-to-edge only on the platform that owns
+  it. In compact composition, preserve the top inset until the single header,
+  let that header paint from the top of the viewport while positioning its
+  toolbar below the inset, and derive icon brightness from the same semantic
+  canvas. In a wide/tablet composition without an AppBar, apply the top inset
+  once around the complete global shell so tabs, navigation, content and tools
+  remain together. A full-screen child outside that shell must own its own
+  explicit inset contract.
+- **Anti-pattern:** Wrapping the authenticated workspace in a top `SafeArea`;
+  stacking a second AppBar below a protected blank strip; relying on a literal
+  native/status-bar color under mandatory edge-to-edge; or accepting a
+  source-string check without proving rendered geometry.
+- **Reference implementation:** `lib/main.dart`,
+  `lib/shared/widgets/main_layout.dart`, and
+  `lib/shared/themes/vinabike_theme_roles.dart`.
+- **Minimum test:** With a non-zero simulated top system inset, render the real
+  compact `MainLayout` across every appearance preset in light and dark. Prove
+  that the header starts at `y=0`, its rendered height includes the inset, its
+  background and overlay style resolve from the same semantic chrome canvas,
+  and no host-level `SafeArea` consumes the inset first. At a representative
+  wide tablet width, prove the complete shell starts below that inset and the
+  descendant receives no duplicate top padding. Then inspect the built Android
+  artifact and verify status-bar continuity plus legible icons on a current
+  Android device or emulator; a Dart contract alone is insufficient.
+
 ### Global Android update prompts reveal detail on demand
 
 - **Problem observed:** The first installed Android update prompt covered too
