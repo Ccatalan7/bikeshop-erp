@@ -1252,17 +1252,22 @@ void main() {
     );
     expect(anaCard, findsOneWidget);
     expect(zoilaCard, findsOneWidget);
-    expect(tester.getTopLeft(anaCard).dx,
-        lessThan(tester.getTopLeft(zoilaCard).dx));
+    // 5h pone a las personas en columna: el orden por nombre se lee de arriba
+    // hacia abajo, no de izquierda a derecha, y todas comparten el borde.
+    expect(tester.getTopLeft(anaCard).dy,
+        lessThan(tester.getTopLeft(zoilaCard).dy));
+    expect(tester.getTopLeft(anaCard).dx, tester.getTopLeft(zoilaCard).dx);
     expect(
       tester.widget<Semantics>(zoilaCard).properties.selected,
       isTrue,
     );
     expect(find.text('Movimiento Zoila'), findsOneWidget);
 
-    await tester.tap(
-      find.text('Registrar anticipo para Zoila Pérez').hitTestable(),
+    expect(
+      find.bySemanticsLabel('Registrar anticipo para Zoila Pérez'),
+      findsOneWidget,
     );
+    await tester.tap(find.text('Nuevo para esta persona').hitTestable());
     await tester.pumpAndSettle();
     expect(
       find.textContaining('Registra dinero entregado a Zoila Pérez'),
@@ -1442,13 +1447,96 @@ void main() {
       find.textContaining('ya no está disponible como trabajador activo'),
       findsOneWidget,
     );
+    // La etiqueta visible es la de 5h y no repite el nombre; quien la nombra
+    // es la semántica, que es lo que anuncia un lector de pantalla.
+    expect(
+      find.bySemanticsLabel('Registrar anticipo para Antonia Inactiva'),
+      findsOneWidget,
+    );
     final action = tester.widget<OutlinedButton>(
-      find.widgetWithText(
-        OutlinedButton,
-        'Registrar anticipo para Antonia Inactiva',
-      ),
+      find.widgetWithText(OutlinedButton, 'Nuevo para esta persona'),
     );
     expect(action.onPressed, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'Anticipos entra por la persona que SÍ tiene saldo, no por la primera '
+      'del alfabeto', (tester) async {
+    // En producción esto abría el submódulo en una pantalla vacía: el orden es
+    // alfabético y la primera persona casi nunca es la que debe plata.
+    final h = harness(
+      employees: const [
+        {
+          'id': 'worker-a',
+          'first_name': 'Aaron',
+          'last_name': 'Sin Saldo',
+          'status': 'active',
+        },
+        {
+          'id': 'worker-z',
+          'first_name': 'Zulema',
+          'last_name': 'Con Saldo',
+          'status': 'active',
+        },
+      ],
+      openAdvances: [
+        EmployeeAdvance(
+          id: 'advance-consumido',
+          employeeId: 'worker-a',
+          amount: 10000,
+          amountApplied: 10000,
+          paidAt: DateTime(2026, 7, 10, 12),
+          status: 'applied',
+          notes: 'Movimiento ya aplicado',
+        ),
+        EmployeeAdvance(
+          id: 'advance-vigente',
+          employeeId: 'worker-z',
+          amount: 40000,
+          amountApplied: 0,
+          paidAt: DateTime(2026, 7, 18, 12),
+          status: 'open',
+          notes: 'Movimiento vigente',
+        ),
+      ],
+    );
+    await pump(tester, h.actions, size: const Size(1440, 900));
+    await tester.tap(find.text('Anticipos'));
+    await tester.pumpAndSettle();
+
+    // Aaron va primero en la columna, pero el foco entra en Zulema.
+    final aaron = find.byKey(
+      const ValueKey<String>('payroll-advance-person-card-worker-a'),
+    );
+    final zulema = find.byKey(
+      const ValueKey<String>('payroll-advance-person-card-worker-z'),
+    );
+    expect(
+      tester.getTopLeft(aaron).dy,
+      lessThan(tester.getTopLeft(zulema).dy),
+    );
+    expect(tester.widget<Semantics>(zulema).properties.selected, isTrue);
+    expect(tester.widget<Semantics>(aaron).properties.selected, isFalse);
+    expect(find.text('Movimiento vigente'), findsOneWidget);
+    expect(find.text('Movimiento ya aplicado'), findsNothing);
+
+    // El pie explica de qué se está hablando, y la acción vive junto a la
+    // persona sobre la que actúa.
+    expect(
+      find.textContaining('es la palabra que manda'),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel('Registrar anticipo para Zulema Con Saldo'),
+      findsOneWidget,
+    );
+
+    // Elegir a mano manda sobre el default y sobrevive al recompose.
+    await tester.tap(aaron);
+    await tester.pumpAndSettle();
+    expect(tester.widget<Semantics>(aaron).properties.selected, isTrue);
+    expect(find.text('Movimiento ya aplicado'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -1477,11 +1565,12 @@ void main() {
       find.textContaining('ya no está disponible como trabajador activo'),
       findsOneWidget,
     );
+    expect(
+      find.bySemanticsLabel('Registrar anticipo para Persona sin ficha'),
+      findsOneWidget,
+    );
     final action = tester.widget<OutlinedButton>(
-      find.widgetWithText(
-        OutlinedButton,
-        'Registrar anticipo para Persona sin ficha',
-      ),
+      find.widgetWithText(OutlinedButton, 'Nuevo para esta persona'),
     );
     expect(action.onPressed, isNull);
     expect(tester.takeException(), isNull);
@@ -2185,7 +2274,7 @@ void main() {
       // El read model manda: la fila imputada (que el lector de saldos
       // abiertos no conoce) es visible con su imputación por semana.
       expect(requests.first, 'employee-line-2:first');
-      expect(find.text('IMPUTADO'), findsWidgets);
+      expect(find.text('APLICADO'), findsWidgets);
       expect(find.textContaining('Aplicado en NOM-00031'), findsOneWidget);
       expect(find.text('VIGENTE'), findsWidgets);
       expect(find.text('ANULADO'), findsNothing);
@@ -2195,14 +2284,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(requests, contains('employee-line-2:adv-applied'));
       expect(find.text('ANULADO'), findsWidgets);
-      expect(find.text('IMPUTADO'), findsWidgets);
+      expect(find.text('APLICADO'), findsWidgets);
       expect(find.text('Cargar movimientos anteriores'), findsNothing);
 
       // Persona inactiva con historial: descubrible, con ledger y sin CTA.
       await tester.tap(find.text('Persona Retirada'));
       await tester.pumpAndSettle();
       expect(requests.last, 'employee-old:first');
-      expect(find.text('IMPUTADO'), findsWidgets);
+      expect(find.text('APLICADO'), findsWidgets);
       expect(find.textContaining('ya no está disponible'), findsOneWidget);
     });
 

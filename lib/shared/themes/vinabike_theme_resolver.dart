@@ -100,6 +100,11 @@ abstract final class VinabikeThemeResolver {
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.primary,
         foregroundColor: scheme.onPrimary,
+        // Default de la app para cualquier AppBar que no sea el del shell: la
+        // barra de estado se tiñe con **el fondo de ese AppBar**, no con el
+        // navy del shell — una franja navy encima de un AppBar claro es el
+        // mismo defecto al revés.
+        systemOverlayStyle: vinabikeSystemOverlayStyleFor(scheme.primary),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 1,

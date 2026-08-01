@@ -1742,6 +1742,11 @@ class _MainLayoutState extends State<MainLayout> {
           title: _buildCompactTitle(context, compactChrome),
           backgroundColor: compactChrome.canvas,
           foregroundColor: compactChrome.foreground,
+          // La barra de estado del sistema toma este mismo navy. Sin esto
+          // Android la deja en su default claro y queda una franja blanca
+          // pegada encima del header — ver `systemOverlayStyle` en
+          // `WorkspaceChromeStyleData`.
+          systemOverlayStyle: compactChrome.systemOverlayStyle,
           surfaceTintColor: Colors.transparent,
           shadowColor: Colors.transparent,
           elevation: 0,
@@ -3821,10 +3826,24 @@ class _AppDrawerState extends State<AppDrawer> {
     );
   }
 
+  /// Resultados del buscador del drawer.
+  ///
+  /// **La tinta va atada al chrome, explícitamente.** Estos `ListTile` no
+  /// declaraban color y salían pintados con el `onSurface` del tema **claro**
+  /// (`#10243A`) sobre el navy del drawer: medido en la app, 1,03:1 de
+  /// contraste — invisible. Los iconos sí se veían, y por eso parecía que el
+  /// buscador no encontraba nada cuando en realidad sí filtraba.
+  ///
+  /// Heredar del `Theme` no alcanzó: el drawer ya está envuelto en
+  /// `WorkspaceChromeTheme.sidebarTheme` y aun así la tinta llegaba del tema de
+  /// la app. Mientras esa fuga no se explique, lo que va sobre el navy se dice
+  /// en el sitio donde se pinta, que es lo que ya hacen la cabecera y las
+  /// pestañas del propio drawer.
   Widget _buildCompactSearchResults(
     BuildContext context, {
     required List<AppDestinationModule> modules,
     required List<AppDestinationModule> fixedModules,
+    required WorkspaceChromeStyleData chrome,
   }) {
     final normalizedQuery = _searchQuery.toLowerCase();
     final results =
@@ -3857,7 +3876,7 @@ class _AppDrawerState extends State<AppDrawer> {
             'No encontramos módulos o páginas para “$_searchQuery”.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: chrome.mutedForeground,
                 ),
           ),
         ),
@@ -3872,10 +3891,22 @@ class _AppDrawerState extends State<AppDrawer> {
         final result = results[index];
         return ListTile(
           minTileHeight: 52,
-          leading: Icon(result.icon, size: 20),
-          title: Text(result.label),
-          subtitle: Text('${result.module} › ${result.label}'),
-          trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+          iconColor: chrome.mutedForeground,
+          textColor: chrome.foreground,
+          leading: Icon(result.icon, size: 20, color: chrome.mutedForeground),
+          title: Text(
+            result.label,
+            style: TextStyle(color: chrome.foreground),
+          ),
+          subtitle: Text(
+            '${result.module} › ${result.label}',
+            style: TextStyle(color: chrome.mutedForeground),
+          ),
+          trailing: Icon(
+            Icons.chevron_right_rounded,
+            size: 20,
+            color: chrome.mutedForeground,
+          ),
           onTap: () {
             Navigator.pop(context);
             _handleMobileNavigation(context, result.route, result.label);
@@ -3885,7 +3916,10 @@ class _AppDrawerState extends State<AppDrawer> {
     );
   }
 
-  Widget _buildCompactWorkspaceAccess(BuildContext context) {
+  Widget _buildCompactWorkspaceAccess(
+    BuildContext context, {
+    required WorkspaceChromeStyleData chrome,
+  }) {
     return Consumer<WorkspaceManager>(
       builder: (context, manager, _) {
         final workspaces = manager.workspaces;
@@ -3907,10 +3941,14 @@ class _AppDrawerState extends State<AppDrawer> {
                 key: ValueKey('mobile-workspace-${workspace.id}'),
                 minTileHeight: 48,
                 selected: workspace.id == activeId,
+                // Va sobre el navy del drawer: la tinta se dice acá.
+                iconColor: chrome.mutedForeground,
+                textColor: chrome.foreground,
                 title: Text(
                   workspace.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: chrome.foreground),
                 ),
                 onTap: () {
                   manager.switchToWorkspaceById(workspace.id);
@@ -3935,6 +3973,7 @@ class _AppDrawerState extends State<AppDrawer> {
   Widget _buildCompactToolsMode(
     BuildContext context, {
     required BuildContext overlayContext,
+    required WorkspaceChromeStyleData chrome,
   }) {
     final toolbarService = context.watch<RightToolbarService>();
     final chatProvider = context.watch<ChatProvider>();
@@ -4023,9 +4062,22 @@ class _AppDrawerState extends State<AppDrawer> {
         widgets.add(
           ListTile(
             minTileHeight: 52,
-            leading: const Icon(Icons.swap_vert_rounded),
-            title: const Text('Reordenar módulos'),
-            trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+            // La fila va sobre el navy; la HOJA que abre, no (ver abajo).
+            iconColor: chrome.mutedForeground,
+            textColor: chrome.foreground,
+            leading: Icon(
+              Icons.swap_vert_rounded,
+              color: chrome.mutedForeground,
+            ),
+            title: Text(
+              'Reordenar módulos',
+              style: TextStyle(color: chrome.foreground),
+            ),
+            trailing: Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: chrome.mutedForeground,
+            ),
             // Open from the app context above the drawer's chromatic Theme.
             // Otherwise showModalBottomSheet captures the shell ColorScheme and
             // paints a navy application overlay.
@@ -4225,13 +4277,14 @@ class _AppDrawerState extends State<AppDrawer> {
                 drawerContext,
                 modules: modules,
                 fixedModules: fixedModules,
+                chrome: chrome,
               );
             }
             return ListView(
               key: const ValueKey('mobile-drawer-navigation-mode'),
               padding: const EdgeInsets.only(bottom: 12),
               children: [
-                _buildCompactWorkspaceAccess(drawerContext),
+                _buildCompactWorkspaceAccess(drawerContext, chrome: chrome),
                 ExpandableMenuItem(
                   key: const ValueKey('drawer-dashboard'),
                   icon: Icons.dashboard_outlined,
@@ -4286,6 +4339,7 @@ class _AppDrawerState extends State<AppDrawer> {
                             child: _buildCompactToolsMode(
                               drawerContext,
                               overlayContext: context,
+                              chrome: chrome,
                             ),
                           ),
                   ),
@@ -4296,12 +4350,26 @@ class _AppDrawerState extends State<AppDrawer> {
                     ),
                     child: Column(
                       children: [
+                        // Mismo defecto medido que en los resultados del
+                        // buscador: sin color explícito salían a 1,03:1 sobre
+                        // el navy.
                         ListTile(
                           minTileHeight: 52,
-                          leading: const Icon(Icons.settings_outlined),
-                          title: const Text('Configuración'),
-                          trailing:
-                              const Icon(Icons.chevron_right_rounded, size: 20),
+                          iconColor: chrome.mutedForeground,
+                          textColor: chrome.foreground,
+                          leading: Icon(
+                            Icons.settings_outlined,
+                            color: chrome.mutedForeground,
+                          ),
+                          title: Text(
+                            'Configuración',
+                            style: TextStyle(color: chrome.foreground),
+                          ),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            size: 20,
+                            color: chrome.mutedForeground,
+                          ),
                           onTap: () {
                             Navigator.pop(drawerContext);
                             _handleMobileNavigation(
@@ -4313,8 +4381,16 @@ class _AppDrawerState extends State<AppDrawer> {
                         ),
                         ListTile(
                           minTileHeight: 52,
-                          leading: const Icon(Icons.logout_outlined),
-                          title: const Text('Cerrar sesión'),
+                          iconColor: chrome.mutedForeground,
+                          textColor: chrome.foreground,
+                          leading: Icon(
+                            Icons.logout_outlined,
+                            color: chrome.mutedForeground,
+                          ),
+                          title: Text(
+                            'Cerrar sesión',
+                            style: TextStyle(color: chrome.foreground),
+                          ),
                           onTap: () => _handleLogout(drawerContext),
                         ),
                       ],

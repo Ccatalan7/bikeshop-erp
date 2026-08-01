@@ -103,45 +103,53 @@ class PayrollAdvancesSurface extends StatelessWidget {
             onLoadMore: onLoadMore,
           );
         }
-        return _desktop(constraints);
+        return _desktop(context, constraints);
       },
     );
   }
 
-  Widget _desktop(BoxConstraints constraints) {
-    const gap = 10.0;
-    final available = constraints.maxWidth - 36;
-    final idealCardWidth =
-        (available - gap * (people.length - 1)) / people.length;
-    final cardWidth = idealCardWidth.clamp(210.0, 340.0).toDouble();
+  Widget _desktop(BuildContext context, BoxConstraints constraints) {
+    // 5h pone a las personas en **columna a la izquierda**, no en una tira
+    // horizontal arriba. La tira funcionaba con tres personas de mock; con las
+    // seis reales ya empujaba gente fuera de pantalla, y a nadie se le ocurre
+    // scrollear en horizontal para buscar a alguien. La columna las muestra
+    // todas y deja la cifra de cada una alineada con la de al lado, que es lo
+    // que hace comparable «quién debe cuánto».
+    const columnWidth = 250.0;
+    final roomForRules = constraints.maxWidth >= 1180;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           SizedBox(
-            height: 84,
-            child: SingleChildScrollView(
-              key: const PageStorageKey<String>(
-                'payroll-desktop-advance-people',
-              ),
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  for (int i = 0; i < people.length; i++) ...<Widget>[
-                    SizedBox(
-                      width: cardWidth,
-                      child: _PersonCard(vm: people[i]),
+            width: columnWidth,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.only(left: 2, bottom: 8),
+                  child: Text(
+                    'PERSONA',
+                    style: PayrollVisualTokens.of(context).overline,
+                  ),
+                ),
+                Expanded(
+                  child: ListView.separated(
+                    key: const PageStorageKey<String>(
+                      'payroll-desktop-advance-people',
                     ),
-                    if (i != people.length - 1) const SizedBox(width: gap),
-                  ],
-                ],
-              ),
+                    primary: false,
+                    itemCount: people.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, i) => _PersonCard(vm: people[i]),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(width: 14),
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -162,13 +170,15 @@ class PayrollAdvancesSurface extends StatelessWidget {
                   paginationError: paginationError,
                   onLoadMore: onLoadMore,
                 )),
-                const SizedBox(width: 14),
-                SizedBox(
-                  width: 280,
-                  child: SingleChildScrollView(
-                    child: _RulesCard(initials: selectedInitials),
+                if (roomForRules) ...<Widget>[
+                  const SizedBox(width: 14),
+                  SizedBox(
+                    width: 280,
+                    child: SingleChildScrollView(
+                      child: _RulesCard(initials: selectedInitials),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -494,7 +504,7 @@ class _CompactLedgerRow extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: _CompactLedgerFigure(
-                  label: 'IMPUTADO',
+                  label: 'APLICADO',
                   value: vm.applied,
                 ),
               ),
@@ -763,16 +773,66 @@ class _Ledger extends StatelessWidget {
                   child: Text(initials, style: visual.avatarInitials(10)),
                 ),
                 const SizedBox(width: 11),
-                Text(name, style: visual.sectionTitle.copyWith(fontSize: 13)),
-                const SizedBox(width: 10),
                 Expanded(
-                  child: Text(count,
-                      style: visual.bodyS
-                          .copyWith(fontSize: 11, color: visual.inkFaint)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Text(name,
+                          style: visual.sectionTitle.copyWith(fontSize: 13),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                      // 5h pone la cifra JUNTO a la persona, no en la otra
+                      // punta de la fila: «saldo vigente $X» se lee como una
+                      // frase sobre ella. El número grande ya vive en su
+                      // tarjeta de la columna, así que repetirlo a la derecha
+                      // sólo ocupaba el lugar donde va la acción.
+                      Text(
+                        'saldo vigente $balance · $count',
+                        style: visual.bodyS
+                            .copyWith(fontSize: 11, color: visual.inkFaint),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
-                Text('VIGENTE', style: visual.overline),
-                const SizedBox(width: 8),
-                Text(balance, style: visual.numCard.copyWith(fontSize: 17)),
+                const SizedBox(width: 10),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 200),
+                  child: SizedBox(
+                    height: 30,
+                    // La etiqueta visible es la de 5h y no repite el nombre,
+                    // que está 200 px a la izquierda. Quien no ve la pantalla
+                    // no tiene ese contexto, así que la semántica sí lo dice.
+                    child: Semantics(
+                      button: true,
+                      enabled: onNewAdvanceForSelectedPerson != null,
+                      label: 'Registrar anticipo para $name',
+                      excludeSemantics: true,
+                      child: OutlinedButton.icon(
+                        onPressed: onNewAdvanceForSelectedPerson,
+                        icon: const Icon(Icons.add_rounded, size: 15),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: visual.inkMuted,
+                          backgroundColor: visual.surface,
+                          padding: const EdgeInsets.symmetric(horizontal: 11),
+                          side: BorderSide(color: visual.borderStrong),
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(PayrollTokens.rField),
+                          ),
+                        ),
+                        label: Text(
+                          'Nuevo para esta persona',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: visual.label.copyWith(fontSize: 11),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -797,7 +857,7 @@ class _Ledger extends StatelessWidget {
                 const SizedBox(width: 10),
                 SizedBox(
                     width: 84,
-                    child: Text('IMPUTADO',
+                    child: Text('APLICADO',
                         textAlign: TextAlign.right, style: visual.overline)),
                 const SizedBox(width: 10),
                 SizedBox(
@@ -839,51 +899,44 @@ class _Ledger extends StatelessWidget {
               color: visual.surfaceSunken,
               border: Border(top: BorderSide(color: visual.border)),
             ),
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    actionUnavailableReason ??
-                        'El saldo se consume desde el composer al pagar cualquier semana.',
-                    key: actionUnavailableReason == null
-                        ? null
-                        : const ValueKey<String>(
-                            'payroll-advance-person-action-unavailable',
-                          ),
+            // 5h reserva este pie para explicar **vigente**, que es la palabra
+            // de la que cuelga todo el submódulo. Antes decía sólo dónde se
+            // consume el saldo; lo que no decía —y es lo que la gente pregunta—
+            // es que aplicarlo NO es automático y que se puede deshacer
+            // mientras la semana siga abierta.
+            child: actionUnavailableReason != null
+                ? Text(
+                    actionUnavailableReason!,
+                    key: const ValueKey<String>(
+                      'payroll-advance-person-action-unavailable',
+                    ),
                     style: visual.bodyS.copyWith(
                       fontSize: 11,
                       color: visual.inkFaint,
                     ),
-                  ),
-                ),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 260),
-                  child: SizedBox(
-                    height: 36,
-                    child: OutlinedButton.icon(
-                      onPressed: onNewAdvanceForSelectedPerson,
-                      icon: const Icon(Icons.add_rounded, size: 15),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: visual.inkMuted,
-                        backgroundColor: visual.surface,
-                        padding: const EdgeInsets.symmetric(horizontal: 11),
-                        side: BorderSide(color: visual.borderStrong),
-                        shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(PayrollTokens.rField),
+                  )
+                : Text.rich(
+                    TextSpan(
+                      style: visual.bodyS
+                          .copyWith(fontSize: 11, color: visual.inkMuted),
+                      children: <InlineSpan>[
+                        TextSpan(
+                          text: 'Vigente',
+                          style: visual.labelStrong.copyWith(
+                            fontSize: 11,
+                            color: visual.ink,
+                          ),
                         ),
-                      ),
-                      label: Text(
-                        'Registrar anticipo para $name',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: visual.label.copyWith(fontSize: 11),
-                      ),
+                        const TextSpan(
+                          text: ' es la palabra que manda: un anticipo existe '
+                              'como saldo a nombre de la persona hasta que un '
+                              'pago lo aplica. Aplicarlo es una decisión del '
+                              'pago, nunca automática, y se puede deshacer '
+                              'mientras la semana no esté confirmada.',
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
@@ -1143,7 +1196,7 @@ class _RulesCard extends StatelessWidget {
                     text:
                         'En la semana de nómina no se ve este ledger: solo el '),
                 TextSpan(
-                    text: 'saldo disponible',
+                    text: 'saldo vigente',
                     style: TextStyle(
                         fontWeight: FontWeight.w600, color: visual.inkMuted)),
                 const TextSpan(text: ' como línea aplicable.'),

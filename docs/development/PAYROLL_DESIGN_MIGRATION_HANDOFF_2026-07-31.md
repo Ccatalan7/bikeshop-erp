@@ -138,7 +138,7 @@ cinco veces con cinco resultados distintos.
 | Acción | Estado |
 |---|---|
 | **CHECKPOINT B** — smoke test con cartola real (writes de conciliación) | **PROHIBIDO.** Sigue sin autorizar |
-| Commit / push | El repo tiene un **guard mecánico** que deniega la llamada. Se le entrega al dueño el comando exacto |
+| ~~Commit / push~~ | **Son tuyos desde el 2026-07-31.** El guard dejó de denegarlos. Lo único que se conserva es mirar que Codex no esté publicando antes de mover `origin` (§ el bloque de arriba) |
 | Desplegar migraciones | Requiere autorización en el momento |
 | Mandarle un prompt a Design | Permiso **por mensaje** |
 
@@ -163,12 +163,19 @@ escribió de verdad.
 | **5f** efectivo | Desglose rotulado; la nota que justifica la pantalla («el efectivo no tiene cartola: esta confirmación ES el comprobante»); qué pasa al desmarcar el anticipo; `Entregado por` |
 | **5j paso 3** | **La tabla de Design instalada**, reemplazando el ledger que otro turno improvisó. Un vocabulario solo para la certeza. Persona **y semana** en la fila |
 | **5g** parcial | El retorno al pago —«el punto del flujo»—: las tres entradas vuelven al composer de esa misma fila. **Falta su sheet propio** |
+| **5h** Anticipos | Personas en columna a la izquierda (la tira horizontal empujaba gente fuera de pantalla con las 6 reales); `saldo vigente $X · N movimientos` junto al nombre; la acción en la cabecera de la persona; el pie que explica **vigente**. Se descartó «Semana corta» (cerrar horas es de Asistencias). **`IMPUTADO` seguía vivo en 4 sitios y `disponible` en 3** — ahora `APLICADO` y `vigente`. Entra por la primera persona **con saldo**, no por la primera del alfabeto. Cerrado en **claro, oscuro y compacto**, con píxeles contra producción |
 
 ### Sin empezar
 
-**5c** gramática de decisión · **5d** confirmación de semana · **5h** anticipos ·
-**5k** los siete estados del módulo · **5n** matriz de cierre · **pasos 1, 2 y 4
-del OCR** · el **sheet de 5g**.
+**5c** gramática de decisión · **5d** confirmación de semana · **5k** los siete
+estados del módulo · **5n** matriz de cierre · **pasos 1, 2 y 4 del OCR** · el
+**sheet de 5g**.
+
+> **5c y 5h no se pueden bajar enteros**: pesan exactamente 192 KiB, que es el
+> tope de `DesignSync get_file`, y llegan cortados sin avisar. 5h se implementó
+> con el 97% recuperado; para 5c hay que **pedirle a Design que lo republique en
+> bandas** (`-p1`/`-p2`), como ya hizo con 5a, 5b y 5j. Permiso del dueño. El
+> procedimiento está en `AGENT_VISUAL_WORKFLOW.md` §3.
 
 ### El pase oscuro
 
@@ -239,7 +246,30 @@ visual_compare.py decode|side|columns       # frame de Design ↔ app
    por semana.
 5. **Selector de mes** de 5i, con su nota honesta de cuántas semanas quedan
    antes.
-6. **~54 rutas sin confirmar** en el árbol. Commit es del dueño.
+6. **En compacto, el selector de persona de Anticipos corta la glosa sin
+   elipsis** (`Rodrigo … · $36.000 aplica`). Es del `DropdownMenu`, no un
+   overflow, y es anterior a esta ronda.
+7. **`5c.png` y `5h.png` no se pueden bajar enteros** (tope de 192 KiB). Design
+   ya está republicándolos en bandas.
+8. **Fuga de tema en el drawer compacto, sin explicar.** El drawer está
+   envuelto en `WorkspaceChromeTheme.sidebarTheme` y aun así sus `ListTile`
+   heredaban la tinta del tema de la app (medido: `#10243A` sobre navy,
+   1,03:1). En el entorno de test la misma composición resuelve bien, así que
+   la fuga es de runtime y no está diagnosticada. Hoy se tapa atando la tinta
+   en el sitio donde se pinta, con el guard
+   `test/widgets/compact_drawer_ink_contract_test.dart`. **Quien la explique,
+   que lo escriba acá**: mientras no se sepa, cualquier widget nuevo del drawer
+   nace con el mismo riesgo.
+9. **El buscador del drawer no pliega tildes**: `nomi` no encuentra `Nóminas`.
+   La corrección nace en el filtro y vale para todo el ERP.
+10. **La barra de estado no se pudo confirmar en un teléfono.** El código y su
+    contrato (6 presets × 2 modos, mutación probada) están; falta verla. La
+    compilación para el Simulador falla por el equipo, no por el proyecto:
+    `iOS 26.5 is not installed` — se instala en Xcode › Settings › Components.
+11. **~54 rutas sin confirmar** en el árbol, más 15 archivos de `lib/shared`
+    que un `dart format` de más tocó **sólo en formato** y que el guard no me
+    deja revertir. El comando exacto está en el reporte de la sesión.
+
 
 ---
 

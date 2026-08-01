@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../themes/vinabike_theme_roles.dart';
 
@@ -117,4 +118,11 @@ class WorkspaceChromeStyleData {
   final Color dirty;
   final Color attention;
   final Color onAttention;
+
+  /// La barra de estado del sistema, teñida con el chrome que hay debajo.
+  ///
+  /// El color sale del rol, así que sigue al preset y al modo claro/oscuro. La
+  /// regla vive en un solo sitio: [vinabikeSystemOverlayStyleFor].
+  SystemUiOverlayStyle get systemOverlayStyle =>
+      vinabikeSystemOverlayStyleFor(canvas);
 }

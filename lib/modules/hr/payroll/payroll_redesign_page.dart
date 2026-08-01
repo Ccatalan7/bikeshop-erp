@@ -2635,7 +2635,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       applied: _clp(entry.appliedAmount),
       balance: _clp(entry.balanceAmount),
       statusLabel: switch (entry.status) {
-        PayrollAdvanceLedgerStatus.applied => 'IMPUTADO',
+        PayrollAdvanceLedgerStatus.applied => 'APLICADO',
         PayrollAdvanceLedgerStatus.partiallyApplied => 'PARCIAL',
         PayrollAdvanceLedgerStatus.open => 'VIGENTE',
         PayrollAdvanceLedgerStatus.voided => 'ANULADO',
@@ -2669,7 +2669,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       applied: _clp(advance.amountApplied),
       balance: _clp(advance.availableAmount),
       statusLabel: advance.availableAmount <= 0.01
-          ? 'IMPUTADO'
+          ? 'APLICADO'
           : advance.amountApplied > 0.01
               ? 'PARCIAL'
               : 'VIGENTE',
@@ -2782,9 +2782,20 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
             .toLowerCase()
             .compareTo(_employeeName(b).toLowerCase()),
       );
+    // Abrir Anticipos y caer en alguien con saldo `—` es abrir el submódulo en
+    // una pantalla vacía: el orden es alfabético y la primera persona casi
+    // nunca es la que debe plata. Sin elección previa se entra por la primera
+    // que **sí** tiene saldo vigente; si nadie tiene, la primera de la lista.
+    final firstWithBalance = employeeIds.firstWhere(
+      (id) =>
+          (byEmployee[id] ?? const <EmployeeAdvance>[])
+              .fold<double>(0, (s, a) => s + a.availableAmount) >
+          0.01,
+      orElse: () => employeeIds.first,
+    );
     final selectedId = employeeIds.contains(_selectedAdvanceEmployeeId)
         ? _selectedAdvanceEmployeeId!
-        : employeeIds.first;
+        : firstWithBalance;
     final selectedAdvances =
         (byEmployee[selectedId] ?? const <EmployeeAdvance>[]).toList()
           ..sort((a, b) => a.paidCivilDate.compareTo(b.paidCivilDate));
@@ -2828,10 +2839,14 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
             name: _employeeName(id),
             initials: _initialsOf(_employeeName(id)),
             avatarColor: _avatarFor(id),
-            balanceLabel: byEmployee.containsKey(id)
-                ? _clp(byEmployee[id]!
-                    .fold<double>(0, (s, a) => s + a.availableAmount))
-                : '—',
+            // `$0`, no `—`. La cifra va a 19 px en negrita, y ahí una raya no
+            // se lee como «sin saldo»: se lee como una línea de tachado o un
+            // separador. Y `$0` no es una suposición — `getOpenEmployeeAdvances`
+            // trae TODOS los saldos abiertos del tenant, así que quien no está
+            // en el mapa tiene cero vigente, que es exactamente lo que dice.
+            balanceLabel: _clp(byEmployee[id]
+                    ?.fold<double>(0, (s, a) => s + a.availableAmount) ??
+                0),
             caption: !byEmployee.containsKey(id)
                 ? 'historial'
                 : byEmployee[id]!
@@ -2937,7 +2952,10 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
               '· solo lectura',
       _PayrollScope.advances => advancePeople == 0
           ? 'sin anticipos vigentes'
-          : '$advancePeople ${advancePeople == 1 ? 'persona' : 'personas'} · ${_clp(advanceTotal)} disponible',
+          // «vigente», no «disponible»: es la palabra de la que cuelga todo el
+          // submódulo (5h) y la que usan la columna y las píldoras del ledger.
+          // «disponible» además no dice disponible *para quién*.
+          : '$advancePeople ${advancePeople == 1 ? 'persona' : 'personas'} · ${_clp(advanceTotal)} vigente',
     };
 
     Widget scopePill(String label, _PayrollScope value) {
@@ -3083,7 +3101,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
             0, (sum, advance) => sum + advance.availableAmount);
         return people == 0
             ? 'Sin anticipos vigentes'
-            : '$people ${people == 1 ? 'persona' : 'personas'} · ${_clp(amount)} disponible';
+            : '$people ${people == 1 ? 'persona' : 'personas'} · ${_clp(amount)} vigente';
       case _PayrollScope.weeks:
         if (week == null) return 'Sin semanas abiertas';
         final unresolved = week.lines

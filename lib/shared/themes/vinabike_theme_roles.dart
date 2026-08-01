@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Semantic state colors resolved for one preset and brightness.
 ///
@@ -211,4 +212,34 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
       avatarD: Color.lerp(avatarD, other.avatarD, t)!,
     );
   }
+}
+
+/// La barra de estado del sistema, teñida con el color que hay justo debajo.
+///
+/// **Por qué existe.** En el teléfono la barra del sistema —reloj, wifi,
+/// batería— quedaba blanca pegada encima de un header navy: una franja que no
+/// pertenecía a la app. La causa no era el header: Material 3 deja
+/// `statusBarColor` **transparente**, y sin modo edge-to-edge Android rellena
+/// eso con su default claro. En todo `lib/` no había un solo
+/// `SystemUiOverlayStyle`, así que la app nunca dijo de qué color va esa franja.
+///
+/// El brillo de los iconos **se calcula contra el fondo real** en vez de fijarse
+/// en claro: un preset puede traer un chrome claro, y ahí unos iconos blancos
+/// serían invisibles. El umbral es el mismo que usa el chrome para decidir su
+/// propio brillo, así que las dos decisiones no pueden separarse.
+///
+/// Se le pasa el color que la pantalla pinta arriba —no «el navy»—, porque una
+/// barra navy encima de un AppBar blanco es el mismo defecto al revés.
+SystemUiOverlayStyle vinabikeSystemOverlayStyleFor(Color background) {
+  final isDark = background.computeLuminance() < 0.35;
+  return SystemUiOverlayStyle(
+    statusBarColor: background,
+    // Android nombra el brillo del ICONO; iOS nombra el del FONDO. Son
+    // opuestos, y confundirlos deja una de las dos plataformas ilegible.
+    statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+    statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+    systemNavigationBarColor: background,
+    systemNavigationBarIconBrightness:
+        isDark ? Brightness.light : Brightness.dark,
+  );
 }

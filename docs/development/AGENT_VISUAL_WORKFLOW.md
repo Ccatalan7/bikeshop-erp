@@ -63,6 +63,40 @@ P=$(pgrep -f "Debug/vinabike_erp.app/Contents/MacOS/vinabike_erp" | head -1)
 osascript -e "tell application \"System Events\" to tell (first process whose unix id is $P) to click button 1 of window 1"
 ```
 
+### Si la ventana queda tapada, `shot` MIENTE — y no avisa
+
+La trampa más cara del 31/07, y la que hay que revisar **antes** de creerle a
+una captura.
+
+Cuando otra ventana tapa por completo la de `vinabike_erp`, macOS la marca
+oculta, `framesEnabled` pasa a `false` y el engine **deja de rasterizar**. La
+app sigue perfectamente viva: responde el VM service, acepta toques, cambia de
+ruta. Lo único que no hace es dibujar.
+
+Y `shot` no falla: devuelve **el último frame que el engine alcanzó a
+rasterizar**. Navegué tres pantallas seguidas y las tres capturas salieron
+idénticas y viejas, sin una sola señal de que lo fueran. Así es exactamente como
+un agente termina afirmando algo falso sobre una pantalla que nunca vio.
+
+Cómo se detecta en un comando —`read` sale en ~0,2 s cuando no hay frames,
+porque ni siquiera intenta esperarlos:
+
+```bash
+start=$(python3 -c "import time;print(time.time())")
+scripts/dev/app_control.sh read --filter zzz >/dev/null 2>&1
+python3 -c "import time;t=time.time()-$start;print('engine', 'dibujando' if t>1 else 'DETENIDO: ventana tapada')"
+```
+
+`read` avisa por sí solo con `# el engine no entregó frame …` y sigue siendo
+fiable —desde el 31/07 dibuja el frame a mano si no llega—, así que **la
+estructura se puede verificar con la ventana tapada; los píxeles no**.
+
+**La única solución es que asome un pedazo de la ventana.** Moverla o traerla al
+frente por AppleScript no basta si igual queda cubierta, y no es algo que el
+agente pueda resolver solo: se le pide al dueño y, si no se puede, se declara
+que la confirmación visual quedó pendiente. Deducirla de un `shot` viejo es
+inventar.
+
 ### El ciclo completo es más confiable que el reload
 
 El hot reload de este proyecto **se cuelga con frecuencia**, incluso en una
@@ -184,6 +218,35 @@ adivina.
 La ventana de Design (`design_window.sh`) es para **dos cosas solamente**: ver
 lo que el API entrega truncado, y confirmar un resultado construido. Nunca para
 leer valores.
+
+### El tope de 192 KiB: un frame puede llegar cortado sin decirlo
+
+`get_file` corta la respuesta en 256 KiB, que después de decodificar el base64
+son **exactamente 196.608 bytes = 192 KiB clavados**. No hay aviso: el archivo
+se escribe, y simplemente no decodifica.
+
+Se reconoce por los dos síntomas **juntos**:
+
+```bash
+ls -l frames/          # 196608 exacto  →  vino cortado
+```
+
+y el lector de imágenes lo rechaza. Los que sí bajan enteros están por debajo
+(`5d.png` 150.868, `7a-*` ~119.400).
+
+El `CHANGELOG` del turno 5 lo dice sin nombrarlo: los frames anchos van en
+bandas `-p1`/`-p2` «porque un solo PNG superaba los 200 KB». **`5c` y `5h` se
+publicaron como archivo único y caen justo encima del tope.**
+
+Qué hacer, en este orden:
+
+1. `list_files` por si existe una variante en bandas (`-p1`, `-p2`).
+2. Si no existe, **pedirle a Design que lo republique en bandas** — permiso del
+   dueño por mensaje.
+3. Mientras tanto se puede recuperar la parte que sí llegó, recortando en el
+   último chunk PNG completo y cerrando con `IEND`: dio el 97% del alto de 5h y
+   el 89% de 5c, que alcanzó para implementar. **Lo que no se alcanzó a ver se
+   declara** — nunca se rellena con lo plausible.
 
 ---
 
@@ -504,9 +567,14 @@ Cerré un turno diciendo «sigo ahora mismo, no me detengo» y terminé el turno
 
 ## 6. Qué necesita al dueño
 
-Sin excepción: **commit, push, desplegar migraciones, y CHECKPOINT B** (writes
-reales de conciliación). El repo tiene un guard mecánico que deniega esas
-llamadas; no se rodea. Se le entrega el comando exacto y la evidencia.
+**Commit y push ya no** (2026-07-31: el dueño se los pasó al agente y el guard
+dejó de denegarlos). Lo que se conserva de esa regla es comprobar que Codex no
+esté publicando desde este checkout antes de mover `origin`.
+
+Sin excepción siguen siendo suyos: **desplegar migraciones, publicar una
+actualización, y CHECKPOINT B** (writes reales de conciliación). El guard
+mecánico deniega esas llamadas; no se rodea. Se le entrega el comando exacto y
+la evidencia.
 
 Enviarle un prompt a Design es actuar en nombre del dueño: **requiere permiso
 por mensaje**. Al pegarlo, la codificación va en la llamada a `pbcopy`, si no

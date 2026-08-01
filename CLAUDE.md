@@ -123,5 +123,9 @@ No escribas el relato de la sesión, ni lo que ya se ve en el código o en git.
   restricción anterior): el agente elige libremente Workflow, agent teams,
   subagentes anidados, Browser y cuantas sesiones necesite. Usa el criterio
   para no gastar de más, pero no pidas permiso para elegir una herramienta.
-  Lo que sigue requiriendo autorización es lo que TOCA ALGO REAL: commit,
-  push, deploy, publicación y escrituras en producción.
+  **Commit y push pasan al agente** (decisión del dueño, 2026-07-31, reemplaza
+  la regla anterior): el guard mecánico dejó de denegarlos. Lo que sigue
+  requiriendo autorización es **deploy, publicación, migraciones y escrituras
+  en producción**. Antes de mover `origin` se comprueba que Codex no esté
+  publicando desde este mismo checkout —árbol limpio, sin procesos de gate y
+  `HEAD == origin`—: el 31/07 un push a destiempo le habría roto el suyo.

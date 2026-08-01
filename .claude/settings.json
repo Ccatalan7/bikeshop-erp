@@ -33,7 +33,6 @@
       "Bash(just db-health local)",
       "Bash(just db-smoke)",
       "Bash(just db-smoke local)",
-
       "Bash(bash scripts/db/preflight.sh)",
       "Bash(bash scripts/db/status.sh)",
       "Bash(bash scripts/db/ensure_local.sh)",
@@ -46,11 +45,14 @@
       "Bash(bash scripts/db/smoke.sh *)",
       "Bash(bash scripts/db/production_validation.sh reuse *)",
       "Bash(bash scripts/db/production_validation.sh test *)",
-
       "Bash(scripts/supabase_cli.sh --version)",
       "Bash(scripts/supabase_cli.sh projects list *)",
       "Bash(scripts/supabase_cli.sh secrets list *)",
-      "Bash(scripts/supabase_cli.sh backups list *)"
+      "Bash(scripts/supabase_cli.sh backups list *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git restore *)"
     ],
     "ask": [
       "Bash(git commit *)",

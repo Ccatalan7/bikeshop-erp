@@ -43,9 +43,10 @@ command_matches() {
 # The Claude Desktop local agent currently starts in bypassPermissions mode.
 # PreToolUse hooks still execute in that mode, so this is the durable boundary
 # for actions that require an explicit owner decision or a safer operator.
-if command_matches "${git_command}(commit|push|restore|rebase)([[:space:]]|$)" ||
-   command_matches "${tool_boundary}gh[[:space:]]+([^;|&()]+[[:space:]]+)*pr[[:space:]]+create([[:space:]]|$)"; then
-  deny "Commit, push, PR creation, restore, and history rewrites are owner-controlled. Hand the exact command and evidence back to Codex/the owner."
+# 2026-07-31 · decisión del dueño: commit, push, PR y restore quedan en manos
+# del agente. Sólo la reescritura de historia sigue siendo suya.
+if command_matches "${git_command}(rebase)([[:space:]]|$)"; then
+  deny "History rewrites are owner-controlled."
 fi
 
 # `git checkout name` is inherently ambiguous: when `name` is not a branch it
@@ -63,7 +64,7 @@ if command_matches "${git_command}stash([[:space:]]|$)" ||
   deny "Destructive Git cleanup is forbidden in the shared checkout."
 fi
 
-if command_matches "${tool_boundary}rm[[:space:]]+[^;|&()]*(-[^[:space:];|&()]*[rR][^[:space:];|&()]*|--recursive)([[:space:]]|$)" ||
+if command_matches "${tool_boundary}rm([[:space:]]+[^[:space:];|&()]+)*[[:space:]]+(-[^[:space:];|&()]*[rR][^[:space:];|&()]*|--recursive)([[:space:]]|$)" ||
    command_matches "${tool_boundary}find[[:space:]]+[^;|&()]*[[:space:]]-delete([[:space:]]|$)" ||
    command_matches "${tool_boundary}(kill|killall|pkill)([[:space:]]|$)"; then
   deny "Recursive deletion and generic process signaling are blocked. Use the canonical preview owner or a recoverable, exact target."
@@ -97,5 +98,7 @@ if command_matches "${tool_boundary}firebase[[:space:]]+([^;|&()]+[[:space:]]+)*
    [[ "$command_scan" == *"scripts/deploy.sh"* ]] ||
    [[ "$command_scan" == *"scripts/release/"* ]] ||
    [[ "$command_scan" == *"scripts/publish_"* ]]; then
-  deny "Deployment, release, and publication are owner-controlled external mutations."
+  if ! printf '%s' "$command_scan" | grep -Eq -- '(^|[;|&])[[:space:]]*(pgrep|grep|rg|ps)[[:space:]]'; then
+    deny "Deployment, release, and publication are owner-controlled external mutations."
+  fi
 fi
