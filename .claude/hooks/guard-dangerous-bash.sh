@@ -49,6 +49,16 @@ if command_matches "${git_command}(rebase)([[:space:]]|$)"; then
   deny "History rewrites are owner-controlled."
 fi
 
+# Deshacer una edición propia sobre archivos NOMBRADOS es recuperación, y por
+# eso `restore` dejó de estar en la lista de arriba. Barrer el árbol entero no
+# lo es: `git restore .` descarta el trabajo sin commitear de quien esté
+# compartiendo el checkout, y `--staged`/`--source` traen contenido de otra
+# revisión. Eso sigue siendo del dueño.
+# El `=` cuenta como cierre del flag: `--source=HEAD~1` es la forma habitual.
+if command_matches "${git_command}restore[[:space:]]+([^;|&()]*[[:space:]])?(--staged|--source|--pathspec-from-file|[.*]|:/)([[:space:]=]|$)"; then
+  deny "Un restore de alcance abierto puede descartar el trabajo sin commitear de otro. Nombra las rutas: git restore -- <ruta> [<ruta>...]"
+fi
+
 # `git checkout name` is inherently ambiguous: when `name` is not a branch it
 # can be a path restore, and `checkout TREE PATH` needs no `--` separator.
 # Branch movement remains available through the unambiguous `git switch`.

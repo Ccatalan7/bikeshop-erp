@@ -107,14 +107,36 @@ void main() {
     expect(await _runGuard('rg -n tenant_id lib'), isNull);
   });
 
+  // 2026-07-31 · decisión del dueño: commit, push y deshacer una edición
+  // propia pasan al agente. Lo externo —deploy, publicación y escrituras en
+  // producción— sigue siendo suyo, y eso se sigue exigiendo más abajo.
+  test('el agente puede guardar y publicar su propio trabajo en la rama',
+      () async {
+    expect(await _runGuard('git add -A'), isNull);
+    expect(await _runGuard('git commit -m "fix: algo"'), isNull);
+    expect(await _runGuard('git push origin smartpegas1.0'), isNull);
+    expect(await _runGuard('git restore -- lib/main.dart'), isNull);
+    expect(await _runGuard('git restore -- lib/a.dart lib/b.dart'), isNull);
+  });
+
+  // Tres falsos positivos que costaron tiempo real y no protegían nada.
+  test('el guard no muerde donde no hay peligro', () async {
+    // Un guion DENTRO de un nombre de archivo no es el flag -r.
+    expect(await _runGuard('rm -f frames/5c-parcial.png'), isNull);
+    expect(await _runGuard('rm -f a-recursivo.txt b-raro.png'), isNull);
+    // Buscar si hay una publicación corriendo es leer, no publicar — y es
+    // justamente lo que hay que hacer ANTES de escribir en el árbol.
+    expect(await _runGuard('pgrep -fl "firebase deploy|gradlew"'), isNull);
+  });
+
   test('external and destructive mutations are denied even in bypass mode',
       () async {
     for (final command in const [
-      'git push origin smartpegas1.0',
-      'git -C /tmp/example push origin main',
-      'git -c user.name=Claude commit -m test',
-      '/usr/bin/git restore lib/main.dart',
-      'sh -c "git commit -m nested"',
+      // Barrer el árbol entero no es recuperar una edición propia: descarta
+      // el trabajo sin commitear de quien comparta el checkout.
+      'git restore .',
+      'git restore --staged lib/main.dart',
+      'git restore --source=HEAD~1 lib/main.dart',
       'git checkout main',
       'git checkout -b claude/example',
       'git checkout .',
