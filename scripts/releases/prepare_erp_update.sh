@@ -181,13 +181,19 @@ prepare_shared_release_notes() {
   fi
 
   local notes_reason_file="$release_notes_temp_dir/reason.txt"
-  local -a candidate_flags=()
+  # macOS still ships Bash 3.2: with `set -u`, expanding an empty array aborts
+  # the script. Keep the argv array non-empty and append the optional candidate.
+  local -a release_notes_args=(
+    --from-commit "$release_notes_from_commit"
+    --to-commit "$head_commit"
+    --output "$candidate_file"
+  )
   if [[ -n "$NOTES_CANDIDATE" ]]; then
     if [[ ! -r "$NOTES_CANDIDATE" ]]; then
       echo "The supplied release-note candidate is not readable: $NOTES_CANDIDATE" >&2
       exit 1
     fi
-    candidate_flags=(--candidate-file "$NOTES_CANDIDATE")
+    release_notes_args+=(--candidate-file "$NOTES_CANDIDATE")
     step 'Preparing one shared user-friendly note from the supplied candidate'
   else
     step 'Preparing one shared user-friendly note with local Codex'
@@ -199,10 +205,7 @@ prepare_shared_release_notes() {
     -u GEMINI_RELEASE_API_KEY \
     -u GH_TOKEN \
     node scripts/releases/generate_codex_release_notes.mjs \
-      --from-commit "$release_notes_from_commit" \
-      --to-commit "$head_commit" \
-      --output "$candidate_file" \
-      "${candidate_flags[@]}" \
+      "${release_notes_args[@]}" \
       --codex-bin "$codex_binary" \
       --git-bin "$git_binary" \
       >"$private_log" 2>"$notes_reason_file"; then

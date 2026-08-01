@@ -819,6 +819,13 @@ request. Without that transitive-skip guard, GitHub can report the workflow as
 successful after packaging while silently skipping the Production publication
 job. Keep this contract frozen for both macOS and Windows.
 
+2026-08-01 correction: the paired macOS preparation runs on Apple's Bash 3.2.
+With `set -u`, expanding an empty optional-argument array aborts after the
+release commit but before push and exact-SHA state creation, leaving Qualify to
+reject the older handoff. Build command argv in an array that already contains
+mandatory arguments (or branch the optional call); regression coverage must
+retain the no-`--notes-candidate` path.
+
 Do not collapse the platform security boundaries merely because their tasks run
 together. `MACOS_UPDATE_SIGNING_KEY`, the Android JKS/passwords, and
 `SUPABASE_RELEASE_SECRET` remain available only to their protected GitHub

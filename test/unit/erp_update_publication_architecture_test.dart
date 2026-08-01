@@ -153,6 +153,13 @@ void main() {
         '        and .from_commit == \$from',
       ),
     );
+    expect(prepareHelper, contains('local -a release_notes_args=('));
+    expect(
+      prepareHelper,
+      contains('release_notes_args+=(--candidate-file "\$NOTES_CANDIDATE")'),
+    );
+    expect(prepareHelper, contains('"\${release_notes_args[@]}"'));
+    expect(prepareHelper, isNot(contains('"\${candidate_flags[@]}"')));
     expect(prepareHelper, isNot(contains('SIGNING_PASSWORD')));
     expect(prepareHelper, isNot(contains('SUPABASE_RELEASE_SECRET')));
   });
