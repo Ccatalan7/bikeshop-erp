@@ -555,6 +555,19 @@ creer que el frame está hecho.
 > **La regla:** grepea antes (§4). Si sólo aparece su declaración, está muerto:
 > instálalo o bórralo, pero no lo dejes.
 
+### Entregar un comando antes de comprobar si ya estaba corriendo
+
+Vi un run de publicación en curso, no comprobé quién lo había disparado, y le
+pasé al dueño el comando para lanzarlo «por si acaso». Resultó que el que veía
+era el de **Android** —los dos targets comparten workflow y `gh run list` los
+muestra igual— así que el comando lanzó un macOS que faltaba, no un duplicado.
+Peor: al «arreglar el duplicado» cancelé la publicación de macOS de verdad.
+
+> **La regla:** un comando que dispara algo externo se entrega **después** de
+> mirar qué hay corriendo, no antes con un «si ya lo hiciste, ignórame». Y el
+> estado se lee por el campo que identifica la cosa (`displayTitle`), no por el
+> que se parece (`workflowName`).
+
 ### Prometer y detenerse
 
 Cerré un turno diciendo «sigo ahora mismo, no me detengo» y terminé el turno.
@@ -571,10 +584,38 @@ Cerré un turno diciendo «sigo ahora mismo, no me detengo» y terminé el turno
 dejó de denegarlos). Lo que se conserva de esa regla es comprobar que Codex no
 esté publicando desde este checkout antes de mover `origin`.
 
-Sin excepción siguen siendo suyos: **desplegar migraciones, publicar una
-actualización, y CHECKPOINT B** (writes reales de conciliación). El guard
+**Publicar la actualización tampoco** (2026-08-01). La tarea macOS+Android es
+**una sola**, y el guard trataba sus dos mitades distinto —Android pasaba,
+macOS no—: eso dejó ver sólo la mitad de lo que estaba corriendo y llevó a
+cancelar el run equivocado. Ahora pasan las dos.
+
+Sin excepción siguen siendo suyos: **desplegar migraciones o funciones,
+`scripts/deploy.sh`, y CHECKPOINT B** (writes reales de conciliación). El guard
 mecánico deniega esas llamadas; no se rodea. Se le entrega el comando exacto y
 la evidencia.
+
+### Publicar: dos targets, un solo workflow
+
+`gh run list` **no distingue la plataforma**. macOS y Android comparten
+`macos-release.yml`, así que los dos aparecen con el mismo `workflowName`
+(«Build macOS Desktop Release») y una lista de runs se lee como si hubiera
+duplicados donde hay uno de cada. Lo que distingue es el **`displayTitle`**:
+
+```bash
+gh run list --limit 8 --json displayTitle,status,conclusion,databaseId,headSha \
+  --jq '.[] | select(.headSha | startswith("<sha>")) |
+        "\(.status)/\(if .conclusion == "" then "pendiente" else .conclusion end)  \(.databaseId)  \(.displayTitle)"'
+```
+
+`Android publish · <sha> · notes <hash> · from <base>` vs `macOS publish · …`.
+El 01/08 confundir uno con otro costó cancelar la publicación de macOS a mitad
+de camino. **Antes de cancelar o relanzar un run, léele el título.**
+
+Dos detalles de `gh` que muerden en el mismo comando: `conclusion` viene como
+cadena **vacía** mientras el run corre, no `null`, así que `// "corriendo"` de
+`jq` no sustituye y un bucle de espera cree que ya terminó; y el workflow tiene
+`cancel-in-progress` para macOS, así que **relanzarlo cancela el anterior** —
+eso es lo correcto, no un fallo.
 
 Enviarle un prompt a Design es actuar en nombre del dueño: **requiere permiso
 por mensaje**. Al pegarlo, la codificación va en la llamada a `pbcopy`, si no

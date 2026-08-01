@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -175,6 +176,24 @@ Future<void> main() async {
     // Debug-only: lets an agent drive the app through synthetic pointer events
     // instead of moving the owner's real cursor. No-op outside debug.
     registerAgentInputExtensions();
+
+    // **La barra de estado la pinta la app, no el sistema.**
+    //
+    // Desde Android 15 (API 35) el modo edge-to-edge es obligatorio y
+    // `Window.setStatusBarColor` —que es lo que hay debajo de
+    // `SystemUiOverlayStyle.statusBarColor`— quedó **ignorado**. Por eso el
+    // arreglo del 31/07 no cambió nada en el teléfono: le pedía al sistema un
+    // color que el sistema ya no acepta, y encima de la franja transparente se
+    // veía el `windowBackground` del tema Android, que en claro es blanco.
+    //
+    // Con edge-to-edge la app se dibuja DEBAJO de la barra y el `AppBar` del
+    // shell extiende su navy hasta arriba, que es lo que se quería. El color
+    // sigue viajando en el overlay style para las versiones de Android donde
+    // todavía se respeta; lo que nunca dejó de funcionar en ninguna es el
+    // brillo de los iconos.
+    if (!kIsWeb) {
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
 
     // Use clean URLs (no hash #) for web
     usePathUrlStrategy();

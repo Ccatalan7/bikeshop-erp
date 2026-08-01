@@ -103,11 +103,20 @@ if [[ "$command_scan" == *"scripts/db/production_validation.sh refresh"* ]]; the
   deny "Refreshing the production-derived database cache is an external read with operational impact; hand it back to Codex."
 fi
 
+# 2026-08-01 · decisión del dueño: publicar la actualización del ERP es del
+# agente. `scripts/publish_*` y `scripts/releases/*` salen de la lista — la
+# tarea macOS+Android es UNA sola y el guard trataba sus dos mitades distinto
+# (Android pasaba, macOS no), que fue lo que llevó a cancelar el run equivocado.
+# Sigue siendo del dueño lo que toca infraestructura fuera del ciclo de release:
+# desplegar funciones, migraciones y `scripts/deploy.sh`.
+# El script se reconoce en POSICIÓN DE COMANDO, no como texto suelto. Un
+# `==  *"scripts/deploy.sh"*` compara contra todo el comando, así que escribir
+# la ruta dentro de un documento —un ledger, un mensaje de commit, un test que
+# la lista— quedaba denegado por *mencionarla*. Pasó cinco veces en un día.
+deploy_script='(^|[;|&][[:space:]]*)([^[:space:];|&()]*(bash|sh|zsh)[[:space:]]+)?[^[:space:];|&()]*scripts/deploy\.sh([[:space:]]|$)'
 if command_matches "${tool_boundary}firebase[[:space:]]+([^;|&()]+[[:space:]]+)*deploy([[:space:]]|$)" ||
    command_matches "${tool_boundary}supabase[[:space:]]+([^;|&()]+[[:space:]]+)*functions[[:space:]]+deploy([[:space:]]|$)" ||
-   [[ "$command_scan" == *"scripts/deploy.sh"* ]] ||
-   [[ "$command_scan" == *"scripts/release/"* ]] ||
-   [[ "$command_scan" == *"scripts/publish_"* ]]; then
+   command_matches "$deploy_script"; then
   if ! printf '%s' "$command_scan" | grep -Eq -- '(^|[;|&])[[:space:]]*(pgrep|grep|rg|ps)[[:space:]]'; then
     deny "Deployment, release, and publication are owner-controlled external mutations."
   fi

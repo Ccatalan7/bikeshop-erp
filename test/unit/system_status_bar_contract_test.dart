@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -73,6 +75,27 @@ void main() {
         );
       }
     }
+  });
+
+  // El arreglo del 31/07 no cambió nada en el teléfono, y la causa no era el
+  // color: **desde Android 15 (API 35) `Window.setStatusBarColor` está
+  // ignorado**, que es exactamente lo que hay debajo de
+  // `SystemUiOverlayStyle.statusBarColor`. Con `targetSdk = 36` el modo
+  // edge-to-edge es obligatorio, así que la franja la tiene que pintar la app
+  // dibujándose debajo de ella — el `AppBar` del shell extiende su navy hasta
+  // arriba — y para eso hay que pedir `SystemUiMode.edgeToEdge` al arrancar.
+  //
+  // Sin esa llamada la app queda encajada bajo la barra y lo que se ve en la
+  // franja es el `windowBackground` del tema Android, que en claro es blanco.
+  test('la app pide edge-to-edge al arrancar: sin eso el color no se aplica',
+      () {
+    final main = File('lib/main.dart').readAsStringSync();
+    expect(
+      main.contains('SystemUiMode.edgeToEdge'),
+      isTrue,
+      reason: 'sin edge-to-edge, en Android 15+ la barra de estado la sigue '
+          'pintando el sistema y statusBarColor no tiene ningún efecto',
+    );
   });
 
   test('la regla del brillo vive en un solo sitio y se calcula, no se fija',

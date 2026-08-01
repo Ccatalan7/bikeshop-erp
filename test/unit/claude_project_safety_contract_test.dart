@@ -129,6 +129,54 @@ void main() {
     expect(await _runGuard('pgrep -fl "firebase deploy|gradlew"'), isNull);
   });
 
+  // 2026-08-01 · publicar la actualización del ERP pasa al agente. La tarea
+  // macOS+Android es UNA, y el guard trataba sus dos mitades distinto —Android
+  // pasaba, macOS no—, que fue lo que llevó a cancelar el run equivocado.
+  test('el agente publica la actualización, pero no toca la infraestructura',
+      () async {
+    expect(
+      await _runGuard('bash scripts/publish_macos_update.sh --prepared-state auto'),
+      isNull,
+    );
+    expect(
+      await _runGuard(
+        'node scripts/releases/publish_android_workflow.mjs --prepared-state auto',
+      ),
+      isNull,
+    );
+    expect(
+      await _runGuard('bash scripts/releases/prepare_erp_update.sh'),
+      isNull,
+    );
+
+    // Mencionar la ruta dentro de un documento no es ejecutarla: el guard la
+    // reconoce en posición de comando, no como texto suelto.
+    expect(
+      await _runGuard('grep -rn scripts/deploy.sh docs/'),
+      isNull,
+    );
+    expect(
+      await _runGuard('cat notas.md >> docs/development/plan.md'),
+      isNull,
+    );
+
+    // Lo que NO es el ciclo de release sigue siendo del dueño.
+    for (final command in const [
+      'firebase deploy',
+      'supabase functions deploy mi-funcion',
+      'bash scripts/deploy.sh',
+      'sh ./scripts/deploy.sh --prod',
+      './scripts/deploy.sh',
+    ]) {
+      expect(
+        (await _runGuard(command))?['hookSpecificOutput']
+            ?['permissionDecision'],
+        'deny',
+        reason: command,
+      );
+    }
+  });
+
   test('external and destructive mutations are denied even in bypass mode',
       () async {
     for (final command in const [
