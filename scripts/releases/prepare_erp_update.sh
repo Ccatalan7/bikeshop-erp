@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 MESSAGE=''
 STATE_FILE_REQUEST='auto'
+NOTES_CANDIDATE=''
 state_temp_file=''
 release_notes_temp_dir=''
 release_notes_from_commit=''
@@ -24,6 +25,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     --state-file)
       STATE_FILE_REQUEST="${2:?--state-file requires a value}"
+      shift
+      ;;
+    # Candidato de novedades ya escrito por quien conduce la publicación.
+    # El productor del texto es intercambiable: lo que garantiza que sea cierto
+    # es la validación —esquema, evidencia citada y filtro de jerga—, no el
+    # proveedor. Sin esto, una cuota agotada de Codex era un punto único de
+    # falla y la actualización salía sin recuadro de novedades.
+    --notes-candidate)
+      NOTES_CANDIDATE="${2:?--notes-candidate requires a value}"
       shift
       ;;
     *)
@@ -134,9 +144,14 @@ prepare_shared_release_notes() {
     echo 'Local Codex notes skipped: gitleaks is unavailable; protected CI will use its fallback chain.'
     return
   fi
+  # Codex sólo hace falta cuando NO viene un candidato: con uno supplied, que
+  # el binario esté o no es irrelevante y rendirse acá era gratuito.
   if ! codex_binary="$(find_codex_binary)"; then
-    echo 'Local Codex notes skipped: Codex is unavailable; protected CI will use its fallback chain.'
-    return
+    if [[ -z "$NOTES_CANDIDATE" ]]; then
+      echo 'Local Codex notes skipped: Codex is unavailable; protected CI will use its fallback chain.'
+      return
+    fi
+    codex_binary='codex'
   fi
   git_binary="$(command -v git)"
 
@@ -165,7 +180,18 @@ prepare_shared_release_notes() {
     return
   fi
 
-  step 'Preparing one shared user-friendly note with local Codex'
+  local notes_reason_file="$release_notes_temp_dir/reason.txt"
+  local -a candidate_flags=()
+  if [[ -n "$NOTES_CANDIDATE" ]]; then
+    if [[ ! -r "$NOTES_CANDIDATE" ]]; then
+      echo "The supplied release-note candidate is not readable: $NOTES_CANDIDATE" >&2
+      exit 1
+    fi
+    candidate_flags=(--candidate-file "$NOTES_CANDIDATE")
+    step 'Preparing one shared user-friendly note from the supplied candidate'
+  else
+    step 'Preparing one shared user-friendly note with local Codex'
+  fi
   if ! env \
     -u OPENAI_API_KEY \
     -u OPENAI_RELEASE_NOTES_ENDPOINT \
@@ -176,10 +202,17 @@ prepare_shared_release_notes() {
       --from-commit "$release_notes_from_commit" \
       --to-commit "$head_commit" \
       --output "$candidate_file" \
+      "${candidate_flags[@]}" \
       --codex-bin "$codex_binary" \
       --git-bin "$git_binary" \
-      >"$private_log" 2>&1; then
-    echo 'Local Codex notes unavailable; protected CI will use Gemini or deterministic notes.'
+      >"$private_log" 2>"$notes_reason_file"; then
+    # El motivo se DICE. Antes las tres causas reales —rango sin novedades,
+    # cuota agotada y candidato rechazado— salían como la misma línea, la
+    # publicación seguía con el texto determinista y nadie se enteraba.
+    if [[ -s "$notes_reason_file" ]]; then
+      sed -n '1,3p' "$notes_reason_file"
+    fi
+    echo 'Shared note unavailable; protected CI will use Gemini or deterministic notes.'
     return
   fi
 

@@ -32,18 +32,45 @@ const MAX_PROMPT_BYTES = 256 * 1024;
 const MAX_CANDIDATE_BYTES = 10 * 1024;
 const MAX_ENVELOPE_BYTES = 12 * 1024;
 
+// Cada causa dice lo que pasó DE VERDAD.
+//
+// Antes, tres situaciones muy distintas —«este rango no tiene novedades que
+// contar», «Codex se quedó sin créditos» y «gitleaks encontró algo»— salían
+// todas como la misma línea tranquilizadora, y la publicación seguía con el
+// texto determinista sin que nadie se enterara. Dos publicaciones salieron sin
+// recuadro de novedades y se creyó que la función estaba rota.
 const SAFE_ERROR_MESSAGES = Object.freeze({
   invalid_arguments: "invalid release-note arguments",
   release_context_invalid: "the committed release range could not be prepared",
+  no_user_facing_changes:
+    "this range has no user-facing changes to announce (nothing is broken)",
   local_preparation_failed: "the private local workspace could not be prepared",
   codex_unavailable: "the Codex CLI is unavailable",
   codex_not_chatgpt: "Codex is not logged in with ChatGPT",
   codex_timeout: "Codex did not finish within the bounded time",
+  codex_out_of_credit:
+    "the Codex account hit its usage limit; supply --candidate-file or wait for the reset",
   codex_failed: "Codex could not generate a release-note candidate",
   codex_output_missing: "Codex did not return a release-note candidate",
   codex_output_invalid: "Codex returned an invalid release-note candidate",
+  candidate_file_unreadable: "the supplied release-note candidate is unreadable",
+  candidate_file_rejected:
+    "the supplied release-note candidate failed the evidence and quality gate",
   output_write_failed: "the validated release-note handoff could not be saved",
 });
+
+/// Reconoce el agotamiento de cuota en la salida de Codex.
+///
+/// Codex informa el límite por stderr y **sale con código 0**, así que sin
+/// mirar el texto el fallo es indistinguible de cualquier otro.
+function looksLikeUsageLimit(text) {
+  // La frase exacta que emite Codex, no una lista suelta de palabras: un
+  // patrón laxo (`quota`, `rate limit`) confunde cualquier texto que las
+  // mencione de paso y clasifica mal el fallo.
+  return /\b(?:hit your usage limit|purchase more credits)\b/iu.test(
+    typeof text === "string" ? text : "",
+  );
+}
 
 const SAFE_ENVIRONMENT_KEYS = Object.freeze([
   "PATH",
@@ -298,6 +325,7 @@ export async function generateCodexReleaseNotes({
   fromCommit,
   toCommit,
   outputPath,
+  candidateFile = "",
   codexBin = "codex",
   gitBin = process.platform === "win32" ? "" : "/usr/bin/git",
   timeoutMs = DEFAULT_CODEX_TIMEOUT_MS,
@@ -339,11 +367,49 @@ export async function generateCodexReleaseNotes({
     fail("release_context_invalid");
   }
   assertPlainObject(context, "release_context_invalid");
-  if (!Array.isArray(context.changes) || context.changes.length === 0) {
+  if (!Array.isArray(context.changes)) {
     fail("release_context_invalid");
   }
-  if (!Array.isArray(context.changes) || context.changes.length < 1) {
-    fail("release_context_invalid");
+  if (context.changes.length === 0) {
+    // No es un fallo del generador: el rango sólo trae commits de publicación
+    // o cambios que no se le cuentan a nadie. Se dice así.
+    fail("no_user_facing_changes");
+  }
+
+  // El productor del texto es intercambiable; lo que garantiza la verdad es la
+  // validación de abajo —esquema, evidencia citada y filtro de jerga—, no quién
+  // lo escribió. Cuando el operador ya trae un candidato, se usa ése y no se
+  // invoca a Codex: así una cuota agotada deja de ser un punto único de falla.
+  if (candidateFile) {
+    let candidate;
+    try {
+      candidate = await readBoundedJson(
+        path.resolve(candidateFile),
+        MAX_CANDIDATE_BYTES,
+        "candidate_file_unreadable",
+        "candidate_file_unreadable",
+      );
+    } catch {
+      fail("candidate_file_unreadable");
+    }
+    let envelope;
+    try {
+      envelope = await createEnvelopeImpl(candidate, { inventory });
+    } catch {
+      fail("candidate_file_rejected");
+    }
+    const serialized = assertCompactEnvelope(
+      envelope,
+      exactFromCommit,
+      exactToCommit,
+    );
+    await writeAtomically(outputPath, serialized);
+    return {
+      source: "operator-candidate",
+      from_commit: exactFromCommit,
+      to_commit: exactToCommit,
+      output_path: path.resolve(outputPath),
+    };
   }
 
   const prompt = buildPrompt({
@@ -441,7 +507,9 @@ export async function generateCodexReleaseNotes({
           timeout: boundedExecTimeout,
           killSignal: "SIGTERM",
           maxBuffer: MAX_CAPTURE_BYTES,
-          stdio: ["pipe", "ignore", "ignore"],
+          // stderr se CAPTURA, no se descarta. Descartarlo era lo que hacía
+          // indistinguible una cuota agotada de cualquier otro fallo.
+          stdio: ["pipe", "ignore", "pipe"],
         },
       );
     } catch {
@@ -449,6 +517,9 @@ export async function generateCodexReleaseNotes({
     }
 
     if (isTimeoutResult(execResult)) fail("codex_timeout");
+    // Codex avisa el límite por stderr y termina con código 0, así que hay que
+    // mirar el texto antes de creerle al código de salida.
+    if (looksLikeUsageLimit(execResult?.stderr)) fail("codex_out_of_credit");
     if (!spawnResultSucceeded(execResult)) fail("codex_failed");
 
     const candidate = await readBoundedJson(
@@ -494,6 +565,7 @@ function parseCliArgs(argv) {
         "--from-commit",
         "--to-commit",
         "--output",
+        "--candidate-file",
         "--codex-bin",
         "--git-bin",
       ].includes(argument)
@@ -519,6 +591,7 @@ function printUsage(stdout) {
       "    --from-commit <40-character-sha> \\",
       "    --to-commit <40-character-sha> \\",
       "    --output <codex-release-notes-envelope.json> \\",
+      "    [--candidate-file <candidate.json>]  # salta Codex y valida igual",
       "    [--codex-bin <path>] \\",
       "    [--git-bin <absolute-path>]",
       "",
@@ -542,11 +615,12 @@ export async function runCli({
       fromCommit: args.from_commit,
       toCommit: args.to_commit,
       outputPath: args.output,
+      candidateFile: args.candidate_file,
       codexBin: args.codex_bin,
       gitBin: args.git_bin,
     });
     stdout.write(
-      `Local Codex release notes prepared for ${result.to_commit}.\n`,
+      `Release notes prepared for ${result.to_commit} (${result.source}).\n`,
     );
     return 0;
   } catch (error) {

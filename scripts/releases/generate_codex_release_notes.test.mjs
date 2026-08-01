@@ -193,7 +193,13 @@ test("uses saved ChatGPT auth once and writes a validated compact envelope",
       );
     }
     assert.equal(spawnCalls[1].options.timeout, 42_000);
-    assert.deepEqual(spawnCalls[1].options.stdio, ["pipe", "ignore", "ignore"]);
+    // stdout sigue descartado; stderr se CAPTURA en memoria y sólo se examina
+    // con una expresión regular para reconocer la cuota agotada. Nunca se
+    // imprime: eso lo sigue garantizando la prueba de más abajo, que exige que
+    // el texto privado del hijo no llegue jamás a la terminal. Sin capturarlo,
+    // una cuota agotada era indistinguible de cualquier otro fallo, y la
+    // actualización salía sin recuadro de novedades sin decir por qué.
+    assert.deepEqual(spawnCalls[1].options.stdio, ["pipe", "ignore", "pipe"]);
     assert.match(spawnCalls[1].options.input, new RegExp(FROM_COMMIT, "u"));
     assert.match(spawnCalls[1].options.input, new RegExp(TO_COMMIT, "u"));
     assert.match(
@@ -316,6 +322,90 @@ test("refuses API-key and logged-out Codex sessions without running exec",
     }
   });
 
+test("un candidato del operador salta Codex y pasa la MISMA validación",
+  async (t) => {
+    // El productor del texto es intercambiable; lo que garantiza que sea cierto
+    // es la validación de evidencia y concreción, no el proveedor. Sin esto,
+    // una cuota agotada de Codex dejaba la actualización sin novedades.
+    const { root, outputPath } = await createOutputFixture(t);
+    const candidatePath = path.join(root, "candidate.json");
+    writeFileSync(candidatePath, JSON.stringify(fixtureCandidate()), "utf8");
+    let spawnCalled = false;
+
+    const result = await generateCodexReleaseNotes({
+      repoDir: root,
+      fromCommit: FROM_COMMIT,
+      toCommit: TO_COMMIT,
+      outputPath,
+      candidateFile: candidatePath,
+      spawnSyncImpl: () => {
+        spawnCalled = true;
+        throw new Error("Codex must not be called.");
+      },
+      ...injectedDependencies(),
+    });
+
+    assert.equal(spawnCalled, false, "no debe invocar a Codex");
+    assert.equal(result.source, "operator-candidate");
+    assert.equal(existsSync(outputPath), true);
+    const written = JSON.parse(readFileSync(outputPath, "utf8"));
+    assert.equal(written.from_commit, FROM_COMMIT);
+    assert.equal(written.to_commit, TO_COMMIT);
+    assert.equal(written.candidate.title, fixtureCandidate().title);
+    assert.equal(statSync(outputPath).mode & 0o777, 0o600);
+  });
+
+test("un candidato del operador que no pasa la compuerta se rechaza",
+  async (t) => {
+    const { root, outputPath } = await createOutputFixture(t);
+    const candidatePath = path.join(root, "candidate.json");
+    writeFileSync(candidatePath, JSON.stringify(fixtureCandidate()), "utf8");
+
+    await assert.rejects(
+      generateCodexReleaseNotes({
+        repoDir: root,
+        fromCommit: FROM_COMMIT,
+        toCommit: TO_COMMIT,
+        outputPath,
+        candidateFile: candidatePath,
+        spawnSyncImpl: () => {
+          throw new Error("Codex must not be called.");
+        },
+        ...injectedDependencies({
+          createEnvelopeImpl: async () => {
+            throw new Error("cita evidencia inexistente");
+          },
+        }),
+      }),
+      (error) =>
+        error instanceof CodexReleaseNotesError &&
+        error.code === "candidate_file_rejected",
+    );
+    assert.equal(existsSync(outputPath), false);
+  });
+
+test("un candidato ilegible no se confunde con un rechazo de la compuerta",
+  async (t) => {
+    const { root, outputPath } = await createOutputFixture(t);
+    await assert.rejects(
+      generateCodexReleaseNotes({
+        repoDir: root,
+        fromCommit: FROM_COMMIT,
+        toCommit: TO_COMMIT,
+        outputPath,
+        candidateFile: path.join(root, "no-existe.json"),
+        spawnSyncImpl: () => {
+          throw new Error("Codex must not be called.");
+        },
+        ...injectedDependencies(),
+      }),
+      (error) =>
+        error instanceof CodexReleaseNotesError &&
+        error.code === "candidate_file_unreadable",
+    );
+    assert.equal(existsSync(outputPath), false);
+  });
+
 test("does not spend Codex quota when no inspectable source change remains",
   async (t) => {
     const { root, outputPath } = await createOutputFixture(t);
@@ -338,9 +428,12 @@ test("does not spend Codex quota when no inspectable source change remains",
           }),
         }),
       }),
+      // Un rango sin novedades que contar NO es un rango que no se pudo
+      // preparar: son dos situaciones distintas y confundirlas fue lo que hizo
+      // creer, durante dos publicaciones, que el generador estaba roto.
       (error) =>
         error instanceof CodexReleaseNotesError &&
-        error.code === "release_context_invalid",
+        error.code === "no_user_facing_changes",
     );
     assert.equal(spawnCalled, false);
     assert.equal(existsSync(outputPath), false);
