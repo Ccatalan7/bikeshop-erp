@@ -10,6 +10,12 @@ typedef PayrollStatementImageTextExtractor = Future<String> Function({
   String? sourcePath,
 });
 
+typedef PayrollStatementDocumentTextExtractor = Future<String> Function({
+  required Uint8List bytes,
+  required String filename,
+  String? sourcePath,
+});
+
 typedef PayrollStatementPdfPageRasterizer = Stream<Uint8List> Function({
   required Uint8List bytes,
   required List<int> pages,
@@ -23,6 +29,7 @@ enum PayrollStatementInputKind {
 enum PayrollStatementExtractionMethod {
   embeddedPdfText,
   onDeviceImageOcr,
+  veryfiCloudOcr,
   imageOcrRequired,
 }
 
@@ -32,6 +39,7 @@ enum PayrollStatementPreparationPhase {
   preparingScannedPdf,
   recognizingPdfPage,
   recognizingImage,
+  recognizingWithVeryfi,
   parsingMovements,
   loadingPayrollContext,
 }
@@ -116,8 +124,10 @@ class PayrollStatementExtractionException implements Exception {
 class PayrollStatementExtractionService {
   PayrollStatementExtractionService({
     PayrollStatementImageTextExtractor? imageTextExtractor,
+    PayrollStatementDocumentTextExtractor? cloudDocumentTextExtractor,
     PayrollStatementPdfPageRasterizer? pdfPageRasterizer,
   })  : _imageTextExtractor = imageTextExtractor,
+        _cloudDocumentTextExtractor = cloudDocumentTextExtractor,
         _pdfPageRasterizer = pdfPageRasterizer ?? _rasterizePdfPagesOnDevice;
 
   static const int maxFileBytes = 12 * 1024 * 1024;
@@ -126,6 +136,7 @@ class PayrollStatementExtractionService {
   static const int _minimumUsefulCharactersPerPage = 20;
 
   final PayrollStatementImageTextExtractor? _imageTextExtractor;
+  final PayrollStatementDocumentTextExtractor? _cloudDocumentTextExtractor;
   final PayrollStatementPdfPageRasterizer _pdfPageRasterizer;
 
   Future<PayrollStatementExtractionResult> extract({
@@ -266,6 +277,48 @@ class PayrollStatementExtractionService {
     required List<PayrollStatementPageText> embeddedPages,
     PayrollStatementPreparationProgressCallback? onProgress,
   }) async {
+    final cloudExtractor = _cloudDocumentTextExtractor;
+    if (cloudExtractor != null) {
+      onProgress?.call(
+        PayrollStatementPreparationProgress(
+          phase: PayrollStatementPreparationPhase.recognizingWithVeryfi,
+          pageCount: pageCount,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      try {
+        final text = await cloudExtractor(
+          bytes: bytes,
+          filename: filename,
+        );
+        if (text.replaceAll(RegExp(r'\s'), '').length <
+            _minimumUsefulCharacters) {
+          throw const PayrollStatementExtractionException(
+            'Veryfi no reconoció suficiente texto en el PDF escaneado.',
+          );
+        }
+        return PayrollStatementExtractionResult(
+          fileSha256: sha256.convert(bytes).toString(),
+          inputKind: PayrollStatementInputKind.pdf,
+          method: PayrollStatementExtractionMethod.veryfiCloudOcr,
+          pages: <PayrollStatementPageText>[
+            PayrollStatementPageText(pageNumber: 1, text: text),
+          ],
+          warnings: const <String>[
+            'El PDF escaneado se procesó mediante el proxy autenticado de '
+                'Veryfi. La ERP no conserva el archivo ni el texto completo.',
+          ],
+        );
+      } on PayrollStatementExtractionException {
+        rethrow;
+      } catch (_) {
+        throw const PayrollStatementExtractionException(
+          'No se pudo reconocer el PDF escaneado con Veryfi. Reintenta o usa '
+          'un PDF con texto seleccionable.',
+        );
+      }
+    }
+
     final imageExtractor = _imageTextExtractor;
     if (imageExtractor == null) {
       return _imageOcrRequiredPdfResult(
@@ -406,7 +459,8 @@ class PayrollStatementExtractionService {
     String? sourcePath,
     PayrollStatementPreparationProgressCallback? onProgress,
   }) async {
-    final extractor = _imageTextExtractor;
+    final cloudExtractor = _cloudDocumentTextExtractor;
+    final extractor = cloudExtractor ?? _imageTextExtractor;
     if (extractor == null) {
       return PayrollStatementExtractionResult(
         fileSha256: sha256.convert(bytes).toString(),
@@ -420,18 +474,30 @@ class PayrollStatementExtractionService {
     }
 
     onProgress?.call(
-      const PayrollStatementPreparationProgress(
-        phase: PayrollStatementPreparationPhase.recognizingImage,
+      PayrollStatementPreparationProgress(
+        phase: cloudExtractor == null
+            ? PayrollStatementPreparationPhase.recognizingImage
+            : PayrollStatementPreparationPhase.recognizingWithVeryfi,
         pageNumber: 1,
         pageCount: 1,
       ),
     );
     await Future<void>.delayed(Duration.zero);
-    final text = await extractor(
-      bytes: bytes,
-      filename: filename,
-      sourcePath: sourcePath,
-    );
+    late final String text;
+    try {
+      text = await extractor(
+        bytes: bytes,
+        filename: filename,
+        sourcePath: sourcePath,
+      );
+    } catch (_) {
+      throw PayrollStatementExtractionException(
+        cloudExtractor == null
+            ? 'No se pudo reconocer la imagen localmente.'
+            : 'No se pudo reconocer la imagen con Veryfi. Reintenta o usa '
+                'un PDF con texto seleccionable.',
+      );
+    }
     if (text.replaceAll(RegExp(r'\s'), '').length < _minimumUsefulCharacters) {
       throw const PayrollStatementExtractionException(
         'No se pudo reconocer suficiente texto en la imagen.',
@@ -441,10 +507,18 @@ class PayrollStatementExtractionService {
     return PayrollStatementExtractionResult(
       fileSha256: sha256.convert(bytes).toString(),
       inputKind: PayrollStatementInputKind.image,
-      method: PayrollStatementExtractionMethod.onDeviceImageOcr,
+      method: cloudExtractor == null
+          ? PayrollStatementExtractionMethod.onDeviceImageOcr
+          : PayrollStatementExtractionMethod.veryfiCloudOcr,
       pages: <PayrollStatementPageText>[
         PayrollStatementPageText(pageNumber: 1, text: text),
       ],
+      warnings: cloudExtractor == null
+          ? const <String>[]
+          : const <String>[
+              'La imagen se procesó mediante el proxy autenticado de Veryfi. '
+                  'La ERP no conserva el archivo ni el texto completo.',
+            ],
     );
   }
 

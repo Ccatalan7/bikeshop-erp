@@ -85,7 +85,7 @@ void main() {
     expect(find.text('Cámara'), findsOneWidget,
         reason: 'sólo el control de captura se llama «Cámara»');
 
-    // Sin OCR local y sin cámara, las tarjetas lo DICEN en vez de desaparecer:
+    // Sin OCR cloud y sin cámara, las tarjetas lo DICEN en vez de desaparecer:
     // un vacío no explica por qué falta la opción.
     await pump(
       tester,
@@ -94,7 +94,7 @@ void main() {
       camera: false,
     );
     expect(
-      find.textContaining('No disponible en este dispositivo'),
+      find.textContaining('No disponible ahora'),
       findsOneWidget,
     );
     expect(find.textContaining('Sólo en Android y iPhone'), findsOneWidget);
@@ -119,11 +119,11 @@ void main() {
       findsOneWidget,
     );
 
-    // El parser señala filas reconocidas con campos que no reconoció; no
-    // garantiza detectar todo lo ilegible ni da confianza OCR por línea.
+    // El parser lleva las filas dudosas a revisión; no garantiza detectar
+    // todo lo ilegible ni da confianza OCR por línea.
     expect(find.textContaining('confianza por línea'), findsNothing);
     expect(
-      find.textContaining('campos que no se reconocen quedan señaladas'),
+      find.textContaining('filas dudosas quedan señaladas'),
       findsOneWidget,
     );
   });

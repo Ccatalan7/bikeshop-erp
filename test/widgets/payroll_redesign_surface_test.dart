@@ -31,6 +31,7 @@ void main() {
   const activatedReleaseCapabilities = PayrollReleaseCapabilities(
     employeePaymentMethodCommand: true,
     structuredAdvanceAudit: true,
+    auditedSettlementReversal: true,
   );
 
   const paymentMethods = [
@@ -113,6 +114,7 @@ void main() {
   ({
     PayrollRedesignActions actions,
     List<Map<String, dynamic>> paid,
+    List<Map<String, dynamic>> corrected,
     List<String> confirmed,
     List<String> registeredAdvanceEmployees,
     int Function() loadCalls,
@@ -134,6 +136,7 @@ void main() {
     Future<void> Function()? beforePayLine,
   }) {
     final paid = <Map<String, dynamic>>[];
+    final corrected = <Map<String, dynamic>>[];
     final confirmed = <String>[];
     final registeredAdvanceEmployees = <String>[];
     var loadCalls = 0;
@@ -180,6 +183,23 @@ void main() {
             'version': expectedReconciliationVersion,
           });
         },
+        reverseSettlement: ({
+          required voucherId,
+          required settlementKind,
+          required settlementId,
+          required reason,
+          required operationKey,
+          required expectedReconciliationVersion,
+        }) async {
+          corrected.add(<String, dynamic>{
+            'voucherId': voucherId,
+            'settlementKind': settlementKind,
+            'settlementId': settlementId,
+            'reason': reason,
+            'operationKey': operationKey,
+            'version': expectedReconciliationVersion,
+          });
+        },
         registerAdvance: ({
           required employeeId,
           required employeeName,
@@ -201,6 +221,7 @@ void main() {
         tenantCivilDateOf: tenantCivilDateOf,
       ),
       paid: paid,
+      corrected: corrected,
       confirmed: confirmed,
       registeredAdvanceEmployees: registeredAdvanceEmployees,
       loadCalls: () => loadCalls,
@@ -488,6 +509,53 @@ void main() {
     expect(find.byType(PayrollPaymentComposer), findsNothing);
     expect(h.paid, isEmpty);
     expect(configuredEmployees, ['employee-line-missing']);
+    expect(h.loadCalls(), 2);
+  });
+
+  testWidgets(
+      '5n: al cerrar configuración de método el foco vuelve al control de origen',
+      (tester) async {
+    final h = harness(
+      vouchers: [
+        voucher(lines: [
+          line(
+            id: 'line-focus-method',
+            name: 'Persona Foco Método',
+            total: 100000,
+            methodId: null,
+          ),
+        ]),
+      ],
+    );
+    await pump(
+      tester,
+      h.actions,
+      size: const Size(1440, 900),
+      onConfigureEmployeePaymentMethod: (_) async {},
+    );
+
+    final trigger = find.byKey(
+      const ValueKey<String>('payroll-method-menu-Persona Foco Método'),
+    );
+    final triggerInk = find.descendant(
+      of: trigger,
+      matching: find.byType(InkWell),
+    );
+    final triggerFocus = tester.widget<InkWell>(triggerInk).focusNode!;
+    triggerFocus.requestFocus();
+    await tester.pump();
+    expect(triggerFocus.hasFocus, isTrue);
+
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Configurar método'));
+    await tester.pumpAndSettle();
+
+    expect(
+      triggerFocus.hasFocus,
+      isTrue,
+      reason: 'el menú temporal no debe tragarse el foco al cerrarse',
+    );
     expect(h.loadCalls(), 2);
   });
 
@@ -2527,6 +2595,94 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+      'respaldo corrige un pago con motivo obligatorio y versión exacta',
+      (tester) async {
+    final payment = PayrollSettlementEvidence(
+      id: 'payment-to-correct',
+      voucherId: 'voucher-1',
+      lineId: 'line-to-correct',
+      kind: PayrollSettlementEvidenceKind.payment,
+      source: PayrollSettlementEvidenceSource.manual,
+      amount: 100000,
+      effectiveDate: DateTime(2026, 8, 1),
+      paymentMethodLabel: 'Transferencia',
+      actorName: 'Claudio Catalán',
+    );
+    final week = voucher(
+      lines: [
+        line(
+          id: 'line-to-correct',
+          name: 'Persona a corregir',
+          total: 100000,
+          settled: 100000,
+          cashPaid: 100000,
+          balance: 0,
+          settlementEvidence: [payment],
+        ),
+      ],
+    );
+    final h = harness(vouchers: [week]);
+    await pump(tester, h.actions, size: const Size(1440, 900));
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('payroll-paid-status-Persona a corregir'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final correction = find.byKey(
+      const ValueKey<String>(
+        'payroll-payment-evidence-correct-payment-to-correct',
+      ),
+    );
+    expect(correction, findsOneWidget);
+    await tester.tap(correction);
+    await tester.pumpAndSettle();
+
+    final confirm = find.byKey(
+      const ValueKey<String>('payroll-settlement-correction-confirm'),
+    );
+    expect(find.text('Corregir pago'), findsOneWidget);
+    expect(
+      find.textContaining('El movimiento original y su respaldo no se borran'),
+      findsOneWidget,
+    );
+    await tester.tap(confirm);
+    await tester.pump();
+    expect(
+      find.text('Explica el motivo con al menos 3 caracteres.'),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(
+        const ValueKey<String>('payroll-settlement-correction-reason'),
+      ),
+      'Cuenta bancaria seleccionada incorrectamente',
+    );
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+
+    expect(h.corrected, hasLength(1));
+    expect(h.corrected.single['voucherId'], 'voucher-1');
+    expect(h.corrected.single['settlementId'], 'payment-to-correct');
+    expect(
+      h.corrected.single['settlementKind'],
+      PayrollSettlementEvidenceKind.payment,
+    );
+    expect(
+      h.corrected.single['reason'],
+      'Cuenta bancaria seleccionada incorrectamente',
+    );
+    expect(h.corrected.single['version'], 7);
+    expect(
+      h.corrected.single['operationKey'],
+      startsWith('payroll_settlement_reversal_'),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('cola cardinalmente segura mantiene 5 y 12 semanas alcanzables',
       (tester) async {
     List<PayrollVoucher> weeks(int count) => List<PayrollVoucher>.generate(
@@ -2702,6 +2858,29 @@ void main() {
     await tester.pumpAndSettle();
     expect(desktop.historyHydrationCalls(), 2);
     expect(find.text('ANULADA'), findsWidgets);
+    // **5n fila 18 · el PANEL DERECHO tiene que haber cambiado, no sólo la
+    // hidratación.** Antes esto afirmaba que la palabra `ANULADA` aparecía en
+    // algún lado —lo cual también es cierto con el chip de la lista y el
+    // detalle todavía mostrando la semana anterior—. Se ancla al ledger: las
+    // cifras de la semana PAGADA (efectivo $100.000, anticipo −$25.000) tienen
+    // que haberse ido, y el total de la ANULADA tiene que estar.
+    final ledger = find.byKey(const ValueKey('payroll-history-ledger'));
+    expect(ledger, findsOneWidget);
+    expect(
+      find.descendant(of: ledger, matching: find.text(r'$100.000')),
+      findsNothing,
+      reason: 'el detalle sigue mostrando la semana pagada',
+    );
+    expect(
+      find.descendant(of: ledger, matching: find.text(r'−$25.000')),
+      findsNothing,
+      reason: 'el anticipo de la semana pagada quedó en el panel',
+    );
+    expect(
+      find.descendant(of: ledger, matching: find.text(r'$50.000')),
+      findsWidgets,
+      reason: 'el detalle no trajo el total de la semana anulada',
+    );
     expect(tester.takeException(), isNull);
 
     final mobile = harness(
@@ -3371,5 +3550,66 @@ void main() {
       find.byKey(const ValueKey<String>('payroll-advance-target-missing')),
       findsNothing,
     );
+  });
+  // ── `5n` · matriz de cierre · notas Flutter ──────────────────────────────
+  testWidgets(
+      '5n · el ESTADO DE TRABAJO sobrevive al cambio de banda (la fila abierta '
+      'sigue abierta)', (tester) async {
+    // `5n` escribe «`LayoutBuilder` recompone, **nunca desmonta**». Esa
+    // afirmación, tal cual, **no se cumple ni tiene por qué**: a 1440 el host
+    // monta la rama de escritorio y bajo el breakpoint el host monta OTRA
+    // rama: a 834 `_buildMobile` monta `PayrollQueueSurface` en su tier de
+    // tablet —la tabla, no tarjetas; las tarjetas son de 430—, y aun así es
+    // otro subárbol, así que SÍ se desmonta. Adaptado con razón: **el requisito de producto no es la
+    // identidad del subárbol, es que el trabajo del operador no se pierda**, y
+    // eso se cumple porque el estado vive en el `State` del host, no en la
+    // superficie.
+    //
+    // **Lo que esta prueba cubre y lo que NO:** cubre la fila abierta. El
+    // borrador del composer y el paso del OCR que la nota también nombra
+    // **no** están cubiertos acá; el del OCR está además medido y documentado
+    // como que NO sobrevive a salir del módulo (§2, fila `5j-p3`).
+    final h = harness();
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    tester.view.physicalSize = const Size(1440, 900);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.resolve(
+          preset: AppearancePresets.all.first,
+          brightness: Brightness.light,
+        ),
+        home: Scaffold(body: PayrollRedesignPage(actions: h.actions)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Por semántica, no por tooltip: `5c` le quitó el `Tooltip` al caret
+    // porque un `OverlayPortal` visible dentro del `LayoutBuilder` de esta
+    // tabla tumbaba el módulo al cambiar de banda (§4.24). La etiqueta
+    // accesible se conservó entera, y es por donde se toca.
+    final handle = tester.ensureSemantics();
+    await tester.tap(
+      find.bySemanticsLabel(RegExp('^Mostrar detalle de ')).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('CÓMO SE CALCULÓ'), findsOneWidget);
+
+    // Mismo `State` padre, otro ancho — NO el mismo subárbol: bajo el
+    // breakpoint el host monta otra rama. Es lo que hace la ventana al
+    // redimensionarse, y lo que debe sobrevivir es el estado, no los widgets.
+    tester.view.physicalSize = const Size(834, 1112);
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('CÓMO SE CALCULÓ'),
+      findsOneWidget,
+      reason: 'la fila abierta se perdió al cambiar de banda',
+    );
+    expect(tester.takeException(), isNull);
+    handle.dispose();
   });
 }

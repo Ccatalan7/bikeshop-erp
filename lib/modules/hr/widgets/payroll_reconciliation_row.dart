@@ -654,6 +654,7 @@ class _PayrollReconciliationRowState extends State<PayrollReconciliationRow> {
                 Text('QUÉ ES ESTE MOVIMIENTO', style: visual.overline),
                 const SizedBox(height: 8),
                 _DecisionOptionGrid(
+                  movementId: data.id,
                   options: options,
                   kind: data.kind,
                   disposition: disposition,
@@ -735,6 +736,7 @@ class _PayrollReconciliationRowState extends State<PayrollReconciliationRow> {
 /// compact ones. Geometry adapts, the graphic language does not.
 class _DecisionOptionGrid extends StatelessWidget {
   const _DecisionOptionGrid({
+    required this.movementId,
     required this.options,
     required this.kind,
     required this.disposition,
@@ -742,6 +744,7 @@ class _DecisionOptionGrid extends StatelessWidget {
     required this.onDisposition,
   });
 
+  final String movementId;
   final List<PayrollRowDisposition> options;
   final PayrollDecisionRowKind kind;
   final PayrollRowDisposition disposition;
@@ -757,6 +760,8 @@ class _DecisionOptionGrid extends StatelessWidget {
         final cards = <Widget>[
           for (final option in options)
             PayrollDecisionOptionCard(
+              movementId: movementId,
+              optionName: option.name,
               title: option.label,
               description: option.describe(kind),
               tag: option.consequenceTag,

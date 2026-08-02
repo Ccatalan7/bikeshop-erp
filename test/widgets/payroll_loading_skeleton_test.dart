@@ -196,7 +196,14 @@ void main() {
 
     final ghostBar = tester.getRect(skeletonMoneyBar);
     final ghostAction = tester.getRect(skeletonAction);
-    expect(ghostBar.height, PayrollTokens.moneyBarH);
+    // `moneyBarH` es el alto del CONTENIDO; el borde superior de 1 se le suma,
+    // igual que en la barra real y que en las bandas de Design (`6a` declara
+    // `height:56px` **más** `border-bottom:1px`, y su suma `47 + 56 + 48` no
+    // cuenta bordes). El 1 es el ancho por defecto de `BorderSide`, no una
+    // holgura: sigue siendo igualdad exacta, y con el `moneyBarH` a la vista
+    // para que un cambio del token siga rompiendo esto.
+    const barTopBorder = 1.0;
+    expect(ghostBar.height, PayrollTokens.moneyBarH + barTopBorder);
 
     gate.complete(PayrollRedesignData(vouchers: <PayrollVoucher>[voucher()]));
     await tester.pumpAndSettle();

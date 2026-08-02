@@ -181,6 +181,14 @@ class PayrollTokens {
   static const double rowH = 48; // fila de decisión (3a) · 50 en 2a
   static const double moneyBarH = 56; // 60 en 2a a 1400
   static const double ctaH = 34;
+
+  // El CTA de la barra monetaria apilada (`5m` nota 04) **no tiene estático
+  // propio**: el 46 que dibuja el frame es un objetivo táctil de 46 y
+  // `F-06 · TOUCH` pide 48, así que usa `touchMobile`. La razón completa está
+  // donde se pinta (`payroll_queue_surface.dart`, banda apilada). Un valor
+  // visual nuevo acá rompe el candado de `payroll_theme_architecture_test`, y
+  // el candado tiene razón: los valores visuales nuevos van al pipeline de
+  // roles, no al inventario estático.
   static const double ctaHDense = 28;
   static const double fieldH = 31;
   static const double touchMin = 44;

@@ -44,6 +44,11 @@ class PayrollPaymentEvidenceEntryVM {
     this.hasAccountingEntry = false,
     this.journalNumber,
     this.journalLines = const [],
+    this.isReversal = false,
+    this.isReversed = false,
+    this.reversalReason,
+    this.reversalMeta,
+    this.canCorrect = false,
   });
 
   final String id;
@@ -73,6 +78,11 @@ class PayrollPaymentEvidenceEntryVM {
 
   /// Las líneas del asiento tal como quedaron registradas: etiqueta y monto.
   final List<(String, String)> journalLines;
+  final bool isReversal;
+  final bool isReversed;
+  final String? reversalReason;
+  final String? reversalMeta;
+  final bool canCorrect;
 
   bool get hasObservedStatementMetadata =>
       observedTransactionDate?.trim().isNotEmpty == true ||
@@ -90,10 +100,12 @@ class PayrollPaymentEvidenceSurface extends StatelessWidget {
     super.key,
     required this.value,
     required this.onClose,
+    this.onCorrect,
   });
 
   final PayrollPaymentEvidenceVM value;
   final VoidCallback onClose;
+  final ValueChanged<String>? onCorrect;
 
   @override
   Widget build(BuildContext context) {
@@ -133,6 +145,7 @@ class PayrollPaymentEvidenceSurface extends StatelessWidget {
                     _EvidenceEntry(
                       entry: value.entries[index],
                       index: index,
+                      onCorrect: onCorrect,
                     ),
                     if (index != value.entries.length - 1)
                       const SizedBox(height: 8),
@@ -293,10 +306,15 @@ class _EvidenceFigure extends StatelessWidget {
 }
 
 class _EvidenceEntry extends StatelessWidget {
-  const _EvidenceEntry({required this.entry, required this.index});
+  const _EvidenceEntry({
+    required this.entry,
+    required this.index,
+    required this.onCorrect,
+  });
 
   final PayrollPaymentEvidenceEntryVM entry;
   final int index;
+  final ValueChanged<String>? onCorrect;
 
   @override
   Widget build(BuildContext context) {
@@ -313,6 +331,10 @@ class _EvidenceEntry extends StatelessWidget {
       if (entry.cashMovement?.trim().isNotEmpty == true)
         ('Anticipo entregado', entry.cashMovement!.trim()),
       ('Origen', entry.source),
+      if (entry.reversalReason?.trim().isNotEmpty == true)
+        ('Motivo corrección', entry.reversalReason!.trim()),
+      if (entry.reversalMeta?.trim().isNotEmpty == true)
+        ('Corrección', entry.reversalMeta!.trim()),
     ];
     // El asiento va en su propio bloque y no mezclado con los atributos del
     // pago: Debe y Haber son UN hecho de dos lados que tienen que cuadrar, y
@@ -337,19 +359,27 @@ class _EvidenceEntry extends StatelessWidget {
                 height: 28,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: entry.kind == 'Anticipo aplicado'
+                  color: entry.isReversal || entry.isReversed
                       ? visual.warningSoft
-                      : visual.successSoft,
+                      : entry.kind == 'Anticipo aplicado'
+                          ? visual.warningSoft
+                          : visual.successSoft,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  entry.kind == 'Anticipo aplicado'
-                      ? Icons.account_balance_wallet_outlined
-                      : Icons.check,
+                  entry.isReversal
+                      ? Icons.undo
+                      : entry.isReversed
+                          ? Icons.history
+                          : entry.kind == 'Anticipo aplicado'
+                              ? Icons.account_balance_wallet_outlined
+                              : Icons.check,
                   size: 15,
-                  color: entry.kind == 'Anticipo aplicado'
+                  color: entry.isReversal || entry.isReversed
                       ? visual.warningFg
-                      : visual.successFg,
+                      : entry.kind == 'Anticipo aplicado'
+                          ? visual.warningFg
+                          : visual.successFg,
                 ),
               ),
               const SizedBox(width: 10),
@@ -357,7 +387,32 @@ class _EvidenceEntry extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(entry.kind, style: visual.cardTitle),
+                    Row(
+                      children: [
+                        Expanded(
+                            child: Text(entry.kind, style: visual.cardTitle)),
+                        if (entry.isReversal || entry.isReversed)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: visual.warningSoft,
+                              borderRadius: BorderRadius.circular(
+                                PayrollTokens.rPill,
+                              ),
+                              border: Border.all(color: visual.warningBorder),
+                            ),
+                            child: Text(
+                              entry.isReversal ? 'REVERSA' : 'REVERSADO',
+                              style: visual.overline.copyWith(
+                                color: visual.warningFg,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                     const SizedBox(height: 2),
                     Text(entry.date, style: visual.monoS),
                   ],
@@ -430,6 +485,24 @@ class _EvidenceEntry extends StatelessWidget {
                 entry.variance!,
                 style: visual.bodyS.copyWith(
                   color: visual.warningFg,
+                ),
+              ),
+            ),
+          ],
+          if (entry.canCorrect && onCorrect != null) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                key: ValueKey<String>(
+                  'payroll-payment-evidence-correct-${entry.id}',
+                ),
+                onPressed: () => onCorrect!(entry.id),
+                icon: const Icon(Icons.edit_note_outlined, size: 17),
+                label: Text(
+                  entry.kind == 'Anticipo aplicado'
+                      ? 'Corregir anticipo'
+                      : 'Corregir pago',
                 ),
               ),
             ),

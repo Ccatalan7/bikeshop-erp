@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -168,7 +170,7 @@ class PayrollPersonRowVM {
   final List<PayrollRowShortcutVM> shortcuts;
   final bool expanded;
   final VoidCallback onToggle;
-  final VoidCallback onAction;
+  final FutureOr<void> Function() onAction;
 
   bool get isPending =>
       status == PayrollRowStatus.pendingTransfer ||
@@ -297,6 +299,19 @@ class PayrollQueueSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // `5n` · «`LayoutBuilder` **en la superficie**, no en la fila». Éste es
+    // ese LayoutBuilder, y su `constraints.maxWidth` es el ancho lógico
+    // ANTES de cualquier padding o borde interior: el único eje honesto para
+    // decidir el tramo. La tabla ya no lo deduce del ancho que le toca.
+    return LayoutBuilder(
+      builder: (context, surfaceConstraints) {
+        final surfaceWidth = surfaceConstraints.maxWidth;
+        return _buildSurface(context, surfaceWidth);
+      },
+    );
+  }
+
+  Widget _buildSurface(BuildContext context, double surfaceWidth) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -311,6 +326,7 @@ class PayrollQueueSurface extends StatelessWidget {
               padding: EdgeInsets.only(bottom: dense ? 11 : 12),
               children: <Widget>[
                 _DecisionTable(
+                  surfaceWidth: surfaceWidth,
                   rows: rows,
                   totals: totals,
                   dense: dense,
@@ -596,6 +612,7 @@ class _WeekCard extends StatelessWidget {
 
 class _DecisionTable extends StatelessWidget {
   const _DecisionTable({
+    required this.surfaceWidth,
     required this.rows,
     required this.totals,
     required this.dense,
@@ -609,6 +626,10 @@ class _DecisionTable extends StatelessWidget {
   /// no lo repite: `7a` dibuja **tres** paneles, y un cuarto que copia palabra
   /// por palabra un aviso visible cinco centímetros más abajo es ruido.
   final String? footerReason;
+
+  /// Ancho lógico de la SUPERFICIE, no el que le toca a esta tarjeta. Decide
+  /// el tramo; el reparto de columnas sigue usando el interior real.
+  final double surfaceWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -628,8 +649,15 @@ class _DecisionTable extends StatelessWidget {
         // El borde consume un píxel por lado; cabecera y filas calculan sobre
         // el ancho interior real para no acumular un overflow subpíxel.
         final tableWidth = effectiveWidth - 2;
+        // `5n` · «Layout por ancho lógico, con `LayoutBuilder` en la
+        // superficie, no en la fila». El tramo lo decide `surfaceWidth`, que
+        // baja del `LayoutBuilder` EXTERIOR; `tableWidth` sólo reparte
+        // columnas. Entre ambos se pierden el padding lateral de la superficie
+        // (32/36 según tier) y los 2 px del `Border`, así que resolver el
+        // tramo acá dejaba 1200 de viewport siempre por debajo de 1200.
         final layout = _QueueGridLayout.resolve(
           width: tableWidth,
+          logicalWidth: surfaceWidth,
           denseHint: dense,
         );
         final body = SizedBox(
@@ -848,6 +876,21 @@ class _PersonRowsState extends State<_PersonRows> {
 /// ya tiene dueño —`PayrollTokens.touchMin`—, así que sólo viajan acá los dos
 /// que no lo tienen.
 const double tabletRowHeight = 60;
+
+/// `5n` · escalera de tramos, y **único owner del tier en todo el módulo**.
+/// «≥1200 tabla de 8 columnas · 1000–1199 seis columnas · 900–999 cinco ·
+/// <900 cuatro con fila de 60 · <600 tarjetas».
+const double payrollQueueEightColMin = 1200;
+const double payrollQueueSixColMin = 1000;
+
+/// El host tenía su propio `< 1240` y competía con esta escalera. Un tier con
+/// dos dueños es un tier que se contradice en los bordes, así que el host
+/// pregunta acá en vez de repetir el número.
+bool payrollQueueDenseHint(double logicalWidth) =>
+    logicalWidth < payrollQueueEightColMin;
+
+/// `5n` · `maxWidth 186/168/200` del control de decisión: 186 en la tabla
+/// ancha, **168 en los tramos compactos de escritorio**, 200 en táctil.
 const double tabletDecisionWidth = 200;
 
 /// Reparte el espacio desde reglas `min / max / flex`. Las columnas monetarias
@@ -883,28 +926,49 @@ class _QueueGridLayout {
   final double gap;
   final List<double> widths;
 
-  /// `PAGADO` acompaña a `MÉTODO`: las dos se retiran juntas al bajar de 1240,
+  /// `5n` · el tope del control por tramo. Lo resuelve el layout una vez y
+  /// viaja a las CUATRO formas; que cada forma lo dedujera de `tablet` fue lo
+  /// que dejó el compacto de escritorio en 186 y el táctil sin tope.
+  double get decisionMaxWidth => tablet
+      ? tabletDecisionWidth
+      : (showMethod ? decisionCellMaxWidth : decisionCellMaxWidthDense);
+
+  /// `PAGADO` acompaña a `MÉTODO`: las dos se retiran juntas al bajar de
+  /// `payrollQueueEightColMin` (**1200**),
   /// y lo que decían pasa a la segunda línea de la persona y al chip (5b).
   bool get showPaid => showMethod;
 
+  /// Dos anchos, y la distinción es el defecto que esto corrige.
+  ///
+  /// [logicalWidth] es el de la SUPERFICIE y decide el **tramo** —`5n` lo pide
+  /// así—. [width] es el interior de la tarjeta y sólo reparte columnas.
+  ///
+  /// Entre uno y otro hay **dos descuentos, no uno**: el padding lateral de la
+  /// superficie (**32 px**, o **36** según el tier) y además los **2 px** del
+  /// `Border` de la tarjeta. Por eso un viewport de 1200 nunca llegaba a 1200
+  /// aquí. Usar un solo ancho para las dos cosas daba, según cuál se eligiera,
+  /// un tramo corrido decenas de píxeles o un overflow de dos.
   static _QueueGridLayout resolve({
     required double width,
+    required double logicalWidth,
     required bool denseHint,
   }) {
-    final showMethod = !denseHint && width >= 1240;
+    // `5n` · «Layout por ancho lógico» declara la escalera: **≥1200 ocho
+    // columnas · 1000–1199 seis · 900–999 cinco · <900 cuatro con fila de 60 ·
+    // <600 tarjetas».
+    //
+    final showMethod = !denseHint && logicalWidth >= payrollQueueEightColMin;
     final dense = denseHint || !showMethod;
-    // 5m: a 834 la tabla queda en persona / total / a pagar / decisión. El
-    // umbral es 900 porque bajo ese ancho el chrome ya es el header único.
-    final showAdvances = width >= 900;
+    final showAdvances = logicalWidth >= payrollQueueSixColMin;
     // 834 es el ancho declarado de 5m; 720 es el piso desde el que la tabla
     // sigue siendo tabla. Bajo eso la superficie ya se compone en tarjetas.
-    final tablet = !showMethod && width >= 720 && width < 900;
-    final horizontalPadding = width < 720 ? 12.0 : (dense ? 15.0 : 16.0);
+    final tablet = !showMethod && logicalWidth >= 720 && logicalWidth < 900;
+    final horizontalPadding = logicalWidth < 720 ? 12.0 : (dense ? 15.0 : 16.0);
     // The disclosure is a real focusable control, not a decorative glyph.
     // Reserve its full desktop target so keyboard and pointer users receive
     // the same affordance without stealing space from the decision column.
     const leadingWidth = 36.0;
-    final gap = width < 720 ? 7.0 : (dense ? 9.0 : 10.0);
+    final gap = logicalWidth < 720 ? 7.0 : (dense ? 9.0 : 10.0);
 
     final rules = showMethod
         ? const <_AdaptiveColumnRule>[
@@ -1316,6 +1380,7 @@ class _PersonRowState extends State<_PersonRow> {
               _RowStateActions(
                 vm: vm,
                 tablet: layout.tablet,
+                decisionMaxWidth: layout.decisionMaxWidth,
               ),
             ],
           ),
@@ -1351,6 +1416,7 @@ class _PersonRowState extends State<_PersonRow> {
 // `font:400 11px · color inkFaint`, sin fondo, sin borde y sin radio.
 const double decisionCellHeight = 28;
 const double decisionCellMaxWidth = 186;
+const double decisionCellMaxWidthDense = 168;
 const double decisionCellPadH = 10;
 const double decisionCellGap = 6;
 const double decisionLabelSize = 11;
@@ -1432,6 +1498,7 @@ class _DecisionShell extends StatelessWidget {
   const _DecisionShell({
     required this.tone,
     required this.tablet,
+    required this.maxWidth,
     required this.children,
   });
 
@@ -1439,6 +1506,9 @@ class _DecisionShell extends StatelessWidget {
 
   /// `5m`: en tablet el MISMO control crece a 44 × 200, sin cambiar de forma.
   final bool tablet;
+
+  /// `5n` · `maxWidth 186/168/200`, ya resuelto por el layout.
+  final double maxWidth;
   final List<Widget> children;
 
   @override
@@ -1447,7 +1517,9 @@ class _DecisionShell extends StatelessWidget {
       constraints: BoxConstraints(
         minHeight: tablet ? PayrollTokens.touchMin : decisionCellHeight,
         minWidth: tablet ? tabletDecisionWidth : 0,
-        maxWidth: tablet ? double.infinity : decisionCellMaxWidth,
+        // `5n`: `maxWidth 186/168/200`. Es TOPE, no piso: sin él la regla de
+        // columna dejaba crecer el control hasta 280 en táctil.
+        maxWidth: maxWidth,
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: decisionCellPadH),
@@ -1473,11 +1545,17 @@ class _PassiveDecision extends StatelessWidget {
     required this.label,
     required this.reason,
     required this.name,
+    this.decisionMaxWidth = decisionCellMaxWidth,
   });
 
   final String label;
   final String reason;
   final String name;
+
+  /// `5n` · la forma pasiva no lleva píldora, pero **sí lleva el mismo tope**:
+  /// si su texto se estira más que las cuatro formas activas, el ojo lee dos
+  /// anchos de columna distintos en la misma tabla.
+  final double decisionMaxWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -1529,7 +1607,10 @@ class _PassiveDecision extends StatelessWidget {
         // canal para lectores de pantalla, no el sustituto de aquello.
         tooltip: reason,
         excludeSemantics: true,
-        child: text,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: decisionMaxWidth),
+          child: text,
+        ),
       ),
     );
   }
@@ -1539,12 +1620,16 @@ class _RowStateActions extends StatelessWidget {
   const _RowStateActions({
     required this.vm,
     this.tablet = false,
+    this.decisionMaxWidth = decisionCellMaxWidth,
   });
 
   final PayrollPersonRowVM vm;
 
   /// Banda de tablet de `5m`: el control crece a 44 sin cambiar de forma.
   final bool tablet;
+
+  /// `5n` · tope del control en este tramo (186 / 168 / 200).
+  final double decisionMaxWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -1557,18 +1642,22 @@ class _RowStateActions extends StatelessWidget {
               label: vm.statusLabel,
               reason: vm.blockedReason,
               name: vm.name,
+              decisionMaxWidth: decisionMaxWidth,
             ),
           PayrollRowActionMode.direct => _DirectRowAction(
               vm: vm,
               tablet: tablet,
+              decisionMaxWidth: decisionMaxWidth,
             ),
           PayrollRowActionMode.paidDetails => _PaidStatusAction(
               vm: vm,
               tablet: tablet,
+              decisionMaxWidth: decisionMaxWidth,
             ),
           PayrollRowActionMode.menu => _StatusActionMenu(
               vm: vm,
               tablet: tablet,
+              decisionMaxWidth: decisionMaxWidth,
             ),
         },
       ),
@@ -1580,11 +1669,15 @@ class _DirectRowAction extends StatelessWidget {
   const _DirectRowAction({
     required this.vm,
     this.tablet = false,
+    this.decisionMaxWidth = decisionCellMaxWidth,
   });
   final PayrollPersonRowVM vm;
 
   /// `5m`: en la banda de tablet el mismo control crece a 44.
   final bool tablet;
+
+  /// `5n` · tope del control en este tramo (186 / 168 / 200).
+  final double decisionMaxWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -1601,7 +1694,8 @@ class _DirectRowAction extends StatelessWidget {
           // banda sigue siendo intrínseco al verbo, que es lo que pide 5a.
           constraints: BoxConstraints(
             minWidth: tablet ? tabletDecisionWidth : 0,
-            maxWidth: tablet ? double.infinity : decisionCellMaxWidth,
+            // `5n`: `maxWidth 186/168/200`. Es TOPE, no piso.
+            maxWidth: decisionMaxWidth,
           ),
           child: IntrinsicWidth(
             child: Semantics(
@@ -1640,7 +1734,8 @@ class _DirectRowAction extends StatelessWidget {
       child: ConstrainedBox(
         constraints: BoxConstraints(
           minWidth: tablet ? tabletDecisionWidth : 0,
-          maxWidth: tablet ? double.infinity : decisionCellMaxWidth,
+          // `5n`: `maxWidth 186/168/200`. Es TOPE, no piso.
+          maxWidth: decisionMaxWidth,
         ),
         child: IntrinsicWidth(
           child: Semantics(
@@ -1697,10 +1792,14 @@ class _PaidStatusAction extends StatelessWidget {
   const _PaidStatusAction({
     required this.vm,
     this.tablet = false,
+    this.decisionMaxWidth = decisionCellMaxWidth,
   });
 
   final PayrollPersonRowVM vm;
   final bool tablet;
+
+  /// `5n` · tope del control en este tramo (186 / 168 / 200).
+  final double decisionMaxWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -1740,6 +1839,7 @@ class _PaidStatusAction extends StatelessWidget {
             hoverColor: tone.fg.withValues(alpha: 0.08),
             focusColor: tone.fg.withValues(alpha: 0.12),
             child: _DecisionShell(
+              maxWidth: decisionMaxWidth,
               tone: tone,
               tablet: tablet,
               children: <Widget>[
@@ -1789,18 +1889,40 @@ class _PaidStatusAction extends StatelessWidget {
 /// Variante compacta para un estado que necesita una acción contextual.
 /// El chevron forma parte de la misma píldora y abre un menú anclado; el menú
 /// mantiene la acción fuera de la línea hasta que el usuario la solicita.
-class _StatusActionMenu extends StatelessWidget {
+class _StatusActionMenu extends StatefulWidget {
   const _StatusActionMenu({
     required this.vm,
     this.tablet = false,
+    this.decisionMaxWidth = decisionCellMaxWidth,
   });
 
   final PayrollPersonRowVM vm;
   final bool tablet;
 
+  /// `5n` · tope del control en este tramo (186 / 168 / 200).
+  final double decisionMaxWidth;
+
+  @override
+  State<_StatusActionMenu> createState() => _StatusActionMenuState();
+}
+
+class _StatusActionMenuState extends State<_StatusActionMenu> {
+  late final FocusNode _triggerFocus = FocusNode(
+    debugLabel: 'Método de pago · ${widget.vm.name}',
+  );
+
+  @override
+  void dispose() {
+    _triggerFocus.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final visual = PayrollVisualTokens.of(context);
+    final vm = widget.vm;
+    final tablet = widget.tablet;
+    final decisionMaxWidth = widget.decisionMaxWidth;
     // La forma con caret existe hoy para un único caso —«Sin método»—, y ése
     // no es una advertencia sino un **bloqueo**: sin método no se le puede
     // pagar a esa persona por ninguna vía. Heredar el tono del estado de la
@@ -1830,7 +1952,12 @@ class _StatusActionMenu extends StatelessWidget {
       menuChildren: <Widget>[
         MenuItemButton(
           key: ValueKey<String>('payroll-configure-method-${vm.name}'),
-          onPressed: vm.onAction,
+          onPressed: () async {
+            await vm.onAction();
+            if (mounted && _triggerFocus.canRequestFocus) {
+              _triggerFocus.requestFocus();
+            }
+          },
           leadingIcon: Icon(
             Icons.tune_rounded,
             size: 17,
@@ -1871,11 +1998,13 @@ class _StatusActionMenu extends StatelessWidget {
               ),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
+                focusNode: _triggerFocus,
                 onTap: toggleMenu,
                 mouseCursor: SystemMouseCursors.click,
                 hoverColor: tone.fg.withValues(alpha: 0.08),
                 focusColor: tone.fg.withValues(alpha: 0.12),
                 child: _DecisionShell(
+                  maxWidth: decisionMaxWidth,
                   tone: tone,
                   tablet: tablet,
                   children: <Widget>[
@@ -2402,76 +2531,172 @@ class _MoneyBar extends StatelessWidget {
       // del esqueleto la buscaba por `ancestor(Container).first`, que se rompe
       // en cuanto alguien envuelve la fila (revisión de Codex, 2026-08-01).
       key: const ValueKey<String>('payroll-money-bar'),
-      height: dense ? 54 : PayrollTokens.moneyBarH,
       padding: EdgeInsets.symmetric(horizontal: dense ? 16 : 18),
       decoration: BoxDecoration(
         color: visual.surface,
         border: Border(top: BorderSide(color: visual.borderStrong)),
         boxShadow: visual.moneyBar,
       ),
-      child: Row(
-        children: <Widget>[
-          Text(dense ? 'FALTA' : 'FALTA PAGAR',
-              style: visual.overline.copyWith(fontSize: dense ? 9 : 9.5)),
-          const SizedBox(width: 8),
-          Text(totals.remaining,
-              style: visual.numBar.copyWith(fontSize: dense ? 19 : 20)),
-          if (!dense) ...<Widget>[
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(totals.equation,
-                  style: visual.monoS.copyWith(fontSize: 10.5),
-                  overflow: TextOverflow.ellipsis),
-            ),
-          ] else ...<Widget>[
-            const SizedBox(width: 12),
-            if (totals.canConfirm) const Spacer(),
-          ],
-          if (!totals.canConfirm) ...<Widget>[
-            Flexible(
-              fit: FlexFit.loose,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: dense ? 220 : 300),
-                child: Text(
-                  totals.blockedReason,
-                  maxLines: dense ? 2 : 3,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                  style: visual.bodyS.copyWith(
-                    fontSize: dense ? 9.5 : 10.5,
-                    color: visual.warningFg,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // `5m` nota 04, literal: «A 834 la barra monetaria **se apila**:
+          // cifra y razón arriba, botón de 46 abajo. Nada de un botón de 34
+          // perdido en una esquina táctil.»
+          //
+          // **ADAPTADO a 48, y el frame gana igual (2026-08-02).** El `height`
+          // de `PayrollAccentAction` dimensiona el `InkWell` entero, así que un
+          // 46 es un objetivo táctil de 46 y **`F-06 · TOUCH` pide 48**. El 46
+          // se descarta por la MISMA razón por la que `5l` descartó el 50: la
+          // altura dibujada no manda sobre la regla táctil. Y acá la adaptación
+          // es incluso más fiel que el número, porque lo que la nota persigue
+          // es justamente que el botón **no** quede chico de tocar. Se usa el
+          // owner canónico `touchMobile` (48); no se crea un estático nuevo —
+          // el candado de arquitectura de tema prohíbe inventar valores
+          // visuales fuera del pipeline de roles, y tenía razón.
+          //
+          // Esto estaba implementado… en `PayrollMoneyBar`, que **esta
+          // superficie nunca monta** — la cola tiene su propia barra. Por eso
+          // el handoff lo daba por hecho «sin confirmar en vivo» y al mirarlo
+          // en la app seguía lado a lado. La regla vive ahora donde se pinta.
+          //
+          // Se cuentan las acciones **visibles**, y son dos estados reales y
+          // excluyentes que emite `_totals()`: borrador → sólo `Confirmar`;
+          // confirmada → sólo la acción-siguiente. Contar «confirm-only» era
+          // apilar la mitad de los casos y dejar el otro en fila por un
+          // fixture que el producto no puede producir.
+          final visibleActions = <Widget Function()>[
+            if (totals.showCommitAction)
+              () => PayrollAccentAction(
+                    actionKey: const ValueKey<String>('payroll-confirm-week'),
+                    label: 'Confirmar semana',
+                    semanticLabel: 'Confirmar semana',
+                    onTap: onConfirmWeek,
+                    enabled: totals.canConfirm,
+                    height: PayrollTokens.touchMobile,
+                    // El rótulo conserva el tamaño del CTA de la barra en su
+                    // rama densa: no hay valor propio leído para el apilado y
+                    // no se inventa uno.
+                    fontSize: 11.5,
                   ),
-                ),
+            if (totals.nextActionLabel.isNotEmpty)
+              () => PayrollAccentAction(
+                    actionKey:
+                        const ValueKey<String>('payroll-next-week-action'),
+                    label: totals.nextActionLabel,
+                    onTap: onNextAction,
+                    height: PayrollTokens.touchMobile,
+                    fontSize: 11.5,
+                  ),
+          ];
+          final stack = constraints.maxWidth < PayrollTokens.bpDesktop &&
+              visibleActions.length == 1;
+          if (stack) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Text('FALTA',
+                          style: visual.overline.copyWith(fontSize: 9)),
+                      const SizedBox(width: 8),
+                      Text(totals.remaining,
+                          style: visual.numBar.copyWith(fontSize: 19)),
+                      if (!totals.canConfirm &&
+                          totals.blockedReason.isNotEmpty) ...<Widget>[
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            totals.blockedReason,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.right,
+                            style: visual.bodyS.copyWith(
+                              fontSize: 9.5,
+                              color: visual.warningFg,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  visibleActions.single(),
+                ],
               ),
+            );
+          }
+          return SizedBox(
+            height: dense ? 54 : PayrollTokens.moneyBarH,
+            child: Row(
+              children: <Widget>[
+                Text(dense ? 'FALTA' : 'FALTA PAGAR',
+                    style: visual.overline.copyWith(fontSize: dense ? 9 : 9.5)),
+                const SizedBox(width: 8),
+                Text(totals.remaining,
+                    style: visual.numBar.copyWith(fontSize: dense ? 19 : 20)),
+                if (!dense) ...<Widget>[
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(totals.equation,
+                        style: visual.monoS.copyWith(fontSize: 10.5),
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                ] else ...<Widget>[
+                  const SizedBox(width: 12),
+                  if (totals.canConfirm) const Spacer(),
+                ],
+                if (!totals.canConfirm) ...<Widget>[
+                  Flexible(
+                    fit: FlexFit.loose,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: dense ? 220 : 300),
+                      child: Text(
+                        totals.blockedReason,
+                        maxLines: dense ? 2 : 3,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                        style: visual.bodyS.copyWith(
+                          fontSize: dense ? 9.5 : 10.5,
+                          color: visual.warningFg,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: dense ? 8 : 12),
+                ],
+                // Deshabilitado que explica: inerte + razón visible al lado.
+                if (totals.showCommitAction)
+                  PayrollAccentAction(
+                    actionKey: const ValueKey<String>('payroll-confirm-week'),
+                    label: dense ? 'Confirmar' : 'Confirmar semana',
+                    semanticLabel: 'Confirmar semana',
+                    onTap: onConfirmWeek,
+                    enabled: totals.canConfirm,
+                    height: dense ? 30 : 32,
+                    fontSize: dense ? 11 : 11.5,
+                    horizontalPadding: dense ? 11 : 12,
+                  ),
+                // Acción-siguiente solo cuando existe y es distinta del CTA de
+                // confirmación: jamás dos botones primarios idénticos.
+                if (totals.nextActionLabel.isNotEmpty) ...<Widget>[
+                  const SizedBox(width: 8),
+                  PayrollAccentAction(
+                    actionKey:
+                        const ValueKey<String>('payroll-next-week-action'),
+                    label: totals.nextActionLabel,
+                    onTap: onNextAction,
+                    height: dense ? 32 : PayrollTokens.ctaH,
+                    fontSize: dense ? 11.5 : 12,
+                    horizontalPadding: dense ? 12 : 14,
+                  ),
+                ],
+              ],
             ),
-            SizedBox(width: dense ? 8 : 12),
-          ],
-          // Deshabilitado que explica: inerte + razón visible al lado.
-          if (totals.showCommitAction)
-            PayrollAccentAction(
-              actionKey: const ValueKey<String>('payroll-confirm-week'),
-              label: dense ? 'Confirmar' : 'Confirmar semana',
-              semanticLabel: 'Confirmar semana',
-              onTap: onConfirmWeek,
-              enabled: totals.canConfirm,
-              height: dense ? 30 : 32,
-              fontSize: dense ? 11 : 11.5,
-              horizontalPadding: dense ? 11 : 12,
-            ),
-          // Acción-siguiente solo cuando existe y es distinta del CTA de
-          // confirmación: jamás dos botones primarios idénticos.
-          if (totals.nextActionLabel.isNotEmpty) ...<Widget>[
-            const SizedBox(width: 8),
-            PayrollAccentAction(
-              actionKey: const ValueKey<String>('payroll-next-week-action'),
-              label: totals.nextActionLabel,
-              onTap: onNextAction,
-              height: dense ? 32 : PayrollTokens.ctaH,
-              fontSize: dense ? 11.5 : 12,
-              horizontalPadding: dense ? 12 : 14,
-            ),
-          ],
-        ],
+          );
+        },
       ),
     );
   }

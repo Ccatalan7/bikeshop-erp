@@ -594,28 +594,42 @@ class _AmountCaseStrip extends StatelessWidget {
       );
     }
 
-    return Row(
-      children: <Widget>[
-        Expanded(child: chip(_AmountCase.exact, 'Completo', suggestedLabel)),
-        const SizedBox(width: 7),
-        Expanded(
-          child: chip(
-            _AmountCase.over,
-            'Con diferencia',
-            difference > 0 ? '+${formatPayrollClp(difference)}' : 'de más',
+    final spokenCase = switch (active) {
+      _AmountCase.exact => 'completo',
+      _AmountCase.over => 'más de lo que queda por pagar, no registrable',
+      _AmountCase.partial => 'pago parcial',
+      _AmountCase.empty => 'sin monto',
+    };
+
+    return Semantics(
+      key: const ValueKey<String>('payroll-composer-case-strip'),
+      container: true,
+      readOnly: true,
+      label: 'Estado del monto: $spokenCase',
+      excludeSemantics: true,
+      child: Row(
+        children: <Widget>[
+          Expanded(child: chip(_AmountCase.exact, 'Completo', suggestedLabel)),
+          const SizedBox(width: 7),
+          Expanded(
+            child: chip(
+              _AmountCase.over,
+              'Con diferencia',
+              difference > 0 ? '+${formatPayrollClp(difference)}' : 'de más',
+            ),
           ),
-        ),
-        const SizedBox(width: 7),
-        Expanded(
-          child: chip(
-            _AmountCase.partial,
-            'Parcial',
-            difference < 0
-                ? formatPayrollClp(_clpDigits(typedLabel))
-                : 'de menos',
+          const SizedBox(width: 7),
+          Expanded(
+            child: chip(
+              _AmountCase.partial,
+              'Parcial',
+              difference < 0
+                  ? formatPayrollClp(_clpDigits(typedLabel))
+                  : 'de menos',
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -645,10 +659,18 @@ class _AmountConsequenceNote extends StatelessWidget {
           'Calza exacto con lo calculado. Al guardar, la fila queda Pagada y '
               'la semana recalcula su saldo.',
         ),
+      // **Corregido el 2026-08-02 (`5n` fila 9).** Antes decía «Al guardar
+      // queda registrada la diferencia», y eso era **imposible**: el host
+      // bloquea el monto por encima del máximo —`amountError` dice «El monto
+      // no puede superar X» y `canRegister` exige `<= newMoney`—, así que
+      // guardar no ocurre. La nota prometía un registro que el sistema no
+      // puede hacer, que es la definición de una promesa falsa. Ahora dice lo
+      // único cierto: hay que bajar el monto.
       _AmountCase.over => (
           visual.warning,
-          'Se transfirió más de lo calculado. Al guardar queda registrada la '
-              'diferencia; las horas no se tocan.',
+          'Es más de lo que queda por pagar, así que no se puede registrar. '
+              'Baja el monto a $suggestedLabel o menos. Si de verdad se '
+              'transfirió de más, se resuelve en la conciliación, no acá.',
         ),
       _AmountCase.partial => (
           visual.warning,
@@ -712,12 +734,19 @@ class _PaymentAmountBlock extends StatelessWidget {
         children: <Widget>[
           Text('TRANSFERENCIA', style: visual.overline),
           const SizedBox(height: 6),
-          // 5e: el caso se DECLARA, no se infiere del monto. Antes, teclear
-          // menos de lo esperado se interpretaba solo como «pago parcial»: un
-          // dedazo se convertía en una decisión de negocio sin que nadie la
-          // tomara. El segmentado no cambia ninguna regla —la validación
-          // sigue siendo la misma— pero obliga a nombrar el caso, y la nota de
-          // abajo dice la consecuencia exacta antes de guardar.
+          // **`5n` fila 9, adjudicada el 2026-08-02: los tres son ESTADOS
+          // DERIVADOS del monto, no modos de escritura.** Este comentario
+          // decía lo contrario —«el caso se DECLARA, no se infiere»— y
+          // describía un segmentado que nunca existió: los chips son
+          // `Container` sin gesto, y `_amountCaseOf(typed, suggested)` calcula
+          // el caso a partir de lo tecleado. Se corrige el texto, no el
+          // control: el monto es la única fuente de verdad y tener dos —el
+          // monto y un modo declarado— es precisamente cómo se desincronizan.
+          //
+          // Se le agrega la semántica que le faltaba para que **no se lea como
+          // una botonera**: es un `Semantics` contenedor y de sólo lectura que
+          // anuncia el caso vigente. Sin esto, un lector de pantalla recorría
+          // tres textos con aire de opciones elegibles.
           _AmountCaseStrip(
             suggestedLabel: suggestedLabel,
             typedLabel: controller.text,

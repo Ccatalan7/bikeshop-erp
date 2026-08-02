@@ -12,13 +12,37 @@ class VeryfiProxyService {
   Future<Map<String, dynamic>> parseInvoiceFromBytes(
     Uint8List bytes,
     String filename,
-  ) async {
+  ) =>
+      _parseDocumentFromBytes(
+        bytes,
+        filename,
+        documentKind: 'receipt_invoice',
+      );
+
+  /// Uses the bank-statement model while preserving the same authenticated
+  /// Edge Function, credentials and transient upload boundary as invoices.
+  Future<Map<String, dynamic>> parseBankStatementFromBytes(
+    Uint8List bytes,
+    String filename,
+  ) =>
+      _parseDocumentFromBytes(
+        bytes,
+        filename,
+        documentKind: 'bank_statement',
+      );
+
+  Future<Map<String, dynamic>> _parseDocumentFromBytes(
+    Uint8List bytes,
+    String filename, {
+    required String documentKind,
+  }) async {
     final response = await _client.functions.invoke(
       'veryfi-ocr',
       body: {
         'filename': filename,
         'contentBase64': base64Encode(bytes),
         'contentType': _contentTypeForFilename(filename),
+        'documentKind': documentKind,
       },
     );
 

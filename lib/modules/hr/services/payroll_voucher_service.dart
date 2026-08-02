@@ -69,6 +69,79 @@ class PayrollAdvanceRegistrationReceipt {
   final String? evidenceStorageObjectEtag;
 }
 
+@immutable
+class PayrollRefinementCapabilities {
+  const PayrollRefinementCapabilities({
+    this.employeePaymentMethodCommand = false,
+    this.structuredAdvanceAudit = false,
+    this.auditedSettlementReversal = false,
+    this.settlementEvidenceContractVersion = 1,
+  });
+
+  final bool employeePaymentMethodCommand;
+  final bool structuredAdvanceAudit;
+  final bool auditedSettlementReversal;
+  final int settlementEvidenceContractVersion;
+
+  factory PayrollRefinementCapabilities.fromMap(Map<String, dynamic> map) {
+    return PayrollRefinementCapabilities(
+      employeePaymentMethodCommand:
+          map['employee_payment_method_command'] == true,
+      structuredAdvanceAudit: map['structured_advance_audit'] == true,
+      auditedSettlementReversal: map['audited_settlement_reversal'] == true,
+      settlementEvidenceContractVersion:
+          (map['settlement_evidence_contract_version'] as num?)?.toInt() ?? 1,
+    );
+  }
+}
+
+@immutable
+class PayrollSettlementReversalReceipt {
+  const PayrollSettlementReversalReceipt({
+    required this.operationId,
+    required this.operationKey,
+    required this.voucherId,
+    required this.originalSettlementId,
+    required this.reversalSettlementId,
+    required this.reconciliationVersion,
+    required this.replayed,
+  });
+
+  final String operationId;
+  final String operationKey;
+  final String voucherId;
+  final String originalSettlementId;
+  final String reversalSettlementId;
+  final int reconciliationVersion;
+  final bool replayed;
+
+  factory PayrollSettlementReversalReceipt.fromMap(
+    Map<String, dynamic> map,
+  ) {
+    String requiredId(String key) {
+      final value = map[key]?.toString().trim() ?? '';
+      if (value.isEmpty) {
+        throw StateError('La reversa no confirmó $key.');
+      }
+      return value;
+    }
+
+    final version = map['reconciliation_version'];
+    if (version is! num) {
+      throw StateError('La reversa no confirmó la versión de la semana.');
+    }
+    return PayrollSettlementReversalReceipt(
+      operationId: requiredId('operation_id'),
+      operationKey: requiredId('operation_key'),
+      voucherId: requiredId('voucher_id'),
+      originalSettlementId: requiredId('original_settlement_id'),
+      reversalSettlementId: requiredId('reversal_settlement_id'),
+      reconciliationVersion: version.toInt(),
+      replayed: map['replayed'] == true,
+    );
+  }
+}
+
 class PayrollVoucherService extends ChangeNotifier {
   final DatabaseService _db;
   final FinancialProjectionRefreshCoordinator _financialProjectionRefresh;
@@ -1433,6 +1506,123 @@ class PayrollVoucherService extends ChangeNotifier {
     }
   }
 
+  /// Appends an exact compensation for one immutable Payroll settlement.
+  /// The original movement and journal remain untouched; the backend owns the
+  /// inverse amount, accounting, balance recalculation, actor trace and retry.
+  Future<PayrollSettlementReversalReceipt> reverseSettlement({
+    required String voucherId,
+    required PayrollSettlementEvidenceKind settlementKind,
+    required String settlementId,
+    required String reason,
+    required int expectedReconciliationVersion,
+    String? operationKey,
+  }) async {
+    final normalizedVoucherId = voucherId.trim();
+    final normalizedSettlementId = settlementId.trim();
+    final normalizedReason = reason.trim();
+    if (normalizedVoucherId.isEmpty || normalizedSettlementId.isEmpty) {
+      throw const PayrollVoucherPreflightException.rejected(
+        'El movimiento ya no está disponible. Recarga la semana.',
+      );
+    }
+    if (normalizedReason.length < 3 || normalizedReason.length > 1000) {
+      throw const PayrollVoucherPreflightException.rejected(
+        'Explica el motivo de la corrección con al menos 3 caracteres.',
+      );
+    }
+    final key = operationKey ?? _newOperationKey('settlement_reversal');
+    final params = <String, dynamic>{
+      'p_voucher_id': normalizedVoucherId,
+      'p_settlement_kind':
+          settlementKind == PayrollSettlementEvidenceKind.advance
+              ? 'advance_allocation'
+              : 'payment',
+      'p_settlement_id': normalizedSettlementId,
+      'p_reason': normalizedReason,
+      'p_operation_key': key,
+      'p_expected_reconciliation_version': expectedReconciliationVersion,
+    };
+
+    try {
+      _setLoading(true);
+      _setError(null);
+      dynamic result;
+      try {
+        result = await _db.rpc(
+          'reverse_payroll_settlement_v1',
+          params: params,
+        );
+      } catch (error, stackTrace) {
+        // A dropped response is ambiguous. Read the immutable receipt by the
+        // same key before asking the operator to retry a money command.
+        try {
+          result = await _db.rpc(
+            'get_payroll_settlement_reversal_operation_v1',
+            params: <String, dynamic>{'p_operation_key': key},
+          );
+        } catch (_) {
+          Error.throwWithStackTrace(error, stackTrace);
+        }
+        if (result == null) {
+          Error.throwWithStackTrace(error, stackTrace);
+        }
+      }
+
+      final receipt = PayrollSettlementReversalReceipt.fromMap(
+        _asJsonObject(result, command: 'corregir el movimiento de nómina'),
+      );
+      if (receipt.voucherId != normalizedVoucherId ||
+          receipt.originalSettlementId != normalizedSettlementId ||
+          receipt.operationKey != key) {
+        throw StateError(
+          'El servidor confirmó una corrección distinta a la solicitada.',
+        );
+      }
+      _financialProjectionRefresh.recordCommitted(
+        FinancialProjectionChange(
+          kind: FinancialProjectionChangeKind.payroll,
+          origin: FinancialProjectionChangeOrigin.localCommit,
+          entityId: normalizedVoucherId,
+        ),
+      );
+      invalidateVouchersCache();
+      return receipt;
+    } catch (e) {
+      _setError('No se pudo corregir el movimiento: $e');
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// Reads the exact rollout capabilities instead of inferring them from
+  /// unrelated tables or older RPCs.
+  Future<PayrollRefinementCapabilities> getRefinementCapabilities() async {
+    try {
+      final result = await _db.rpc(
+        'get_payroll_refinement_capabilities_v1',
+      );
+      final map = _asJsonObject(
+        result,
+        command: 'validar las capacidades de nómina',
+      );
+      if (map['contract_version'] != 1) {
+        throw StateError(
+          'El servidor respondió con capacidades de nómina incompatibles.',
+        );
+      }
+      return PayrollRefinementCapabilities.fromMap(map);
+    } on PostgrestException catch (error) {
+      if (!_isMissingPayrollAuditFunction(
+        error,
+        'get_payroll_refinement_capabilities_v1',
+      )) {
+        rethrow;
+      }
+      return const PayrollRefinementCapabilities();
+    }
+  }
+
   Future<int> _loadVoucherReconciliationVersion(String voucherId) async {
     final id = voucherId.trim();
     if (id.isEmpty) {
@@ -1479,9 +1669,10 @@ class PayrollVoucherService extends ChangeNotifier {
   /// El vínculo es `journal_entries.source_reference = expense_payments.id`
   /// con `source_module = 'expense_payments'`, verificado contra producción.
   Future<Map<String, PayrollJournalEntry>> fetchJournalEntriesForPayments(
-    List<String> paymentIds,
+    List<String> settlementIds,
   ) async {
-    final ids = paymentIds.where((id) => id.trim().isNotEmpty).toSet().toList();
+    final ids =
+        settlementIds.where((id) => id.trim().isNotEmpty).toSet().toList();
     if (ids.isEmpty) return const {};
     try {
       final entryRows = await _db.select(
@@ -1778,10 +1969,24 @@ class PayrollVoucherService extends ChangeNotifier {
         .toList(growable: false);
     if (voucherIds.isEmpty) return vouchers;
 
-    final raw = await _db.rpc(
-      'get_payroll_voucher_settlement_evidence',
-      params: <String, dynamic>{'p_voucher_ids': voucherIds},
-    );
+    dynamic raw;
+    try {
+      raw = await _db.rpc(
+        'get_payroll_voucher_settlement_evidence_v2',
+        params: <String, dynamic>{'p_voucher_ids': voucherIds},
+      );
+    } on PostgrestException catch (error) {
+      if (!_isMissingPayrollAuditFunction(
+        error,
+        'get_payroll_voucher_settlement_evidence_v2',
+      )) {
+        rethrow;
+      }
+      raw = await _db.rpc(
+        'get_payroll_voucher_settlement_evidence',
+        params: <String, dynamic>{'p_voucher_ids': voucherIds},
+      );
+    }
     final rows = raw is List ? raw : const <dynamic>[];
     final evidenceByLineId = <String, List<PayrollSettlementEvidence>>{};
     for (final rawRow in rows) {

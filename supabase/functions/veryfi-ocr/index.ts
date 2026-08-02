@@ -7,6 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+type VeryfiDocumentKind = "receipt_invoice" | "bank_statement";
+
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -66,9 +68,12 @@ function safeContentType(contentType: unknown, filename: string): string {
   return contentTypeForFilename(filename);
 }
 
-function buildVeryfiHeaders(): Headers {
-  const apiUrl = Deno.env.get("VERYFI_API_URL") ??
-    "https://api.veryfi.com/api/v8/partner/documents";
+function buildVeryfiHeaders(documentKind: VeryfiDocumentKind): Headers {
+  const apiUrl = documentKind === "bank_statement"
+    ? Deno.env.get("VERYFI_BANK_STATEMENTS_API_URL") ??
+      "https://api.veryfi.com/api/v8/partner/bank-statements"
+    : Deno.env.get("VERYFI_API_URL") ??
+      "https://api.veryfi.com/api/v8/partner/documents";
   const clientId = Deno.env.get("VERYFI_CLIENT_ID") ?? "";
   const apiKey = Deno.env.get("VERYFI_API_KEY") ?? "";
   const username = Deno.env.get("VERYFI_USERNAME") ?? "";
@@ -130,27 +135,46 @@ serve(async (req: Request): Promise<Response> => {
       return jsonResponse({ error: "Missing authentication" }, 401);
     }
 
-    const { filename, contentBase64, contentType } = await req.json() as {
-      filename?: string;
-      contentBase64?: string;
-      contentType?: string;
-    };
+    const { filename, contentBase64, contentType, documentKind } = await req
+      .json() as {
+        filename?: string;
+        contentBase64?: string;
+        contentType?: string;
+        documentKind?: VeryfiDocumentKind;
+      };
 
     if (!filename || !contentBase64) {
       return jsonResponse({ error: "Missing filename or contentBase64" }, 400);
     }
 
-    const veryfiHeaders = buildVeryfiHeaders();
+    const resolvedDocumentKind = documentKind ?? "receipt_invoice";
+    if (
+      resolvedDocumentKind !== "receipt_invoice" &&
+      resolvedDocumentKind !== "bank_statement"
+    ) {
+      return jsonResponse({ error: "Unsupported document kind" }, 400);
+    }
+
+    const veryfiHeaders = buildVeryfiHeaders(resolvedDocumentKind);
     const apiUrl = veryfiHeaders.get("x-veryfi-api-url")!;
     veryfiHeaders.delete("x-veryfi-api-url");
 
     const bytes = decodeBase64(contentBase64);
     const mimeType = safeContentType(contentType, filename);
     const formData = new FormData();
-    formData.append("file", new Blob([bytes], { type: mimeType }), filename);
+    // Deno's current BlobPart type requires an ArrayBuffer, while the decoded
+    // view is intentionally typed as ArrayBufferLike. Copy once into the
+    // concrete buffer that is sent to Veryfi; neither buffer is persisted.
+    const uploadBuffer = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(uploadBuffer).set(bytes);
+    formData.append(
+      "file",
+      new Blob([uploadBuffer], { type: mimeType }),
+      filename,
+    );
 
     console.log(
-      `[veryfi-ocr] user=${userData.user.id} file=${filename} type=${mimeType} size=${bytes.length}`,
+      `[veryfi-ocr] user=${userData.user.id} type=${mimeType} size=${bytes.length}`,
     );
 
     const veryfiResponse = await fetch(apiUrl, {
@@ -168,10 +192,12 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     if (!veryfiResponse.ok) {
-      console.error("[veryfi-ocr] Veryfi error", veryfiResponse.status, rawText);
+      // Never print or echo the provider body: an OCR error can still contain
+      // recognized account numbers or document text.
+      console.error("[veryfi-ocr] Veryfi error", veryfiResponse.status);
       return jsonResponse(
         {
-          error: `Veryfi API error: ${veryfiResponse.status} ${rawText}`,
+          error: `Veryfi API error: ${veryfiResponse.status}`,
         },
         veryfiResponse.status,
       );

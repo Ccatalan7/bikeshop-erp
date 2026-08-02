@@ -52,6 +52,15 @@ class PayrollSettlementEvidence {
     this.statementSourceLineStart,
     this.statementSourceLineEnd,
     this.statementRowOrdinal,
+    this.isReversal = false,
+    this.reversalOfEvidenceId,
+    this.reversalEvidenceId,
+    this.reversalReason,
+    this.reversalOperationId,
+    this.reversalOperationKey,
+    this.reversedAt,
+    this.reversedById,
+    this.reversedByName,
   });
 
   final String id;
@@ -88,8 +97,19 @@ class PayrollSettlementEvidence {
   final int? statementSourceLineStart;
   final int? statementSourceLineEnd;
   final int? statementRowOrdinal;
+  final bool isReversal;
+  final String? reversalOfEvidenceId;
+  final String? reversalEvidenceId;
+  final String? reversalReason;
+  final String? reversalOperationId;
+  final String? reversalOperationKey;
+  final DateTime? reversedAt;
+  final String? reversedById;
+  final String? reversedByName;
 
   bool get isAdvance => kind == PayrollSettlementEvidenceKind.advance;
+  bool get isReversed => !isReversal && reversalEvidenceId != null;
+  bool get isActiveSettlement => !isReversal && !isReversed;
   bool get isFromStatement =>
       source == PayrollSettlementEvidenceSource.bankStatement ||
       source == PayrollSettlementEvidenceSource.cashReconciliation ||
@@ -161,6 +181,15 @@ class PayrollSettlementEvidence {
       statementSourceLineEnd:
           (map['statement_source_line_end'] as num?)?.toInt(),
       statementRowOrdinal: (map['statement_row_ordinal'] as num?)?.toInt(),
+      isReversal: map['is_reversal'] == true,
+      reversalOfEvidenceId: map['reversal_of_evidence_id']?.toString(),
+      reversalEvidenceId: map['reversal_evidence_id']?.toString(),
+      reversalReason: map['reversal_reason']?.toString(),
+      reversalOperationId: map['reversal_operation_id']?.toString(),
+      reversalOperationKey: map['reversal_operation_key']?.toString(),
+      reversedAt: date('reversed_at'),
+      reversedById: map['reversed_by_id']?.toString(),
+      reversedByName: map['reversed_by_name']?.toString(),
     );
   }
 }

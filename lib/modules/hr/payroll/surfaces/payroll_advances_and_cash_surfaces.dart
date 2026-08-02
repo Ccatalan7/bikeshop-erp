@@ -1257,6 +1257,7 @@ class PayrollCashSurface extends StatelessWidget {
     required this.deliveredBy,
     required this.onClose,
     this.onApplyAdvance,
+    this.advanceApplied = false,
     required this.onConfirm,
     this.onPickDate,
     this.confirmed = false,
@@ -1280,6 +1281,11 @@ class PayrollCashSurface extends StatelessWidget {
   final String deliveredBy;
   final VoidCallback onClose;
   final VoidCallback? onApplyAdvance;
+
+  /// Si el anticipo está aplicado **ahora**. El host ya alternaba este estado;
+  /// lo que faltaba era que el control lo mostrara.
+  final bool advanceApplied;
+
   final VoidCallback onConfirm;
   final VoidCallback? onPickDate;
 
@@ -1429,28 +1435,89 @@ class PayrollCashSurface extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 11),
+                          // **`5n` fila 16→12, corregido el 2026-08-02.** Este
+                          // control tenía dos defectos que se sostenían el uno
+                          // al otro:
+                          //
+                          // 1. Medía `touchMobile - 4` = **44**, bajo el 48 de
+                          //    `F-06 · TOUCH`. Mismo caso que el CTA apilado de
+                          //    `5m`: un valor derivado a la baja de un token
+                          //    táctil no es un valor táctil.
+                          // 2. **No mostraba su estado.** El texto de arriba
+                          //    promete que «desmarcarlo» devuelve el anticipo,
+                          //    y el estado del host SÍ alterna
+                          //    (`applyAdvance = !applyAdvance`), pero el
+                          //    control decía siempre «Aplicar»: la única señal
+                          //    de que algo pasó eran las cifras de más arriba.
+                          //    Un control que promete desmarcar y nunca se ve
+                          //    marcado es una promesa a medias.
+                          //
+                          // Ahora es una casilla de verdad: `Semantics.checked`
+                          // para quien usa lector de pantalla, marca visible y
+                          // rótulo que dice **qué pasa si lo tocas ahora**. No
+                          // se inventa dirección visual: el par marcado
+                          // (`accentSoft`/`accentBorder`) es el que ya tenía, y
+                          // el desmarcado usa `surfaceSunken`/`border`, el
+                          // mismo par neutro del segmentado de `5e`.
                           if (onApplyAdvance != null)
-                            Material(
-                              color: visual.accentSoft,
-                              shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(PayrollTokens.rPanel),
-                                side: BorderSide(
-                                  color: visual.accentBorder,
+                            Semantics(
+                              checked: advanceApplied,
+                              label: advanceApplied
+                                  ? 'Anticipo aplicado, $availableAdvanceLabel'
+                                  : 'Aplicar anticipo de $availableAdvanceLabel',
+                              child: Material(
+                                color: advanceApplied
+                                    ? visual.accentSoft
+                                    : visual.surfaceSunken,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                      PayrollTokens.rPanel),
+                                  side: BorderSide(
+                                    color: advanceApplied
+                                        ? visual.accentBorder
+                                        : visual.border,
+                                  ),
                                 ),
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              child: InkWell(
-                                onTap: onApplyAdvance,
-                                mouseCursor: SystemMouseCursors.click,
-                                child: Container(
-                                  height: PayrollTokens.touchMobile - 4,
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    'Aplicar anticipo de $availableAdvanceLabel',
-                                    style: visual.labelStrong.copyWith(
-                                      fontSize: 12.5,
-                                      color: visual.accent,
+                                clipBehavior: Clip.antiAlias,
+                                child: InkWell(
+                                  key: const ValueKey<String>(
+                                    'payroll-cash-apply-advance',
+                                  ),
+                                  onTap: onApplyAdvance,
+                                  mouseCursor: SystemMouseCursors.click,
+                                  child: Container(
+                                    height: PayrollTokens.touchMobile,
+                                    alignment: Alignment.center,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: <Widget>[
+                                        Icon(
+                                          advanceApplied
+                                              ? Icons.check_box_outlined
+                                              : Icons
+                                                  .check_box_outline_blank_rounded,
+                                          size: 17,
+                                          color: advanceApplied
+                                              ? visual.accent
+                                              : visual.inkMuted,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Flexible(
+                                          child: Text(
+                                            advanceApplied
+                                                ? 'Anticipo aplicado · $availableAdvanceLabel'
+                                                : 'Aplicar anticipo de $availableAdvanceLabel',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: visual.labelStrong.copyWith(
+                                              fontSize: 12.5,
+                                              color: advanceApplied
+                                                  ? visual.accent
+                                                  : visual.ink,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),

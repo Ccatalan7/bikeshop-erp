@@ -20,7 +20,6 @@ import '../../../shared/utils/responsive_viewport.dart';
 import '../../../shared/widgets/vb_short_select.dart';
 import '../services/payroll_statement_capture_cleanup.dart';
 import '../services/payroll_statement_extraction_service.dart';
-import '../services/payroll_statement_local_image_ocr.dart';
 import '../services/payroll_voucher_service.dart';
 import '../widgets/payroll_format.dart';
 import '../widgets/payroll_money_bar.dart';
@@ -68,17 +67,17 @@ class PayrollStatementCaptureCapabilities {
 
 /// Resolves picker capabilities independently from viewport composition.
 ///
-/// Local image OCR is available on Android, iOS and macOS. Camera capture is
-/// intentionally narrower: only Android and iOS. Web always remains
-/// text-PDF-only even if a test adapter is accidentally supplied.
+/// The authenticated Veryfi proxy accepts files from every host. Camera
+/// capture remains intentionally narrower: only Android and iOS.
 @visibleForTesting
 PayrollStatementCaptureCapabilities payrollStatementCaptureCapabilities({
   required bool isWeb,
   required TargetPlatform platform,
-  required bool localImageOcrSupported,
+  required bool cloudImageOcrSupported,
 }) {
-  final supportsImages = !isWeb && localImageOcrSupported;
+  final supportsImages = cloudImageOcrSupported;
   final supportsCamera = supportsImages &&
+      !isWeb &&
       (platform == TargetPlatform.android || platform == TargetPlatform.iOS);
   return PayrollStatementCaptureCapabilities(
     supportsImages: supportsImages,
@@ -477,11 +476,10 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       database: context.read<DatabaseService>(),
       payrollService: payrollService,
     );
-    const ocr = PayrollStatementLocalImageOcr();
     final captureCapabilities = payrollStatementCaptureCapabilities(
       isWeb: kIsWeb,
       platform: defaultTargetPlatform,
-      localImageOcrSupported: ocr.isSupported,
+      cloudImageOcrSupported: true,
     );
     return PayrollReconciliationActions(
       prepare: ({required bytes, required filename, sourcePath}) =>
@@ -2106,7 +2104,7 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
   String? get _workflowMetadata {
     final draft = _draft;
     if (draft == null) {
-      return 'PDF, imagen o cámara · OCR local';
+      return 'PDF, imagen o cámara · texto local + OCR Veryfi';
     }
     final movementCount = draft.parseResult.rows.length;
     final pageCount = draft.extraction.pages.length;
@@ -2608,6 +2606,7 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     final extractionLabel = switch (draft.extraction.method) {
       PayrollStatementExtractionMethod.embeddedPdfText => 'Texto del PDF',
       PayrollStatementExtractionMethod.onDeviceImageOcr => 'OCR local',
+      PayrollStatementExtractionMethod.veryfiCloudOcr => 'OCR Veryfi',
       PayrollStatementExtractionMethod.imageOcrRequired => 'OCR pendiente',
     };
 
@@ -3106,8 +3105,9 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
                   Text(
                     supportsImages
                         ? 'Lee cartolas de Banco de Chile en PDF —también '
-                            'escaneado—, JPG, PNG o WebP. La extracción y el '
-                            'OCR ocurren en este dispositivo.'
+                            'escaneado—, JPG, PNG o WebP. El texto de un PDF '
+                            'digital se lee aquí; imágenes y escaneos usan el '
+                            'proxy autenticado de Veryfi.'
                         : 'En este dispositivo lee cartolas de Banco de Chile '
                             'en PDF con texto seleccionable. El archivo nunca '
                             'se envía a un servicio de OCR externo.',
@@ -3206,10 +3206,9 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 760),
               child: const _Notice(
-                message: 'La lectura de imágenes necesita OCR en el propio '
-                    'dispositivo y aquí no está disponible. Usa un PDF con '
-                    'texto seleccionable, o abre esta tarea desde Mac, Android '
-                    'o iPhone para un PDF escaneado, una foto o la cámara.',
+                message: 'La lectura de imágenes necesita el servicio OCR '
+                    'autenticado y ahora no está disponible. Usa un PDF con '
+                    'texto seleccionable o reintenta cuando vuelva la conexión.',
               ),
             ),
           ),
@@ -5562,6 +5561,8 @@ class _PreparationProgress extends StatelessWidget {
         _pageLabel('Reconociendo', progress),
       PayrollStatementPreparationPhase.recognizingImage =>
         'Reconociendo la imagen en este dispositivo…',
+      PayrollStatementPreparationPhase.recognizingWithVeryfi =>
+        'Reconociendo el documento con Veryfi…',
       PayrollStatementPreparationPhase.parsingMovements =>
         'Interpretando los movimientos…',
       PayrollStatementPreparationPhase.loadingPayrollContext =>
@@ -5697,10 +5698,11 @@ class _SourceExpectations extends StatelessWidget {
       ),
       card(
         title: 'Imagen o captura',
-        body: 'Se lee con OCR en este dispositivo. Las filas con campos que no '
-            'se reconocen quedan señaladas para que las revises en el paso 2.',
+        body: 'Se envía temporalmente al proxy autenticado de Veryfi. La ERP '
+            'no guarda el archivo ni el texto completo; las filas dudosas '
+            'quedan señaladas para revisión.',
         available: supportsImages,
-        unavailable: 'No disponible en este dispositivo: usa un PDF con texto.',
+        unavailable: 'No disponible ahora: usa un PDF con texto seleccionable.',
       ),
       card(
         // **No se copia el rótulo del frame.** `5j` titula esta tarjeta

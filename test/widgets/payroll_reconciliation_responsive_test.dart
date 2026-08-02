@@ -70,22 +70,22 @@ void main() {
       'android': payrollStatementCaptureCapabilities(
         isWeb: false,
         platform: TargetPlatform.android,
-        localImageOcrSupported: true,
+        cloudImageOcrSupported: true,
       ),
       'ios': payrollStatementCaptureCapabilities(
         isWeb: false,
         platform: TargetPlatform.iOS,
-        localImageOcrSupported: true,
+        cloudImageOcrSupported: true,
       ),
       'macos': payrollStatementCaptureCapabilities(
         isWeb: false,
         platform: TargetPlatform.macOS,
-        localImageOcrSupported: true,
+        cloudImageOcrSupported: true,
       ),
       'web': payrollStatementCaptureCapabilities(
         isWeb: true,
         platform: TargetPlatform.linux,
-        localImageOcrSupported: false,
+        cloudImageOcrSupported: true,
       ),
     };
 
@@ -97,8 +97,8 @@ void main() {
     expect(matrix['macos']!.supportsImages, isTrue);
     expect(matrix['macos']!.supportsGallery, isTrue);
     expect(matrix['macos']!.supportsCamera, isFalse);
-    expect(matrix['web']!.supportsImages, isFalse);
-    expect(matrix['web']!.supportsGallery, isFalse);
+    expect(matrix['web']!.supportsImages, isTrue);
+    expect(matrix['web']!.supportsGallery, isTrue);
     expect(matrix['web']!.supportsCamera, isFalse);
   });
 
@@ -1248,11 +1248,11 @@ void main() {
         find.textContaining('Este archivo necesita OCR de imagen.'),
         findsOneWidget,
       );
-      // On-device OCR is unavailable here, so the actionable state is shown
-      // instead of a cloud fallback.
+      // Cloud OCR is unavailable here, so the actionable recovery state is
+      // shown instead of pretending that a local fallback exists.
       expect(find.text('Cámara'), findsNothing);
       expect(
-        find.textContaining('OCR en el propio dispositivo'),
+        find.textContaining('servicio OCR autenticado'),
         findsOneWidget,
       );
     });
@@ -4055,6 +4055,112 @@ void main() {
     expect(find.text('Elegir archivo'), findsOneWidget);
     expect(harness.calls, isEmpty);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'OCR 3 · cada opción tiene identidad propia por movimiento, y el rótulo '
+      'hablado no cambia', (tester) async {
+    // Deuda de PRODUCTO. Las cuatro opciones tienen el mismo rótulo en todas
+    // las tarjetas y la etapa las monta todas, así que quien resuelve por
+    // identidad encontraba N «No es nómina» iguales y sólo alcanzaba la
+    // primera.
+    //
+    // El id **no** va en el `label`: obligaría a escuchar «Movimiento
+    // p1-l34-r1» en cada opción y degrada VoiceOver. Va en `identifier` —el
+    // campo para identidad de automatización— y en una `ValueKey` con el mismo
+    // valor. **No** se usa índice: la lista se acorta al responder.
+    //
+    // Fixture REAL: el mismo arné que el resto de la etapa, con dos
+    // movimientos que el draft produce de verdad. Las identidades se DERIVAN
+    // de las tarjetas montadas; no se inventa ningún id.
+    final harness = recorder(
+      prepared: draft(
+        withAlternateTransferLine: true,
+        withPayrollNamedUnmatchedMovement: true,
+      ),
+    );
+    await pump(tester, actions: harness.actions);
+    await loadStatement(tester);
+    final handle = tester.ensureSemantics();
+
+    List<PayrollDecisionOptionCard> montadas() => tester
+        .widgetList<PayrollDecisionOptionCard>(
+          find.byType(PayrollDecisionOptionCard),
+        )
+        .where((card) => card.identity != null)
+        .toList(growable: false);
+
+    int pendientes() {
+      final texto = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((t) => t.data ?? '')
+          .firstWhere(
+            (d) => d.contains('necesitan tu decisión'),
+            orElse: () => '',
+          );
+      return int.tryParse(texto.split(' ').first) ?? -1;
+    }
+
+    // La pregunta principal se obtiene del arne real. Al soltarla con
+    // `Siguiente pregunta`, la siguiente ocupa la misma posicion visual:
+    // la identidad debe seguir al MOVIMIENTO, no a esa posicion.
+    final primeraPregunta = montadas();
+    expect(primeraPregunta, isNotEmpty);
+    final primera = primeraPregunta.firstWhere(
+      (card) => card.optionName == 'notPayroll',
+    );
+    final movUno = primera.movementId!;
+    final keyUno = primera.identity!;
+
+    void expectIdentidad(
+      PayrollDecisionOptionCard card,
+      String movementId,
+      String identity,
+    ) {
+      expect(identity, contains(movementId));
+      expect(find.bySemanticsIdentifier(identity), findsOneWidget);
+      expect(find.byKey(ValueKey<String>(identity)), findsOneWidget);
+      expect(
+        tester.getSemantics(find.bySemanticsIdentifier(identity)).label,
+        isNot(contains(movementId)),
+        reason: 'el id tecnico no se pronuncia en VoiceOver',
+      );
+      expect(card.movementId, movementId);
+    }
+
+    expectIdentidad(primera, movUno, keyUno);
+
+    // Se toca UNA key exacta y se resuelve una sola disposicion.
+    final antes = pendientes();
+    await tester.tap(find.byKey(ValueKey<String>(keyUno)));
+    await tester.pumpAndSettle();
+    expect(pendientes(), antes - 1, reason: 'se resolvio una sola decision');
+
+    await tester.tap(find.bySemanticsLabel('Siguiente pregunta').first);
+    await tester.pumpAndSettle();
+
+    final segundaPregunta = montadas();
+    final candidatas = segundaPregunta
+        .where(
+          (card) =>
+              card.optionName == 'notPayroll' && card.movementId != movUno,
+        )
+        .toList(growable: false);
+    final montadasInfo = segundaPregunta
+        .map((card) => '${card.movementId}/${card.optionName}')
+        .join(', ');
+    expect(
+      candidatas,
+      isNotEmpty,
+      reason: 'montadas: $montadasInfo',
+    );
+    final segunda = candidatas.first;
+    final movDos = segunda.movementId!;
+    final keyDos = segunda.identity!;
+    expect(movDos, isNot(movUno));
+    expect(keyDos, isNot(keyUno));
+    expectIdentidad(segunda, movDos, keyDos);
+    handle.dispose();
   });
 }
 

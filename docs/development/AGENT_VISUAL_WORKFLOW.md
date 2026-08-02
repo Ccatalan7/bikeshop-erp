@@ -452,6 +452,17 @@ con `find` en vez de con `read`: `read` lista el nodo aunque esté fuera de la
 vista, mientras que `find` sólo devuelve lo que de verdad se puede tocar — la
 diferencia entre «existe» y «llego».
 
+**2026-08-02: al DRAWER le pasa lo mismo.** Con `RR.HH.` ya expandido, `scroll`
+sobre el drawer no movió nada y `find --label "Nóminas"` seguía diciendo «sin
+coincidencias»; `drag 174 700 174 380` lo movió a la primera. O sea no es una
+rareza de un panel: **es el patrón**. Si `find` no encuentra algo que `read` sí
+lista, el gesto es `drag`, no más `scroll`.
+
+Y al revés, el `scroll` de la **página** de Configuración sí funciona — tan bien
+que se pasa de largo. Si `find` falla después de desplazar, mira la captura
+antes de insistir: el 02/08 «Apariencia» ya había quedado **arriba** de la vista,
+no abajo, y dos scrolls más sólo alejaban el objetivo.
+
 ### `dart format` sobre un DIRECTORIO toca archivos de otros
 
 ```bash
@@ -585,6 +596,16 @@ sobre una captura de la ventana de Design o sobre un compuesto.
 Sirve para lo que el `spec.json` no dice o dice mal: el 31/07 el spec de 5a
 declaraba 7 columnas y su propio frame dibujaba 8. **Ante una diferencia entre
 spec y frame, gana el frame** — lo dice la regla del propio turno.
+
+**Para medir LA APP, no recortes la captura: pregúntale al árbol.** `find`
+devuelve el rectángulo real (`centro x,y` + `ancho×alto`) del nodo vivo, y eso
+es la medida buena. El 2026-08-02 se intentó recortar un PNG con `sips` para
+mirar de cerca una banda del header y **`sips -c` recorta SIEMPRE desde el
+centro; `--cropOffset` lo ignora en silencio** y devuelve un recorte de otra
+parte de la pantalla, sin error y sin aviso. Dos intentos perdidos, y el riesgo
+real no es perderlos: es **describir la zona equivocada creyendo que es el
+header**. El cromo móvil se cerró midiendo con `find` —`nav 56 + borde 1 +
+alcance 48`— en un solo comando.
 
 ### Código
 
@@ -753,6 +774,57 @@ el de la opción más larga. Una restricción con un solo extremo no es la regla
 Al escribir un aserto sobre una medida, pregúntate qué valor absurdo lo pasaría.
 Si existe uno, acota por los dos lados. Y compruébalo con una mutación: si el
 aserto no se pone rojo al romper el código, no está midiendo nada.
+
+### Auditar evidencia en la carpeta equivocada, y declararla falsa
+
+**2026-08-02, y el error fue mío.** Declaré en el handoff que tres capturas de
+`5n` «no existían en el disco» y que otras dos eran duplicados: **falso**.
+Existen, con los hashes que el otro agente citaba, y sin un solo duplicado. Lo
+que pasó es que hay **dos carpetas con el mismo nombre**:
+
+```
+/Users/Claudio/Dev/bikeshop-erp/Screenshots vinabikeProject/…   ← la real, y está en .gitignore
+/Users/Claudio/Screenshots vinabikeProject/…                    ← otra, vieja, que no cita nadie
+```
+
+Audité la de `$HOME`, encontré duplicados **reales pero de una carpeta muerta**,
+y los reporté como si fueran de la que el handoff cita. Acusar de falsa una
+evidencia que sí existe cuesta más caro que no haberla mirado: manda a rehacer
+trabajo hecho y quema la confianza en el resto del reporte.
+
+**La regla, en dos partes.** Primero, **una carpeta de evidencia se cita con su
+ruta absoluta**, nunca con `~` ni con el nombre suelto: el `~` es justo lo que
+hizo que dos carpetas distintas se leyeran igual. Segundo, **antes de declarar
+que algo falta, comprueba que estás mirando donde el documento apunta** —
+`git check-ignore -v <ruta>` confirma de paso que es la carpeta versionada como
+evidencia.
+
+Con la ruta correcta, el chequeo que sí vale la pena:
+
+```bash
+cd "/Users/Claudio/Dev/bikeshop-erp/Screenshots vinabikeProject/<carpeta>"
+shasum -a 256 *.png | awk '{print $1}' | sort | uniq -d
+```
+
+Y ojo con el falso positivo simétrico: **dos capturas del mismo estado canónico
+salen byte a byte idénticas** —`07` y `14` de esa carpeta, tomadas con dos horas
+de diferencia en sesiones distintas—. Ahí el hash repetido **prueba** que la
+restauración fue exacta; no es un `cp` mal puesto. El hash dice «mismo píxel»,
+no dice «mismo error»: la conclusión la pone el contexto, no el hash.
+
+### Una batería recortada no dice que el módulo esté verde
+
+**2026-08-02.** Las últimas rondas corrían **tres** suites y anotaban
+`163 pasadas · 0 fallidas`. Cierto de esas tres. La batería completa que este
+mismo repositorio manda correr tenía **tres pruebas rojas**, dos de ellas por un
+`static` nuevo que rompe el candado de arquitectura de tema y una por un salto
+de 1 px entre la silueta de carga y los datos. Llevaban ahí desde el cierre
+anterior, declarado «CERRADO».
+
+La causa es de encuadre: se recorta el alcance para que la corrida sea rápida
+—razonable— y después **se cita el resultado como si el alcance fuera el
+módulo**. Un conteo se dice con **su fecha, su árbol y su alcance**, y el
+alcance es la parte que se olvida.
 
 ### «Ya sé por qué falla» — y no lo comprobé
 

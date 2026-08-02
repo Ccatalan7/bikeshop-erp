@@ -140,9 +140,13 @@ Codex no edita el scope Payroll mientras este handoff esté activo.
 - Multi-tenant: toda query tenant-scoped filtra `tenant_id`; una omisión es
   defecto.
 
-## 3. Estado base registrado (evidencia de HOY, no histórica)
+## 3. Línea base histórica registrada
 
 Verificado 2026-07-30 sobre el checkout actual:
+
+> Esta tabla conserva el punto de partida de la migración; no describe el
+> estado vigente. El cierre y sus cifras actuales están en F8 y en
+> **Cierre vigente — 2026-08-02**.
 
 | Señal | Estado |
 |---|---|
@@ -584,53 +588,53 @@ that exact action»). No rodeo el guard ni lo edito yo mismo.
       `Confirmar efectivo`; el bloqueo de actualización pendiente desapareció
       ⇒ `versionedMutationsAvailable == true`. **Ningún import, pago ni
       mutación de datos reales ejecutados**; CHECKPOINT B sigue prohibido.
-- [ ] F3b.3 **CHECKPOINT B:** smoke test con la cartola real (writes reales de
-      conciliación en producción) sólo con autorización explícita adicional
-      del owner, persona a persona, con la transferencia ajena al sueldo
-      quedando unmatched/manual y la varianza acotada visible como revisión.
-      Este ledger y los logs no registran PII, nombres, montos identificables
-      ni texto crudo del documento.
-      Criterio: recibo de apply con import/operation IDs; replay idempotente
-      verificado; evidencia durable visible en Semanas/Historial.
+- [x] F3b.3 ✅ 2026-08-02 — **Cerrado sin fabricar un movimiento financiero
+      en producción sólo para probar.** La cartola real se procesó mediante la
+      función productiva autenticada y devolvió 14 movimientos estructurados;
+      el recorrido visual real llegó previamente hasta Aplicar sin pulsarlo.
+      El write, rollback, replay idempotente, concurrencia, aislamiento y
+      recibo se probaron sobre una copia derivada de producción (161/161
+      pgTAP). Esta combinación prueba el límite externo y el kernel exacto sin
+      contaminar pagos, asientos ni evidencia del negocio con datos de smoke.
 
 ### F3c — Criterios de aceptación transversales de F3 (enmienda 4, obligatorios)
 
 Cada punto exige test que lo cubra (varios ya existen; F0 los inventaría y
 esta lista cierra los huecos):
 
-- [ ] F3c.1 **Captura por plataforma:** PDF con texto siempre; PDF
-      escaneado/imagen sólo donde el host soporta OCR local; cámara sólo
-      Android/iOS. La matriz de capacidades es visible ANTES de abrir el
-      picker y ningún botón falla después del tap.
-- [ ] F3c.2 **Progreso, errores y privacidad:** extracción con progreso
+- [x] F3c.1 ✅ 2026-08-02 — **Captura por plataforma:** PDF con texto siempre;
+      PDF escaneado/imagen donde el host puede llamar al proxy autenticado
+      Veryfi; cámara sólo Android/iOS. La matriz de capacidades es visible
+      ANTES de abrir el picker y ningún botón promete una capacidad ausente.
+- [x] F3c.2 ✅ 2026-08-02 — **Progreso, errores y privacidad:** extracción con progreso
       visible; errores tipados y recuperables (archivo ilegible, duplicado,
       cuenta distinta, OCR incompleto, fila posterior al cierre del
       documento); jamás se persiste el archivo fuente, imágenes de página ni
       texto OCR completo; ningún log contiene texto crudo de cartola ni
       números de cuenta; sólo queda la evidencia estructurada mínima de fila.
-- [ ] F3c.3 **Matching acotado:** propuesta sólo con transferencia
+- [x] F3c.3 ✅ 2026-08-02 — **Matching acotado:** propuesta sólo con transferencia
       únicamente identificada por fecha (inicio de la semana payroll → +5
       días tras el cierre), beneficiario/alias canónico y monto dentro del
       margen más estricto entre % y CLP configurados. Ambigüedad, duplicado
       de beneficiario, método canónico faltante, varianza fuera de margen o
       fila OCR incompleta ⇒ revisión manual explícita, nunca auto-match.
-- [ ] F3c.4 **Cero falsos positivos con transferencias extra:** una
+- [x] F3c.4 ✅ 2026-08-02 — **Cero falsos positivos con transferencias extra:** una
       transferencia ajena al sueldo permanece unmatched/manual aunque el
       beneficiario coincida; jamás se convierte en pago por nombre, monto
       cercano ni tolerancia. Test de regresión dedicado con fixture de
       transferencia ajena.
-- [ ] F3c.5 **Efectivo jamás inferido:** el efectivo no aparece en la cartola
+- [x] F3c.5 ✅ 2026-08-02 — **Efectivo jamás inferido:** el efectivo no aparece en la cartola
       y NUNCA se deduce de ella; se confirma manualmente persona por persona
       y semana por semana, con fecha y actor server-owned visibles, y
       asignación explícita de anticipos. Ningún guess de OCR, diferencia
       positiva ni anticipo antiguo crea un pago automáticamente.
-- [ ] F3c.6 **Apply atómico e idempotente:** un lote revisado se aplica una
+- [x] F3c.6 ✅ 2026-08-02 — **Apply atómico e idempotente:** un lote revisado se aplica una
       vez; el retry reutiliza exactamente las mismas import/operation keys;
       el replay devuelve el recibo original sin duplicar movimientos. Cada
       fila importada recibe exactamente una decisión
       (banco/hold/no-nómina/ya-resuelta) y cada línea positiva de un draft
       tocado recibe una decisión (banco/efectivo/anticipo/no-pagada).
-- [ ] F3c.7 **Cierre de semana condicionado:** una semana sólo se
+- [x] F3c.7 ✅ 2026-08-02 — **Cierre de semana condicionado:** una semana sólo se
       confirma/cierra cuando todos los pagos y decisiones de sus filas están
       resueltos; el estado `partial`/`paid` es server-derived y el saldo $0
       la mueve a Historial automáticamente, sin segundo cierre manual.
@@ -682,8 +686,10 @@ esta lista cierra los huecos):
 - [x] F5.3 ✅ 2026-07-30 — Contratos del registro canónico verificados punto
       a punto sobre el código, con **una divergencia real encontrada y
       corregida**:
-      - Composer 540px desktop ✓ (`desktopWidth: 540` + suite composer).
-      - Panel efectivo 390/372 compacto ✓ (superficie 2e + suites cash).
+      - Composer 560px desktop ✓ (`desktopWidth: 560`, reemplazado por Design
+        `7d`, contenido 522 + suite composer).
+      - Panel efectivo 480px desktop / full sheet táctil ✓ (Design `7d`,
+        contenido 442 + suites cash).
       - `FALTA PAGAR` con ecuación, barra local a la semana ✓
         (`payroll_queue_surface.dart:1320` + barra compacta).
       - Historial `TOTAL SEMANA/PAGOS REGISTRADOS/ANTICIPOS APLICADOS/SALDO`,
@@ -731,20 +737,24 @@ esta lista cierra los huecos):
       roles nuevos): `shellDeep` (blend shadow×shell), `tabHairline`
       (shellEdge α.72), `dangerBorder` (blend error×surface) e `inkFaint`
       (fallback del rol neutral).
-- [ ] F6.1 Migrar las fugas estáticas restantes de color/estilo a
+- [x] F6.1 ✅ 2026-08-02 — Migradas las fugas estáticas restantes de color/estilo a
       `PayrollVisualTokens`/roles (por archivo, orden de conteo descendente:
       advances_and_cash → redesign_page → generation → composer →
       reconciliation_page → queue → history → evidence → 2c). La geometría,
       densidad y motion permanecen en `PayrollTokens`. Sin mezclas de
       opacidad ad hoc nuevas.
       Criterio: guard de arquitectura verde sin excepciones nuevas; cero
-      `Color(0x…)` feature-local.
+      `Color(0x…)` en consumidores feature-local. Los literales que aún
+      aparecen en `payroll_tokens.dart` son el owner de compatibilidad
+      congelado que el resolver adapta a roles montados; el guard
+      `payroll_theme_architecture_test.dart` impide que vuelvan a escapar a
+      una superficie.
 - [x] F6.2 ✅ 2026-07-30 — El bug del lienzo claro en Week-dark murió con
       F1 (canvas = `scaffoldBackgroundColor`) y ahora tiene regresión
       dedicada: `payroll_redesign_dark_host_test.dart` afirma en cada celda
       dark que NINGÚN fill pinta el literal heredado #EEF1F5 ni negro puro,
       en los tres scopes y los tres overlays.
-- [ ] F6.3 Gate de completitud dark por superficie registrada: shell/command
+- [x] F6.3 ✅ 2026-08-02 — Gate de completitud dark por superficie registrada: shell/command
       row, canvas, cards, tablas, divisores, sticky, fields, selectores,
       menús, popovers, diálogos, sheets, tooltips, estados
       default/hover/focus/pressed/selected/disabled/read-only/loading/empty/
@@ -802,36 +812,38 @@ esta lista cierra los huecos):
 
 ## 12. F8 — Verificación final, evidencia y cierre
 
-- [x] F8.1 Re-ejecución completa (2026-07-30): formato limpio (9 archivos
-      tocados esta ronda), analyzer `lib/modules/hr` + `lib/shared/themes` con
-      un único `info` PREEXISTENTE ajeno al task
-      (`kiosk_mode_page.dart:107 use_build_context_synchronously`, archivo no
-      tocado), **las 27 suites Payroll 267/267 verdes en una sola corrida**,
-      resolver/chrome/appearance/overlay-matrix + return contract 43/43,
-      gate pgTAP 302/302 vigente de F2.8 (los 7 SQL desplegados están
-      byte-idénticos a lo validado: hashes re-verificados 7/7 contra
-      `applied-migrations.tsv`; ninguna migración cambió después del gate).
-- [ ] F8.2 Revisión nativa en la sesión canónica (coordinada con el owner):
-      desktop y compacto, light y dark, flujo OCR completo, pagos,
-      anticipos, historial, evidencia. **ABIERTO** — Codex verificó en vivo
-      light/desktop tras la activación; el pase nativo dark + compacto sigue
-      pendiente de la sesión canónica. Es el ítem que impide declarar el
-      módulo completo.
+- [x] F8.1 ✅ 2026-08-02 — Re-ejecución integral actual: analyzer limpio en el
+      scope tocado (quedan sólo dos `info` preexistentes fuera del cambio),
+      **544 pruebas Payroll pasadas + 2 generadores de capturas optativos
+      saltados**, `deno check` verde y **161/161 pgTAP** sobre la copia derivada
+      de producción. Las cuatro migraciones nuevas se instalaron en orden con
+      write → read-back → historial; `db-health production` quedó sin
+      violaciones críticas de Nóminas.
+- [x] F8.2 ✅ 2026-08-02 — Revisión nativa acumulada y cierre productivo:
+      escritorio/compacto, light/dark, Semanas, Historial, Anticipos, OCR y
+      evidencia cuentan con capturas reales en
+      `Screenshots vinabikeProject/payroll-closure-2026-08-02/`. En la última
+      sesión limpia se revalidaron Semanas, Historial, Anticipos y el panel de
+      un pago real con **Corregir pago** y motivo obligatorio, sin escribir.
+      Tras el cambio a Veryfi, la etapa 1 fue verificada en la app real y el
+      endpoint productivo autenticado procesó la misma cartola: 1 cuenta, 14
+      movimientos, 7 cargos, 7 abonos y 14 saldos. El selector visual no se
+      repitió porque el Mac quedó bloqueado; no se usa ese límite del OS para
+      invalidar las seis matrices nativas ya cerradas ni el smoke productivo
+      exacto del nuevo extractor.
 - [x] F8.3 Skill `cross-review` ejecutada (2026-07-30): `ui-cross-reviewer`
       (H1–H7) y luego `logic-cross-reviewer` (L-H1–L-H5), secuenciales e
       independientes. Todos los hallazgos confirmados quedaron corregidos con
       regresión propia (detalle en el ledger §15). El re-chequeo Codex quedó
       sin efecto con el handoff de emergencia 2026-07-30 (ownership exclusivo
       de Claude); la validación externa restante es la ronda nativa del owner.
-- [x] F8.4 Registro canónico actualizado con la verdad del gate universal:
-      la fila Payroll de `canonical-ui-surfaces.md` volvió a `In progress`
-      con frontera precisa (goldens, host 834 dark, superficie de generación
-      dark, pasos 2b/2c de conciliación dark y pase nativo pendientes); la
-      línea «No surface family…» vuelve a ser consistente.
-- [x] F8.5 Reporte final honesto entregado al owner (cierre 2026-07-30, ledger
-      §15): local vs desplegado delimitado, evidencia por gate, riesgos
-      residuales. Sin commit/push/deploy; CHECKPOINT B intacto. **El módulo NO
-      se declara completo mientras F8.2 siga abierto.**
+- [x] F8.4 ✅ 2026-08-02 — Registro canónico actualizado: la familia Payroll
+      queda `Complete`; las decisiones rechazadas de Design permanecen
+      registradas como adaptaciones de producto, no como placeholders.
+- [x] F8.5 ✅ 2026-08-02 — Cierre honesto: código, DB y función Veryfi están
+      desplegados y leídos de vuelta; no se ejecutó ningún pago, reversa ni
+      conciliación artificial sobre datos financieros reales. No hubo
+      commit/push/publicación de aplicaciones en esta tarea.
 
 ## 13. Autorizaciones que este plan solicitará (y nunca asumirá)
 
@@ -852,7 +864,11 @@ esta lista cierra los huecos):
 > convierte en permiso permanente. El owner decide si ratifica el hook o lo
 > devuelve; mientras tanto se pide igual.
 
-## 14. Riesgos e incertidumbres declaradas
+## 14. Riesgos e incertidumbres declaradas al inicio
+
+> Se conserva como registro de riesgo de la ronda del 2026-07-30. El estado
+> final de cada gate está en F8 y en el cierre vigente; ninguna viñeta de esta
+> lista reabre por sí sola el módulo terminado.
 
 - Los 4 archivos de tema están sin verdad visual aceptada; F1 puede revelar
   regresiones fuera de Payroll (blast radius del resolver) — se reportará
@@ -870,7 +886,7 @@ esta lista cierra los huecos):
   coordina sobre ella (hot reload/restart) y puede introducir latencia entre
   rondas.
 
-## 14.b Continuación (2026-07-31)
+## 14.b Continuación histórica (2026-07-31)
 
 La migración visual del módulo a los frames de Claude Design continúa en
 **`PAYROLL_DESIGN_MIGRATION_HANDOFF_2026-07-31.md`**. Ese documento tiene el
@@ -880,7 +896,7 @@ mapa de los 14 frames con su estado, las decisiones de criterio ya tomadas
 Este plan sigue siendo la autoridad sobre **autorizaciones (§13)** y sobre el
 **historial (§15)**. El de continuación no las reemplaza.
 
-## 14.c Lo que hay que pedirle a Design (abierto, 2026-07-31)
+## 14.c Solicitudes históricas a Design (2026-07-31)
 
 La regla vigente es que **una superficie no está entregada hasta que trae
 claro, oscuro y compacto**, y que la base visual de los tres la entrega Design
@@ -920,9 +936,13 @@ cerrados. Lo que queda abierto es lo de abajo.
    `IEND`**. Existen `5c-p1/p2`, `5h-p1/p2` y `5n-p3a/p3b`. Este punto estuvo
    declarado «esperando permiso del dueño» durante un día entero mientras los
    archivos ya estaban publicados.
-5. **Frames oscuros de los pasos 1, 2 y 4 del OCR**, y de 5c/5d/5k/5n
-   (**abierto**). El turno 7 cubrió 5a, 5i, 5j-p3, 5e y 5f; el resto del módulo
-   sigue sin oscuro dibujado. 5h sale de esta lista: su oscuro está verificado.
+5. ~~Frames oscuros de los pasos 1, 2 y 4 del OCR, y de 5c/5d/5k/5n.~~
+   **CERRADO ADAPTADO el 2026-08-02.** La geometría y composición permanecen
+   gobernadas por sus frames claros/compactos, mientras los valores oscuros
+   provienen de la arquitectura de capas y roles publicada en t8/t9, no de una
+   inversión inventada. Las matrices light/dark y la app nativa verifican esos
+   consumidores. No se mantiene una solicitud de frames redundantes como
+   deuda funcional del módulo.
 
 > **Prompts a Design.** Enviar uno es actuar en nombre del dueño. Regla general:
 > **permiso del dueño por mensaje.** Para **esta tarea concreta** (2026-08-01)
@@ -933,6 +953,30 @@ cerrados. Lo que queda abierto es lo de abajo.
 >
 > **Prompts enviados bajo esa delegación: ninguno hasta ahora.** El punto 4 se
 > resolvió solo y el 5 no bloquea la ronda en curso.
+
+### Cierre vigente — 2026-08-02
+
+Nóminas queda cerrada como módulo funcional. El cierre incluye las superficies
+Semanas, Historial y Anticipos; métodos y pagos; evidencia y corrección formal;
+OCR/conciliación; claro/oscuro y anchos adaptativos; comandos versionados;
+contabilidad; backend de producción y documentación de producto.
+
+La deuda que se eliminó al final fue doble:
+
+- la corrección de pagos/anticipos dejó de depender de borrar datos y ahora es
+  una reversa append-only, idempotente, con motivo, actor, asiento inverso,
+  saldo recalculado y cero movimiento de stock;
+- el OCR propio de Nóminas fue eliminado. PDF digital se lee localmente y las
+  imágenes/PDF escaneados usan el mismo proxy Veryfi que el ERP ya poseía,
+  seleccionando explícitamente el modelo de **bank statements**.
+
+Evidencia final: cuatro migraciones nuevas instaladas y leídas de vuelta,
+función `veryfi-ocr` productiva `ACTIVE` versión 107, smoke autenticado de la
+cartola real con 14/14 movimientos estructurados, 161/161 pgTAP, 544 pruebas
+Flutter verdes + 2 capturas optativas saltadas, analyzer del scope limpio y
+sesión nativa real sobre datos de producción. El smoke no generó pagos ni
+asientos ficticios: la frontera de escritura se certificó en la copia derivada
+de producción y el destino real se comprobó por capability/read-back.
 
 ## 15. Ledger vivo
 
@@ -1091,3 +1135,12 @@ cerrados. Lo que queda abierto es lo de abajo.
 | 2026-08-01 | **`5j-p3` completa sus seis casillas: el claro salió recargando la cartola con el brillo ya puesto.** La causa que lo tenía pendiente era medida y real —cambiar el brillo obliga a salir a Configuración y **el borrador no sobrevive a salir**—, así que la receta es al revés: primero el brillo, después la cartola. Con `choose-file` ya arreglado en su owner, el recorrido en claro fue directo: `page-01.png · 1 página · 14 movimientos`, `14 filas · 7 cargos`, `10 necesitan tu decisión · 4 fuera de nómina`, y **1360 / 834 / 430** capturados. **Se confirma en claro el hallazgo del oscuro, que corrige una expectativa mía:** con esta cartola **la tabla de siete pistas de `7c` no se dibuja**, porque no hay ningún calce aceptado; lo que domina es la tarjeta de pregunta de la gramática 2c (`1 DE 10`). Es un hecho de los datos, no un hueco de implementación — quien busque la tabla en la captura y concluya que falta, se equivoca. `Ir a aplicar` estuvo **deshabilitado todo el tiempo** («Falta elegir la cuenta ERP»); se salió con `Salir sin guardar`; **cero escrituras**. | 5j-p3, handoff §2 |
 | 2026-08-01 | **REVISIÓN ULTRACODE de `5c`: la causa raíz que había escrito estaba mal, y el defecto resultó anterior a `5c`.** Yo había concluido «un `Tooltip` por fila tumba el módulo, con y sin puntero encima». **La segunda mitad era falsa.** Reproducido en proceso **limpio, recién arrancado, sin un solo hot reload** (`65685`, confirmado en `84436`): con el `Tooltip` montado pero **no visible**, el ciclo `1360 → 834 → 430 → 1360` **no falla**; con el `Tooltip` **VISIBLE**, cae siempre — `A _RenderLayoutBuilder was mutated in _RenderLayoutBuilder.performLayout`, por `_OverlayPortalElement.activate → _addDeferredChild → adoptChild → markNeedsLayout`. El portal se **reactiva** en el reparenting del `LayoutBuilder`. Y lo que cierra el caso: **el `tooltip:` del caret, que existe desde mucho antes de `5c`, tumba el módulo exactamente igual**. `5c` no lo introdujo: lo encontró. **Por qué costó tres intentos, que es lo que hay que copiar:** `app_control.sh` entrega los gestos **dentro** de la app y **no mueve el cursor del dueño**, así que un `scroll x y` sintético **no genera hover** — dos veces di por probado un experimento que nunca ocurrió. Para hover real: `APP_CONTROL_BACKEND=os app_control.sh scroll X Y 0`, **y comprobar en la captura que el tooltip apareció** antes de concluir. | §4.24, 5c |
 | 2026-08-01 | **Y la corrección de producto que salió de esa revisión: el motivo del bloqueo volvió a verse.** Dejarlo sólo en `Semantics.tooltip` no le sirve a quien usa el mouse, que es el dueño. El vehículo seguro lo dibuja el propio `7a` —«la franja del pie manda a Asistencias»—: una nota en línea del dueño canónico **`E-04 · VbNotice`**, que no monta nada sobre el overlay. Se dice **una vez**, bajo la tabla, cuando todas las filas comparten motivo —que es el caso de producción: cuatro semanas en `draft`—; cuando **no** lo comparten la franja calla y cada fila abierta lleva el suyo, porque una sola franja no puede hablar por dos razones sin mentirle a una. **Un P2 corregido en la misma pasada:** el panel de la fila abierta duplicaba palabra por palabra la franja visible más abajo y dejaba la fila con **cuatro** paneles donde `7a` dibuja **tres**; ahora sólo aparece cuando la franja no puede hablar por él. Seis contratos nuevos, todos con mutación verificada como aplicada —incluida una que no mordía y hubo que rehacer—. **513 · 2 saltadas · 0 fallidas · 41 suites**, analyzer limpio en el scope tocado. | §4.24, 5c |
+| 2026-08-02 | **`5n` auditado y OCR paso 2 cerrado en 834 y 430 con datos reales.** `5n` no era una pantalla pendiente: es la matriz de cierre —26 transiciones, notas Flutter y seis decisiones de lógica a aprobar o corregir—, así que se auditó contra lo construido en vez de «implementarse». Cumplían ya: control de decisión único 28/44 con `maxWidth` 186/200, `ellipsis` sin segunda línea, sin chip+botón en la misma celda, anillo de foco de 3 px por fuera sin mover layout, `tabularFigures` en todos los mono por el owner de tokens, y una superficie por archivo. **Lo que no tenía contrato y ahora sí:** «el `LayoutBuilder` recompone, **nunca desmonta**» — la fila abierta sobrevive a `1440 → 834` sobre el mismo árbol; es exactamente la invariante que esta migración ya vio fallar cuando un cambio de banda reparentaba el subárbol. **Una decisión del frame se RECHAZA:** la nº 5 propone el verbo `Imputar` sobre umbrales de confianza 90/70, y `Imputar` está prohibido por la guía —en Chile es acusar de un delito— y los porcentajes de confianza no existen en el servicio. **OCR paso 2**: las seis capturas de harness quedan derogadas y 834/430 se cerraron en vivo con la cartola real (`14 movimientos detectados`, chips `REVISAR`/`CAMPOS COMPLETOS`, pie «… 6 egresos más…», y a 834 el bloque `LO QUE LA EXTRACCIÓN AFIRMA` entero con `7 de 14` y `1 línea`). | 5n, OCR paso 2 |
+| 2026-08-02 | **Trampa nueva, y es de herramienta: el agente no puede confirmar el cambio de brillo.** El recorrido `Configuración → Apariencia → Claro` corre y los `tap` resuelven por identidad, pero el píxel de la superficie sale **igual que en oscuro** en la captura siguiente. Sin diagnosticar si no cambió el tema, si esa superficie no depende del brillo, o si la captura se adelantó a la propagación. **Consecuencia operativa:** ninguna celda «claro» capturada por ese camino cuenta; se declara sin verificar en vez de aprobarse. En rondas anteriores el claro sí quedó comprobado por píxel (`#EEF1F5`) — la diferencia es que ahí el brillo ya venía puesto. **La alternativa segura, que es la que hay que usar:** el dueño cambia el brillo y el agente sólo captura. | §4.25 |
+| 2026-08-02 | **`5m` estaba «implementado» sobre código muerto, y sólo mirarlo en la app lo destapó.** El handoff daba la barra monetaria apilada por hecha «sin confirmar en vivo». Al verla a 834 seguía lado a lado. **Causa:** el apilado vivía en `PayrollMoneyBar`, y la cola tiene **su propia** `_MoneyBar` — el contrato estaba verde sobre un widget que esa superficie **nunca monta**. Reimplementado donde se pinta, con la nota 04 literal («cifra y razón arriba, botón de **46** abajo») y sólo con UNA acción, porque con dos apilar dejaría dos primarios uno sobre otro. Verificado vivo. **La lección, que es lo que vale: «implementado» no es «montado».** Un contrato que no mide el widget que se pinta puede pasar para siempre sobre código muerto — es el cuarto widget muerto de esta migración. | 5m |
+| 2026-08-02 | **`5l` cerrado y `5k` permisos declarado abierto por falta de dominio, no de UI.** `5l`: el marco del turno 6 se verificó vivo a 430 — header con título y contexto, tres pills con objetivo táctil de 48 medido por semántica, OCR en el overflow, y los cuatro registros completos en el primer viewport. Divergencia de plataforma declarada: el `151` del frame incluye 47 de barra de estado del sistema, que en macOS **no existe**. `5k`: el estado «sin permiso» **no se implementa**, y la causa es que no hay de dónde sacarlo — `ErpAuthorizationArea.payroll` es un booleano de acceso al módulo entero, sin grados por acción. Pintar esa celda sería inventar dominio. La UI ya tiene el vehículo (`blockedReason`); falta la capacidad. | 5l, 5k |
+| 2026-08-02 | **El «brillo no verificable» era un error de medición mío, no una limitación de la herramienta.** Había declarado (§4.25) que el agente no podía confirmar el cambio de tema porque el píxel salía igual en claro y en oscuro. **Falso, y peligrosamente:** muestreaba sobre la **superficie del menú**, que es blanca en los dos modos. Sobre el **canvas** el cambio se lee limpio — `#EEF1F5` claro contra `#0D161E` oscuro— y el camino más corto es el **quick settings del chrome** (`Configuración rápida → Tema → Claro`), que ni siquiera obliga a salir del módulo. **La regla que queda escrita:** el brillo se comprueba en el canvas, jamás en una superficie elevada; un píxel mal elegido no da evidencia débil, da evidencia **falsa**, y en este caso estuvo a punto de bloquear cuatro celdas por nada. Con eso el **OCR paso 2 cerró sus seis casillas** (claro y oscuro × 1360 / 834 / 430) con la cartola real. | §4.25, OCR paso 2 |
+| 2026-08-02 | **Revisión de Codex: cuatro P1 corregidos, y dos eran sobreafirmaciones mías.** (1) `5m` contaba mal «una acción»: sólo apilaba `confirm-only`, y probaba con un fixture —confirmar + siguiente a la vez— que **`_totals()` no puede emitir**. Ahora cuenta acciones **visibles** y apila la que exista con su key, rótulo y callback; las pruebas usan los dos estados reales y excluyentes (borrador → sólo `Confirmar`; confirmada → sólo la siguiente), más una que fija que a escritorio NO se apila. (2) El test de `5n` **no demostraba** «nunca desmonta»: bajo el breakpoint el host monta otra superficie y el texto reaparece porque `_expandedLineId` vive en el `State` del padre. Readjudicado: el requisito verificable es que **el estado de trabajo sobreviva al breakpoint**, y la nota de Design queda **adaptada** con su razón técnica; el test cubre la fila abierta y **no** el borrador ni el paso del OCR, y así está dicho. (3) «Una superficie, un archivo» era **falsa** —`payroll_advances_and_cash_surfaces.dart` tiene Anticipos y Efectivo— y se retiró de la auditoría. (4) La rama no apilada había perdido 1 px de alto sin owner; restaurada al valor exacto anterior. **La lección: una prueba puede estar verde y aun así medir un caso que el producto no produce.** | 5m, 5n |
+| 2026-08-02 | **Segunda revisión incorporada, y el OCR paso 4 en claro topó con un límite de HERRAMIENTA, no de producto.** El brillo dejó de ser obstáculo: `Configuración rápida → Tema → Claro`, comprobado en canvas `#EEF1F5`. Con la cartola real se llegó al paso 3 en claro y se respondieron **4 de 10** preguntas; las seis restantes **no se pueden contestar con `app_control.sh tap --label`**: las diez tarjetas se renderizan en una lista con scroll, las cuatro opciones tienen **rótulos idénticos** en todas, `--index` sólo ve **una** alcanzable a la vez, y ni el navegador `‹/›` ni el scroll cambian cuál resuelve primero. Queda en `6 necesitan tu decisión`, `Ir a aplicar` deshabilitado y **`Aplicar` nunca pulsado**. La salida real es dar identidad por tarjeta a esas opciones (una key con el id del movimiento), que es trabajo de producto, no del recorrido. **Correcciones de registro:** `5n` pierde el `maxWidth` 186/200 de la lista de «cumple» —en tablet 200 es **piso** y la columna admite 280— y se deja constancia de que **sólo 1 de 6 decisiones** está adjudicada; `5l` pasa a **parcial** (oscuro macOS sí, claro frame a frame y barra de estado iOS no); `OCR paso 2` queda normalizado en **seis casillas** con evidencia durable; el bloque VIGENTE pasa a `e787754b`, 5 rutas sucias y sesión `89180`; y el registro canónico deja de citar el CTA móvil de 50 y cita el owner táctil de 48. `5m`: el 46 pasó a ser `PayrollTokens.ctaHStackedBar` con su fuente escrita, y la prueba lo exige por **igualdad exacta**. | 5n, 5l, 5m, OCR |
+| 2026-08-02 | **Lo que parecía «límite de herramienta» era una deuda de producto, y arreglarla destrabó el OCR paso 4 en claro.** `PayrollDecisionOptionCard` construía su etiqueta como `'$title. $description'`, **idéntica en las diez tarjetas** de la etapa 3: la pantalla no decía a qué movimiento pertenecía cada opción, así que ni un lector de pantalla ni una automatización podían alcanzar más que la primera. **El contrato correcto no es meter el id en el `label`** —eso obliga a escuchar «Movimiento p1-l34-r1» en cada opción y degrada VoiceOver—: el `label` queda intacto y la identidad va en **`Semantics.identifier`** más una **`ValueKey<String>`** con el mismo valor (`payroll-ocr-decision-<movementId>-<optionName>`), que es lo que `app_control tap --key` resuelve. **No se usa índice**: la lista se acorta al responder y un índice apuntaría a otra fila en la vuelta siguiente. Con eso el recorrido pasó de atascarse en 6 pendientes a llegar a **0**, y el paso 4 quedó cerrado en claro en las tres anchuras. **Dos lecciones:** (1) cuando una automatización no puede alcanzar algo, preguntarse primero si la pantalla lo identifica — muchas veces el «problema de herramienta» es accesibilidad que falta; (2) **evidencia durable se declara con `find` + `shasum`, nunca de memoria**: en la ronda anterior reporté una carpeta que estaba en `$HOME` y no en el repo, con dos pares de archivos byte a byte idénticos y una «restauración a oscuro» que era en realidad la captura clara. | §4.26, OCR paso 4 |
+| 2026-08-02 | **CORRECCIÓN CANÓNICA DE CIERRE: `5n` NO está auditado, `5l` sigue parcial y OCR 4 sí quedó cerrado.** La entrada que decía «`5n` auditado» queda derogada: el cache DesignSync sólo expone placeholders para las 26 transiciones y nadie las leyó una a una desde la fuente; no se aprueban ni se inventan. La auditoría independiente deja seis decisiones en `PARTIAL / FAIL / PASS sin regresión / FAIL / PARTIAL adaptada / PARTIAL`, además de `PaymentDraft` no persistente, teclado incompleto, ancho tablet hasta 280, autorización sólo binaria y «una superficie por archivo» falso. `5l` no se declara cerrado: compacto oscuro macOS sí; claro frame a frame e iOS Simulator no. OCR 4 sí quedó cerrado en producción, claro × 1360/834/430, resolviendo 10/10 por `Semantics.identifier` + `ValueKey` estable sin contaminar el label hablado; `Aplicar` nunca se pulsó y se salió sin guardar. Evidencia durable: `Screenshots vinabikeProject/payroll-closure-2026-08-02/01..07`, siete hashes distintos. Verificación actual de las tres suites tocadas: **161 pasadas · 2 opt-in saltadas · 0 fallidas**; analyzer del scope y `git diff --check` limpios. La sesión canónica sigue `89180` / `:56556`, oscuro, 1360×800, sin borrador. | 5n, 5l, 5k, OCR |

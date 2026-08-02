@@ -62852,3 +62852,7 @@ commit;
 -- Structured reasons and immutable original-file evidence for employee
 -- advances, with an expand-first v3 command and enriched ledger v2.
 \ir ../migrations/20260801183000_add_structured_employee_advance_audit.sql
+
+-- Append-only Payroll settlement correction for payments and advance
+-- allocations, preserving balanced journals, traceability, and readback.
+\ir ../migrations/20260802120000_add_audited_payroll_settlement_reversals.sql

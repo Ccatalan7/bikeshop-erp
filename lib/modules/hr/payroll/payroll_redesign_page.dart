@@ -126,10 +126,12 @@ class PayrollReleaseCapabilities {
   const PayrollReleaseCapabilities({
     this.employeePaymentMethodCommand = false,
     this.structuredAdvanceAudit = false,
+    this.auditedSettlementReversal = false,
   });
 
   final bool employeePaymentMethodCommand;
   final bool structuredAdvanceAudit;
+  final bool auditedSettlementReversal;
 }
 
 /// Datos que la superficie necesita, cargados juntos.
@@ -215,6 +217,7 @@ class PayrollRedesignActions {
     this.loadHistoryVoucher,
     this.loadAdvanceLedgerPage,
     this.tenantCivilDateOf,
+    this.reverseSettlement,
   });
 
   /// Saca una línea del borrador (`is_included = false`). No es una capacidad
@@ -251,6 +254,17 @@ class PayrollRedesignActions {
     required String operationKey,
     required int expectedReconciliationVersion,
   }) payLine;
+
+  /// Corrige un movimiento sin borrarlo: el backend agrega la compensación,
+  /// su asiento inverso y la trazabilidad del motivo/actor.
+  final Future<void> Function({
+    required String voucherId,
+    required PayrollSettlementEvidenceKind settlementKind,
+    required String settlementId,
+    required String reason,
+    required String operationKey,
+    required int expectedReconciliationVersion,
+  })? reverseSettlement;
 
   /// Registra un anticipo por la ruta **auditada**: capability → evidencia
   /// confirmada → `register_employee_advance_v3`. La firma lleva el motivo
@@ -539,6 +553,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         final methodsFuture = service.getPaymentMethods();
         final advancesFuture = service.getOpenEmployeeAdvances();
         final employeesFuture = service.getPayrollEmployees();
+        final capabilitiesFuture = service.getRefinementCapabilities();
         final results = await Future.wait<Object?>(
           <Future<Object?>>[
             openFuture,
@@ -546,16 +561,24 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
             methodsFuture,
             advancesFuture,
             employeesFuture,
+            capabilitiesFuture,
           ],
           eagerError: true,
         );
         final open = results[0] as List<PayrollVoucher>;
         final history = results[1] as _PayrollInitialHistoryLoad;
+        final capabilities = results[5] as PayrollRefinementCapabilities;
         return PayrollRedesignData(
           vouchers: <PayrollVoucher>[...open, ...history.vouchers],
           paymentMethods: results[2] as List<Map<String, dynamic>>,
           openAdvances: results[3] as List<EmployeeAdvance>,
           employees: results[4] as List<Map<String, dynamic>>,
+          releaseCapabilities: PayrollReleaseCapabilities(
+            employeePaymentMethodCommand:
+                capabilities.employeePaymentMethodCommand,
+            structuredAdvanceAudit: capabilities.structuredAdvanceAudit,
+            auditedSettlementReversal: capabilities.auditedSettlementReversal,
+          ),
           versionedMutationsAvailable: service.supportsVersionedPayrollCommands,
           historyNextCursor: history.page?.nextCursor,
           historyHasMore: history.page?.hasMore ?? false,
@@ -590,6 +613,23 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         expectedReconciliationVersion: expectedReconciliationVersion,
       ),
       journalEntriesForPayments: service.fetchJournalEntriesForPayments,
+      reverseSettlement: ({
+        required voucherId,
+        required settlementKind,
+        required settlementId,
+        required reason,
+        required operationKey,
+        required expectedReconciliationVersion,
+      }) async {
+        await service.reverseSettlement(
+          voucherId: voucherId,
+          settlementKind: settlementKind,
+          settlementId: settlementId,
+          reason: reason,
+          operationKey: operationKey,
+          expectedReconciliationVersion: expectedReconciliationVersion,
+        );
+      },
       excludeLine: (voucherId, lineId) async {
         final voucher = await service.getVoucher(voucherId);
         final line = voucher?.lines.firstWhere((l) => l.id == lineId);
@@ -1112,14 +1152,9 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     // vez de llamar a `evaluateErpAuthorization`, que está marcada
     // `@visibleForTesting`. Las cuatro condiciones importan: **cargando o con
     // problema de carga cae a sólo lectura**, nunca a editable.
-    final profileService = context.read<CurrentUserProfileService?>();
-    final canManageHr = profileService != null &&
-        !profileService.isLoading &&
-        profileService.loadIssue == null &&
-        profileService.profile?.canManageUsers == true;
-    final authority = canManageHr
-        ? PayrollMethodAuthority.editable
-        : PayrollMethodAuthority.readOnly;
+    final authority = payrollMethodAuthorityFor(
+      context.read<CurrentUserProfileService?>(),
+    );
 
     final currentName =
         _configuredMethodById(snapshot.preferredMethodId)?['name']
@@ -1796,7 +1831,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     var count = 0;
     for (final line in lines) {
       for (final evidence in line.settlementEvidence) {
-        if (evidence.isAdvance) continue;
+        if (evidence.isAdvance || !evidence.isActiveSettlement) continue;
         if (evidence.isFromStatement == fromStatement) count++;
       }
     }
@@ -1979,6 +2014,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
   }) {
     DateTime? latest;
     for (final evidence in line.settlementEvidence) {
+      if (!evidence.isActiveSettlement) continue;
       if (evidence.isAdvance != advanceOnly) continue;
       final when = evidence.effectiveDate ??
           evidence.cashMovementDate ??
@@ -2034,7 +2070,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
   DateTime? _lastPaymentDate(PayrollVoucherLine line) {
     DateTime? latest;
     for (final evidence in line.settlementEvidence) {
-      if (evidence.isAdvance) continue;
+      if (evidence.isAdvance || !evidence.isActiveSettlement) continue;
       // La fecha del movimiento manda sobre la de registro: el chip cuenta
       // cuándo se pagó, no cuándo alguien lo tecleó.
       final at = evidence.cashMovementDate ??
@@ -2287,9 +2323,9 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         onToggle: () => setState(() {
           _expandedLineId = _expandedLineId == line.id ? null : line.id;
         }),
-        onAction: () {
+        onAction: () async {
           if (needsMethod) {
-            _openEmployeePaymentMethod(line, resumePaymentFor: week);
+            await _openEmployeePaymentMethod(line, resumePaymentFor: week);
             return;
           }
           if (!_versionedMutationsAvailable && line.balance > 0.01) {
@@ -2299,18 +2335,18 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
           switch (status) {
             case PayrollRowStatus.paid:
             case PayrollRowStatus.paidWithinTolerance:
-              _openPaymentEvidence(week, line);
+              await _openPaymentEvidence(week, line);
             case PayrollRowStatus.pendingTransfer:
               if (_weekIsDraft) {
                 _explainDraftGate();
               } else {
-                _openComposer(week, line);
+                await _openComposer(week, line);
               }
             case PayrollRowStatus.pendingCash:
               if (_weekIsDraft) {
                 _explainDraftGate();
               } else {
-                _openCash(week, line);
+                await _openCash(week, line);
               }
             case PayrollRowStatus.openWeek:
             case PayrollRowStatus.weekNotConfirmed:
@@ -2327,14 +2363,11 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     PayrollVoucher week,
     PayrollVoucherLine line,
   ) async {
-    // El asiento REAL de cada pago, leído de journal_entries. Se pide acá y no
-    // en la carga general porque sólo hace falta al abrir un respaldo.
+    // El asiento REAL de cada movimiento, leído de journal_entries. Pagos,
+    // anticipos y sus reversas tienen asiento; se pide sólo al abrir respaldo.
     final journalByPayment =
         await _resolveActions().journalEntriesForPayments?.call(
-                  line.settlementEvidence
-                      .where((e) => !e.isAdvance)
-                      .map((e) => e.id)
-                      .toList(),
+                  line.settlementEvidence.map((e) => e.id).toList(),
                 ) ??
             const <String, PayrollJournalEntry>{};
     if (!mounted) return;
@@ -2344,18 +2377,19 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       return '${_two(value.day)}/${_two(value.month)}/${value.year}';
     }
 
-    String sourceLabel(PayrollSettlementEvidence evidence) =>
-        switch (evidence.source) {
-          PayrollSettlementEvidenceSource.manual =>
-            'Registro manual de Nóminas',
-          PayrollSettlementEvidenceSource.bankStatement =>
-            'Cartola bancaria conciliada',
-          PayrollSettlementEvidenceSource.cashReconciliation =>
-            'Efectivo confirmado en conciliación',
-          PayrollSettlementEvidenceSource.statementReconciliation =>
-            'Conciliación de cartola',
-          PayrollSettlementEvidenceSource.legacy => 'Historial anterior',
-        };
+    String sourceLabel(PayrollSettlementEvidence evidence) {
+      if (evidence.isReversal) return 'Corrección auditada de Nóminas';
+      return switch (evidence.source) {
+        PayrollSettlementEvidenceSource.manual => 'Registro manual de Nóminas',
+        PayrollSettlementEvidenceSource.bankStatement =>
+          'Cartola bancaria conciliada',
+        PayrollSettlementEvidenceSource.cashReconciliation =>
+          'Efectivo confirmado en conciliación',
+        PayrollSettlementEvidenceSource.statementReconciliation =>
+          'Conciliación de cartola',
+        PayrollSettlementEvidenceSource.legacy => 'Historial anterior',
+      };
+    }
 
     String? statementLocation(PayrollSettlementEvidence evidence) {
       if (!evidence.hasObservedStatementMetadata) return null;
@@ -2378,24 +2412,42 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       return parts.isEmpty ? null : parts.join(' · ');
     }
 
+    String? reversalMeta(PayrollSettlementEvidence evidence) {
+      final parts = <String>[
+        if (evidence.reversedByName?.trim().isNotEmpty == true)
+          evidence.reversedByName!.trim(),
+        if (evidence.reversedAt != null) dateLabel(evidence.reversedAt),
+      ];
+      return parts.isEmpty ? null : parts.join(' · ');
+    }
+
+    final canCorrect =
+        _data?.releaseCapabilities.auditedSettlementReversal == true &&
+            _resolveActions().reverseSettlement != null &&
+            week.id != null &&
+            week.status != PayrollVoucherStatus.voided;
+
     final entries = <PayrollPaymentEvidenceEntryVM>[
       for (final evidence in line.settlementEvidence)
         PayrollPaymentEvidenceEntryVM(
           id: evidence.id,
-          kind: evidence.isAdvance ? 'Anticipo aplicado' : 'Pago registrado',
+          kind: evidence.isReversal
+              ? evidence.isAdvance
+                  ? 'Reversa de anticipo'
+                  : 'Reversa de pago'
+              : evidence.isAdvance
+                  ? 'Anticipo aplicado'
+                  : 'Pago registrado',
           amount: _clp(evidence.amount),
           date: dateLabel(evidence.effectiveDate ?? evidence.recordedAt),
           method: evidence.isAdvance
               ? 'Saldo de anticipo'
               : evidence.paymentMethodLabel ?? 'Método no conservado',
           account: evidence.paymentAccountLabel,
-          // Un anticipo aplicado no mueve plata: sólo consume un saldo ya
-          // entregado, así que no genera este asiento y decir que sí sería
-          // falso. Sólo los pagos reales lo traen.
-          // El asiento existe si hubo un pago real. Un anticipo aplicado NO
-          // mueve plata —sólo consume un saldo ya entregado— así que pintarle
-          // Debe/Haber afirmaría un movimiento que no ocurrió.
-          hasAccountingEntry: !evidence.isAdvance,
+          // Aplicar un anticipo no mueve caja otra vez, pero sí reclasifica la
+          // obligación: 2106 Sueldos por pagar contra 1135 Anticipos. Ese
+          // asiento real también debe quedar visible junto al de los pagos.
+          hasAccountingEntry: true,
           journalNumber: journalByPayment[evidence.id]?.entryNumber,
           journalLines: [
             for (final jl in journalByPayment[evidence.id]?.lines ??
@@ -2418,6 +2470,11 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
               : '${dateLabel(evidence.cashMovementDate)}'
                   '${evidence.fundingActorName?.trim().isNotEmpty == true ? ' · ${evidence.fundingActorName!.trim()}' : ''}',
           source: sourceLabel(evidence),
+          isReversal: evidence.isReversal,
+          isReversed: evidence.isReversed,
+          reversalReason: evidence.reversalReason,
+          reversalMeta: reversalMeta(evidence),
+          canCorrect: canCorrect && evidence.isActiveSettlement,
           observedTransactionDate: !evidence.hasObservedStatementMetadata ||
                   evidence.statementTransactionDate == null
               ? null
@@ -2463,10 +2520,214 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
               entries: entries,
             ),
             onClose: () => Navigator.of(dialogContext).pop(),
+            onCorrect: canCorrect
+                ? (evidenceId) async {
+                    final evidence = line.settlementEvidence.firstWhere(
+                      (item) => item.id == evidenceId,
+                    );
+                    Navigator.of(dialogContext).pop();
+                    await Future<void>.delayed(PayrollTokens.base);
+                    if (!mounted) return;
+                    await _correctSettlement(week, evidence);
+                  }
+                : null,
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _correctSettlement(
+    PayrollVoucher week,
+    PayrollSettlementEvidence evidence,
+  ) async {
+    final voucherId = week.id;
+    final command = _resolveActions().reverseSettlement;
+    if (voucherId == null ||
+        command == null ||
+        !evidence.isActiveSettlement ||
+        _data?.releaseCapabilities.auditedSettlementReversal != true) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+        content: Text(
+          'La corrección auditada todavía no está disponible en este servidor.',
+        ),
+      ));
+      return;
+    }
+
+    final controller = TextEditingController();
+    String? validationMessage;
+    final noun = evidence.isAdvance ? 'anticipo aplicado' : 'pago';
+    final reason = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          void submit() {
+            final value = controller.text.trim();
+            if (value.length < 3) {
+              setDialogState(() {
+                validationMessage =
+                    'Explica el motivo con al menos 3 caracteres.';
+              });
+              return;
+            }
+            Navigator.of(dialogContext).pop(value);
+          }
+
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: visual.surface,
+                  borderRadius: BorderRadius.circular(PayrollTokens.rSheet),
+                  border: Border.all(color: visual.borderStrong),
+                  boxShadow: visual.overlay,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('Corregir $noun', style: visual.sectionTitle),
+                      const SizedBox(height: 8),
+                      Text(
+                        'El movimiento original y su respaldo no se borran. '
+                        'Se registrará una reversa con asiento contable '
+                        'inverso, se reabrirá el saldo correspondiente y '
+                        'después podrás ingresar el movimiento correcto.',
+                        style: visual.bodyM,
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: visual.surfaceSunken,
+                          borderRadius:
+                              BorderRadius.circular(PayrollTokens.rField),
+                          border: Border.all(color: visual.border),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                evidence.isAdvance
+                                    ? 'Anticipo aplicado'
+                                    : 'Pago registrado',
+                                style: visual.labelStrong,
+                              ),
+                            ),
+                            Text(_clp(evidence.amount), style: visual.numRow),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        key: const ValueKey<String>(
+                          'payroll-settlement-correction-reason',
+                        ),
+                        controller: controller,
+                        autofocus: true,
+                        minLines: 3,
+                        maxLines: 5,
+                        maxLength: 1000,
+                        onChanged: (_) {
+                          if (validationMessage != null) {
+                            setDialogState(() => validationMessage = null);
+                          }
+                        },
+                        decoration: InputDecoration(
+                          labelText: 'Motivo obligatorio',
+                          hintText:
+                              'Qué estaba incorrecto y por qué se corrige',
+                          errorText: validationMessage,
+                          alignLabelWithHint: true,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                            child: const Text('Cancelar'),
+                          ),
+                          // accent-fill: dialog-action (resolver-owned M3 dialog grammar)
+                          FilledButton(
+                            key: const ValueKey<String>(
+                              'payroll-settlement-correction-confirm',
+                            ),
+                            onPressed: submit,
+                            child: const Text('Registrar corrección'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    // The dialog future resolves when its pop starts; its TextField can still
+    // listen to this controller during the reverse transition.
+    await Future<void>.delayed(PayrollTokens.base);
+    controller.dispose();
+    if (reason == null || !mounted) return;
+
+    var committed = false;
+    try {
+      await command(
+        voucherId: voucherId,
+        settlementKind: evidence.kind,
+        settlementId: evidence.id,
+        reason: reason,
+        operationKey: 'payroll_settlement_reversal_${const Uuid().v4()}',
+        expectedReconciliationVersion: week.reconciliationVersion,
+      );
+      committed = true;
+    } catch (error) {
+      debugPrint('❌ [PayrollRedesign] settlement correction: $error');
+    }
+
+    if (!mounted) return;
+    await _load();
+    if (!mounted) return;
+    final refreshed = _data?.vouchers.where((item) => item.id == voucherId);
+    final corrected = refreshed?.any(
+          (item) => item.lines.any(
+            (line) => line.settlementEvidence.any(
+              (item) => item.id == evidence.id && item.isReversed,
+            ),
+          ),
+        ) ??
+        false;
+    if (committed || corrected) {
+      setState(() {
+        _scope = _PayrollScope.weeks;
+        _selectedVoucherId = voucherId;
+      });
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+        content: Text(
+          '${evidence.isAdvance ? 'Anticipo' : 'Pago'} corregido. '
+          'El saldo quedó abierto para registrar el dato correcto.',
+        ),
+      ));
+      return;
+    }
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+      content: Text(
+        'No se confirmó la corrección. La semana fue recargada; revisa el '
+        'movimiento antes de volver a intentar.',
+      ),
+    ));
   }
 
   /// Quienes entraron a la semana sin horas cerradas en Asistencias.
@@ -3229,6 +3490,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                     onApplyAdvance: available <= 0.01
                         ? null
                         : () => setSheet(() => applyAdvance = !applyAdvance),
+                    advanceApplied: applyAdvance,
                     onPickDate: () async {
                       final first = DateTime(week.periodStart.year,
                           week.periodStart.month, week.periodStart.day);
@@ -4275,7 +4537,10 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final dense = constraints.maxWidth < 1240;
+                // El tier tiene UN owner: `payrollQueueDenseHint`, en la
+                // superficie. Este host llevaba su propio `< 1240` y los dos
+                // números se contradecían en el borde de 1200.
+                final dense = payrollQueueDenseHint(constraints.maxWidth);
                 if (_scope == _PayrollScope.advances) {
                   return _buildAdvances(data);
                 }
@@ -4409,32 +4674,47 @@ class _PayrollLoadingSkeleton extends StatelessWidget {
         ),
         Container(
           key: const ValueKey('payroll-loading-money-bar'),
-          height: PayrollTokens.moneyBarH,
+          // **`moneyBarH` es el alto del CONTENIDO, y el borde se le suma.**
+          // Así lo monta la barra real (`payroll_queue_surface.dart`, rama no
+          // apilada: `SizedBox(height: moneyBarH)` dentro de un `Container`
+          // con `border: top`), y así lo escribe Design: en `6a` las bandas
+          // declaran `height:56px` **más** `border-bottom:1px`, y su propia
+          // suma del cromo (`47 + 56 + 48 = 151`) no cuenta los bordes.
+          //
+          // Poner el `moneyBarH` como alto del `Container` —que fue lo que
+          // hubo acá hasta el 2026-08-02— hace la silueta de **56** contra una
+          // barra real de **57**, y el control de decisión aterriza 1 px más
+          // arriba de donde su fantasma lo prometía. Es exactamente el salto
+          // que esta pantalla existe para evitar, así que se corrige la
+          // SILUETA —que es la que mentía— y no la barra que ve el operador.
           decoration: BoxDecoration(
             color: visual.surface,
             border: Border(top: BorderSide(color: visual.borderStrong)),
             boxShadow: visual.moneyBar,
           ),
           padding: const EdgeInsets.symmetric(horizontal: 18),
-          child: Row(
-            children: <Widget>[
-              const VbSkeleton.bar(width: 74, height: VbSkeleton.labelHeight),
-              const SizedBox(width: 8),
-              const VbSkeleton.bar(width: 118, height: 20),
-              const Spacer(),
-              // El control de decisión, en su sitio exacto: es LO que no puede
-              // saltar cuando lleguen los datos.
-              SizedBox(
-                key: const ValueKey('payroll-loading-primary-action'),
-                width: 168,
-                height: PayrollTokens.ctaH,
-                child: _ghostSurface(
-                  visual,
-                  radius: PayrollTokens.rControl,
-                  key: const ValueKey('payroll-loading-ghost-surface'),
+          child: SizedBox(
+            height: PayrollTokens.moneyBarH,
+            child: Row(
+              children: <Widget>[
+                const VbSkeleton.bar(width: 74, height: VbSkeleton.labelHeight),
+                const SizedBox(width: 8),
+                const VbSkeleton.bar(width: 118, height: 20),
+                const Spacer(),
+                // El control de decisión, en su sitio exacto: es LO que no
+                // puede saltar cuando lleguen los datos.
+                SizedBox(
+                  key: const ValueKey('payroll-loading-primary-action'),
+                  width: 168,
+                  height: PayrollTokens.ctaH,
+                  child: _ghostSurface(
+                    visual,
+                    radius: PayrollTokens.rControl,
+                    key: const ValueKey('payroll-loading-ghost-surface'),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],

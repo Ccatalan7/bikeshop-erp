@@ -650,6 +650,8 @@ class PayrollDecisionOptionCard extends StatelessWidget {
     required this.tone,
     required this.selected,
     required this.onSelect,
+    this.movementId,
+    this.optionName,
   });
 
   final String title;
@@ -659,93 +661,128 @@ class PayrollDecisionOptionCard extends StatelessWidget {
   final bool selected;
   final VoidCallback? onSelect;
 
+  /// Identidad estable del movimiento al que pertenece esta opción. Nula sólo
+  /// donde la tarjeta no vive en una lista (no hay ambigüedad que resolver).
+  final String? movementId;
+
+  /// Nombre estable de la opción (`confirm`, `notPayroll`…). El título visible
+  /// puede cambiar de redacción; esto no.
+  final String? optionName;
+
+  /// Identidad estable de ESTA opción en ESTE movimiento. Nula cuando la
+  /// tarjeta no vive en una lista y no hay ambigüedad que resolver.
+  ///
+  /// No se usa índice ni contador: la lista se acorta a medida que se
+  /// responde, así que un índice apuntaría a otra fila en la vuelta siguiente.
+  String? get identity {
+    final id = movementId?.trim();
+    if (id == null || id.isEmpty) return null;
+    return 'payroll-ocr-decision-$id-${optionName ?? title}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final visual = PayrollVisualTokens.of(context);
     final enabled = onSelect != null;
-    return Semantics(
-      button: true,
-      selected: selected,
-      enabled: enabled,
-      label: '$title. $description',
-      excludeSemantics: true,
-      child: Material(
-        color: selected ? visual.surfaceSelected : visual.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(PayrollTokens.rField),
-          side: BorderSide(
-            color: selected ? visual.accent : visual.border,
+    final key = identity;
+    return KeyedSubtree(
+      key: key == null ? null : ValueKey<String>(key),
+      child: Semantics(
+        button: true,
+        selected: selected,
+        enabled: enabled,
+        // **Identidad por movimiento, SIN tocar lo que se lee en voz alta.**
+        // Las cuatro opciones tienen el mismo rótulo en las diez tarjetas de la
+        // etapa, así que quien resuelve por identidad —una automatización, o el
+        // rotor de VoiceOver— encontraba diez «No es nómina» indistinguibles.
+        //
+        // El id NO va en el `label`: meterlo ahí obligaría a escuchar
+        // «Movimiento p1-l34-r1» en cada opción, que es ruido para quien usa
+        // lector de pantalla. Va en `identifier`, que es exactamente el campo
+        // para identidad de automatización, y en una `ValueKey` con el mismo
+        // valor para que `app_control tap --key` lo alcance.
+        label: '$title. $description',
+        identifier: identity,
+        excludeSemantics: true,
+        child: Material(
+          color: selected ? visual.surfaceSelected : visual.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(PayrollTokens.rField),
+            side: BorderSide(
+              color: selected ? visual.accent : visual.border,
+            ),
           ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onSelect,
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 46),
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        // accent-fill: selection (radio dot of the selected
-                        // decision option; no content is painted over it)
-                        color: selected ? visual.accent : Colors.transparent,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: selected ? visual.accent : visual.borderStrong,
-                          width: 1.5,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onSelect,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 46),
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          // accent-fill: selection (radio dot of the selected
+                          // decision option; no content is painted over it)
+                          color: selected ? visual.accent : Colors.transparent,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color:
+                                selected ? visual.accent : visual.borderStrong,
+                            width: 1.5,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: visual.cardTitle.copyWith(
-                          fontSize: 12,
-                          color: !enabled
-                              ? visual.inkDisabled
-                              : selected
-                                  ? visual.ink
-                                  : visual.inkMuted,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: visual.cardTitle.copyWith(
+                            fontSize: 12,
+                            color: !enabled
+                                ? visual.inkDisabled
+                                : selected
+                                    ? visual.ink
+                                    : visual.inkMuted,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  description,
-                  style: visual.bodyS.copyWith(
-                    fontSize: 10.5,
-                    height: 1.45,
-                    color: enabled ? visual.inkFaint : visual.inkDisabled,
+                    ],
                   ),
-                ),
-                const SizedBox(height: 7),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: tone.soft,
-                    borderRadius: BorderRadius.circular(PayrollTokens.rTag),
-                  ),
-                  child: Text(
-                    tag,
-                    style: visual.monoS.copyWith(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: tone.fg,
+                  const SizedBox(height: 6),
+                  Text(
+                    description,
+                    style: visual.bodyS.copyWith(
+                      fontSize: 10.5,
+                      height: 1.45,
+                      color: enabled ? visual.inkFaint : visual.inkDisabled,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 7),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: tone.soft,
+                      borderRadius: BorderRadius.circular(PayrollTokens.rTag),
+                    ),
+                    child: Text(
+                      tag,
+                      style: visual.monoS.copyWith(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        color: tone.fg,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

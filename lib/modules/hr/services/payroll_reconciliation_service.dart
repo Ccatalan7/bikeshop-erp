@@ -10,8 +10,8 @@ import '../models/payroll_statement_reconciliation.dart';
 import '../models/payroll_voucher.dart';
 import 'payroll_bank_statement_parser.dart';
 import 'payroll_statement_extraction_service.dart';
-import 'payroll_statement_local_image_ocr.dart';
 import 'payroll_statement_matcher.dart';
+import 'payroll_statement_veryfi_ocr.dart';
 import 'payroll_voucher_service.dart';
 
 typedef PayrollReconciliationRpc = Future<dynamic> Function(
@@ -236,14 +236,13 @@ class PayrollReconciliationService {
     required PayrollVoucherService payrollService,
     PayrollBankStatementParser parser = const PayrollBankStatementParser(),
     PayrollStatementMatcher matcher = const PayrollStatementMatcher(),
-    PayrollStatementLocalImageOcr localImageOcr =
-        const PayrollStatementLocalImageOcr(),
+    PayrollStatementVeryfiOcr veryfiOcr = const PayrollStatementVeryfiOcr(),
     PayrollReconciliationRpc? sensitiveRpc,
   })  : _database = database,
         _payrollService = payrollService,
         _parser = parser,
         _matcher = matcher,
-        _localImageOcr = localImageOcr,
+        _veryfiOcr = veryfiOcr,
         _sensitiveRpc = sensitiveRpc ??
             ((functionName, params) =>
                 database.supabase.rpc(functionName, params: params));
@@ -255,7 +254,7 @@ class PayrollReconciliationService {
   final PayrollVoucherService _payrollService;
   final PayrollBankStatementParser _parser;
   final PayrollStatementMatcher _matcher;
-  final PayrollStatementLocalImageOcr _localImageOcr;
+  final PayrollStatementVeryfiOcr _veryfiOcr;
   final PayrollReconciliationRpc _sensitiveRpc;
 
   Future<PayrollStatementPreparedDraft> prepare({
@@ -266,8 +265,7 @@ class PayrollReconciliationService {
     PayrollStatementPreparationProgressCallback? onProgress,
   }) async {
     final extractionService = PayrollStatementExtractionService(
-      imageTextExtractor:
-          _localImageOcr.isSupported ? _localImageOcr.extractText : null,
+      cloudDocumentTextExtractor: _veryfiOcr.extractText,
     );
     Future<PayrollStatementExtractionResult> extract({
       bool forceImageOcrForPdf = false,
@@ -303,7 +301,6 @@ class PayrollReconciliationService {
     );
     if (extraction.inputKind == PayrollStatementInputKind.pdf &&
         extraction.method == PayrollStatementExtractionMethod.embeddedPdfText &&
-        _localImageOcr.isSupported &&
         _needsPdfOcrRetry(parseResult)) {
       extraction = await extract(forceImageOcrForPdf: true);
       onProgress?.call(
@@ -322,8 +319,8 @@ class PayrollReconciliationService {
 
     if (extraction.needsImageOcr) {
       throw const PayrollReconciliationServiceException(
-        'Este archivo necesita OCR de imagen. Usa un dispositivo compatible '
-        'con OCR local o sube una cartola PDF con texto seleccionable.',
+        'Este archivo necesita OCR de imagen y Veryfi no está disponible. '
+        'Reintenta o sube una cartola PDF con texto seleccionable.',
         recoveryAction: PayrollReconciliationRecoveryAction.selectAnotherFile,
       );
     }

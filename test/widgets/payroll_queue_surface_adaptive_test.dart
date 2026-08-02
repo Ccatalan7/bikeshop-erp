@@ -543,7 +543,7 @@ void main() {
     expect(find.text('TOTAL'), findsOneWidget);
     expect(find.text('A PAGAR'), findsOneWidget);
     expect(find.text('DECISIÓN'), findsOneWidget);
-    // Las dos que 5m retira, y el método que ya se había ido en 1240.
+    // Las dos que 5m retira, y el método que ya se había ido al bajar de 1200.
     // **Las DOS grafías**: cuando la tabla se estrecha el rótulo se abrevia a
     // `ANTIC.`, así que comprobar sólo `ANTICIPOS` deja pasar la columna
     // entera. El aserto anterior no mordía por exactamente eso.
@@ -608,10 +608,14 @@ void main() {
       reason: 'el control táctil mide 44',
     );
 
+    // `greaterThanOrEqualTo` es exactamente lo que dejó pasar el defecto: con
+    // la regla de columna en 280 el control crecía y la prueba seguía verde.
+    // `5n` declara `maxWidth 186/168/200`, así que 200 es TOPE, no piso.
     expect(
       action.width,
-      greaterThanOrEqualTo(tabletDecisionWidth),
-      reason: 'el control de decisión mide 200 de ancho',
+      tabletDecisionWidth,
+      reason: '`5n`: en táctil el control de decisión mide 200 exactos, '
+          'no «al menos 200»',
     );
     expect(tester.takeException(), isNull);
   });
@@ -1134,6 +1138,226 @@ void main() {
       lessThanOrEqualTo(decisionCellMaxWidth),
       reason: '`7a` acota la celda en 186',
     );
+    expect(tester.takeException(), isNull);
+  });
+  // `_totals()` emite DOS estados reales y excluyentes: borrador →
+  // `showCommitAction: true` con `nextActionLabel` vacío; confirmada →
+  // `showCommitAction: false` con acción-siguiente. Los dos se apilan; la
+  // combinación «confirmar + siguiente» que probaba antes **el producto no la
+  // puede producir**, así que medía un caso imposible.
+  const soloConfirmar = PayrollWeekTotalsVM(
+    title: 'Semana 27',
+    equation: '',
+    remaining: r'$225.000',
+    showCommitAction: true,
+    canConfirm: false,
+    blockedReason: 'La semana está en borrador.',
+    nextActionLabel: '',
+  );
+
+  const soloSiguiente = PayrollWeekTotalsVM(
+    title: 'Semana 27',
+    equation: '',
+    remaining: r'$225.000',
+    showCommitAction: false,
+    canConfirm: true,
+    blockedReason: '',
+    nextActionLabel: 'Pagar a Lucas',
+  );
+
+  for (final (nombre, totals, key) in <(String, PayrollWeekTotalsVM, String)>[
+    ('borrador · sólo Confirmar', soloConfirmar, 'payroll-confirm-week'),
+    (
+      'confirmada · sólo la siguiente',
+      soloSiguiente,
+      'payroll-next-week-action'
+    ),
+  ]) {
+    testWidgets('5m · a 834 se apila la única acción visible — $nombre',
+        (tester) async {
+      // Nota 04 de `5m`, literal: «A 834 la barra monetaria se apila: cifra y
+      // razón arriba, botón de 46 abajo. Nada de un botón de 34 perdido en una
+      // esquina táctil.»
+      //
+      // El apilado ya estaba «implementado» en `PayrollMoneyBar` — que esta
+      // superficie **nunca monta**, porque la cola tiene su propia barra. Por
+      // eso el contrato mide la barra QUE SE PINTA, y con las combinaciones
+      // que el host emite de verdad.
+      await pumpQueue(
+        tester,
+        width: 834,
+        height: 1112,
+        dense: true,
+        rows: <PayrollPersonRowVM>[row(0)],
+        value: totals,
+      );
+
+      final cta = find.byKey(ValueKey<String>(key));
+      expect(cta, findsOneWidget, reason: 'la acción del estado no se dibujó');
+      final ctaRect = tester.getRect(cta);
+      final figure = tester.getRect(find.text(r'$225.000'));
+
+      expect(
+        ctaRect.top,
+        greaterThan(figure.bottom),
+        reason: 'el botón sigue al lado de la cifra en vez de apilarse',
+      );
+      // Igualdad EXACTA contra el token, que es lo que impide que esto se
+      // deslice: `>= 48` pasaría con 56 y con 80.
+      //
+      // El valor pasó de 46 a `touchMobile` (48) el 2026-08-02: `5m` dibuja 46,
+      // pero `height` dimensiona el `InkWell` entero, así que 46 es un objetivo
+      // táctil de 46 y `F-06 · TOUCH` pide 48 — la misma razón por la que `5l`
+      // bajó su CTA de 50. La intención de la nota («nada de un botón de 34
+      // perdido en una esquina táctil») se cumple mejor con 48, no peor.
+      expect(
+        ctaRect.height,
+        PayrollTokens.touchMobile,
+        reason:
+            'el alto del CTA apilado dejó de ser el objetivo táctil de F-06',
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('5m · a escritorio la barra NO se apila', (tester) async {
+    // El apilado es de la banda compacta; a 1360 la fila es correcta.
+    await pumpQueue(
+      tester,
+      width: 1360,
+      height: 900,
+      dense: false,
+      rows: <PayrollPersonRowVM>[row(0)],
+      value: soloConfirmar,
+    );
+    final cta = tester.getRect(
+      find.byKey(const ValueKey<String>('payroll-confirm-week')),
+    );
+    final figure = tester.getRect(find.text(r'$225.000'));
+    expect(cta.top, lessThan(figure.bottom));
+    expect(tester.takeException(), isNull);
+  });
+
+  // `5n` · «Layout por ancho lógico»: ≥1200 ocho columnas · 1000–1199 seis ·
+  // 900–999 cinco. Se prueba por el BORDE y desde la superficie real.
+  //
+  // Entre el ancho exterior y la tabla se pierden DOS descuentos, no uno: el
+  // padding lateral de la superficie (32 px, 36 según el tier) y además los
+  // 2 px del `Border` de la tarjeta. Si el eje volviera a ser el interior,
+  // esos descuentos correrían el tramo y 1200 dejaría de bastar. Eso es
+  // exactamente lo que pasaba antes de subir el owner a la superficie.
+  testWidgets('5n · la escalera cambia en 1200 y en 1000 exactos',
+      (tester) async {
+    Future<void> at(double width) => pumpQueue(
+          tester,
+          width: width,
+          height: 1112,
+          dense: false,
+          rows: <PayrollPersonRowVM>[row(0)],
+        );
+
+    await at(1200);
+    expect(find.text('MÉTODO'), findsOneWidget,
+        reason: '1200 es el piso de las ocho columnas: el padding y el borde '
+            'no pueden desplazar el tramo');
+    expect(find.text('PAGADO'), findsOneWidget);
+
+    await at(1199);
+    expect(find.text('MÉTODO'), findsNothing);
+    expect(find.text('PAGADO'), findsNothing);
+    expect(find.textContaining('ANTIC'), findsOneWidget,
+        reason: '1199 es el tramo de seis columnas y conserva ANTICIPOS');
+
+    await at(1000);
+    expect(find.textContaining('ANTIC'), findsOneWidget,
+        reason: '1000 es el piso del tramo de seis');
+
+    await at(999);
+    expect(find.textContaining('ANTIC'), findsNothing,
+        reason: '999 cae al tramo de cinco columnas');
+    expect(find.text('A PAGAR'), findsOneWidget);
+
+    expect(tester.takeException(), isNull);
+  });
+
+  // `5n` · `maxWidth 186/168/200`. El tope debe alcanzar TODAS las formas
+  // reales del control: directa, pagada, menú y PASIVA.
+  //
+  // Los rótulos son deliberadamente LARGOS y el aserto es de IGUALDAD. Con
+  // rótulos cortos y `<=`, la implementación anterior —que topaba todo en 186—
+  // pasaba igual, y por eso el 168 se coló. Un control que no llega al tope no
+  // prueba el tope: hay que empujarlo contra él.
+  testWidgets('5n · el tope 186/168/200 se alcanza en las cuatro formas',
+      (tester) async {
+    const largo = 'Registrar pago por transferencia bancaria al día siguiente';
+
+    Future<void> put(double viewport, PayrollPersonRowVM r) => pumpQueue(
+          tester,
+          width: viewport,
+          height: 1112,
+          dense: false,
+          rows: <PayrollPersonRowVM>[r],
+        );
+
+    const tap = ValueKey<String>('payroll-row-action-tap-Persona de prueba 0');
+    const paidKey = ValueKey<String>('payroll-paid-status-Persona de prueba 0');
+    const menuKey = ValueKey<String>('payroll-method-menu-Persona de prueba 0');
+    const passiveKey =
+        ValueKey<String>('payroll-row-blocked-Persona de prueba 0');
+
+    final direct = row(0, actionLabel: largo);
+    final paid = row(
+      0,
+      status: PayrollRowStatus.paid,
+      statusLabel: largo,
+      actionLabel: largo,
+      actionMode: PayrollRowActionMode.paidDetails,
+    );
+    final menu = row(
+      0,
+      statusLabel: largo,
+      actionLabel: largo,
+      actionMode: PayrollRowActionMode.menu,
+    );
+    final passive = row(
+      0,
+      statusLabel: largo,
+      actionLabel: largo,
+      actionMode: PayrollRowActionMode.none,
+      blockedReason: 'Sus horas de esta semana todavía no están cerradas.',
+    );
+
+    // Los topes van como LITERALES, no como las constantes de producción.
+    // Comparar contra `decisionCellMaxWidthDense` era una tautología: mutar la
+    // constante movía los dos lados del aserto y la prueba seguía verde con
+    // 186. Se comprobó por mutación el 2026-08-02.
+    for (final tramo in const <List<Object>>[
+      <Object>[1400.0, 186.0],
+      <Object>[1100.0, 168.0],
+    ]) {
+      final width = tramo[0] as double;
+      final cap = tramo[1] as double;
+
+      await put(width, direct);
+      expect(tester.getSize(find.byKey(tap)).width, cap,
+          reason: 'directa a $width topa exactamente en $cap');
+      await put(width, paid);
+      expect(tester.getSize(find.byKey(paidKey)).width, cap,
+          reason: 'la forma PAGADA usa el mismo tope, no el ancho de columna');
+      await put(width, menu);
+      expect(tester.getSize(find.byKey(menuKey)).width, cap,
+          reason: 'el menú «Sin método» también topa en $cap');
+      await put(width, passive);
+      expect(tester.getSize(find.byKey(passiveKey)).width, cap,
+          reason: 'la forma PASIVA no lleva píldora, pero lleva el mismo tope: '
+              'si su texto se estira más, la columna muestra dos anchos');
+    }
+
+    // 834 · táctil → 200 exactos.
+    await put(834, direct);
+    expect(tester.getSize(find.byKey(tap)).width, 200.0,
+        reason: 'en táctil el control mide 200, no «al menos 200»');
+
     expect(tester.takeException(), isNull);
   });
 }

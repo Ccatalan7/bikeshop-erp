@@ -6209,6 +6209,304 @@ select is(
   'movement evidence sums to the direct-payment and advance ledger'
 );
 
+-- Formal correction is append-only: the original payment/allocation, its
+-- source evidence, and its journal remain visible while an exact negative
+-- movement and linked reversal journal reopen the business balance.
+select is(
+  public.get_payroll_refinement_capabilities_v1()
+    ->>'audited_settlement_reversal',
+  'true',
+  'the server advertises the audited settlement-reversal capability'
+);
+
+select set_config(
+  'test.reversal.payment_id',
+  (
+    select evidence.evidence_id::text
+    from public.get_payroll_voucher_settlement_evidence_v2(
+      array['7f281000-0000-4000-8000-000000000501'::uuid]
+    ) evidence
+    where evidence.evidence_kind = 'payment'
+      and evidence.amount > 0
+      and not evidence.is_reversal
+    order by evidence.evidence_id
+    limit 1
+  ),
+  true
+);
+select set_config(
+  'test.reversal.payment_journal_id',
+  (
+    select journal_entry.id::text
+    from public.journal_entries journal_entry
+    where journal_entry.source_module = 'expense_payments'
+      and (
+        journal_entry.source_document_id =
+          current_setting('test.reversal.payment_id')::uuid
+        or journal_entry.source_reference =
+          current_setting('test.reversal.payment_id')
+      )
+    limit 1
+  ),
+  true
+);
+select set_config(
+  'test.reversal.payment_expected_version',
+  (
+    select reconciliation_version::text
+    from public.payroll_vouchers
+    where id = '7f281000-0000-4000-8000-000000000501'
+  ),
+  true
+);
+select set_config(
+  'test.reversal.payment_receipt',
+  public.reverse_payroll_settlement_v1(
+    '7f281000-0000-4000-8000-000000000501',
+    'payment',
+    current_setting('test.reversal.payment_id')::uuid,
+    'Cuenta bancaria seleccionada incorrectamente',
+    'reverse-payment-fixture-0001',
+    current_setting('test.reversal.payment_expected_version')::bigint
+  )::text,
+  true
+);
+
+select ok(
+  exists (
+    select 1
+    from public.expense_payments original
+    join public.expense_payments reversal
+      on reversal.tenant_id = original.tenant_id
+     and reversal.reversal_of_id = original.id
+     and reversal.amount = -original.amount
+     and reversal.payment_method_id is not distinct from
+        original.payment_method_id
+     and reversal.payment_account_id is not distinct from
+        original.payment_account_id
+    where original.id = current_setting(
+      'test.reversal.payment_id'
+    )::uuid
+      and original.amount > 0
+  ),
+  'payment correction retains the original and appends its exact inverse'
+);
+
+select ok(
+  exists (
+    select 1
+    from public.journal_entries reversal_journal
+    where reversal_journal.source_document_id = (
+      current_setting('test.reversal.payment_receipt')::jsonb
+        ->>'reversal_settlement_id'
+    )::uuid
+      and reversal_journal.reversal_of_id = current_setting(
+        'test.reversal.payment_journal_id'
+      )::uuid
+      and reversal_journal.operation_id = (
+        current_setting('test.reversal.payment_receipt')::jsonb
+          ->>'trace_operation_id'
+      )::uuid
+      and reversal_journal.total_debit =
+        (
+          current_setting('test.reversal.payment_receipt')::jsonb
+            ->>'amount'
+        )::numeric
+      and reversal_journal.total_credit = reversal_journal.total_debit
+  )
+  and not exists (
+    select 1
+    from public.stock_movements stock_movement
+    where stock_movement.operation_id = (
+      current_setting('test.reversal.payment_receipt')::jsonb
+        ->>'trace_operation_id'
+    )::uuid
+  ),
+  'payment correction posts one linked balanced journal and no stock movement'
+);
+
+select is(
+  (
+    select status
+    from public.payroll_vouchers
+    where id = '7f281000-0000-4000-8000-000000000501'
+  ),
+  'confirmed',
+  'reversing the only payment reopens the paid voucher'
+);
+
+select ok(
+  exists (
+    select 1
+    from public.get_payroll_voucher_settlement_evidence_v2(
+      array['7f281000-0000-4000-8000-000000000501'::uuid]
+    ) evidence
+    where evidence.evidence_id = current_setting(
+      'test.reversal.payment_id'
+    )::uuid
+      and not evidence.is_reversal
+      and evidence.reversal_evidence_id = (
+        current_setting('test.reversal.payment_receipt')::jsonb
+          ->>'reversal_settlement_id'
+      )::uuid
+      and evidence.reversal_reason =
+        'Cuenta bancaria seleccionada incorrectamente'
+      and evidence.reversed_by_id =
+        '7f281000-0000-4000-8000-000000000101'
+  )
+  and exists (
+    select 1
+    from public.get_payroll_voucher_settlement_evidence_v2(
+      array['7f281000-0000-4000-8000-000000000501'::uuid]
+    ) evidence
+    where evidence.evidence_id = (
+      current_setting('test.reversal.payment_receipt')::jsonb
+        ->>'reversal_settlement_id'
+    )::uuid
+      and evidence.is_reversal
+      and evidence.reversal_of_evidence_id = current_setting(
+        'test.reversal.payment_id'
+      )::uuid
+  ),
+  'evidence v2 exposes both correction sides, reason, and actor'
+);
+
+select is(
+  public.reverse_payroll_settlement_v1(
+    '7f281000-0000-4000-8000-000000000501',
+    'payment',
+    current_setting('test.reversal.payment_id')::uuid,
+    'Cuenta bancaria seleccionada incorrectamente',
+    'reverse-payment-fixture-0001',
+    current_setting('test.reversal.payment_expected_version')::bigint
+  )->>'replayed',
+  'true',
+  'an identical correction retry returns the immutable receipt without duplication'
+);
+
+select throws_ok(
+  $$
+    select public.reverse_payroll_settlement_v1(
+      '7f281000-0000-4000-8000-000000000501',
+      'payment',
+      current_setting('test.reversal.payment_id')::uuid,
+      'Monto ingresado incorrectamente',
+      'reverse-payment-fixture-0001',
+      (
+        select reconciliation_version
+        from public.payroll_vouchers
+        where id = '7f281000-0000-4000-8000-000000000501'
+      )
+    )
+  $$,
+  'P0001',
+  'payroll_money_idempotency_conflict',
+  'a correction operation key cannot be reused with changed intent'
+);
+
+select set_config(
+  'test.reversal.advance_allocation_id',
+  (
+    select evidence.evidence_id::text
+    from public.get_payroll_voucher_settlement_evidence_v2(
+      array['7f281000-0000-4000-8000-000000000503'::uuid]
+    ) evidence
+    where evidence.evidence_kind = 'advance'
+      and evidence.amount > 0
+      and not evidence.is_reversal
+    order by evidence.evidence_id
+    limit 1
+  ),
+  true
+);
+select set_config(
+  'test.reversal.advance_receipt',
+  public.reverse_payroll_settlement_v1(
+    '7f281000-0000-4000-8000-000000000503',
+    'advance_allocation',
+    current_setting('test.reversal.advance_allocation_id')::uuid,
+    'Anticipo imputado a la semana incorrecta',
+    'reverse-advance-fixture-0001',
+    (
+      select reconciliation_version
+      from public.payroll_vouchers
+      where id = '7f281000-0000-4000-8000-000000000503'
+    )
+  )::text,
+  true
+);
+
+select ok(
+  exists (
+    select 1
+    from public.employee_advance_allocations original
+    join public.employee_advance_allocations reversal
+      on reversal.tenant_id = original.tenant_id
+     and reversal.reversal_of_id = original.id
+     and reversal.advance_id = original.advance_id
+     and reversal.voucher_line_id = original.voucher_line_id
+     and reversal.amount = -original.amount
+    join public.employee_advances advance
+      on advance.id = original.advance_id
+     and advance.amount_applied = 0
+     and advance.status = 'open'
+    where original.id = current_setting(
+      'test.reversal.advance_allocation_id'
+    )::uuid
+  ),
+  'advance correction restores the advance balance without deleting either allocation'
+);
+
+select ok(
+  exists (
+    select 1
+    from public.journal_entries reversal_journal
+    join public.journal_entries original_journal
+      on original_journal.id = reversal_journal.reversal_of_id
+     and (
+       original_journal.source_document_id = current_setting(
+         'test.reversal.advance_allocation_id'
+       )::uuid
+       or original_journal.source_reference = current_setting(
+         'test.reversal.advance_allocation_id'
+       )
+     )
+    where reversal_journal.source_document_id = (
+      current_setting('test.reversal.advance_receipt')::jsonb
+        ->>'reversal_settlement_id'
+    )::uuid
+      and reversal_journal.operation_id = (
+        current_setting('test.reversal.advance_receipt')::jsonb
+          ->>'trace_operation_id'
+      )::uuid
+      and reversal_journal.total_debit =
+        reversal_journal.total_credit
+      and reversal_journal.total_debit = (
+        current_setting('test.reversal.advance_receipt')::jsonb
+          ->>'amount'
+      )::numeric
+  )
+  and not exists (
+    select 1
+    from public.stock_movements stock_movement
+    where stock_movement.operation_id = (
+      current_setting('test.reversal.advance_receipt')::jsonb
+        ->>'trace_operation_id'
+    )::uuid
+  ),
+  'advance correction posts the exact linked accounting inverse and no stock movement'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from public.payroll_money_operations money_operation
+    where money_operation.operation_type = 'payroll_settlement_reversal'
+  ),
+  2,
+  'one immutable operation receipt exists for each distinct correction'
+);
+
 reset role;
 
 -- Ordinary linked ERP worker: no full statement evidence and no commands.

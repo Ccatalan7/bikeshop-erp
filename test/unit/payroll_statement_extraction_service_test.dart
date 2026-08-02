@@ -124,6 +124,47 @@ void main() {
       expect(result.warnings.single, contains('Android o iPhone'));
     });
 
+    test('sends one whole scanned PDF to the cloud extractor without rastering',
+        () async {
+      final source = _blankPdfBytes(pageCount: 2);
+      var cloudCalls = 0;
+      var rasterCalls = 0;
+      final progress = <PayrollStatementPreparationProgress>[];
+      final service = PayrollStatementExtractionService(
+        cloudDocumentTextExtractor: ({
+          required bytes,
+          required filename,
+          sourcePath,
+        }) async {
+          cloudCalls += 1;
+          expect(bytes, same(source));
+          expect(filename, 'cartola-escaneada.pdf');
+          return 'Cuenta corriente 123456789\n'
+              'Fecha Descripción Cargos Abonos Saldo\n'
+              '27/07/2026 Transferencia a Persona 128.000 0 900.000';
+        },
+        pdfPageRasterizer: ({required bytes, required pages}) async* {
+          rasterCalls += 1;
+        },
+      );
+
+      final result = await service.extract(
+        bytes: source,
+        filename: 'cartola-escaneada.pdf',
+        onProgress: progress.add,
+      );
+
+      expect(result.method, PayrollStatementExtractionMethod.veryfiCloudOcr);
+      expect(result.pages, hasLength(1));
+      expect(result.parserInput, contains('Persona'));
+      expect(cloudCalls, 1);
+      expect(rasterCalls, 0);
+      expect(
+        progress.map((event) => event.phase),
+        contains(PayrollStatementPreparationPhase.recognizingWithVeryfi),
+      );
+    });
+
     test('rasterizes and OCRs every scanned PDF page locally in order',
         () async {
       final rasterRequests = <List<int>>[];
@@ -296,6 +337,49 @@ void main() {
         PayrollStatementExtractionMethod.onDeviceImageOcr,
       );
       expect(result.parserInput, contains('Persona Ejemplo'));
+    });
+
+    test('prefers the cloud extractor for an image and identifies the method',
+        () async {
+      var localCalls = 0;
+      var cloudCalls = 0;
+      final service = PayrollStatementExtractionService(
+        imageTextExtractor: ({
+          required bytes,
+          required filename,
+          sourcePath,
+        }) async {
+          localCalls += 1;
+          return 'local should not run';
+        },
+        cloudDocumentTextExtractor: ({
+          required bytes,
+          required filename,
+          sourcePath,
+        }) async {
+          cloudCalls += 1;
+          expect(sourcePath, '/temporary/foto.jpg');
+          return 'Cuenta corriente 123456789\n'
+              'Fecha Descripción Cargos Abonos Saldo\n'
+              '27/07/2026 App-traspaso A: Persona Ejemplo 128.000 0 900.000';
+        },
+      );
+
+      final result = await service.extract(
+        bytes: Uint8List.fromList(<int>[
+          0xFF,
+          0xD8,
+          0xFF,
+          ...List<int>.filled(80, 0),
+        ]),
+        filename: 'foto.jpg',
+        sourcePath: '/temporary/foto.jpg',
+      );
+
+      expect(result.method, PayrollStatementExtractionMethod.veryfiCloudOcr);
+      expect(result.parserInput, contains('Persona Ejemplo'));
+      expect(cloudCalls, 1);
+      expect(localCalls, 0);
     });
 
     test('rejects extension-only files with invalid magic bytes', () async {

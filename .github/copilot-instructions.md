@@ -47,6 +47,7 @@ código o en git, o una conclusión que todavía no se verificó.
 | Paletas, claro/oscuro, roles semánticos | `docs/architecture/appearance-palette-contract.md` |
 | Componentes compartidos y su adopción | `docs/architecture/universal-ui-component-system.md` |
 | Una superficie de negocio cambió | `docs/architecture/canonical-ui-surfaces.md` |
+| Refinamiento integral de un módulo, incluyendo correcciones/reversas | `docs/architecture/APP_REFINEMENT_MASTER_PLAN.md` |
 | Colaboración entre agentes | `docs/development/CODEX_CLAUDE_COLLABORATION.md` |
 
 Si el aprendizaje no calza en ninguno, va acá — y si acá crece demasiado, se
@@ -502,6 +503,31 @@ implemented under their component id (`S-05`, `O-02`, `I-01`…) with values bou
 to theme roles — that guide's own first rule is that a widget may not contain a
 literal hex. A module's screens are designed on their own Design canvas rather
 than by editing the shared guide.
+
+## UI-led refinement is full product refinement
+
+Every gradual UI migration or module redesign must follow
+`docs/architecture/APP_REFINEMENT_MASTER_PLAN.md`. The visual surface is the
+priority and discovery point, but the work is not a skin pass: the same task
+audits UX, terminology, state transitions, domain logic, backend ownership,
+authorization, concurrency, accounting, inventory, consumers and operational
+evidence.
+
+For every persistent mutation, map both directions before declaring the module
+complete:
+
+```text
+Owner -> Control -> Operation -> Consumers
+Source -> Forward effect -> Correction/Reversal -> Projections -> Evidence
+```
+
+A consequential transaction must have a formal correction path appropriate to
+its domain — reversal, void, reopening, return, credit note or supersession.
+Preserve the original, require a reason, append linked evidence, execute the
+inverse accounting/stock/business effects exactly once through the canonical
+owner, and recalculate every projection. Never expose a destructive hard delete
+of posted evidence as the normal correction workflow. If the capability does
+not exist, the module remains `partial`; a polished UI does not waive this gate.
 
 ## Verification Expectations
 

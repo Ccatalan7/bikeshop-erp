@@ -498,7 +498,7 @@ void main() {
     expect(database.rpcCalls, hasLength(1));
     expect(
       database.rpcCalls.single.functionName,
-      'get_payroll_voucher_settlement_evidence',
+      'get_payroll_voucher_settlement_evidence_v2',
     );
     expect(
       database.rpcCalls.single.params['p_voucher_ids'],
@@ -543,6 +543,97 @@ void main() {
       isFalse,
     );
     expect(hydrated.last.lines.single.balance, 50000);
+  });
+
+  test('v2 evidence preserves the append-only correction relationship', () {
+    final evidence = PayrollSettlementEvidence.fromMap(
+      <String, dynamic>{
+        'evidence_id': 'payment-original',
+        'voucher_id': 'voucher-1',
+        'line_id': 'line-1',
+        'evidence_kind': 'payment',
+        'source': 'bank_statement',
+        'amount': 72000,
+        'is_reversal': false,
+        'reversal_evidence_id': 'payment-reversal',
+        'reversal_reason': 'Cuenta incorrecta',
+        'reversal_operation_id': 'operation-1',
+        'reversal_operation_key': 'reverse-payment-0001',
+        'reversed_at': '2026-08-02T12:00:00.000Z',
+        'reversed_by_id': 'user-1',
+        'reversed_by_name': 'Claudio Catalán',
+      },
+    );
+
+    expect(evidence.isReversal, isFalse);
+    expect(evidence.isReversed, isTrue);
+    expect(evidence.isActiveSettlement, isFalse);
+    expect(evidence.reversalEvidenceId, 'payment-reversal');
+    expect(evidence.reversalReason, 'Cuenta incorrecta');
+    expect(evidence.reversedByName, 'Claudio Catalán');
+  });
+
+  test('refinement capabilities come from the exact server contract', () async {
+    final database = _LifecycleDatabaseService();
+    final service = PayrollVoucherService(database);
+    addTearDown(() {
+      service.dispose();
+      database.dispose();
+    });
+
+    final capabilities = await service.getRefinementCapabilities();
+
+    expect(capabilities.employeePaymentMethodCommand, isTrue);
+    expect(capabilities.structuredAdvanceAudit, isTrue);
+    expect(capabilities.auditedSettlementReversal, isTrue);
+    expect(capabilities.settlementEvidenceContractVersion, 2);
+    expect(
+      database.rpcCalls.single.functionName,
+      'get_payroll_refinement_capabilities_v1',
+    );
+  });
+
+  test('reverseSettlement sends one versioned correction and publishes refresh',
+      () async {
+    final database = _LifecycleDatabaseService();
+    final refresh = _RecordingRefreshCoordinator();
+    final service = PayrollVoucherService(
+      database,
+      financialProjectionRefresh: refresh,
+    );
+    addTearDown(() {
+      service.dispose();
+      database.dispose();
+      refresh.dispose();
+    });
+
+    final receipt = await service.reverseSettlement(
+      voucherId: 'voucher-reversal',
+      settlementKind: PayrollSettlementEvidenceKind.payment,
+      settlementId: 'payment-original',
+      reason: 'Cuenta contable incorrecta',
+      operationKey: 'reverse-payment-0001',
+      expectedReconciliationVersion: 17,
+    );
+
+    expect(receipt.reversalSettlementId, 'settlement-reversal');
+    expect(database.rpcCalls, hasLength(1));
+    expect(
+      database.rpcCalls.single.functionName,
+      'reverse_payroll_settlement_v1',
+    );
+    expect(
+      database.rpcCalls.single.params,
+      <String, dynamic>{
+        'p_voucher_id': 'voucher-reversal',
+        'p_settlement_kind': 'payment',
+        'p_settlement_id': 'payment-original',
+        'p_reason': 'Cuenta contable incorrecta',
+        'p_operation_key': 'reverse-payment-0001',
+        'p_expected_reconciliation_version': 17,
+      },
+    );
+    expect(refresh.changes.single.entityId, 'voucher-reversal');
   });
 
   test('deleteVoucher loads a version and generates a command key once',
@@ -844,7 +935,8 @@ class _LifecycleDatabaseService extends DatabaseService {
         ),
       ),
     );
-    if (functionName == 'get_payroll_voucher_settlement_evidence') {
+    if (functionName == 'get_payroll_voucher_settlement_evidence' ||
+        functionName == 'get_payroll_voucher_settlement_evidence_v2') {
       final voucherIds =
           (params?['p_voucher_ids'] as List<dynamic>? ?? const [])
               .map((value) => value.toString())
@@ -853,6 +945,26 @@ class _LifecycleDatabaseService extends DatabaseService {
           .where((row) => voucherIds.contains(row['voucher_id']?.toString()))
           .map((row) => Map<String, dynamic>.from(row))
           .toList(growable: false);
+    }
+    if (functionName == 'get_payroll_refinement_capabilities_v1') {
+      return <String, dynamic>{
+        'contract_version': 1,
+        'employee_payment_method_command': true,
+        'structured_advance_audit': true,
+        'audited_settlement_reversal': true,
+        'settlement_evidence_contract_version': 2,
+      };
+    }
+    if (functionName == 'reverse_payroll_settlement_v1') {
+      return <String, dynamic>{
+        'operation_id': 'operation-reversal',
+        'operation_key': params?['p_operation_key'],
+        'voucher_id': params?['p_voucher_id'],
+        'original_settlement_id': params?['p_settlement_id'],
+        'reversal_settlement_id': 'settlement-reversal',
+        'reconciliation_version': 18,
+        'replayed': false,
+      };
     }
     if (returnMalformedResult) return true;
     return <String, dynamic>{

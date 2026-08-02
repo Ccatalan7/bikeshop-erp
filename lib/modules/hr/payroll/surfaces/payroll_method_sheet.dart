@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../shared/services/current_user_profile_service.dart';
 import '../../../../shared/widgets/vb_notice.dart';
 import '../../../../shared/widgets/vb_short_select.dart';
 import '../../models/hr_models.dart';
@@ -109,6 +110,36 @@ enum PayrollMethodAuthority {
   /// Puede ver la ficha pero no cambiarla, o la autoridad aún no se resuelve.
   /// **El default conservador es éste**: sin permiso demostrado, sólo lectura.
   readOnly,
+}
+
+/// Deriva la autoridad de la hoja desde el perfil de sesión.
+///
+/// **Recibe el servicio entero a propósito.** Una versión anterior tomaba
+/// cuatro `bool` y el llamador hacía el mapeo; entonces la página y la prueba
+/// escribían **cada una su propio mapeo**, y la prueba pasaba aunque el mapeo
+/// de producción se torciera — que es justo lo que tenía que atajar. Con la
+/// firma así, duplicarlo es imposible: sólo hay un sitio donde se leen
+/// `isLoading`, `loadIssue` y `canManageUsers`, y es éste.
+///
+/// La capacidad es la canónica: `canManageUsers` es lo que la base exige para
+/// escribir la ficha (`employees_update_managers` pide `can_manage_tenant_hr`,
+/// que es `can_manage_tenant_users`). Leerla admite además
+/// `can_manage_tenant_payroll`, así que **un contador ve esta hoja y no puede
+/// guardarla**. No se inventa un permiso por acción que el backend no tiene.
+///
+/// **Las cuatro condiciones importan, y el default es restrictivo**: sin
+/// servicio, mientras carga y con problema de carga se cae a sólo lectura,
+/// nunca a editable. Un permiso que «aún no se sabe» no es un permiso.
+PayrollMethodAuthority payrollMethodAuthorityFor(
+  CurrentUserProfileService? service,
+) {
+  final canWrite = service != null &&
+      !service.isLoading &&
+      service.loadIssue == null &&
+      service.profile?.canManageUsers == true;
+  return canWrite
+      ? PayrollMethodAuthority.editable
+      : PayrollMethodAuthority.readOnly;
 }
 
 class PayrollMethodSheet extends StatefulWidget {
