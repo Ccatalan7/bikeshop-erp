@@ -17,6 +17,118 @@ enum PayrollAdvanceLedgerStatus {
   }
 }
 
+enum PayrollAdvanceReasonCode {
+  requestedAdvance,
+  shortWorkweek,
+  other;
+
+  static PayrollAdvanceReasonCode parse(Object? value) {
+    return switch (value?.toString()) {
+      'requested_advance' => PayrollAdvanceReasonCode.requestedAdvance,
+      'short_workweek' => PayrollAdvanceReasonCode.shortWorkweek,
+      'other' => PayrollAdvanceReasonCode.other,
+      final value => throw FormatException(
+          'Unknown employee advance reason: $value',
+        ),
+    };
+  }
+
+  String get wireValue => switch (this) {
+        PayrollAdvanceReasonCode.requestedAdvance => 'requested_advance',
+        PayrollAdvanceReasonCode.shortWorkweek => 'short_workweek',
+        PayrollAdvanceReasonCode.other => 'other',
+      };
+}
+
+class PayrollAdvanceReason {
+  const PayrollAdvanceReason({
+    required this.code,
+    required this.explanation,
+    this.workEndedOn,
+  });
+
+  final PayrollAdvanceReasonCode code;
+  final String explanation;
+  final DateTime? workEndedOn;
+
+  factory PayrollAdvanceReason.fromMap(Object? value) {
+    final map = _object(value, 'employee advance reason');
+    final code = PayrollAdvanceReasonCode.parse(map['code']);
+    final explanation = _requiredText(map, 'explanation');
+    final workEndedOn = _optionalDateTime(map['work_ended_on']);
+    if ((code == PayrollAdvanceReasonCode.shortWorkweek) !=
+        (workEndedOn != null)) {
+      throw const FormatException(
+        'Employee advance work-ended date does not match its reason',
+      );
+    }
+    return PayrollAdvanceReason(
+      code: code,
+      explanation: explanation,
+      workEndedOn: workEndedOn,
+    );
+  }
+}
+
+class PayrollAdvanceOriginalEvidence {
+  const PayrollAdvanceOriginalEvidence({
+    required this.id,
+    required this.appFileId,
+    required this.fileName,
+    required this.sizeBytes,
+    required this.sha256,
+    required this.storageObjectId,
+    required this.storageObjectVersion,
+    required this.storageObjectEtag,
+    required this.createdAt,
+    required this.createdBy,
+    this.mimeType,
+  });
+
+  final String id;
+  final String appFileId;
+  final String fileName;
+  final String? mimeType;
+  final int sizeBytes;
+  final String sha256;
+  final String storageObjectId;
+  final String storageObjectVersion;
+  final String storageObjectEtag;
+  final DateTime createdAt;
+  final String createdBy;
+
+  factory PayrollAdvanceOriginalEvidence.fromMap(Object? value) {
+    final map = _object(value, 'employee advance original evidence');
+    final sizeBytes = _requiredInt(map, 'size_bytes');
+    final sha256 = _requiredText(map, 'sha256').toLowerCase();
+    final storageObjectId = _requiredText(map, 'storage_object_id');
+    final storageObjectVersion = _requiredText(map, 'storage_object_version');
+    final storageObjectEtag = _requiredText(map, 'storage_object_etag');
+    if (sizeBytes <= 0 ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(sha256) ||
+        !RegExp(
+          r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+        ).hasMatch(storageObjectId)) {
+      throw const FormatException(
+        'Invalid employee advance original evidence integrity metadata',
+      );
+    }
+    return PayrollAdvanceOriginalEvidence(
+      id: _requiredText(map, 'id'),
+      appFileId: _requiredText(map, 'app_file_id'),
+      fileName: _requiredText(map, 'file_name'),
+      mimeType: _optionalText(map['mime_type']),
+      sizeBytes: sizeBytes,
+      sha256: sha256,
+      storageObjectId: storageObjectId,
+      storageObjectVersion: storageObjectVersion,
+      storageObjectEtag: storageObjectEtag,
+      createdAt: _requiredDateTime(map, 'created_at'),
+      createdBy: _requiredText(map, 'created_by'),
+    );
+  }
+}
+
 enum PayrollAuditEvidenceSource {
   manual,
   statementReconciliation,
@@ -220,6 +332,8 @@ class PayrollAdvanceLedgerEntry {
     this.paymentAccount,
     this.reference,
     this.notes,
+    this.reason,
+    this.originalEvidence,
   });
 
   final String id;
@@ -233,6 +347,8 @@ class PayrollAdvanceLedgerEntry {
   final PayrollAccountIdentity? paymentAccount;
   final String? reference;
   final String? notes;
+  final PayrollAdvanceReason? reason;
+  final PayrollAdvanceOriginalEvidence? originalEvidence;
   final PayrollAuditActor actor;
   final PayrollAuditEvidence fundingEvidence;
   final DateTime createdAt;
@@ -256,6 +372,12 @@ class PayrollAdvanceLedgerEntry {
           : PayrollAccountIdentity.fromMap(map['payment_account']),
       reference: _optionalText(map['reference']),
       notes: _optionalText(map['notes']),
+      reason: map['reason'] == null
+          ? null
+          : PayrollAdvanceReason.fromMap(map['reason']),
+      originalEvidence: map['original_evidence'] == null
+          ? null
+          : PayrollAdvanceOriginalEvidence.fromMap(map['original_evidence']),
       actor: PayrollAuditActor.fromMap(map['actor']),
       fundingEvidence: PayrollAuditEvidence.fromMap(map['funding_evidence']),
       createdAt: _requiredDateTime(map, 'created_at'),
@@ -325,7 +447,7 @@ class PayrollAdvanceLedgerPage {
   final PayrollAdvanceLedgerCursor? nextCursor;
 
   factory PayrollAdvanceLedgerPage.fromMap(Map<String, dynamic> map) {
-    _requireContractVersion(map);
+    _requireContractVersion(map, supported: const <int>{1, 2});
     final nextCursorValue = map['next_cursor'];
     final page = PayrollAdvanceLedgerPage(
       employeeId: _requiredText(map, 'employee_id'),
@@ -457,8 +579,11 @@ class PayrollHistoryPage {
   }
 }
 
-void _requireContractVersion(Map<String, dynamic> map) {
-  if (map['contract_version'] != 1) {
+void _requireContractVersion(
+  Map<String, dynamic> map, {
+  Set<int> supported = const <int>{1},
+}) {
+  if (!supported.contains(map['contract_version'])) {
     throw FormatException(
       'Unsupported payroll read model version: ${map['contract_version']}',
     );

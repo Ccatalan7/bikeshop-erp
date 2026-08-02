@@ -305,15 +305,28 @@ familia visual todavía no entregada, especialmente dark mode integral.
 - El ledger visible debe permanecer acotado y desplazable con muchas filas o
   poca altura. Una persona inactiva puede conservar historial, pero no puede
   recibir un CTA de nuevo anticipo.
-- Falta un contrato estructurado para
-  `requested_advance | short_workweek | other`, con motivo obligatorio y
-  `work_ended_on` para semana corta. Una nota libre no reemplaza ese contrato.
-- Falta vincular el comprobante original del anticipo al dueño canónico de
-  archivos con evidencia append-only y tenant-scoped.
-- Falta un read model paginado de ledger por persona. La lectura actual sólo
-  conserva saldos abiertos y hace desaparecer los anticipos imputados/anulados;
-  el ledger debe exponer entregado, imputado, saldo, estado e imputaciones por
-  semana.
+- El backend fuente ya define el contrato estructurado
+  `requested_advance | short_workweek | other`, explicación obligatoria y
+  `work_ended_on` para semana corta en
+  `20260801183000_add_structured_employee_advance_audit.sql`. La migración aún
+  no está desplegada y la UI de creación todavía debe adoptar v3; una nota libre
+  no reemplaza ese contrato.
+- El mismo contrato vincula opcionalmente el comprobante original a `app_files`
+  por actor + operation key. Conserva el SHA-256 calculado por el cliente, pero
+  la frontera de confianza no depende de esa metadata: v3 comprueba el dueño
+  real de Storage y fija el `object id`, `version` y `ETag` producidos por el
+  servidor antes de volver inmutables el vínculo, la metadata y los bytes. Un
+  upload todavía no reclamado por `app_files` permanece recuperable; la
+  inmutabilidad comienza sólo después de validar metadata, actor y objeto.
+  El coordinador cliente ordena `capability → carga confirmada → v3`, sin
+  compensación destructiva ante respuestas ambiguas. La migración pasa 42
+  contratos pgTAP locales. Un smoke real por Storage API + PostgREST confirmó
+  upload `200`, metadata `201`, dueño/versión/ETag, bloqueo posterior y rechazo
+  de overwrite/delete; su cleanup terminó con cero usuarios, tenants, metadata
+  u objetos de prueba. Siguen pendientes la adopción desde la UI y el despliegue.
+- `get_employee_advance_ledger_page_v2` ya enriquece la página acotada de v1 con
+  motivo y evidencia. El cliente parsea v2 y degrada sólo ante ausencia real a
+  v1 durante el rollout; producción aún no tiene la migración.
 - Aplicación a semanas elegibles sin reescribir total/horas.
 - Búsqueda/selector adaptativo cuando la lista de trabajadores crece, selección
   preservada al cambiar breakpoint y persona preseleccionada en acciones

@@ -60274,7 +60274,8 @@ begin
   if import_row.apply_operation_key is not null then
     if import_row.apply_operation_key = operation_key_value then
       if import_row.apply_payload_hash = payload_hash_value then
-        return import_row.apply_receipt;
+        return import_row.apply_receipt
+          || jsonb_build_object('replayed', true);
       end if;
       raise exception 'payroll_statement_apply_idempotency_conflict'
         using
@@ -61864,6 +61865,8 @@ begin
   end;
 
   receipt_value := jsonb_build_object(
+    'replayed',
+    false,
     'import_id',
     p_import_id,
     'status',
@@ -62797,7 +62800,7 @@ comment on function public.apply_payroll_statement_reconciliation(
   jsonb,
   jsonb
 ) is
-  'Atomically applies explicit reviewed payroll decisions with stable account-scoped row dedupe, live balances, tenant locks, voucher-version checks, and an exact allow-list for draft vouchers the operator authorized to commit. The receipt returns committed_voucher_ids. A manually confirmed partial debit posts exactly the bank amount and leaves the residual obligation open; bounded overpayment variance remains unresolved and is not a full bank-ledger reconciliation.';
+  'Atomically applies explicit reviewed payroll decisions with stable account-scoped row dedupe, live balances, tenant locks, voucher-version checks, and an exact allow-list for draft vouchers the operator authorized to commit. The receipt returns committed_voucher_ids and declares replayed=false on the first application or replayed=true on an exact retry. A manually confirmed partial debit posts exactly the bank amount and leaves the residual obligation open; bounded overpayment variance remains unresolved and is not a full bank-ledger reconciliation.';
 comment on function public.delete_payroll_voucher_draft(uuid) is
   'Service-only legacy aggregate deletion used behind the versioned public command.';
 comment on function public.delete_payroll_voucher_draft_v2(
@@ -62839,3 +62842,13 @@ commit;
 -- Authority-bound Website Builder editor read projection (RPC) plus the
 -- private-row read hardening for website_pages/website_blocks.
 \ir ../migrations/20260730091630_harden_website_editor_reads.sql
+
+-- Exact first-apply/retry metadata for the OCR reconciliation receipt.
+\ir ../migrations/20260801173000_report_payroll_reconciliation_replay.sql
+
+-- Atomic, server-derived employee payment-method configuration for Payroll.
+\ir ../migrations/20260801180000_set_employee_payroll_payment_method.sql
+
+-- Structured reasons and immutable original-file evidence for employee
+-- advances, with an expand-first v3 command and enriched ledger v2.
+\ir ../migrations/20260801183000_add_structured_employee_advance_audit.sql

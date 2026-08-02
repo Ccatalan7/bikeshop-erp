@@ -11,6 +11,64 @@ import '../../accounting/services/financial_projection_refresh_coordinator.dart'
 
 bool _payrollTimeZonesInitialized = false;
 
+/// Falla conocida antes de que un comando financiero alcance su RPC.
+///
+/// La distinción es de integridad, no de presentación: cuando aparece esta
+/// excepción el servicio garantiza que **no envió la escritura**, por lo que
+/// el host no debe levantar la valla de resultado ambiguo ni insinuar que el
+/// movimiento pudo haberse registrado.
+enum PayrollVoucherPreflightFailureKind {
+  rejected,
+  unavailable,
+}
+
+class PayrollVoucherPreflightException implements Exception {
+  const PayrollVoucherPreflightException.rejected(this.userMessage)
+      : kind = PayrollVoucherPreflightFailureKind.rejected;
+
+  const PayrollVoucherPreflightException.unavailable(this.userMessage)
+      : kind = PayrollVoucherPreflightFailureKind.unavailable;
+
+  final PayrollVoucherPreflightFailureKind kind;
+
+  /// Texto deliberadamente seguro para interfaz; nunca contiene payloads ni
+  /// mensajes crudos del backend.
+  final String userMessage;
+
+  bool get mayHaveCommitted => false;
+
+  @override
+  String toString() => 'PayrollVoucherPreflightException(${kind.name})';
+}
+
+@immutable
+class PayrollAdvanceEvidenceReference {
+  const PayrollAdvanceEvidenceReference({
+    required this.appFileId,
+    required this.sha256,
+  });
+
+  final String appFileId;
+  final String sha256;
+}
+
+@immutable
+class PayrollAdvanceRegistrationReceipt {
+  const PayrollAdvanceRegistrationReceipt({
+    required this.advanceId,
+    required this.replayed,
+    this.evidenceStorageObjectId,
+    this.evidenceStorageObjectVersion,
+    this.evidenceStorageObjectEtag,
+  });
+
+  final String advanceId;
+  final bool replayed;
+  final String? evidenceStorageObjectId;
+  final String? evidenceStorageObjectVersion;
+  final String? evidenceStorageObjectEtag;
+}
+
 class PayrollVoucherService extends ChangeNotifier {
   final DatabaseService _db;
   final FinancialProjectionRefreshCoordinator _financialProjectionRefresh;
@@ -401,15 +459,32 @@ class PayrollVoucherService extends ChangeNotifier {
       );
     }
 
-    final result = await _db.rpc(
-      'get_employee_advance_ledger_page_v1',
-      params: <String, dynamic>{
-        'p_employee_id': employeeId,
-        'p_page_size': pageSize,
-        'p_cursor_paid_at': cursor?.paidAt.toUtc().toIso8601String(),
-        'p_cursor_id': cursor?.id,
-      },
-    );
+    final params = <String, dynamic>{
+      'p_employee_id': employeeId,
+      'p_page_size': pageSize,
+      'p_cursor_paid_at': cursor?.paidAt.toUtc().toIso8601String(),
+      'p_cursor_id': cursor?.id,
+    };
+    dynamic result;
+    try {
+      result = await _db.rpc(
+        'get_employee_advance_ledger_page_v2',
+        params: params,
+      );
+    } on PostgrestException catch (error) {
+      if (!_isMissingPayrollAuditFunction(
+        error,
+        'get_employee_advance_ledger_page_v2',
+      )) {
+        rethrow;
+      }
+      // Expand-first rollout: released backends keep v1 while the structured
+      // audit migration is pending. Only a genuinely absent v2 may degrade.
+      result = await _db.rpc(
+        'get_employee_advance_ledger_page_v1',
+        params: params,
+      );
+    }
     return PayrollAdvanceLedgerPage.fromMap(
       _asJsonObject(
         result,
@@ -435,13 +510,71 @@ class PayrollVoucherService extends ChangeNotifier {
         cursor: cursor,
       );
     } on PostgrestException catch (error) {
-      if (!_isMissingPayrollAuditPaginationFunction(error)) rethrow;
+      if (!_isMissingPayrollAuditFunction(
+        error,
+        'get_employee_advance_ledger_page_v1',
+      )) {
+        rethrow;
+      }
       debugPrint(
         '⚠️ [PayrollVoucherService] Advance-ledger pagination is not '
         'installed; using the open-advance compatibility reader.',
       );
       return null;
     }
+  }
+
+  /// Probes the exact read contract installed by the structured-advance
+  /// migration before a caller uploads immutable evidence. This must never
+  /// fall back to ledger v1: a `false` result guarantees that no evidence
+  /// object should be created for a money command the backend cannot accept.
+  Future<bool> supportsStructuredEmployeeAdvanceAudit({
+    required String employeeId,
+  }) async {
+    final normalizedEmployeeId = employeeId.trim();
+    if (normalizedEmployeeId.isEmpty) {
+      throw ArgumentError.value(
+        employeeId,
+        'employeeId',
+        'Employee ID is required',
+      );
+    }
+    dynamic result;
+    try {
+      result = await _db.rpc(
+        'get_employee_advance_ledger_page_v2',
+        params: <String, dynamic>{
+          'p_employee_id': normalizedEmployeeId,
+          'p_page_size': 1,
+          'p_cursor_paid_at': null,
+          'p_cursor_id': null,
+        },
+      );
+    } on PostgrestException catch (error) {
+      if (!_isMissingPayrollAuditFunction(
+        error,
+        'get_employee_advance_ledger_page_v2',
+      )) {
+        rethrow;
+      }
+      return false;
+    }
+    final response = _asJsonObject(
+      result,
+      command: 'validar anticipos auditados',
+    );
+    if (response['contract_version'] != 2) {
+      throw StateError(
+        'El servidor respondió con un contrato de anticipos incompatible.',
+      );
+    }
+    final page = PayrollAdvanceLedgerPage.fromMap(response);
+    if (page.employeeId != normalizedEmployeeId) {
+      throw StateError(
+        'El servidor respondió por otra persona al validar anticipos.',
+      );
+    }
+    return true;
   }
 
   /// Loads paid/voided payroll headers using a stable `(period_end, id)`
@@ -484,7 +617,12 @@ class PayrollVoucherService extends ChangeNotifier {
         cursor: cursor,
       );
     } on PostgrestException catch (error) {
-      if (!_isMissingPayrollAuditPaginationFunction(error)) rethrow;
+      if (!_isMissingPayrollAuditFunction(
+        error,
+        'get_payroll_history_page_v1',
+      )) {
+        rethrow;
+      }
       debugPrint(
         '⚠️ [PayrollVoucherService] Audit pagination is not installed; '
         'using the bounded legacy compatibility reader.',
@@ -493,15 +631,17 @@ class PayrollVoucherService extends ChangeNotifier {
     }
   }
 
-  bool _isMissingPayrollAuditPaginationFunction(PostgrestException error) {
+  bool _isMissingPayrollAuditFunction(
+    PostgrestException error,
+    String functionName,
+  ) {
+    final hint = error.hint?.toString().toLowerCase() ?? '';
     final diagnostic = <Object?>[
       error.message,
       error.details,
       error.hint,
     ].whereType<Object>().join(' ').toLowerCase();
-    final namesAuditFunction =
-        diagnostic.contains('get_payroll_history_page_v1') ||
-            diagnostic.contains('get_employee_advance_ledger_page_v1');
+    final namesAuditFunction = diagnostic.contains(functionName);
     final functionIsUnavailable = error.code == 'PGRST202' ||
         error.code == '42883' ||
         diagnostic.contains('schema cache') ||
@@ -510,7 +650,8 @@ class PayrollVoucherService extends ChangeNotifier {
     // A signature mismatch ("no function matches the given name and
     // argument types") is contract drift, not an uninstalled backend: it
     // must stay loudly visible instead of degrading to the legacy reader.
-    final isSignatureMismatch = diagnostic.contains('no function matches');
+    final isSignatureMismatch = diagnostic.contains('no function matches') ||
+        (hint.contains('perhaps you meant') && hint.contains('$functionName('));
     return namesAuditFunction && functionIsUnavailable && !isSignatureMismatch;
   }
 
@@ -954,8 +1095,12 @@ class PayrollVoucherService extends ChangeNotifier {
   Future<List<Map<String, dynamic>>> getPayrollEmployees() async {
     return _db.select(
       'employees',
+      // La cuenta DESTINO viaja en la misma lectura: la fila abierta de 5a
+      // tiene que decir a dónde va la transferencia, y pedirla por persona
+      // sería un N+1 sobre una tabla que esta pantalla ya trae entera.
       selectColumns: 'id,first_name,last_name,status,'
-          'preferred_payment_method_id',
+          'preferred_payment_method_id,'
+          'bank_name,bank_account_type,bank_account_number',
       orderBy: 'first_name',
     );
   }
@@ -1029,13 +1174,161 @@ class PayrollVoucherService extends ChangeNotifier {
     return advanceId;
   }
 
+  /// Registers an advance with the structured audit contract owned by v3.
+  ///
+  /// This deliberately has no v2 fallback: silently dropping the canonical
+  /// reason or original evidence during a rolling deployment would turn a
+  /// successful financial write into an unaudited one. Released callers that
+  /// still need the legacy path keep using [registerEmployeeAdvance].
+  Future<PayrollAdvanceRegistrationReceipt> registerAuditedEmployeeAdvance({
+    required String employeeId,
+    required double amount,
+    required String paymentMethodId,
+    String? paymentAccountId,
+    required DateTime paidAt,
+    String? reference,
+    String? notes,
+    required PayrollAdvanceReasonCode reasonCode,
+    required String reasonExplanation,
+    DateTime? workEndedOn,
+    PayrollAdvanceEvidenceReference? evidence,
+    String? operationKey,
+  }) async {
+    final explanation = reasonExplanation.trim();
+    final evidenceId = evidence?.appFileId.trim();
+    final evidenceSha256 = evidence?.sha256.trim().toLowerCase();
+    final hasValidReason = explanation.isNotEmpty && explanation.length <= 1000;
+    final hasValidWorkDate =
+        (reasonCode == PayrollAdvanceReasonCode.shortWorkweek) ==
+            (workEndedOn != null);
+    final hasValidEvidence = evidence == null ||
+        (evidenceId != null &&
+            evidenceId.isNotEmpty &&
+            evidenceSha256 != null &&
+            RegExp(r'^[0-9a-f]{64}$').hasMatch(evidenceSha256));
+    final rawOperationKey =
+        operationKey ?? _newOperationKey('advance_register');
+    final resolvedOperationKey = rawOperationKey.trim();
+    final hasValidOperationKey = rawOperationKey == resolvedOperationKey &&
+        RegExp(r'^[A-Za-z0-9:_-]{8,200}$').hasMatch(resolvedOperationKey);
+    if (!hasValidReason ||
+        !hasValidWorkDate ||
+        !hasValidEvidence ||
+        !hasValidOperationKey) {
+      throw const PayrollVoucherPreflightException.rejected(
+        'Completa un motivo válido y su respaldo antes de registrar el anticipo.',
+      );
+    }
+
+    final resolvedAccountId = await _resolvePaymentAccountId(
+      paymentMethodId: paymentMethodId,
+      suppliedAccountId: paymentAccountId,
+    );
+    final resolvedPaidAt = await _tenantCivilInstantIso(paidAt);
+    final result = await _db.rpc(
+      'register_employee_advance_v3',
+      params: <String, dynamic>{
+        'p_operation_key': resolvedOperationKey,
+        'p_employee_id': employeeId,
+        'p_amount': amount,
+        'p_payment_method_id': paymentMethodId,
+        'p_payment_account_id': resolvedAccountId,
+        'p_paid_at': resolvedPaidAt,
+        'p_reference': reference,
+        'p_notes': notes,
+        'p_reason_code': reasonCode.wireValue,
+        'p_reason_explanation': explanation,
+        'p_work_ended_on': workEndedOn == null ? null : _civilDate(workEndedOn),
+        'p_evidence_file_id': evidenceId,
+        'p_evidence_file_sha256': evidenceSha256,
+      },
+    );
+    final receipt = _asJsonObject(
+      result,
+      command: 'registrar el anticipo auditado',
+    );
+    final advanceId = receipt['advance_id']?.toString().trim();
+    final replayed = receipt['replayed'];
+    final receiptWorkEndedOn = receipt['work_ended_on']?.toString();
+    final expectedWorkEndedOn =
+        workEndedOn == null ? null : _civilDate(workEndedOn);
+    final receiptAmount = receipt['amount'];
+    final evidenceStorageObjectId =
+        receipt['evidence_storage_object_id']?.toString().trim();
+    final evidenceStorageObjectVersion =
+        receipt['evidence_storage_object_version']?.toString().trim();
+    final evidenceStorageObjectEtag =
+        receipt['evidence_storage_object_etag']?.toString().trim();
+    final hasConfirmedStorageIdentity = evidence == null
+        ? evidenceStorageObjectId == null &&
+            evidenceStorageObjectVersion == null &&
+            evidenceStorageObjectEtag == null
+        : evidenceStorageObjectId != null &&
+            RegExp(
+              r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+            ).hasMatch(evidenceStorageObjectId) &&
+            evidenceStorageObjectVersion != null &&
+            evidenceStorageObjectVersion.isNotEmpty &&
+            evidenceStorageObjectEtag != null &&
+            evidenceStorageObjectEtag.isNotEmpty;
+    final receiptPaidAt =
+        DateTime.tryParse(receipt['paid_at']?.toString() ?? '');
+    final expectedPaidAt = DateTime.parse(resolvedPaidAt);
+    final receiptMatches = advanceId != null &&
+        advanceId.isNotEmpty &&
+        replayed is bool &&
+        receipt['operation_key']?.toString() == resolvedOperationKey &&
+        receipt['employee_id']?.toString() == employeeId &&
+        receiptAmount is num &&
+        receiptAmount.toDouble() == amount &&
+        receipt['payment_method_id']?.toString() == paymentMethodId &&
+        receipt['payment_account_id']?.toString() == resolvedAccountId &&
+        receiptPaidAt != null &&
+        receiptPaidAt.toUtc().isAtSameMomentAs(expectedPaidAt) &&
+        receipt['status'] == 'open' &&
+        receipt['reference']?.toString() == reference &&
+        receipt['reason_code'] == reasonCode.wireValue &&
+        receipt['reason_explanation'] == explanation &&
+        receiptWorkEndedOn == expectedWorkEndedOn &&
+        receipt['evidence_file_id']?.toString() == evidenceId &&
+        receipt['evidence_file_sha256']?.toString() == evidenceSha256 &&
+        hasConfirmedStorageIdentity;
+    if (!receiptMatches) {
+      throw StateError(
+        'El servidor no confirmó íntegramente el anticipo auditado.',
+      );
+    }
+
+    _financialProjectionRefresh.recordCommitted(
+      FinancialProjectionChange(
+        kind: FinancialProjectionChangeKind.payroll,
+        origin: FinancialProjectionChangeOrigin.localCommit,
+        entityId: advanceId,
+      ),
+    );
+    return PayrollAdvanceRegistrationReceipt(
+      advanceId: advanceId,
+      replayed: replayed,
+      evidenceStorageObjectId: evidenceStorageObjectId,
+      evidenceStorageObjectVersion: evidenceStorageObjectVersion,
+      evidenceStorageObjectEtag: evidenceStorageObjectEtag,
+    );
+  }
+
   Future<String> _resolvePaymentAccountId({
     required String paymentMethodId,
     String? suppliedAccountId,
   }) async {
     final supplied = suppliedAccountId?.trim();
     if (supplied != null && supplied.isNotEmpty) return supplied;
-    final methods = await getPaymentMethods();
+    final List<Map<String, dynamic>> methods;
+    try {
+      methods = await getPaymentMethods();
+    } catch (_) {
+      throw const PayrollVoucherPreflightException.unavailable(
+        'No se pudo validar la cuenta del método de pago. Intenta nuevamente.',
+      );
+    }
     for (final method in methods) {
       if (method['id']?.toString() != paymentMethodId) continue;
       final accountId = method['account_id']?.toString().trim();
@@ -1046,7 +1339,7 @@ class PayrollVoucherService extends ChangeNotifier {
       }
       return accountId;
     }
-    throw StateError(
+    throw const PayrollVoucherPreflightException.rejected(
       'El método de pago no tiene una cuenta contable activa.',
     );
   }
@@ -1056,14 +1349,20 @@ class PayrollVoucherService extends ChangeNotifier {
     PayrollVoucherLine line, {
     String? operationKey,
   }) async {
-    if (line.id == null) return;
+    if (line.id == null) {
+      throw const PayrollVoucherPreflightException.rejected(
+        'La línea ya no está disponible. Recarga la semana.',
+      );
+    }
     try {
       final voucher = await getVoucher(line.voucherId);
       if (voucher == null) {
-        throw StateError('No se encontró la nómina de esta línea.');
+        throw const PayrollVoucherPreflightException.unavailable(
+          'No se pudo validar la semana antes de cambiarla. Intenta nuevamente.',
+        );
       }
       if (voucher.status != PayrollVoucherStatus.draft) {
-        throw StateError(
+        throw const PayrollVoucherPreflightException.rejected(
           'Una semana confirmada ya no puede cambiar sus horas ni su método. '
           'Registra el pago como movimiento.',
         );
@@ -1073,7 +1372,9 @@ class PayrollVoucherService extends ChangeNotifier {
           if (current.id == line.id) line else current,
       ];
       if (!replaced.any((current) => current.id == line.id)) {
-        throw StateError('La línea cambió; recarga la nómina.');
+        throw const PayrollVoucherPreflightException.rejected(
+          'La línea cambió; recarga la nómina.',
+        );
       }
       await updateVoucher(
         voucher.copyWith(lines: replaced),
@@ -1100,7 +1401,7 @@ class PayrollVoucherService extends ChangeNotifier {
       _setLoading(true);
 
       if (paymentSplits == null || paymentSplits.isEmpty) {
-        throw StateError(
+        throw const PayrollVoucherPreflightException.rejected(
           'El pago debe indicar exactamente qué persona y monto se registran.',
         );
       }
@@ -1133,11 +1434,33 @@ class PayrollVoucherService extends ChangeNotifier {
   }
 
   Future<int> _loadVoucherReconciliationVersion(String voucherId) async {
-    final row = await _db.selectById('payroll_vouchers', voucherId);
-    if (row == null) {
-      throw StateError('La nómina ya no existe. Recarga antes de continuar.');
+    final id = voucherId.trim();
+    if (id.isEmpty) {
+      throw const PayrollVoucherPreflightException.rejected(
+        'La semana ya no está disponible. Recarga antes de continuar.',
+      );
     }
-    return (row['reconciliation_version'] as num?)?.toInt() ?? 0;
+    final Map<String, dynamic>? row;
+    try {
+      row = await _db.selectById('payroll_vouchers', id);
+    } catch (_) {
+      throw const PayrollVoucherPreflightException.unavailable(
+        'No se pudo validar la versión de la semana. Intenta nuevamente.',
+      );
+    }
+    if (row == null) {
+      throw const PayrollVoucherPreflightException.rejected(
+        'La semana ya no existe. Recarga antes de continuar.',
+      );
+    }
+    final version = row['reconciliation_version'];
+    if (version is! num) {
+      throw const PayrollVoucherPreflightException.unavailable(
+        'La semana no trae una versión verificable. Actualiza la vista antes '
+        'de continuar.',
+      );
+    }
+    return version.toInt();
   }
 
   int? _cachedVoucherReconciliationVersion(String voucherId) {

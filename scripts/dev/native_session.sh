@@ -18,8 +18,11 @@
 #     single-key commands, so logging goes through screen's own logfile.
 #   - Keystrokes need an explicit window: `screen -S <s> -p 0 -X stuff`.
 #     Without `-p 0` the key is swallowed and the reload never happens.
-#   - This script never pattern-kills Flutter/Dart; it only stops the exact
-#     screen session it created.
+#   - This script never pattern-kills Flutter/Dart. `stop` captures the exact
+#     descendant tree of ITS screen before closing it, asks `flutter run` to
+#     quit gracefully with `q`, and only then terminates that captured tree —
+#     leaf first — verifying nothing survives. Closing screen alone leaves
+#     login/flutter/frontend orphaned on init (observed twice on 2026-08-01).
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -100,7 +103,13 @@ case "${1:-}" in
     ;;
 
   status)
-    session_alive && echo "screen: viva ($SESSION)" || echo "screen: no existe"
+    if session_alive; then
+      echo "screen: activa (sesión=$SESSION)"
+      echo "attach: screen -x $SESSION  # sirve aunque ya figure Attached"
+      echo "control: $0 reload | $0 restart"
+    else
+      echo "screen: no existe (sesión esperada=$SESSION)"
+    fi
     pid="$(app_pid)"
     [ -n "$pid" ] && echo "app:    pid $pid" || echo "app:    no corre"
     uri="$(vm_uri)"
@@ -190,8 +199,71 @@ PY
 
   stop)
     session_alive || { echo "no hay sesión '$SESSION'"; exit 0; }
-    screen -S "$SESSION" -X quit
-    echo "sesión '$SESSION' cerrada"
+
+    # 2026-08-01 · `stop` era sólo `screen -X quit`. Eso mata screen y deja
+    # `login → flutter → frontend` colgando de init: dos árboles huérfanos
+    # quemando CPU, y el `start` siguiente negándose por "app debug viva sin
+    # sesión screen". El árbol se captura ANTES de cerrar screen, porque en
+    # cuanto screen muere ya no hay forma de saber cuáles descendientes eran
+    # suyos sin adivinar por patrón — que es justo lo que este script no hace.
+    screen_pid="$(screen -ls 2>/dev/null | awk -v s="$SESSION" '
+      $1 ~ ("\\." s "$") { split($1, a, "."); print a[1]; exit }')"
+
+    # FALLA CERRADO. Si no se puede resolver la screen o su árbol, lo que NO se
+    # puede hacer es cerrar screen igual y declarar «sin descendientes»: eso es
+    # exactamente cómo se produjeron los huérfanos. Se aborta y se dice.
+    if [ -z "$screen_pid" ]; then
+      echo "no se pudo resolver el pid de la screen '$SESSION'." >&2
+      echo "NO se cierra nada: cerrarla a ciegas dejaría su árbol huérfano." >&2
+      exit 1
+    fi
+
+    owned_tree=""
+    collect_tree() {
+      local p="$1" c
+      owned_tree="$owned_tree $p"
+      for c in $(pgrep -P "$p" 2>/dev/null); do collect_tree "$c"; done
+    }
+    # TODOS los hijos directos, no el primero: `screen` puede tener más de una
+    # ventana, y quedarse con `head -1` deja las demás fuera de la limpieza.
+    for root in $(pgrep -P "$screen_pid" 2>/dev/null); do collect_tree "$root"; done
+
+    if [ -z "${owned_tree// /}" ]; then
+      echo "la screen '$SESSION' (pid $screen_pid) no declara descendientes." >&2
+      echo "NO se cierra: sin árbol capturado no hay forma de limpiar." >&2
+      exit 1
+    fi
+
+    # 1 · Salida grácil: `q` es como `flutter run` termina por sí mismo, y así
+    #     cierra la app y libera el VM service en orden.
+    screen -S "$SESSION" -p 0 -X stuff 'q' 2>/dev/null || true
+    for _ in $(seq 1 20); do session_alive || break; sleep 1; done
+
+    # 2 · Si no salió sola, se cierra screen y se termina SÓLO lo capturado
+    #     arriba, hoja primero. Nunca por patrón, nunca a un pid ajeno.
+    session_alive && { screen -S "$SESSION" -X quit 2>/dev/null || true; }
+    for p in $(echo "$owned_tree" | tr ' ' '\n' | tail -r); do
+      [ -n "$p" ] && kill -0 "$p" 2>/dev/null && kill "$p" 2>/dev/null || true
+    done
+    for _ in $(seq 1 10); do
+      still=""
+      for p in $owned_tree; do kill -0 "$p" 2>/dev/null && still="$still $p"; done
+      [ -z "${still// /}" ] && break
+      sleep 1
+    done
+    for p in $owned_tree; do
+      kill -0 "$p" 2>/dev/null && kill -9 "$p" 2>/dev/null || true
+    done
+
+    # 3 · Se comprueba que no quede descendiente, y si queda **se dice**: un
+    #     stop que miente es lo que produjo los huérfanos anteriores.
+    leftovers=""
+    for p in $owned_tree; do kill -0 "$p" 2>/dev/null && leftovers="$leftovers $p"; done
+    if [ -n "${leftovers// /}" ]; then
+      echo "sesión '$SESSION' cerrada, PERO quedaron vivos:$leftovers" >&2
+      exit 1
+    fi
+    echo "sesión '$SESSION' cerrada, sin descendientes vivos"
     ;;
 
   *)

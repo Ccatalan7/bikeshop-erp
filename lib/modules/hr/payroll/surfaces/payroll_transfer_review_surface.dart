@@ -879,7 +879,7 @@ class PayrollReviewTableHeader extends StatelessWidget {
         children: <Widget>[
           Flexible(
             child: Text(
-              'Revisar coincidencias',
+              'Propuestas de pago',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: visual.sectionTitle.copyWith(fontSize: 13),
@@ -918,6 +918,100 @@ class PayrollReviewTableHeader extends StatelessWidget {
 /// forcing a horizontal scroll. Rows that need judgement expand in place;
 /// the expansion is where the full evidence and controls live, so the table
 /// never hides mandatory work behind a modal.
+/// Las siete pistas de `7c` (proyecto `ERP Bikeshop UI Mockups`, página
+/// `Nóminas - Rediseño`, turno 7, frames `7c-ocr-{pacific,aubergine}`), leídas
+/// literales del archivo con `DesignSync`:
+/// `26px 76px minmax(190px,1fr) 118px minmax(200px,1.1fr) 148px 84px`, gap 10,
+/// fila con padding `10 16`.
+const double reviewColCaret = 26;
+const double reviewColDate = 76;
+const double reviewColAmount = 118;
+const double reviewColConfidence = 148;
+const double reviewColGap = 10;
+const double reviewRowPadH = 16;
+
+/// 7c pone 84 para su enlace `Cambiar`. Acá la pista lleva el control de
+/// decisión de la gramática 2c —verbo + `⋯`—, que necesita más: se declara la
+/// diferencia en vez de recortar un control canónico para calzar un ancho.
+const double reviewColDecision = 150;
+
+/// La fila de RÓTULOS DE COLUMNA de `7c`.
+///
+/// No se llama `…TableHeader` porque ese nombre ya lo tiene el encabezado de
+/// la tarjeta —título, contadores y la regla de calce—: son dos cosas
+/// distintas y colisionaron una vez.
+///
+/// Sólo existe desde 900: bajo ese ancho la fila se recompone en bloques y
+/// unos rótulos sobre columnas que ya no existen serían ruido.
+class PayrollReviewColumnHeader extends StatelessWidget {
+  const PayrollReviewColumnHeader({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = PayrollVisualTokens.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 900) return const SizedBox.shrink();
+        return Container(
+          key: const ValueKey<String>('payroll-review-column-header'),
+          padding:
+              const EdgeInsets.fromLTRB(reviewRowPadH, 7, reviewRowPadH, 7),
+          decoration: BoxDecoration(
+            color: visual.surfaceSunken,
+            border: Border(bottom: BorderSide(color: visual.border)),
+          ),
+          child: Row(
+            children: <Widget>[
+              const SizedBox(width: reviewColCaret),
+              const SizedBox(width: reviewColGap),
+              SizedBox(
+                width: reviewColDate,
+                child: Text('FECHA', style: visual.overline),
+              ),
+              const SizedBox(width: reviewColGap),
+              Expanded(
+                flex: 10,
+                child: Text(
+                  'DESCRIPCIÓN EN LA CARTOLA',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: visual.overline,
+                ),
+              ),
+              const SizedBox(width: reviewColGap),
+              SizedBox(
+                width: reviewColAmount,
+                child: Text(
+                  'MONTO',
+                  textAlign: TextAlign.right,
+                  style: visual.overline,
+                ),
+              ),
+              const SizedBox(width: reviewColGap),
+              Expanded(
+                flex: 11,
+                child: Text(
+                  'PERSONA Y RAZÓN',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: visual.overline,
+                ),
+              ),
+              const SizedBox(width: reviewColGap),
+              SizedBox(
+                width: reviewColConfidence,
+                child: Text('CONFIANZA', style: visual.overline),
+              ),
+              const SizedBox(width: reviewColGap),
+              const SizedBox(width: reviewColDecision),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class PayrollReviewTableRow extends StatelessWidget {
   const PayrollReviewTableRow({
     super.key,
@@ -1026,6 +1120,16 @@ class PayrollReviewTableRow extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: visual.monoS.copyWith(fontSize: 9.5),
                       ),
+                    // `7c`: la razón es la segunda línea de PERSONA Y RAZÓN.
+                    Text(
+                      why,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: visual.monoS.copyWith(
+                        fontSize: 10,
+                        color: visual.inkFaint,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1045,7 +1149,10 @@ class PayrollReviewTableRow extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: expanded ? visual.surfaceSunken : null,
+        // `7c`: la fila marcada va en `selectionRow`, no en `sunken`. El
+        // hundido es profundidad de disclosure; la selección tiene su propio
+        // rol y ΔE medido contra el surface.
+        color: expanded ? visual.surfaceSelected : null,
         border: Border(
           top: isFirst ? BorderSide.none : BorderSide(color: visual.border),
         ),
@@ -1059,45 +1166,78 @@ class PayrollReviewTableRow extends StatelessWidget {
               onTap: onToggleExpanded,
               child: Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 17,
+                  horizontal: reviewRowPadH,
                   vertical: 10,
                 ),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     if (constraints.maxWidth >= 900) {
+                      // Las siete pistas de `7c`, leídas del archivo de Design:
+                      // `26px 76px minmax(190px,1fr) 118px minmax(200px,1.1fr)
+                      // 148px 84px`, gap 10. La primera lleva el caret —el
+                      // mismo rol que en 7a—, y la RAZÓN baja bajo la persona,
+                      // que es donde 7c la dibuja: como segunda línea, no como
+                      // columna propia.
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: <Widget>[
                           SizedBox(
-                            width: 52,
-                            child: Text(
-                              date,
-                              style: visual.monoM.copyWith(fontSize: 11),
+                            width: reviewColCaret,
+                            child: Icon(
+                              expanded
+                                  ? Icons.keyboard_arrow_down_rounded
+                                  : Icons.chevron_right_rounded,
+                              size: 18,
+                              color: visual.inkFaint,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(flex: 5, child: movement),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: reviewColGap),
                           SizedBox(
-                            width: 96,
+                            width: reviewColDate,
+                            child: Text(
+                              date,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: visual.monoS.copyWith(
+                                fontSize: 10.5,
+                                color: visual.inkMuted,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: reviewColGap),
+                          Expanded(flex: 10, child: movement),
+                          const SizedBox(width: reviewColGap),
+                          SizedBox(
+                            width: reviewColAmount,
                             child: Text(
                               amount,
                               textAlign: TextAlign.right,
-                              style: visual.monoM.copyWith(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: visual.numRow.copyWith(
+                                fontSize: 13,
                                 color: settled ? visual.inkMuted : visual.ink,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(flex: 4, child: personCell),
-                          const SizedBox(width: 12),
-                          Expanded(flex: 5, child: whyText),
-                          const SizedBox(width: 12),
-                          confidence,
-                          const SizedBox(width: 12),
-                          SizedBox(width: 150, child: decision),
+                          const SizedBox(width: reviewColGap),
+                          Expanded(flex: 11, child: personCell),
+                          const SizedBox(width: reviewColGap),
+                          SizedBox(
+                            width: reviewColConfidence,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: confidence,
+                            ),
+                          ),
+                          const SizedBox(width: reviewColGap),
+                          // 7c dibuja acá un enlace (`Cambiar` / `Asignar`) de
+                          // 84. Este ERP resuelve la fila con un control de
+                          // decisión —verbo + `⋯`—, que es la gramática 2c ya
+                          // aprobada y no se cambia por una diferencia de
+                          // ancho: la pista se ensancha lo que ese control
+                          // necesita, y queda declarado.
+                          SizedBox(width: reviewColDecision, child: decision),
                         ],
                       );
                     }

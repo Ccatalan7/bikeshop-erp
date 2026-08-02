@@ -8,6 +8,25 @@ import '../models/hr_models.dart';
 import '../services/hr_service.dart';
 import '../services/payroll_voucher_service.dart';
 
+/// **MUERTO — no lo revivas sin migrarlo primero.**
+///
+/// Nadie lo referencia: cero imports, cero exports de barril, ninguna librería
+/// `deferred` lo alcanza y ninguna ruta lo registra (verificado el 2026-08-01
+/// sobre todo el repositorio). Sigue llamando **`registerEmployeeAdvance`
+/// (`register_employee_advance_v2`)**, la ruta legacy sin motivo estructurado
+/// ni evidencia inmutable.
+///
+/// La ruta productiva es `showPayrollAdvanceEntry` +
+/// `PayrollAdvanceRegistrationService.register(...)`, que exige
+/// capability → evidencia confirmada → `register_employee_advance_v3`.
+///
+/// No se borró **a propósito**: el árbol está compartido con otro agente y
+/// eliminarlo no hace falta para que la UI productiva deje de usar v2 —ya no
+/// la usa—. Si al limpiar se decide borrarlo, no hay nada que migrar.
+@Deprecated(
+  'Ruta legacy v2 sin consumidores. Usa showPayrollAdvanceEntry + '
+  'PayrollAdvanceRegistrationService.',
+)
 class EmployeeAdvanceDialog extends StatefulWidget {
   const EmployeeAdvanceDialog({super.key});
 

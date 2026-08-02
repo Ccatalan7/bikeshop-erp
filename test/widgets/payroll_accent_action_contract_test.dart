@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:vinabike_erp/modules/hr/payroll/surfaces/payroll_accent_action.dart';
+import 'package:vinabike_erp/modules/hr/payroll/theme/payroll_tokens.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 import 'package:vinabike_erp/shared/themes/vinabike_theme_roles.dart';
@@ -184,11 +185,14 @@ void main() {
       PayrollAccentAction(
         label: 'Pagar',
         onTap: () {},
-        height: 50,
+        height: PayrollTokens.touchMobile,
         borderRadius: 11,
       ),
     );
-    expect(tester.getSize(find.byType(PayrollAccentAction)).height, 50);
+    // Igualdad EXACTA al token: un `>= 48` dejaría pasar el 50 que este
+    // contrato existe para impedir.
+    expect(tester.getSize(find.byType(PayrollAccentAction)).height,
+        PayrollTokens.touchMobile);
     final shape = actionMaterial(tester).shape! as RoundedRectangleBorder;
     expect(shape.borderRadius, BorderRadius.circular(11));
 

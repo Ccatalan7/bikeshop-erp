@@ -813,8 +813,10 @@ values
     '7f281000-0000-4000-8000-000000000519',
     '7f281000-0000-4000-8000-000000000001',
     'STMT-REPEATED-PRIOR',
-    '2026-07-26',
-    '2026-08-01',
+    -- Fixed overlapping weeks keep this duplicate-row scenario independent
+    -- from the calendar-relative future-date fixtures above.
+    '2026-03-01',
+    '2026-03-07',
     'Cargo repetido anterior',
     1,
     1000,
@@ -825,8 +827,8 @@ values
     '7f281000-0000-4000-8000-000000000520',
     '7f281000-0000-4000-8000-000000000001',
     'STMT-REPEATED-NEW',
-    '2026-07-27',
-    '2026-08-02',
+    '2026-03-02',
+    '2026-03-08',
     'Cargo repetido nuevo',
     1,
     1000,
@@ -2613,6 +2615,16 @@ select is(
 );
 
 select is(
+  (
+    current_setting('test.statement.apply_receipt')::jsonb
+      ->>'replayed'
+  )::boolean,
+  false,
+  'the first apply receipt is explicitly distinguished from a replay'
+);
+
+select set_config(
+  'test.statement.apply_replay_receipt',
   public.apply_payroll_statement_reconciliation(
     (
       current_setting('test.statement.import_receipt')::jsonb
@@ -2627,9 +2639,25 @@ select is(
       '7f281000-0000-4000-8000-000000000503',
       '7f281000-0000-4000-8000-000000000504'
     )
-  ),
-  current_setting('test.statement.apply_receipt')::jsonb,
-  'an identical apply acknowledgement retry returns the stored receipt'
+  )::text,
+  true
+);
+
+select is(
+  (
+    current_setting('test.statement.apply_replay_receipt')::jsonb
+      ->>'replayed'
+  )::boolean,
+  true,
+  'an identical apply acknowledgement retry declares the replay'
+);
+
+select is(
+  current_setting('test.statement.apply_replay_receipt')::jsonb
+    - 'replayed',
+  current_setting('test.statement.apply_receipt')::jsonb
+    - 'replayed',
+  'an identical apply acknowledgement retry preserves the stored financial receipt'
 );
 
 select is(
@@ -5087,7 +5115,7 @@ select set_config(
     jsonb_build_array(
       jsonb_build_object(
         'ordinal', 1,
-        'transaction_date', '2026-07-27',
+        'transaction_date', '2026-03-02',
         'direction', 'debit',
         'amount', 1000,
         'description_observed', 'Cargo idéntico solapado',
@@ -5150,7 +5178,7 @@ select set_config(
     jsonb_build_array(
       jsonb_build_object(
         'ordinal', 1,
-        'transaction_date', '2026-07-27',
+        'transaction_date', '2026-03-02',
         'direction', 'debit',
         'amount', 1000,
         'description_observed', 'Cargo idéntico solapado',
@@ -5159,7 +5187,7 @@ select set_config(
       ),
       jsonb_build_object(
         'ordinal', 2,
-        'transaction_date', '2026-07-27',
+        'transaction_date', '2026-03-02',
         'direction', 'debit',
         'amount', 1000,
         'description_observed', 'Cargo idéntico solapado',

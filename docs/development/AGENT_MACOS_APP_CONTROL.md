@@ -34,7 +34,7 @@ The session lives in a detached `screen` named `payroll`. The owner can take
 it over at any time with **`screen -x payroll`** (`Ctrl+A`, then `D` to
 detach). Both sides share the same terminal, so nobody has to hand over.
 
-Four traps this encodes, each of which cost a full round when hit:
+Traps this encodes, each of which cost a full round when hit:
 
 1. **Never pipe `flutter run` to `tee`.** Losing the TTY silently disables the
    single-key commands: `r` does nothing, forever. Logging goes through
@@ -53,15 +53,83 @@ Four traps this encodes, each of which cost a full round when hit:
    ever appears. `flutter run` never reports it. More reloads do nothing.
 
    Run **`native_session.sh doctor`**, which names the cause instead of
-   guessing: it checks whether the log is still growing, asks the VM service
-   for a real `reloadSources`, and prints `COMPILADOR TRABADO — Error while
+   guessing: it checks whether the log is still growing, probes the VM service
+   with a **read-only `getVM`**, and prints `COMPILADOR TRABADO — Error while
    starting Kernel isolate task` when the kernel task is stuck. The only fix
    is restarting the process: `native_session.sh stop && native_session.sh start`.
+
+   > **`doctor` no pide un `reloadSources`, y no debe pedirlo.** Una versión
+   > anterior lo hacía «para comprobar», y eso disparaba un segundo reload
+   > encima del que ya corría: los dos morían y el doctor reportaba trabado un
+   > compilador que él mismo acababa de trabar. Un diagnóstico es de sólo
+   > lectura — si para medir algo hay que moverlo, no se está midiendo. El
+   > script actual usa `getVM`; esta guía decía lo contrario hasta el
+   > 2026-08-01.
+
+6. **La app puede arrancar sin que el tool llegue a su loop interactivo**
+   (2026-08-01). Síntoma engañoso: `status` dice `app: pid NNNNN` —está viva y
+   cargando datos reales— pero `vm: sin URI en el log`, y **todo
+   `app_control.sh` queda inservible** porque va por el VM service. No es que
+   la app haya fallado: es que `flutter run` nunca imprimió la línea
+   `A Dart VM Service … is available at:`.
+
+   Cómo se confirma en dos comandos, sin tocar nada:
+
+   ```bash
+   lsof -nP -p <pid> -a -iTCP -sTCP:LISTEN     # sí escucha: 127.0.0.1:NNNNN
+   curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:NNNNN/   # 403
+   ```
+
+   El `403` es la prueba: el puerto existe, pero el VM exige el **código de
+   autenticación**, y ese código **sólo viaja en la línea de stdout que nunca
+   salió**. No se puede reconstruir ni adivinar. Otra señal del mismo cuadro:
+   `screen -S payroll -p 0 -X stuff 'h'` deja una `h` literal al final del log
+   en vez de imprimir la ayuda — el proceso no está leyendo teclas.
+
+   **La única salida es reemplazar la sesión deliberadamente**
+   (`stop` y luego `start`, comprobando antes los PID y la `screen`), y **exigir
+   la URI del VM antes de seguir**. Con el build caliente cuesta poco. Lo que no
+   se puede es seguir trabajando «a ciegas» sobre una app que responde a la
+   vista pero no al control: cada `read`/`shot` fallaría y se leería como un
+   defecto de la pantalla.
+
+7. **`stop` dejaba huérfano todo el árbol, y por eso el `start` siguiente se
+   negaba** (2026-08-01). `stop` era una sola línea: `screen -S <s> -X quit`.
+   Eso mata **screen**, no a sus descendientes: `login → flutter → frontend`
+   pasan a colgar de `init` y siguen vivos. Se observó **dos veces en una
+   jornada** —dos árboles completos quemando CPU— y el síntoma con el que
+   aparece es engañoso: el `start` siguiente responde `hay una app debug viva
+   sin sesión screen`, que se lee como «quedó una app abierta» cuando en
+   realidad quedó un `flutter run` entero.
+
+   Peor: una vez que screen murió, **ya no hay manera de saber qué
+   descendientes eran suyos** sin adivinar por patrón — y matar por patrón es
+   justo lo que este runbook prohíbe, porque acierta a la sesión del dueño con
+   la misma facilidad.
+
+   El owner corregido hace las cuatro cosas en orden: **captura el árbol antes
+   de tocar screen**, pide salida grácil con `q` (que es como `flutter run`
+   termina solo, cerrando la app y liberando el VM service), y sólo si no salió
+   cierra screen y termina **ese** árbol, hoja primero; al final **verifica que
+   no quede descendiente y lo dice si queda**. Un `stop` que informa éxito sin
+   comprobarlo es exactamente lo que produjo los huérfanos.
 
    Do **not** blame `screen -ls` saying `(Attached)`. An attached owner does
    NOT block reloads — that misreading cost a full round on 2026-07-31, and
    `doctor` now prints the attach as informational precisely so nobody
    confuses it with the cause again.
+
+8. **Nunca pongas `reload`/`restart` dentro de un loop o background task**
+   (2026-08-01). Un loop dejado esperando sobrevivió al primer reemplazo y,
+   como la sesión nueva reutiliza el nombre `payroll`, le inyectó una `r`
+   durante el build. La sesión recién creada llegó al VM y quedó trabada de
+   inmediato en `Performing hot reload...`; repetir `stop && start` sin matar
+   primero el productor sólo recreó el mismo defecto.
+
+   `native_session.sh reload` ya espera y confirma una sola ronda. Si queda
+   colgado, **interrumpe primero el comando, loop o task que envió la tecla**;
+   después usa `doctor` y reemplaza la sesión una vez. Nunca dejes un poller
+   que ejecute acciones: observar `status` puede repetirse, enviar `r`/`R` no.
 
 ### Verifying dark and compact without leaving a trace
 
@@ -75,13 +143,21 @@ from the same session:
   you only need the composition:
 
   ```bash
-  osascript -e 'tell application "System Events" to tell (first process whose unix id is <PID>) to set size of front window to {430, 928}'
+  scripts/dev/app_control.sh resize 430 928
   ```
 
   `app_control.sh geometry` prints the pid and confirms the new size, and the
   compact shell (drawer + pills) engages exactly as on a phone. Restore
-  `{1672, 928}` afterwards. Use the Simulator when what you need is touch
-  behaviour or the real safe areas, not just the breakpoint.
+  with `scripts/dev/app_control.sh resize 1672 928` afterwards. Use the
+  Simulator when what you need is touch behaviour or the real safe areas, not
+  just the breakpoint.
+
+  Do not address `front window` yourself. On 2026-08-01 the exact debug process
+  retained a residual 66×20 window while its real Flutter frame was 1360×768;
+  `window 1`, process-frontmost, and name-based resizing all selected the
+  residue and made working controls look broken. The wrapper resolves the
+  exact debug PID and chooses its largest accessible window for `geometry`,
+  `resize`, OS screenshots and OS-input fallback.
 
 ## 2. Eyes and hands on the running app
 
@@ -93,7 +169,47 @@ scripts/dev/app_control.sh scroll X Y -5
 scripts/dev/app_control.sh drag X Y X2 Y2
 scripts/dev/app_control.sh type "texto"
 scripts/dev/app_control.sh key 36            # 36 return · 53 esc · 48 tab
+scripts/dev/app_control.sh choose-file /ruta/absoluta/cartola.png
 ```
+
+### El selector de archivos es una ventana del sistema (2026-08-01)
+
+`Elegir archivo` abre un panel de macOS que no pertenece al árbol semántico de
+Flutter. No intentes manejarlo con coordenadas guardadas ni mandes
+`Cmd+Shift+G` a ciegas: con el panel abierto detrás de Claude, el atajo terminó
+seis veces en el buscador interno de Claude y luego otro intento perdió varios
+minutos bajando carpeta por carpeta.
+
+Abre el panel tocando el botón Flutter por identidad y entrega el archivo con
+el owner versionado:
+
+```bash
+scripts/dev/app_control.sh tap --label "Elegir archivo"
+scripts/dev/app_control.sh choose-file \
+  /Users/Claudio/Dev/bikeshop-erp/tmp/pdfs/cartola_analysis/page-01.png
+```
+
+`choose-file` exige un archivo real y una ruta absoluta, resuelve el panel
+`Open` del PID debug exacto, lo trae al frente y abre `Go to Folder`. **La ruta
+se pega desde el portapapeles en una sola operación; no se teclea carácter a
+carácter.** Teclearla compite con la animación de la hoja y pierde caracteres,
+mientras que `Cmd+Shift+G` + paste ya fue el mecanismo probado. El owner
+preserva y restaura todos los formatos del portapapeles, confirma el archivo y
+falla si el panel no se cerró. No lanza otra copia de la app ni toca una
+ventana de Claude o Terminal. Después confirma el resultado por semántica
+(`read`) —por ejemplo, nombre del archivo y cantidad de movimientos— antes de
+seguir.
+
+El PID debe permanecer en el *specifier* de AppleScript en cada acceso. No
+guardes `first process whose unix id is …` en una variable para reutilizarla:
+System Events serializa después esa referencia por **nombre**, y si la copia
+instalada y la debug se llaman ambas `vinabike_erp`, `tell targetProcess`
+resuelve la primera homónima. El síntoma engañoso fue `name of every window`
+como lista anidada y `-1700`, aunque el PID inicial era correcto. Tampoco uses
+`open -a` para enfocar: dos bundles con el mismo identificador pueden activar
+la copia instalada. `choose-file` mantiene ahora el predicado de PID inline y
+enumera cada ventana por índice; esta trampa costó una ronda completa el
+2026-08-01.
 
 ### Tap by identity; pixels are a one-frame fallback (2026-07-31)
 

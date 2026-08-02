@@ -122,6 +122,42 @@ scripts/db/query.sh production --sql "select … "
 Afirmar sin ella puede costar la confianza del dueño en sus propios datos, que
 es mucho más caro que la consulta.
 
+## Un `text` con `CHECK` es un enum disfrazado: lee `pg_constraint`
+
+**El dominio de una columna no está en `information_schema.columns`.** Esa vista
+dice el *tipo de almacenamiento*, no los valores admitidos. Una columna
+declarada `text` puede tener un `CHECK` que la reduce a tres literales, y ese
+`CHECK` no aparece por ningún lado en la vista de columnas.
+
+**Lo que pasó el 2026-08-01.** Se leyó `employees.bank_account_type` en
+`information_schema.columns`, salió `text`, y de ahí se concluyó —y se escribió
+en el código y en el handoff— que era **texto libre**. Design dibujaba un select
+para ese campo y se le llevó la contraria «porque el esquema no tiene catálogo».
+Era falso: `employees_bank_account_type_check` admite exactamente
+`Cuenta Corriente`, `Cuenta Vista` y `Cuenta de Ahorro`. El editor de fichas
+llevaba además una cuarta etiqueta inválida —`Cuenta Ahorro`— que la base
+rechazaba al guardar. Costó una ronda entera de diagnóstico y una corrección de
+Design que no correspondía.
+
+La regla:
+
+- Antes de declarar el dominio de una columna —y **siempre** antes de escribir
+  un desplegable, una validación o un enum de cliente contra ella— consulta sus
+  constraints, no sólo su tipo.
+- El dominio se **cita**, no se transcribe: un `enum` de Dart que repite la
+  lista a mano vuelve a divergir en el primer cambio. Que la lista tenga un
+  único dueño que la tome del constraint.
+- Vale igual para `NOT NULL`, `DEFAULT`, `UNIQUE` y las FK: lo que la base
+  acepta lo definen sus constraints, y la vista de columnas sólo cuenta una
+  parte.
+
+```bash
+scripts/db/query.sh production --sql "
+  select conname, pg_get_constraintdef(oid)
+  from pg_constraint
+  where conrelid = 'public.employees'::regclass"
+```
+
 ## Guarded read defaults you should know
 
 Hosted reads run in `BEGIN READ ONLY` with a 30-second statement timeout and are

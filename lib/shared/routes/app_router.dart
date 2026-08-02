@@ -1454,7 +1454,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.WorkerLoginPage(),
           ),
         ),
@@ -1464,7 +1463,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.WorkerHomePage(),
           ),
         ),
@@ -1474,7 +1472,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.WorkerPasswordResetPage(),
           ),
         ),
@@ -1484,7 +1481,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.LoginScreen(),
           ),
         ),
@@ -1495,7 +1491,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.ResetPasswordScreen(),
           ),
         ),
@@ -1508,7 +1503,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.AcceptInvitationPage(token: token),
             );
           },
@@ -1520,7 +1514,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.DashboardScreen(),
           ),
         ),
@@ -1531,7 +1524,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.WorkspaceDemoPage(),
           ),
         ),
@@ -1542,7 +1534,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.AccountListPage(),
           ),
         ),
@@ -1551,7 +1542,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.ExpenseListPage(),
           ),
         ),
@@ -1560,7 +1550,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.ExpenseCategoriesPage(),
           ),
         ),
@@ -1569,7 +1558,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.ExpenseFormPage(),
           ),
         ),
@@ -1580,7 +1568,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.ExpenseDetailPage(expenseId: id),
             );
           },
@@ -1592,7 +1579,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.ExpenseFormPage(expenseId: id),
             );
           },
@@ -1602,7 +1588,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.AccountFormPage(),
           ),
         ),
@@ -1613,7 +1598,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.AccountFormPage(accountId: id),
             );
           },
@@ -1623,7 +1607,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.JournalEntryListPage(),
           ),
         ),
@@ -1632,7 +1615,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.JournalEntryFormPage(),
           ),
         ),
@@ -1643,7 +1625,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.JournalEntryFormPage(entryId: entryId),
             );
           },
@@ -1655,7 +1636,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.FinancialReportsHubPage(),
           ),
         ),
@@ -1664,7 +1644,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.IncomeStatementPage(),
           ),
         ),
@@ -1673,7 +1652,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.BalanceSheetPage(),
           ),
         ),
@@ -1684,7 +1662,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.F29DashboardPage(),
           ),
         ),
@@ -1695,7 +1672,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.CustomerListPage(),
           ),
         ),
@@ -1704,7 +1680,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.CustomerFormPage(),
           ),
         ),
@@ -1715,7 +1690,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.CustomerFormPage(customerId: id),
             );
           },
@@ -1729,7 +1703,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.ClientLogbookPage(
                 customerId: id,
                 initialTab: initialTab,
@@ -1745,7 +1718,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.PegasTablePage(),
           ),
         ),
@@ -1754,7 +1726,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.JobStatusesPage(),
           ),
         ),
@@ -1763,7 +1734,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.JobSubjectsPage(),
           ),
         ),
@@ -1773,7 +1743,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.MechanicJobFormPage(
                 customerId: state.uri.queryParameters['customer_id'],
                 initialBikeId: state.uri.queryParameters['bike_id'],
@@ -1789,7 +1758,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.MechanicJobFormPage(
                 jobId: jobId,
                 initialTab: state.uri.queryParameters['tab'],
@@ -1802,7 +1770,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.CustomerBikeDirectoryPage(),
           ),
         ),
@@ -1811,7 +1778,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.WorkshopCalendarPage(),
           ),
         ),
@@ -1820,7 +1786,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.BikeBrandsPage(),
           ),
         ),
@@ -1831,7 +1796,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.BikeEncyclopediaPage(),
           ),
         ),
@@ -1842,7 +1806,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.WheelBuilderWizardPage(),
           ),
         ),
@@ -1851,7 +1814,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.SpokeLengthCalculatorPage(),
           ),
         ),
@@ -1860,7 +1822,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.WheelHubsPage(),
           ),
         ),
@@ -1869,7 +1830,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.WheelRimsPage(),
           ),
         ),
@@ -1878,7 +1838,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.WheelSpokesPage(),
           ),
         ),
@@ -1893,7 +1852,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.ProductListPage(
                 initialCategoryId: categoryId,
                 initialSupplierId: supplierId,
@@ -1909,7 +1867,6 @@ class AppRouter {
                   _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                erp.loadLibrary(),
                 () => erp.ProductFormPage(lockProductType: true),
               ),
             ),
@@ -1919,7 +1876,6 @@ class AppRouter {
                   _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                erp.loadLibrary(),
                 () => erp.ProductImportPage(),
               ),
             ),
@@ -1930,7 +1886,6 @@ class AppRouter {
                 return _buildDeferredPageWithNoTransition(
                   context,
                   state,
-                  erp.loadLibrary(),
                   () => erp.ProductFormPage(
                     productId: id,
                     lockProductType: true,
@@ -1948,7 +1903,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.ServiceListPage(
                 initialCategoryId: categoryId,
                 refreshToken: refreshToken,
@@ -1962,7 +1916,6 @@ class AppRouter {
                   _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                erp.loadLibrary(),
                 () => erp.ProductFormPage(
                   initialProductType: erp.ProductType.service,
                   lockProductType: true,
@@ -1976,7 +1929,6 @@ class AppRouter {
                 return _buildDeferredPageWithNoTransition(
                   context,
                   state,
-                  erp.loadLibrary(),
                   () => erp.ProductFormPage(
                     productId: id,
                     initialProductType: erp.ProductType.service,
@@ -1992,7 +1944,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.HierarchicalCategoryPage(),
           ),
           routes: [
@@ -2003,7 +1954,6 @@ class AppRouter {
                 return _buildDeferredPageWithNoTransition(
                   context,
                   state,
-                  erp.loadLibrary(),
                   () => erp.CategoryFormPage(parentCategoryId: parentId),
                 );
               },
@@ -2015,7 +1965,6 @@ class AppRouter {
                 return _buildDeferredPageWithNoTransition(
                   context,
                   state,
-                  erp.loadLibrary(),
                   () => erp.HierarchicalCategoryPage(categoryId: id),
                 );
               },
@@ -2027,7 +1976,6 @@ class AppRouter {
                     return _buildDeferredPageWithNoTransition(
                       context,
                       state,
-                      erp.loadLibrary(),
                       () => erp.CategoryFormPage(categoryId: id),
                     );
                   },
@@ -2041,7 +1989,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.BrandListPage(),
           ),
           routes: [
@@ -2051,7 +1998,6 @@ class AppRouter {
                   _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                erp.loadLibrary(),
                 () => erp.BrandFormPage(),
               ),
             ),
@@ -2062,7 +2008,6 @@ class AppRouter {
                 return _buildDeferredPageWithNoTransition(
                   context,
                   state,
-                  erp.loadLibrary(),
                   () => erp.BrandFormPage(brandId: id),
                 );
               },
@@ -2074,7 +2019,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.StockMovementsPage(),
           ),
         ),
@@ -2097,7 +2041,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.InvoiceListPage(
                 initialInvoiceId: initialInvoiceId,
                 initialInvoiceNumber: initialInvoiceNumber,
@@ -2119,7 +2062,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.InvoiceFormPage(
                 preselectedJobId: jobId,
                 preselectedCustomerId: customerId,
@@ -2136,7 +2078,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.InvoiceFormPage(
                 invoiceId: id,
                 referrer: referrer,
@@ -2152,7 +2093,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.InvoicePaymentPage(invoiceId: id),
             );
           },
@@ -2166,7 +2106,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.InvoiceFormPage(
                 invoiceId: id,
                 referrer: referrer,
@@ -2182,7 +2121,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.PaymentsPage(
                 highlightPaymentId: paymentId,
                 initialOpenRequestId: state.uri.queryParameters['openRequest'],
@@ -2197,7 +2135,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.PaymentEditPage(paymentId: id),
             );
           },
@@ -2209,7 +2146,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.PaymentDetailPage(paymentId: id),
             );
           },
@@ -2221,7 +2157,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.SalesReportsPage(),
           ),
         ),
@@ -2230,7 +2165,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.SalesByProductPage(),
           ),
         ),
@@ -2252,7 +2186,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.SalesByProductDetailPage(
                 productId: id,
                 productName: name,
@@ -2267,7 +2200,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.SalesByCustomerPage(),
           ),
         ),
@@ -2280,7 +2212,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => MainLayout(
                 child: erp.EmployeeChatPage(
                   initialConversationId: conversationId,
@@ -2296,7 +2227,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.SupplierListPage(),
           ),
         ),
@@ -2305,7 +2235,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.SupplierFormPage(),
           ),
         ),
@@ -2316,7 +2245,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.SupplierFormPage(supplierId: id),
             );
           },
@@ -2326,7 +2254,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.PurchaseInvoiceListPage(),
           ),
         ),
@@ -2341,7 +2268,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.PurchaseInvoiceFormPage(isPrepayment: isPrepayment),
             );
           },
@@ -2353,7 +2279,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => MainLayout(
                 child: erp.PurchasePaymentsListPage(
                   highlightPaymentId: paymentId,
@@ -2369,7 +2294,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.PurchasePaymentEditPage(paymentId: id),
             );
           },
@@ -2381,7 +2305,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.PurchasePaymentDetailPage(paymentId: id),
             );
           },
@@ -2391,7 +2314,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.SmartPurchaseListPage(),
           ),
         ),
@@ -2402,7 +2324,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.PurchaseReceiptDetailPage(receiptId: receiptId),
             );
           },
@@ -2417,7 +2338,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.PurchaseInvoiceFormPage(
                 invoiceId: id,
                 referrer: referrer,
@@ -2433,7 +2353,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.PurchaseInvoiceFormPage(invoiceId: id),
             );
           },
@@ -2446,7 +2365,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.PurchaseInvoiceFormPage(invoiceId: id),
             );
           },
@@ -2458,7 +2376,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.PurchasePaymentFormPage(invoiceId: id),
             );
           },
@@ -2470,7 +2387,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => MainLayout(
               child: erp.POSDashboardPage(),
             ),
@@ -2481,7 +2397,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => MainLayout(
               child: erp.POSCartPage(),
             ),
@@ -2492,7 +2407,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => MainLayout(
               child: erp.POSPaymentPage(),
             ),
@@ -2506,7 +2420,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => MainLayout(
                 child: erp.POSReceiptPage(transaction: transaction),
               ),
@@ -2520,7 +2433,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.MyProfilePage(),
           ),
         ),
@@ -2529,7 +2441,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => MainLayout(
               child: erp.SettingsPage(),
             ),
@@ -2540,7 +2451,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => MainLayout(
               child: erp.FactoryResetPageNew(),
             ),
@@ -2551,7 +2461,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.BackupManagementPage(),
           ),
         ),
@@ -2560,7 +2469,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => MainLayout(
               child: erp.AppearanceSettingsPage(),
             ),
@@ -2571,7 +2479,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => MainLayout(
               child: erp.CompanySettingsPage(),
             ),
@@ -2582,7 +2489,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => MainLayout(
               child: erp.BusinessHoursSettingsPage(),
             ),
@@ -2593,7 +2499,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => MainLayout(
               child: erp.UserManagementPage(
                 initialOpenRequest: state.uri.queryParameters['openRequest'],
@@ -2606,7 +2511,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => MainLayout(
               child: erp.WhatsAppSettingsPage(),
             ),
@@ -2617,7 +2521,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             // Deferred page classes cannot be constructed with const.
             // ignore: prefer_const_constructors
             () => MainLayout(
@@ -2630,7 +2533,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => MainLayout(
               child: erp.PaymentMethodsSettingsPage(),
             ),
@@ -2641,7 +2543,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.BluetoothScannerPage(),
           ),
         ),
@@ -2650,7 +2551,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.KeyboardScannerPage(),
           ),
         ),
@@ -2659,7 +2559,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => MainLayout(
               child: erp.RemoteScannerPage(),
             ),
@@ -2670,7 +2569,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.NiimbotSettingsPage(),
           ),
         ),
@@ -2679,7 +2577,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.LabelPrinterPage(),
           ),
         ),
@@ -2688,7 +2585,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => MainLayout(
               child: erp.NotificationSettingsPage(),
             ),
@@ -2701,7 +2597,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => ErpAuthorizationGate(
               area: ErpAuthorizationArea.hrManagement,
               authorizedBuilder: (_) => erp.EmployeeListPage(),
@@ -2713,7 +2608,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => ErpAuthorizationGate(
               area: ErpAuthorizationArea.hrManagement,
               authorizedBuilder: (_) => erp.EmployeeDetailPage(
@@ -2727,7 +2621,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => ErpAuthorizationGate(
               area: ErpAuthorizationArea.hrManagement,
               authorizedBuilder: (_) => erp.ShiftPlanningPage(),
@@ -2739,7 +2632,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => ErpAuthorizationGate(
               area: ErpAuthorizationArea.hrManagement,
               authorizedBuilder: (_) => erp.AttendancesPage(
@@ -2758,7 +2650,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => ErpAuthorizationGate(
               area: ErpAuthorizationArea.hrManagement,
               authorizedBuilder: (_) =>
@@ -2773,7 +2664,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => ErpAuthorizationGate(
               area: ErpAuthorizationArea.hrManagement,
               authorizedBuilder: (_) => erp.MedicalLeavesPage(),
@@ -2799,7 +2689,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => ErpAuthorizationGate(
               area: ErpAuthorizationArea.payroll,
               authorizedBuilder: (_) =>
@@ -2807,6 +2696,11 @@ class AppRouter {
                   // ignore: prefer_const_constructors
                   erp.PayrollRedesignRoute(
                 initialVoucherId: state.uri.queryParameters['voucher'],
+                // Continuidad del origen: `?scope=advances&employee=<id>`
+                // deja al operador en la persona exacta desde la que salió,
+                // en vez de aterrizar en Semanas y hacerle buscar de nuevo.
+                initialScope: state.uri.queryParameters['scope'],
+                initialAdvanceEmployeeId: state.uri.queryParameters['employee'],
               ),
             ),
           ),
@@ -2816,7 +2710,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => ErpAuthorizationGate(
               area: ErpAuthorizationArea.payroll,
               authorizedBuilder: (_) =>
@@ -2836,7 +2729,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.BugListPage(),
           ),
         ),
@@ -2847,7 +2739,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.WebsiteManagementPage(),
           ),
           routes: [
@@ -2858,7 +2749,6 @@ class AppRouter {
                   _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                erp.loadLibrary(),
                 () => erp.PageManagementPage(),
               ),
             ),
@@ -2869,7 +2759,6 @@ class AppRouter {
                   _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                erp.loadLibrary(),
                 () => erp.NavigationManagementPage(),
               ),
             ),
@@ -2880,7 +2769,6 @@ class AppRouter {
                   _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                erp.loadLibrary(),
                 () => erp.WebsiteDestinationManagementPage(),
               ),
             ),
@@ -2891,7 +2779,6 @@ class AppRouter {
                   _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                erp.loadLibrary(),
                 () => erp.IntegrationsPage(),
               ),
             ),
@@ -2902,7 +2789,6 @@ class AppRouter {
                   _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                erp.loadLibrary(),
                 () => erp.SeoSettingsPage(),
               ),
             ),
@@ -2913,7 +2799,6 @@ class AppRouter {
                   _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                erp.loadLibrary(),
                 () => erp.FeaturedProductsPage(),
               ),
             ),
@@ -2924,7 +2809,6 @@ class AppRouter {
                   _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                erp.loadLibrary(),
                 () => erp.ProductWebsiteVisibilityPage(
                   section: state.uri.queryParameters['section'] == 'categories'
                       ? erp.WebsiteCatalogSection.categories
@@ -2946,7 +2830,6 @@ class AppRouter {
                 return _buildDeferredPageWithNoTransition(
                   context,
                   state,
-                  erp.loadLibrary(),
                   () => erp.OnlineOrdersPage(
                     initialOrderId: initialOrderId,
                     initialOpenRequestId:
@@ -2962,7 +2845,6 @@ class AppRouter {
                   _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                erp.loadLibrary(),
                 () => erp.WebsiteSettingsPage(),
               ),
             ),
@@ -3008,7 +2890,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.WhatsAppWebModulePage(),
           ),
         ),
@@ -3019,7 +2900,6 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            erp.loadLibrary(),
             () => erp.SpreadsheetDashboardPage(),
           ),
         ),
@@ -3036,7 +2916,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.SpreadsheetEditorPage(spreadsheetId: id),
             );
           },
@@ -3050,7 +2929,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.GoogleSheetsModulePage(sheetUrl: url),
             );
           },
@@ -3064,7 +2942,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.NotionModulePage(workspaceUrl: url),
             );
           },
@@ -3079,7 +2956,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.AnalyticsDashboardPage(dashboardUrl: url),
             );
           },
@@ -3095,7 +2971,6 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              erp.loadLibrary(),
               () => erp.GenericWebToolPage(url: url, name: name),
             );
           },
@@ -3109,17 +2984,36 @@ class AppRouter {
   // Helper for deferred routes (Code Splitting)
   // Shows MainLayout with loading indicator while the library chunk loads
   // This preserves the sidebar during navigation
+  /// **El `Future` de la biblioteca diferida, memoizado — y no es un detalle.**
+  ///
+  /// `loadLibrary()` devuelve un `Future` **nuevo en cada llamada**, aunque la
+  /// biblioteca ya esté cargada. Pasárselo al `FutureBuilder` de abajo hacía
+  /// que, en cada reconstrucción de la página, el builder volviera a
+  /// `ConnectionState.waiting` y dibujara el esqueleto —un `MainLayout` pelado—
+  /// en lugar del árbol real, que es `ErpAuthorizationGate → MainLayout →
+  /// página`. Como el tipo del hijo cambia, Flutter **destruye el subárbol** y
+  /// con él el `State` de la ruta.
+  ///
+  /// Eso borraba trabajo del operador: medido en la app viva el 2026-08-01, al
+  /// cruzar los 900 px la conciliación de cartolas perdía la extracción OCR y
+  /// las decisiones ya tomadas, y volvía al paso 1. Afectaba a **toda ruta
+  /// diferida con estado en memoria**, no sólo a ésa.
+  ///
+  /// Con un único `Future` estable el builder queda en `done` para siempre y el
+  /// subárbol se conserva. Es `static final`, así que Dart lo inicializa de
+  /// forma perezosa: la carga diferida sigue siendo diferida.
+  static final Future<dynamic> _erpLibraryOnce = erp.loadLibrary();
+
   static Page<void> _buildDeferredPageWithNoTransition(
     BuildContext context,
     GoRouterState state,
-    Future<dynamic> libraryFuture,
     Widget Function() widgetBuilder, {
     LocalKey? pageKeyOverride,
   }) {
     return CustomTransitionPage<void>(
       key: pageKeyOverride ?? state.pageKey,
       child: FutureBuilder(
-        future: libraryFuture,
+        future: _erpLibraryOnce,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.done) {
             return widgetBuilder();

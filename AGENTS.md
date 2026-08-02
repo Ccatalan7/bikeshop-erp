@@ -103,9 +103,11 @@
   security, and final integration. Both remain independent reviewers, and
   neither may edit the same files concurrently with the other.
 - Every Claude collaboration session must visibly use **Code** mode for this
-  repository, **Fable 5** (preferred) or **Opus 5**, and
-  **Effort: Ultracode** before its first prompt is sent. Re-check the visible
-  selectors and intended chat title or URL after changing chats and immediately
-  before Send. Work produced in Extra or a lower effort is not accepted until
-  it is independently re-reviewed in Ultracode; see the collaboration guide
-  for the exact preflight.
+  repository and **Fable 5** (preferred) or **Opus 5**. Use
+  **Effort: Ultracode** only while dynamic workflows/subagents are enabled.
+  Anthropic defines Ultracode as `xhigh` plus automatic workflow orchestration;
+  when the owner suspends workflows/subagents (as in the current Payroll
+  migration), **Effort: xhigh** is the accepted maximum and is required instead.
+  Re-check the visible selectors and intended chat title or URL after changing
+  chats and immediately before Send; see the collaboration guide for the exact
+  preflight.

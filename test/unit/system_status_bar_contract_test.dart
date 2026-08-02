@@ -92,8 +92,8 @@ void main() {
     final main = File('lib/main.dart').readAsStringSync();
     final host = _between(
       main,
-      "return Scaffold(\n                    body: Stack(",
-      'const QueryPerformanceGauge()',
+      'home: _WorkspaceDeepLinkBridge(',
+      'class _WorkspaceDeepLinkBridge',
     );
 
     expect(host, contains('_WorkspaceShell('));
@@ -113,6 +113,28 @@ void main() {
     expect(shell, contains('WorkspaceSystemInsetBoundary('));
     expect(shell, contains('compact: true'));
     expect(shell, contains('compact: false'));
+  });
+
+  test('el banner global delega geometría y clipping al owner de sistema', () {
+    final main = File('lib/main.dart').readAsStringSync();
+    final shellScope = File('lib/shared/widgets/workspace_shell_scope.dart')
+        .readAsStringSync();
+    final windowZoom =
+        File('lib/shared/widgets/window_zoom_scope.dart').readAsStringSync();
+    final alertOwner = _between(
+      main,
+      'void _showWorkspaceAlert(',
+      'void _openSharedRoute(',
+    );
+
+    expect(alertOwner, contains('WorkspaceTopOverlay('));
+    expect(alertOwner, isNot(contains('Positioned(')));
+    expect(shellScope, contains('class WorkspaceTopOverlay'));
+    expect(shellScope, contains('MediaQuery.viewPaddingOf(context)'));
+    expect(shellScope, contains('ClipRect('));
+    expect(shellScope, contains('mainAxisSize: MainAxisSize.min'));
+    expect(windowZoom, contains('viewPadding: _toZoomedLogicalInsets('));
+    expect(windowZoom, contains('padding: _toZoomedLogicalInsets('));
   });
 
   test('la regla del brillo vive en un solo sitio y se calcula, no se fija',

@@ -26,6 +26,7 @@ import 'quick_supplier_messages_panel.dart';
 import 'quick_task_panel.dart';
 import 'right_toolbar_glass_surface.dart';
 import 'toolbar_tool_presentation.dart';
+import 'workspace_shell_scope.dart';
 
 enum RightToolbarPresentation {
   desktopRail,
@@ -410,6 +411,18 @@ class _RightToolbarState extends State<RightToolbar> {
     final theme = Theme.of(context);
     final presentation = tool.toolbarPresentation;
 
+    // Esta herramienta ocupa toda la pantalla compacta: tapa el `AppBar` de
+    // `MainLayout`, que era el único que declaraba el estilo de la barra de
+    // estado. Sin esta declaración el sistema seguía usando el estilo del
+    // header navy tapado, así que en claro quedaban iconos claros sobre la
+    // franja blanca que pinta este mismo widget — reloj y señal invisibles.
+    //
+    // `WorkspaceSystemUiCanvas` recibe UN color y con él hace las dos cosas:
+    // pinta desde y=0 y publica `vinabikeSystemOverlayStyleFor(color)`. Que
+    // sea el mismo argumento es lo que impide que vuelvan a desincronizarse.
+    // El inset lo sigue consumiendo el `SafeArea` de abajo, una sola vez.
+    final canvas = theme.colorScheme.surface;
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -418,49 +431,55 @@ class _RightToolbarState extends State<RightToolbar> {
       child: Semantics(
         container: true,
         label: '${presentation.title}, herramienta',
-        child: Material(
-          color: theme.colorScheme.surface,
-          child: SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  height: 56,
-                  padding: const EdgeInsets.only(left: 4, right: 12),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: theme.colorScheme.outlineVariant,
+        child: WorkspaceSystemUiCanvas(
+          color: canvas,
+          child: Material(
+            // Transparente a propósito: pinta el canvas de arriba, que es el
+            // mismo que declara el estilo.
+            color: Colors.transparent,
+            child: SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    key: const ValueKey('right-toolbar-compact-header'),
+                    height: 56,
+                    padding: const EdgeInsets.only(left: 4, right: 12),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: theme.colorScheme.outlineVariant,
+                        ),
                       ),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        key: const ValueKey('right-toolbar-compact-back'),
-                        tooltip: 'Volver',
-                        onPressed: _close,
-                        icon: const Icon(Icons.arrow_back),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Semantics(
-                          header: true,
-                          child: Text(
-                            presentation.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
+                    child: Row(
+                      children: [
+                        IconButton(
+                          key: const ValueKey('right-toolbar-compact-back'),
+                          tooltip: 'Volver',
+                          onPressed: _close,
+                          icon: const Icon(Icons.arrow_back),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Semantics(
+                            header: true,
+                            child: Text(
+                              presentation.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Expanded(child: _stableToolPanel(tool)),
-              ],
+                  Expanded(child: _stableToolPanel(tool)),
+                ],
+              ),
             ),
           ),
         ),

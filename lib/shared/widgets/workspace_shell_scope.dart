@@ -33,6 +33,79 @@ class WorkspaceShellScope extends InheritedWidget {
   }
 }
 
+/// Paints the canvas behind the system bars and publishes its matching style.
+///
+/// This widget deliberately does not consume any platform inset. Its caller
+/// remains the geometry owner (an AppBar, a full-screen child's SafeArea, or
+/// [WorkspaceSystemInsetBoundary]), while this owner keeps the painted pixel
+/// and [SystemUiOverlayStyle] impossible to configure independently.
+class WorkspaceSystemUiCanvas extends StatelessWidget {
+  const WorkspaceSystemUiCanvas({
+    required this.color,
+    required this.child,
+    super.key,
+  });
+
+  final Color color;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: vinabikeSystemOverlayStyleFor(color),
+      child: ColoredBox(
+        color: color,
+        child: child,
+      ),
+    );
+  }
+}
+
+/// Positions a transient workspace overlay below the real top system inset.
+///
+/// Root Navigator overlays use window coordinates and therefore start at y=0
+/// under edge-to-edge. [MediaQuery.viewPadding] remains authoritative even if
+/// a routed SafeArea already removed `padding.top`. The clip starts at that
+/// system boundary, so an entering translation cannot paint across the clock,
+/// signal, or battery area before settling at [topGap]. `WindowZoomScope`
+/// normalizes platform insets into its descendant coordinate space, so this
+/// owner consumes [MediaQuery.viewPadding] directly without dividing again.
+class WorkspaceTopOverlay extends StatelessWidget {
+  const WorkspaceTopOverlay({
+    required this.child,
+    this.topGap = 0,
+    this.horizontalMargin = 0,
+    super.key,
+  });
+
+  final Widget child;
+  final double topGap;
+  final double horizontalMargin;
+
+  @override
+  Widget build(BuildContext context) {
+    final viewPadding = MediaQuery.viewPaddingOf(context);
+    return Positioned(
+      top: viewPadding.top,
+      left: viewPadding.left + horizontalMargin,
+      right: viewPadding.right + horizontalMargin,
+      bottom: 0,
+      child: ClipRect(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Padding(
+            padding: EdgeInsets.only(top: topGap),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [child],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Applies platform insets once at the authenticated workspace boundary.
 ///
 /// Compact composition deliberately preserves the top inset for its canonical
@@ -61,14 +134,11 @@ class WorkspaceSystemInsetBoundary extends StatelessWidget {
     }
 
     final surface = Theme.of(context).colorScheme.surface;
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: vinabikeSystemOverlayStyleFor(surface),
-      child: ColoredBox(
-        color: surface,
-        child: SafeArea(
-          bottom: false,
-          child: child,
-        ),
+    return WorkspaceSystemUiCanvas(
+      color: surface,
+      child: SafeArea(
+        bottom: false,
+        child: child,
       ),
     );
   }

@@ -20,6 +20,7 @@ import 'package:vinabike_erp/shared/services/notification_service.dart';
 import 'package:vinabike_erp/shared/services/right_toolbar_service.dart';
 import 'package:vinabike_erp/shared/services/smart_screenshot_service.dart';
 import 'package:vinabike_erp/shared/services/workspace_manager.dart';
+import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/workspace_chrome_theme.dart';
 import 'package:vinabike_erp/shared/utils/responsive_viewport.dart';
 import 'package:vinabike_erp/shared/widgets/main_layout.dart';
@@ -116,7 +117,8 @@ void main() {
   );
 
   testWidgets(
-    '900 keeps desktop chrome while 899, 834 and 390 use compact task UI',
+    '900 keeps desktop chrome; 899/834 keep the 5m table with compact chrome; '
+    '390 uses task cards',
     (tester) async {
       final harness = await _ShellHarness.create();
       addTearDown(harness.dispose);
@@ -148,15 +150,23 @@ void main() {
           findsNothing,
           reason: '$size',
         );
+        // `5m` separa las dos preguntas: bajo 900 el CHROME es compacto —header
+        // único con drawer, sin rail ni tabs— pero el CONTENIDO sólo pasa a
+        // tarjetas en teléfono. En la banda de tablet (834/899) sigue siendo la
+        // tabla de cuatro columnas, porque hay ancho de sobra para persona,
+        // total, a pagar y decisión.
+        final phone = size.width < 720;
+        // `payroll-mobile-weeks` es la píldora de alcance, o sea CHROME: 5m la
+        // conserva en toda la banda compacta, tablet incluida.
         expect(
           find.byKey(const ValueKey('payroll-mobile-weeks')),
           findsOneWidget,
-          reason: '$size must use the task-card composition',
+          reason: '$size · el alcance compacto es chrome, no contenido',
         );
         expect(
           find.byKey(const ValueKey('payroll-queue-vertical-scroll')),
-          findsNothing,
-          reason: '$size must not compress the desktop ledger',
+          phone ? findsNothing : findsOneWidget,
+          reason: '$size · 5m mantiene la tabla en la banda de tablet',
         );
         expect(tester.takeException(), isNull, reason: '$size');
       }
@@ -1049,6 +1059,25 @@ class _ShellHarness {
     );
   }
 
+  /// El tema del arnés es el **del root real** (`lib/main.dart`): resuelve el
+  /// preset seleccionado en `AppearanceService` en claro y en oscuro.
+  ///
+  /// Antes eran `ThemeData.light()` / `ThemeData.dark()`, y con eso el arnés
+  /// no representaba a la app: sin el resolver no existe `VinabikeThemeRoles`,
+  /// así que ningún componente compartido puede montarse acá — lo destapó el
+  /// esqueleto `X-01` de la carga, que se negó a pintar (2026-08-01). Además
+  /// una prueba que dice cruzar «todas las paletas» sólo estaba cruzando el
+  /// tema anidado del chrome.
+  static ThemeData _light(AppearanceService appearance) => AppTheme.resolve(
+        preset: appearance.appearancePreset,
+        brightness: Brightness.light,
+      );
+
+  static ThemeData _dark(AppearanceService appearance) => AppTheme.resolve(
+        preset: appearance.appearancePreset,
+        brightness: Brightness.dark,
+      );
+
   Future<void> pump(
     WidgetTester tester, {
     required Size size,
@@ -1088,15 +1117,15 @@ class _ShellHarness {
         ],
       );
       app = MaterialApp.router(
-        theme: ThemeData.light(),
-        darkTheme: ThemeData.dark(),
+        theme: _light(appearance),
+        darkTheme: _dark(appearance),
         themeMode: themeMode,
         routerConfig: _router,
       );
     } else {
       app = MaterialApp(
-        theme: ThemeData.light(),
-        darkTheme: ThemeData.dark(),
+        theme: _light(appearance),
+        darkTheme: _dark(appearance),
         themeMode: themeMode,
         home: Material(
           child: _ReservedPayrollWorkspaceShell(actions: actions),
@@ -1387,12 +1416,17 @@ PayrollRedesignActions _payrollActions() {
     }) async {},
     registerAdvance: ({
       required employeeId,
+      required employeeName,
       required amount,
       required paymentMethodId,
       required paymentAccountId,
       required paidAt,
       reference,
       notes,
+      required reasonCode,
+      required reasonExplanation,
+      workEndedOn,
+      originalReceipt,
       required operationKey,
     }) async {},
   );

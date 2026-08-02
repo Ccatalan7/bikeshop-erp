@@ -9,7 +9,14 @@ import 'package:vinabike_erp/modules/hr/models/payroll_voucher.dart';
 import 'package:vinabike_erp/modules/hr/payroll/payroll_redesign_page.dart';
 import 'package:vinabike_erp/modules/hr/payroll/surfaces/payroll_advances_and_cash_surfaces.dart';
 import 'package:vinabike_erp/modules/hr/payroll/surfaces/payroll_payment_composer.dart';
+import 'package:vinabike_erp/modules/hr/payroll/surfaces/payroll_accent_action.dart';
 import 'package:vinabike_erp/modules/hr/payroll/theme/payroll_tokens.dart';
+import 'package:vinabike_erp/modules/hr/services/payroll_voucher_service.dart';
+import 'package:vinabike_erp/modules/hr/widgets/payroll_advance_entry.dart';
+import 'package:vinabike_erp/shared/themes/app_theme.dart';
+import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
+import 'package:vinabike_erp/shared/utils/responsive_viewport.dart';
+import 'package:vinabike_erp/shared/widgets/vb_money_text.dart';
 
 /// Conductual de la superficie nueva (handoff 2a/2b/2e + 3a/3c).
 /// Fixtures sintéticas; ningún dato real.
@@ -20,6 +27,11 @@ void main() {
 
   const transferAccountId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const cashAccountId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+  const activatedReleaseCapabilities = PayrollReleaseCapabilities(
+    employeePaymentMethodCommand: true,
+    structuredAdvanceAudit: true,
+  );
 
   const paymentMethods = [
     {
@@ -110,6 +122,8 @@ void main() {
     List<EmployeeAdvance> openAdvances = const [],
     List<Map<String, dynamic>> employees = const [],
     bool versionedMutationsAvailable = true,
+    PayrollReleaseCapabilities releaseCapabilities =
+        activatedReleaseCapabilities,
     Future<PayrollRedesignData> Function(int call)? onLoad,
     Future<PayrollVoucher> Function(PayrollVoucher voucher)? onHydrateHistory,
     Future<PayrollAdvanceLedgerPage?> Function({
@@ -117,6 +131,7 @@ void main() {
       PayrollAdvanceLedgerCursor? cursor,
     })? loadAdvanceLedgerPage,
     Future<DateTime> Function(DateTime instant)? tenantCivilDateOf,
+    Future<void> Function()? beforePayLine,
   }) {
     final paid = <Map<String, dynamic>>[];
     final confirmed = <String>[];
@@ -129,13 +144,18 @@ void main() {
         load: () async {
           loadCalls += 1;
           final custom = onLoad;
-          if (custom != null) return custom(loadCalls);
+          if (custom != null) {
+            return (await custom(loadCalls)).copyWith(
+              releaseCapabilities: releaseCapabilities,
+            );
+          }
           return PayrollRedesignData(
             vouchers: resolvedVouchers,
             paymentMethods: paymentMethods,
             openAdvances: openAdvances,
             employees: employees,
             versionedMutationsAvailable: versionedMutationsAvailable,
+            releaseCapabilities: releaseCapabilities,
           );
         },
         hydrateHistoryVoucher: (voucher) async {
@@ -151,6 +171,7 @@ void main() {
           required operationKey,
           required expectedReconciliationVersion,
         }) async {
+          await beforePayLine?.call();
           paid.add({
             'voucherId': voucherId,
             'lineId': lineId,
@@ -161,12 +182,17 @@ void main() {
         },
         registerAdvance: ({
           required employeeId,
+          required employeeName,
           required amount,
           required paymentMethodId,
           required paymentAccountId,
           required paidAt,
           reference,
           notes,
+          required reasonCode,
+          required reasonExplanation,
+          workEndedOn,
+          originalReceipt,
           required operationKey,
         }) async {
           registeredAdvanceEmployees.add(employeeId);
@@ -187,6 +213,8 @@ void main() {
     PayrollRedesignActions actions, {
     required Size size,
     String? initialVoucherId,
+    String? initialScope,
+    String? initialAdvanceEmployeeId,
     Future<void> Function(String employeeId)? onConfigureEmployeePaymentMethod,
   }) async {
     tester.view.physicalSize = size;
@@ -196,10 +224,20 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         key: UniqueKey(),
+        // Este arnés montaba `MaterialApp` **sin tema**, así que ejercitaba
+        // Nóminas contra el default de Flutter y no contra el de la app: sin
+        // `VinabikeThemeRoles`, ningún componente compartido podía usarse acá.
+        // Se monta el tema real (2026-08-01).
+        theme: AppTheme.resolve(
+          preset: AppearancePresets.all.first,
+          brightness: Brightness.light,
+        ),
         home: Scaffold(
           body: PayrollRedesignPage(
             actions: actions,
             initialVoucherId: initialVoucherId,
+            initialScope: initialScope,
+            initialAdvanceEmployeeId: initialAdvanceEmployeeId,
             onConfigureEmployeePaymentMethod: onConfigureEmployeePaymentMethod,
           ),
         ),
@@ -384,6 +422,17 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.textContaining('Confirmar entrega'), findsOneWidget);
+    // El CTA de efectivo mide EXACTAMENTE el token de densidad. Igualdad, no
+    // `>= 48`: lo que este aserto impide es justamente el 50 que traía antes.
+    expect(
+      tester
+          .getSize(find.ancestor(
+            of: find.textContaining('Confirmar entrega'),
+            matching: find.byType(PayrollAccentAction),
+          ))
+          .height,
+      PayrollTokens.touchMobile,
+    );
 
     await tester.tap(find.textContaining('Confirmar entrega'));
     await tester.pumpAndSettle();
@@ -440,6 +489,74 @@ void main() {
     expect(h.paid, isEmpty);
     expect(configuredEmployees, ['employee-line-missing']);
     expect(h.loadCalls(), 2);
+  });
+
+  test('las capacidades pendientes nacen fail-closed', () {
+    const data = PayrollRedesignData(vouchers: <PayrollVoucher>[]);
+
+    expect(data.releaseCapabilities.employeePaymentMethodCommand, isFalse);
+    expect(data.releaseCapabilities.structuredAdvanceAudit, isFalse);
+  });
+
+  testWidgets('release gate deja Sin método pasivo y no expone la ruta 5g',
+      (tester) async {
+    final h = harness(
+      releaseCapabilities: const PayrollReleaseCapabilities(),
+      vouchers: [
+        voucher(lines: [
+          line(
+            id: 'line-dormant-method',
+            name: 'Persona Método Dormante',
+            total: 100000,
+            methodId: null,
+          ),
+        ]),
+      ],
+    );
+    var configureCalls = 0;
+    await pump(
+      tester,
+      h.actions,
+      size: const Size(1440, 900),
+      onConfigureEmployeePaymentMethod: (_) async => configureCalls++,
+    );
+
+    expect(find.text('Sin método'), findsOneWidget);
+    expect(find.text('Configurar método'), findsNothing);
+    expect(find.textContaining('Cambiar método de pago'), findsNothing);
+    expect(
+      find.byKey(
+        const ValueKey<String>(
+          'payroll-method-menu-Persona Método Dormante',
+        ),
+      ),
+      findsNothing,
+    );
+    final passive = tester.widget<Semantics>(
+      find.byKey(
+        const ValueKey<String>(
+          'payroll-row-blocked-Persona Método Dormante',
+        ),
+      ),
+    );
+    expect(passive.properties.enabled, isFalse);
+    expect(
+      passive.properties.label,
+      contains('El contrato activo del servidor no permite cambiarlo'),
+    );
+    final disclosure = find.byWidgetPredicate(
+      (widget) =>
+          widget is Semantics &&
+          widget.properties.label ==
+              'Mostrar detalle de Persona Método Dormante',
+    );
+    await tester.tap(
+      find.descendant(of: disclosure, matching: find.byType(IconButton)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Cambiar método de pago'), findsNothing);
+    expect(find.text('Nuevo anticipo'), findsNothing);
+    expect(configureCalls, 0);
   });
 
   testWidgets('5g: configurar el método vuelve al pago, no a la tabla',
@@ -708,6 +825,47 @@ void main() {
     expect(h.paid, hasLength(2));
   });
 
+  testWidgets('una precondición sin write no levanta la valla ambigua',
+      (tester) async {
+    var attempts = 0;
+    final h = harness(
+      beforePayLine: () async {
+        attempts += 1;
+        if (attempts == 1) {
+          throw const PayrollVoucherPreflightException.rejected(
+            'La semana cambió antes de enviar el pago. Revisa e intenta otra vez.',
+          );
+        }
+      },
+    );
+    await pump(tester, h.actions, size: const Size(1440, 900));
+
+    await tester.tap(find.text('Pagar').first);
+    await tester.pumpAndSettle();
+    final register = find.textContaining('Registrar \$').first;
+    await tester.tap(register);
+    await tester.pumpAndSettle();
+
+    expect(attempts, 1);
+    expect(h.paid, isEmpty);
+    expect(
+      find.textContaining('antes de enviar el pago'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('payroll-stale-projection-banner')),
+      findsNothing,
+      reason: 'el servicio garantiza que el RPC no salió',
+    );
+    expect(find.textContaining('No pudimos verificar'), findsNothing);
+
+    // El mismo panel puede reintentar de inmediato: no quedó una valla falsa.
+    await tester.tap(register);
+    await tester.pumpAndSettle();
+    expect(attempts, 2);
+    expect(h.paid, hasLength(1));
+  });
+
   testWidgets('volver de Asistencias y OCR recarga la proyección',
       (tester) async {
     final h = harness();
@@ -738,7 +896,19 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpWidget(
+      MaterialApp.router(
+        // Mismo motivo que el arnés de arriba: sin el tema del resolver no
+        // existe `VinabikeThemeRoles`, y ningún componente compartido puede
+        // montarse — el esqueleto `X-01` de la carga se niega a pintar. El
+        // arnés sin tema no representaba a la app (2026-08-01).
+        theme: AppTheme.resolve(
+          preset: AppearancePresets.all.first,
+          brightness: Brightness.light,
+        ),
+        routerConfig: router,
+      ),
+    );
     await tester.pumpAndSettle();
     expect(h.loadCalls(), 1);
 
@@ -850,7 +1020,19 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpWidget(
+      MaterialApp.router(
+        // Mismo motivo que el arnés de arriba: sin el tema del resolver no
+        // existe `VinabikeThemeRoles`, y ningún componente compartido puede
+        // montarse — el esqueleto `X-01` de la carga se niega a pintar. El
+        // arnés sin tema no representaba a la app (2026-08-01).
+        theme: AppTheme.resolve(
+          preset: AppearancePresets.all.first,
+          brightness: Brightness.light,
+        ),
+        routerConfig: router,
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Importar cartola'));
@@ -896,15 +1078,46 @@ void main() {
 
     // La fila no ofrece un botón que en realidad abre otra cosa: dice por qué
     // no se puede pagar todavía y deja la única acción real en el pie.
-    expect(find.text('Falta confirmar'), findsWidgets);
+    //
+    // `5c` · la palabra nombra QUÉ falta confirmar y usa el mismo vocabulario
+    // que la tarjeta de la semana (`SIN CONFIRMAR`). «Falta confirmar», en
+    // Design, es el efectivo entregado y pendiente —una fila que SÍ se puede
+    // resolver—, así que no puede significar también «la semana es borrador».
+    expect(find.text('Semana sin confirmar'), findsWidgets);
+    expect(find.text('Falta confirmar'), findsNothing);
     expect(find.text('Pagar'), findsNothing);
     expect(h.paid, isEmpty);
+
+    // `5c`: la forma pasiva es texto, no una píldora. Con producción en
+    // borrador casi todas las filas caen acá, así que una píldora hacía que la
+    // tabla entera pareciera accionable sin serlo.
+    //
+    // La fila es la de **Lucas Reyes**, no la de Vicente: Vicente entra al
+    // fixture ya saldado, y `_statusOf` sólo bloquea por borrador cuando queda
+    // saldo — a quien ya se le pagó le corresponde el chip `Pagado`, que sí es
+    // un control. Afirmarlo sobre Vicente medía la forma equivocada.
+    //
+    // Se afirma sobre el ESTILO del texto, no sobre la ausencia de `InkWell`:
+    // la píldora anterior tampoco tenía uno —era un `Container` pintado—, así
+    // que esa aserción pasaba con y sin el defecto. Se comprobó devolviendo la
+    // píldora: sólo el estilo la caza.
+    final blocked = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('payroll-row-actions-Lucas Reyes'),
+        ),
+        matching: find.text('Semana sin confirmar'),
+      ),
+    );
+    expect(blocked.style?.fontSize, 11);
+    expect(blocked.style?.fontWeight, FontWeight.w400);
 
     // Una sola acción primaria: el lenguaje distingue obligación de pago.
     expect(find.text('Confirmar semana'), findsOneWidget);
     await tester.tap(find.text('Confirmar semana'));
     await tester.pumpAndSettle();
-    expect(find.text('¿Confirmar esta semana?'), findsOneWidget);
+    // 5d titula la acción, no la pregunta: el diálogo ya es la pregunta.
+    expect(find.text('Confirmar esta semana'), findsOneWidget);
     // El resumen del header también dice «N personas»: el alcance se busca
     // dentro del diálogo, no en toda la pantalla.
     expect(
@@ -924,9 +1137,379 @@ void main() {
     expect(h.confirmed, ['voucher-1']);
   });
 
+  testWidgets(
+      '5c · la franja del pie sólo habla cuando todas las filas comparten '
+      'motivo', (tester) async {
+    // Compartido: la semana en borrador bloquea a todos por lo mismo, así que
+    // el motivo se dice UNA vez y se ve sin pasar el puntero por ningún lado.
+    final iguales = harness(
+      vouchers: [voucher(status: PayrollVoucherStatus.draft, day: 6)],
+    );
+    await pump(tester, iguales.actions, size: const Size(1440, 900));
+    expect(
+      find.byKey(const ValueKey<String>('payroll-blocked-note')),
+      findsOneWidget,
+    );
+    expect(find.text('Esta semana todavía no se puede pagar'), findsOneWidget);
+    expect(find.textContaining('está en borrador'), findsOneWidget);
+
+    // Mezclados: Rocío no tiene horas cerradas —motivo suyo— y el resto está
+    // bloqueado por la semana. Una sola franja tendría que elegir una de las
+    // dos razones y le mentiría a la otra, así que calla.
+    final mezclados = harness(
+      vouchers: [
+        voucher(
+          status: PayrollVoucherStatus.draft,
+          day: 6,
+          lines: [
+            line(id: 'l-1', name: 'Lucas Reyes'),
+            line(id: 'l-2', name: 'Rocío Álvarez', hours: 0, total: 0),
+          ],
+        ),
+      ],
+    );
+    await pump(tester, mezclados.actions, size: const Size(1440, 900));
+    expect(
+      find.byKey(const ValueKey<String>('payroll-blocked-note')),
+      findsNothing,
+      reason: 'dos razones distintas no caben en una sola franja',
+    );
+    expect(find.text('Semana sin confirmar'), findsWidgets);
+    expect(find.text('Horas sin cerrar'), findsWidgets);
+  });
+
+  testWidgets(
+      '5c · a 430 el motivo de la SEMANA no se repite por tarjeta; el de la '
+      'persona sí', (tester) async {
+    // El motivo del borrador es idéntico en las cuatro tarjetas y la barra ya
+    // ofrece `Confirmar semana`: repetirlo se comía los cuatro registros del
+    // primer viewport que pide `5l`, para no decir nada nuevo.
+    final semana = harness(
+      vouchers: [voucher(status: PayrollVoucherStatus.draft, day: 6)],
+    );
+    await pump(tester, semana.actions, size: const Size(430, 932));
+
+    expect(find.text('Semana sin confirmar'), findsWidgets);
+    expect(
+      find.textContaining('hasta confirmarla las horas'),
+      findsNothing,
+      reason: 'el marco ya explica el estado de la semana',
+    );
+
+    // Pero cuando el bloqueo es de ESTA persona —Asistencias no cerró SUS
+    // horas—, la tarjeta lo dice: no hay otro lugar en el teléfono que lo diga.
+    final persona = harness(
+      vouchers: [
+        voucher(
+          lines: [
+            line(
+                id: 'line-sin-horas',
+                name: 'Rocío Álvarez',
+                hours: 0,
+                total: 0),
+          ],
+        ),
+      ],
+    );
+    await pump(tester, persona.actions, size: const Size(430, 932));
+
+    expect(find.text('Horas sin cerrar'), findsWidgets);
+    expect(
+      find.textContaining('Asistencias todavía no cierra las horas'),
+      findsOneWidget,
+    );
+  });
+
+  // ---- 5d · confirmación de semana (turno 5, `handoff-t5/frames/5d.png`) ----
+  //
+  // Design dibuja 5d como el CIERRE de una semana ya pagada («todos los saldos
+  // en cero», la tarjeta pasa a PAGADA). Acá la acción confirma un BORRADOR y
+  // crea los sueldos por pagar, así que el resumen dice lo que esta acción
+  // hace. Estas tres pruebas fijan esa adaptación para que nadie la deshaga
+  // copiando el frame literal más adelante.
+
+  testWidgets(
+      '5d · el diálogo declara su alcance y no promete pagos que no existen',
+      (tester) async {
+    final h = harness(
+      vouchers: [voucher(status: PayrollVoucherStatus.draft, day: 6)],
+    );
+    await pump(tester, h.actions, size: const Size(1440, 900));
+    await tester.tap(find.text('Confirmar semana'));
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(Dialog);
+    expect(dialog, findsOneWidget);
+
+    // El ancho que publica el spec del turno 5: «diálogo 460 · CTA 34».
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.byWidgetPredicate(
+          (w) => w is ConstrainedBox && w.constraints.maxWidth == 460,
+        ),
+      ),
+      findsOneWidget,
+      reason: '5d publica el diálogo a 460',
+    );
+
+    // El resumen numérico rotulado que 5d aporta sobre el diálogo anterior.
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text('QUEDARÁ CONFIRMADA CON'),
+      ),
+      findsOneWidget,
+    );
+    // El total, escrito por `F-03 VbMoneyText`: 3 × $172.875. No hay una
+    // segunda fila repitiendo el mismo monto — con una sola categoría, el
+    // desglose decía dos veces lo que la frase de encabezado ya dice.
+    expect(
+      find.descendant(of: dialog, matching: find.byType(VbMoneyText)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: dialog, matching: find.text(r'$518.625')),
+      findsOneWidget,
+    );
+
+    // Lo DESCARTADO del frame. Al confirmar un borrador no hay ni un pago
+    // registrado: prometer transferencias, efectivo o una diferencia bajo
+    // tolerancia sería una pantalla mintiendo sobre dinero.
+    // `inmutable` va en esta lista por una razón distinta a las demás: no es
+    // una capacidad que falte, es una afirmación **falsa** del frame.
+    // `revertToDraft` → `revert_payroll_to_draft` devuelve una semana
+    // confirmada a borrador **mientras no haya pagos**; los pagos, mientras
+    // existen, bloquean ese retorno, y se deshacen con `revert_payroll_payment`
+    // —nunca editándolos en sitio—. Y tampoco se
+    // promete «reabrir»: el servicio lo permite, pero ninguna superficie lo
+    // expone hoy.
+    for (final promesa in const <String>[
+      'transferencias',
+      'entrega en efectivo',
+      'diferencia bajo tolerancia',
+      'saldos en cero',
+      'Deshacer',
+      'Contabilidad',
+      'Mensajería',
+      'inmutable',
+      'reabr',
+    ]) {
+      expect(
+        find.descendant(of: dialog, matching: find.textContaining(promesa)),
+        findsNothing,
+        reason: 'confirmar un borrador no promete «$promesa»',
+      );
+    }
+
+    // Los dos checkboxes de efecto lateral de 5d son capacidad nueva —el
+    // asiento contable ya se crea por pago y no hay canal a empleados—, así
+    // que no se dibujan como si funcionaran.
+    expect(
+      find.descendant(of: dialog, matching: find.byType(Checkbox)),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+      '5d · a quien queda en \$0 se le nombra, no se le resta en silencio',
+      (tester) async {
+    final h = harness(
+      vouchers: [
+        voucher(
+          status: PayrollVoucherStatus.draft,
+          lines: [
+            line(id: 'line-1', name: 'Vicente Soto'),
+            line(id: 'line-2', name: 'Lucas Reyes'),
+            line(id: 'line-3', name: 'Guillermo Pinto', total: 0),
+          ],
+        ),
+      ],
+    );
+    await pump(tester, h.actions, size: const Size(1440, 900));
+    await tester.tap(find.text('Confirmar semana'));
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(Dialog);
+    // El alcance cuenta 2 de 3: una línea en $0 no genera sueldo por pagar.
+    expect(
+      find.descendant(of: dialog, matching: find.textContaining('2 personas')),
+      findsOneWidget,
+    );
+    // Y la exclusión se declara, en vez de desaparecer dentro del número.
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.textContaining('1 persona queda'),
+      ),
+      findsOneWidget,
+      reason:
+          'el frame no contempla el caso; callarlo deja el total sin explicar',
+    );
+  });
+
+  testWidgets('5d · a 390 el pie se apila y «Esc cancela» no se dibuja',
+      (tester) async {
+    final h = harness(
+      vouchers: [voucher(status: PayrollVoucherStatus.draft, day: 6)],
+    );
+    await pump(tester, h.actions, size: const Size(390, 844));
+    await tester.tap(
+      find.byKey(const ValueKey('payroll-mobile-primary-action')),
+    );
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(Dialog);
+    expect(dialog, findsOneWidget);
+
+    final submit =
+        find.byKey(const ValueKey('payroll-confirm-week-dialog-submit'));
+    expect(submit, findsOneWidget);
+
+    // En un teléfono no hay tecla Esc: anunciar un atajo inexistente es ruido,
+    // y además desarmaba el pie en tres pedazos a 390.
+    expect(
+      find.descendant(of: dialog, matching: find.text('Esc cancela')),
+      findsNothing,
+    );
+
+    // Una decisión por pantalla: el primario a ancho completo, con el target
+    // táctil que publica `F-06 VbDensity` (`Control/botón · TOUCH 48`). El
+    // frame 5l dice «CTA 50» y **no se sigue**: el dueño canónico de densidad
+    // manda sobre un frame de módulo, y `touchMobile` ya vale 48.
+    final button = tester.getSize(submit);
+    final sheet = tester.getSize(
+      find.descendant(of: dialog, matching: find.byType(Column)).first,
+    );
+    expect(button.height, PayrollTokens.touchMobile);
+    expect(button.width, greaterThan(sheet.width * 0.9),
+        reason:
+            'el CTA compacto va a ancho completo, no encajonado a la derecha');
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      '5d · el pie cambia en el umbral que publica ResponsiveViewport, no en un 600 escrito a mano',
+      (tester) async {
+    // Se prueba contra la constante, no contra su valor: si el owner mueve el
+    // breakpoint, este test lo sigue en vez de contradecirlo.
+    const boundary = ResponsiveViewport.phoneMaxExclusive;
+
+    for (final probe in <({double width, bool compact})>[
+      (width: boundary - 1, compact: true),
+      (width: boundary, compact: false),
+    ]) {
+      final h = harness(
+        vouchers: [voucher(status: PayrollVoucherStatus.draft, day: 6)],
+      );
+      await pump(tester, h.actions, size: Size(probe.width, 900));
+      // El CTA que abre el diálogo NO cambia de dueño en este mismo umbral: la
+      // barra compacta llega hasta tablet, así que se toma el que exista en vez
+      // de suponer cuál. Lo que este test fija es el pie del DIÁLOGO.
+      final mobileCta =
+          find.byKey(const ValueKey('payroll-mobile-primary-action'));
+      await tester.tap(
+        mobileCta.evaluate().isNotEmpty
+            ? mobileCta
+            : find.byKey(const ValueKey('payroll-confirm-week')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.text('Esc cancela'),
+        ),
+        probe.compact ? findsNothing : findsOneWidget,
+        reason: 'a ${probe.width}px el pie debería ser '
+            '${probe.compact ? 'compacto' : 'ancho'}',
+      );
+      await tester.tap(find.text('Volver a revisar'));
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets(
+      '5l · el CTA de la tarjeta de persona mide TOUCH 48, el valor del owner de densidad',
+      (tester) async {
+    // Este contrato existe porque el valor **no es verificable en runtime sin
+    // escribir en producción**: la acción de pago sólo aparece en una semana
+    // ya confirmada, y confirmar una es un write real. Antes medía `50`
+    // literal, copiado del frame 5l; el dueño canónico es `F-06 VbDensity`
+    // (`Control/botón · TOUCH 48`) y un frame de módulo no lo sobrescribe.
+    final h = harness(
+      vouchers: [voucher(status: PayrollVoucherStatus.confirmed, day: 6)],
+    );
+    await pump(tester, h.actions, size: const Size(390, 900));
+
+    final action = find.byKey(
+      const ValueKey('payroll-mobile-person-action-Lucas Reyes'),
+    );
+    expect(action, findsOneWidget,
+        reason: 'una semana confirmada con saldo ofrece la acción de pago');
+    expect(
+      tester.getSize(action).height,
+      PayrollTokens.touchMobile,
+      reason: 'el frame 5l dibuja 50; manda F-06 · TOUCH 48',
+    );
+  });
+
+  testWidgets(
+      '5d · el rótulo dice «Confirmar semana 27», no «Semana» a media frase',
+      (tester) async {
+    final h = harness(
+      vouchers: [
+        voucher(status: PayrollVoucherStatus.draft, day: 6)
+            .copyWith(periodLabel: 'Semana 27: 29 jun - 05 jul'),
+      ],
+    );
+    await pump(tester, h.actions, size: const Size(1440, 900));
+    await tester.tap(find.text('Confirmar semana'));
+    await tester.pumpAndSettle();
+
+    // En español el sustantivo va en minúscula dentro de la frase; la mayúscula
+    // a media oración es calco del inglés.
+    expect(find.text('Confirmar semana 27: 29 jun - 05 jul'), findsOneWidget);
+    expect(find.text('Confirmar Semana 27: 29 jun - 05 jul'), findsNothing);
+  });
+
+  testWidgets(
+      '5d · en escritorio el pie conserva «Esc cancela» y los dos botones en línea',
+      (tester) async {
+    final h = harness(
+      vouchers: [voucher(status: PayrollVoucherStatus.draft, day: 6)],
+    );
+    await pump(tester, h.actions, size: const Size(1440, 900));
+    await tester.tap(find.text('Confirmar semana'));
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(Dialog);
+    expect(
+      find.descendant(of: dialog, matching: find.text('Esc cancela')),
+      findsOneWidget,
+      reason: 'con teclado sí existe el atajo, y decirlo ahorra un clic',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('sin semanas ofrece una salida real a Asistencias en ambos modos',
       (tester) async {
-    final h = harness(vouchers: const []);
+    // El fixture declara un trabajador contratado a propósito: **sin nadie
+    // contratado el vacío correcto ya no es éste**, sino el que manda a
+    // Trabajadores — mandar a cerrar horas de gente que no existe era el
+    // defecto (5k, 2026-08-01). Ver `payroll_loading_skeleton_test.dart`.
+    final h = harness(
+      vouchers: const [],
+      employees: const <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'employee-line-1',
+          'first_name': 'Vicente',
+          'last_name': 'Soto',
+          'status': 'active',
+        },
+      ],
+    );
     late final GoRouter router;
     router = GoRouter(
       initialLocation: '/hr/payroll',
@@ -950,7 +1533,19 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpWidget(
+      MaterialApp.router(
+        // Mismo motivo que el arnés de arriba: sin el tema del resolver no
+        // existe `VinabikeThemeRoles`, y ningún componente compartido puede
+        // montarse — el esqueleto `X-01` de la carga se niega a pintar. El
+        // arnés sin tema no representaba a la app (2026-08-01).
+        theme: AppTheme.resolve(
+          preset: AppearancePresets.all.first,
+          brightness: Brightness.light,
+        ),
+        routerConfig: router,
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('No hay semanas por resolver'), findsOneWidget);
@@ -1083,7 +1678,19 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpWidget(
+      MaterialApp.router(
+        // Mismo motivo que el arnés de arriba: sin el tema del resolver no
+        // existe `VinabikeThemeRoles`, y ningún componente compartido puede
+        // montarse — el esqueleto `X-01` de la carga se niega a pintar. El
+        // arnés sin tema no representaba a la app (2026-08-01).
+        theme: AppTheme.resolve(
+          preset: AppearancePresets.all.first,
+          brightness: Brightness.light,
+        ),
+        routerConfig: router,
+      ),
+    );
     await tester.pumpAndSettle();
 
     final scopeScroll = find.descendant(
@@ -1647,6 +2254,35 @@ void main() {
   });
 
   testWidgets(
+      'release gate de anticipos deja revisión honesta sin abrir formulario',
+      (tester) async {
+    final h = harness(
+      releaseCapabilities: const PayrollReleaseCapabilities(
+        employeePaymentMethodCommand: true,
+      ),
+    );
+    await pump(tester, h.actions, size: const Size(1440, 900));
+
+    await tester.tap(find.text('Anticipos'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No hay anticipos vigentes'), findsOneWidget);
+    expect(find.text('Registrar anticipo'), findsNothing);
+    expect(
+      find.byKey(
+        const ValueKey<String>('payroll-empty-advance-blocked-reason'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('motivo y respaldo auditables'),
+      findsOneWidget,
+    );
+    expect(find.byType(PayrollAdvanceEntry), findsNothing);
+    expect(h.registeredAdvanceEmployees, isEmpty);
+  });
+
+  testWidgets(
       'un anticipo global conserva la persona elegida después del refresh',
       (tester) async {
     const employees = [
@@ -1714,6 +2350,12 @@ void main() {
     await tester.tap(find.text('Beto Bravo').last);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, '15000');
+    // La explicación es obligatoria desde el contrato `v3`: sin ella el
+    // formulario no devuelve intención, que es exactamente lo que queremos.
+    await tester.enterText(
+      find.byKey(const Key('payroll-advance-reason')),
+      'Adelanto pedido por Beto',
+    );
     await tester.pump();
     await tester.tap(find.text('Registrar anticipo').hitTestable().last);
     await tester.pumpAndSettle();
@@ -2073,8 +2715,19 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(mobile.historyHydrationCalls(), 1);
+    // 5i compacto: el primer paso es elegir semana en la lista, no desplegar
+    // un select de treinta opciones paginadas.
     expect(
-      find.byKey(const ValueKey('payroll-history-selector')),
+      find.byKey(const ValueKey('payroll-history-index-compact')),
+      findsOneWidget,
+    );
+    expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+    await tester.tap(
+      find.byKey(const ValueKey('payroll-history-week-history-paid')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('payroll-history-compact-ledger')),
       findsOneWidget,
     );
     expect(find.text(r'$100.000'), findsWidgets);
@@ -2522,5 +3175,201 @@ void main() {
       expect(find.textContaining('ANT-LUCAS-P1'), findsNothing,
           reason: 'el reset por selección no conserva filas de otra persona');
     });
+  });
+  // ── Deep link `/hr/payroll?scope=advances&employee=<id>` ─────────────────
+  //
+  // F4: un anticipo con motivo estructurado y comprobante original, que es lo
+  // que `v3` entrega y el modelo descartaba.
+  const advanceEmployees = <Map<String, dynamic>>[
+    <String, dynamic>{
+      'id': 'worker-ana',
+      'first_name': 'Ana',
+      'last_name': 'Torres',
+      'status': 'active',
+      'preferred_payment_method_id': 'method-transfer',
+    },
+  ];
+
+  const advancePaymentMethods = <Map<String, dynamic>>[
+    <String, dynamic>{
+      'id': 'method-transfer',
+      'name': 'Transferencia',
+      'code': 'transfer',
+      'account_id': 'account-transfer',
+      'is_active': true,
+    },
+  ];
+
+  List<EmployeeAdvance> advancesF4() => <EmployeeAdvance>[
+        EmployeeAdvance(
+          id: 'advance-rg',
+          employeeId: 'worker-ana',
+          amount: 36000,
+          amountApplied: 0,
+          paidAt: DateTime(2026, 7, 30, 12),
+          status: 'open',
+          reference: 'TRF-99887',
+          notes: 'Registrado desde el centro de nóminas.',
+          reasonCode: PayrollAdvanceReasonCode.shortWorkweek,
+          reasonExplanation: 'Se fue el miércoles',
+          workEndedOn: DateTime(2026, 7, 29),
+        ),
+      ];
+
+  testWidgets(
+      '5h · el ledger muestra la EXPLICACIÓN, no la referencia ni el origen',
+      (tester) async {
+    final h = harness(
+      onLoad: (_) async => PayrollRedesignData(
+        vouchers: <PayrollVoucher>[voucher()],
+        paymentMethods: advancePaymentMethods,
+        employees: advanceEmployees,
+        openAdvances: advancesF4(),
+      ),
+    );
+    await pump(
+      tester,
+      h.actions,
+      size: const Size(1440, 900),
+      initialScope: 'advances',
+    );
+
+    // La razón visible es lo que escribió el operador.
+    expect(find.text('Se fue el miércoles'), findsWidgets);
+    // La referencia bancaria NO es un motivo y no puede ocupar su lugar.
+    expect(find.text('TRF-99887'), findsNothing);
+    // El código se lee en castellano y la fecha condicional acompaña.
+    expect(find.textContaining('Semana corta'), findsWidgets);
+    expect(find.textContaining('Último día trabajado'), findsWidgets);
+  });
+
+  testWidgets(
+      '5h · un employee que NO existe se DICE, no se sustituye en silencio',
+      (tester) async {
+    final h = harness(
+      onLoad: (_) async => PayrollRedesignData(
+        vouchers: <PayrollVoucher>[voucher()],
+        paymentMethods: advancePaymentMethods,
+        employees: advanceEmployees,
+        openAdvances: advancesF4(),
+      ),
+    );
+    await pump(
+      tester,
+      h.actions,
+      size: const Size(1440, 900),
+      initialScope: 'advances',
+      initialAdvanceEmployeeId: 'nadie-con-este-id',
+    );
+    // Caer en la primera persona haría que el operador leyera el saldo de
+    // otro creyendo que es el de quien pidió el enlace.
+    expect(
+      find.byKey(const ValueKey<String>('payroll-advance-target-missing')),
+      findsOneWidget,
+    );
+    expect(find.text('No encontramos a esa persona'), findsOneWidget);
+    expect(
+      find.text('Se fue el miércoles'),
+      findsNothing,
+      reason: 'un enlace roto no puede pintar el ledger de Ana',
+    );
+    expect(find.text('Registrar anticipo'), findsNothing);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('payroll-advance-target-missing-reset'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('payroll-advance-target-missing')),
+      findsNothing,
+    );
+    expect(find.text('Se fue el miércoles'), findsWidgets);
+  });
+
+  testWidgets('5h · el enlace roto también se dice cuando no hay personas',
+      (tester) async {
+    final h = harness(
+      onLoad: (_) async => PayrollRedesignData(
+        vouchers: <PayrollVoucher>[voucher()],
+        paymentMethods: advancePaymentMethods,
+        employees: const <Map<String, dynamic>>[],
+        openAdvances: const <EmployeeAdvance>[],
+      ),
+    );
+    await pump(
+      tester,
+      h.actions,
+      size: const Size(430, 900),
+      initialScope: 'advances',
+      initialAdvanceEmployeeId: 'nadie-con-este-id',
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('payroll-advance-target-missing')),
+      findsOneWidget,
+    );
+    expect(find.text('No hay anticipos vigentes'), findsNothing);
+    expect(find.text('Registrar anticipo'), findsNothing);
+  });
+
+  testWidgets('5h · didUpdateWidget atiende un cambio de URL', (tester) async {
+    final h = harness(
+      onLoad: (_) async => PayrollRedesignData(
+        vouchers: <PayrollVoucher>[voucher()],
+        paymentMethods: advancePaymentMethods,
+        employees: advanceEmployees,
+        openAdvances: advancesF4(),
+      ),
+    );
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final employeeId = ValueNotifier<String?>('nadie-con-este-id');
+    addTearDown(employeeId.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.resolve(
+          preset: AppearancePresets.all.first,
+          brightness: Brightness.light,
+        ),
+        home: Scaffold(
+          body: ValueListenableBuilder<String?>(
+            valueListenable: employeeId,
+            builder: (context, value, _) => PayrollRedesignPage(
+              key: const ValueKey<String>('same-payroll-page'),
+              actions: h.actions,
+              initialScope: 'advances',
+              initialAdvanceEmployeeId: value,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('payroll-advance-target-missing')),
+      findsOneWidget,
+    );
+
+    // Misma instancia de State, otra URL: esto sí ejecuta didUpdateWidget.
+    employeeId.value = 'worker-ana';
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('payroll-advance-target-missing')),
+      findsNothing,
+      reason: 'el aviso no se queda pegado cuando el enlace sí se cumple',
+    );
+    expect(find.text('Se fue el miércoles'), findsWidgets);
+
+    // Al retirar `?employee=`, tampoco queda pegado el target anterior.
+    employeeId.value = null;
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('payroll-advance-target-missing')),
+      findsNothing,
+    );
   });
 }

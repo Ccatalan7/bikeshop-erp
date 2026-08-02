@@ -894,13 +894,28 @@ Every record must contain these exact fields:
   canvas. In a wide/tablet composition without an AppBar, apply the top inset
   once around the complete global shell so tabs, navigation, content and tools
   remain together. A full-screen child outside that shell must own its own
-  explicit inset contract.
+  explicit inset contract. If a compact tool replaces the routed surface, it
+  must replace the system-bar canvas and its `SystemUiOverlayStyle` together,
+  then consume the inset once around its content; covering an annotated
+  `AppBar` with an unannotated light surface leaves stale light icons over that
+  surface. Root overlays are a different geometry case: position them from
+  `MediaQuery.viewPadding`, which survives a descendant `SafeArea`, and clip
+  their entrance animation at the physical system boundary so no intermediate
+  frame crosses the clock, signal, or battery region. If an ancestor applies
+  application zoom with `Transform.scale`, that zoom owner must convert every
+  viewport inset into its pre-transform coordinate space (`inset / scale`)
+  before publishing the descendant `MediaQuery`; otherwise root overlays and
+  ordinary `SafeArea` consumers both land inside the physical system boundary.
 - **Anti-pattern:** Wrapping the authenticated workspace in a top `SafeArea`;
   stacking a second AppBar below a protected blank strip; relying on a literal
-  native/status-bar color under mandatory edge-to-edge; or accepting a
-  source-string check without proving rendered geometry.
+  native/status-bar color under mandatory edge-to-edge; painting a full-screen
+  replacement without publishing the matching icon contrast; positioning a
+  root banner from `padding.top` or a fixed `top`; or accepting a source-string
+  check without proving rendered geometry.
 - **Reference implementation:** `lib/main.dart`,
-  `lib/shared/widgets/main_layout.dart`, and
+  `lib/shared/widgets/main_layout.dart`,
+  `lib/shared/widgets/workspace_shell_scope.dart`,
+  `lib/shared/widgets/right_toolbar.dart`, and
   `lib/shared/themes/vinabike_theme_roles.dart`.
 - **Minimum test:** With a non-zero simulated top system inset, render the real
   compact `MainLayout` across every appearance preset in light and dark. Prove
@@ -908,9 +923,17 @@ Every record must contain these exact fields:
   background and overlay style resolve from the same semantic chrome canvas,
   and no host-level `SafeArea` consumes the inset first. At a representative
   wide tablet width, prove the complete shell starts below that inset and the
-  descendant receives no duplicate top padding. Then inspect the built Android
-  artifact and verify status-bar continuity plus legible icons on a current
-  Android device or emulator; a Dart contract alone is insufficient.
+  descendant receives no duplicate top padding. Exercise every compact tool
+  through the shared replacement host in light and dark/palette canvases,
+  proving that one content inset is applied, icon contrast changes with the
+  painted surface, and closing the tool restores the route annotation. Render
+  a translated root alert with `padding.top == 0` and non-zero `viewPadding.top`
+  and prove both its settled geometry and its clip start below the system bar.
+  Repeat at application scale `1.0` and `0.8` and prove the clip lands on the
+  same physical system boundary. Re-run the transition at `899/900`. Then
+  inspect the built Android artifact and verify status-bar continuity plus
+  legible icons on a current Android device or emulator; a Dart contract alone
+  is insufficient.
 
 ### Global Android update prompts reveal detail on demand
 

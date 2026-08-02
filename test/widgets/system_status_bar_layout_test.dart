@@ -8,11 +8,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/messaging/providers/chat_provider.dart';
 import 'package:vinabike_erp/modules/settings/services/appearance_service.dart';
 import 'package:vinabike_erp/shared/services/navigation_service.dart';
+import 'package:vinabike_erp/shared/services/window_zoom_service.dart';
 import 'package:vinabike_erp/shared/services/workspace_manager.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
+import 'package:vinabike_erp/shared/themes/vinabike_theme_roles.dart';
 import 'package:vinabike_erp/shared/themes/workspace_chrome_theme.dart';
 import 'package:vinabike_erp/shared/widgets/main_layout.dart';
+import 'package:vinabike_erp/shared/widgets/window_zoom_scope.dart';
 import 'package:vinabike_erp/shared/widgets/workspace_shell_scope.dart';
 
 void main() {
@@ -171,6 +174,162 @@ void main() {
         findsWidgets,
       );
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'el canvas de sistema pinta desde y=0, publica su contraste y no consume inset',
+    (tester) async {
+      const surface = Color(0xFFF2F4F7);
+      const topInset = 24.0;
+
+      await tester.binding.setSurfaceSize(const Size(384, 824));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) {
+            final media = MediaQuery.of(context);
+            return MediaQuery(
+              data: media.copyWith(
+                padding: const EdgeInsets.only(top: topInset),
+                viewPadding: const EdgeInsets.only(top: topInset),
+              ),
+              child: child!,
+            );
+          },
+          home: const WorkspaceSystemUiCanvas(
+            color: surface,
+            child: SafeArea(
+              bottom: false,
+              child: SizedBox.expand(
+                key: ValueKey('system-ui-canvas-content'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final canvas = find.byType(WorkspaceSystemUiCanvas);
+      final content = find.byKey(
+        const ValueKey('system-ui-canvas-content'),
+      );
+      final annotation = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
+        find.descendant(
+          of: canvas,
+          matching: find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
+        ),
+      );
+      final paintedCanvas = tester.widget<ColoredBox>(
+        find.descendant(
+          of: canvas,
+          matching: find.byWidgetPredicate(
+            (widget) => widget is ColoredBox && widget.color == surface,
+          ),
+        ),
+      );
+
+      expect(tester.getTopLeft(canvas).dy, 0);
+      expect(tester.getTopLeft(content).dy, topInset);
+      expect(paintedCanvas.color, surface);
+      expect(
+        annotation.value,
+        vinabikeSystemOverlayStyleFor(surface),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    '899/900 conserva el límite físico del status bar aunque el host ancho use zoom',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(899, 824);
+      tester.view.padding = const FakeViewPadding(top: 24);
+      tester.view.viewPadding = const FakeViewPadding(top: 24);
+      addTearDown(tester.view.reset);
+
+      final zoom = WindowZoomService();
+      addTearDown(zoom.dispose);
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<WindowZoomService>.value(
+          value: zoom,
+          child: MaterialApp(
+            builder: (context, child) => WindowZoomScope(child: child!),
+            home: const Stack(
+              children: [
+                WorkspaceSystemInsetBoundary(
+                  compact: false,
+                  child: SizedBox.expand(
+                    key: ValueKey('zoomed-wide-shell-content'),
+                  ),
+                ),
+                WorkspaceTopOverlay(
+                  topGap: 10,
+                  horizontalMargin: 16,
+                  child: Material(
+                    child: Center(
+                      child: SizedBox(
+                        key: ValueKey('zoomed-workspace-alert'),
+                        width: 240,
+                        height: 40,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      for (final width in <double>[899, 900, 899]) {
+        tester.view.physicalSize = Size(width, 824);
+        await tester.pump();
+
+        final metrics = tester.widget<WindowViewportMetrics>(
+          find.byType(WindowViewportMetrics),
+        );
+        final clip = find.descendant(
+          of: find.byType(WorkspaceTopOverlay),
+          matching: find.byType(ClipRect),
+        );
+        final shellContent = find.byKey(
+          const ValueKey('zoomed-wide-shell-content'),
+        );
+        final alert = find.byKey(
+          const ValueKey('zoomed-workspace-alert'),
+        );
+
+        expect(
+          metrics.appliedScale,
+          width < 900 ? 1 : closeTo(0.8, 0.001),
+          reason: 'ancho físico $width',
+        );
+        expect(
+          tester.getTopLeft(clip).dy,
+          closeTo(24, 0.001),
+          reason: '$width: el clip invadió el status bar al escalarse',
+        );
+        expect(
+          tester.getTopLeft(shellContent).dy,
+          closeTo(24, 0.001),
+          reason: '$width: el SafeArea ancho no llegó al borde físico',
+        );
+        expect(
+          tester.getTopLeft(alert).dy,
+          greaterThanOrEqualTo(24),
+          reason: '$width: el banner asentado invadió el status bar',
+        );
+        expect(
+          MediaQuery.paddingOf(tester.element(shellContent)).top,
+          0,
+          reason: '$width: quedó un segundo inset para un descendiente',
+        );
+        expect(tester.takeException(), isNull, reason: '$width');
+      }
     },
   );
 }

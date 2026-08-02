@@ -47,6 +47,13 @@ typedef AppFilesLoader = Future<List<AppStoredFile>> Function({
   required int limit,
 });
 
+void _logStorageUiFailure(String operation, Object error) {
+  // La UI nunca imprime el error crudo: las excepciones de Storage pueden
+  // incluir rutas, ids internos o texto del negocio. El tipo basta para el
+  // diagnóstico local sin filtrar esos datos al operador.
+  debugPrint('Storage UI $operation failed: ${error.runtimeType}');
+}
+
 class AppFilesPanel extends StatefulWidget {
   final bool compact;
   final bool showHeader;
@@ -160,7 +167,10 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
       unawaited(_openInitialFileIfNeeded(files));
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      _logStorageUiFailure('list', error);
+      setState(
+        () => _error = 'No pudimos cargar tus archivos. Intenta nuevamente.',
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -307,9 +317,12 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
         );
       } catch (error) {
         if (!mounted) return;
+        _logStorageUiFailure('prepare upload', error);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('No se pudo preparar ${file.name}: $error'),
+            content: Text(
+              'No se pudo preparar ${file.name}. Intenta nuevamente.',
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -353,9 +366,12 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
       );
     } catch (error) {
       if (!mounted) return;
+      _logStorageUiFailure('save upload', error);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No se pudo guardar el archivo: $error'),
+          content: const Text(
+            'No se pudo guardar el archivo. Intenta nuevamente.',
+          ),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -615,9 +631,12 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
       await _loadFiles();
     } catch (error) {
       if (!mounted) return;
+      _logStorageUiFailure('delete', error);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No se pudo eliminar: $error'),
+          content: const Text(
+            'No se pudo eliminar el archivo. Intenta nuevamente.',
+          ),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -638,9 +657,12 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
       );
     } catch (error) {
       if (!mounted) return;
+      _logStorageUiFailure('download', error);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No se pudo descargar: $error'),
+          content: const Text(
+            'No se pudo descargar el archivo. Intenta nuevamente.',
+          ),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -675,13 +697,15 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
       messenger.showSnackBar(
         SnackBar(content: Text('“${file.fileName}” se abrió en Planillas.')),
       );
-    } catch (error, stackTrace) {
-      debugPrint('Stored spreadsheet import error: $error\n$stackTrace');
+    } catch (error) {
+      _logStorageUiFailure('spreadsheet import', error);
       if (!mounted) return;
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(
         SnackBar(
-          content: Text('No se pudo abrir en Planillas: $error'),
+          content: const Text(
+            'No se pudo abrir en Planillas. Intenta nuevamente.',
+          ),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -762,9 +786,12 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
       }
     } catch (error) {
       if (!mounted) return;
+      _logStorageUiFailure('prepare OCR', error);
       messenger.showSnackBar(
         SnackBar(
-          content: Text('No se pudo preparar OCR: $error'),
+          content: const Text(
+            'No se pudo preparar el archivo para OCR. Intenta nuevamente.',
+          ),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -1826,14 +1853,21 @@ class _FileListTile extends StatelessWidget {
                         label: 'Abrir origen',
                       ),
                     ),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: _FileActionMenuItem(
-                      icon: Icons.delete_outline,
-                      label: 'Eliminar',
+                  // Una evidencia inmutable de anticipo NO se puede borrar:
+                  // el servicio la rechaza siempre. Ofrecer el botón es
+                  // prometer algo que no va a pasar y educar a ignorar el
+                  // error. Se retira la acción, no se deshabilita a medias.
+                  if (!AppFileStorageService.isImmutablePayrollAdvanceEvidence(
+                      file)) ...<PopupMenuEntry<String>>[
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: _FileActionMenuItem(
+                        icon: Icons.delete_outline,
+                        label: 'Eliminar',
+                      ),
                     ),
-                  ),
+                  ],
                 ],
                 icon: const Icon(Icons.more_vert, size: 18),
               ),
@@ -2084,9 +2118,12 @@ class _InlineStorageFileRunnerState extends State<_InlineStorageFileRunner> {
       );
     } catch (error) {
       if (!mounted) return;
+      _logStorageUiFailure('save text', error);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No se pudo guardar: $error'),
+          content: const Text(
+            'No se pudo guardar el archivo. Intenta nuevamente.',
+          ),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -2119,8 +2156,11 @@ class _InlineStorageFileRunnerState extends State<_InlineStorageFileRunner> {
       );
     } catch (error) {
       if (!mounted) return;
+      _logStorageUiFailure('print PDF', error);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo imprimir: $error')),
+        const SnackBar(
+          content: Text('No se pudo imprimir. Intenta nuevamente.'),
+        ),
       );
     }
   }
@@ -2199,7 +2239,11 @@ class _InlineStorageFileRunnerState extends State<_InlineStorageFileRunner> {
                             )
                           : const Icon(Icons.save_outlined, size: 19),
                     ),
-                  if (_file.isImage)
+                  // Recortar reescribe el archivo: imposible sobre una
+                  // evidencia inmutable, y el servicio lo rechaza.
+                  if (_file.isImage &&
+                      !AppFileStorageService.isImmutablePayrollAdvanceEvidence(
+                          _file))
                     IconButton(
                       tooltip: 'Recortar imagen',
                       onPressed: bytes == null ? null : () => _editImage(bytes),
@@ -2262,7 +2306,9 @@ class _InlineStorageFileRunnerState extends State<_InlineStorageFileRunner> {
       return _StorageEmptyState(
         icon: Icons.cloud_off_outlined,
         title: 'No se pudo cargar el archivo',
-        subtitle: snapshot.error?.toString() ?? 'Intenta nuevamente.',
+        // Nunca el error crudo: puede traer rutas de Storage, ids internos o
+        // texto del negocio. Se dice qué pasó y qué hacer.
+        subtitle: 'No pudimos cargar el archivo. Intenta nuevamente.',
         actionLabel: 'Reintentar',
         onAction: _reload,
       );
@@ -2584,7 +2630,10 @@ class _StorageFilePreviewDialogState extends State<StorageFilePreviewDialog> {
                       onRetry: () {
                         setState(() => _bytesFuture = _loadBytes());
                       },
-                      onEditImage: bytes == null || !_file.isImage
+                      onEditImage: bytes == null ||
+                              !_file.isImage ||
+                              AppFileStorageService
+                                  .isImmutablePayrollAdvanceEvidence(_file)
                           ? null
                           : () => _editImage(bytes),
                       onDownload: bytes == null ? null : () => _download(bytes),
@@ -2613,7 +2662,9 @@ class _StorageFilePreviewDialogState extends State<StorageFilePreviewDialog> {
       return _StorageEmptyState(
         icon: Icons.cloud_off_outlined,
         title: 'No se pudo cargar el archivo',
-        subtitle: snapshot.error?.toString() ?? 'Intenta nuevamente.',
+        // Nunca el error crudo: puede traer rutas de Storage, ids internos o
+        // texto del negocio. Se dice qué pasó y qué hacer.
+        subtitle: 'No pudimos cargar el archivo. Intenta nuevamente.',
         actionLabel: 'Reintentar',
         onAction: () => setState(() => _bytesFuture = _loadBytes()),
       );
@@ -2752,7 +2803,7 @@ class _StoragePreviewHeader extends StatelessWidget {
               onPressed: onRetry,
               icon: const Icon(Icons.refresh),
             ),
-          if (file.isImage)
+          if (file.isImage && onEditImage != null)
             IconButton(
               tooltip: 'Recortar',
               onPressed: onEditImage,

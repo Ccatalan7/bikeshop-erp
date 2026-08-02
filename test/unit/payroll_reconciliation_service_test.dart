@@ -936,6 +936,32 @@ void main() {
       },
     );
 
+    test('apply preserves the backend replay acknowledgement', () async {
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      final draft = await harness.prepare();
+      harness.database.sensitiveRpcHandler = (functionName, params) async {
+        expect(functionName, 'apply_payroll_statement_reconciliation');
+        return <String, dynamic>{
+          'import_id': _importId,
+          'operation_key': _explicitRetryKey,
+          'committed_voucher_ids': <String>[_voucherId],
+          'replayed': true,
+        };
+      };
+
+      final receipt = await harness.reconciliationService.apply(
+        draft: draft,
+        importReceipt: _importReceipt(draft),
+        operationKey: _explicitRetryKey,
+        decisions: _reviewDecisions(draft),
+        authorizedDraftVoucherIds: const {_voucherId},
+      );
+
+      expect(receipt.wasReplay, isTrue);
+      expect(harness.payrollService.cacheInvalidationCount, 1);
+    });
+
     test('apply rejects a missing or extra draft commitment authorization',
         () async {
       final harness = _Harness();

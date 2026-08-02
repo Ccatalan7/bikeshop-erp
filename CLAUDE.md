@@ -88,14 +88,14 @@ No escribas el relato de la sesión, ni lo que ya se ve en el código o en git.
 ## Working agreements
 
 - This repository accepts collaborative Claude work only from **Code** mode
-  with **Fable 5** (preferred) or **Opus 5** and **Effort: Ultracode**.
-  Before the first prompt, and again after switching chats, verify those visible
-  labels plus the `bikeshop-erp` repository. If the effort control is a slider,
-  move it to the far-right detent and confirm that the rendered label says
-  `Effort: Ultracode`; never infer the value from the knob position. Work
-  produced in Extra or a lower effort must be re-reviewed in Ultracode before
-  it can be accepted. Immediately before Send, re-check the intended chat
-  title or URL because changing a selector can move focus to another chat.
+  with **Fable 5** (preferred) or **Opus 5**. Use **Effort: Ultracode** when
+  workflows/subagents are enabled; use **Effort: xhigh** while the owner has
+  them suspended. This is not a quality downgrade: Anthropic defines
+  Ultracode as `xhigh` plus automatic workflow orchestration, so the two modes
+  cannot truthfully coexist with a zero-subagent rule. Before the first prompt,
+  and again after switching chats, verify the visible model, effort,
+  `bikeshop-erp` repository and intended chat title/URL immediately before
+  Send.
 - Never print credential values, full connection strings, or credential-bearing
   commands. Check presence only.
 - Multi-tenant: every tenant-scoped query filters `tenant_id`. A missing filter
@@ -107,25 +107,28 @@ No escribas el relato de la sesión, ni lo que ya se ve en el código o en git.
   for visual and interaction redesign, while remaining an independent peer
   reviewer of logic. Do not silently agree with Codex: test its assumptions and
   report evidence. Never edit the same files concurrently with another agent.
-- Every newly identified non-trivial defect passes the dual diagnosis gate:
-  Claude and Codex independently state evidence, root cause, severity, proposed
-  correction, alternatives, minimum regression and uncertainty before either
-  implements it. Work from a neutral evidence packet and do not read or ratify
-  the other agent's conclusion on the first pass. Batch related defects into one
-  bounded review instead of starting a session per defect.
-- Invoke the `cross-review` skill before declaring shared work complete. Use
-  `ui-design-lead` for visual redesign, `logic-cross-reviewer` for independent
-  contract review, and `ui-cross-reviewer` for a final visual review. Start
-  with one coherent reviewer, but let it use enough tools to resolve the
-  evidence; Codex may add a sequential specialist for a distinct uncovered
-  seam and must report the reason at the next cost checkpoint.
-- **Sin techo de herramientas** (decisión del owner, 2026-07-31, reemplaza la
-  restricción anterior): el agente elige libremente Workflow, agent teams,
-  subagentes anidados, Browser y cuantas sesiones necesite. Usa el criterio
-  para no gastar de más, pero no pidas permiso para elegir una herramienta.
-  **Commit y push pasan al agente** (decisión del dueño, 2026-07-31, reemplaza
-  la regla anterior): el guard mecánico dejó de denegarlos. Lo que sigue
-  requiriendo autorización es **deploy, publicación, migraciones y escrituras
-  en producción**. Antes de mover `origin` se comprueba que Codex no esté
-  publicando desde este mismo checkout —árbol limpio, sin procesos de gate y
-  `HEAD == origin`—: el 31/07 un push a destiempo le habría roto el suyo.
+- The dual-diagnosis gate is for P0/P1 findings and seams involving financial
+  integrity, security, tenant isolation, concurrency, navigation ownership or
+  another broad invariant. Local visual/mechanical defects are corrected by
+  the active lead and bundled into the next block checkpoint; do not stop a
+  feature for one review session per control.
+- Invoke the `cross-review` skill at a coherent feature/block boundary, not
+  after every widget. While subagents are suspended, Claude and Codex perform
+  that review directly in the existing primary sessions; do not launch the
+  `ui-design-lead`, `logic-cross-reviewer` or `ui-cross-reviewer` agents.
+- **Sin techo de herramientas** remains the general project rule, but the owner
+  suspended Workflow, agent teams and subagents for the current Payroll
+  migration after repeated stalls. The current user settings enforce that
+  suspension. Work sequentially in one session until the owner lifts it.
+  Browser, Computer Use, DesignSync and the native debug tooling remain
+  available.
+  **Commit, push, PR, deploy, publicación y escrituras en producción requieren
+  autorización explícita del dueño, por acción** (2026-08-01, corrige la
+  redacción del 31/07 que decía «commit y push pasan al agente»). El guard
+  mecánico dejó de denegar los tres primeros, pero eso mide **capacidad, no
+  permiso**: manda `CODEX_CLAUDE_COLLABORATION.md` §Safety boundary — «commits,
+  and pushes require the owner's explicit authorization». Una autorización
+  puntual **no** se convierte en permiso permanente. Cuando la haya, antes de
+  mover `origin` se comprueba que Codex no esté publicando desde este mismo
+  checkout —árbol limpio, sin procesos de gate y `HEAD == origin`—: el 31/07 un
+  push a destiempo le habría roto el suyo.

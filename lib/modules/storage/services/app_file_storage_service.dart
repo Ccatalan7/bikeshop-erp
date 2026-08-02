@@ -1,12 +1,135 @@
-import 'dart:typed_data';
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:mime/mime.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/services/tenant_service.dart';
 import '../models/app_stored_file.dart';
+
+class PayrollAdvanceReceiptValidation {
+  const PayrollAdvanceReceiptValidation({
+    required this.fileName,
+    required this.mimeType,
+  });
+
+  final String fileName;
+  final String mimeType;
+}
+
+/// Client-side mirror of the versioned SQL receipt policy.
+///
+/// SQL remains authoritative for persisted Storage/app_files rows. This mirror
+/// rejects malformed bytes before any upload or financial write can happen.
+class PayrollAdvanceReceiptPolicyV1 {
+  const PayrollAdvanceReceiptPolicyV1._();
+
+  static const int maxSizeBytes = 12582912;
+  static const List<String> allowedMimeTypes = <String>[
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+  ];
+
+  static PayrollAdvanceReceiptValidation validate({
+    required Uint8List bytes,
+    required String fileName,
+    String? mimeType,
+  }) {
+    final cleanFileName = fileName.trim();
+    if (bytes.isEmpty) {
+      throw ArgumentError('El comprobante está vacío.');
+    }
+    if (bytes.length > maxSizeBytes) {
+      throw ArgumentError('El comprobante supera el máximo de 12 MiB.');
+    }
+    if (cleanFileName.isEmpty) {
+      throw ArgumentError('El comprobante necesita un nombre de archivo.');
+    }
+
+    final signatureMime = _mimeFromSignature(bytes);
+    final extensionMime = _mimeFromFileName(cleanFileName);
+    final declaredMime = normalizeMimeType(mimeType);
+    if (signatureMime == null ||
+        extensionMime == null ||
+        signatureMime != extensionMime ||
+        (declaredMime.isNotEmpty && declaredMime != signatureMime)) {
+      throw ArgumentError(
+        'El comprobante debe ser PDF, JPG, PNG o WEBP y su contenido, '
+        'extensión y tipo deben coincidir.',
+      );
+    }
+
+    return PayrollAdvanceReceiptValidation(
+      fileName: cleanFileName,
+      mimeType: signatureMime,
+    );
+  }
+
+  static String normalizeMimeType(String? value) =>
+      (value ?? '').split(';').first.trim().toLowerCase();
+
+  static String? _mimeFromFileName(String fileName) {
+    final separator = fileName.lastIndexOf('.');
+    if (separator < 0 || separator == fileName.length - 1) return null;
+    switch (fileName.substring(separator + 1).toLowerCase()) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+    }
+    return null;
+  }
+
+  static String? _mimeFromSignature(Uint8List bytes) {
+    if (bytes.length >= 5 &&
+        bytes[0] == 0x25 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x44 &&
+        bytes[3] == 0x46 &&
+        bytes[4] == 0x2D) {
+      return 'application/pdf';
+    }
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xFF &&
+        bytes[1] == 0xD8 &&
+        bytes[2] == 0xFF) {
+      return 'image/jpeg';
+    }
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47 &&
+        bytes[4] == 0x0D &&
+        bytes[5] == 0x0A &&
+        bytes[6] == 0x1A &&
+        bytes[7] == 0x0A) {
+      return 'image/png';
+    }
+    if (bytes.length >= 12 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46 &&
+        bytes[8] == 0x57 &&
+        bytes[9] == 0x45 &&
+        bytes[10] == 0x42 &&
+        bytes[11] == 0x50) {
+      return 'image/webp';
+    }
+    return null;
+  }
+}
 
 class AppFileStorageService {
   AppFileStorageService._();
@@ -25,6 +148,21 @@ class AppFileStorageService {
   static const int _historicalFilePageSize = 500;
 
   Stream<AppStoredFile> get savedFiles => _savedFileController.stream;
+
+  /// Payroll advance receipts are write-once from the moment their metadata
+  /// row exists, not only after the money command links them. The path check
+  /// mirrors the restrictive Storage policies and protects callers that hold
+  /// a stale or partially populated [AppStoredFile].
+  static bool isImmutablePayrollAdvanceEvidence(AppStoredFile file) {
+    final segments = file.storagePath.split('/');
+    final usesEvidenceNamespace = file.storageBucket == bucketName &&
+        segments.length >= 4 &&
+        segments[1] == 'evidence' &&
+        segments[2] == 'payroll_advance';
+    return usesEvidenceNamespace ||
+        (file.sourceType == 'payroll_advance' &&
+            file.contextType == 'payroll_advance_operation');
+  }
 
   Future<List<AppStoredFile>> listFiles({
     String? query,
@@ -188,6 +326,165 @@ class AppFileStorageService {
     }
   }
 
+  /// Persists immutable evidence without destructive compensation.
+  ///
+  /// The storage path is deterministic for `operationKey + sha256Hex`, so a
+  /// lost response can be recovered by read-back. Unlike [saveFile], this
+  /// method never deletes the blob after an ambiguous metadata result: a
+  /// retry either returns the exact existing evidence or fails loudly while
+  /// preserving the bytes for deliberate recovery.
+  Future<AppStoredFile> saveImmutableEvidenceFile({
+    required Uint8List bytes,
+    required String fileName,
+    String? mimeType,
+    required AppFileContext context,
+    required String operationKey,
+    required String sha256Hex,
+  }) async {
+    final receipt = PayrollAdvanceReceiptPolicyV1.validate(
+      bytes: bytes,
+      fileName: fileName,
+      mimeType: mimeType,
+    );
+    final tenantId = await _requireTenantId();
+    final safeName = _safeFileName(receipt.fileName);
+    final digest = sha256Hex.trim().toLowerCase();
+    final cleanOperationKey = operationKey.trim();
+    final contextType = context.contextType?.trim();
+    final contextId = context.contextId?.trim();
+    final resolvedMime = receipt.mimeType;
+    if (bytes.isEmpty ||
+        operationKey != cleanOperationKey ||
+        !RegExp(r'^[A-Za-z0-9:_-]{8,200}$').hasMatch(cleanOperationKey) ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(digest) ||
+        sha256.convert(bytes).toString() != digest ||
+        context.sourceType.trim().isEmpty ||
+        context.sourceId != cleanOperationKey ||
+        contextType == null ||
+        contextType.isEmpty ||
+        contextId != cleanOperationKey ||
+        context.metadata['sha256']?.toString().toLowerCase() != digest ||
+        context.metadata['operation_key']?.toString() != cleanOperationKey) {
+      throw ArgumentError('Invalid immutable evidence identity');
+    }
+
+    final existing = await _findImmutableEvidenceRows(
+      tenantId: tenantId,
+      sourceType: context.sourceType,
+      contextType: contextType,
+      contextId: cleanOperationKey,
+    );
+    if (existing.length > 1) {
+      throw StateError('Multiple immutable evidence rows share one operation.');
+    }
+    if (existing.length == 1) {
+      return _verifyImmutableEvidence(
+        existing.single,
+        expectedTenantId: tenantId,
+        expectedBytes: bytes,
+        expectedFileName: safeName,
+        expectedMimeType: resolvedMime,
+        expectedSha256: digest,
+        expectedOperationKey: cleanOperationKey,
+        expectedContext: context,
+      );
+    }
+
+    final sourceSegment =
+        context.sourceType.trim().replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_');
+    final operationHash = sha256
+        .convert(utf8.encode('$tenantId:$cleanOperationKey'))
+        .toString()
+        .substring(0, 32);
+    final storagePath =
+        '$tenantId/evidence/$sourceSegment/$operationHash/$digest-$safeName';
+
+    try {
+      await _supabase.storage.from(bucketName).uploadBinary(
+            storagePath,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: resolvedMime,
+              upsert: false,
+            ),
+          );
+    } catch (error, stackTrace) {
+      try {
+        final storedBytes =
+            await _supabase.storage.from(bucketName).download(storagePath);
+        if (sha256.convert(storedBytes).toString() != digest) {
+          Error.throwWithStackTrace(error, stackTrace);
+        }
+      } catch (_) {
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+    }
+
+    Map<String, dynamic> row;
+    try {
+      final inserted = await _supabase
+          .from('app_files')
+          .insert({
+            'tenant_id': tenantId,
+            'file_name': safeName,
+            'storage_bucket': bucketName,
+            'storage_path': storagePath,
+            'mime_type': resolvedMime,
+            'size_bytes': bytes.length,
+            'source_type': context.sourceType,
+            'source_id': context.sourceId,
+            'source_provider': context.sourceProvider,
+            'source_route': context.sourceRoute,
+            'context_type': context.contextType,
+            'context_id': context.contextId,
+            'context_title': context.contextTitle,
+            'context_subtitle': context.contextSubtitle,
+            'tags': context.tags,
+            'metadata': context.metadata,
+          })
+          .select()
+          .single();
+      row = Map<String, dynamic>.from(inserted);
+    } catch (error, stackTrace) {
+      try {
+        final recovered = await _findImmutableEvidenceRows(
+          tenantId: tenantId,
+          sourceType: context.sourceType,
+          contextType: contextType,
+          contextId: cleanOperationKey,
+        );
+        if (recovered.length == 1) {
+          return _verifyImmutableEvidence(
+            recovered.single,
+            expectedTenantId: tenantId,
+            expectedBytes: bytes,
+            expectedFileName: safeName,
+            expectedMimeType: resolvedMime,
+            expectedSha256: digest,
+            expectedOperationKey: cleanOperationKey,
+            expectedContext: context,
+          );
+        }
+      } catch (_) {
+        // Preserve the original ambiguous result and, crucially, the blob.
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+
+    final saved = await _verifyImmutableEvidence(
+      row,
+      expectedTenantId: tenantId,
+      expectedBytes: bytes,
+      expectedFileName: safeName,
+      expectedMimeType: resolvedMime,
+      expectedSha256: digest,
+      expectedOperationKey: cleanOperationKey,
+      expectedContext: context,
+    );
+    _savedFileController.add(saved);
+    return saved;
+  }
+
   Future<AppStoredFile> replaceFileBytes({
     required AppStoredFile file,
     required Uint8List bytes,
@@ -198,6 +495,11 @@ class AppFileStorageService {
     final tenantId = await _requireTenantId();
     if (file.tenantId != tenantId) {
       throw StateError('El archivo pertenece a otro tenant.');
+    }
+    if (isImmutablePayrollAdvanceEvidence(file)) {
+      throw StateError(
+        'El comprobante original de un anticipo no se puede reemplazar.',
+      );
     }
 
     final resolvedMime = mimeType?.trim().isNotEmpty == true
@@ -303,6 +605,11 @@ class AppFileStorageService {
   }
 
   Future<void> deleteFile(AppStoredFile file) async {
+    if (isImmutablePayrollAdvanceEvidence(file)) {
+      throw StateError(
+        'El comprobante original de un anticipo no se puede eliminar.',
+      );
+    }
     await _supabase
         .from('app_files')
         .update({'deleted_at': DateTime.now().toUtc().toIso8601String()}).eq(
@@ -361,6 +668,84 @@ class AppFileStorageService {
     _supplierUrlCandidates = candidates;
     _supplierUrlCandidatesLoadedAt = now;
     return candidates;
+  }
+
+  Future<List<Map<String, dynamic>>> _findImmutableEvidenceRows({
+    required String tenantId,
+    required String sourceType,
+    required String contextType,
+    required String contextId,
+  }) async {
+    final rows = await _supabase
+        .from('app_files')
+        .select()
+        .eq('tenant_id', tenantId)
+        .eq('source_type', sourceType)
+        .eq('context_type', contextType)
+        .eq('context_id', contextId)
+        .isFilter('deleted_at', null)
+        .limit(2);
+    return (rows as List<dynamic>)
+        .map(
+          (row) => Map<String, dynamic>.from(
+            row as Map<dynamic, dynamic>,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<AppStoredFile> _verifyImmutableEvidence(
+    Map<String, dynamic> row, {
+    required String expectedTenantId,
+    required Uint8List expectedBytes,
+    required String expectedFileName,
+    required String expectedMimeType,
+    required String expectedSha256,
+    required String expectedOperationKey,
+    required AppFileContext expectedContext,
+  }) async {
+    final file = AppStoredFile.fromJson(row);
+    final expectedMetadataMatches = expectedContext.metadata.entries.every(
+      (entry) => file.metadata[entry.key]?.toString() == entry.value.toString(),
+    );
+    final expectedTags = expectedContext.tags.toSet();
+    final actualTags = file.tags.toSet();
+    final recordMatches = file.id.trim().isNotEmpty &&
+        file.tenantId == expectedTenantId &&
+        file.uploadedBy?.trim().isNotEmpty == true &&
+        file.fileName == expectedFileName &&
+        file.storageBucket == bucketName &&
+        file.storagePath.trim().isNotEmpty &&
+        file.mimeType == expectedMimeType &&
+        file.sizeBytes == expectedBytes.length &&
+        file.sourceType == expectedContext.sourceType &&
+        file.sourceId == expectedContext.sourceId &&
+        file.sourceProvider == expectedContext.sourceProvider &&
+        file.sourceRoute == expectedContext.sourceRoute &&
+        file.contextType == expectedContext.contextType &&
+        file.contextId == expectedOperationKey &&
+        file.contextTitle == expectedContext.contextTitle &&
+        file.contextSubtitle == expectedContext.contextSubtitle &&
+        expectedTags.length == actualTags.length &&
+        actualTags.containsAll(expectedTags) &&
+        expectedMetadataMatches &&
+        file.metadata['sha256']?.toString().toLowerCase() == expectedSha256 &&
+        file.metadata['operation_key']?.toString() == expectedOperationKey &&
+        file.deletedAt == null;
+    if (!recordMatches) {
+      throw StateError(
+        'Stored immutable evidence does not match the requested operation.',
+      );
+    }
+
+    final storedBytes = await _supabase.storage
+        .from(file.storageBucket)
+        .download(file.storagePath);
+    if (storedBytes.length != expectedBytes.length ||
+        sha256.convert(storedBytes).toString() != expectedSha256) {
+      throw StateError('Stored immutable evidence bytes do not match.');
+    }
+    return file;
   }
 
   Future<String> _requireTenantId() async {

@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/accounting/models/journal_entry.dart';
 import 'package:vinabike_erp/modules/accounting/services/accounting_service.dart';
 import 'package:vinabike_erp/modules/accounting/services/financial_projection_refresh_coordinator.dart';
+import 'package:vinabike_erp/modules/hr/models/payroll_audit_read_models.dart';
 import 'package:vinabike_erp/modules/hr/services/payroll_voucher_service.dart';
 import 'package:vinabike_erp/shared/services/database_service.dart';
 
@@ -198,6 +199,140 @@ void main() {
       expect(coordinator.changes, isEmpty);
     },
   );
+
+  test('audited advance sends the complete v3 contract and verifies receipt',
+      () async {
+    final database = _WriterHintDatabaseService();
+    final coordinator = _RecordingRefreshCoordinator();
+    final payroll = PayrollVoucherService(
+      database,
+      financialProjectionRefresh: coordinator,
+    );
+    addTearDown(() {
+      payroll.dispose();
+      database.dispose();
+      coordinator.dispose();
+    });
+
+    final receipt = await payroll.registerAuditedEmployeeAdvance(
+      employeeId: 'employee-1',
+      amount: 32000,
+      paymentMethodId: 'method-1',
+      paymentAccountId: 'cash',
+      paidAt: DateTime(2026, 7, 24, 15, 30),
+      reference: 'ADV-STRUCTURED-1',
+      notes: 'Respaldo original',
+      reasonCode: PayrollAdvanceReasonCode.shortWorkweek,
+      reasonExplanation: ' La semana terminó el jueves. ',
+      workEndedOn: DateTime(2026, 7, 24),
+      evidence: const PayrollAdvanceEvidenceReference(
+        appFileId: 'file-1',
+        sha256: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+            'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      ),
+      operationKey: 'advance-audit-client-0001',
+    );
+
+    expect(receipt.advanceId, 'advance-audited-1');
+    expect(receipt.replayed, isFalse);
+    expect(
+      receipt.evidenceStorageObjectId,
+      '7f2a1830-0000-4000-8000-000000000901',
+    );
+    expect(receipt.evidenceStorageObjectVersion, 'storage-version-1');
+    expect(receipt.evidenceStorageObjectEtag, 'storage-etag-1');
+    final call = database.rpcCalls.singleWhere(
+      (call) => call.functionName == 'register_employee_advance_v3',
+    );
+    expect(
+      call.params,
+      <String, dynamic>{
+        'p_operation_key': 'advance-audit-client-0001',
+        'p_employee_id': 'employee-1',
+        'p_amount': 32000,
+        'p_payment_method_id': 'method-1',
+        'p_payment_account_id': 'cash',
+        'p_paid_at': '2026-07-24T19:30:00.000Z',
+        'p_reference': 'ADV-STRUCTURED-1',
+        'p_notes': 'Respaldo original',
+        'p_reason_code': 'short_workweek',
+        'p_reason_explanation': 'La semana terminó el jueves.',
+        'p_work_ended_on': '2026-07-24',
+        'p_evidence_file_id': 'file-1',
+        'p_evidence_file_sha256': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      },
+    );
+    expect(
+      coordinator.changes,
+      containsOnce(
+        FinancialProjectionChangeKind.payroll,
+        entityId: 'advance-audited-1',
+      ),
+    );
+  });
+
+  test('audited advance rejects a crossed receipt without publishing a hint',
+      () async {
+    final database = _WriterHintDatabaseService()
+      ..malformedAuditedReceipt = true;
+    final coordinator = _RecordingRefreshCoordinator();
+    final payroll = PayrollVoucherService(
+      database,
+      financialProjectionRefresh: coordinator,
+    );
+    addTearDown(() {
+      payroll.dispose();
+      database.dispose();
+      coordinator.dispose();
+    });
+
+    await expectLater(
+      payroll.registerAuditedEmployeeAdvance(
+        employeeId: 'employee-1',
+        amount: 12000,
+        paymentMethodId: 'method-1',
+        paymentAccountId: 'cash',
+        paidAt: DateTime(2026, 7, 24, 16),
+        reasonCode: PayrollAdvanceReasonCode.requestedAdvance,
+        reasonExplanation: 'Solicitud expresa del trabajador',
+        operationKey: 'advance-audit-client-0002',
+      ),
+      throwsStateError,
+    );
+    expect(coordinator.changes, isEmpty);
+  });
+
+  test('audited advance rejects a noncanonical operation key before RPC',
+      () async {
+    final database = _WriterHintDatabaseService();
+    final coordinator = _RecordingRefreshCoordinator();
+    final payroll = PayrollVoucherService(
+      database,
+      financialProjectionRefresh: coordinator,
+    );
+    addTearDown(() {
+      payroll.dispose();
+      database.dispose();
+      coordinator.dispose();
+    });
+
+    await expectLater(
+      payroll.registerAuditedEmployeeAdvance(
+        employeeId: 'employee-1',
+        amount: 12000,
+        paymentMethodId: 'method-1',
+        paymentAccountId: 'cash',
+        paidAt: DateTime(2026, 7, 24, 16),
+        reasonCode: PayrollAdvanceReasonCode.requestedAdvance,
+        reasonExplanation: 'Solicitud expresa del trabajador',
+        operationKey: ' advance-audit-client-0003 ',
+      ),
+      throwsA(isA<PayrollVoucherPreflightException>()),
+    );
+    expect(database.rpcCalls, isEmpty);
+    expect(coordinator.changes, isEmpty);
+  });
 }
 
 Matcher containsOnce(
@@ -295,7 +430,10 @@ class _WriterHintDatabaseService extends DatabaseService {
   bool failJournalCreate = false;
   bool failJournalHeaderDelete = false;
   bool failRpc = false;
+  bool malformedAuditedReceipt = false;
   int _nextJournalId = 1;
+  final List<({String functionName, Map<String, dynamic> params})> rpcCalls =
+      <({String functionName, Map<String, dynamic> params})>[];
 
   @override
   Future<List<Map<String, dynamic>>> select(
@@ -378,11 +516,44 @@ class _WriterHintDatabaseService extends DatabaseService {
     String functionName, {
     Map<String, dynamic>? params,
   }) async {
+    rpcCalls.add((
+      functionName: functionName,
+      params: Map<String, dynamic>.from(
+        params ?? const <String, dynamic>{},
+      ),
+    ));
     if (failRpc) {
       throw StateError('$functionName rejected');
     }
     if (functionName == 'register_employee_advance_v2') {
       return {'advance_id': 'advance-1'};
+    }
+    if (functionName == 'register_employee_advance_v3') {
+      return <String, dynamic>{
+        'advance_id': 'advance-audited-1',
+        'operation_key': params?['p_operation_key'],
+        'employee_id': malformedAuditedReceipt
+            ? 'employee-crossed'
+            : params?['p_employee_id'],
+        'amount': params?['p_amount'],
+        'payment_method_id': params?['p_payment_method_id'],
+        'payment_account_id': params?['p_payment_account_id'],
+        'paid_at': params?['p_paid_at'],
+        'status': 'open',
+        'reference': params?['p_reference'],
+        'reason_code': params?['p_reason_code'],
+        'reason_explanation': params?['p_reason_explanation'],
+        'work_ended_on': params?['p_work_ended_on'],
+        'evidence_file_id': params?['p_evidence_file_id'],
+        'evidence_file_sha256': params?['p_evidence_file_sha256'],
+        if (params?['p_evidence_file_id'] != null)
+          'evidence_storage_object_id': '7f2a1830-0000-4000-8000-000000000901',
+        if (params?['p_evidence_file_id'] != null)
+          'evidence_storage_object_version': 'storage-version-1',
+        if (params?['p_evidence_file_id'] != null)
+          'evidence_storage_object_etag': 'storage-etag-1',
+        'replayed': false,
+      };
     }
     if (functionName == 'revert_payroll_to_draft') {
       return null;

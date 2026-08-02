@@ -113,7 +113,7 @@ void _expectPageUsesTheme(WidgetTester tester, ThemeData theme) {
   );
   final decoration = card.decoration! as BoxDecoration;
   final border = decoration.border! as Border;
-  final title = tester.widget<Text>(find.text('Sube la cartola'));
+  final title = tester.widget<Text>(find.text('Carga la cartola'));
   final scanner = tester.widget<Icon>(
     find.descendant(
       of: find.byKey(

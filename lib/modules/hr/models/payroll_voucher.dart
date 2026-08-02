@@ -1,3 +1,5 @@
+import 'payroll_audit_read_models.dart';
+
 enum PayrollVoucherStatus { draft, confirmed, partial, paid, voided }
 
 enum PayrollSettlementEvidenceKind { payment, advance }
@@ -495,6 +497,9 @@ class EmployeeAdvance {
     this.paymentAccountId,
     this.reference,
     this.notes,
+    this.reasonCode,
+    this.reasonExplanation,
+    this.workEndedOn,
   }) : paidCivilDate = paidCivilDate ?? paidAt;
 
   final String id;
@@ -512,7 +517,31 @@ class EmployeeAdvance {
   final String? paymentMethodId;
   final String? paymentAccountId;
   final String? reference;
+
+  /// Sólo el ORIGEN del anticipo. Con `v3` el motivo dejó de viajar acá.
   final String? notes;
+
+  /// Motivo estructurado. **Nulo en asientos legacy** (anteriores a `v3`):
+  /// esa nulabilidad es el dato, no un descuido — distingue «no tiene motivo
+  /// registrado» de «tiene uno y dice esto».
+  final PayrollAdvanceReasonCode? reasonCode;
+
+  /// Lo que el operador escribió al entregar el dinero.
+  final String? reasonExplanation;
+
+  /// Último día trabajado; sólo viaja con `shortWorkweek`.
+  final DateTime? workEndedOn;
+
+  /// Qué mostrar como motivo, en orden de verdad: la explicación del operador
+  /// primero y el respaldo legacy sólo si no hay ninguna. `reference` es la
+  /// referencia bancaria y no es un motivo, así que nunca gana.
+  String? get displayReason {
+    final explanation = reasonExplanation?.trim();
+    if (explanation != null && explanation.isNotEmpty) return explanation;
+    final legacyNotes = notes?.trim();
+    if (legacyNotes != null && legacyNotes.isNotEmpty) return legacyNotes;
+    return null;
+  }
 
   double get availableAmount => (amount - amountApplied).clamp(0, amount);
 
@@ -533,7 +562,33 @@ class EmployeeAdvance {
       paymentAccountId: map['payment_account_id'] as String?,
       reference: map['reference'] as String?,
       notes: map['notes'] as String?,
+      // `getOpenEmployeeAdvances` ya trae estas tres columnas desde `v3`; el
+      // modelo las descartaba, así que el composer seguía mostrando `notes`
+      // —el origen— bajo el rótulo de motivo. Se parsean tolerando el legacy:
+      // un asiento viejo simplemente no las trae.
+      reasonCode: _parseAdvanceReasonCode(map['reason_code']),
+      reasonExplanation: map['reason_explanation'] as String?,
+      workEndedOn: _parseAdvanceDay(map['work_ended_on']),
     );
+  }
+
+  static PayrollAdvanceReasonCode? _parseAdvanceReasonCode(Object? value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) return null;
+    // Un código desconocido NO revienta la lista: el ledger sigue siendo
+    // legible y el motivo cae al respaldo. Reventar acá dejaría al operador
+    // sin ver sus anticipos por un valor que ni siquiera necesita.
+    try {
+      return PayrollAdvanceReasonCode.parse(text);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  static DateTime? _parseAdvanceDay(Object? value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) return null;
+    return DateTime.tryParse(text);
   }
 }
 

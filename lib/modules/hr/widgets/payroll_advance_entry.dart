@@ -1,11 +1,38 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show Uint8List;
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/utils/responsive_viewport.dart';
+import '../../../shared/widgets/vb_notice.dart';
+import '../../../shared/widgets/vb_short_select.dart';
+import '../../storage/services/app_file_storage_service.dart';
+import '../payroll/theme/payroll_tokens.dart';
+import '../models/payroll_audit_read_models.dart';
 import '../models/payroll_voucher.dart';
 import 'payroll_format.dart';
 import 'payroll_money_bar.dart';
 import 'payroll_payment_sheet.dart' show ClpAmountInputFormatter;
+
+/// El comprobante original tal como lo eligió el operador: **bytes en
+/// memoria**, sin subir.
+///
+/// Elegir un archivo no es registrarlo. La subida ocurre dentro de
+/// `PayrollAdvanceRegistrationService.register`, y **sólo después** de que el
+/// backend confirmó que el bundle `v3` existe: así nunca queda un comprobante
+/// inmutable colgado en Storage por un anticipo que no llegó a registrarse.
+@immutable
+class PayrollAdvanceReceiptDraft {
+  const PayrollAdvanceReceiptDraft({
+    required this.bytes,
+    required this.fileName,
+    this.mimeType,
+  });
+
+  final Uint8List bytes;
+  final String fileName;
+  final String? mimeType;
+}
 
 /// A request to register money handed to a worker outside a voucher payment.
 @immutable
@@ -18,6 +45,10 @@ class PayrollAdvanceIntent {
     required this.paymentAccountId,
     required this.paidAt,
     required this.operationKey,
+    required this.reasonCode,
+    required this.reasonExplanation,
+    this.workEndedOn,
+    this.originalReceipt,
     this.reference,
     this.notes,
   });
@@ -29,7 +60,28 @@ class PayrollAdvanceIntent {
   final String paymentAccountId;
   final DateTime paidAt;
   final String operationKey;
+
+  /// Qué clase de anticipo es, en el vocabulario del backend auditado.
+  final PayrollAdvanceReasonCode reasonCode;
+
+  /// Por qué se entrega, en palabras del operador. **Siempre obligatoria**:
+  /// el código dice la familia, no el caso, y un anticipo sin motivo escrito
+  /// es exactamente lo que la auditoría no puede reconstruir después.
+  final String reasonExplanation;
+
+  /// Último día trabajado. **Sólo** existe —y sólo es obligatorio— cuando el
+  /// motivo es `shortWorkweek`: es el dato que define la semana corta.
+  final DateTime? workEndedOn;
+
+  /// Respaldo en papel, opcional, todavía en memoria.
+  final PayrollAdvanceReceiptDraft? originalReceipt;
+
+  /// Referencia bancaria del movimiento. Es un dato del pago, no del motivo.
   final String? reference;
+
+  /// Notas de ORIGEN, separadas del motivo a propósito: `notes` cuenta desde
+  /// dónde se registró y `reasonExplanation` cuenta por qué se entregó. Antes
+  /// viajaban mezcladas en un solo texto y la auditoría no podía separarlas.
   final String? notes;
 }
 
@@ -79,12 +131,27 @@ Future<PayrollAdvanceIntent?> showPayrollAdvanceEntry({
     builder: (context) => Dialog(
       insetPadding: const EdgeInsets.all(24),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 580),
+        // 680, no 580. El contrato `v3` sumó dos campos OBLIGATORIOS —tipo y
+        // explicación— y con el techo anterior quedaban **bajo el pliegue**:
+        // el formulario se veía completo, el primario estaba habilitado, y al
+        // pulsarlo reclamaba un campo que nunca se mostró. Medido en la app
+        // viva a 1360×768, donde sobraban 140 px de pantalla sin usar.
+        //
+        // `ConstrainedBox` respeta primero la restricción que baja del
+        // `Dialog`, así que en una ventana baja sigue acotado y el scroll
+        // interno hace su trabajo; acá sólo deja de desperdiciar el alto que
+        // había.
+        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 680),
         child: content,
       ),
     ),
   );
 }
+
+/// Elige un archivo y lo devuelve **en memoria**. Inyectable para que las
+/// pruebas ejerzan el recorrido completo sin abrir el panel del sistema.
+typedef PayrollAdvanceReceiptPicker = Future<PayrollAdvanceReceiptDraft?>
+    Function();
 
 class PayrollAdvanceEntry extends StatefulWidget {
   const PayrollAdvanceEntry({
@@ -94,6 +161,7 @@ class PayrollAdvanceEntry extends StatefulWidget {
     this.line,
     this.employees = const [],
     this.initialEmployeeId,
+    this.pickReceipt,
   });
 
   final PayrollVoucher? voucher;
@@ -102,6 +170,9 @@ class PayrollAdvanceEntry extends StatefulWidget {
   final List<Map<String, dynamic>> employees;
   final String? initialEmployeeId;
 
+  /// Nulo en producción: usa el selector del sistema.
+  final PayrollAdvanceReceiptPicker? pickReceipt;
+
   @override
   State<PayrollAdvanceEntry> createState() => _PayrollAdvanceEntryState();
 }
@@ -109,6 +180,7 @@ class PayrollAdvanceEntry extends StatefulWidget {
 class _PayrollAdvanceEntryState extends State<PayrollAdvanceEntry> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _referenceController = TextEditingController();
+  final TextEditingController _reasonController = TextEditingController();
 
   String? _employeeId;
   String? _methodId;
@@ -116,7 +188,32 @@ class _PayrollAdvanceEntryState extends State<PayrollAdvanceEntry> {
   String? _validationError;
   bool _isDirty = false;
   bool _allowPop = false;
+
+  /// `5h` · qué clase de anticipo es. Arranca en el caso corriente para que el
+  /// formulario no exija una decisión antes de la primera cifra.
+  PayrollAdvanceReasonCode _reasonCode =
+      PayrollAdvanceReasonCode.requestedAdvance;
+
+  /// Último día trabajado. Sólo vive con `shortWorkweek`.
+  DateTime? _workEndedOn;
+
+  /// Comprobante elegido y todavía **no** subido.
+  PayrollAdvanceReceiptDraft? _receipt;
+  bool _pickingReceipt = false;
+
+  /// Estable por instancia del formulario: el mismo intento reintentado no
+  /// puede convertirse en dos anticipos. Sobrevive a cada `setState`, que es
+  /// justo lo que un `Uuid()` recalculado en `build` no haría.
   final String _operationKey = const Uuid().v4();
+
+  bool get _needsWorkEndedOn =>
+      _reasonCode == PayrollAdvanceReasonCode.shortWorkweek;
+
+  /// Sólo para pruebas: deja comprobar que la clave **no** cambia entre
+  /// reconstrucciones, que es lo que impide registrar dos veces el mismo
+  /// anticipo al reintentar.
+  @visibleForTesting
+  String get operationKeyForTest => _operationKey;
 
   double get _amount =>
       double.tryParse(_amountController.text.replaceAll('.', '').trim()) ?? 0;
@@ -282,6 +379,7 @@ class _PayrollAdvanceEntryState extends State<PayrollAdvanceEntry> {
   void dispose() {
     _amountController.dispose();
     _referenceController.dispose();
+    _reasonController.dispose();
     super.dispose();
   }
 
@@ -299,6 +397,96 @@ class _PayrollAdvanceEntryState extends State<PayrollAdvanceEntry> {
       });
     }
   }
+
+  Future<void> _pickWorkEndedOn() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _workEndedOn ?? _paidAt,
+      firstDate: DateTime(now.year - 1),
+      lastDate: now,
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _workEndedOn = picked;
+        _validationError = null;
+        _isDirty = true;
+      });
+    }
+  }
+
+  /// Elige el comprobante y lo deja **en memoria**. No sube nada: la subida
+  /// vive en el coordinador y sólo ocurre después de confirmar la capability,
+  /// para que cancelar acá no deje un archivo inmutable huérfano en Storage.
+  Future<void> _pickReceipt() async {
+    if (_pickingReceipt) return;
+    setState(() => _pickingReceipt = true);
+    try {
+      final picked = await (widget.pickReceipt ?? _defaultReceiptPicker)();
+      if (!mounted) return;
+      PayrollAdvanceReceiptValidation? validated;
+      if (picked != null) {
+        validated = PayrollAdvanceReceiptPolicyV1.validate(
+          bytes: picked.bytes,
+          fileName: picked.fileName,
+          mimeType: picked.mimeType,
+        );
+      }
+      setState(() {
+        if (picked != null && validated != null) {
+          _receipt = PayrollAdvanceReceiptDraft(
+            bytes: picked.bytes,
+            fileName: validated.fileName,
+            mimeType: validated.mimeType,
+          );
+          _isDirty = true;
+          _validationError = null;
+        }
+      });
+    } on ArgumentError catch (error) {
+      if (!mounted) return;
+      final message = error.message?.toString().trim();
+      setState(() {
+        _validationError = message == null || message.isEmpty
+            ? 'El comprobante no es válido.'
+            : message;
+      });
+    } catch (error) {
+      // Nunca se interpola el error: puede traer rutas o nombres del negocio.
+      debugPrint('❌ [PayrollAdvance] selector (${error.runtimeType})');
+      if (!mounted) return;
+      setState(() => _validationError =
+          'No pudimos abrir el selector de archivos. Intenta de nuevo.');
+    } finally {
+      if (mounted) setState(() => _pickingReceipt = false);
+    }
+  }
+
+  Future<PayrollAdvanceReceiptDraft?> _defaultReceiptPicker() async {
+    final result = await FilePicker.platform.pickFiles(
+      withData: true,
+      allowMultiple: false,
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+    );
+    final file = result?.files.singleOrNull;
+    final bytes = file?.bytes;
+    if (file == null || bytes == null || bytes.isEmpty) return null;
+    return PayrollAdvanceReceiptDraft(
+      bytes: bytes,
+      fileName: file.name,
+      mimeType: _mimeForExtension(file.extension),
+    );
+  }
+
+  static String? _mimeForExtension(String? extension) =>
+      switch (extension?.toLowerCase()) {
+        'pdf' => 'application/pdf',
+        'png' => 'image/png',
+        'jpg' || 'jpeg' => 'image/jpeg',
+        'webp' => 'image/webp',
+        _ => null,
+      };
 
   Future<void> _requestClose() async {
     if (!_isDirty) {
@@ -386,6 +574,36 @@ class _PayrollAdvanceEntryState extends State<PayrollAdvanceEntry> {
           () => _validationError = 'La fecha no puede estar en el futuro.');
       return;
     }
+    // El motivo escrito es OBLIGATORIO, no una glosa opcional: el código dice
+    // la familia («semana corta») y la explicación dice el caso. Sin ella la
+    // auditoría no puede reconstruir por qué salió ese dinero.
+    final explanation = _reasonController.text.trim();
+    if (explanation.isEmpty) {
+      setState(() => _validationError = 'Explica en una línea por qué se '
+          'entrega este anticipo.');
+      return;
+    }
+    if (explanation.length > 1000) {
+      setState(() => _validationError = 'La explicación es demasiado larga: '
+          'resúmela en menos de 1.000 caracteres.');
+      return;
+    }
+    // El último día trabajado define la semana corta. Va exactamente con ese
+    // motivo: exigirlo en los otros dos inventaría un dato, y omitirlo acá
+    // dejaría al backend sin lo único que distingue el caso.
+    final workEndedOn = _needsWorkEndedOn ? _workEndedOn : null;
+    if (_needsWorkEndedOn && workEndedOn == null) {
+      setState(() => _validationError = 'Indica el último día trabajado de '
+          'esta semana corta.');
+      return;
+    }
+    if (workEndedOn != null &&
+        DateTime(workEndedOn.year, workEndedOn.month, workEndedOn.day)
+            .isAfter(today)) {
+      setState(() => _validationError = 'El último día trabajado no puede '
+          'estar en el futuro.');
+      return;
+    }
     final voucher = widget.voucher;
     _pop(
       PayrollAdvanceIntent(
@@ -396,20 +614,45 @@ class _PayrollAdvanceEntryState extends State<PayrollAdvanceEntry> {
         paymentAccountId: paymentAccountId,
         paidAt: _paidAt,
         operationKey: _operationKey,
+        reasonCode: _reasonCode,
+        reasonExplanation: explanation,
+        workEndedOn: workEndedOn,
+        originalReceipt: _receipt,
         reference: _referenceController.text.trim().isEmpty
             ? null
             : _referenceController.text.trim(),
-        notes: voucher == null
-            ? 'Anticipo registrado desde el centro de nóminas.'
-            : 'Anticipo registrado desde la semana '
-                '${formatPayrollWeekRange(voucher.periodStart, voucher.periodEnd)}.',
+        // `notes` ya NO lleva el motivo: éste viaja tipado en
+        // `reasonExplanation` y el backend lo guarda aparte. Acá queda sólo el
+        // ORIGEN, que es lo que la nota siempre quiso decir.
+        notes: _originNote(voucher),
       ),
     );
   }
 
+  /// `Registrado desde la semana 07 – 13 jul.`
+  ///
+  /// **Sólo el origen.** Antes esta nota concatenaba motivo y origen en un
+  /// texto libre porque el backend no tenía dónde poner el motivo; con `v3` sí
+  /// lo tiene, y mezclarlos volvía a hacer imposible separarlos después.
+  String _originNote(PayrollVoucher? voucher) {
+    final origin = voucher == null
+        ? 'registrado desde el centro de nóminas'
+        : 'registrado desde la semana '
+            '${formatPayrollWeekRange(voucher.periodStart, voucher.periodEnd)}';
+    return '${_capitalize(origin)}.';
+  }
+
+  static String _capitalize(String value) =>
+      value.isEmpty ? value : '${value[0].toUpperCase()}${value.substring(1)}';
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    // 5h se implementa con el vocabulario montado de Nóminas, no con
+    // `theme.textTheme`/`colorScheme` crudos: los tokens claros del turno 4
+    // —ratificados por el turno 8— viven en `PayrollVisualTokens`, y usarlos
+    // directamente es lo que hace que este formulario se lea como el resto del
+    // módulo en los seis presets y en los dos brillos.
+    final visual = PayrollVisualTokens.of(context);
 
     return PopScope(
       canPop: _allowPop || !_isDirty,
@@ -432,8 +675,7 @@ class _PayrollAdvanceEntryState extends State<PayrollAdvanceEntry> {
                       widget.line == null
                           ? 'Registrar anticipo'
                           : 'Anticipo para $_employeeName',
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w800),
+                      style: visual.sectionTitle,
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -445,26 +687,17 @@ class _PayrollAdvanceEntryState extends State<PayrollAdvanceEntry> {
                                   'antes de liquidar una semana.'
                           : 'Semana '
                               '${formatPayrollWeekRange(widget.voucher!.periodStart, widget.voucher!.periodEnd)}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
+                      style: visual.monoS.copyWith(fontSize: 10.5),
                     ),
                     const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.all(13),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        'El anticipo queda en el registro de la persona y podrá '
-                        'aplicarse a una nómina posterior. No cambia horas, '
-                        'tarifas ni totales para hacerlos cuadrar.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          height: 1.35,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                      ),
+                    // `E-04 · VbNotice`, el owner compartido del aviso. Antes
+                    // era un `Container` con `surfaceContainerHighest` y radio
+                    // 10 a mano — una variante local de un control que ya
+                    // existe bajo su id.
+                    const VbNotice(
+                      title: 'El anticipo queda en el registro de la persona',
+                      body: 'Podrá aplicarse a una nómina posterior. No cambia '
+                          'horas, tarifas ni totales para hacerlos cuadrar.',
                     ),
                     if (widget.line == null) ...[
                       const SizedBox(height: 18),
@@ -472,6 +705,7 @@ class _PayrollAdvanceEntryState extends State<PayrollAdvanceEntry> {
                     ],
                     const SizedBox(height: 18),
                     TextField(
+                      key: const Key('payroll-advance-amount'),
                       controller: _amountController,
                       keyboardType: TextInputType.number,
                       autofocus: widget.line != null || _employeeId != null,
@@ -525,8 +759,8 @@ class _PayrollAdvanceEntryState extends State<PayrollAdvanceEntry> {
                         key: const Key(
                           'payroll-advance-no-valid-payment-method',
                         ),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.error,
+                        style: visual.bodyS.copyWith(
+                          color: visual.dangerFg,
                           height: 1.35,
                         ),
                       ),
@@ -545,11 +779,123 @@ class _PayrollAdvanceEntryState extends State<PayrollAdvanceEntry> {
                             Icon(
                               Icons.calendar_today_rounded,
                               size: 17,
-                              color: theme.colorScheme.onSurfaceVariant,
+                              color: visual.inkMuted,
                             ),
                           ],
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    // `5h` · **qué clase de anticipo es**, antes de por qué.
+                    // El frame propone una lista corta de motivos y ahora sí
+                    // existe dominio detrás: `v3` guarda un `reason_code`
+                    // tipado con exactamente estos tres valores. Hasta `v2`
+                    // esto era texto libre porque el esquema no tenía dónde
+                    // ponerlo; ya no.
+                    VbShortSelect<PayrollAdvanceReasonCode>(
+                      key: const Key('payroll-advance-reason-code'),
+                      label: 'Tipo de anticipo',
+                      sheetTitle: 'Tipo de anticipo',
+                      value: _reasonCode,
+                      options: const <VbShortSelectOption<
+                          PayrollAdvanceReasonCode>>[
+                        VbShortSelectOption(
+                          value: PayrollAdvanceReasonCode.requestedAdvance,
+                          label: 'Solicitud de anticipo',
+                        ),
+                        VbShortSelectOption(
+                          value: PayrollAdvanceReasonCode.shortWorkweek,
+                          label: 'Semana corta',
+                        ),
+                        VbShortSelectOption(
+                          value: PayrollAdvanceReasonCode.other,
+                          label: 'Otro',
+                        ),
+                      ],
+                      onChanged: (value) => setState(() {
+                        _reasonCode = value;
+                        _validationError = null;
+                        _isDirty = true;
+                        // Cambiar de motivo no deja colgado un dato que ya no
+                        // aplica: la fecha de término es de la semana corta.
+                        if (!_needsWorkEndedOn) _workEndedOn = null;
+                      }),
+                    ),
+                    if (_needsWorkEndedOn) ...[
+                      const SizedBox(height: 12),
+                      // «Último día trabajado», no «fecha de término»: lo que
+                      // el operador sabe es hasta cuándo vino la persona, y la
+                      // semana no termina — se liquida corta.
+                      InkWell(
+                        key: const Key('payroll-advance-work-ended-on'),
+                        onTap: _pickWorkEndedOn,
+                        borderRadius: BorderRadius.circular(8),
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Último día trabajado',
+                            helperText: 'La semana se liquida hasta este día.',
+                            helperMaxLines: 2,
+                            errorText: _isDirty && _workEndedOn == null
+                                ? 'Falta indicarlo'
+                                : null,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _workEndedOn == null
+                                      ? 'Elegir día'
+                                      : formatPayrollDate(_workEndedOn!),
+                                  style: _workEndedOn == null
+                                      ? visual.bodyM
+                                          .copyWith(color: visual.inkFaint)
+                                      : null,
+                                ),
+                              ),
+                              Icon(
+                                Icons.event_busy_rounded,
+                                size: 17,
+                                color: visual.inkMuted,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    // La explicación es OBLIGATORIA: el código de arriba dice
+                    // la familia, esto dice el caso. El ledger ya tenía columna
+                    // `MOTIVO` y el formulario no tenía dónde escribirla —
+                    // mandaba siempre la misma frase de relleno y todos los
+                    // anticipos se veían iguales en el historial.
+                    TextField(
+                      key: const Key('payroll-advance-reason'),
+                      controller: _reasonController,
+                      textCapitalization: TextCapitalization.sentences,
+                      onChanged: (_) => setState(() {
+                        _validationError = null;
+                        _isDirty = true;
+                      }),
+                      decoration: const InputDecoration(
+                        labelText: 'Explicación',
+                        helperText:
+                            'Se ve en el historial de la persona y en el '
+                            'detalle del pago.',
+                        // `helperText` es de UNA línea por defecto y a 430 se
+                        // cortaba con puntos suspensivos: la frase moría justo
+                        // donde explicaba para qué sirve el campo.
+                        helperMaxLines: 3,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _ReceiptRow(
+                      receipt: _receipt,
+                      busy: _pickingReceipt,
+                      onPick: _pickReceipt,
+                      onRemove: () => setState(() {
+                        _receipt = null;
+                        _isDirty = true;
+                      }),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -568,9 +914,7 @@ class _PayrollAdvanceEntryState extends State<PayrollAdvanceEntry> {
                       const SizedBox(height: 12),
                       Text(
                         _validationError!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.error,
-                        ),
+                        style: visual.bodyS.copyWith(color: visual.dangerFg),
                       ),
                     ],
                   ],
@@ -653,5 +997,110 @@ class _PayrollAdvanceEntryState extends State<PayrollAdvanceEntry> {
         );
       },
     );
+  }
+}
+
+/// `5h` · el comprobante original: elegir, ver, quitar o reemplazar **antes**
+/// de enviar. Nada se sube acá.
+class _ReceiptRow extends StatelessWidget {
+  const _ReceiptRow({
+    required this.receipt,
+    required this.busy,
+    required this.onPick,
+    required this.onRemove,
+  });
+
+  final PayrollAdvanceReceiptDraft? receipt;
+  final bool busy;
+  final VoidCallback onPick;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = PayrollVisualTokens.of(context);
+    final current = receipt;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'Comprobante original (opcional)',
+          style: visual.label.copyWith(fontSize: 11.5),
+        ),
+        const SizedBox(height: 6),
+        if (current == null)
+          OutlinedButton.icon(
+            key: const Key('payroll-advance-pick-receipt'),
+            onPressed: busy ? null : onPick,
+            icon: const Icon(Icons.attach_file_rounded, size: 17),
+            label: const Text('Adjuntar comprobante'),
+          )
+        else
+          Container(
+            key: const Key('payroll-advance-receipt-chip'),
+            padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+            decoration: BoxDecoration(
+              color: visual.surfaceSunken,
+              borderRadius: BorderRadius.circular(PayrollTokens.rField),
+              border: Border.all(color: visual.border),
+            ),
+            child: Row(
+              children: <Widget>[
+                Icon(
+                  Icons.description_outlined,
+                  size: 16,
+                  color: visual.inkMuted,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        current.fileName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: visual.bodyM.copyWith(fontSize: 12),
+                      ),
+                      // El peso es la única prueba en pantalla de que el
+                      // archivo se leyó de verdad y no quedó en el nombre.
+                      Text(
+                        _weightLabel(current.bytes.length),
+                        style: visual.monoS.copyWith(fontSize: 9.5),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  key: const Key('payroll-advance-replace-receipt'),
+                  onPressed: busy ? null : onPick,
+                  child: const Text('Reemplazar'),
+                ),
+                IconButton(
+                  key: const Key('payroll-advance-remove-receipt'),
+                  onPressed: busy ? null : onRemove,
+                  icon: const Icon(Icons.close_rounded, size: 17),
+                  color: visual.inkMuted,
+                  constraints: const BoxConstraints.tightFor(
+                    width: PayrollTokens.touchMin,
+                    height: PayrollTokens.touchMin,
+                  ),
+                  padding: EdgeInsets.zero,
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 4),
+        Text(
+          'Se guarda como respaldo inmutable sólo si el anticipo se registra.',
+          style: visual.bodyS.copyWith(fontSize: 10.5, color: visual.inkFaint),
+        ),
+      ],
+    );
+  }
+
+  static String _weightLabel(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 }

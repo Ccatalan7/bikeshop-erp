@@ -581,6 +581,111 @@ void main() {
     expect(refresh.changes.single.entityId, 'voucher-delete');
   });
 
+  test('empty payment is rejected before any write can be sent', () async {
+    final database = _LifecycleDatabaseService();
+    final service = PayrollVoucherService(database);
+    addTearDown(() {
+      service.dispose();
+      database.dispose();
+    });
+
+    await expectLater(
+      service.payVoucher('voucher-pay', paymentSplits: const {}),
+      throwsA(
+        isA<PayrollVoucherPreflightException>()
+            .having(
+              (error) => error.kind,
+              'kind',
+              PayrollVoucherPreflightFailureKind.rejected,
+            )
+            .having((error) => error.mayHaveCommitted, 'commit', isFalse),
+      ),
+    );
+
+    expect(database.selectByIdCalls, isEmpty);
+    expect(database.rpcCalls, isEmpty);
+  });
+
+  test('missing voucher is a typed no-write preflight rejection', () async {
+    final database = _LifecycleDatabaseService();
+    final service = PayrollVoucherService(database);
+    addTearDown(() {
+      service.dispose();
+      database.dispose();
+    });
+
+    await expectLater(
+      service.deleteVoucher('voucher-missing'),
+      throwsA(
+        isA<PayrollVoucherPreflightException>()
+            .having(
+              (error) => error.kind,
+              'kind',
+              PayrollVoucherPreflightFailureKind.rejected,
+            )
+            .having((error) => error.mayHaveCommitted, 'commit', isFalse),
+      ),
+    );
+
+    expect(database.selectByIdCalls, ['voucher-missing']);
+    expect(database.rpcCalls, isEmpty);
+  });
+
+  test('failed version read is unavailable before write, without raw error',
+      () async {
+    final database = _LifecycleDatabaseService()
+      ..selectByIdError = StateError('secret transport detail');
+    final service = PayrollVoucherService(database);
+    addTearDown(() {
+      service.dispose();
+      database.dispose();
+    });
+
+    await expectLater(
+      service.commitVoucher('voucher-unreadable'),
+      throwsA(
+        isA<PayrollVoucherPreflightException>()
+            .having(
+              (error) => error.kind,
+              'kind',
+              PayrollVoucherPreflightFailureKind.unavailable,
+            )
+            .having(
+              (error) => error.userMessage,
+              'safe message',
+              isNot(contains('secret transport detail')),
+            ),
+      ),
+    );
+
+    expect(database.rpcCalls, isEmpty);
+  });
+
+  test('a version row with no version never becomes an implicit zero write',
+      () async {
+    final database = _LifecycleDatabaseService()
+      ..voucherVersions['voucher-no-version'] = 9
+      ..omitReconciliationVersion = true;
+    final service = PayrollVoucherService(database);
+    addTearDown(() {
+      service.dispose();
+      database.dispose();
+    });
+
+    await expectLater(
+      service.commitVoucher('voucher-no-version'),
+      throwsA(
+        isA<PayrollVoucherPreflightException>().having(
+          (error) => error.kind,
+          'kind',
+          PayrollVoucherPreflightFailureKind.unavailable,
+        ),
+      ),
+    );
+
+    expect(database.rpcCalls, isEmpty);
+  });
+
   test('a malformed lifecycle RPC result publishes no committed refresh',
       () async {
     final database = _LifecycleDatabaseService()..returnMalformedResult = true;
@@ -633,6 +738,7 @@ class _LifecycleDatabaseService extends DatabaseService {
       <Map<String, dynamic>>[];
   bool returnMalformedResult = false;
   bool rejectReconciliationVersionColumn = false;
+  bool omitReconciliationVersion = false;
   Object? selectByIdError;
   String? lastAdvanceWhere;
   List<String>? lastAdvanceWhereIn;
@@ -721,7 +827,7 @@ class _LifecycleDatabaseService extends DatabaseService {
     if (version == null) return null;
     return <String, dynamic>{
       'id': id,
-      'reconciliation_version': version,
+      if (!omitReconciliationVersion) 'reconciliation_version': version,
     };
   }
 

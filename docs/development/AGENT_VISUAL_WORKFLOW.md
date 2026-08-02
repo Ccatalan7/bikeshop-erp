@@ -63,6 +63,32 @@ P=$(pgrep -f "Debug/vinabike_erp.app/Contents/MacOS/vinabike_erp" | head -1)
 osascript -e "tell application \"System Events\" to tell (first process whose unix id is $P) to click button 1 of window 1"
 ```
 
+**Si eso responde `Can't get window 1 … Invalid index (-1719)`, el huérfano no
+tiene ventana** (2026-08-01). Pasa cuando el proceso sobrevive a su propia
+interfaz: `status` lo ve vivo, el VM contesta, y no hay nada que cerrar. Un
+`quit` de aplicación sí funciona, y no es una señal de proceso:
+
+```bash
+osascript -e "tell application \"System Events\" to tell (first process whose unix id is $P) to quit"
+```
+
+**No lo resuelvas con `kill`.** El guard lo deniega —«generic process signaling
+is blocked»— y tiene razón: apunta a un proceso que puede no ser el que crees.
+
+Dos formas de esa trampa, que juntas cuestan una ronda:
+
+1. **El guard escanea el comando completo.** Un `kill` al final de un bloque
+   compuesto hace que se deniegue **todo lo que iba antes**, incluido el `quit`
+   que sí habría funcionado. Manda el `quit` solo.
+2. **`kill -0` no señala nada** —es la forma canónica de preguntar «¿sigue
+   vivo?»— y el guard igual lo deniega, porque lee el verbo, no el flag. Para
+   comprobar liveness usa **`ps -p <pid>`**, que dice lo mismo sin la palabra
+   prohibida.
+
+Y cuando lo que necesitas es apagar la sesión, la respuesta no es rodear el
+guard: es **`native_session.sh stop`**, que es el owner canónico y desde el
+2026-08-01 captura y limpia su árbol entero.
+
 ### Si la ventana queda tapada, `shot` MIENTE — y no avisa
 
 La trampa más cara del 31/07, y la que hay que revisar **antes** de creerle a
@@ -91,11 +117,64 @@ python3 -c "import time;t=time.time()-$start;print('engine', 'dibujando' if t>1 
 fiable —desde el 31/07 dibuja el frame a mano si no llega—, así que **la
 estructura se puede verificar con la ventana tapada; los píxeles no**.
 
-**La única solución es que asome un pedazo de la ventana.** Moverla o traerla al
+> **Esa sonda da FALSOS POSITIVOS y ya costó una afirmación equivocada
+> (2026-08-01).** `read --filter zzz` **también** vuelve en 0,2 s cuando el
+> filtro simplemente no encuentra nada, que es exactamente lo que hace `zzz`.
+> Con esa lectura escribí en un handoff que la confirmación visual quedaba
+> pendiente por ventana tapada; un `shot` de control mostró la app
+> perfectamente rasterizada. **Para saber si el engine dibuja, mira el frame o
+> el aviso que el propio `read` imprime (`# el engine no entregó frame …`), no
+> un cronómetro sobre un filtro que no matchea.** Un filtro que sí matchea algo
+> presente en pantalla sirve; `zzz` no.
+
+**Cuando la ventana sí está tapada, la única solución es que asome un pedazo.** Moverla o traerla al
 frente por AppleScript no basta si igual queda cubierta, y no es algo que el
 agente pueda resolver solo: se le pide al dueño y, si no se puede, se declara
 que la confirmación visual quedó pendiente. Deducirla de un `shot` viejo es
 inventar.
+
+### `window` captura POR REGIÓN DE PANTALLA: puede traerte otra aplicación
+
+**Trampa nueva, 2026-08-01, y es de privacidad.** Con `shot` devolviendo un
+frame viejo, el reflejo es probar `app_control.sh window`, que hace una captura
+del sistema operativo. Pero recorta **el rectángulo donde está la ventana**, no
+la ventana: si `vinabike_erp` no está al frente, ahí encima hay otra cosa. En
+esa ronda devolvió, a pantalla completa, **una página web ajena abierta en otro
+navegador** — contenido privado del dueño que nada tenía que ver con la tarea.
+
+Se borró en el acto y no se usó. La regla:
+
+- **`window` sólo después de comprobar que la app está al frente**, y aun así
+  mirando lo que devolvió antes de razonar sobre ello.
+- Si lo que devuelve no es la app, **bórralo de inmediato** y no lo describas:
+  es contenido privado que se coló en el contexto.
+- Para verificar la app, el camino es `shot` (va por el VM service y **no puede**
+  capturar otra aplicación), con la app traída al frente primero.
+
+### Traer la app al frente: `open -a`, no `set frontmost`
+
+```bash
+open -a "$PWD/build/macos/Build/Products/Debug/vinabike_erp.app"
+```
+
+`osascript … to set frontmost of (process whose unix id is …) to true` **falla
+en silencio** con esta app: devuelve sin error y el frontmost sigue siendo otro
+—comprobado el 2026-08-01, quedó al frente un navegador—. `open -a` sobre el
+bundle **no relanza** la app si ya corre (el PID no cambia): sólo la activa.
+
+Importa porque una app en segundo plano no rasteriza: `read` sigue diciendo la
+verdad del árbol, pero `shot` devuelve el último frame viejo. **Síntoma exacto:
+el árbol dice que el popover está abierto y el PNG muestra la pantalla sin él.**
+
+### Después de cambiar el brillo, REABRE la ruta antes de capturar
+
+Una ruta que ya estaba en la pila puede conservar píxeles del tema anterior. El
+2026-08-01 el diálogo de 5g salió con su fondo oscuro y su texto claro **encima
+de una app ya conmutada a claro**, y por un momento pareció un defecto de
+contraste del componente. No lo era: era el frame rancio de la ruta.
+
+Cierra la ruta, vuelve a una pantalla neutra, comprueba **ahí** que el brillo
+cambió, y recién entonces reabre la ruta que vas a capturar.
 
 ### El ciclo completo es más confiable que el reload
 
@@ -235,8 +314,18 @@ y el lector de imágenes lo rechaza. Los que sí bajan enteros están por debajo
 (`5d.png` 150.868, `7a-*` ~119.400).
 
 El `CHANGELOG` del turno 5 lo dice sin nombrarlo: los frames anchos van en
-bandas `-p1`/`-p2` «porque un solo PNG superaba los 200 KB». **`5c` y `5h` se
-publicaron como archivo único y caen justo encima del tope.**
+bandas `-p1`/`-p2` «porque un solo PNG superaba los 200 KB». `5c` y `5h` se
+publicaron como archivo único y caían justo encima del tope — **hasta que
+Design los republicó en bandas**, que es lo que el propio `CHANGELOG` registra
+en su sección «Republicado después del turno 5» (comprobado el 2026-08-01:
+`5c-p1.png` baja en 104.760 bytes y decodifica).
+
+> **Antes de heredar un bloqueo, reverifícalo en su fuente.** Ese caso quedó
+> declarado como «bloqueado esperando permiso del dueño» durante un día
+> completo mientras el archivo ya estaba publicado. El CHANGELOG del turno se
+> lee antes de implementar; lo que faltaba era volver a leerlo antes de
+> **repetir un bloqueo**. Un impedimento que depende de un tercero caduca solo,
+> y nadie le mira la fecha de vencimiento.
 
 Qué hacer, en este orden:
 
@@ -269,6 +358,49 @@ scripts/dev/app_control.sh tap --label "Nóminas" --index 0
 Si `tap` se queja de varios candidatos, `find --label X` los lista y `--index N`
 desempata. Nunca por coordenada.
 
+### Llegar a un módulo EN COMPACTO (por el drawer)
+
+Por debajo de 900 no hay barra lateral, y el drawer no se deja tocar por
+identidad a la primera. Tres trampas seguidas, cada una cuesta un intento:
+
+```bash
+scripts/dev/app_control.sh click 28 28          # abre el drawer (el hamburger
+                                                # no tiene identidad; coordenada
+                                                # del frame actual, un solo uso)
+scripts/dev/app_control.sh scroll 174 400 -6    # el módulo suele estar bajo el
+                                                # pie: si no se ve, `find` dice
+                                                # «nada que tocar», y tiene razón
+scripts/dev/app_control.sh tap --label "RR.HH."
+scripts/dev/app_control.sh read | grep -n "Nóminas"   # ← espera a que expanda
+scripts/dev/app_control.sh tap --label "Nóminas" --index 0
+```
+
+1. **El hamburger no tiene etiqueta**: `find --label "Abrir menú"` no encuentra
+   nada. Es el caso legítimo de coordenada.
+2. **Lo que está bajo el pie del drawer no es tocable**, y `find` lo rechaza con
+   «sin coincidencias: nada que tocar». No es un fallo del script: es su
+   contrato. Se hace `scroll` primero.
+3. **La fila padre tarda en expandir.** Un `find --label "Nóminas"` disparado
+   justo después del `tap` sobre `RR.HH.` devuelve «sin coincidencias» aunque el
+   `read` de un segundo después la muestre como `[botón]`. Comprueba con `read`
+   antes de concluir que no está.
+
+### Capturar un estado que sólo existe MIENTRAS carga
+
+El esqueleto de carga (5k) se dibuja sólo en el **primer** montaje de la
+página: una recarga conserva los datos y se queda en la vista real. Para verlo
+no hace falta reiniciar la sesión —basta **salir del módulo y volver**, que
+remonta la ruta— y la captura tiene que ir pegada al toque que entra:
+
+```bash
+scripts/dev/app_control.sh tap --label "Nóminas" --index 0
+scripts/dev/app_control.sh shot frame.png     # sin nada en medio
+```
+
+Cualquier comando intercalado —incluso un `read`— pierde la carrera contra una
+lectura de producción. Y **preparar la navegación antes**: expandir el menú, o
+abrir y desplazar el drawer, en comandos aparte.
+
 ### Cambiar a oscuro, y volver
 
 No hay comando: se hace por la UI del módulo de Configuración.
@@ -279,8 +411,12 @@ scripts/dev/app_control.sh tap --label "Apariencia"
 scripts/dev/app_control.sh tap --label "Oscuro"      # o "Claro"
 ```
 
-**Escribe la preferencia persistida del dueño. Déjala en `Claro` al terminar** —
-la app es suya, no un banco de pruebas.
+**Escribe la preferencia persistida del dueño**, así que no la dejes donde te
+quedó por casualidad. **El valor al que se vuelve lo declara el handoff vigente
+en su fila `Sesión canónica`**, no esta receta: durante la migración de Nóminas
+ese valor es `Oscuro`, y una versión anterior de esta línea decía `Claro`, que
+contradecía al handoff y hacía que cada ronda lo dejara distinto. Comprueba el
+check en su sitio antes de cerrar.
 
 **Si el toggle se resiste, no insistas a ciegas.** El pase oscuro también se
 verifica sin la UI: `payroll_redesign_dark_host_test.dart` monta las superficies
@@ -298,6 +434,103 @@ osascript -e "tell application \"System Events\" to tell (first process whose un
 
 **430** compacto · **880** tablet · **1180** sidebar expandido · **1672**
 escritorio. Devuélvela como estaba al terminar.
+
+### Si un panel ignora `scroll`, usa `drag`
+
+```bash
+scripts/dev/app_control.sh drag 900 700 900 300     # arrastra hacia arriba
+```
+
+**2026-08-01.** El panel «Salario y Horas» de la ficha de trabajador **no se
+movió** con `scroll` —cuatro intentos, dos posiciones distintas— y una ronda
+anterior lo dio por bloqueado, dejando ese estado sin verificar. `drag` lo movió
+a la primera: es un gesto de arrastre, que el `Scrollable` de Flutter atiende
+aunque los eventos de rueda no le lleguen.
+
+Antes de declarar una pantalla inalcanzable, prueba el otro gesto. Y comprueba
+con `find` en vez de con `read`: `read` lista el nodo aunque esté fuera de la
+vista, mientras que `find` sólo devuelve lo que de verdad se puede tocar — la
+diferencia entre «existe» y «llego».
+
+### `dart format` sobre un DIRECTORIO toca archivos de otros
+
+```bash
+.fvm/flutter_sdk/bin/dart format lib/shared/widgets/vb_short_select.dart   # sí
+.fvm/flutter_sdk/bin/dart format test/                                     # NO
+```
+
+**2026-08-01, y costó una limpieza entera.** Un `dart format test/` reescribió
+**32 archivos ajenos** —toda la familia de Website Builder y storefront— con
+cambios de puro reformateo. En un checkout compartido eso aparece como
+movimiento concurrente en la revisión de diff de otro agente, que es exactamente
+lo que este repositorio prohíbe.
+
+**Formatea por archivo, siempre los tuyos y sólo los tuyos.** Si ya pasó, la
+reversión segura no es `git checkout --` a ciegas (además el guard lo deniega, y
+con razón): por cada archivo, guarda una copia del árbol, escribe encima la
+versión de `HEAD` con `git show HEAD:<ruta> > <ruta>`, formatéala y **compárala
+con la copia**. Si son idénticas, el único cambio era tu formato y revertir es
+correcto; si difieren, había trabajo ajeno y se restituye la copia intacta.
+
+### Generar las capturas de HARNESS de una etapa inalcanzable en vivo
+
+Cuando una superficie sólo existe tras una precondición prohibida —subir un
+archivo real, confirmar una semana— las seis celdas se generan desde el arnés,
+con fixture sintético, y **se declaran como de harness**:
+
+```bash
+SHOTS=$(mktemp -d)                       # directorio nuevo; nada que borrar
+PAYROLL_SHOT_DIR="$SHOTS" .fvm/flutter_sdk/bin/flutter test <suite> \
+  --plain-name "<nombre exacto y único del generador>"
+ls -l "$SHOTS"                           # exactamente seis PNG
+```
+
+**El comando tiene que terminar en `exit 0`.** Un generador que sale distinto de
+cero es un generador roto: mientras lo esté, no se puede distinguir «falló la
+descarga de una fuente» de «la captura salió en blanco» o «la pantalla
+desbordó», que es justo lo que estas imágenes existen para delatar.
+
+**El obstáculo real y cómo se resuelve** (2026-08-01). `GoogleFonts.textStyle`
+lanza la carga de la fuente como un future *fire-and-forget* y le hace `.then`
+**sin `onError`**; en `flutter_test` toda petición HTTP vuelve 400, así que ese
+future **rechaza** y el error llega a la zona como asíncrono no capturado. Y no
+ocurre una sola vez: el `catch` de `loadFontIfNecessary` hace
+`_loadedFonts.remove(...)` antes del `rethrow` (`google_fonts 6.3.2`,
+`google_fonts_base.dart`), o sea **borra la marca de carga y reintenta en la
+siguiente resolución de estilo** — por eso no hay drenaje ni precalentamiento
+que sirva.
+
+Sólo estalla al capturar porque el rechazo se materializa cuando el future
+completa, y eso exige el event loop real: fuera de `runAsync` la zona falsa de
+`flutter_test` nunca lo deja completar. La captura es el único punto que necesita `runAsync`
+—el encoder de `toImage`/`toByteData` corre ahí—, así que ahí aterrizaban todos
+los rechazos.
+
+La solución es **que el error no nazca**, no taparlo: se sustituye el cliente
+HTTP del paquete por uno cuyo `send` devuelve un `Completer` que nunca completa,
+de modo que las cargas quedan **pendientes** en vez de rechazar. Un `Completer`
+pelado no tiene timer ni I/O, así que no deja temporizadores al cerrar. Se
+restaura el cliente original y se limpia la caché en `addTearDown`.
+
+Lo que **no** se hace, y por qué:
+
+- **No se drena con `takeException`.** Silencia también los errores ajenos —un
+  overflow, por ejemplo—, que son exactamente los que la captura debe delatar.
+- **No se apaga `allowRuntimeFetching`.** Sin la fuente entre los assets lanza
+  al resolver **cada** estilo, o sea en cada frame: es peor.
+- **No se captura fuera de `runAsync`.** `toByteData` se queda esperando el
+  event loop y el test se cuelga (medido: bloqueado en `S`, 0 % CPU).
+
+Y lo que sí queda declarado como límite, dicho por lo que se ve y no por lo que
+se supone: en estas capturas **el texto sale como bloques** —los glifos de la
+tipografía de prueba del arnés—, así que **no se puede leer ni una palabra en
+ellas**. Demuestran **composición**: qué hay, dónde, de qué tamaño y con qué
+color. **No son evidencia de tipografía** —ni de familia, ni de peso, ni de
+kerning— y no se debe afirmar cuál se dibujó: eso no se midió. El texto se cubre
+con aserciones de copy, nunca con la imagen.
+
+El generador va **`opt-in`** por variable de entorno y **fuera de la batería**:
+es herramienta de evidencia, no regresión — pero verde, como cualquier otra.
 
 ### Comparar una banda del frame contra la app
 
@@ -429,8 +662,30 @@ preciosa que afirma algo falso, y un ERP donde cada módulo navega distinto.
 | 2 | **¿La palabra es la correcta?** ¿Es la que usa el dueño, en chileno, y dice lo que la cosa hace? | el vocabulario ya fijado del módulo |
 | 3 | **¿La funcionalidad es posible?** ¿El backend expone esto, o es capacidad nueva? | los servicios y RPC reales |
 | 4 | **¿La navegación calza con el ERP?** ¿Rutas, retorno, superficies canónicas? | `canonical-ui-surfaces.md` y el contrato de retorno |
-| 5 | **¿El layout aguanta en las tres vistas?** claro, oscuro, compacto — y con los recursos que este ERP ya usa | la app corriendo en cada breakpoint |
+| 5 | **¿El layout aguanta las SEIS CELDAS?** Son **dos ejes**, no una lista: brillo (claro · oscuro) **×** host (escritorio · tablet · móvil/compacto). Se responden las seis, deliberadamente, con los recursos que este ERP ya usa | la app corriendo en cada celda |
 | 6 | **¿Rompe armonía con otros módulos?** ¿Reinventa un control que ya es canónico? | `universal-ui-component-system.md`, la guía de componentes |
+
+> **Precisión del dueño, 2026-08-01.** La dimensión 5 decía «las tres vistas»
+> —claro, oscuro, compacto—, y una corrección intermedia las listó como «cinco
+> vistas» en fila. **Las dos formulaciones estaban mal por la misma razón: no
+> es una lista, son dos ejes que se multiplican.**
+>
+> | | escritorio | tablet | móvil/compacto |
+> |---|---|---|---|
+> | **claro** | ? | ? | ? |
+> | **oscuro** | ? | ? | ? |
+>
+> **Seis celdas, y ninguna se deduce de otra.** Enumerarlas en fila deja creer
+> que «claro» y «escritorio» son dos casillas que se tachan por separado,
+> cuando lo que hay que demostrar es *claro en escritorio*, *claro en tablet*,
+> *oscuro en móvil*… Escritorio y tablet se responden **deliberadamente**, no se
+> dan por supuestos porque este ERP haya nacido en escritorio.
+>
+> Y el criterio que gobierna las seis dimensiones, con todas sus letras: **un
+> frame de Design es una propuesta sobre el ASPECTO, no una orden sobre el
+> producto.** La app, el repositorio y los datos reales son la fuente de
+> funcionalidad, UX, lenguaje y reglas; `DesignSync` sigue siendo la fuente
+> literal de cada valor visual.
 
 ### Qué hacer con cada resultado
 
@@ -483,6 +738,22 @@ comunicar; se cambió el mecanismo.** Eso es evaluar, no desobedecer.
 Cada uno costó tiempo real. Están acá con su **causa**, no con la anécdota,
 porque la causa es lo que se repite. Si cometes uno nuevo, agrégalo.
 
+### Un aserto acotado por un solo lado deja pasar el defecto entero
+
+**2026-08-01.** El popover de `S-05` se estiraba a **1.672 px colgando de un
+campo de 206** —cada opción es un `Row` con `Expanded`, así que la columna
+adoptaba el ancho máximo admitido—. La prueba de contrato existía, decía
+`ancho >= ancho del campo`, y estaba **verde**: un menú del ancho de la pantalla
+cumple esa condición de sobra. Lo encontró la app viva, no el harness.
+
+La causa no es «faltaba una prueba»: es que **la prueba traducía a `>=` una
+regla que en el archivo de Design dice «mismo ancho o más»**, donde ese «más» es
+el de la opción más larga. Una restricción con un solo extremo no es la regla.
+
+Al escribir un aserto sobre una medida, pregúntate qué valor absurdo lo pasaría.
+Si existe uno, acota por los dos lados. Y compruébalo con una mutación: si el
+aserto no se pone rojo al romper el código, no está midiendo nada.
+
 ### «Ya sé por qué falla» — y no lo comprobé
 
 - **La sesión no recargaba.** Vi `screen -ls` diciendo `(Attached)` y concluí
@@ -496,6 +767,131 @@ porque la causa es lo que se repite. Si cometes uno nuevo, agrégalo.
 > **La regla:** antes de actuar sobre una causa, compruébala. Lo primero que
 > parece explicarlo casi nunca es lo que pasa, y "arreglar" el síntoma
 > equivocado cuesta más que investigar.
+
+### El log compacto de `flutter test` no prueba qué corrió
+
+El reporter por defecto reescribe **la misma línea** con `\r`. Grepear ese log
+por rutas de archivo para saber si una suite corrió da un resultado que cambia
+entre corridas idénticas: en dos ejecuciones con el mismo conteo `+330`,
+faltaban tres archivos en una y **otros cuatro** en la otra. Ninguno faltaba —
+lo que faltaba era su línea, pisada por la siguiente.
+
+Lo que sí demuestra cobertura:
+
+```bash
+flutter test --reporter json <archivos> > out.json
+# eventos {"type":"suite"} → una entrada por archivo, sin sobrescribir
+# evento  {"type":"done","success":true}
+```
+
+> **La regla:** para afirmar «corrieron los N archivos», cuenta **eventos de
+> suite**, no líneas de un log que se pisa a sí mismo. Y si dos corridas dan el
+> mismo total pero distinta lista de «ausentes», el que está mal es tu método
+> de medición, no la corrida.
+
+### Concluir por ausencia en una lista truncada
+
+Quise comprobar si un `reload` había entrado y busqué la fila que el código
+nuevo elimina:
+
+```bash
+scripts/dev/app_control.sh read --filter "sueldos por pagar" | head -4   # ← la trampa
+```
+
+No apareció, y di el reload por bueno. **Estaba en la línea 5.** El `shot`
+posterior mostró la fila intacta: el reload nunca había entrado y yo ya había
+escrito que sí.
+
+> **La regla:** `read` es una lista, y `head` la corta. **Una ausencia sólo
+> prueba algo si miraste la lista entera** — filtra con `grep -n` sobre la
+> salida completa, o mira el `shot`. Y para decidir si un cambio entró,
+> pregúntale a lo que el código nuevo **agrega**, no a lo que quita: una
+> presencia se ve en cualquier posición, una ausencia hay que demostrarla.
+
+### Un arnés de prueba sin tema no prueba la app
+
+`payroll_redesign_surface_test.dart` montaba `MaterialApp(home: …)` **sin
+`theme:`**, así que sus 40+ pruebas ejercitaban Nóminas contra el default de
+Flutter. Pasaban todas, y aun así no estaban mirando la aplicación: sin el tema
+del resolver no existe `VinabikeThemeRoles`, y por lo tanto **ningún componente
+compartido puede montarse ahí**. Se descubrió al intentar usar el primero: el
+widget se negó a pintar con `VinabikeThemeRoles is missing`.
+
+```dart
+MaterialApp(
+  theme: AppTheme.resolve(preset: AppearancePresets.all.first,
+                          brightness: Brightness.light),
+  home: …,
+)
+```
+
+Montarlo no rompió una sola prueba, que es la parte incómoda: el hueco llevaba
+tiempo abierto y era gratis de cerrar.
+
+> **La regla:** un guard que se niega a funcionar en el arnés casi nunca está
+> mal configurado — está diciendo que el arnés no representa a la app. Antes de
+> degradar el componente para que quepa en la prueba, comprueba si la prueba es
+> la que está mintiendo. Degradarlo habría dejado un widget pintando colores
+> sin procedencia, que es justo lo que el contrato prohíbe.
+
+**Ampliación del 2026-08-01, y es la parte incómoda:** ese hueco no se cerró
+con el arreglo anterior, sólo dejó de verse. `VbNotice` y `VbMoneyText` vivían
+dentro de un diálogo que casi ningún arnés abre, así que **tres arneses más
+seguían sin tema y nadie se enteró**. Bastó montar el esqueleto `X-01` en el
+gate de carga —el primer frame de **todo** montaje de la página— para que 22
+pruebas se pusieran rojas de golpe con el mismo `VinabikeThemeRoles is missing`.
+Los tres mentían distinto: uno sin `theme:`, otro con el `pump` bueno pero
+cuatro `MaterialApp.router` sueltos sin tema, y el tercero con
+`ThemeData.light()/dark()` mientras decía cruzar «todas las paletas» —lo que
+cruzaba era el tema **anidado** del chrome, no el del resolver—. Se arreglaron
+los tres montando lo que monta `lib/main.dart`
+(`AppTheme.resolve(preset: appearance.appearancePreset, …)`) y **no cambió una
+sola aserción**.
+
+> **La regla que faltaba:** un arnés sin tema no se detecta arreglando el que
+> falló, sino **metiendo el componente compartido en el camino que toda prueba
+> recorre**. Mientras el componente viva en una rama que casi nadie visita, el
+> resto de los arneses siguen mintiendo en silencio.
+
+### Sobrescribir `MediaQuery` con una `MediaQueryData` nueva borra el tamaño
+
+Para que `pumpAndSettle` no se quedara colgado contra el barrido infinito del
+esqueleto, envolví la página en `MediaQuery(data: MediaQueryData(disableAnimations: true))`.
+Eso **reemplaza la data entera**: el tamaño se fue a `Size.zero`, la página se
+creyó compacta a 1440 y la prueba estuvo midiendo la composición móvil mientras
+afirmaba medir la de escritorio. No falló por eso —falló tres aserciones más
+abajo, con números que no cuadraban.
+
+```dart
+Builder(
+  builder: (context) => MediaQuery(
+    data: MediaQuery.of(context).copyWith(disableAnimations: true),
+    child: …,
+  ),
+)
+```
+
+> **La regla:** a `MediaQuery` se le **copia** la data ambiente y se le cambia
+> el campo; construir una `MediaQueryData` desde cero apaga todo lo demás. Y si
+> una prueba responsiva empieza a dar números de otro breakpoint, sospecha del
+> `MediaQuery` del arnés antes que del widget.
+
+### Un pipe se come el código de salida de la batería
+
+Corrí `flutter test … | tail -25` en segundo plano. El runner reportó **«exit
+code 0»** y di la batería por verde. **No lo estaba**: `306 +1 fallo`. El código
+de salida que se propaga es el del **último** comando de la tubería —`tail`—,
+que siempre sale 0.
+
+```bash
+flutter test <archivos> > bat.log 2>&1; echo "EXIT=$?"   # así no miente
+set -o pipefail                                          # o así, si hay pipe
+```
+
+> **La regla:** un resultado de pruebas se lee del **texto** (`All tests
+> passed!` / `Some tests failed`), no del código de salida de una tubería. Y si
+> lo que informa el verde es un runner en segundo plano, comprueba qué comando
+> le dio ese código.
 
 ### Diagnosticar con algo que muta
 
@@ -568,6 +964,45 @@ Peor: al «arreglar el duplicado» cancelé la publicación de macOS de verdad.
 > estado se lee por el campo que identifica la cosa (`displayTitle`), no por el
 > que se parece (`workflowName`).
 
+### Una prueba nueva que pasa a la primera es sospechosa: múta el código
+
+El 2026-08-01, en el paso 4, escribí cuatro regresiones y **las cuatro pasaron
+en la primera corrida**. Dos no probaban nada:
+
+- «un descarte automático no se cuenta como *Excluidos por ti*» seguía verde con
+  el contador **roto a propósito**: su fixture usaba un abono entrante, que ni
+  siquiera entra en la lista sobre la que el contador itera.
+- «el total es lo que las semanas dejan de deber» seguía verde **quitando los
+  anticipos del total**: el fixture no creaba ninguno.
+
+Las dos veces **el fixture estaba mal, no la aserción** — la misma causa que ya
+había costado tres pruebas decorativas en el paso 2, sólo que ahí el síntoma era
+un `if` y acá era un escenario que no se construía.
+
+```bash
+# el único chequeo que no se puede engañar a sí mismo
+<rompe la línea que la prueba dice vigilar>
+flutter test <suite> --plain-name "<la prueba>"   # tiene que salir ROJO
+<restaura desde la copia>
+```
+
+> **La regla:** una regresión no vale por estar verde, vale por **ponerse roja
+> cuando corresponde**. Mutar la línea que dice vigilar cuesta un minuto y es lo
+> único que distingue una prueba de un adorno. Y si la mutación no la enrojece,
+> arregla el **fixture** —que el escenario ocurra— antes de tocar la aserción.
+
+### Un frame puede traer una palabra que un turno posterior ya derogó
+
+`5j-paso4` (turno 5) rotula **`Total a imputar`**. El `CHANGELOG` del **turno 7**
+lista, bajo «Decisiones de producto respetadas (ya en la app)», «"Imputar" →
+"Aplicar"». El frame no está mal: está **desactualizado**, y nadie lo va a
+reetiquetar.
+
+> **La regla:** antes de copiar una palabra de un frame, busca esa palabra en los
+> `CHANGELOG` de los turnos **posteriores**. Una decisión de producto ya tomada
+> gana sobre el frame que la precede, y el contrato de sincronía nombra
+> «imputar» y «ganado» justamente como los casos que Code debe corregir.
+
 ### Prometer y detenerse
 
 Cerré un turno diciendo «sigo ahora mismo, no me detengo» y terminé el turno.
@@ -627,19 +1062,35 @@ Se construye el candidato contra **esa** base, no contra la que uno supone.
 
 ## 6. Qué necesita al dueño
 
-**Commit y push ya no** (2026-07-31: el dueño se los pasó al agente y el guard
-dejó de denegarlos). Lo que se conserva de esa regla es comprobar que Codex no
-esté publicando desde este checkout antes de mover `origin`.
+**Todo efecto que salga de este checkout se pide, y se pide por acción:**
+commit, push, publicar la actualización, desplegar migraciones o funciones,
+`scripts/deploy.sh` y CHECKPOINT B (writes reales de conciliación).
 
-**Publicar la actualización tampoco** (2026-08-01). La tarea macOS+Android es
-**una sola**, y el guard trataba sus dos mitades distinto —Android pasaba,
-macOS no—: eso dejó ver sólo la mitad de lo que estaba corriendo y llevó a
-cancelar el run equivocado. Ahora pasan las dos.
+El contrato que manda es `CODEX_CLAUDE_COLLABORATION.md` §Safety boundary:
+«Production writes, deployment, publication, messages, commits, and pushes
+require the owner's explicit authorization.» Una autorización puntual **no** se
+convierte en permiso permanente — se vuelve a pedir la próxima vez.
 
-Sin excepción siguen siendo suyos: **desplegar migraciones o funciones,
-`scripts/deploy.sh`, y CHECKPOINT B** (writes reales de conciliación). El guard
-mecánico deniega esas llamadas; no se rodea. Se le entrega el comando exacto y
-la evidencia.
+### El guard mecánico mide capacidad, no permiso
+
+Son dos cosas distintas y confundirlas es lo que esta sección existe para
+impedir: hasta el 2026-08-01 este mismo documento decía «commit y push ya no
+[se piden]», y con eso un agente quedaba autorizándose solo.
+
+| | Hoy el hook `.claude/hooks/guard-dangerous-bash.sh` |
+|---|---|
+| **Deja pasar** | `git add` · `commit` · `push` · `restore -- <rutas nombradas>` · `scripts/publish_*` · `scripts/releases/*` |
+| **Sigue denegando** | `git rebase` · `restore` de alcance abierto · `supabase db\|migration` · `firebase deploy` · `supabase functions deploy` · `scripts/deploy.sh` · `production_validation.sh refresh` |
+
+Que el hook **deje de impedir** algo no concede permiso: sólo deja de
+bloquearlo. El contrato no se movió cuando se movió el hook. Lo que la fila de
+la izquierda describe es qué comandos no van a fallar, no cuáles se pueden
+ejecutar.
+
+Ya con la autorización en la mano, antes de mover `origin` se comprueba que
+Codex no esté publicando desde este checkout (§ el bloque de arranque del
+handoff de Nóminas). El guard deniega lo de la fila derecha y **no se rodea**:
+se le entrega al dueño el comando exacto y la evidencia.
 
 ### Publicar: dos targets, un solo workflow
 

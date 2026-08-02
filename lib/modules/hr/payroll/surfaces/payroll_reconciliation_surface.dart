@@ -125,7 +125,13 @@ class _WorkflowHeader extends StatelessWidget {
     final visual = PayrollVisualTokens.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 600;
+        // **El umbral compacto es el canónico, 900, no 600.** Con 600 la
+        // tablet de 834 tomaba la rama de escritorio, que dibuja el nombre
+        // largo del paso y su metadato en la misma línea: no cabían y salían
+        // elididos —«Subir cart…», «14 movimie…», «0/4 efecti…»—, visto en la
+        // app viva el 2026-08-01. `F-06` y `ResponsiveViewport.usesCompactShell`
+        // ponen el corte en `desktopMin`.
+        final compact = constraints.maxWidth < ResponsiveViewport.desktopMin;
         return Container(
           color: visual.shell,
           padding: EdgeInsets.fromLTRB(
@@ -265,7 +271,13 @@ class _ReconciliationStepper extends StatelessWidget {
     final visual = PayrollVisualTokens.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 600;
+        // **El umbral compacto es el canónico, 900, no 600.** Con 600 la
+        // tablet de 834 tomaba la rama de escritorio, que dibuja el nombre
+        // largo del paso y su metadato en la misma línea: no cabían y salían
+        // elididos —«Subir cart…», «14 movimie…», «0/4 efecti…»—, visto en la
+        // app viva el 2026-08-01. `F-06` y `ResponsiveViewport.usesCompactShell`
+        // ponen el corte en `desktopMin`.
+        final compact = constraints.maxWidth < ResponsiveViewport.desktopMin;
         return Container(
           padding: EdgeInsets.symmetric(
             horizontal: compact ? 8 : 18,

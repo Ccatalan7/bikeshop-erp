@@ -387,6 +387,59 @@ Material component themes for:
 - date and time pickers, tooltips, tabs, segmented controls and badges;
 - sliders, scrollbars, mobile navigation bars and navigation drawers.
 
+### Owners already implemented, by id
+
+Each one is the **only** place its control may be written. Adding a feature-local
+variant of any of these is the defect this document exists to prevent.
+
+| Id | Owner | Archivo |
+|---|---|---|
+| `S-05` Select corto | `VbShortSelect<T>` | `lib/shared/widgets/vb_short_select.dart` |
+| `O-02` Popover | `showVbAnchoredPopover` · `VbPopoverSurface` | `lib/shared/widgets/vb_anchored_popover.dart` |
+| `O-05` Bottom sheet | (dentro de `VbShortSelect`, presentación táctil) | ídem `S-05` |
+| `E-04` Notice | `VbNotice` | `lib/shared/widgets/vb_notice.dart` |
+| `F-03` Dinero | `VbMoneyText` | `lib/shared/widgets/vb_money_text.dart` |
+| `X-01` Estado de superficie | `VbSurfaceState` · esqueletos | `lib/shared/widgets/vb_skeleton.dart` |
+
+**`S-05` trae su propio techo, y es el que decide si el componente aplica.** La
+guía lo publica así: *«Hasta ~7 opciones, conjunto estable y conocido, etiquetas
+cortas… El menú **no** es scrollable: si necesita scroll, era el otro
+componente.»* Por encima de eso el control correcto es **`S-06`
+(`VbSearchableSelect`), que todavía NO existe en este repositorio**: una lista
+paginada, que crece con el uso o que trae nombres de persona **no se mete en un
+S-05 más alto**, se deja con su control actual y se anota. `VbShortSelect`
+lleva un `assert` sobre ese techo para que la violación aparezca en desarrollo
+en vez de recortar el menú en silencio.
+
+En táctil `S-05` **cambia de forma, no de owner**: la guía manda *«la lista es un
+bottom sheet, no un popover de 200 px»* y *«Nunca aparece en desktop pointer»*,
+así que el mismo widget elige popover o `O-05` según el ancho del host.
+
+**Dónde empieza «táctil» lo fija `F-06`, y son 900 — no 600.** Textual del
+archivo: *«Bajo 900 px de ancho lógico la densidad se fuerza a touch: 48 px de
+target sin importar la preferencia. Nada de detectar el zoom del navegador.»* Es
+el mismo umbral que publica `ResponsiveBreakpoints.desktopMin`, así que **la
+tablet de 834 es un host táctil**, no un escritorio angosto. Usar el umbral de
+teléfono (600) fue un defecto real: puso un popover de escritorio en tablet, y se
+vio en las capturas de 834 antes de corregirlo.
+
+De ese mismo umbral cuelga el objetivo táctil, y el patrón lo enseña la guía en
+tres sitios: el campo de búsqueda dice `Alto 34 (48 touch)`, la casilla dice
+*«toda la fila es el hit target (34, 48 en touch)»*, y hay un recuadro rotulado
+**«TOUCH — 48 con área invisible»**. O sea: **la caja visual no cambia de
+tamaño; crece el área alrededor de ella.** Un componente compartido que dibuje
+34 y deje el objetivo en 34 bajo 900 px incumple `F-06` y
+`GUI_MOBILE_DESIGN_PRINCIPLES` a la vez.
+
+**El estado `read-only` de `S-05` está publicado y NO implementado, a
+propósito.** Se dibuja como texto con `border-bottom:1px dashed`, y el ritmo del
+punteado **no es un valor legible**: en CSS lo resuelve el motor de render, así
+que no hay número que citar. Se registra como *unreadable* en vez de inventar un
+patrón plausible. El resto de los valores de este componente sí son literales del
+archivo, incluido el `radius.pill` del handle: la escalera de radios de la guía
+es `4 · 6 · 8 · 10 · 14 · 999`, con el último rotulado `pill`, y el handle lo
+escribe entero — `width:34px;height:4px;border-radius:999px`.
+
 These themes are a compatibility floor, not permission for a feature to invent
 another component family. A specialized canonical component may add anatomy or
 behavior, but its colors and interaction states still derive from the same

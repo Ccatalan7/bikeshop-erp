@@ -1,10 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' show ImageByteFormat;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/hr/payroll/theme/payroll_tokens.dart';
 import 'package:go_router/go_router.dart';
+// ignore: implementation_imports
+import 'package:google_fonts/src/google_fonts_base.dart' as gf_base;
+import 'package:http/http.dart' as http;
 import 'package:vinabike_erp/modules/hr/models/payroll_statement_reconciliation.dart';
 import 'package:vinabike_erp/modules/hr/models/payroll_voucher.dart';
 import 'package:vinabike_erp/modules/hr/pages/payroll_reconciliation_page.dart';
@@ -14,6 +21,9 @@ import 'package:vinabike_erp/modules/hr/services/payroll_reconciliation_service.
 import 'package:vinabike_erp/modules/hr/services/payroll_statement_extraction_service.dart';
 import 'package:vinabike_erp/modules/hr/widgets/payroll_money_bar.dart';
 import 'package:vinabike_erp/modules/hr/widgets/payroll_reconciliation_row.dart';
+import 'package:vinabike_erp/shared/themes/app_theme.dart';
+import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
+import 'package:vinabike_erp/shared/widgets/vb_money_text.dart';
 
 /// Behaviour tests for the staged bank-statement reconciliation.
 ///
@@ -209,6 +219,12 @@ void main() {
     bool alreadyResolved = false,
     PayrollCivilDate? documentDate,
     PayrollVoucherStatus voucherStatus = PayrollVoucherStatus.draft,
+    // Filas extra para fixtures adversariales, p. ej. más filas problemáticas
+    // que el antiguo tope de visibles.
+    List<PayrollStatementRow> extraRows = const <PayrollStatementRow>[],
+    // Períodos extra de nóminas abiertas, para probar orden y ancho del panel.
+    // Se insertan en el orden que se pase: el fixture NO los ordena.
+    List<DateTime> extraOpenPayrollStarts = const <DateTime>[],
   }) {
     final matchedRow = statementRow(
       rowNumber: 1,
@@ -343,7 +359,9 @@ void main() {
         method: PayrollStatementExtractionMethod.embeddedPdfText,
         pages: [PayrollStatementPageText(pageNumber: 1, text: 'texto')],
       ),
-      parseResult: PayrollBankStatementParseResult(rows: rows),
+      parseResult: PayrollBankStatementParseResult(
+        rows: <PayrollStatementRow>[...rows, ...extraRows],
+      ),
       reconciliation: PayrollStatementReconciliationResult(
         statementRows: alreadyResolved
             ? rows.where((row) => row != matchedRow).toList()
@@ -355,6 +373,21 @@ void main() {
         },
       ),
       vouchersById: {
+        // Insertadas ANTES de la principal y deliberadamente desordenadas: si
+        // la pantalla recorriera el `Map` tal cual, saldrían así.
+        for (final start in extraOpenPayrollStarts)
+          'voucher-${start.month}-${start.day}': PayrollVoucher(
+            id: 'voucher-${start.month}-${start.day}',
+            tenantId: 'tenant-1',
+            voucherNumber: 'NOM-${start.month}${start.day}',
+            periodStart: start,
+            periodEnd: start.add(const Duration(days: 6)),
+            totalAmount: 100000,
+            status: PayrollVoucherStatus.confirmed,
+            createdAt: start,
+            updatedAt: start,
+            lines: const <PayrollVoucherLine>[],
+          ),
         'voucher-1': PayrollVoucher(
           id: 'voucher-1',
           tenantId: 'tenant-1',
@@ -554,6 +587,7 @@ void main() {
     WidgetTester tester, {
     required PayrollReconciliationActions actions,
     Size size = const Size(1440, 900),
+    Brightness brightness = Brightness.light,
     PayrollStatementPicker? pickFile,
     PayrollStatementPicker? pickCamera,
     PayrollStatementPicker? pickGallery,
@@ -589,7 +623,18 @@ void main() {
       ],
     );
     await tester.pumpWidget(
-      MaterialApp.router(key: UniqueKey(), routerConfig: router),
+      MaterialApp.router(
+        key: UniqueKey(),
+        // Sin el tema del resolver no existe `VinabikeThemeRoles` y el arnés no
+        // representa a la app — el mismo hueco que ya se cerró en otros tres
+        // arneses el 2026-08-01. Además, sin tema las capturas de evidencia no
+        // mostrarían el aspecto real.
+        theme: AppTheme.resolve(
+          preset: AppearancePresets.all.first,
+          brightness: brightness,
+        ),
+        routerConfig: router,
+      ),
     );
     await tester.pumpAndSettle();
     return router;
@@ -601,7 +646,7 @@ void main() {
     // t5: tras preparar, la app aterriza en la evidencia de extracción; la
     // mayoría de los flujos siguen hacia la revisión.
     final toReview =
-        find.widgetWithText(PayrollPrimaryAction, 'Revisar coincidencias');
+        find.widgetWithText(PayrollPrimaryAction, 'Ver propuestas de pago');
     if (toReview.evaluate().isNotEmpty &&
         tester.widget<PayrollPrimaryAction>(toReview.first).onPressed != null) {
       await tester.tap(toReview.first);
@@ -611,9 +656,9 @@ void main() {
 
   Future<void> goToStage(WidgetTester tester, String stage) async {
     const labels = <String>[
-      'Subir cartola',
-      'Extraer',
-      'Revisar',
+      'Cargar cartola',
+      'Lectura',
+      'Propuestas',
       'Aplicar',
     ];
     final index = labels.indexOf(stage);
@@ -733,10 +778,68 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Toca desplazando primero.
+  ///
+  /// Desde que el paso 4 adoptó la composición de tres columnas del frame 5j,
+  /// la tarjeta de efectivo vive en una columna del ancho que Design le da a su
+  /// propia hoja de efectivo (480), así que es **más alta que el viewport** y
+  /// sus controles caen bajo el pliegue. Un `tap` sobre algo fuera de pantalla
+  /// no falla: **avisa y no entrega el evento**, y la prueba sigue creyendo que
+  /// tocó. Desplazar antes es conducir la pantalla, no relajar la aserción.
+  Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+    await tester.ensureVisible(finder.first);
+    await tester.pumpAndSettle();
+    await tester.tap(finder.first);
+    await tester.pumpAndSettle();
+  }
+
   /// Opens the active cash card for one person in the cash stage.
   Future<void> openCashPerson(WidgetTester tester, String name) async {
-    await tester.tap(find.text(name).first);
-    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text(name));
+  }
+
+  /// Suspende la red de `google_fonts` **sólo dentro del generador opt-in**.
+  ///
+  /// **El problema, con su mecánica exacta.** `GoogleFonts.textStyle` lanza la
+  /// carga de la fuente como un future *fire-and-forget* y le hace `.then(...)`
+  /// sin `onError`, así que si ese future **rechaza**, el error llega a la zona
+  /// como asíncrono no capturado y el binding lo convierte en fallo de la
+  /// prueba. En `flutter_test` toda petición HTTP vuelve 400, de modo que
+  /// rechaza siempre. Y **no basta con que falle una vez**: el `catch` de
+  /// `loadFontIfNecessary` hace `_loadedFonts.remove(...)` antes de `rethrow`
+  /// (google_fonts 6.3.2, `google_fonts_base.dart`), o sea **borra la marca de
+  /// carga y vuelve a intentarlo en la siguiente resolución de estilo**. Por eso
+  /// no existe drenaje ni precalentamiento que lo silencie.
+  ///
+  /// **Por qué sólo estalla al capturar.** El rechazo se materializa cuando el
+  /// future completa, y eso exige el event loop real: fuera de `runAsync` la
+  /// zona falsa de `flutter_test` nunca lo deja completar. La captura es el
+  /// único punto que necesita `runAsync` —el encoder de `toImage`/`toByteData`
+  /// corre ahí—, así que es justo ahí donde aterrizaban los rechazos.
+  ///
+  /// **La sustitución.** Se cambia el cliente HTTP del paquete por uno cuyo
+  /// `send` devuelve un `Completer` que nunca se completa: las cargas quedan
+  /// **pendientes**, no rechazadas, así que no hay error que contaminar. Un
+  /// `Completer` pelado no tiene timer ni I/O, de modo que no mantiene vivo el
+  /// isolate ni deja temporizadores al cerrar.
+  ///
+  /// Es una **sustitución de red de prueba**, no un comportamiento de
+  /// producción: se restaura el cliente original y se limpia la caché al salir.
+  ///
+  /// **No cambia lo que se ve.** Las fuentes ya no se cargaban antes —fallaban
+  /// en vez de quedar pendientes—, y está comprobado: las seis capturas del
+  /// paso 4 salen **byte a byte idénticas** a las de antes de esta sustitución.
+  /// El texto sale como **bloques**, los glifos de la tipografía de prueba del
+  /// arnés: estas capturas prueban **composición** y **no son evidencia de
+  /// tipografía**. Cuál familia se dibuja no se midió y no se afirma.
+  void suspendGoogleFontsNetwork() {
+    final original = gf_base.httpClient;
+    gf_base.clearCache();
+    gf_base.httpClient = _NeverCompletingClient();
+    addTearDown(() {
+      gf_base.httpClient = original;
+      gf_base.clearCache();
+    });
   }
 
   Future<void> selectBankAccount(WidgetTester tester) async {
@@ -760,6 +863,189 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  group('5j · ningún texto se recorta en tablet ni en teléfono', () {
+    // **Se MIDE, no se supone.** `RenderParagraph.didExceedMaxLines` es `true`
+    // exactamente cuando Flutter tuvo que cortar el texto con puntos
+    // suspensivos, así que este aserto ve lo mismo que el operador.
+    //
+    // Nace de la app viva el 2026-08-01: a 834 los pasos decían «Subir cart…»,
+    // «14 movimie…» y «0/4 efecti…», y la barra de dinero «Monto reco…» con el
+    // primario en «Confirmar 4 sema…». Un botón que no dice qué hace no es una
+    // acción: es una adivinanza sobre dinero.
+    List<String> elided(WidgetTester tester) {
+      final cut = <String>[];
+      for (final element in find.byType(Text).evaluate()) {
+        final render = element.renderObject;
+        if (render is RenderParagraph && render.didExceedMaxLines) {
+          cut.add((element.widget as Text).data ?? '<rich>');
+        }
+      }
+      return cut;
+    }
+
+    for (final width in <double>[834, 430]) {
+      testWidgets(
+          'a ${width.toInt()} no queda texto elidido en la etapa de revisión',
+          (tester) async {
+        final harness = recorder();
+        // `pump` es quien fija el tamaño de la vista: ponerlo por fuera lo
+        // sobrescribe y las dos anchuras miden lo mismo.
+        await pump(
+          tester,
+          actions: harness.actions,
+          size: Size(width, 1000),
+        );
+        await loadStatement(tester);
+
+        // **Se acota a los rótulos ACCIONABLES**, que son los que al
+        // recortarse dejan de decir qué va a pasar: el primario y el
+        // secundario de la barra de dinero. Los textos explicativos largos
+        // también se eliden hoy y **eso queda declarado abajo**, medido y sin
+        // arreglar en esta ronda.
+        final acciones = <String>{
+          for (final w in tester.widgetList<PayrollPrimaryAction>(
+            find.byType(PayrollPrimaryAction),
+          ))
+            w.label,
+          for (final w in tester.widgetList<PayrollSecondaryAction>(
+            find.byType(PayrollSecondaryAction),
+          ))
+            w.label,
+        };
+        expect(
+          elided(tester).where(acciones.contains),
+          isEmpty,
+          reason: 'a ${width.toInt()} px un botón que mueve dinero no puede '
+              'decir «Confirmar 4 sema…»: eso no es una acción, es una '
+              'adivinanza',
+        );
+      });
+    }
+  });
+
+  group('5j · paso 3 · la pregunta respondida SE VA al avanzar', () {
+    // El contrato lo escribió el propio código al responder: «Answering does
+    // not make the question vanish… It leaves only on "next question".»
+    // `_moveQuestion` sólo movía el índice y **nunca sacaba la fila de
+    // `_answeredInPlaceRowIds`**, así que la promesa no se cumplía: la tarjeta
+    // respondida seguía en la pila «Pendiente de decisión», el denominador del
+    // contador no bajaba nunca, y para llegar a una sin responder había que
+    // recorrer la lista entera y después caminar hacia atrás. Se vio
+    // recorriendo las 10 decisiones en la app viva el 2026-08-01.
+    int denominator(WidgetTester tester) {
+      final label = tester
+          .widgetList<Text>(find.textContaining(' DE '))
+          .map((text) => text.data)
+          .whereType<String>()
+          .firstWhere((data) => RegExp(r'^\d+ DE \d+$').hasMatch(data));
+      return int.parse(label.split(' DE ').last);
+    }
+
+    testWidgets('responder NO la hace desaparecer: se queda hasta avanzar',
+        (tester) async {
+      final harness = recorder(
+        prepared: draft(
+          withUnmatchedMovement: true,
+          withIncompleteEvidence: true,
+        ),
+      );
+      await pump(tester, actions: harness.actions);
+      await loadStatement(tester);
+
+      final before = denominator(tester);
+      await tester.tap(find.text('No es nómina').first);
+      await tester.pumpAndSettle();
+
+      // La mitad deliberada del contrato: la fila se queda para que el
+      // operador vea lo que acaba de decidir y complete lo que le falte.
+      expect(denominator(tester), before);
+      expect(
+        find.byType(PayrollNoPendingDecisionsCard),
+        findsNothing,
+        reason: 'responder no vacía la etapa por sí solo',
+      );
+    });
+
+    /// Dos preguntas abiertas a la vez: sin eso `Anterior` viene deshabilitado
+    /// por el guard `index > 0` y no hay nada que probar.
+    PayrollStatementPreparedDraft twoOpenQuestions() => draft(
+          withAlternateTransferLine: true,
+          withPayrollNamedUnmatchedMovement: true,
+        );
+
+    testWidgets('«Anterior» NO la suelta: se vuelve para mirarla otra vez',
+        (tester) async {
+      // El contrato dice «It leaves only on "next question"». Si retroceder
+      // también la sacara de la pila, volver a mirar lo recién decidido sería
+      // imposible — y la flecha izquierda dejaría de tener sentido.
+      final harness = recorder(prepared: twoOpenQuestions());
+      await pump(tester, actions: harness.actions);
+      await loadStatement(tester);
+
+      final before = denominator(tester);
+      expect(before, greaterThan(1));
+
+      // Voy a la segunda, la respondo, y vuelvo con «Anterior».
+      await tester.tap(find.bySemanticsLabel('Siguiente pregunta').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('No es nómina').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Pregunta anterior').first);
+      await tester.pumpAndSettle();
+
+      expect(
+        denominator(tester),
+        before,
+        reason: 'retroceder no suelta nada: la respondida sigue en la pila '
+            'para poder volver a ella',
+      );
+    });
+
+    // **La limpieza de `_stagedQuestionRowId` en `_moveQuestion` NO tiene
+    // regresión, y se dice.** El arreglo está puesto —sin él, con una fila en
+    // revisión la flecha mueve el índice y la tarjeta no cambia—, pero
+    // provocar ese estado exige que una fila pendiente que no encabeza exponga
+    // su acción de reapertura, y en los fixtures de este archivo esa acción no
+    // se renderiza sin expandir grupos que el arnés no arma. Se intentó y no
+    // muerde, así que **no se cuenta como cubierto**.
+
+    testWidgets('en la ÚLTIMA pregunta, avanzar también la suelta',
+        (tester) async {
+      // El guard anterior apagaba «Siguiente» en el último índice, así que la
+      // última tarjeta respondida quedaba clavada y sin forma de sacarla.
+      final harness = recorder(
+        prepared: draft(
+          withUnmatchedMovement: true,
+          withIncompleteEvidence: true,
+        ),
+      );
+      await pump(tester, actions: harness.actions);
+      await loadStatement(tester);
+
+      var guard = 0;
+      while (denominator(tester) > 1 && guard < 30) {
+        guard += 1;
+        await tester.tap(find.text('No es nómina').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.bySemanticsLabel('Siguiente pregunta').first);
+        await tester.pumpAndSettle();
+      }
+      expect(denominator(tester), 1);
+
+      await tester.tap(find.text('No es nómina').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Siguiente pregunta').first);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byType(PayrollNoPendingDecisionsCard),
+        findsOneWidget,
+        reason: 'sin preguntas abiertas la etapa lo dice; no deja una tarjeta '
+            'respondida haciéndose pasar por pendiente',
+      );
+    });
+  });
+
   group('file stage', () {
     testWidgets('preparing a statement moves to the transfer review',
         (tester) async {
@@ -767,11 +1053,12 @@ void main() {
       await pump(tester, actions: harness.actions);
 
       expect(find.byType(PayrollReconciliationSurface), findsOneWidget);
-      expect(find.text('Sube la cartola'), findsOneWidget);
+      expect(find.text('Carga la cartola'), findsOneWidget);
       await loadStatement(tester);
 
       expect(harness.calls, ['prepare']);
-      expect(find.textContaining('Revisar coincidencias'), findsWidgets);
+      expect(
+          find.textContaining(RegExp('[Pp]ropuestas de pago')), findsWidgets);
       // The pending-decision card leads the review; the suggestion batch is
       // one deliberate expansion away with its dense ledger rows.
       expect(
@@ -804,7 +1091,8 @@ void main() {
 
       expect(cameraCalls, 1);
       expect(harness.calls, <String>['prepare']);
-      expect(find.textContaining('Revisar coincidencias'), findsWidgets);
+      expect(
+          find.textContaining(RegExp('[Pp]ropuestas de pago')), findsWidgets);
       expect(tester.takeException(), isNull);
     });
 
@@ -834,7 +1122,8 @@ void main() {
 
       expect(galleryCalls, 1);
       expect(harness.calls, <String>['prepare']);
-      expect(find.textContaining('Revisar coincidencias'), findsWidgets);
+      expect(
+          find.textContaining(RegExp('[Pp]ropuestas de pago')), findsWidgets);
       expect(tester.takeException(), isNull);
     });
 
@@ -884,7 +1173,8 @@ void main() {
         find.byKey(const ValueKey('payroll-extraction-progress')),
         findsNothing,
       );
-      expect(find.textContaining('Revisar coincidencias'), findsWidgets);
+      expect(
+          find.textContaining(RegExp('[Pp]ropuestas de pago')), findsWidgets);
     });
 
     testWidgets('technical failures never log OCR text or account data',
@@ -1009,8 +1299,8 @@ void main() {
 
       // Gating never traps the operator: completed/earlier stages remain
       // reachable while later stages wait for their prerequisites.
-      await goToStage(tester, 'Subir cartola');
-      expect(find.text('Sube la cartola'), findsOneWidget);
+      await goToStage(tester, 'Cargar cartola');
+      expect(find.text('Carga la cartola'), findsOneWidget);
       expect(stageIsEnabled(tester, 2), isTrue);
     });
 
@@ -1401,7 +1691,8 @@ void main() {
       await loadStatement(tester);
 
       expect(harness.calls, ['prepare']);
-      expect(find.textContaining('Revisar coincidencias'), findsWidgets);
+      expect(
+          find.textContaining(RegExp('[Pp]ropuestas de pago')), findsWidgets);
       expect(find.text('Fila OCR incompleta'), findsOneWidget);
       expect(
         find.text('Se conserva como evidencia; no puede crear un pago'),
@@ -1835,13 +2126,12 @@ void main() {
       await openCashPerson(tester, 'Rosa Díaz');
       expect(find.text('¿Cómo quedó esta obligación?'), findsOneWidget);
       expect(find.textContaining('Pendiente'), findsWidgets);
-      await tester.tap(
+      await tapVisible(
+        tester,
         find.widgetWithText(PayrollDecisionOptionCard, 'Todavía no pagado'),
       );
-      await tester.pumpAndSettle();
       // Closing the person is explicit; nothing advances alone.
-      await tester.tap(find.text('Confirmar respuesta'));
-      await tester.pumpAndSettle();
+      await tapVisible(tester, find.text('Confirmar respuesta'));
       expect(find.text('¿Cómo quedó esta obligación?'), findsNothing);
       expect(find.textContaining('Todavía no pagado'), findsWidgets);
 
@@ -1876,17 +2166,16 @@ void main() {
       await goToStage(tester, 'Aplicar');
       await openCashPerson(tester, 'Rosa Díaz');
 
-      await tester.tap(
+      await tapVisible(tester,
           find.widgetWithText(PayrollDecisionOptionCard, 'Entregué efectivo'));
-      await tester.pumpAndSettle();
-      await tester.tap(
+      await tapVisible(
+        tester,
         find.byKey(const ValueKey('cash-advance-advance-oldest')),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(
+      await tapVisible(
+        tester,
         find.byKey(const ValueKey('cash-advance-advance-newest')),
       );
-      await tester.pumpAndSettle();
 
       expect(
         find.textContaining(r'Anticipo $70.000'),
@@ -1896,11 +2185,9 @@ void main() {
         find.textContaining(r'Efectivo $50.000'),
         findsOneWidget,
       );
-      await tester.tap(find.text('Confirmar respuesta'));
-      await tester.pumpAndSettle();
+      await tapVisible(tester, find.text('Confirmar respuesta'));
       await goToStage(tester, 'Aplicar');
-      await tester.tap(find.text(commitAndApplyLabel));
-      await tester.pumpAndSettle();
+      await tapVisible(tester, find.text(commitAndApplyLabel));
 
       final decisions = harness.decisions.single;
       final allocations = decisions
@@ -1953,17 +2240,16 @@ void main() {
       await goToStage(tester, 'Aplicar');
       await openCashPerson(tester, 'Rosa Díaz');
 
-      await tester.tap(
+      await tapVisible(tester,
           find.widgetWithText(PayrollDecisionOptionCard, 'Entregué efectivo'));
-      await tester.pumpAndSettle();
-      await tester.tap(
+      await tapVisible(
+        tester,
         find.byKey(const ValueKey('cash-advance-advance-first-half')),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(
+      await tapVisible(
+        tester,
         find.byKey(const ValueKey('cash-advance-advance-second-half')),
       );
-      await tester.pumpAndSettle();
 
       expect(
         find.textContaining('No se registrará efectivo nuevo'),
@@ -1973,11 +2259,9 @@ void main() {
         find.byKey(const ValueKey('cash-manual-amount')),
         findsNothing,
       );
-      await tester.tap(find.text('Confirmar respuesta'));
-      await tester.pumpAndSettle();
+      await tapVisible(tester, find.text('Confirmar respuesta'));
       await goToStage(tester, 'Aplicar');
-      await tester.tap(find.text(commitAndApplyLabel));
-      await tester.pumpAndSettle();
+      await tapVisible(tester, find.text(commitAndApplyLabel));
 
       final decisions = harness.decisions.single;
       expect(
@@ -2388,19 +2672,17 @@ void main() {
       await confirmSuggestion(tester);
       await goToStage(tester, 'Aplicar');
       await openCashPerson(tester, 'Rosa Díaz');
-      await tester.tap(
+      await tapVisible(tester,
           find.widgetWithText(PayrollDecisionOptionCard, 'Entregué efectivo'));
-      await tester.pumpAndSettle();
-      await tester.tap(
+      await tapVisible(
+        tester,
         find.byKey(const ValueKey('cash-advance-advance-receipt-oldest')),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(
+      await tapVisible(
+        tester,
         find.byKey(const ValueKey('cash-advance-advance-receipt-newest')),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Confirmar respuesta'));
-      await tester.pumpAndSettle();
+      await tapVisible(tester, find.text('Confirmar respuesta'));
       await goToStage(tester, 'Aplicar');
       await tester.tap(find.text(commitAndApplyLabel));
       await tester.pumpAndSettle();
@@ -2499,7 +2781,15 @@ void main() {
         250,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.tap(automaticGroup);
+      // **Se asegura la visibilidad ANTES de tocar.** `scrollUntilVisible` deja
+      // el objetivo dentro del árbol pero puede quedar bajo la barra de dinero,
+      // y entonces `tap` avisa «finds no widget at the hit test location», el
+      // evento no llega y el `scrollUntilVisible` siguiente revienta con «Bad
+      // state: No element». Eso NO es un defecto del producto: es conducción
+      // del arnés, y confundirlo cuesta una ronda entera.
+      await tester.ensureVisible(automaticGroup);
+      await tester.pumpAndSettle();
+      await tester.tap(automaticGroup, warnIfMissed: false);
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
         find.text('PAGO PROVEEDOR GENERICO'),
@@ -2537,9 +2827,9 @@ void main() {
               ? 'MainLayout already owns the compact route header.'
               : 'Desktop needs the reconciliation workflow header.',
         );
-        expect(find.bySemanticsLabel('Subir cartola'), findsWidgets);
-        expect(find.bySemanticsLabel(RegExp('^Extraer')), findsWidgets);
-        expect(find.bySemanticsLabel(RegExp('^Revisar')), findsWidgets);
+        expect(find.bySemanticsLabel('Cargar cartola'), findsWidgets);
+        expect(find.bySemanticsLabel(RegExp('^Lectura')), findsWidgets);
+        expect(find.bySemanticsLabel(RegExp('^Propuestas')), findsWidgets);
         expect(find.bySemanticsLabel(RegExp('^Aplicar')), findsWidgets);
         expect(find.text('Elegir archivo'), findsOneWidget);
         expect(find.text('Cámara'), findsOneWidget);
@@ -2669,6 +2959,1115 @@ void main() {
       }
     });
   });
+
+  testWidgets(
+      '5j paso 2 · una nómina abierta FUERA del rango de la cartola no se anuncia como cubierta',
+      (tester) async {
+    // `vouchersById` trae todas las nóminas abiertas del tenant, no las que la
+    // cartola cubre. El rótulo tiene que decir eso y no otra cosa.
+    final harness = recorder(
+      prepared: draft(documentDate: const PayrollCivilDate(2026, 7, 20)),
+    );
+    await pump(tester, actions: harness.actions);
+    await tester.tap(find.text('Elegir archivo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Semanas que cubre'), findsNothing,
+        reason: 'la cartola no determina esa lista; son nóminas abiertas');
+    expect(find.text('Nóminas abiertas que se compararán'), findsOneWidget);
+  });
+
+  testWidgets(
+      '5j paso 2 · un abono completo NO desaparece porque exista una fila incompleta',
+      (tester) async {
+    // El bug que el test anterior no veía: la política mostraba «las que piden
+    // atención, o todas si no hay ninguna», así que **una sola fila incompleta
+    // borraba todos los abonos** — mientras la nota prometía que se muestran
+    // uno a uno.
+    final incoming = PayrollStatementRow(
+      bookingDate: const PayrollCivilDate(2026, 7, 15),
+      description: 'ABONO VENTA WEBPAY',
+      documentNumber: 'WP-1',
+      debitAmountClp: null,
+      creditAmountClp: 90000,
+      balanceAmountClp: null,
+      direction: PayrollStatementMovementDirection.incoming,
+      evidence: const PayrollStatementRowEvidence(
+        sourceRowNumber: 900,
+        startPageNumber: 1,
+        startLineNumber: 900,
+        endPageNumber: 1,
+        endLineNumber: 900,
+      ),
+    );
+    // Conteo CONOCIDO y medido, no supuesto: el fixture rinde 9 filas —las del
+    // draft base, una incompleta, un abono y seis egresos limpios—, de las que
+    // 2 son obligatorias (incompleta y abono); se rellena hasta las 4
+    // publicadas y quedan **5 ocultas**. Mi primera estimación decía 6: por eso
+    // el número va exacto en el aserto y no dentro de un `if`.
+    final harness = recorder(
+      prepared: draft(
+        withIncompleteEvidence: true,
+        extraRows: <PayrollStatementRow>[
+          incoming,
+          for (var i = 1; i <= 6; i++)
+            statementRow(
+              rowNumber: 500 + i,
+              description: 'PAGO PROVEEDOR LIMPIO $i',
+              debit: 10000 * i,
+            ),
+        ],
+      ),
+    );
+    await pump(tester, actions: harness.actions, size: const Size(1440, 2000));
+    await tester.tap(find.text('Elegir archivo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ABONO VENTA WEBPAY'), findsOneWidget,
+        reason: 'el abono se promete visible uno a uno');
+    expect(find.text('CAMPOS INCOMPLETOS'), findsWidgets,
+        reason: 'y la fila que pide atención sigue estando');
+    // **Sin condicional**: el pie tiene que existir y decir el número exacto.
+    // La versión anterior lo envolvía en un `if` y el fixture no producía pie,
+    // así que el test pasaba sin comprobar nada.
+    expect(
+      find.text('… 5 egresos más con todos sus campos reconocidos y sin '
+          'avisos.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Todos quedan en la revisión'), findsNothing,
+        reason: 'no todos los movimientos alimentan la revisión');
+    // Un egreso limpio concreto SÍ está oculto; los obligatorios no.
+    expect(find.text('PAGO PROVEEDOR LIMPIO 6'), findsNothing);
+  });
+
+  testWidgets(
+      '5j paso 2 · cinco nóminas abiertas se listan en orden CRONOLÓGICO y caben en el panel',
+      (tester) async {
+    // El test anterior decía «varias» y usaba un fixture con **una sola**: no
+    // probaba ni el orden ni el ancho que yo había afirmado. Acá van cinco,
+    // insertadas fuera de orden a propósito, y a 1360 —donde el panel derecho
+    // mide 320 px, que es el caso estrecho real—.
+    final harness = recorder(
+      prepared: draft(
+        extraOpenPayrollStarts: <DateTime>[
+          DateTime(2026, 9, 7),
+          DateTime(2026, 6, 1),
+          DateTime(2026, 12, 21),
+          DateTime(2026, 8, 3),
+        ],
+      ),
+    );
+    await pump(tester, actions: harness.actions, size: const Size(1360, 1200));
+    await tester.tap(find.text('Elegir archivo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nóminas abiertas que se compararán'), findsOneWidget);
+    // El valor del `factRow` es el hermano del rótulo dentro de su fila.
+    final value = tester
+        .widgetList<Text>(
+          find.descendant(
+            of: find
+                .ancestor(
+                  of: find.text('Nóminas abiertas que se compararán'),
+                  matching: find.byType(Row),
+                )
+                .first,
+            matching: find.byType(Text),
+          ),
+        )
+        .map((text) => text.data)
+        .whereType<String>()
+        .firstWhere((data) => data != 'Nóminas abiertas que se compararán');
+    final weeks = value.split(' · ');
+    expect(weeks.length, 5, reason: 'las cinco nóminas abiertas se listan');
+    // Orden por `periodStart`: los cinco períodos se insertaron desordenados
+    // (jul, sep, jun, dic, ago) y tienen que salir de junio a diciembre.
+    final months = weeks
+        .map((w) => const <String>[
+              'ene',
+              'feb',
+              'mar',
+              'abr',
+              'may',
+              'jun',
+              'jul',
+              'ago',
+              'sep',
+              'oct',
+              'nov',
+              'dic',
+            ].indexWhere((m) => w.toLowerCase().contains(m)))
+        .toList();
+    expect(months.any((m) => m < 0), isFalse, reason: 'etiquetas: $weeks');
+    expect(
+      months,
+      List<int>.from(months)..sort(),
+      reason: 'orden lexicográfico sobre la etiqueta no es cronológico: $weeks',
+    );
+    expect(tester.takeException(), isNull,
+        reason: 'el panel de 320 px no puede desbordar con cinco nóminas');
+  });
+
+  testWidgets(
+      '5j paso 2 · una fila fuera del rango pide REVISIÓN, no releer el OCR',
+      (tester) async {
+    final harness = recorder(
+      prepared: draft(documentDate: const PayrollCivilDate(2026, 7, 20)),
+    );
+    await pump(tester, actions: harness.actions);
+    await tester.tap(find.text('Elegir archivo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Requieren revisión'), findsOneWidget);
+    expect(find.textContaining('Requieren tu lectura'), findsNothing,
+        reason: '`out_of_statement_range` no se arregla releyendo el OCR');
+  });
+
+  testWidgets(
+      '5j paso 2 · un abono completo no promete una sección «Otros movimientos»',
+      (tester) async {
+    // `_buildTransferRows` arma la revisión con egresos sin calzar y filas de
+    // campos incompletos: un abono COMPLETO no entra ahí. La nota no puede
+    // mandar al operador a una sección que este flujo no construye.
+    final incoming = PayrollStatementRow(
+      bookingDate: const PayrollCivilDate(2026, 7, 15),
+      description: 'ABONO VENTA WEBPAY',
+      documentNumber: 'WP-1',
+      debitAmountClp: null,
+      creditAmountClp: 90000,
+      balanceAmountClp: null,
+      direction: PayrollStatementMovementDirection.incoming,
+      evidence: const PayrollStatementRowEvidence(
+        sourceRowNumber: 900,
+        startPageNumber: 1,
+        startLineNumber: 900,
+        endPageNumber: 1,
+        endLineNumber: 900,
+      ),
+    );
+    final harness = recorder(
+      prepared: draft(extraRows: <PayrollStatementRow>[incoming]),
+    );
+    await pump(tester, actions: harness.actions, size: const Size(1440, 2000));
+    await tester.tap(find.text('Elegir archivo'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Otros movimientos'), findsNothing,
+        reason: 'esa sección no existe en este flujo');
+    expect(
+      find.textContaining('Se muestran uno a uno en esta lectura'),
+      findsOneWidget,
+    );
+    // Y el abono sí se ve en la lectura del paso 2, que es lo que se promete.
+    expect(find.text('ABONO VENTA WEBPAY'), findsOneWidget);
+  });
+
+  testWidgets(
+      '5j paso 2 · genera las seis capturas de HARNESS (claro/oscuro × 1360/834/430)',
+      (tester) async {
+    // **Evidencia de HARNESS, no viva.** La etapa 2 sólo existe con una cartola
+    // cargada, y cargar una es subir un archivo real a un flujo que corre
+    // contra producción. Así que las seis celdas se generan acá, con el fixture
+    // sintético, y se declaran como tales — no se maquilla la matriz.
+    // **Opt-in.** Sin `PAYROLL_SHOT_DIR` la suite no escribe artefactos: una
+    // batería de regresión no deja archivos por ahí como efecto colateral.
+    final target = Platform.environment['PAYROLL_SHOT_DIR'];
+    if (target == null || target.isEmpty) {
+      markTestSkipped('define PAYROLL_SHOT_DIR para generar las capturas');
+      return;
+    }
+    suspendGoogleFontsNetwork();
+    final dir = Directory(target);
+    for (final brightness in Brightness.values) {
+      for (final width in const <double>[1360, 834, 430]) {
+        // Fixture que **demuestra la política**: una incompleta, un abono
+        // completo y egresos limpios de sobra, para que se vean cuatro filas y
+        // quede resumen. Con el fixture anterior salían dos y ningún pie, así
+        // que las capturas no probaban lo que el ledger afirmaba.
+        final harness = recorder(
+          prepared: draft(
+            withIncompleteEvidence: true,
+            extraRows: <PayrollStatementRow>[
+              PayrollStatementRow(
+                bookingDate: const PayrollCivilDate(2026, 7, 15),
+                description: 'ABONO VENTA WEBPAY',
+                documentNumber: 'WP-1',
+                debitAmountClp: null,
+                creditAmountClp: 90000,
+                balanceAmountClp: null,
+                direction: PayrollStatementMovementDirection.incoming,
+                evidence: const PayrollStatementRowEvidence(
+                  sourceRowNumber: 900,
+                  startPageNumber: 1,
+                  startLineNumber: 900,
+                  endPageNumber: 1,
+                  endLineNumber: 900,
+                ),
+              ),
+              for (var i = 1; i <= 6; i++)
+                statementRow(
+                  rowNumber: 500 + i,
+                  description: 'PAGO PROVEEDOR LIMPIO $i',
+                  debit: 10000 * i,
+                ),
+            ],
+          ),
+        );
+        await pump(
+          tester,
+          actions: harness.actions,
+          size: Size(width, width < 600 ? 1400 : 1100),
+          brightness: brightness,
+        );
+        await tester.tap(find.text('Elegir archivo'));
+        await tester.pumpAndSettle();
+
+        final boundary = tester.firstRenderObject<RenderRepaintBoundary>(
+          find.byType(RepaintBoundary),
+        );
+        await tester.runAsync(() async {
+          final image = await boundary.toImage(pixelRatio: 1);
+          final data = await image.toByteData(format: ImageByteFormat.png);
+          image.dispose();
+          if (data == null) return;
+          if (!dir.existsSync()) dir.createSync(recursive: true);
+          File(
+            '${dir.path}/paso2-${brightness.name}-${width.toInt()}.png',
+          ).writeAsBytesSync(data.buffer.asUint8List());
+        });
+      }
+    }
+    // Exactamente seis, y contando **sólo las de este generador**: un
+    // `greaterThanOrEqualTo` sobre el directorio entero daba verde con un
+    // destino contaminado —o con cinco propias y una ajena—, que es justo lo
+    // que el contrato del comando promete que no puede pasar.
+    expect(
+      dir
+          .listSync()
+          .whereType<File>()
+          .where((file) => file.uri.pathSegments.last.startsWith('paso2-'))
+          .length,
+      6,
+    );
+  });
+
+  // ── 5j · paso 2 · lo que la extracción PUEDE afirmar ──────────────────────
+  // Fixture SINTÉTICO y determinista: ningún archivo real, ninguna importación
+  // viva. Lo que se prueba es el lenguaje de la etapa, que es donde el módulo
+  // se puede pasar de afirmación.
+  testWidgets(
+      '5j paso 2 · una fila sin avisos dice CAMPOS COMPLETOS, nunca NÍTIDA',
+      (tester) async {
+    final harness = recorder(prepared: draft());
+    await pump(tester, actions: harness.actions);
+    // Sólo hasta la etapa 2: `loadStatement` sigue de largo hacia la revisión.
+    await tester.tap(find.text('Elegir archivo'));
+    await tester.pumpAndSettle();
+
+    // Ningún vocabulario de confianza o calidad: el extractor no mide nada de
+    // eso. Sólo hechos comprobables sobre los campos.
+    for (final banned in const <String>[
+      'NÍTIDA',
+      'nítida',
+      'ILEGIBLE',
+      'LECTURA DUDOSA',
+    ]) {
+      expect(find.textContaining(banned), findsNothing, reason: banned);
+    }
+    expect(find.text('CAMPOS COMPLETOS'), findsWidgets);
+    // «N de N líneas leídas» era tautológico: el parse sólo conserva lo que
+    // detectó, no hay total del documento con el que comparar.
+    expect(find.textContaining('líneas leídas'), findsNothing);
+    // Singular o plural según el fixture: lo que importa es que ya no
+    // compare contra un total que no existe.
+    expect(find.textContaining('detectado'), findsWidgets);
+    // Y el panel no puede llamar «semanas que cubre» a las nóminas abiertas.
+    expect(find.text('Semanas que cubre'), findsNothing);
+    expect(find.text('Nóminas abiertas que se compararán'), findsOneWidget);
+  });
+
+  testWidgets(
+      '5j paso 2 · una fila sin evidencia estructurada dice CAMPOS INCOMPLETOS',
+      (tester) async {
+    final harness = recorder(prepared: draft(withIncompleteEvidence: true));
+    await pump(tester, actions: harness.actions);
+    await tester.tap(find.text('Elegir archivo'));
+    await tester.pumpAndSettle();
+
+    // `hasCompleteStructuredEvidence` sólo exige fecha, dirección, monto
+    // positivo y descripción: su `false` prueba que FALTAN CAMPOS, no que el
+    // OCR fuera incapaz de leer.
+    expect(find.text('CAMPOS INCOMPLETOS'), findsWidgets);
+    expect(find.textContaining('ILEGIBLE'), findsNothing);
+  });
+
+  testWidgets(
+      '5j paso 2 · un aviso que no es de lectura no se rotula como lectura dudosa',
+      (tester) async {
+    // `out_of_statement_range` marca una fila COMPLETA cuya fecha cae después
+    // del cierre declarado. No dice nada de la calidad de lectura, así que
+    // llamarla «LECTURA DUDOSA» era falso para esa fila.
+    final harness = recorder(
+      prepared: draft(documentDate: const PayrollCivilDate(2026, 7, 20)),
+    );
+    await pump(tester, actions: harness.actions);
+    await tester.tap(find.text('Elegir archivo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('REVISAR'), findsWidgets);
+    expect(find.textContaining('LECTURA DUDOSA'), findsNothing);
+  });
+
+  testWidgets(
+      '5j paso 2 · ninguna fila que pide atención se esconde, y el resumen sólo cuenta limpias',
+      (tester) async {
+    // Fixture adversarial: MÁS filas problemáticas que el antiguo tope de 9.
+    // Con ese tope la décima quedaba oculta y el pie afirmaba que las ocultas
+    // tenían todos sus campos — una mentira sobre movimientos de dinero.
+    final noisy = <PayrollStatementRow>[
+      for (var i = 1; i <= 12; i++)
+        PayrollStatementRow(
+          bookingDate: null,
+          description: 'TRANSFERENCIA OCR CORTADA $i',
+          documentNumber: 'OCR-$i',
+          debitAmountClp: null,
+          creditAmountClp: null,
+          balanceAmountClp: null,
+          direction: PayrollStatementMovementDirection.unknown,
+          parseWarningCodes: const <String>['missing_transaction_amount'],
+          evidence: PayrollStatementRowEvidence(
+            sourceRowNumber: 100 + i,
+            startPageNumber: 1,
+            startLineNumber: 100 + i,
+            endPageNumber: 1,
+            endLineNumber: 100 + i,
+          ),
+        ),
+    ];
+    final harness = recorder(prepared: draft(extraRows: noisy));
+    await pump(tester, actions: harness.actions, size: const Size(1440, 2400));
+    await tester.tap(find.text('Elegir archivo'));
+    await tester.pumpAndSettle();
+
+    for (var i = 1; i <= 12; i++) {
+      expect(
+        find.text('TRANSFERENCIA OCR CORTADA $i'),
+        findsOneWidget,
+        reason: 'la fila $i pide atención y no puede esconderse tras un tope',
+      );
+    }
+    // Las 12 problemáticas son obligatorias y se muestran todas; del fixture
+    // base queda **una** limpia fuera, que es lo que el pie resume.
+    // Singular exacto: queda **una** limpia oculta, así que el pie dice
+    // «1 egreso más». El aserto anterior buscaba «movimientos más» —texto que
+    // producción ya no emite— dentro de un `if`, así que nunca entraba.
+    expect(
+      find.text('… 1 egreso más con todos sus campos reconocidos y sin '
+          'avisos.'),
+      findsOneWidget,
+    );
+  });
+
+  // ── 5j · paso 4 · el único punto de escritura ──────────────────────────────
+  //
+  // Fixture SINTÉTICO: ningún archivo real, ninguna importación viva. Lo que se
+  // prueba es la aritmética del resumen y la composición del frame, que es
+  // donde una pantalla de dinero se puede pasar de afirmación.
+
+  /// Deja la app en el paso 4 con una semana tocada por una transferencia.
+  Future<void> reachApplyStage(
+    WidgetTester tester, {
+    required PayrollReconciliationActions actions,
+    Size size = const Size(1360, 1100),
+  }) async {
+    await pump(tester, actions: actions, size: size);
+    await loadStatement(tester);
+    await selectBankAccount(tester);
+    await confirmSuggestion(tester);
+    await goToStage(tester, 'Aplicar');
+  }
+
+  group('5j · el CTA largo del paso 4 no se recorta en compacto', () {
+    // La prueba de elisión anterior sólo montaba **Revisar**, donde el
+    // primario dice «Ir a aplicar» — corto. El rótulo que de verdad pierde
+    // significado es el del paso 4: «Confirmar N semanas y aplicar
+    // conciliación», que en la app viva a 430 salía «…y aplica…».
+    for (final width in <double>[834, 430]) {
+      testWidgets('a ${width.toInt()} el primario dice entero qué va a pasar',
+          (tester) async {
+        final harness = recorder(prepared: draft(withCashEmployee: true));
+        await reachApplyStage(
+          tester,
+          actions: harness.actions,
+          size: Size(width, 1100),
+        );
+
+        final cta = find.widgetWithText(
+          PayrollPrimaryAction,
+          commitAndApplyLabel,
+        );
+        expect(cta, findsOneWidget,
+            reason: 'el paso 4 tiene que estar montado');
+
+        final paragraph = tester.renderObject<RenderParagraph>(
+          find.descendant(
+            of: cta,
+            matching: find.text(commitAndApplyLabel),
+          ),
+        );
+        expect(
+          paragraph.didExceedMaxLines,
+          isFalse,
+          reason: 'a ${width.toInt()} px el botón que aplica la conciliación '
+              'dice «Confirmar N sema…»: eso no es una acción, es una '
+              'adivinanza sobre dinero',
+        );
+      });
+    }
+  });
+
+  group('5j · el stepper usa el breakpoint canónico, no 600', () {
+    const compactNames = <String>[
+      'Cargar',
+      'Lectura',
+      'Propuestas',
+      'Aplicar',
+    ];
+
+    testWidgets('a 834 los cuatro pasos salen compactos y sin elidir',
+        (tester) async {
+      final harness = recorder();
+      await pump(tester, actions: harness.actions, size: const Size(834, 1000));
+      await loadStatement(tester);
+
+      for (var i = 0; i < compactNames.length; i++) {
+        final step =
+            find.byKey(ValueKey<String>('reconciliation-step-${i + 1}'));
+        expect(step, findsOneWidget);
+        final label = find.descendant(
+          of: step,
+          matching: find.text(compactNames[i]),
+        );
+        expect(
+          label,
+          findsOneWidget,
+          reason:
+              'a 834 el paso ${i + 1} tiene que decir «${compactNames[i]}»; '
+              'con el umbral en 600 tomaba la rama ancha y salía «Subir '
+              'cart…», «14 movimie…», «0/4 efecti…»',
+        );
+        expect(
+          tester.renderObject<RenderParagraph>(label).didExceedMaxLines,
+          isFalse,
+        );
+      }
+    });
+
+    testWidgets('a 900 vuelve la rama ancha, con el nombre largo',
+        (tester) async {
+      final harness = recorder();
+      await pump(tester, actions: harness.actions, size: const Size(900, 1000));
+      await loadStatement(tester);
+
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('reconciliation-step-1')),
+          matching: find.text('Cargar cartola'),
+        ),
+        findsOneWidget,
+        reason: '900 ya es escritorio: ahí el nombre completo sí cabe',
+      );
+    });
+  });
+
+  testWidgets(
+      '5j paso 4 · a 1360 las tres columnas arrancan en la misma fila, con la '
+      'canaleta y la proporción del frame; a 834 y 430 se apilan',
+      (tester) async {
+    const titles = <String>[
+      'IMPACTO POR SEMANA',
+      'EFECTIVO · SIEMPRE PREGUNTADO A MANO',
+      'RESUMEN ANTES DE ESCRIBIR',
+    ];
+
+    // 1360 · la composición del frame: tres columnas lado a lado, con su
+    // proporción. Comparar sólo el borde superior no bastaba —tres columnas
+    // apiladas de altura cero también lo cumplirían—, así que se miden los
+    // rectángulos completos: misma línea, sin solaparse, en el orden del frame
+    // y con los anchos que el frame publica.
+    final wide = recorder(prepared: draft(withCashEmployee: true));
+    await reachApplyStage(tester, actions: wide.actions);
+    final rects = <Rect>[
+      for (final title in titles)
+        tester.getRect(
+          find
+              .ancestor(
+                of: find.text(title),
+                matching: find.byType(Column),
+              )
+              .first,
+        ),
+    ];
+    expect(
+      rects.map((rect) => rect.top).toSet().length,
+      1,
+      reason: 'las tres columnas arrancan en la misma línea: $rects',
+    );
+    for (var i = 1; i < rects.length; i++) {
+      expect(
+        rects[i].left,
+        greaterThanOrEqualTo(rects[i - 1].right),
+        reason: 'la columna $i se solapa con la anterior: $rects',
+      );
+      expect(
+        rects[i].left - rects[i - 1].right,
+        moreOrLessEquals(20, epsilon: 1),
+        reason: 'la canaleta del frame es 20: $rects',
+      );
+    }
+    // Proporción 43:43:40 del frame (medida sobre el PNG publicado en
+    // 430/430/400). Se compara la razón, no el píxel: el canvas de la app no
+    // es el del frame.
+    expect(
+      rects[0].width,
+      moreOrLessEquals(rects[1].width, epsilon: 1),
+      reason: 'las dos primeras columnas son iguales: $rects',
+    );
+    expect(
+      rects[2].width / rects[0].width,
+      moreOrLessEquals(40 / 43, epsilon: 0.02),
+      reason: 'la tercera columna guarda la razón 40/43 del frame: $rects',
+    );
+
+    // 834 y 430 · Design no publicó una composición de paso 4 para tablet ni
+    // para móvil, así que no se inventa una: se apila en el mismo orden de
+    // lectura. Apilado significa **una debajo de otra**, no tres angostas.
+    for (final width in const <double>[834, 430]) {
+      final narrow = recorder(prepared: draft(withCashEmployee: true));
+      await reachApplyStage(
+        tester,
+        actions: narrow.actions,
+        size: Size(width, 1600),
+      );
+      final tops = <double>[
+        for (final title in titles) tester.getTopLeft(find.text(title)).dy,
+      ];
+      expect(
+        tops[0] < tops[1] && tops[1] < tops[2],
+        isTrue,
+        reason: 'a $width las columnas se apilan en orden: $tops',
+      );
+    }
+  });
+
+  testWidgets(
+      '5j paso 4 · el total del resumen es exactamente lo que las semanas dejan '
+      'de deber', (tester) async {
+    // La cifra grande del resumen y las cifras de la columna izquierda salen
+    // del mismo conjunto de decisiones a propósito: dos números distintos para
+    // lo mismo, en una pantalla de dinero, es como se pierde la confianza. Si
+    // alguien cambia una de las dos derivaciones, esta prueba se pone roja.
+    //
+    // El fixture tiene que mover las TRES clases de dinero —transferencia,
+    // efectivo y anticipo—, porque el total las suma a las tres. Con sólo la
+    // transferencia, sacar los anticipos de la suma dejaba la prueba en verde:
+    // comprobado quitando esa línea del cálculo, y no se puso roja.
+    final harness = recorder(
+      prepared: draft(
+        withCashEmployee: true,
+        openAdvances: [
+          cashAdvance(
+            id: 'advance-total-check',
+            amount: 30000,
+            paidAt: DateTime(2026, 7, 10),
+          ),
+        ],
+      ),
+    );
+    await reachApplyStage(tester, actions: harness.actions);
+
+    // Se responde el efectivo con anticipo aplicado, para que el total tenga
+    // las tres clases dentro.
+    await openCashPerson(tester, 'Rosa Díaz');
+    await tapVisible(tester,
+        find.widgetWithText(PayrollDecisionOptionCard, 'Entregué efectivo'));
+    await tapVisible(
+      tester,
+      find.byKey(const ValueKey('cash-advance-advance-total-check')),
+    );
+    await tapVisible(tester, find.text('Confirmar respuesta'));
+
+    expect(
+      find.text('Anticipos que se descontarán'),
+      findsOneWidget,
+      reason: 'el anticipo aplicado tiene que aparecer como su propia fila',
+    );
+
+    // La semana tocada aparece con su tarjeta de impacto.
+    final impactCard = find.byKey(
+      const ValueKey<String>('payroll-week-impact-voucher-1'),
+    );
+    expect(impactCard, findsOneWidget);
+
+    /// `$1.234.567` → 1234567. Se lee de la pantalla a propósito: lo que hay
+    /// que verificar es la cifra que el operador ve, no la variable interna.
+    int parseClp(String text) =>
+        int.parse(text.replaceAll(RegExp(r'[^0-9]'), ''));
+
+    final cardMoney = tester
+        .widgetList<Text>(
+          find.descendant(of: impactCard, matching: find.byType(Text)),
+        )
+        .map((widget) => widget.data ?? '')
+        .where((text) => text.startsWith(r'$'))
+        .map(parseClp)
+        .toList(growable: false);
+    expect(
+      cardMoney,
+      hasLength(2),
+      reason: 'la tarjeta muestra antes → después, dos cifras',
+    );
+    final before = cardMoney.first;
+    final after = cardMoney.last;
+    expect(
+      after,
+      lessThan(before),
+      reason: 'la transferencia confirmada tiene que bajar lo que falta pagar',
+    );
+    expect(
+      find.descendant(of: impactCard, matching: find.text('falta pagar')),
+      findsOneWidget,
+      reason: 'sin el rótulo, la cifra grande se lee como «lo que se paga»',
+    );
+
+    // La glosa nombra los movimientos que componen la baja. Si se cae uno, la
+    // semana muestra una caída que su propia glosa no explica.
+    expect(
+      find.descendant(
+        of: impactCard,
+        matching: find.text('1 transferencia + 1 en efectivo + 1 anticipo'),
+      ),
+      findsOneWidget,
+    );
+
+    // El total del resumen y la baja de la semana son el MISMO conjunto de
+    // decisiones. Si alguien cambia una de las dos derivaciones, esto se pone
+    // rojo: dos cifras distintas para lo mismo, en una pantalla de dinero, es
+    // como se pierde la confianza.
+    final summary = find.byKey(
+      const ValueKey<String>('payroll-reconciliation-apply-summary'),
+    );
+    expect(summary, findsOneWidget);
+    final total = tester.widget<VbMoneyText>(
+      find.descendant(of: summary, matching: find.byType(VbMoneyText)),
+    );
+    expect(
+      total.amount,
+      before - after,
+      reason: 'el total a aplicar es exactamente lo que la semana deja de '
+          'deber',
+    );
+    expect(find.text('Total a aplicar'), findsOneWidget);
+    expect(find.text('Pagos que se crearán'), findsOneWidget);
+  });
+
+  testWidgets(
+      '5j paso 4 · «Excluidos por ti» cuenta lo que excluyó el operador y NO lo '
+      'que la app descartó sola', (tester) async {
+    // Las dos mitades van en la misma prueba a propósito. La primera versión
+    // sólo tenía la mitad negativa, con un fixture cuyo abono entrante ni
+    // siquiera llega a `_transferRows`: quitarle el guard al contador **no la
+    // ponía roja**. Verde sin probar nada es peor que ausente, así que acá el
+    // fixture demuestra primero que construyó el caso, y la mitad positiva
+    // obliga a que el contador sepa distinguir.
+
+    // ── Descarte AUTOMÁTICO: el movimiento cae fuera de toda ventana de pago
+    // y la app lo clasifica sola. Atribuírselo al operador sería ponerle un
+    // criterio que no aplicó.
+    final automatic = recorder(
+      prepared: draft(withForeignNamedMovement: true),
+    );
+    await pump(tester,
+        actions: automatic.actions, size: const Size(1360, 1100));
+    await loadStatement(tester);
+    await selectBankAccount(tester);
+    await confirmSuggestion(tester);
+
+    // Las filas auto-clasificadas nacen dentro de su grupo plegado: sin
+    // abrirlo, `find` no las ve y una ausencia no probaría nada.
+    final automaticGroup = find.byKey(
+      const ValueKey('review-group-automatic'),
+    );
+    await tester.scrollUntilVisible(
+      automaticGroup,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(automaticGroup);
+    await tester.pumpAndSettle();
+    final autoLedgerRow = find.byKey(
+      const ValueKey('payroll-ledger-p1-l2-r2'),
+    );
+    await tester.ensureVisible(autoLedgerRow);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<PayrollReviewTableRow>(autoLedgerRow).stateTag,
+      'NO ES NÓMINA',
+      reason: 'sin la clasificación automática esta mitad no prueba nada',
+    );
+
+    await goToStage(tester, 'Aplicar');
+    expect(
+      find.text('Excluidos por ti'),
+      findsNothing,
+      reason: 'nadie excluyó nada a mano: la fila no debe existir',
+    );
+
+    // ── Exclusión EXPLÍCITA: el cargo nombra a alguien de la nómina, así que
+    // exige respuesta, y el operador responde «No es nómina». Eso sí es suyo.
+    final manual = recorder(
+      prepared: draft(withPayrollNamedUnmatchedMovement: true),
+    );
+    await pump(tester, actions: manual.actions, size: const Size(1360, 1100));
+    await loadStatement(tester);
+    await selectBankAccount(tester);
+    await confirmSuggestion(tester);
+
+    final suspiciousRow = find.byWidgetPredicate(
+      (widget) =>
+          widget is PayrollReconciliationRow &&
+          widget.data.sourceRowId == 'p1-l2-r2',
+    );
+    expect(suspiciousRow, findsOneWidget);
+    expect(
+      tester
+          .widget<PayrollReconciliationRow>(suspiciousRow)
+          .data
+          .isAutomaticallyClassified,
+      isFalse,
+      reason: 'esta fila tiene que ser una pregunta, no un descarte solo',
+    );
+    await tapVisible(
+      tester,
+      find.descendant(
+        of: suspiciousRow,
+        matching:
+            find.widgetWithText(PayrollDecisionOptionCard, 'No es nómina'),
+      ),
+    );
+
+    await goToStage(tester, 'Aplicar');
+    expect(
+      find.text('Excluidos por ti'),
+      findsOneWidget,
+      reason: 'el operador excluyó una fila a mano y el resumen tiene que '
+          'decirlo',
+    );
+  });
+
+  testWidgets(
+      '5j paso 4 · tras un intento fallido el encabezado deja de decir «nada se '
+      'escribió»', (tester) async {
+    // `createImport` corre ANTES que `apply` y escribe la importación con sus
+    // filas. Si el apply falla, no hay pagos —es una sola transacción— pero la
+    // cartola sí quedó registrada, y el encabezado del frame afirma lo
+    // contrario de forma incondicional.
+    final harness = recorder(
+      failFirstApply: true,
+      prepared: draft(),
+    );
+    await reachApplyStage(tester, actions: harness.actions);
+
+    final note = find.byKey(
+      const ValueKey<String>('payroll-reconciliation-apply-write-note'),
+    );
+    expect(
+      tester.widget<Text>(note).data,
+      'Nada se escribió todavía. Este es el último punto de retorno.',
+    );
+
+    await tapVisible(tester, find.text(commitAndApplyLabel));
+    expect(harness.calls, contains('createImport'));
+
+    expect(
+      tester.widget<Text>(note).data,
+      contains('La cartola ya quedó registrada por el intento anterior'),
+      reason: 'la importación existe: el encabezado no puede decir «nada»',
+    );
+  });
+
+  testWidgets(
+      '5j paso 4 · genera las seis capturas de HARNESS (claro/oscuro × '
+      '1360/834/430)', (tester) async {
+    // **Evidencia de HARNESS, no viva.** El paso 4 sólo existe con una cartola
+    // cargada, y cargar una es subir un archivo real a un flujo que corre
+    // contra producción. Las seis celdas se generan acá, con fixture sintético,
+    // y se declaran como tales. **Opt-in**: sin `PAYROLL_SHOT_DIR` no escribe
+    // artefactos, porque una batería de regresión no deja archivos por ahí.
+    //
+    // **Límite visual declarado:** las fuentes reales no se cargan en
+    // `flutter_test`, así que el texto sale como **bloques** —los glifos de la
+    // tipografía de prueba del arnés— y en estas imágenes no se lee ni una
+    // palabra. Demuestran **composición**; **no son evidencia de tipografía**.
+    // El texto lo cubren las aserciones de copy, nunca la imagen.
+    final target = Platform.environment['PAYROLL_SHOT_DIR'];
+    if (target == null || target.isEmpty) {
+      markTestSkipped('define PAYROLL_SHOT_DIR para generar las capturas');
+      return;
+    }
+    suspendGoogleFontsNetwork();
+    final dir = Directory(target);
+    for (final brightness in Brightness.values) {
+      for (final width in const <double>[1360, 834, 430]) {
+        final harness = recorder(prepared: draft(withCashEmployee: true));
+        // El brillo se fija al montar, así que cada celda monta exactamente una
+        // vez.
+        await pump(
+          tester,
+          actions: harness.actions,
+          size: Size(width, width < 600 ? 1600 : 1100),
+          brightness: brightness,
+        );
+        await loadStatement(tester);
+        await selectBankAccount(tester);
+        await confirmSuggestion(tester);
+        await goToStage(tester, 'Aplicar');
+
+        final boundary = tester.firstRenderObject<RenderRepaintBoundary>(
+          find.byType(RepaintBoundary),
+        );
+        await tester.runAsync(() async {
+          final image = await boundary.toImage(pixelRatio: 1);
+          final data = await image.toByteData(format: ImageByteFormat.png);
+          image.dispose();
+          if (data == null) return;
+          if (!dir.existsSync()) dir.createSync(recursive: true);
+          File(
+            '${dir.path}/paso4-${brightness.name}-${width.toInt()}.png',
+          ).writeAsBytesSync(data.buffer.asUint8List());
+        });
+      }
+    }
+    // Se filtra por el NOMBRE del archivo, no por la ruta: `path.contains`
+    // también matchea el directorio, y los destinos de `mktemp -d` de esta
+    // tarea se llaman `paso4-XXXXXX`, así que habría contado cualquier archivo
+    // que cayera ahí dentro.
+    expect(
+      dir
+          .listSync()
+          .whereType<File>()
+          .where((file) => file.uri.pathSegments.last.startsWith('paso4-'))
+          .length,
+      6,
+    );
+  });
+
+  testWidgets(
+      '5j p3 · la fila de propuestas usa las siete pistas de 7c y marca con '
+      'selectionRow', (tester) async {
+    // Fuente: proyecto `ERP Bikeshop UI Mockups`, página `Nóminas - Rediseño`,
+    // turno 7, frames `7c-ocr-{pacific,aubergine}`. Las pistas se leyeron
+    // literales del archivo con DesignSync:
+    // `26px 76px minmax(190px,1fr) 118px minmax(200px,1.1fr) 148px 84px`.
+    tester.view.physicalSize = const Size(1360, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    for (final expanded in <bool>[false, true]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.vinabike,
+            brightness: Brightness.dark,
+          ),
+          home: Scaffold(
+            body: PayrollReviewTableRow(
+              date: '11 jul',
+              description: 'TRANSF A L FUENTES',
+              amount: r'$172.875',
+              stateTag: 'CALZA',
+              stateTone: PayrollStateTone.success,
+              why: 'monto y cuenta coinciden',
+              person: 'Lucas Fuentes',
+              personDetail: 'Semana 28',
+              confidence: const SizedBox(width: 60, height: 22),
+              decision: const SizedBox(height: 28),
+              expanded: expanded,
+              isFirst: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final context = tester.element(find.byType(PayrollReviewTableRow));
+      final visual = PayrollVisualTokens.of(context);
+      final box = tester
+          .widget<Container>(
+            find
+                .descendant(
+                  of: find.byType(PayrollReviewTableRow),
+                  matching: find.byType(Container),
+                )
+                .first,
+          )
+          .decoration! as BoxDecoration;
+      // 7c: la fila marcada va en `selectionRow`, NUNCA en el hundido, que es
+      // profundidad de disclosure y tiene otro dueño.
+      expect(
+        box.color,
+        expanded ? visual.surfaceSelected : null,
+        reason: 'expanded=$expanded',
+      );
+      expect(box.color, isNot(visual.surfaceSunken),
+          reason: 'expanded=$expanded');
+
+      // La razón es la SEGUNDA línea de PERSONA Y RAZÓN, no una columna aparte.
+      expect(find.text('monto y cuenta coinciden'), findsOneWidget);
+      expect(find.text('Lucas Fuentes'), findsOneWidget);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('5j p3 · los rótulos de columna son los de 7c, y sólo desde 900',
+      (tester) async {
+    for (final width in const <double>[1360, 834]) {
+      tester.view.physicalSize = Size(width, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.vinabike,
+            brightness: Brightness.dark,
+          ),
+          home: const Scaffold(body: PayrollReviewColumnHeader()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final visible = width >= 900;
+      expect(
+        find.byKey(const ValueKey<String>('payroll-review-column-header')),
+        visible ? findsOneWidget : findsNothing,
+        reason: 'a $width',
+      );
+      for (final label in const <String>[
+        'FECHA',
+        'DESCRIPCIÓN EN LA CARTOLA',
+        'MONTO',
+        'PERSONA Y RAZÓN',
+        'CONFIANZA',
+      ]) {
+        expect(
+          find.text(label),
+          visible ? findsOneWidget : findsNothing,
+          reason: '$label a $width',
+        );
+      }
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      '5j p1 · un selector que no responde NO deja la etapa en «Validando el '
+      'archivo…» ni esconde Cancelar', (tester) async {
+    // Visto en la app viva el 2026-08-01: el panel del sistema quedó sin
+    // responder y la etapa 1 se quedó en `Validando el archivo…` **para
+    // siempre**, con `Cancelar` deshabilitado por `_isBusy`. La única salida
+    // fue matar la sesión.
+    //
+    // La causa era que el estado ocupado se levantaba ANTES de esperar al
+    // selector, así que la pantalla afirmaba estar validando mientras el
+    // operador todavía estaba eligiendo el archivo.
+    final never = Completer<PayrollPickedStatement?>();
+    addTearDown(() {
+      if (!never.isCompleted) never.complete(null);
+    });
+    final harness = recorder();
+    await pump(
+      tester,
+      actions: harness.actions,
+      pickFile: () => never.future,
+    );
+
+    await tester.tap(find.text('Elegir archivo'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // La etapa NO miente: nadie está validando nada todavía.
+    expect(
+      find.text('Validando el archivo…'),
+      findsNothing,
+      reason: 'el selector abierto no es una validación en curso',
+    );
+    expect(
+      find.byKey(const ValueKey('payroll-extraction-progress')),
+      findsNothing,
+    );
+    // Y la salida sigue existiendo.
+    final cancel = find.text('Cancelar');
+    expect(cancel, findsWidgets, reason: 'Cancelar nunca desaparece');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('5j p1 · cancelar el selector deja la etapa utilizable',
+      (tester) async {
+    final harness = recorder();
+    await pump(
+      tester,
+      actions: harness.actions,
+      pickFile: () async => null,
+    );
+
+    await tester.tap(find.text('Elegir archivo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Validando el archivo…'), findsNothing);
+    expect(find.text('Elegir archivo'), findsOneWidget);
+    expect(harness.calls, isEmpty, reason: 'cancelar no prepara nada');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      '5j p1 · si el selector falla, la etapa lo dice y se puede '
+      'reintentar', (tester) async {
+    final harness = recorder();
+    await pump(
+      tester,
+      actions: harness.actions,
+      pickFile: () async => throw StateError('panel del sistema caído'),
+    );
+
+    await tester.tap(find.text('Elegir archivo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Validando el archivo…'), findsNothing);
+    expect(
+      find.textContaining('No pudimos abrir el selector'),
+      findsOneWidget,
+      reason: 'una falla del selector se nombra, no se traga',
+    );
+    expect(find.text('Elegir archivo'), findsOneWidget);
+    expect(harness.calls, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+/// Cliente HTTP que nunca responde, para `suspendGoogleFontsNetwork`.
+///
+/// No falla ni acierta: deja la petición colgada. Es exactamente lo que se
+/// necesita para que una carga de fuente accesoria no rechace y contamine el
+/// `runAsync` de la captura.
+class _NeverCompletingClient extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    return Completer<http.StreamedResponse>().future;
+  }
 }
 
 class _SensitiveExtractionFailure implements Exception {

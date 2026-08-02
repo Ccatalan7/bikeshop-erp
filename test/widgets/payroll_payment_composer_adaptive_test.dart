@@ -4,7 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:vinabike_erp/modules/hr/payroll/surfaces/payroll_payment_composer.dart';
+import 'package:vinabike_erp/modules/hr/payroll/surfaces/payroll_accent_action.dart';
 import 'package:vinabike_erp/modules/hr/payroll/theme/payroll_tokens.dart';
+
+/// Ancho real de la hoja del composer segun Design `7d` (el `width` 522 del
+/// HTML es de contenido: esa pagina no tiene reset `border-box`).
+const double composerSheetWidth = 560;
 
 void main() {
   setUpAll(() {
@@ -28,6 +33,7 @@ void main() {
     ValueChanged<String>? onAmountChanged,
     String? amountError,
     bool registerEnabled = true,
+    Brightness brightness = Brightness.light,
   }) async {
     tester.view
       ..physicalSize = size
@@ -38,6 +44,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(brightness: brightness),
         home: Builder(
           builder: (context) {
             final media = MediaQuery.of(context);
@@ -55,7 +62,7 @@ void main() {
                         ? Alignment.centerRight
                         : Alignment.bottomCenter,
                     child: SizedBox(
-                      width: desktop ? 540 : double.infinity,
+                      width: desktop ? composerSheetWidth : double.infinity,
                       height: double.infinity,
                       child: PayrollPaymentComposer(
                         personName: 'Lucas Reyes Bravo',
@@ -147,7 +154,17 @@ void main() {
     final register =
         find.byKey(const ValueKey<String>('payroll-composer-register'));
     expect(register.hitTestable(), findsOneWidget);
-    expect(tester.getSize(register).height, greaterThanOrEqualTo(48));
+    // El CTA compacto mide EXACTAMENTE el token de densidad `F-06 · TOUCH 48`,
+    // y se mide **el botón de registrar**, no «el primer PayrollAccentAction
+    // que aparezca»: anclar por posición no fija nada. Igualdad y no `>= 48`,
+    // porque antes traía un 50 literal del frame y un aserto laxo lo dejaba
+    // pasar sin decir nada.
+    final registerAction = find.descendant(
+      of: register,
+      matching: find.byType(PayrollAccentAction),
+    );
+    expect(registerAction, findsOneWidget);
+    expect(tester.getSize(registerAction).height, PayrollTokens.touchMobile);
     expect(
       tester.getBottomRight(footer).dy,
       lessThanOrEqualTo(544),
@@ -333,6 +350,89 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
     amountController.dispose();
+    referenceController.dispose();
+  });
+
+  testWidgets(
+      '7d · los tres modos del pago miden 46, el activo va en selectionRow y '
+      'el inactivo en sunken — en claro y en oscuro', (tester) async {
+    for (final brightness in Brightness.values) {
+      final referenceController = TextEditingController();
+      final amountController = TextEditingController(text: r'$172.875');
+      await pumpComposer(
+        tester,
+        size: const Size(1360, 900),
+        referenceController: referenceController,
+        amountController: amountController,
+        onAmountChanged: (_) {},
+        brightness: brightness,
+      );
+
+      Container cardOf(String name) => tester.widget<Container>(
+            find.byKey(ValueKey<String>('payroll-composer-case-$name')),
+          );
+      final context = tester.element(
+        find.byKey(const ValueKey<String>('payroll-payment-composer')),
+      );
+      final visual = PayrollVisualTokens.of(context);
+
+      for (final name in const <String>['exact', 'over', 'partial']) {
+        final size = tester.getSize(
+          find.byKey(ValueKey<String>('payroll-composer-case-$name')),
+        );
+        expect(
+          size.height,
+          paymentModeCardHeight,
+          reason: '$name en $brightness',
+        );
+      }
+
+      // El activo: `selectionRow` + borde de acento. El inactivo: `sunken` +
+      // borde `divider`. Ninguno de los dos es `surface`.
+      final activeBox = cardOf('exact').decoration! as BoxDecoration;
+      final idleBox = cardOf('partial').decoration! as BoxDecoration;
+      expect(activeBox.color, visual.surfaceSelected, reason: '$brightness');
+      expect(idleBox.color, visual.surfaceSunken, reason: '$brightness');
+      expect(activeBox.color, isNot(visual.surface), reason: '$brightness');
+      expect(
+        (activeBox.border! as Border).top.color,
+        visual.accent,
+        reason: '$brightness',
+      );
+      expect(
+        (idleBox.border! as Border).top.color,
+        visual.border,
+        reason: '$brightness',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      amountController.dispose();
+      referenceController.dispose();
+    }
+  });
+
+  testWidgets('7d · la hoja del composer mide 560 en escritorio',
+      (tester) async {
+    // El ancho REAL del archivo de Design, no el `width` de contenido (522)
+    // que esa página declara por no tener reset `border-box`.
+    expect(composerSheetWidth, 560);
+
+    final referenceController = TextEditingController();
+    await pumpComposer(
+      tester,
+      size: const Size(1360, 900),
+      referenceController: referenceController,
+    );
+    final width = tester
+        .getSize(
+          find.byKey(const ValueKey<String>('payroll-payment-composer')),
+        )
+        .width;
+    expect(width, composerSheetWidth);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
     referenceController.dispose();
   });
 }

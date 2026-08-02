@@ -2444,14 +2444,13 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
         ),
       ),
-      items: const [
-        DropdownMenuItem(value: null, child: Text('Sin especificar')),
-        DropdownMenuItem(
-            value: BankAccountType.checking, child: Text('Cuenta Corriente')),
-        DropdownMenuItem(
-            value: BankAccountType.savings, child: Text('Cuenta Ahorro')),
-        DropdownMenuItem(
-            value: BankAccountType.vista, child: Text('Cuenta Vista')),
+      // Las opciones salen del owner del dominio, que las toma del constraint
+      // de producción. Escritas a mano acá decían «Cuenta Ahorro», que **no**
+      // es uno de los tres valores admitidos: el guardado lo rechazaba la base.
+      items: [
+        const DropdownMenuItem(value: null, child: Text('Sin especificar')),
+        for (final type in BankAccountType.values)
+          DropdownMenuItem(value: type, child: Text(type.label)),
       ],
       onChanged: (value) => setState(() => _bankAccountType = value),
     );

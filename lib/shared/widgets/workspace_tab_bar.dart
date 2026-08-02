@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'vb_anchored_popover.dart';
+import 'vb_shell_icon_button.dart';
+
 import '../services/workspace_manager.dart';
 import 'quick_ui_settings_button.dart';
 import 'share_workspace_link_button.dart';
@@ -289,20 +292,38 @@ class _WorkspaceTabBarState extends State<WorkspaceTabBar> {
               ),
             ),
           ),
+          // `A-02` sobre shell: los iconos son la unidad, no una píldora que
+          // los encierra. La píldora exterior con borde + la píldora interior
+          // de navegación daban dos marcos anidados y tres alturas distintas
+          // (32 / 28 / 26) en 20 px de ancho: eso es lo que se veía comprimido
+          // y superpuesto. Ahora es UNA fila de controles de 32 con un solo
+          // separador donde cambia el significado.
           Container(
             key: const ValueKey('workspace-chrome-actions'),
-            height: 32,
-            margin: const EdgeInsets.fromLTRB(6, 4, 8, 4),
+            height: _chromeGroupHeight,
             padding: const EdgeInsets.symmetric(horizontal: 3),
             decoration: BoxDecoration(
+              // UN marco, no dos. Lo que se veía comprimido eran dos píldoras
+              // anidadas —ésta y la de navegación— con tres alturas distintas
+              // (32 / 28 / 26) en unos pocos píxeles. El grupo conserva su
+              // marco, que es lo que lo separa de las pestañas; lo que se
+              // retiró es el marco interior.
               color: chrome.raised.withValues(alpha: 0.48),
               border: Border.all(color: chrome.edge),
               borderRadius: BorderRadius.circular(8),
             ),
+            // El margen vertical se calcula, no se elige: la barra mide
+            // `workspaceBarHeight` menos 1 px de hairline inferior, y la caja
+            // `A-02` de 32 tiene que caber ENTERA. Con `4` fijo quedaban 31 y
+            // el control se recortaba un píxel — que es parte de por qué el
+            // grupo se veía comprimido.
+            margin: const EdgeInsets.fromLTRB(
+                6, _chromeGroupInset, 8, _chromeGroupInset),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const _WorkspaceNavigationControls(),
+                _ChromeSeparator(color: chrome.edge),
                 const ShareWorkspaceLinkButton(),
                 const SmartScreenshotButton(),
                 if (workspaceManager.workspaces.length <
@@ -895,83 +916,43 @@ class _WorkspaceNavigationControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final workspaceManager = context.watch<WorkspaceManager>();
     final workspace = workspaceManager.activeWorkspace;
-    final chrome = WorkspaceChromeStyle.maybeOf(context) ??
-        WorkspaceChromeStyleData.vinabike;
-
-    return Container(
-      height: 28,
-      margin: const EdgeInsets.only(right: 4),
-      decoration: BoxDecoration(
-        border: Border.all(color: chrome.edge),
-        borderRadius: BorderRadius.circular(7),
-        color: chrome.canvas.withValues(alpha: 0.28),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _WorkspaceNavButton(
-            icon: Icons.arrow_back,
-            tooltip: 'Atrás',
-            enabled: workspace?.canGoBack ?? false,
-            onPressed: workspaceManager.navigateActiveWorkspaceBack,
-          ),
-          Container(
-            width: 1,
-            height: 16,
-            color: chrome.edge,
-          ),
-          _WorkspaceNavButton(
-            icon: Icons.arrow_forward,
-            tooltip: 'Adelante',
-            enabled: workspace?.canGoForward ?? false,
-            onPressed: workspaceManager.navigateActiveWorkspaceForward,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WorkspaceNavButton extends StatelessWidget {
-  final IconData icon;
-  final String tooltip;
-  final bool enabled;
-  final VoidCallback onPressed;
-
-  const _WorkspaceNavButton({
-    required this.icon,
-    required this.tooltip,
-    required this.enabled,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final chrome = WorkspaceChromeStyle.maybeOf(context) ??
-        WorkspaceChromeStyleData.vinabike;
-
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        mouseCursor:
-            enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-        onTap: enabled ? onPressed : null,
-        borderRadius: BorderRadius.circular(7),
-        child: SizedBox(
-          width: 30,
-          height: 26,
-          child: Icon(
-            icon,
-            size: 15,
-            color: enabled
-                ? chrome.foreground
-                : chrome.mutedForeground.withValues(alpha: 0.42),
-          ),
+    // Atrás y adelante son la MISMA clase de control que el resto del grupo:
+    // `A-02` sobre shell. Encerrarlos en su propia píldora los hacía parecer
+    // otra cosa y obligaba a encogerlos para que cupieran.
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        VbShellIconButton(
+          buttonKey: const ValueKey<String>('workspace-nav-back'),
+          icon: Icons.arrow_back,
+          tooltip: 'Atrás',
+          onPressed: (workspace?.canGoBack ?? false)
+              ? workspaceManager.navigateActiveWorkspaceBack
+              : null,
         ),
-      ),
+        VbShellIconButton(
+          buttonKey: const ValueKey<String>('workspace-nav-forward'),
+          icon: Icons.arrow_forward,
+          tooltip: 'Adelante',
+          onPressed: (workspace?.canGoForward ?? false)
+              ? workspaceManager.navigateActiveWorkspaceForward
+              : null,
+        ),
+      ],
     );
   }
 }
+
+/// Aire vertical del grupo, **derivado y no elegido**.
+///
+/// La barra útil mide `workspaceBarHeight` menos 1 px de hairline inferior; el
+/// grupo suma 1 px de marco arriba y otro abajo; y la caja `A-02` de 32 tiene
+/// que caber ENTERA. Con el `4` fijo anterior quedaban 30 px para una caja de
+/// 32: el control se recortaba dos píxeles, y eso es parte de lo que se veía
+/// comprimido.
+const double _chromeGroupHeight = VbShellIconButton.box + 2;
+const double _chromeGroupInset =
+    ((WorkspaceShellScope.workspaceBarHeight - 1) - _chromeGroupHeight) / 2;
 
 class _NewTabDropdown extends StatefulWidget {
   const _NewTabDropdown();
@@ -980,133 +961,135 @@ class _NewTabDropdown extends StatefulWidget {
   State<_NewTabDropdown> createState() => _NewTabDropdownState();
 }
 
+@immutable
+class _NewWorkspaceOption {
+  const _NewWorkspaceOption(this.icon, this.title, this.route);
+  final IconData icon;
+  final String title;
+  final String route;
+}
+
 class _NewTabDropdownState extends State<_NewTabDropdown> {
-  // Use GlobalKey to keep the popup menu button stable across rebuilds
-  final GlobalKey _menuKey = GlobalKey();
+  final GlobalKey _anchor = GlobalKey();
+
+  static const List<_NewWorkspaceOption> _options = <_NewWorkspaceOption>[
+    _NewWorkspaceOption(Icons.dashboard, 'Dashboard', '/dashboard'),
+    _NewWorkspaceOption(
+      Icons.language,
+      'Navegador web',
+      '/tools/web?url=https%3A%2F%2Fwww.google.com&name=Navegador%20web',
+    ),
+    _NewWorkspaceOption(Icons.shopping_bag, 'Productos', '/inventory/products'),
+    _NewWorkspaceOption(Icons.receipt, 'Ventas', '/sales/invoices'),
+    _NewWorkspaceOption(Icons.people, 'Clientes', '/clientes'),
+    _NewWorkspaceOption(
+      Icons.shopping_cart,
+      'Compras',
+      '/purchases/suppliers',
+    ),
+    _NewWorkspaceOption(Icons.point_of_sale, 'POS', '/pos'),
+    _NewWorkspaceOption(Icons.build, 'Taller', '/taller/pegas'),
+    _NewWorkspaceOption(
+      Icons.account_balance,
+      'Contabilidad',
+      '/accounting/accounts',
+    ),
+  ];
+
+  Future<void> _open() async {
+    final chosen = await showVbAnchoredPopover<_NewWorkspaceOption>(
+      anchorContext: _anchor.currentContext ?? context,
+      minWidth: 208,
+      barrierLabel: 'Cerrar el menú de espacios de trabajo',
+      builder: (context) => const _NewWorkspaceMenu(options: _options),
+    );
+    if (chosen == null || !mounted) return;
+    context.read<WorkspaceManager>().addWorkspace(
+          title: chosen.title,
+          initialRoute: chosen.route,
+        );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final chrome = WorkspaceChromeStyle.maybeOf(context) ??
-        WorkspaceChromeStyleData.vinabike;
-
-    return PopupMenuButton<Map<String, String>>(
-      key: _menuKey,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-      icon: Icon(
-        Icons.add,
-        size: 18,
-        color: chrome.foreground,
+    return KeyedSubtree(
+      key: _anchor,
+      child: VbShellIconButton(
+        buttonKey: const ValueKey<String>('workspace-new-tab'),
+        icon: Icons.add,
+        tooltip: 'Nuevo espacio de trabajo',
+        onPressed: _open,
       ),
-      tooltip: 'Nuevo espacio de trabajo',
-      offset: const Offset(0, 40),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
-      itemBuilder: (context) => [
-        const PopupMenuItem(
-          value: {'title': 'Dashboard', 'route': '/dashboard'},
-          child: Row(
-            children: [
-              Icon(Icons.dashboard, size: 18),
-              SizedBox(width: 12),
-              Text('Dashboard'),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          value: {
-            'title': 'Navegador web',
-            'route':
-                '/tools/web?url=https%3A%2F%2Fwww.google.com&name=Navegador%20web',
-          },
-          child: Row(
-            children: [
-              Icon(Icons.language, size: 18),
-              SizedBox(width: 12),
-              Text('Navegador web'),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          value: {'title': 'Productos', 'route': '/inventory/products'},
-          child: Row(
-            children: [
-              Icon(Icons.shopping_bag, size: 18),
-              SizedBox(width: 12),
-              Text('Productos'),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          value: {'title': 'Ventas', 'route': '/sales/invoices'},
-          child: Row(
-            children: [
-              Icon(Icons.receipt, size: 18),
-              SizedBox(width: 12),
-              Text('Ventas'),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          value: {'title': 'Clientes', 'route': '/clientes'},
-          child: Row(
-            children: [
-              Icon(Icons.people, size: 18),
-              SizedBox(width: 12),
-              Text('Clientes'),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          value: {'title': 'Compras', 'route': '/purchases/suppliers'},
-          child: Row(
-            children: [
-              Icon(Icons.shopping_cart, size: 18),
-              SizedBox(width: 12),
-              Text('Compras'),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          value: {'title': 'POS', 'route': '/pos'},
-          child: Row(
-            children: [
-              Icon(Icons.point_of_sale, size: 18),
-              SizedBox(width: 12),
-              Text('POS'),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          value: {'title': 'Taller', 'route': '/taller/pegas'},
-          child: Row(
-            children: [
-              Icon(Icons.build, size: 18),
-              SizedBox(width: 12),
-              Text('Taller'),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          value: {'title': 'Contabilidad', 'route': '/accounting/accounts'},
-          child: Row(
-            children: [
-              Icon(Icons.account_balance, size: 18),
-              SizedBox(width: 12),
-              Text('Contabilidad'),
-            ],
-          ),
-        ),
-      ],
-      onSelected: (value) {
-        // Use read() instead of requiring a watch dependency
-        final workspaceManager = context.read<WorkspaceManager>();
-        workspaceManager.addWorkspace(
-          title: value['title']!,
-          initialRoute: value['route']!,
-        );
-      },
     );
   }
+}
+
+class _NewWorkspaceMenu extends StatelessWidget {
+  const _NewWorkspaceMenu({required this.options});
+
+  final List<_NewWorkspaceOption> options;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // This is a nine-command menu, NOT the seven-option `S-05` short select.
+    // Position and surface both come from the exclusive `O-02` owner; this
+    // widget supplies only bounded, scroll-safe command content.
+    return VbPopoverSurface(
+      width: 248,
+      child: SingleChildScrollView(
+        primary: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            for (final option in options)
+              Semantics(
+                button: true,
+                label: 'Abrir ${option.title} en un espacio nuevo',
+                excludeSemantics: true,
+                child: InkWell(
+                  key: ValueKey<String>('workspace-new-${option.route}'),
+                  onTap: () => Navigator.of(context).pop(option),
+                  child: SizedBox(
+                    height: 30,
+                    child: Row(
+                      children: <Widget>[
+                        const SizedBox(width: 11),
+                        Icon(option.icon, size: 16),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            option.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ),
+                        const SizedBox(width: 11),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Separador de 1 px entre dos significados distintos del grupo. `F-04` lo
+/// resuelve con el rol `border` del shell; no lleva color propio.
+class _ChromeSeparator extends StatelessWidget {
+  const _ChromeSeparator({required this.color});
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 1,
+        height: 16,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        color: color,
+      );
 }

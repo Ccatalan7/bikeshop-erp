@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:vinabike_erp/modules/hr/models/payroll_voucher.dart';
 import 'package:vinabike_erp/modules/hr/payroll/payroll_redesign_page.dart';
+import 'package:vinabike_erp/shared/themes/app_theme.dart';
+import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
 void main() {
   setUpAll(() {
@@ -68,18 +70,31 @@ void main() {
         }) async {},
         registerAdvance: ({
           required employeeId,
+          required employeeName,
           required amount,
           required paymentMethodId,
           required paymentAccountId,
           required paidAt,
           reference,
           notes,
+          required reasonCode,
+          required reasonExplanation,
+          workEndedOn,
+          originalReceipt,
           required operationKey,
         }) async {},
       );
 
       await tester.pumpWidget(
         MaterialApp(
+          // Sin el tema del resolver no existe `VinabikeThemeRoles`, y ningún
+          // componente compartido puede montarse acá: el esqueleto `X-01` de
+          // la carga se niega a pintar. El arnés sin tema no representaba a la
+          // app (2026-08-01).
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.all.first,
+            brightness: Brightness.light,
+          ),
           home: Scaffold(
             body: PayrollRedesignPage(actions: actions),
           ),

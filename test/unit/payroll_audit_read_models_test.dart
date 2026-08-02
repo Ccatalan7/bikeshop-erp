@@ -65,11 +65,35 @@ void main() {
     expect(allocation.evidence.statementImportId, 'import-1');
   });
 
+  test('advance ledger v2 preserves structured reason and original evidence',
+      () {
+    final page = PayrollAdvanceLedgerPage.fromMap(
+      _advancePageResponse(contractVersion: 2, withStructuredAudit: true),
+    );
+
+    final advance = page.items.single;
+    expect(advance.reason?.code, PayrollAdvanceReasonCode.shortWorkweek);
+    expect(advance.reason?.explanation, 'La semana terminó el jueves.');
+    expect(advance.reason?.workEndedOn, DateTime(2026, 7, 24));
+    expect(advance.originalEvidence?.fileName, 'comprobante.pdf');
+    expect(advance.originalEvidence?.sizeBytes, 2048);
+    expect(
+      advance.originalEvidence?.storageObjectId,
+      '7f2a1830-0000-4000-8000-000000000901',
+    );
+    expect(
+      advance.originalEvidence?.storageObjectVersion,
+      'storage-version-1',
+    );
+    expect(advance.originalEvidence?.storageObjectEtag, 'storage-etag-1');
+    expect(advance.originalEvidence?.createdBy, 'actor-1');
+  });
+
   test('advance service sends exact bounded keyset cursor parameters',
       () async {
     final database = _AuditReadDatabaseService()
-      ..responses['get_employee_advance_ledger_page_v1'] =
-          _advancePageResponse();
+      ..responses['get_employee_advance_ledger_page_v2'] =
+          _advancePageResponse(contractVersion: 2);
     final service = PayrollVoucherService(database);
     addTearDown(() {
       service.dispose();
@@ -89,7 +113,7 @@ void main() {
     expect(database.rpcCalls, hasLength(1));
     expect(
       database.rpcCalls.single.functionName,
-      'get_employee_advance_ledger_page_v1',
+      'get_employee_advance_ledger_page_v2',
     );
     expect(
       database.rpcCalls.single.params,
@@ -101,6 +125,37 @@ void main() {
       },
     );
     expect(database.selectCalls, isEmpty);
+  });
+
+  test('advance ledger degrades from an absent v2 to the released v1',
+      () async {
+    final database = _AuditReadDatabaseService()
+      ..errors['get_employee_advance_ledger_page_v2'] =
+          const PostgrestException(
+        message: 'Could not find the function '
+            'public.get_employee_advance_ledger_page_v2',
+        code: 'PGRST202',
+      )
+      ..responses['get_employee_advance_ledger_page_v1'] =
+          _advancePageResponse();
+    final service = PayrollVoucherService(database);
+    addTearDown(() {
+      service.dispose();
+      database.dispose();
+    });
+
+    final page = await service.fetchEmployeeAdvanceLedgerPage(
+      employeeId: 'employee-1',
+    );
+
+    expect(page.items, hasLength(1));
+    expect(
+      database.rpcCalls.map((call) => call.functionName),
+      <String>[
+        'get_employee_advance_ledger_page_v2',
+        'get_employee_advance_ledger_page_v1',
+      ],
+    );
   });
 
   test('advance service rejects an unbounded page before calling the backend',
@@ -125,6 +180,12 @@ void main() {
   test('advance capability reader falls back only when the RPC is absent',
       () async {
     final database = _AuditReadDatabaseService()
+      ..errors['get_employee_advance_ledger_page_v2'] =
+          const PostgrestException(
+        message: 'Could not find the function '
+            'public.get_employee_advance_ledger_page_v2',
+        code: 'PGRST202',
+      )
       ..errors['get_employee_advance_ledger_page_v1'] =
           const PostgrestException(
         message: 'Could not find the function '
@@ -143,7 +204,7 @@ void main() {
       ),
       isNull,
     );
-    expect(database.rpcCalls, hasLength(1));
+    expect(database.rpcCalls, hasLength(2));
   });
 
   test('a signature mismatch never degrades to the legacy reader', () async {
@@ -151,11 +212,11 @@ void main() {
     // función y dice «does not exist» en el hint típico, pero es deriva de
     // contrato (RPC instalada con OTRA firma), no un backend sin instalar.
     final database = _AuditReadDatabaseService()
-      ..errors['get_employee_advance_ledger_page_v1'] =
+      ..errors['get_employee_advance_ledger_page_v2'] =
           const PostgrestException(
         message: 'no function matches the given name and argument types: '
-            'public.get_employee_advance_ledger_page_v1(uuid, integer)',
-        details: 'function public.get_employee_advance_ledger_page_v1(uuid, '
+            'public.get_employee_advance_ledger_page_v2(uuid, integer)',
+        details: 'function public.get_employee_advance_ledger_page_v2(uuid, '
             'integer) does not exist',
         code: '42883',
       );
@@ -176,12 +237,43 @@ void main() {
     );
   });
 
+  test('a PostgREST signature hint never degrades to ledger v1', () async {
+    final database = _AuditReadDatabaseService()
+      ..errors['get_employee_advance_ledger_page_v2'] =
+          const PostgrestException(
+        message: 'Could not find the function '
+            'public.get_employee_advance_ledger_page_v2(p_employee_id) '
+            'in the schema cache',
+        details: 'Searched for the function with one named parameter.',
+        hint: 'Perhaps you meant to call the function '
+            'public.get_employee_advance_ledger_page_v2(p_employee_id, '
+            'p_page_size, p_cursor_paid_at, p_cursor_id)',
+        code: 'PGRST202',
+      );
+    final service = PayrollVoucherService(database);
+    addTearDown(() {
+      service.dispose();
+      database.dispose();
+    });
+
+    await expectLater(
+      service.tryFetchEmployeeAdvanceLedgerPage(
+        employeeId: 'employee-1',
+      ),
+      throwsA(
+        isA<PostgrestException>()
+            .having((error) => error.code, 'code', 'PGRST202'),
+      ),
+    );
+    expect(database.rpcCalls, hasLength(1));
+  });
+
   test('advance capability reader never hides authorization failures',
       () async {
     final database = _AuditReadDatabaseService()
-      ..errors['get_employee_advance_ledger_page_v1'] =
+      ..errors['get_employee_advance_ledger_page_v2'] =
           const PostgrestException(
-        message: 'permission denied',
+        message: 'permission denied for get_employee_advance_ledger_page_v2',
         code: '42501',
       );
     final service = PayrollVoucherService(database);
@@ -195,6 +287,83 @@ void main() {
         employeeId: 'employee-1',
       ),
       throwsA(isA<PostgrestException>()),
+    );
+  });
+
+  test('structured advance capability probes v2 without a legacy fallback',
+      () async {
+    final database = _AuditReadDatabaseService()
+      ..responses['get_employee_advance_ledger_page_v2'] =
+          _advancePageResponse(contractVersion: 2);
+    final service = PayrollVoucherService(database);
+    addTearDown(() {
+      service.dispose();
+      database.dispose();
+    });
+
+    expect(
+      await service.supportsStructuredEmployeeAdvanceAudit(
+        employeeId: 'employee-1',
+      ),
+      isTrue,
+    );
+    expect(database.rpcCalls, hasLength(1));
+    final call = database.rpcCalls.single;
+    expect(
+      call.functionName,
+      'get_employee_advance_ledger_page_v2',
+    );
+    expect(
+      call.params,
+      <String, dynamic>{
+        'p_employee_id': 'employee-1',
+        'p_page_size': 1,
+        'p_cursor_paid_at': null,
+        'p_cursor_id': null,
+      },
+    );
+  });
+
+  test('absent structured advance capability returns false before any upload',
+      () async {
+    final database = _AuditReadDatabaseService()
+      ..errors['get_employee_advance_ledger_page_v2'] =
+          const PostgrestException(
+        message: 'Could not find the function '
+            'public.get_employee_advance_ledger_page_v2',
+        code: 'PGRST202',
+      );
+    final service = PayrollVoucherService(database);
+    addTearDown(() {
+      service.dispose();
+      database.dispose();
+    });
+
+    expect(
+      await service.supportsStructuredEmployeeAdvanceAudit(
+        employeeId: 'employee-1',
+      ),
+      isFalse,
+    );
+    expect(database.rpcCalls, hasLength(1));
+  });
+
+  test('structured advance capability rejects a crossed v2 response', () async {
+    final crossed = _advancePageResponse(contractVersion: 2)
+      ..['employee_id'] = 'employee-crossed';
+    final database = _AuditReadDatabaseService()
+      ..responses['get_employee_advance_ledger_page_v2'] = crossed;
+    final service = PayrollVoucherService(database);
+    addTearDown(() {
+      service.dispose();
+      database.dispose();
+    });
+
+    await expectLater(
+      service.supportsStructuredEmployeeAdvanceAudit(
+        employeeId: 'employee-1',
+      ),
+      throwsStateError,
     );
   });
 
@@ -340,9 +509,12 @@ class _AuditReadDatabaseService extends DatabaseService {
   }
 }
 
-Map<String, dynamic> _advancePageResponse() {
+Map<String, dynamic> _advancePageResponse({
+  int contractVersion = 1,
+  bool withStructuredAudit = false,
+}) {
   return <String, dynamic>{
-    'contract_version': 1,
+    'contract_version': contractVersion,
     'employee_id': 'employee-1',
     'totals': <String, dynamic>{
       'delivered_amount': 150000,
@@ -371,6 +543,27 @@ Map<String, dynamic> _advancePageResponse() {
         },
         'reference': 'ADV-001',
         'notes': 'Anticipo registrado',
+        if (withStructuredAudit)
+          'reason': <String, dynamic>{
+            'code': 'short_workweek',
+            'explanation': 'La semana terminó el jueves.',
+            'work_ended_on': '2026-07-24',
+          },
+        if (withStructuredAudit)
+          'original_evidence': <String, dynamic>{
+            'id': 'advance-evidence-1',
+            'app_file_id': 'app-file-1',
+            'file_name': 'comprobante.pdf',
+            'mime_type': 'application/pdf',
+            'size_bytes': 2048,
+            'sha256': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+                'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            'storage_object_id': '7f2a1830-0000-4000-8000-000000000901',
+            'storage_object_version': 'storage-version-1',
+            'storage_object_etag': 'storage-etag-1',
+            'created_at': '2026-07-29T15:00:02Z',
+            'created_by': 'actor-1',
+          },
         'actor': <String, dynamic>{
           'id': 'actor-1',
           'name': 'Claudio Catalán',

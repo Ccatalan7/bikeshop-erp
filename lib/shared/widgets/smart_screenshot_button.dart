@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../services/right_toolbar_service.dart';
 import '../services/smart_screenshot_service.dart';
 import '../services/workspace_manager.dart';
+import 'vb_shell_icon_button.dart';
 import 'workspace_shell_scope.dart';
 
 class SmartScreenshotButton extends StatelessWidget {
@@ -16,19 +17,24 @@ class SmartScreenshotButton extends StatelessWidget {
     final theme = Theme.of(context);
     final chrome = WorkspaceChromeStyle.maybeOf(context);
 
+    // `A-02` sobre shell, mismo dueño que el resto del grupo.
+    if (chrome != null) {
+      return VbShellIconButton(
+        buttonKey: const ValueKey<String>('workspace-smart-screenshot'),
+        icon: Icons.screenshot_monitor_outlined,
+        tooltip: 'Capturas',
+        onPressed: () => _showScreenshotDialog(context),
+      );
+    }
     return IconButton(
       visualDensity: VisualDensity.compact,
       padding: EdgeInsets.zero,
-      constraints: chrome == null
-          ? null
-          : const BoxConstraints.tightFor(width: 28, height: 28),
       tooltip: 'Capturas',
       onPressed: () => _showScreenshotDialog(context),
       icon: Icon(
         Icons.screenshot_monitor_outlined,
         size: 20,
-        color: chrome?.mutedForeground ??
-            theme.colorScheme.onSurface.withValues(alpha: 0.76),
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.76),
       ),
     );
   }

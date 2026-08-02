@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../../../../shared/widgets/vb_notice.dart';
 import '../theme/payroll_tokens.dart';
 import 'payroll_accent_action.dart';
 
@@ -104,7 +106,9 @@ class PayrollPersonRowVM {
     required this.expanded,
     required this.onToggle,
     required this.onAction,
-    this.bankAccountCaption,
+    this.blockedReason = '',
+    this.blockedReasonIsPersonal = false,
+    this.destination,
     this.shortcuts = const <PayrollRowShortcutVM>[],
   });
   final String name;
@@ -133,13 +137,31 @@ class PayrollPersonRowVM {
   /// Empty when the row is intentionally read-only.
   final String actionLabel; // "Pagar" | "Ver pago" | "Configurar método"
   final PayrollRowActionMode actionMode;
+
+  /// Por qué esta fila no ofrece acción, en una frase.
+  ///
+  /// `5c`: «Inhabilitado ≠ oculto: aparece cuando falta permiso o la semana
+  /// está cerrada, y **siempre acompañado del motivo**». Sin esto, la forma
+  /// pasiva dice que no se puede y calla lo único que el operador necesita —
+  /// qué destrabaría la fila—, y el estado se vuelve un muro sin puerta.
+  final String blockedReason;
+
+  /// Si el motivo habla de **esta persona** o del estado de la semana.
+  ///
+  /// En escritorio da lo mismo: el motivo vive en un tooltip y no cuesta
+  /// espacio. En el teléfono sí importa — un motivo de la semana es idéntico
+  /// en todas las tarjetas, y repetirlo cuatro veces se comió los «cuatro
+  /// registros completos en el primer viewport» que pide `5l`, para decir algo
+  /// que la barra ya dice con `Confirmar semana`. El motivo de la semana lo
+  /// explica el marco; la tarjeta explica lo que es cierto de su persona.
+  final bool blockedReasonIsPersonal;
   final String hours; // "38,5 h"
   final String rate; // "$4.490 / h"
   final String paymentsSummary;
 
-  /// Cuenta desde la que se paga, tal como la muestra el banco
-  /// (`Banco de Chile ****9082`). Sólo vive en la fila abierta.
-  final String? bankAccountCaption;
+  /// A dónde llega la transferencia. Sólo vive en la fila abierta, y es nula
+  /// cuando el método es efectivo: ahí no hay cuenta que nombrar.
+  final PayrollRowDestinationVM? destination;
 
   /// Salidas de la fila abierta. Son atajos, no decisiones: ninguna de ellas
   /// paga ni confirma nada.
@@ -174,6 +196,25 @@ class PayrollPersonRowVM {
 
 /// Una salida de la fila abierta: nombre y a dónde lleva. Nunca ejecuta un
 /// movimiento de dinero — para eso está la decisión de la fila.
+/// La cuenta **destino** de una transferencia, o la ausencia declarada de una.
+///
+/// Es un tipo y no un `String?` porque «no la sé» y «no aplica» son hechos
+/// distintos, y la pantalla los pinta distinto: uno es una glosa neutra y el
+/// otro un pendiente accionable que ya tiene su atajo en la misma fila.
+@immutable
+class PayrollRowDestinationVM {
+  /// `Banco Estado · Cuenta Vista · •••• 4821`, ya enmascarada por el host.
+  const PayrollRowDestinationVM.known(String this.label) : missing = false;
+
+  /// La persona se paga por transferencia y no tiene cuenta registrada.
+  const PayrollRowDestinationVM.missing()
+      : label = null,
+        missing = true;
+
+  final String? label;
+  final bool missing;
+}
+
 class PayrollRowShortcutVM {
   const PayrollRowShortcutVM({
     required this.label,
@@ -221,6 +262,7 @@ class PayrollQueueSurface extends StatelessWidget {
     required this.onNextAction,
     this.dense = false,
     this.excludedNote,
+    this.blockedNote,
   });
 
   final List<PayrollWeekCardVM> weeks;
@@ -233,6 +275,21 @@ class PayrollQueueSurface extends StatelessWidget {
   /// Quién quedó fuera del cálculo y por qué. Nulo cuando no hay nadie: una
   /// franja de advertencia vacía enseña a ignorar las advertencias.
   final String? excludedNote;
+
+  /// Por qué **todas** las filas bloqueadas lo están, cuando comparten motivo.
+  ///
+  /// `5c` exige que un estado inhabilitado nunca aparezca sin su razón, y esa
+  /// razón tiene que verse **con el puntero**, no sólo con lector de pantalla.
+  /// El vehículo NO puede ser un `Tooltip`: se comprobó en un proceso limpio
+  /// que un `OverlayPortal` visible dentro del `LayoutBuilder` de esta tabla
+  /// revienta al cambiar de banda (§4.24). El que sí sirve lo dibuja el propio
+  /// `7a`: «la franja del pie manda a Asistencias» — una nota en línea, del
+  /// dueño canónico `E-04 · VbNotice`, que no monta nada sobre el overlay.
+  ///
+  /// Nulo cuando no hay filas bloqueadas **o cuando no comparten motivo**: una
+  /// sola franja no puede hablar por dos razones distintas sin mentirle a una.
+  /// Ese caso lo cubre la fila abierta, que siempre lleva el suyo.
+  final String? blockedNote;
 
   /// true cuando el ancho útil es 1116 (sidebar expandido) o menor: el método
   /// baja como segunda línea de la persona y se abrevian los headers.
@@ -253,7 +310,23 @@ class PayrollQueueSurface extends StatelessWidget {
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: EdgeInsets.only(bottom: dense ? 11 : 12),
               children: <Widget>[
-                _DecisionTable(rows: rows, totals: totals, dense: dense),
+                _DecisionTable(
+                  rows: rows,
+                  totals: totals,
+                  dense: dense,
+                  footerReason: blockedNote,
+                ),
+                if (blockedNote != null) ...<Widget>[
+                  SizedBox(height: dense ? 11 : 12),
+                  KeyedSubtree(
+                    key: const ValueKey<String>('payroll-blocked-note'),
+                    child: VbNotice(
+                      tone: VbNoticeTone.warning,
+                      title: 'Esta semana todavía no se puede pagar',
+                      body: blockedNote,
+                    ),
+                  ),
+                ],
                 if (excludedNote != null) ...<Widget>[
                   SizedBox(height: dense ? 11 : 12),
                   _ExcludedStrip(
@@ -262,8 +335,17 @@ class PayrollQueueSurface extends StatelessWidget {
                     dense: dense,
                   ),
                 ],
-                SizedBox(height: dense ? 11 : 12),
-                _AttendanceStrip(onOpen: onOpenAttendance, dense: dense),
+                // `5b`: a 1116 la **franja de Asistencias se oculta**. No es
+                // una pérdida: lo que esa franja recuerda —que las horas se
+                // editan en Asistencias— ya lo dice la nota de personas fuera
+                // del cálculo cuando hay alguna, y la salida real vive en la
+                // fila abierta (`Abrir en Asistencias ↗`). Con el sidebar
+                // expandido el canvas no sobra, y una franja permanente que
+                // sólo recuerda una regla es lo primero que se retira.
+                if (!dense) ...<Widget>[
+                  SizedBox(height: dense ? 11 : 12),
+                  _AttendanceStrip(onOpen: onOpenAttendance, dense: dense),
+                ],
               ],
             ),
           ),
@@ -513,11 +595,20 @@ class _WeekCard extends StatelessWidget {
 }
 
 class _DecisionTable extends StatelessWidget {
-  const _DecisionTable(
-      {required this.rows, required this.totals, required this.dense});
+  const _DecisionTable({
+    required this.rows,
+    required this.totals,
+    required this.dense,
+    required this.footerReason,
+  });
   final List<PayrollPersonRowVM> rows;
   final PayrollWeekTotalsVM totals;
   final bool dense;
+
+  /// El motivo que YA dice la franja del pie, si dice alguno. La fila abierta
+  /// no lo repite: `7a` dibuja **tres** paneles, y un cuarto que copia palabra
+  /// por palabra un aviso visible cinco centímetros más abajo es ruido.
+  final String? footerReason;
 
   @override
   Widget build(BuildContext context) {
@@ -544,6 +635,7 @@ class _DecisionTable extends StatelessWidget {
         final body = SizedBox(
           width: tableWidth,
           child: _DecisionTableBody(
+            footerReason: footerReason,
             rows: rows,
             totals: totals,
             layout: layout,
@@ -576,11 +668,13 @@ class _DecisionTableBody extends StatelessWidget {
     required this.rows,
     required this.totals,
     required this.layout,
+    required this.footerReason,
   });
 
   final List<PayrollPersonRowVM> rows;
   final PayrollWeekTotalsVM totals;
   final _QueueGridLayout layout;
+  final String? footerReason;
 
   @override
   Widget build(BuildContext context) {
@@ -589,6 +683,10 @@ class _DecisionTableBody extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Container(
+          // Las dos franjas de cabecera llevan identidad porque son dos owners
+          // distintos con dos tokens distintos, y el esqueleto de carga tiene
+          // que reservar LAS DOS (revisión de Codex, 2026-08-01).
+          key: const ValueKey<String>('payroll-table-title'),
           constraints: BoxConstraints(
             minHeight: layout.dense ? 42 : PayrollTokens.tableHeaderH,
           ),
@@ -630,6 +728,7 @@ class _DecisionTableBody extends StatelessWidget {
           ),
         ),
         Container(
+          key: const ValueKey<String>('payroll-table-columns'),
           height: PayrollTokens.tableColsH,
           padding: EdgeInsets.symmetric(
             horizontal: layout.horizontalPadding,
@@ -656,12 +755,100 @@ class _DecisionTableBody extends StatelessWidget {
             ],
           ),
         ),
-        for (final PayrollPersonRowVM row in rows)
-          _PersonRow(vm: row, layout: layout),
+        _PersonRows(
+          rows: rows,
+          layout: layout,
+          footerReason: footerReason,
+        ),
       ],
     );
   }
 }
+
+/// Las filas y su navegación por teclado.
+///
+/// 7a lo dice en su propio frame —«Solo una fila abierta a la vez ↑↓ → ↵»— y
+/// hasta acá era sólo un rótulo: la conducta no existía. El scope la
+/// implementa, y es **determinista**: `↑`/`↓` mueven el foco a la fila
+/// anterior o siguiente, no a los controles de adentro, porque la travesía
+/// direccional por defecto entra al caret y al botón de decisión y el operador
+/// pierde el hilo de la tabla.
+///
+/// «Una sola abierta a la vez» ya lo garantiza el host, que guarda **un** id
+/// expandido; acá se conserva esa propiedad al abrir con el teclado.
+/// Mover el foco una fila arriba o abajo.
+@immutable
+class _MoveRowIntent extends Intent {
+  const _MoveRowIntent(this.delta);
+  final int delta;
+}
+
+class _PersonRows extends StatefulWidget {
+  const _PersonRows({
+    required this.rows,
+    required this.layout,
+    required this.footerReason,
+  });
+  final String? footerReason;
+
+  final List<PayrollPersonRowVM> rows;
+  final _QueueGridLayout layout;
+
+  @override
+  State<_PersonRows> createState() => _PersonRowsState();
+}
+
+class _PersonRowsState extends State<_PersonRows> {
+  final List<FocusNode> _nodes = <FocusNode>[];
+
+  void _sync(int length) {
+    while (_nodes.length < length) {
+      _nodes.add(FocusNode(debugLabel: 'payroll-row-${_nodes.length}'));
+    }
+    while (_nodes.length > length) {
+      _nodes.removeLast().dispose();
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final node in _nodes) {
+      node.dispose();
+    }
+    super.dispose();
+  }
+
+  void _move(int from, int delta) {
+    final next = from + delta;
+    if (next < 0 || next >= _nodes.length) return;
+    _nodes[next].requestFocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _sync(widget.rows.length);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        for (var index = 0; index < widget.rows.length; index++)
+          _PersonRow(
+            footerReason: widget.footerReason,
+            vm: widget.rows[index],
+            layout: widget.layout,
+            focusNode: _nodes[index],
+            onMove: (delta) => _move(index, delta),
+          ),
+      ],
+    );
+  }
+}
+
+/// `5m`, leído del frame publicado por Design (turno 5, `5m-p1`): en la banda
+/// de tablet la fila mide **60** y el control de decisión **44 × 200**. El 44
+/// ya tiene dueño —`PayrollTokens.touchMin`—, así que sólo viajan acá los dos
+/// que no lo tienen.
+const double tabletRowHeight = 60;
+const double tabletDecisionWidth = 200;
 
 /// Reparte el espacio desde reglas `min / max / flex`. Las columnas monetarias
 /// y de decisión nunca dependen de un ancho fijo de un mockup.
@@ -669,6 +856,7 @@ class _QueueGridLayout {
   const _QueueGridLayout({
     required this.dense,
     required this.showMethod,
+    required this.tablet,
     required this.showAdvances,
     required this.horizontalPadding,
     required this.leadingWidth,
@@ -678,6 +866,14 @@ class _QueueGridLayout {
 
   final bool dense;
   final bool showMethod;
+
+  /// La banda de tablet de `5m` (834): cuatro columnas, fila de **60** y el
+  /// control de decisión a **44 × 200**.
+  ///
+  /// «El mismo control de decisión crece a 44 de alto y 200 de ancho, **sin
+  /// cambiar de forma ni de verbo**» — anotación literal del frame. No es un
+  /// control distinto: es el mismo, táctil.
+  final bool tablet;
 
   /// `ANTICIPOS` sobrevive hasta 1116 (5b) y desaparece en tablet (5m), donde
   /// la aritmética completa vive en la fila abierta y en el chip.
@@ -700,6 +896,9 @@ class _QueueGridLayout {
     // 5m: a 834 la tabla queda en persona / total / a pagar / decisión. El
     // umbral es 900 porque bajo ese ancho el chrome ya es el header único.
     final showAdvances = width >= 900;
+    // 834 es el ancho declarado de 5m; 720 es el piso desde el que la tabla
+    // sigue siendo tabla. Bajo eso la superficie ya se compone en tarjetas.
+    final tablet = !showMethod && width >= 720 && width < 900;
     final horizontalPadding = width < 720 ? 12.0 : (dense ? 15.0 : 16.0);
     // The disclosure is a real focusable control, not a decorative glyph.
     // Reserve its full desktop target so keyboard and pointer users receive
@@ -727,7 +926,12 @@ class _QueueGridLayout {
             const _AdaptiveColumnRule(min: 82, max: 180, flex: 1.35),
             // La columna de decisión recibe prioridad antes que identidad y
             // conserva un único control intrínseco al ancho real de 1116 px.
-            const _AdaptiveColumnRule(min: 130, max: 280, flex: 2.65),
+            // `5m`: en tablet la decisión pide **200** de ancho, no 130.
+            _AdaptiveColumnRule(
+              min: tablet ? tabletDecisionWidth : 130,
+              max: 280,
+              flex: 2.65,
+            ),
           ];
     final contentWidth =
         width - horizontalPadding * 2 - leadingWidth - gap * rules.length;
@@ -735,6 +939,7 @@ class _QueueGridLayout {
     return _QueueGridLayout(
       dense: dense,
       showMethod: showMethod,
+      tablet: tablet,
       showAdvances: showAdvances,
       horizontalPadding: horizontalPadding,
       leadingWidth: leadingWidth,
@@ -849,19 +1054,76 @@ class _ColLabel extends StatelessWidget {
   }
 }
 
-class _PersonRow extends StatelessWidget {
-  const _PersonRow({required this.vm, required this.layout});
+class _PersonRow extends StatefulWidget {
+  const _PersonRow({
+    required this.footerReason,
+    required this.vm,
+    required this.layout,
+    required this.focusNode,
+    required this.onMove,
+  });
   final PayrollPersonRowVM vm;
   final _QueueGridLayout layout;
+  final FocusNode focusNode;
+  final ValueChanged<int> onMove;
+  final String? footerReason;
+
+  @override
+  State<_PersonRow> createState() => _PersonRowState();
+}
+
+class _PersonRowState extends State<_PersonRow> {
+  bool _focused = false;
+
+  PayrollPersonRowVM get vm => widget.vm;
+  _QueueGridLayout get layout => widget.layout;
 
   @override
   Widget build(BuildContext context) {
     final visual = PayrollVisualTokens.of(context);
+    return FocusableActionDetector(
+      focusNode: widget.focusNode,
+      onShowFocusHighlight: (value) {
+        if (value != _focused) setState(() => _focused = value);
+      },
+      shortcuts: const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.arrowDown): _MoveRowIntent(1),
+        SingleActivator(LogicalKeyboardKey.arrowUp): _MoveRowIntent(-1),
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+      },
+      actions: <Type, Action<Intent>>{
+        _MoveRowIntent: CallbackAction<_MoveRowIntent>(
+          onInvoke: (intent) {
+            widget.onMove(intent.delta);
+            return null;
+          },
+        ),
+        // Enter abre y cierra la misma fila: es el mismo verbo del caret, y el
+        // host sigue siendo el dueño de que haya una sola abierta.
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            vm.onToggle();
+            return null;
+          },
+        ),
+      },
+      child: Semantics(
+        container: true,
+        selected: _focused,
+        child: _buildRow(context, visual),
+      ),
+    );
+  }
+
+  Widget _buildRow(BuildContext context, PayrollVisualTokens visual) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Container(
-          constraints: const BoxConstraints(minHeight: PayrollTokens.rowH),
+          constraints: BoxConstraints(
+            minHeight: layout.tablet ? tabletRowHeight : PayrollTokens.rowH,
+          ),
           padding: EdgeInsets.symmetric(
             horizontal: layout.horizontalPadding,
             vertical: 6,
@@ -873,13 +1135,19 @@ class _PersonRow extends StatelessWidget {
             color: vm.expanded ? visual.surfaceSunken : visual.surface,
             border: Border(bottom: BorderSide(color: visual.border)),
           ),
-          foregroundDecoration: vm.expanded
+          // El foco de teclado tiene que verse: sin anillo, `↑`/`↓` mueven
+          // algo que el operador no puede ubicar.
+          foregroundDecoration: _focused
               ? BoxDecoration(
-                  border: Border(
-                    left: BorderSide(color: visual.accent, width: 3),
-                  ),
+                  border: Border.all(color: visual.accent, width: 2),
                 )
-              : null,
+              : (vm.expanded
+                  ? BoxDecoration(
+                      border: Border(
+                        left: BorderSide(color: visual.accent, width: 3),
+                      ),
+                    )
+                  : null),
           child: _RowGrid(
             layout: layout,
             children: <Widget>[
@@ -892,7 +1160,18 @@ class _PersonRow extends StatelessWidget {
                 excludeSemantics: true,
                 child: IconButton(
                   onPressed: vm.onToggle,
-                  tooltip: vm.expanded ? 'Ocultar detalle' : 'Mostrar detalle',
+                  // **Sin `tooltip:`, y no por gusto.** `IconButton.tooltip`
+                  // construye un `Tooltip`, que es un `OverlayPortal`; con uno
+                  // visible dentro del `LayoutBuilder` de esta tabla, cambiar
+                  // de banda tumba el módulo. Reproducido en proceso limpio
+                  // (`84436`, sin hot reload): hover real sobre el caret,
+                  // `1360 → 834`, y cae con `A _RenderLayoutBuilder was
+                  // mutated in _RenderLayoutBuilder.performLayout`. **Este
+                  // defecto es ANTERIOR a `5c`** —el caret siempre tuvo su
+                  // tooltip— y lo único que hizo `5c` fue encontrarlo.
+                  // No se pierde nada: el `Semantics` de arriba ya dice
+                  // «Mostrar/Ocultar detalle de <persona>» palabra por
+                  // palabra, y el estado se ve en el propio glifo (▸ / ▾).
                   mouseCursor: SystemMouseCursors.click,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints.tightFor(
@@ -1034,47 +1313,262 @@ class _PersonRow extends StatelessWidget {
                               ? visual.inkDisabled
                               : visual.ink)),
                 ),
-              _RowStateActions(vm: vm, dense: layout.dense),
+              _RowStateActions(
+                vm: vm,
+                tablet: layout.tablet,
+              ),
             ],
           ),
         ),
-        if (vm.expanded) _RowDisclosure(vm: vm, dense: layout.dense),
+        if (vm.expanded)
+          _RowDisclosure(
+            vm: vm,
+            dense: layout.dense,
+            footerReason: widget.footerReason,
+          ),
       ],
     );
   }
 }
 
-class _RowStateActions extends StatelessWidget {
-  const _RowStateActions({required this.vm, required this.dense});
+// ── `5c` · gramática de decisión ────────────────────────────────────────────
+//
+// El tablero `5c` es **el contrato del control de decisión**: cinco formas por
+// cinco estados. Cualquier fila futura —vacaciones, licencia, finiquito— cae
+// en una de las cinco, o se declara una sexta en Design antes de dibujarla.
+//
+//   1. pagada          → el chip ES el botón: abre el respaldo   (`_PaidStatusAction`)
+//   2. falta método    → tonal con caret: opciones               (`_StatusActionMenu`)
+//   3. transferencia   → acción directa, estado implícito        (`_DirectRowAction`)
+//   4. efectivo        → misma jerarquía, otra tesorería         (`_DirectRowAction`)
+//   5. bloqueo         → texto pasivo, sin falsa acción          (`_PassiveDecision`)
+//
+// Medidas **leídas literales del turno 7** (`7a`, canvas «Nóminas - Rediseño»),
+// no estimadas de una captura: `height:28 · max-width:186 · padding:0 10 ·
+// border-radius:8 · gap:6 · border:1`, rótulo `500 11px` (`600` en el
+// primario), meta mono `9.5px` al 75 %, `›` de 12 al 60 % y `▾` de 9 detrás de
+// un divisor de 1 con 7 de separación. La forma pasiva es
+// `font:400 11px · color inkFaint`, sin fondo, sin borde y sin radio.
+const double decisionCellHeight = 28;
+const double decisionCellMaxWidth = 186;
+const double decisionCellPadH = 10;
+const double decisionCellGap = 6;
+const double decisionLabelSize = 11;
+const double decisionMetaSize = 9.5;
 
-  final PayrollPersonRowVM vm;
-  final bool dense;
+/// `5c` · FOCO: **anillo de 3 px por fuera del borde, nunca reemplazándolo**, y
+/// **visible con teclado, no con clic**.
+///
+/// Las dos mitades de esa regla salen gratis si el anillo no pide el foco por
+/// su cuenta: este `Focus` sólo se entera de que lo tomó el control de adentro
+/// (`hasFocus` incluye a los descendientes), y en Material un `InkWell` **no
+/// mueve el foco al tocarlo con el puntero** — se comprobó en el SDK montado,
+/// no se supuso—, así que el anillo aparece con `Tab`/`↑`/`↓` y no con el clic.
+///
+/// Se dibuja con un hijo posicionado a −3 y `Clip.none`: queda literalmente por
+/// fuera de los límites del control, no ocupa layout y no toca su borde.
+class _DecisionFocusRing extends StatefulWidget {
+  const _DecisionFocusRing({required this.child, this.focusable = false});
+
+  final Widget child;
+
+  /// La forma pasiva sí es un destino de teclado: es la única manera de que
+  /// quien no usa puntero alcance el motivo. Las activas ya traen el suyo
+  /// dentro del `InkWell`.
+  final bool focusable;
+
+  @override
+  State<_DecisionFocusRing> createState() => _DecisionFocusRingState();
+}
+
+class _DecisionFocusRingState extends State<_DecisionFocusRing> {
+  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
     final visual = PayrollVisualTokens.of(context);
-    final tone = vm.toneFor(visual);
+    return Focus(
+      canRequestFocus: widget.focusable,
+      skipTraversal: !widget.focusable,
+      onFocusChange: (bool value) {
+        if (value != _focused) setState(() => _focused = value);
+      },
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: <Widget>[
+          widget.child,
+          if (_focused)
+            Positioned(
+              left: -3,
+              top: -3,
+              right: -3,
+              bottom: -3,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  key: const ValueKey<String>('payroll-decision-focus-ring'),
+                  decoration: BoxDecoration(
+                    borderRadius:
+                        BorderRadius.circular(PayrollTokens.rField + 3),
+                    // accent-fill: focus ring. `5c` lo fija en el acento al
+                    // 35 %; en oscuro ese acento es el del preset, que es
+                    // exactamente lo que publica `interaction.focusRing`.
+                    border: Border.all(
+                      color: visual.accent.withValues(alpha: 0.35),
+                      width: 3,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// El envoltorio común de las tres formas tonales de `5c`. Una sola pieza para
+/// que «cambiar de estado» no signifique cambiar de tamaño ni de forma.
+class _DecisionShell extends StatelessWidget {
+  const _DecisionShell({
+    required this.tone,
+    required this.tablet,
+    required this.children,
+  });
+
+  final PayrollStateTone tone;
+
+  /// `5m`: en tablet el MISMO control crece a 44 × 200, sin cambiar de forma.
+  final bool tablet;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minHeight: tablet ? PayrollTokens.touchMin : decisionCellHeight,
+        minWidth: tablet ? tabletDecisionWidth : 0,
+        maxWidth: tablet ? double.infinity : decisionCellMaxWidth,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: decisionCellPadH),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: children,
+        ),
+      ),
+    );
+  }
+}
+
+/// `5c` · forma 5: **texto pasivo, sin falsa acción**.
+///
+/// No es una píldora atenuada: una píldora con relleno y borde es la misma
+/// figura que las cuatro formas activas, y con producción en borrador **todas**
+/// las filas del módulo caen aquí — la tabla entera parecía accionable y no lo
+/// era. Va el hecho en texto, con el motivo al alcance del puntero y del
+/// lector de pantalla, y sin cursor de mano.
+class _PassiveDecision extends StatelessWidget {
+  const _PassiveDecision({
+    required this.label,
+    required this.reason,
+    required this.name,
+  });
+
+  final String label;
+  final String reason;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = PayrollVisualTokens.of(context);
+    final Widget text = Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.right,
+      style: visual.bodyS.copyWith(
+        fontSize: decisionLabelSize,
+        fontWeight: FontWeight.w400,
+        color: visual.inkFaint,
+      ),
+    );
+    return _DecisionFocusRing(
+      focusable: true,
+      child: Semantics(
+        key: ValueKey<String>('payroll-row-blocked-$name'),
+        // `aria-disabled` + `aria-describedby` de `5c`: se anuncia que hay un
+        // estado y que no está habilitado, y el motivo viaja con él.
+        //
+        // `container: true` no es decoración: sin él la anotación se funde en
+        // el nodo de la FILA, que sí trae el botón del caret — y el lector
+        // terminaba anunciando la fila entera como un botón deshabilitado,
+        // cuando el caret se puede abrir perfectamente. Lo bloqueado es la
+        // decisión, no la fila.
+        container: true,
+        enabled: false,
+        label: reason.isEmpty ? '$label. $name' : '$label. $name. $reason',
+        // Acá el motivo viaja como PROPIEDAD semántica, no como `Tooltip`.
+        //
+        // `5c` pide «el motivo en tooltip» y se implementó así primero, pero un
+        // `Tooltip` es un `OverlayPortal` y **uno VISIBLE** dentro del
+        // `LayoutBuilder` de esta tabla se reactiva en el reparenting del
+        // cambio de banda y muta un `_RenderLayoutBuilder` desde dentro del
+        // `performLayout` de otro: el módulo se cae. Medido en proceso limpio,
+        // sin hot reload. Montado y **sin mostrar** no falla — lo que importa
+        // es que esté visible, no cuántos haya—, y el `tooltip:` del caret,
+        // anterior a `5c`, lo producía igual: el defecto no era de esta celda.
+        // La prueba de widget NO lo reproduce; necesita el relayout real de la
+        // ventana, por eso el contrato es estructural.
+        //
+        // **El motivo visible NO se pierde:** vive donde lo dibuja el propio
+        // `7a` —la franja del pie—, en el aviso en línea canónico
+        // `E-04 · VbNotice`, que no monta nada sobre el overlay. Se dice una
+        // vez cuando todas las filas comparten motivo, y si no lo comparten la
+        // franja calla y cada fila abierta lleva el suyo. Esta propiedad es el
+        // canal para lectores de pantalla, no el sustituto de aquello.
+        tooltip: reason,
+        excludeSemantics: true,
+        child: text,
+      ),
+    );
+  }
+}
+
+class _RowStateActions extends StatelessWidget {
+  const _RowStateActions({
+    required this.vm,
+    this.tablet = false,
+  });
+
+  final PayrollPersonRowVM vm;
+
+  /// Banda de tablet de `5m`: el control crece a 44 sin cambiar de forma.
+  final bool tablet;
+
+  @override
+  Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerRight,
       child: KeyedSubtree(
         key: ValueKey<String>('payroll-row-actions-${vm.name}'),
         child: switch (vm.actionMode) {
-          PayrollRowActionMode.none => _StatusPill(
+          PayrollRowActionMode.none => _PassiveDecision(
               label: vm.statusLabel,
-              tone: tone,
-              fontSize: dense ? 8.5 : 9,
+              reason: vm.blockedReason,
+              name: vm.name,
             ),
           PayrollRowActionMode.direct => _DirectRowAction(
               vm: vm,
-              dense: dense,
+              tablet: tablet,
             ),
           PayrollRowActionMode.paidDetails => _PaidStatusAction(
               vm: vm,
-              dense: dense,
+              tablet: tablet,
             ),
           PayrollRowActionMode.menu => _StatusActionMenu(
               vm: vm,
-              dense: dense,
+              tablet: tablet,
             ),
         },
       ),
@@ -1083,9 +1577,14 @@ class _RowStateActions extends StatelessWidget {
 }
 
 class _DirectRowAction extends StatelessWidget {
-  const _DirectRowAction({required this.vm, required this.dense});
+  const _DirectRowAction({
+    required this.vm,
+    this.tablet = false,
+  });
   final PayrollPersonRowVM vm;
-  final bool dense;
+
+  /// `5m`: en la banda de tablet el mismo control crece a 44.
+  final bool tablet;
 
   @override
   Widget build(BuildContext context) {
@@ -1096,19 +1595,37 @@ class _DirectRowAction extends StatelessWidget {
     if (primary) {
       // Accent-filled interaction is owned by the canonical action so fill,
       // foreground and overlays stay one contract.
-      return IntrinsicWidth(
-        child: Semantics(
-          label: '${vm.statusLabel}.',
-          child: KeyedSubtree(
-            key: ValueKey<String>('payroll-row-action-${vm.name}'),
-            child: PayrollAccentAction(
-              actionKey: ValueKey<String>('payroll-row-action-tap-${vm.name}'),
-              label: vm.actionLabel,
-              onTap: vm.onAction,
-              minHeight: dense ? 27 : 28,
-              fontSize: dense ? 10.5 : 11,
-              horizontalPadding: dense ? 9 : 10,
-              verticalPadding: 5,
+      return _DecisionFocusRing(
+        child: ConstrainedBox(
+          // `5m`: en tablet el control mide **200** de ancho. Fuera de esa
+          // banda sigue siendo intrínseco al verbo, que es lo que pide 5a.
+          constraints: BoxConstraints(
+            minWidth: tablet ? tabletDecisionWidth : 0,
+            maxWidth: tablet ? double.infinity : decisionCellMaxWidth,
+          ),
+          child: IntrinsicWidth(
+            child: Semantics(
+              label: '${vm.statusLabel}.',
+              child: KeyedSubtree(
+                key: ValueKey<String>('payroll-row-action-${vm.name}'),
+                child: PayrollAccentAction(
+                  actionKey:
+                      ValueKey<String>('payroll-row-action-tap-${vm.name}'),
+                  label: vm.actionLabel,
+                  onTap: vm.onAction,
+                  // `5m`: en tablet el MISMO control crece a 44 —el objetivo
+                  // táctil que ya publica `PayrollTokens.touchMin`— sin cambiar
+                  // de forma ni de verbo. Fuera de ahí, el 28 de `7a`.
+                  minHeight:
+                      tablet ? PayrollTokens.touchMin : decisionCellHeight,
+                  // `5b` es explícito: a 1116 «las etiquetas largas se truncan
+                  // con elipsis», no se encogen. El rótulo no cambia de tamaño
+                  // entre bandas; lo que cambia es cuánto cabe.
+                  fontSize: decisionLabelSize,
+                  horizontalPadding: tablet ? 14 : decisionCellPadH,
+                  verticalPadding: 5,
+                ),
+              ),
             ),
           ),
         ),
@@ -1119,37 +1636,49 @@ class _DirectRowAction extends StatelessWidget {
     final border = outline ? visual.borderStrong : Colors.transparent;
     final foreground = vm.isPending ? visual.inkMuted : visual.inkFaint;
 
-    return IntrinsicWidth(
-      child: Semantics(
-        button: true,
-        label: '${vm.statusLabel}. ${vm.actionLabel}',
-        child: Material(
-          key: ValueKey<String>('payroll-row-action-${vm.name}'),
-          color: fill,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(PayrollTokens.rField),
-            side: BorderSide(color: border),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: vm.onAction,
-            mouseCursor: SystemMouseCursors.click,
-            hoverColor: visual.accentSoft,
-            focusColor: visual.accentSoft,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: dense ? 27 : 28),
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: dense ? 9 : 10,
-                  vertical: 5,
-                ),
-                child: Text(
-                  vm.actionLabel,
-                  maxLines: 1,
-                  textAlign: TextAlign.center,
-                  style: visual.labelStrong.copyWith(
-                    fontSize: dense ? 10.5 : 11,
-                    color: foreground,
+    return _DecisionFocusRing(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: tablet ? tabletDecisionWidth : 0,
+          maxWidth: tablet ? double.infinity : decisionCellMaxWidth,
+        ),
+        child: IntrinsicWidth(
+          child: Semantics(
+            button: true,
+            label: '${vm.statusLabel}. ${vm.actionLabel}',
+            child: Material(
+              key: ValueKey<String>('payroll-row-action-${vm.name}'),
+              color: fill,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(PayrollTokens.rField),
+                side: BorderSide(color: border),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: vm.onAction,
+                mouseCursor: SystemMouseCursors.click,
+                hoverColor: visual.accentSoft,
+                focusColor: visual.accentSoft,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight:
+                        tablet ? PayrollTokens.touchMin : decisionCellHeight,
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: tablet ? 14 : decisionCellPadH,
+                      vertical: 5,
+                    ),
+                    child: Text(
+                      vm.actionLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: visual.labelStrong.copyWith(
+                        fontSize: decisionLabelSize,
+                        color: foreground,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1165,10 +1694,13 @@ class _DirectRowAction extends StatelessWidget {
 /// su respaldo. Hover, foco, cursor y tooltip comunican que es interactivo sin
 /// agregar otra etiqueta dentro de la tabla.
 class _PaidStatusAction extends StatelessWidget {
-  const _PaidStatusAction({required this.vm, required this.dense});
+  const _PaidStatusAction({
+    required this.vm,
+    this.tablet = false,
+  });
 
   final PayrollPersonRowVM vm;
-  final bool dense;
+  final bool tablet;
 
   @override
   Widget build(BuildContext context) {
@@ -1178,62 +1710,74 @@ class _PaidStatusAction extends StatelessWidget {
     // distinguir dos filas pagadas sin abrir el respaldo de cada una, y en
     // 1116 es donde vive la columna PAGADO que ahí se retira.
     final meta = vm.statusMeta.trim();
-    return Tooltip(
-      message: 'Ver pago de ${vm.name}',
+    return _DecisionFocusRing(
+      // Sin `Tooltip`: repetía palabra por palabra la etiqueta semántica que
+      // está justo abajo, y cada `Tooltip` es un `OverlayPortal` que se monta
+      // DENTRO del `LayoutBuilder` de esta tabla. Con uno por fila, un cambio
+      // de ancho revienta en `overlay.dart:1258 · '!_skipMarkNeedsLayout'` —
+      // medido en la app viva, no supuesto—. Lo que decía ya lo dicen el
+      // rótulo visible y la semántica.
       child: Semantics(
         button: true,
         label: meta.isEmpty
             ? '${vm.statusLabel}. Ver pago de ${vm.name}'
             : '${vm.statusLabel} $meta. Ver pago de ${vm.name}',
+        tooltip: 'Ver pago de ${vm.name}',
         excludeSemantics: true,
         child: Material(
           key: ValueKey<String>('payroll-paid-status-${vm.name}'),
           color: tone.soft,
-          shape: StadiumBorder(side: BorderSide(color: tone.border)),
+          // `7a` la dibuja con radio 8, no de cápsula: las cinco formas de
+          // `5c` comparten envoltura y sólo cambian de contenido.
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(PayrollTokens.rField),
+            side: BorderSide(color: tone.border),
+          ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: vm.onAction,
             mouseCursor: SystemMouseCursors.click,
             hoverColor: tone.fg.withValues(alpha: 0.08),
             focusColor: tone.fg.withValues(alpha: 0.12),
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: dense ? 8 : 9,
-                vertical: dense ? 3 : 4,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
+            child: _DecisionShell(
+              tone: tone,
+              tablet: tablet,
+              children: <Widget>[
+                Flexible(
+                  child: Text(
                     vm.statusLabel,
                     maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: visual.labelStrong.copyWith(
-                      fontSize: dense ? 8.5 : 9,
+                      fontSize: decisionLabelSize,
+                      fontWeight: FontWeight.w500,
                       color: tone.fg,
                     ),
                   ),
-                  if (meta.isNotEmpty) ...<Widget>[
-                    const SizedBox(width: 5),
-                    Flexible(
-                      child: Text(
-                        meta,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: visual.monoS.copyWith(
-                          fontSize: dense ? 8.5 : 9,
-                          color: tone.fg,
-                        ),
+                ),
+                if (meta.isNotEmpty) ...<Widget>[
+                  const SizedBox(width: decisionCellGap),
+                  Flexible(
+                    child: Text(
+                      meta,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: visual.monoS.copyWith(
+                        fontSize: decisionMetaSize,
+                        color: tone.fg.withValues(alpha: 0.75),
                       ),
                     ),
-                  ],
-                  const SizedBox(width: 3),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    size: dense ? 11 : 12,
-                    color: tone.fg,
                   ),
                 ],
-              ),
+                const SizedBox(width: decisionCellGap),
+                Text(
+                  '›',
+                  style: visual.bodyS.copyWith(
+                    fontSize: 12,
+                    color: tone.fg.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1246,15 +1790,26 @@ class _PaidStatusAction extends StatelessWidget {
 /// El chevron forma parte de la misma píldora y abre un menú anclado; el menú
 /// mantiene la acción fuera de la línea hasta que el usuario la solicita.
 class _StatusActionMenu extends StatelessWidget {
-  const _StatusActionMenu({required this.vm, required this.dense});
+  const _StatusActionMenu({
+    required this.vm,
+    this.tablet = false,
+  });
 
   final PayrollPersonRowVM vm;
-  final bool dense;
+  final bool tablet;
 
   @override
   Widget build(BuildContext context) {
     final visual = PayrollVisualTokens.of(context);
-    final tone = vm.toneFor(visual);
+    // La forma con caret existe hoy para un único caso —«Sin método»—, y ése
+    // no es una advertencia sino un **bloqueo**: sin método no se le puede
+    // pagar a esa persona por ninguna vía. Heredar el tono del estado de la
+    // fila pintaba de ámbar lo mismo que «falta confirmar», que sí se puede
+    // pagar. `7a` lo dibuja en `danger` —`#33191A` / `#6E332F` / `#F08C82`,
+    // leídos del canvas— y el mapa de uso del turno 9 lo dice con todas sus
+    // letras: «danger: chip Sin método». Si algún día aparece un segundo caso
+    // de menú, declara su tono aquí en vez de tomarlo prestado.
+    final tone = visual.danger;
     return MenuAnchor(
       consumeOutsideTap: true,
       style: MenuStyle(
@@ -1295,58 +1850,58 @@ class _StatusActionMenu extends StatelessWidget {
         void toggleMenu() =>
             controller.isOpen ? controller.close() : controller.open();
 
-        return Tooltip(
-          message: '${vm.statusLabel}: abrir opciones',
+        return _DecisionFocusRing(
+          // Sin `Tooltip`, por la misma causa medida en `_PaidStatusAction`.
           child: Semantics(
             button: true,
+            tooltip: '${vm.statusLabel}: abrir opciones',
+            // `5c` pide `aria-haspopup=menu`. Flutter no publica ese flag;
+            // lo equivalente y verdadero es anunciar que el control tiene
+            // estado abierto/cerrado y en cuál está, que es justo lo que
+            // `MenuAnchor` ya sabe.
+            expanded: controller.isOpen,
             label: '${vm.statusLabel}. Abrir opciones',
             excludeSemantics: true,
             child: Material(
               key: ValueKey<String>('payroll-method-menu-${vm.name}'),
               color: tone.soft,
-              shape: StadiumBorder(side: BorderSide(color: tone.border)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(PayrollTokens.rField),
+                side: BorderSide(color: tone.border),
+              ),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 onTap: toggleMenu,
                 mouseCursor: SystemMouseCursors.click,
                 hoverColor: tone.fg.withValues(alpha: 0.08),
                 focusColor: tone.fg.withValues(alpha: 0.12),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: dense ? 24 : 26),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Padding(
-                        padding: EdgeInsets.only(
-                          left: dense ? 8 : 9,
-                          right: dense ? 6 : 7,
-                        ),
-                        child: Text(
-                          vm.statusLabel,
-                          maxLines: 1,
-                          style: visual.labelStrong.copyWith(
-                            fontSize: dense ? 8.5 : 9,
-                            color: tone.fg,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        width: 1,
-                        height: dense ? 14 : 15,
-                        color: tone.border,
-                      ),
-                      Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: dense ? 4 : 5,
-                        ),
-                        child: Icon(
-                          Icons.keyboard_arrow_down_rounded,
-                          size: dense ? 15 : 16,
+                child: _DecisionShell(
+                  tone: tone,
+                  tablet: tablet,
+                  children: <Widget>[
+                    Flexible(
+                      child: Text(
+                        vm.statusLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: visual.labelStrong.copyWith(
+                          fontSize: decisionLabelSize,
+                          fontWeight: FontWeight.w500,
                           color: tone.fg,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    // `7a`: el caret va detrás de un divisor de 1 con 7 de
+                    // separación, no suelto ni dentro de un botón aparte.
+                    const SizedBox(width: decisionCellGap),
+                    Container(width: 1, height: 15, color: tone.border),
+                    const SizedBox(width: 7),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 14,
+                      color: tone.fg,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1360,7 +1915,14 @@ class _StatusActionMenu extends StatelessWidget {
 /// Disclosure por fila: horas, tarifa y pagos registrados. Payroll no edita
 /// asistencia: la salida es "Ver asistencia de la semana ↗".
 class _RowDisclosure extends StatelessWidget {
-  const _RowDisclosure({required this.vm, required this.dense});
+  const _RowDisclosure({
+    required this.vm,
+    required this.dense,
+    this.footerReason,
+  });
+
+  /// Cuando la franja del pie ya dice ESTE motivo, el panel no se dibuja.
+  final String? footerReason;
   final PayrollPersonRowVM vm;
   final bool dense;
 
@@ -1376,6 +1938,20 @@ class _RowDisclosure extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final panels = <Widget>[
+            // `5c`: el bloqueo nunca aparece sin su motivo, y la fila abierta
+            // es donde vive el suyo cuando la franja del pie no puede hablar
+            // por él —porque las filas bloqueadas no comparten razón—. Es una
+            // nota en línea, sin overlay: la que sí se puede montar acá.
+            if (vm.blockedReason.isNotEmpty && vm.blockedReason != footerReason)
+              _DiscPanel(
+                label: 'POR QUÉ NO SE PUEDE PAGAR',
+                child: Text(
+                  vm.blockedReason,
+                  key:
+                      ValueKey<String>('payroll-disclosure-blocked-${vm.name}'),
+                  style: visual.bodyS.copyWith(fontSize: 11.5),
+                ),
+              ),
             _DiscPanel(
               label: 'CÓMO SE CALCULÓ',
               child: Column(
@@ -1415,13 +1991,23 @@ class _RowDisclosure extends StatelessWidget {
                       style: visual.bodyS.copyWith(fontSize: 11.5),
                     ),
                   ),
-                  if (vm.bankAccountCaption != null) ...<Widget>[
+                  if (vm.destination case final destination?) ...<Widget>[
                     const SizedBox(height: 6),
                     Text(
-                      vm.bankAccountCaption!,
+                      destination.missing
+                          ? 'Sin cuenta de destino registrada'
+                          : destination.label!,
+                      key: ValueKey<String>(
+                        destination.missing
+                            ? 'payroll-row-destination-missing'
+                            : 'payroll-row-destination',
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: visual.monoS.copyWith(fontSize: 9.5),
+                      style: visual.monoS.copyWith(
+                        fontSize: 9.5,
+                        color: destination.missing ? visual.warningFg : null,
+                      ),
                     ),
                   ],
                 ],
@@ -1430,12 +2016,27 @@ class _RowDisclosure extends StatelessWidget {
             if (vm.shortcuts.isNotEmpty)
               _DiscPanel(
                 label: 'ATAJOS',
-                child: Wrap(
-                  spacing: 7,
-                  runSpacing: 7,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    for (final shortcut in vm.shortcuts)
-                      _DiscShortcut(shortcut: shortcut),
+                    Wrap(
+                      spacing: 7,
+                      runSpacing: 7,
+                      children: <Widget>[
+                        for (final shortcut in vm.shortcuts)
+                          _DiscShortcut(shortcut: shortcut),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    // 7a dibuja esta pista. Se escribe **porque la conducta
+                    // existe**: `↑`/`↓` mueven el foco de fila y `↵` abre o
+                    // cierra la enfocada. Una pista sin conducta es una
+                    // promesa falsa, y así estaba antes.
+                    Text(
+                      'Una sola fila abierta a la vez · ↑↓ mueve · ↵ abre',
+                      key: const ValueKey<String>('payroll-row-keyboard-hint'),
+                      style: visual.monoS.copyWith(fontSize: 9.5),
+                    ),
                   ],
                 ),
               ),
@@ -1796,6 +2397,11 @@ class _MoneyBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final visual = PayrollVisualTokens.of(context);
     return Container(
+      // Identidad de producción: la barra de dinero es el owner del control de
+      // decisión y hay que poder ubicarla sin adivinar su ancestro. El contrato
+      // del esqueleto la buscaba por `ancestor(Container).first`, que se rompe
+      // en cuanto alguien envuelve la fila (revisión de Codex, 2026-08-01).
+      key: const ValueKey<String>('payroll-money-bar'),
       height: dense ? 54 : PayrollTokens.moneyBarH,
       padding: EdgeInsets.symmetric(horizontal: dense ? 16 : 18),
       decoration: BoxDecoration(

@@ -41,14 +41,22 @@ Future<T?> showVbAnchoredPopover<T>({
     return Future<T?>.value();
   }
 
+  // The ERP can render its whole desktop shell through `WindowZoomScope`.
+  // Transform BOTH corners into the overlay coordinate system: combining a
+  // transformed origin with the render box's untransformed size detaches the
+  // popover from its trigger at any scale other than 1.0.
   final topLeft = anchorBox.localToGlobal(Offset.zero, ancestor: overlayBox);
-  final anchorRect = topLeft & anchorBox.size;
+  final bottomRight = anchorBox.localToGlobal(
+    anchorBox.size.bottomRight(Offset.zero),
+    ancestor: overlayBox,
+  );
+  final anchorRect = Rect.fromPoints(topLeft, bottomRight);
 
   return navigator.push<T>(
     _VbAnchoredPopoverRoute<T>(
       anchorRect: anchorRect,
       gap: gap,
-      minWidth: math.max(minWidth, anchorBox.size.width),
+      minWidth: math.max(minWidth, anchorRect.width),
       barrierLabel: barrierLabel,
       builder: builder,
     ),
@@ -195,11 +203,17 @@ class _VbAnchoredPopoverLayout extends SingleChildLayoutDelegate {
         ? anchorRect.bottom + gap
         : anchorRect.top - gap - childSize.height;
 
-    // Left-aligned with the anchor, pulled back inside the viewport rather
-    // than allowed to hang off it.
+    // Leading-aligned when it fits. If it would overflow, align the trailing
+    // edges before clamping to the viewport. This preserves the relationship
+    // with a trigger near the right edge instead of pinning the menu to an
+    // unrelated screen edge.
     final maxX =
         math.max(padding.left, size.width - childSize.width - padding.right);
-    final x = anchorRect.left.clamp(padding.left, maxX);
+    final leadingX = anchorRect.left;
+    final preferredX = leadingX + childSize.width <= size.width - padding.right
+        ? leadingX
+        : anchorRect.right - childSize.width;
+    final x = preferredX.clamp(padding.left, maxX);
 
     final maxY =
         math.max(padding.top, size.height - childSize.height - padding.bottom);

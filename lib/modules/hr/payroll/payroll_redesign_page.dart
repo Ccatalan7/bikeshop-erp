@@ -6,14 +6,22 @@ import 'package:uuid/uuid.dart';
 import '../../../shared/services/current_user_profile_service.dart';
 import '../../../shared/utils/responsive_viewport.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/vb_money_text.dart';
+import '../../../shared/widgets/vb_notice.dart';
+import '../../../shared/widgets/vb_skeleton.dart';
 import '../../../shared/widgets/workspace_shell_scope.dart';
+import '../models/hr_models.dart';
 import '../models/payroll_audit_read_models.dart';
+
 import '../models/payroll_voucher.dart';
+import '../services/payroll_employee_payment_method_command.dart';
+import '../services/payroll_advance_registration_service.dart';
 import '../services/payroll_voucher_service.dart';
 import '../widgets/payroll_advance_entry.dart' show showPayrollAdvanceEntry;
 import 'surfaces/payroll_accent_action.dart';
 import 'surfaces/payroll_advances_and_cash_surfaces.dart';
 import 'surfaces/payroll_history_surface.dart';
+import 'surfaces/payroll_method_sheet.dart';
 import 'surfaces/payroll_payment_composer.dart';
 import 'surfaces/payroll_payment_evidence_surface.dart';
 import 'surfaces/payroll_queue_surface.dart';
@@ -28,9 +36,17 @@ class PayrollRedesignRoute extends StatefulWidget {
   const PayrollRedesignRoute({
     super.key,
     this.initialVoucherId,
+    this.initialScope,
+    this.initialAdvanceEmployeeId,
   });
 
   final String? initialVoucherId;
+
+  /// `weeks` | `history` | `advances`. Nulo o desconocido deja el default.
+  final String? initialScope;
+
+  /// A quién abrir dentro de Anticipos.
+  final String? initialAdvanceEmployeeId;
 
   @override
   State<PayrollRedesignRoute> createState() => _PayrollRedesignRouteState();
@@ -49,6 +65,8 @@ class _PayrollRedesignRouteState extends State<PayrollRedesignRoute> {
       ),
       child: PayrollRedesignPage(
         initialVoucherId: widget.initialVoucherId,
+        initialScope: widget.initialScope,
+        initialAdvanceEmployeeId: widget.initialAdvanceEmployeeId,
         onCompactContextChanged: (value) {
           if (!mounted || value == _compactContextLine) return;
           setState(() => _compactContextLine = value);
@@ -63,9 +81,17 @@ class PayrollRedesignPage extends StatefulWidget {
     super.key,
     this.actions,
     this.initialVoucherId,
+    this.initialScope,
+    this.initialAdvanceEmployeeId,
     this.onConfigureEmployeePaymentMethod,
     this.onCompactContextChanged,
   });
+
+  /// Ámbito pedido por la URL (`weeks` | `history` | `advances`).
+  final String? initialScope;
+
+  /// Persona pedida por la URL dentro de Anticipos.
+  final String? initialAdvanceEmployeeId;
 
   /// Costura de inyección para tests.
   final PayrollRedesignActions? actions;
@@ -87,6 +113,25 @@ class PayrollRedesignPage extends StatefulWidget {
   State<PayrollRedesignPage> createState() => _PayrollRedesignPageState();
 }
 
+/// Backend mutations that are deliberately dormant until their exact pending
+/// migration has been deployed and read back.
+///
+/// The default is fail-closed on purpose. A released client must not infer
+/// either capability from an older Payroll RPC, a successful employee read or
+/// the presence of UI code: the two commands are owned by separate, still
+/// pending migrations. Tests and a future verified activation inject the
+/// capabilities explicitly.
+@immutable
+class PayrollReleaseCapabilities {
+  const PayrollReleaseCapabilities({
+    this.employeePaymentMethodCommand = false,
+    this.structuredAdvanceAudit = false,
+  });
+
+  final bool employeePaymentMethodCommand;
+  final bool structuredAdvanceAudit;
+}
+
 /// Datos que la superficie necesita, cargados juntos.
 @immutable
 class PayrollRedesignData {
@@ -96,16 +141,29 @@ class PayrollRedesignData {
     this.openAdvances = const [],
     this.employees = const [],
     this.versionedMutationsAvailable = true,
+    this.releaseCapabilities = const PayrollReleaseCapabilities(),
     this.historyNextCursor,
     this.historyHasMore = false,
+    this.historyActorNames = const <String, String>{},
   });
 
   final List<PayrollVoucher> vouchers;
   final List<Map<String, dynamic>> paymentMethods;
   final List<EmployeeAdvance> openAdvances;
   final List<Map<String, dynamic>> employees;
+  final PayrollReleaseCapabilities releaseCapabilities;
   final PayrollHistoryCursor? historyNextCursor;
   final bool historyHasMore;
+
+  /// Nombre legible de quien registró el pago, por id de comprobante.
+  ///
+  /// `get_payroll_history_page_v1` devuelve `paid_by: {id, name}` resuelto por
+  /// `erp_actor_display_name`, pero `PayrollVoucher.paidBy` sólo guarda el id:
+  /// el nombre se perdía en la conversión y el detalle no podía decir quién
+  /// cerró la semana. El contrato de lectura legacy no lo trae, así que este
+  /// mapa queda vacío en ese camino y la superficie omite la frase en vez de
+  /// inventarla.
+  final Map<String, String> historyActorNames;
 
   /// False when the server only exposes the legacy read contract.
   ///
@@ -119,9 +177,11 @@ class PayrollRedesignData {
     List<EmployeeAdvance>? openAdvances,
     List<Map<String, dynamic>>? employees,
     bool? versionedMutationsAvailable,
+    PayrollReleaseCapabilities? releaseCapabilities,
     PayrollHistoryCursor? historyNextCursor,
     bool clearHistoryNextCursor = false,
     bool? historyHasMore,
+    Map<String, String>? historyActorNames,
   }) {
     return PayrollRedesignData(
       vouchers: vouchers ?? this.vouchers,
@@ -130,10 +190,12 @@ class PayrollRedesignData {
       employees: employees ?? this.employees,
       versionedMutationsAvailable:
           versionedMutationsAvailable ?? this.versionedMutationsAvailable,
+      releaseCapabilities: releaseCapabilities ?? this.releaseCapabilities,
       historyNextCursor: clearHistoryNextCursor
           ? null
           : historyNextCursor ?? this.historyNextCursor,
       historyHasMore: historyHasMore ?? this.historyHasMore,
+      historyActorNames: historyActorNames ?? this.historyActorNames,
     );
   }
 }
@@ -189,14 +251,24 @@ class PayrollRedesignActions {
     required String operationKey,
     required int expectedReconciliationVersion,
   }) payLine;
+
+  /// Registra un anticipo por la ruta **auditada**: capability → evidencia
+  /// confirmada → `register_employee_advance_v3`. La firma lleva el motivo
+  /// tipado, la explicación obligatoria y el comprobante todavía en memoria,
+  /// porque quien decide si se sube es el coordinador, no la pantalla.
   final Future<void> Function({
     required String employeeId,
+    required String employeeName,
     required double amount,
     required String paymentMethodId,
     required String paymentAccountId,
     required DateTime paidAt,
     String? reference,
     String? notes,
+    required PayrollAdvanceReasonCode reasonCode,
+    required String reasonExplanation,
+    DateTime? workEndedOn,
+    PayrollAdvanceOriginalReceiptDraft? originalReceipt,
     required String operationKey,
   }) registerAdvance;
 }
@@ -206,10 +278,23 @@ class _PayrollInitialHistoryLoad {
   const _PayrollInitialHistoryLoad({
     required this.vouchers,
     this.page,
+    this.actorNames = const <String, String>{},
   });
 
   final List<PayrollVoucher> vouchers;
   final PayrollHistoryPage? page;
+  final Map<String, String> actorNames;
+}
+
+/// Quién registró el pago, por comprobante, con el nombre ya resuelto por el
+/// servidor. Una entrada sin nombre no se agrega: la frase se omite entera
+/// antes que mostrar un uuid.
+Map<String, String> _actorNamesFrom(List<PayrollHistoryHeader> headers) {
+  return <String, String>{
+    for (final header in headers)
+      if (header.paidBy.name?.trim().isNotEmpty ?? false)
+        header.id: header.paidBy.name!.trim(),
+  };
 }
 
 enum _PayrollScope { weeks, history, advances }
@@ -267,12 +352,20 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
   void initState() {
     super.initState();
     _selectedVoucherId = widget.initialVoucherId?.trim();
+    _applyRequestedScope();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
   void didUpdateWidget(covariant PayrollRedesignPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // El ámbito y la persona son handoff de la URL: si cambian sin que cambie
+    // el voucher —volver de Archivos a otra persona, por ejemplo— hay que
+    // atenderlos igual.
+    if (widget.initialScope != oldWidget.initialScope ||
+        widget.initialAdvanceEmployeeId != oldWidget.initialAdvanceEmployeeId) {
+      setState(_applyRequestedScope);
+    }
     final nextVoucherId = widget.initialVoucherId?.trim();
     if (nextVoucherId == null ||
         nextVoucherId.isEmpty ||
@@ -283,6 +376,41 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     _selectedVoucherId = nextVoucherId;
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
+
+  /// Aplica `?scope=` y `?employee=`.
+  ///
+  /// **La persona pedida no se sustituye en silencio.** Si el id no existe en
+  /// los datos, la selección queda nula y la superficie lo dice: caer en la
+  /// primera persona haría que el operador leyera el saldo de alguien más
+  /// creyendo que es el de quien pidió.
+  void _applyRequestedScope() {
+    final scope = widget.initialScope?.trim().toLowerCase();
+    switch (scope) {
+      case 'advances':
+        _scope = _PayrollScope.advances;
+      case 'history':
+        _scope = _PayrollScope.history;
+      case 'weeks':
+        _scope = _PayrollScope.weeks;
+      default:
+        break;
+    }
+    final employeeId = widget.initialAdvanceEmployeeId?.trim();
+    if (scope == 'advances' && employeeId != null && employeeId.isNotEmpty) {
+      _selectedAdvanceEmployeeId = employeeId;
+      _requestedAdvanceEmployeeId = employeeId;
+    } else {
+      // La URL es la autoridad de este handoff. Si deja de pedir una persona,
+      // no se conserva el target anterior: hacerlo dejaría pegado un aviso (o
+      // una selección) que ya no pertenece a la navegación vigente.
+      _selectedAdvanceEmployeeId = null;
+      _requestedAdvanceEmployeeId = null;
+    }
+  }
+
+  /// Quién pidió la URL, para poder distinguir «no hay nadie seleccionado» de
+  /// «se pidió a alguien que no está».
+  String? _requestedAdvanceEmployeeId;
 
   // ── Formatos (locales al host: sin dependencia visual legacy) ────────────
 
@@ -312,6 +440,25 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     final endPart = '${_two(end.day)} ${_months[end.month - 1]}';
     if (start.month == end.month) return '${_two(start.day)} – $endPart';
     return '${_two(start.day)} ${_months[start.month - 1]} – $endPart';
+  }
+
+  static const List<String> _monthsLong = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', //
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+  ];
+
+  /// `julio 2026`. Una semana pertenece al mes en que **termina**, que es el
+  /// mismo criterio con que el historial ordena y pagina (`period_end`).
+  static String _monthLabel(DateTime periodEnd) =>
+      '${_monthsLong[periodEnd.month - 1]} ${periodEnd.year}';
+
+  /// `29 jun 17:00`, en la hora del equipo. El instante viene en UTC desde
+  /// Postgres, así que sin `toLocal()` la pantalla afirmaría una hora que nadie
+  /// vivió.
+  static String _dayAndTime(DateTime instant) {
+    final local = instant.toLocal();
+    return '${_two(local.day)} ${_months[local.month - 1]} '
+        '${_two(local.hour)}:${_two(local.minute)}';
   }
 
   static int _isoWeek(DateTime date) {
@@ -386,6 +533,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                   ),
                 )
                 .toList(growable: false),
+            actorNames: _actorNamesFrom(page.items),
           );
         }();
         final methodsFuture = service.getPaymentMethods();
@@ -411,6 +559,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
           versionedMutationsAvailable: service.supportsVersionedPayrollCommands,
           historyNextCursor: history.page?.nextCursor,
           historyHasMore: history.page?.hasMore ?? false,
+          historyActorNames: history.actorNames,
         );
       },
       hydrateHistoryVoucher: service.hydrateVoucherSettlements,
@@ -447,24 +596,39 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         if (line == null) return;
         await service.updateLine(line.copyWith(isIncluded: false));
       },
+      // La ruta legacy (`registerEmployeeAdvance` → `..._v2`) NO se usa desde
+      // la UI productiva: no lleva motivo estructurado ni comprobante
+      // inmutable, y sube evidencia sin saber si el backend la va a aceptar.
+      // El coordinador ordena las tres cosas —capability, evidencia, RPC— y
+      // garantiza que nada se sube antes de saber que `v3` existe.
       registerAdvance: ({
         required employeeId,
+        required employeeName,
         required amount,
         required paymentMethodId,
         required paymentAccountId,
         required paidAt,
         reference,
         notes,
+        required reasonCode,
+        required reasonExplanation,
+        workEndedOn,
+        originalReceipt,
         required operationKey,
       }) =>
-          service.registerEmployeeAdvance(
+          PayrollAdvanceRegistrationService(voucherService: service).register(
         employeeId: employeeId,
+        employeeName: employeeName,
         amount: amount,
         paymentMethodId: paymentMethodId,
         paymentAccountId: paymentAccountId,
         paidAt: paidAt,
         reference: reference,
         notes: notes,
+        reasonCode: reasonCode,
+        reasonExplanation: reasonExplanation,
+        workEndedOn: workEndedOn,
+        originalReceipt: originalReceipt,
         operationKey: operationKey,
       ),
     );
@@ -722,6 +886,10 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
           historyNextCursor: page.nextCursor,
           clearHistoryNextCursor: page.nextCursor == null,
           historyHasMore: page.hasMore,
+          historyActorNames: <String, String>{
+            ...current.historyActorNames,
+            ..._actorNamesFrom(page.items),
+          },
         );
         _historyNextCursor = page.nextCursor;
         _historyHasMore = page.hasMore;
@@ -832,6 +1000,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     PayrollVoucherLine line, {
     PayrollVoucher? resumePaymentFor,
   }) async {
+    if (!_employeePaymentMethodCommandAvailable) return;
     final employeeId = line.employeeId.trim();
     if (employeeId.isEmpty) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
@@ -845,7 +1014,18 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     if (injected != null) {
       await injected(employeeId);
     } else {
-      await context.push('/hr/employees/${Uri.encodeComponent(employeeId)}');
+      // 5g: la hoja propia reemplaza el viaje a la ficha. Si no se puede
+      // resolver el estado de la ficha —sin conexión, sin permiso de lectura—
+      // se cae al editor completo, que es la ruta que existía antes: perder la
+      // configuración entera por no poder abrir una hoja sería peor.
+      final handled = await _openMethodSheet(
+        employeeId: employeeId,
+        employeeName: line.employeeName,
+        resumePaymentFor: resumePaymentFor,
+      );
+      if (!handled && mounted) {
+        await context.push('/hr/employees/${Uri.encodeComponent(employeeId)}');
+      }
     }
     if (!mounted) return;
     await _load();
@@ -866,6 +1046,155 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     } else {
       await _openComposer(week, refreshed);
     }
+  }
+
+  /// 5g · abre la hoja de método y guarda con el comando estrecho.
+  ///
+  /// Devuelve `false` si no pudo siquiera plantearla —ahí el llamador cae al
+  /// editor de fichas—. Devuelve `true` en cuanto la hoja se mostró, se haya
+  /// guardado o no: cancelar es una respuesta.
+  Future<bool> _openMethodSheet({
+    required String employeeId,
+    required String employeeName,
+    PayrollVoucher? resumePaymentFor,
+  }) async {
+    final command = PayrollEmployeePaymentMethodCommand();
+    final read = await command.read(employeeId);
+    final snapshot = read.snapshot;
+    if (!mounted) return true;
+    if (snapshot == null) {
+      // La lectura no llegó. Se dice, en vez de caer en silencio al editor de
+      // fichas como si nada hubiera pasado.
+      if (read.status == PayrollEmployeePaymentReadStatus.unavailable) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            content: Text('No pudimos leer la ficha para configurar su pago. '
+                'Reintenta en un momento.'),
+          ),
+        );
+        return true;
+      }
+      return false;
+    }
+
+    // Sólo lo que Nóminas sabe pagar. El catálogo del tenant trae cinco
+    // métodos; el módulo reconoce dos.
+    final options = <PayrollMethodOption>[
+      for (final method in _data?.paymentMethods ?? const [])
+        if (_isConfiguredPaymentMethod(method))
+          if (<String>{'transfer', 'cash'}
+              .contains(method['code']?.toString().trim().toLowerCase()))
+            PayrollMethodOption(
+              id: method['id'].toString(),
+              code: method['code'].toString().trim().toLowerCase(),
+              name: method['name']?.toString().trim() ?? '',
+            ),
+    ];
+    // Orden del frame: transferencia primero. El catálogo del tenant ordena por
+    // `sort_order` y ahí `cash` va antes, así que sin esto la hoja sale con las
+    // dos opciones al revés de como Design las dibuja — visto en la app viva.
+    options.sort((left, right) => left.isTransfer == right.isTransfer
+        ? 0
+        : left.isTransfer
+            ? -1
+            : 1);
+    if (options.isEmpty) return false;
+
+    // **Autoridad real, con el patrón de producción del chrome.**
+    // `ErpAuthorizationArea.hrManagement` resuelve a `profile.canManageUsers`,
+    // y ésa es exactamente la capacidad que la base exige para escribir:
+    // `employees_update_managers` pide `can_manage_tenant_hr`, que es
+    // `can_manage_tenant_users`. Leer la ficha admite además
+    // `can_manage_tenant_payroll`, así que un contador ve esta hoja y no puede
+    // guardarla — que es el estado que 5g dibuja.
+    //
+    // Se replica la derivación de `main_layout.dart` y `right_toolbar.dart` en
+    // vez de llamar a `evaluateErpAuthorization`, que está marcada
+    // `@visibleForTesting`. Las cuatro condiciones importan: **cargando o con
+    // problema de carga cae a sólo lectura**, nunca a editable.
+    final profileService = context.read<CurrentUserProfileService?>();
+    final canManageHr = profileService != null &&
+        !profileService.isLoading &&
+        profileService.loadIssue == null &&
+        profileService.profile?.canManageUsers == true;
+    final authority = canManageHr
+        ? PayrollMethodAuthority.editable
+        : PayrollMethodAuthority.readOnly;
+
+    final currentName =
+        _configuredMethodById(snapshot.preferredMethodId)?['name']
+            ?.toString()
+            .trim();
+    final currentCode =
+        _configuredMethodById(snapshot.preferredMethodId)?['code']
+            ?.toString()
+            .trim()
+            .toLowerCase();
+    final returnLabel = resumePaymentFor == null
+        ? 'Vuelves a la lista de la semana'
+        : 'Vuelves al pago de '
+            '${resumePaymentFor.periodLabel?.trim() ?? 'la semana'}';
+
+    final recordedPayments = await command.countRecordedPayments(employeeId);
+    if (!mounted) return true;
+
+    final draft = await showDialog<PayrollMethodDraft>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: PayrollMethodSheet(
+          employeeName: employeeName,
+          options: options,
+          authority: authority,
+          returnLabel: returnLabel,
+          confirmLabel: resumePaymentFor == null
+              ? 'Guardar método'
+              : 'Guardar y seguir con el pago',
+          selectedMethodId: snapshot.preferredMethodId,
+          currentMethodName: currentName,
+          bankName: snapshot.bankName,
+          bankAccountType: BankAccountType.decode(snapshot.bankAccountType),
+          bankAccountNumber: snapshot.bankAccountNumber,
+          recordedPayments: recordedPayments,
+          showsPreferenceDisagreement: snapshot.disagreesWith(currentCode),
+        ),
+      ),
+    );
+    if (draft == null || !mounted) return true;
+
+    final outcome = await command.apply(
+      expected: snapshot,
+      methodId: draft.methodId,
+      methodCode: draft.methodCode,
+      touchesBankAccount: draft.touchesBankAccount,
+      bankName: draft.bankName,
+      bankAccountType: draft.bankAccountType,
+      bankAccountNumber: draft.bankAccountNumber,
+    );
+    if (!mounted) return true;
+    // Cada desenlace dice lo que pasó. Ninguno se anuncia como guardado sin
+    // serlo: este dato después gira sueldos.
+    final message = switch (outcome.status) {
+      PayrollEmployeePaymentWriteStatus.applied =>
+        'Método de pago actualizado.',
+      PayrollEmployeePaymentWriteStatus.versionConflict =>
+        'La ficha cambió mientras la tenías abierta. No se guardó nada: '
+            'ábrela de nuevo para ver el dato actual.',
+      PayrollEmployeePaymentWriteStatus.notAuthorized =>
+        'No se guardó: cambiar la ficha lo hace quien administra trabajadores '
+            'y usuarios.',
+      PayrollEmployeePaymentWriteStatus.missing =>
+        'No se guardó: la ficha de esta persona ya no está.',
+      PayrollEmployeePaymentWriteStatus.rejected =>
+        'No se guardó: el tipo de cuenta o el método no son válidos para esta '
+            'ficha. Revisa los datos y vuelve a intentar.',
+      PayrollEmployeePaymentWriteStatus.unreachable =>
+        'No pudimos confirmar el guardado. Vuelve a abrir la ficha para ver '
+            'cómo quedó antes de reintentar.',
+    };
+    ScaffoldMessenger.maybeOf(context)
+        ?.showSnackBar(SnackBar(content: Text(message)));
+    return true;
   }
 
   PayrollVoucher? _voucherById(String? id) {
@@ -914,6 +1243,12 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
   bool get _versionedMutationsAvailable =>
       _data?.versionedMutationsAvailable == true;
 
+  bool get _employeePaymentMethodCommandAvailable =>
+      _data?.releaseCapabilities.employeePaymentMethodCommand == true;
+
+  bool get _structuredAdvanceAuditAvailable =>
+      _data?.releaseCapabilities.structuredAdvanceAudit == true;
+
   void _showVersionedUpdateRequired() {
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
       content: Text('Actualización de nóminas pendiente. Puedes revisar los '
@@ -950,6 +1285,19 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         ));
       }
       return refreshed;
+    } on PayrollVoucherPreflightException catch (error) {
+      // The service guarantees that these failures happened before its RPC.
+      // There is no movement to disambiguate, so fencing the next attempt or
+      // claiming that a write may have happened would be false.
+      debugPrint(
+        '⚠️ [PayrollRedesign] preflight ${error.kind.name}; no write sent',
+      );
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text(error.userMessage)),
+        );
+      }
+      return false;
     } catch (error) {
       debugPrint('❌ [PayrollRedesign] comando: $error');
       // A transport failure may happen after the server committed. Fence every
@@ -978,6 +1326,63 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     await _load();
   }
 
+  Future<void> _openEmployees() async {
+    await context.push('/hr/employees');
+    if (!mounted) return;
+    await _load();
+  }
+
+  /// ¿Hay alguien contratado, hoy, en esta empresa?
+  ///
+  /// **No es «alguien que pueda recibir un anticipo»** —para eso está
+  /// [_employeeCanReceiveAdvance], que además excluye a quien está con
+  /// licencia—. Acá la pregunta es si el taller tiene trabajadores, y alguien
+  /// `on_leave` **sí está contratado**.
+  ///
+  /// El modelo lo garantiza por esquema, no por los datos de hoy (verificado
+  /// contra producción el 2026-08-01): `employees.status` es `NOT NULL`, con
+  /// default `'active'` y un `CHECK` que lo limita a
+  /// `active | inactive | on_leave | terminated`.
+  bool _hasAnyEmployedWorker(PayrollRedesignData data) {
+    if (data.employees.isEmpty) return false;
+    return data.employees.any((employee) {
+      final status = employee['status']?.toString().trim().toLowerCase();
+      return status == 'active' || status == 'on_leave';
+    });
+  }
+
+  /// El único vacío cuya causa el modelo distingue, más uno genérico honesto.
+  ///
+  /// **Lo que NO se afirma, y por qué** (criterio de Codex, 2026-08-01): sin una
+  /// señal canónica del período en curso, ni «todo pagado» ni «semana sin horas
+  /// cerradas» son derivables. Un comprobante histórico pagado no dice nada del
+  /// ciclo actual, y que no haya voucher abierto no prueba que Asistencias no
+  /// haya cerrado nada. Así que el vacío general **describe el mecanismo** —de
+  /// dónde vienen las semanas— sin declarar por qué no hay ninguna.
+  Widget _emptyWeeksSurface(PayrollRedesignData data) {
+    if (!_hasAnyEmployedWorker(data)) {
+      return _PayrollEmptyWeeks(
+        key: const ValueKey('payroll-empty-no-workers'),
+        title: 'Aún no hay nadie contratado',
+        body: 'Nóminas paga a los trabajadores que tengas registrados. '
+            'Empieza por agregar uno.',
+        actionLabel: 'Ir a Trabajadores',
+        actionKey: const ValueKey('payroll-empty-open-employees'),
+        icon: Icons.badge_outlined,
+        onAction: _openEmployees,
+      );
+    }
+    return _PayrollEmptyWeeks(
+      key: const ValueKey('payroll-empty-no-open-weeks'),
+      title: 'No hay semanas por resolver',
+      body: 'Las semanas aparecen acá cuando Asistencias cierra sus horas.',
+      actionLabel: 'Abrir Asistencias',
+      actionKey: const ValueKey('payroll-empty-weeks-open-attendance'),
+      icon: Icons.calendar_month_outlined,
+      onAction: _openAttendances,
+    );
+  }
+
   Future<void> _openReconciliation() async {
     // Navigation is never gated on the versioned backend: with the update
     // absent the reconciliation route opens as an honest read-only preview
@@ -995,6 +1400,10 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       _showVersionedUpdateRequired();
       return;
     }
+    // `register_employee_advance_v3` belongs to a later migration than the
+    // long-lived versioned Payroll bundle. Do not let someone complete a form
+    // only to discover at submit time that the auditable writer is dormant.
+    if (!_structuredAdvanceAuditAvailable) return;
     // Inactive employees stay discoverable in the ledger by their true name,
     // but a NEW advance can only target someone who still works here.
     final selectableEmployees = data.employees.where((employee) {
@@ -1008,14 +1417,26 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       initialEmployeeId: initialEmployeeId,
     );
     if (intent == null) return;
+    final receipt = intent.originalReceipt;
     final refreshed = await _run(() => _resolveActions().registerAdvance(
           employeeId: intent.employeeId,
+          employeeName: intent.employeeName,
           amount: intent.amount,
           paymentMethodId: intent.paymentMethodId,
           paymentAccountId: intent.paymentAccountId,
           paidAt: intent.paidAt,
           reference: intent.reference,
           notes: intent.notes,
+          reasonCode: intent.reasonCode,
+          reasonExplanation: intent.reasonExplanation,
+          workEndedOn: intent.workEndedOn,
+          originalReceipt: receipt == null
+              ? null
+              : PayrollAdvanceOriginalReceiptDraft(
+                  bytes: receipt.bytes,
+                  fileName: receipt.fileName,
+                  mimeType: receipt.mimeType,
+                ),
           operationKey: intent.operationKey,
         ));
     if (!refreshed || !mounted) return;
@@ -1042,13 +1463,27 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         .toList();
     final total =
         included.fold<double>(0, (sum, line) => sum + line.totalAmount);
+    // Quien está incluido pero suma $0 no genera sueldo. El frame 5d declara el
+    // alcance con un número, así que la exclusión se dice en vez de callarse.
+    final zeroed =
+        week.lines.where((line) => line.isIncluded).length - included.length;
+    final periodLabel = week.periodLabel?.trim() ?? '';
+    // En español el sustantivo va en minúscula dentro de la frase: «Confirmar
+    // semana 27», no «Confirmar Semana 27» —eso es calco del inglés—. Sólo se
+    // baja la inicial cuando la etiqueta empieza exactamente con «Semana »;
+    // cualquier otro rótulo se respeta tal cual, porque puede ser un nombre.
+    const weekPrefix = 'Semana ';
+    final inlineLabel = periodLabel.startsWith(weekPrefix)
+        ? 'semana ${periodLabel.substring(weekPrefix.length)}'
+        : periodLabel;
     final proceed = await showDialog<bool>(
           context: context,
           barrierDismissible: false,
           builder: (dialogContext) => Dialog(
             backgroundColor: Colors.transparent,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
+              // 5d (turno 5) publica el diálogo a 460. Spec: «diálogo 460 · CTA 34».
+              constraints: const BoxConstraints(maxWidth: 460),
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: visual.surface,
@@ -1063,17 +1498,25 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        '¿Confirmar esta semana?',
+                        inlineLabel.isEmpty
+                            ? 'Confirmar esta semana'
+                            : 'Confirmar $inlineLabel',
                         style: visual.sectionTitle,
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'Se crearán los sueldos por pagar de ${included.length} '
-                        '${included.length == 1 ? 'persona' : 'personas'} por '
-                        '${_clp(total)} y quedarán habilitados sus pagos.',
+                        '${included.length == 1 ? 'persona' : 'personas'} y '
+                        'quedarán habilitados sus pagos.',
                         style: visual.bodyM,
                       ),
                       const SizedBox(height: 12),
+                      // Resumen numérico de 5d. Dice lo que ESTA acción crea.
+                      // El desglose por método del frame (transferencias /
+                      // efectivo / diferencia bajo tolerancia) se descarta a
+                      // propósito: describe una semana ya pagada, y acá todavía
+                      // no existe ni un pago. Divergencia declarada en el
+                      // handoff de Nóminas.
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -1082,34 +1525,145 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                               BorderRadius.circular(PayrollTokens.rField),
                           border: Border.all(color: visual.border),
                         ),
-                        child: Text(
-                          'Las horas y tarifas vienen de Asistencias. Revisa '
-                          'esos datos antes de continuar; una semana con pagos '
-                          'registrados ya no puede volver a editarse.',
-                          style: visual.bodyS,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'QUEDARÁ CONFIRMADA CON',
+                                    style: visual.overline,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // F-03: el dinero lo escribe `VbMoneyText`, con
+                                // el único tamaño que la guía publica para
+                                // dinero (700/14). No se le pasa tamaño ni
+                                // color: un componente canónico no acepta
+                                // overrides visuales, y el frame dibuja este
+                                // total en verde porque allá la semana se está
+                                // CERRANDO ya pagada — acá se está confirmando
+                                // un borrador y ese dinero se va a deber, así
+                                // que el verde diría «listo» sobre una
+                                // obligación que recién nace. Descartado.
+                                VbMoneyText(total),
+                              ],
+                            ),
+                            // Sin fila de desglose: con una sola categoría
+                            // repetiría el mismo monto que ya está arriba y la
+                            // frase de encabezado que ya dice cuántos son.
+                            if (zeroed > 0) ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '$zeroed '
+                                      '${zeroed == 1 ? 'persona queda' : 'personas quedan'} en \$0',
+                                      style: visual.bodyS,
+                                    ),
+                                  ),
+                                  Text('sin sueldo', style: visual.bodyS),
+                                ],
+                              ),
+                            ],
+                          ],
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      // 5d saca la consecuencia del gris y la pone en un aviso:
+                      // es la única decisión del módulo que exige un modal.
+                      // El aviso es
+                      // `E-04 VbNotice`, el componente compartido, no un
+                      // Container propio de Nóminas — un cuarto aviso local era
+                      // justo lo que el sistema de componentes viene a cerrar.
+                      // OJO con el texto: 5d dice «al confirmar, la semana
+                      // queda inmutable» y **es falso**. `revertToDraft` →
+                      // `revert_payroll_to_draft` devuelve una semana
+                      // confirmada a borrador **mientras no haya pagos**; los
+                      // pagos bloquean ese retorno y se revierten con su propio
+                      // comando, nunca editándolos en sitio. Tampoco se promete
+                      // reabrir: el servicio lo permite pero **ninguna
+                      // superficie lo expone**, y ofrecer una salida que no
+                      // existe es el mismo defecto al revés.
+                      const VbNotice(
+                        tone: VbNoticeTone.warning,
+                        title: 'Revisa las horas y tarifas antes de confirmar',
+                        body: 'Vienen de Asistencias, y Nóminas no las edita. '
+                            'Una semana con pagos registrados ya no puede '
+                            'volver a editarse.',
+                      ),
                       const SizedBox(height: 18),
-                      Wrap(
-                        alignment: WrapAlignment.end,
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          TextButton(
+                      Builder(
+                        builder: (footerContext) {
+                          final cancel = TextButton(
                             onPressed: () =>
                                 Navigator.of(dialogContext).pop(false),
                             child: const Text('Volver a revisar'),
-                          ),
+                          );
                           // accent-fill: dialog-action (resolver-owned M3 dialog grammar)
-                          FilledButton(
+                          final submit = FilledButton(
                             key: const ValueKey(
                               'payroll-confirm-week-dialog-submit',
                             ),
                             onPressed: () =>
                                 Navigator.of(dialogContext).pop(true),
                             child: const Text('Confirmar semana'),
-                          ),
-                        ],
+                          );
+
+                          // El breakpoint lo decide el owner canónico, no un
+                          // literal: `WindowZoomScope` publica el viewport real
+                          // y repetir «600» acá crearía un segundo umbral que
+                          // se desincroniza en silencio.
+                          if (ResponsiveViewport.widthOf(footerContext) <
+                              ResponsiveViewport.phoneMaxExclusive) {
+                            // En compacto: una decisión por pantalla y CTA a
+                            // ancho completo, con la altura táctil canónica
+                            // `F-06 · TOUCH 48` (`PayrollTokens.touchMobile`).
+                            // El frame 5l dibuja 50 y no se sigue: un frame de
+                            // módulo no sobrescribe al owner de densidad.
+                            // **`Esc cancela` no se dibuja**: en un teléfono no
+                            // hay tecla Esc, y un atajo que no existe es ruido
+                            // que además desarmaba el pie a 390.
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                SizedBox(
+                                  height: PayrollTokens.touchMobile,
+                                  child: submit,
+                                ),
+                                const SizedBox(height: 8),
+                                cancel,
+                              ],
+                            );
+                          }
+
+                          return Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  'Esc cancela',
+                                  style: visual.bodyS,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Flexible(
+                                flex: 3,
+                                child: Wrap(
+                                  alignment: WrapAlignment.end,
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [cancel, submit],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -1207,6 +1761,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                 : 'PAGADA',
             voided: voucher.status == PayrollVoucherStatus.voided,
             selected: voucher.id == selectedId,
+            monthLabel: _monthLabel(voucher.periodEnd),
             people: _historyPeopleLabel(voucher),
             // El historial hidrata sus líneas al abrirlas: hasta entonces el
             // saldo NO se conoce, y mostrar `$0` afirmaría que cerró bien una
@@ -1256,6 +1811,22 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     return 'Origen de los pagos de esta semana';
   }
 
+  /// `registró Claudio Catalán · 29 jun 17:00`, o lo que de eso se sepa.
+  ///
+  /// 7b escribe «confirmó Rocío». En este dominio *confirmar* deja la semana en
+  /// `confirmed`, y el historial sólo trae `paid`/`voided`: quien figura acá es
+  /// quien **registró el pago**. Sin nombre resuelto por el servidor la frase
+  /// se queda con la fecha, y sin fecha desaparece entera.
+  String? _historyClosedNote(PayrollVoucher voucher) {
+    final id = voucher.id;
+    final actor = id == null ? null : _data?.historyActorNames[id];
+    final paidAt = voucher.paidAt;
+    if (actor == null && paidAt == null) return null;
+    if (actor == null) return 'pago registrado el ${_dayAndTime(paidAt!)}';
+    if (paidAt == null) return 'registró $actor';
+    return 'registró $actor · ${_dayAndTime(paidAt)}';
+  }
+
   PayrollHistoryDetailVM? _historyDetail(PayrollVoucher? voucher) {
     final id = voucher?.id;
     if (voucher == null || id == null) return null;
@@ -1282,6 +1853,8 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       paid: paid > 0.01 ? _clp(paid) : '—',
       pending: _clp(pending),
       settled: pending <= 0.01,
+      peopleLabel: _historyPeopleLabel(voucher),
+      closedNote: _historyClosedNote(voucher),
       originNote: _paymentOriginNote(included),
       manualPayments: _countPayments(included, fromStatement: false),
       statementPayments: _countPayments(included, fromStatement: true),
@@ -1296,9 +1869,10 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
             advances:
                 line.advancesApplied > 0.01 ? _clp(-line.advancesApplied) : '—',
             pending: _clp(line.balance),
+            settled: line.balance <= 0.01,
             initials: _initialsOf(line.employeeName),
             avatarColor: _avatarFor(line.employeeId),
-            paymentCaption: _historyPaymentCaption(line),
+            methodAndDate: _historyMethodAndDate(line),
             hasEvidence: line.settledAmount > 0.01,
             onOpenEvidence: line.settledAmount <= 0.01
                 ? null
@@ -1306,6 +1880,16 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
           ),
       ],
     );
+  }
+
+  /// La banda de tablet de `5m`: chrome compacto, contenido de tabla.
+  ///
+  /// El piso son 720: bajo eso la tabla deja de caber con sus cuatro columnas
+  /// y las tarjetas de 5l son la composición correcta. El techo lo pone el
+  /// shell, que a 900 devuelve el rail y la rama ancha.
+  static bool _isTabletBand(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    return width >= 720;
   }
 
   Widget _buildHistory(PayrollRedesignData data, {required bool compact}) {
@@ -1355,22 +1939,56 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         : PayrollRowStatus.pendingTransfer;
   }
 
-  /// How the money actually moved, in short bank language ("transferencia",
-  /// "efectivo"). Historical rows show it under the dominant figure so the
-  /// reader knows the channel without opening the evidence panel.
-  String? _historyPaymentCaption(PayrollVoucherLine line) {
+  /// La pista `MÉTODO Y FECHA` de 7b: `Transferencia · 07/07`.
+  ///
+  /// La fecha sale de la evidencia real del pago —no de `paid_at` de la
+  /// semana—, porque una semana puede pagarse en dos días distintos y la
+  /// pregunta de esta columna es cuándo se movió **esta** plata. Sin evidencia
+  /// fechada queda sólo el método; sin pago no hay método que declarar.
+  String? _historyMethodAndDate(PayrollVoucherLine line) {
     if (line.settledAmount <= 0.01) return null;
     // Una semana puede quedar cubierta sin que se mueva dinero nuevo: si sólo
     // se imputó un anticipo, decirlo «efectivo» o «transferencia» sería
     // falso. La glosa nombra lo que realmente ocurrió.
-    if (line.cashPaid <= 0.01 && line.advancesApplied > 0.01) {
-      return 'cubierto con anticipo';
-    }
+    final coveredByAdvance =
+        line.cashPaid <= 0.01 && line.advancesApplied > 0.01;
+    // «Cubierto con anticipo · 27/06» no cabe en la pista de 160 de 7b y salía
+    // elidido en la app viva; «Con anticipo» dice lo mismo, y el monto lo trae
+    // la celda ANTICIPOS de esa misma fila.
+    final label = coveredByAdvance ? 'Con anticipo' : _historyMethodLabel(line);
+    final day = _historyPaymentDay(line, advanceOnly: coveredByAdvance);
+    return day == null ? label : '$label · $day';
+  }
+
+  String _historyMethodLabel(PayrollVoucherLine line) {
     final method = _resolvedMethodForLine(line);
     final name = method?['name']?.toString().trim();
-    if (name != null && name.isNotEmpty) return name.toLowerCase();
+    if (name != null && name.isNotEmpty) return _capitalized(name);
     final legacy = line.paymentMethod.trim();
-    return legacy.isEmpty ? 'pago registrado' : legacy.toLowerCase();
+    return legacy.isEmpty ? 'Pago registrado' : _capitalized(legacy);
+  }
+
+  static String _capitalized(String value) => value.isEmpty
+      ? value
+      : '${value[0].toUpperCase()}${value.substring(1).toLowerCase()}';
+
+  /// `07/07` del movimiento más reciente que saldó la línea.
+  static String? _historyPaymentDay(
+    PayrollVoucherLine line, {
+    required bool advanceOnly,
+  }) {
+    DateTime? latest;
+    for (final evidence in line.settlementEvidence) {
+      if (evidence.isAdvance != advanceOnly) continue;
+      final when = evidence.effectiveDate ??
+          evidence.cashMovementDate ??
+          evidence.recordedAt;
+      if (when == null) continue;
+      if (latest == null || when.isAfter(latest)) latest = when;
+    }
+    if (latest == null) return null;
+    final local = latest.toLocal();
+    return '${_two(local.day)}/${_two(local.month)}';
   }
 
   String _methodLabel(PayrollVoucherLine line) {
@@ -1428,14 +2046,65 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     return latest;
   }
 
-  /// La cuenta desde la que sale el dinero, tal como la nombra el banco.
-  String? _bankAccountCaptionFor(PayrollVoucherLine line) {
+  /// La cuenta **destino**: a dónde llega la transferencia.
+  ///
+  /// Antes esta glosa mostraba `Bancos - Cuenta Corriente · 1110`, que es la
+  /// cuenta **contable del ERP** —el plan de cuentas—, no la del trabajador.
+  /// Presentarla bajo `PAGOS DE ESTA SEMANA` afirmaba un destino falso: el que
+  /// va a transferir necesita el banco y la cuenta de la persona, que es lo que
+  /// dibuja 7a («Banco Estado · •••• 4821»).
+  ///
+  /// El número **nunca se muestra entero**: banco, tipo y los últimos cuatro
+  /// dígitos alcanzan para reconocer la cuenta, y es todo lo que una pantalla
+  /// de nómina necesita enseñar.
+  ///
+  /// Efectivo no tiene destino bancario y devuelve `null`: una cuenta ahí
+  /// sería ruido, no información.
+  PayrollRowDestinationVM? _destinationFor(PayrollVoucherLine line) {
     final method = _resolvedMethodForLine(line);
     if (method == null) return null;
-    final name = method['account_name']?.toString().trim();
-    if (name == null || name.isEmpty) return null;
-    final code = method['account_code']?.toString().trim();
-    return code == null || code.isEmpty ? name : '$name · $code';
+    final code = method['code']?.toString().trim().toLowerCase();
+    if (code == 'cash') return null;
+
+    final employee = _employeeRowFor(line.employeeId);
+    if (employee == null) return const PayrollRowDestinationVM.missing();
+    String? text(String key) {
+      final value = employee[key]?.toString().trim();
+      return value == null || value.isEmpty ? null : value;
+    }
+
+    final bank = text('bank_name');
+    final type = BankAccountType.decode(text('bank_account_type'))?.label;
+    final masked = _maskedAccount(text('bank_account_number'));
+    final parts = <String>[
+      if (bank != null) bank,
+      if (type != null) type,
+      if (masked != null) masked,
+    ];
+    // Sin ningún dato de la cuenta la fila **lo dice**, en vez de callar: hoy
+    // en producción ninguna persona tiene banco cargado, así que quedarse en
+    // silencio dejaba la pantalla igual de muda que cuando mostraba la cuenta
+    // contable. 5g es el camino para configurarla y ya está como atajo acá.
+    return parts.isEmpty
+        ? const PayrollRowDestinationVM.missing()
+        : PayrollRowDestinationVM.known(parts.join(' · '));
+  }
+
+  Map<String, dynamic>? _employeeRowFor(String employeeId) {
+    for (final employee in _data?.employees ?? const <Map<String, dynamic>>[]) {
+      if (employee['id']?.toString() == employeeId) return employee;
+    }
+    return null;
+  }
+
+  /// `•••• 4821`. Con menos de cuatro dígitos se enmascara entero: revelar
+  /// «los últimos 2» de una cuenta corta es revelarla.
+  static String? _maskedAccount(String? raw) {
+    if (raw == null) return null;
+    final digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return null;
+    if (digits.length < 4) return '••••';
+    return '•••• ${digits.substring(digits.length - 4)}';
   }
 
   /// Salidas de la fila abierta. Ninguna mueve dinero: son navegación, y por
@@ -1443,10 +2112,23 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
   List<PayrollRowShortcutVM> _shortcutsFor(PayrollVoucherLine line) {
     return <PayrollRowShortcutVM>[
       // El anticipo nace con la persona ya elegida: se abre desde su fila.
-      PayrollRowShortcutVM(
-        label: 'Nuevo anticipo',
-        onTap: () => _newAdvance(line.employeeId),
-      ),
+      if (_structuredAdvanceAuditAvailable)
+        PayrollRowShortcutVM(
+          label: 'Nuevo anticipo',
+          onTap: () => _newAdvance(line.employeeId),
+        ),
+      // 5g: «el sheet se abre desde la fila (caret) o desde el composer».
+      // Hasta acá sólo existía el segundo camino y el primero a medias: la hoja
+      // aparecía **únicamente** cuando faltaba el método, así que cambiar el
+      // banco de alguien que ya tiene uno obligaba a salir a la ficha. Con eso,
+      // además, el estado quedaba inalcanzable para revisarlo: hoy en
+      // producción el único trabajador sin método tampoco tiene horas, o sea
+      // saldo cero, o sea su fila no ofrece la acción.
+      if (_employeePaymentMethodCommandAvailable)
+        PayrollRowShortcutVM(
+          label: 'Cambiar método de pago',
+          onTap: () => _openEmployeePaymentMethod(line),
+        ),
       PayrollRowShortcutVM(label: 'Ver historial', onTap: _showHistory),
       PayrollRowShortcutVM(
         label: 'Abrir en Asistencias',
@@ -1488,10 +2170,19 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                   // No es «sin horas»: las horas existen, lo que falta es
                   // cerrarlas en Asistencias. Decir el hecho nombra la salida.
                   PayrollRowStatus.nothingToPay => 'Horas sin cerrar',
-                  PayrollRowStatus.weekNotConfirmed => 'Falta confirmar',
+                  // `5c`: la palabra tiene que decir QUÉ falta confirmar. En
+                  // Design «Falta confirmar» es el efectivo entregado y sin
+                  // confirmar —una fila que SÍ se puede resolver—, así que
+                  // usarla acá para «la semana sigue en borrador» le pone dos
+                  // significados a la misma frase en la misma columna. Y la
+                  // tarjeta de la semana ya rotula ese hecho `SIN CONFIRMAR`:
+                  // ahora las dos dicen lo mismo con las mismas palabras.
+                  PayrollRowStatus.weekNotConfirmed => 'Semana sin confirmar',
                 };
       final action = needsMethod
-          ? 'Configurar método'
+          ? _employeePaymentMethodCommandAvailable
+              ? 'Configurar método'
+              : ''
           : !_versionedMutationsAvailable && line.balance > 0.01
               ? ''
               : switch (status) {
@@ -1516,7 +2207,9 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                   PayrollRowStatus.weekNotConfirmed => '',
                 };
       final actionMode = needsMethod
-          ? PayrollRowActionMode.menu
+          ? _employeePaymentMethodCommandAvailable
+              ? PayrollRowActionMode.menu
+              : PayrollRowActionMode.none
           : !_versionedMutationsAvailable && line.balance > 0.01
               ? PayrollRowActionMode.none
               : switch (status) {
@@ -1531,6 +2224,39 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                   PayrollRowStatus.weekNotConfirmed =>
                     PayrollRowActionMode.none,
                 };
+      // `5c` · «Inhabilitado ≠ oculto … siempre acompañado del motivo». La
+      // forma pasiva dice que no se puede; el motivo dice qué lo destrabaría,
+      // y sin él la fila es un muro sin puerta. Cada frase nombra la salida
+      // real, no una genérica.
+      final blockedReason = actionMode != PayrollRowActionMode.none
+          ? ''
+          : needsMethod && !_employeePaymentMethodCommandAvailable
+              ? 'No hay un método de pago configurado. El contrato activo '
+                  'del servidor no permite cambiarlo desde Nóminas.'
+              : !_versionedMutationsAvailable && line.balance > 0.01
+                  ? 'Esta versión de la app todavía no puede registrar pagos ni '
+                      'anticipos. Los saldos se pueden revisar; para operar hay '
+                      'que actualizar.'
+                  : switch (status) {
+                      PayrollRowStatus.openWeek =>
+                        'La semana sigue corriendo y todavía acumula horas. No se '
+                            'paga ni se confirma hasta que termine; los anticipos '
+                            'sí se pueden registrar.',
+                      PayrollRowStatus.nothingToPay =>
+                        'Asistencias todavía no cierra las horas de esta persona, '
+                            'así que la semana no le calcula monto. Se corrige en '
+                            'Asistencias, no acá.',
+                      PayrollRowStatus.weekNotConfirmed =>
+                        'La semana está en borrador: hasta confirmarla las horas '
+                            'no quedan fijas y no se le puede pagar a nadie. '
+                            '«Confirmar semana», abajo, es el paso que falta.',
+                      // Los cuatro restantes no llegan acá: tienen acción propia.
+                      PayrollRowStatus.paid ||
+                      PayrollRowStatus.paidWithinTolerance ||
+                      PayrollRowStatus.pendingTransfer ||
+                      PayrollRowStatus.pendingCash =>
+                        '',
+                    };
       rows.add(PayrollPersonRowVM(
         name: line.employeeName,
         initials: _initialsOf(line.employeeName),
@@ -1546,12 +2272,16 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         statusMeta: _decisionMetaFor(line, status),
         actionLabel: action,
         actionMode: actionMode,
+        blockedReason: blockedReason,
+        // Sólo `nothingToPay` habla de esta persona —Asistencias no cerró SUS
+        // horas—. Los otros tres son de la semana o de la app.
+        blockedReasonIsPersonal: status == PayrollRowStatus.nothingToPay,
         hours: '${line.totalHours.toStringAsFixed(1).replaceAll('.', ',')} h',
         rate: '${_clp(line.hourlyRate)} / h',
         paymentsSummary: line.settledAmount > 0.01
             ? 'Pago registrado ${_clp(line.settledAmount)}'
             : 'Sin pagos registrados',
-        bankAccountCaption: _bankAccountCaptionFor(line),
+        destination: _destinationFor(line),
         shortcuts: _shortcutsFor(line),
         expanded: _expandedLineId == line.id,
         onToggle: () => setState(() {
@@ -1751,6 +2481,20 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
 
   /// `2 personas fuera del cálculo: Rocío y Ana · horas sin cerrar en
   /// Asistencias`. Nombra a quién, porque «alguien» no se puede arreglar.
+  /// `5c` · el motivo compartido de las filas bloqueadas, para la franja del
+  /// pie. Devuelve `null` si no hay ninguna bloqueada **o si no coinciden**:
+  /// una sola nota no puede hablar por dos razones sin mentirle a una, y ese
+  /// caso lo cubre la fila abierta con el suyo.
+  String? _blockedNote(List<PayrollPersonRowVM> rows) {
+    final reasons = <String>{
+      for (final row in rows)
+        if (row.actionMode == PayrollRowActionMode.none &&
+            row.blockedReason.isNotEmpty)
+          row.blockedReason,
+    };
+    return reasons.length == 1 ? reasons.first : null;
+  }
+
   String? _excludedNote(PayrollVoucher week) {
     final excluded = _outsideCalculation(week);
     if (excluded.isEmpty) return null;
@@ -1822,7 +2566,9 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
           : firstPending == null
               ? ''
               : _requiresMethodConfiguration(firstPending)
-                  ? 'Configurar método de $firstName'
+                  ? _employeePaymentMethodCommandAvailable
+                      ? 'Configurar método de $firstName'
+                      : ''
                   : _statusOf(week, firstPending) ==
                           PayrollRowStatus.pendingCash
                       ? 'Confirmar efectivo'
@@ -2187,7 +2933,12 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                     },
                     child: _adaptivePayrollPanel(
                       dialogContext,
-                      desktopWidth: 540,
+                      // 5e/7d: la hoja del composer mide **560**. El `width`
+                      // del HTML de Design es 522 porque esa página no tiene
+                      // reset `border-box` y el padding 18 y el borde 1 quedan
+                      // fuera; el ancho real, y el que se implementa, es 560
+                      // (CHANGELOG de `handoff-t9`, «Modelo de caja al portar»).
+                      desktopWidth: 560,
                       background: visual.surfaceOverlay,
                       child: PayrollPaymentComposer(
                         personName: line.employeeName,
@@ -2204,9 +2955,12 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                         advances: [
                           for (final a in advances)
                             PayrollAdvanceVM(
-                              reason: a.notes?.trim().isNotEmpty == true
-                                  ? a.notes!.trim()
-                                  : 'Anticipo',
+                              // El motivo es lo que ESCRIBIÓ el operador
+                              // (`reason_explanation`), no `notes`, que desde
+                              // `v3` sólo lleva el origen. Mientras el modelo
+                              // descartaba esas columnas, el composer mostraba
+                              // «Registrado desde…» donde debía ir el motivo.
+                              reason: a.displayReason ?? 'Anticipo',
                               meta: '${_two(a.paidCivilDate.day)}/'
                                   '${_two(a.paidCivilDate.month)}'
                                   '${a.reference?.trim().isNotEmpty == true ? ' · ${a.reference!.trim()}' : ''}',
@@ -2450,7 +3204,10 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                 },
                 child: _adaptivePayrollPanel(
                   dialogContext,
-                  desktopWidth: 390,
+                  // 5f/7d: la hoja de efectivo mide **480** (`width` 442 + 18
+                  // de padding + 1 de borde en el HTML sin `border-box`). Los
+                  // 390 anteriores no salían de ningún archivo de Design.
+                  desktopWidth: 480,
                   background: visual.surfaceOverlay,
                   child: PayrollCashSurface(
                     weekLabel: 'Semana ${_isoWeek(week.periodStart)}',
@@ -2599,6 +3356,39 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     return dates;
   }
 
+  /// Etiqueta humana del código de motivo. El wire value (`short_workweek`)
+  /// es del backend; en pantalla se lee en castellano.
+  static String _advanceReasonLabel(PayrollAdvanceReasonCode code) =>
+      switch (code) {
+        PayrollAdvanceReasonCode.requestedAdvance => 'Solicitud de anticipo',
+        PayrollAdvanceReasonCode.shortWorkweek => 'Semana corta',
+        PayrollAdvanceReasonCode.other => 'Otro',
+      };
+
+  static String _civilDayLabel(DateTime day) {
+    final local = day.toLocal();
+    return '${_two(local.day)}/${_two(local.month)}/${local.year}';
+  }
+
+  /// Abre el comprobante original en Archivos.
+  ///
+  /// Viaja el **`appFileId`**, nunca la ruta de Storage, el id del objeto ni su
+  /// ETag: eso es identidad interna del almacenamiento y no tiene por qué
+  /// aparecer en una URL. El `openRequest` es nuevo en cada apertura para que
+  /// pedir dos veces el mismo archivo no se ignore como navegación repetida, y
+  /// se usa `push` —no `go`— porque desde Archivos se vuelve al ledger.
+  void _openAdvanceEvidence(PayrollAdvanceOriginalEvidence evidence) {
+    context.push(
+      Uri(
+        path: '/storage',
+        queryParameters: <String, String>{
+          'file': evidence.appFileId,
+          'openRequest': const Uuid().v4(),
+        },
+      ).toString(),
+    );
+  }
+
   AdvanceLedgerRowVM _advanceLedgerRowFromEntry(
     PayrollAdvanceLedgerEntry entry,
   ) {
@@ -2606,13 +3396,30 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     final notes = entry.notes?.trim();
     final hasReference = reference != null && reference.isNotEmpty;
     final hasNotes = notes != null && notes.isNotEmpty;
-    final reason = hasReference
-        ? reference
-        : hasNotes
-            ? notes
-            : 'Anticipo';
+    final structured = entry.reason;
+    // La razón que se lee es la que ESCRIBIÓ el operador. `reference` es la
+    // referencia bancaria y `notes` es el origen; presentarlos como motivo era
+    // mostrar dos datos distintos bajo el rótulo de un tercero. El respaldo
+    // legacy sólo se usa cuando el asiento no trae motivo estructurado —los
+    // anteriores a `v3`—, que es exactamente cuando no hay nada mejor.
+    final reason = structured != null
+        ? structured.explanation
+        : hasReference
+            ? reference
+            : hasNotes
+                ? notes
+                : 'Anticipo';
     final detailParts = <String>[
-      if (hasReference &&
+      // La etiqueta humana del código acompaña a la explicación en vez de
+      // reemplazarla: el código dice la familia, la explicación dice el caso.
+      if (structured != null) _advanceReasonLabel(structured.code),
+      if (structured?.workEndedOn != null)
+        'Último día trabajado ${_civilDayLabel(structured!.workEndedOn!)}',
+      // `notes` y `reference` no se mezclan con el motivo: cuando hay motivo
+      // estructurado, el origen viaja como su propia glosa.
+      if (structured != null && hasNotes) notes,
+      if (structured == null &&
+          hasReference &&
           hasNotes &&
           notes.toLowerCase() != reference.toLowerCase())
         notes,
@@ -2627,10 +3434,14 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       PayrollAdvanceLedgerStatus.open => visual.info,
       PayrollAdvanceLedgerStatus.voided => visual.neutral,
     };
+    final evidence = entry.originalEvidence;
     return AdvanceLedgerRowVM(
       date: '${_two(local.day)}/${_two(local.month)}',
       reason: reason,
       detail: detailParts.isEmpty ? null : detailParts.join(' · '),
+      evidenceFileName: evidence?.fileName,
+      onOpenEvidence:
+          evidence == null ? null : () => _openAdvanceEvidence(evidence),
       amount: _clp(entry.amount),
       applied: _clp(entry.appliedAmount),
       balance: _clp(entry.balanceAmount),
@@ -2649,16 +3460,30 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     final notes = advance.notes?.trim();
     final hasReference = reference != null && reference.isNotEmpty;
     final hasNotes = notes != null && notes.isNotEmpty;
-    final reason = hasReference
-        ? reference
-        : hasNotes
-            ? notes
-            : 'Anticipo';
-    final detail = hasReference &&
-            hasNotes &&
-            notes.toLowerCase() != reference.toLowerCase()
-        ? notes
-        : null;
+    final explanation = advance.reasonExplanation?.trim();
+    final hasExplanation = explanation != null && explanation.isNotEmpty;
+    // Mismo orden de verdad que el ledger estructurado: la explicación del
+    // operador manda; `reference` es referencia bancaria y nunca es un motivo.
+    final reason = hasExplanation
+        ? explanation
+        : hasReference
+            ? reference
+            : hasNotes
+                ? notes
+                : 'Anticipo';
+    final code = advance.reasonCode;
+    final detailParts = <String>[
+      if (code != null) _advanceReasonLabel(code),
+      if (advance.workEndedOn != null)
+        'Último día trabajado ${_civilDayLabel(advance.workEndedOn!)}',
+      if (hasExplanation && hasNotes) notes,
+      if (!hasExplanation &&
+          hasReference &&
+          hasNotes &&
+          notes.toLowerCase() != reference.toLowerCase())
+        notes,
+    ];
+    final detail = detailParts.isEmpty ? null : detailParts.join(' · ');
 
     return AdvanceLedgerRowVM(
       date:
@@ -2697,6 +3522,53 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         for (final row in data.employees)
           if (row['id'] != null) row['id'].toString(),
     };
+    final requested = _requestedAdvanceEmployeeId?.trim();
+    final requestedIsMissing = requested != null &&
+        requested.isNotEmpty &&
+        !selectableIds.contains(requested);
+
+    if (requestedIsMissing) {
+      // Un deep link es una promesa de identidad. Si no puede cumplirse, no
+      // mostramos el ledger, saldo ni CTA de un reemplazo: aun con un aviso,
+      // esa sustitución permite atribuir movimientos a la persona equivocada.
+      return Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              key: const ValueKey<String>('payroll-advance-target-missing'),
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                const VbNotice(
+                  tone: VbNoticeTone.warning,
+                  title: 'No encontramos a esa persona',
+                  body: 'El enlace ya no coincide con una persona disponible. '
+                      'No mostramos saldos ni movimientos de otra persona.',
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: PayrollTokens.touchMobile,
+                  child: OutlinedButton(
+                    key: const ValueKey<String>(
+                      'payroll-advance-target-missing-reset',
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _requestedAdvanceEmployeeId = null;
+                        _selectedAdvanceEmployeeId = null;
+                      });
+                    },
+                    child: const Text('Ver personas disponibles'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     if (selectableIds.isEmpty) {
       return Center(
         child: ConstrainedBox(
@@ -2744,10 +3616,15 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
-                if (!_versionedMutationsAvailable) ...[
+                if (!_versionedMutationsAvailable ||
+                    !_structuredAdvanceAuditAvailable) ...[
                   Text(
-                    'Actualización del servidor pendiente: registrar '
-                    'anticipos se habilita cuando se instale.',
+                    !_versionedMutationsAvailable
+                        ? 'Actualización del servidor pendiente: el ledger '
+                            'queda disponible sólo para revisión.'
+                        : 'El contrato activo del servidor todavía no admite '
+                            'anticipos con motivo y respaldo auditables. El '
+                            'ledger queda disponible sólo para revisión.',
                     key: const ValueKey<String>(
                       'payroll-empty-advance-blocked-reason',
                     ),
@@ -2800,16 +3677,21 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         (byEmployee[selectedId] ?? const <EmployeeAdvance>[]).toList()
           ..sort((a, b) => a.paidCivilDate.compareTo(b.paidCivilDate));
     final selectedName = _employeeName(selectedId);
-    final canRegisterForSelected =
-        _versionedMutationsAvailable && _employeeCanReceiveAdvance(selectedId);
+    final canRegisterForSelected = _versionedMutationsAvailable &&
+        _structuredAdvanceAuditAvailable &&
+        _employeeCanReceiveAdvance(selectedId);
     final unavailableReason = canRegisterForSelected
         ? null
         : !_versionedMutationsAvailable
             ? 'Actualización del servidor pendiente: el ledger queda '
                 'disponible para revisión y registrar anticipos se habilita '
                 'cuando se instale.'
-            : 'Esta persona ya no está disponible como trabajador activo. '
-                'Su ledger se conserva para revisión, pero no admite nuevos anticipos.';
+            : !_structuredAdvanceAuditAvailable
+                ? 'El contrato activo del servidor todavía no admite '
+                    'anticipos con motivo y respaldo auditables. Puedes '
+                    'revisar el ledger, pero no registrar uno nuevo.'
+                : 'Esta persona ya no está disponible como trabajador activo. '
+                    'Su ledger se conserva para revisión, pero no admite nuevos anticipos.';
     final openBalance =
         selectedAdvances.fold<double>(0, (s, a) => s + a.availableAmount);
 
@@ -2855,7 +3737,10 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                     ? 'aplicable ahora'
                     : 'todo aplicado',
             selected: id == selectedId,
-            onTap: () => setState(() => _selectedAdvanceEmployeeId = id),
+            onTap: () => setState(() {
+              _requestedAdvanceEmployeeId = null;
+              _selectedAdvanceEmployeeId = id;
+            }),
           ),
       ],
       selectedName: selectedName,
@@ -3077,7 +3962,16 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     );
   }
 
-  // ── Móvil (<900): tarjeta por persona, CTA 50, targets 48 ────────────────
+  // ── Móvil (<900): tarjeta por persona, targets 48 ────────────────────────
+  //
+  // El CTA táctil mide `PayrollTokens.touchMobile` = **48**, que es lo que
+  // publica el dueño canónico de densidad `F-06 VbDensity`
+  // (`Control/botón · TOUCH 48`). El frame 5l dibuja 50 y **no se sigue**:
+  // `universal-ui-component-system.md` §2 prohíbe que una feature revierta la
+  // cascada o conserve un override visual propio, y que una ronda anterior
+  // hubiera cerrado 5l contra su frame no le gana al owner. Corregido el
+  // 2026-08-01, junto con la narrativa de «excepción heredada» que lo
+  // justificaba — que era precisamente la forma en que un override sobrevive.
 
   String _compactHeaderContext(
     PayrollRedesignData data,
@@ -3212,12 +4106,32 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
             Expanded(child: _buildAdvances(data))
           else if (_scope == _PayrollScope.history)
             Expanded(child: _buildHistory(data, compact: true))
-          else ...[
+          // `5m` · tablet 834: el CHROME es compacto —header único con drawer,
+          // «el contrato de 3c se mantiene intacto»— pero el CONTENIDO sigue
+          // siendo **la tabla de cuatro columnas**, no las tarjetas de 390. La
+          // banda existía en `PayrollQueueSurface` y el host no la montaba
+          // nunca: a 834 se veían tarjetas de teléfono en una pantalla que
+          // tiene ancho de sobra para persona, total, a pagar y decisión.
+          else if (_isTabletBand(context) && week != null) ...[
+            Expanded(
+              child: PayrollQueueSurface(
+                weeks: _weekCards(data),
+                rows: _personRows(week),
+                totals: _totals(week),
+                dense: true,
+                excludedNote: _excludedNote(week),
+                blockedNote: _blockedNote(_personRows(week)),
+                onOpenAttendance: _openAttendances,
+                onConfirmWeek: () => _commitWeek(week),
+                onNextAction: () => _runNextWeekAction(week),
+              ),
+            ),
+          ] else ...[
             _MobileWeekStrip(weeks: weeks),
             ...[
               Expanded(
                 child: week == null
-                    ? _PayrollEmptyWeeks(onOpenAttendance: _openAttendances)
+                    ? _emptyWeeksSurface(data)
                     : ListView(
                         padding: const EdgeInsets.all(13),
                         children: [
@@ -3294,11 +4208,26 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
   Widget build(BuildContext context) {
     final visual = PayrollVisualTokens.of(context);
     if (_isLoading && _data == null) {
-      return ColoredBox(
-        color: visual.canvas,
-        child: Center(
-          child: CircularProgressIndicator(color: visual.accent),
-        ),
+      // 5k · `X-01`: la silueta real, no un spinner. El spinner no ocupaba el
+      // sitio de nada, así que al llegar los datos el módulo de comando, la
+      // banda de semanas, la tabla y la barra de dinero **aparecían de golpe**
+      // y el control de decisión saltaba a su posición definitiva.
+      //
+      // Este gate sólo se cruza en la PRIMERA carga: una recarga conserva
+      // `_data`, se queda en la vista real y avisa con el banner de proyección
+      // vieja.
+      //
+      // **Limitación declarada, no supuesto** (revisión de Codex, 2026-08-01):
+      // la silueta es la del scope `Semanas` porque ése es el scope mientras se
+      // carga, pero `_load` puede aterrizar en **Historial** —cuando el
+      // `initialVoucherId` que llegó de Asistencias ya está pagado, o cuando no
+      // queda ninguna semana abierta—. En ese caso la silueta anticipó una
+      // superficie distinta de la que aparece. No se puede resolver antes de
+      // cargar: el scope de llegada lo decide el dato. Se declara y se prueba
+      // (`payroll_loading_skeleton_test.dart`), en vez de afirmar que la
+      // silueta siempre acierta.
+      return _PayrollLoadingSkeleton(
+        compact: ResponsiveViewport.usesCompactShell(context),
       );
     }
     final error = _error;
@@ -3354,9 +4283,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                   return _buildHistory(data, compact: false);
                 }
                 if (week == null) {
-                  return _PayrollEmptyWeeks(
-                    onOpenAttendance: _openAttendances,
-                  );
+                  return _emptyWeeksSurface(data);
                 }
                 return PayrollQueueSurface(
                   weeks: _weekCards(data),
@@ -3364,6 +4291,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                   totals: _totals(week),
                   dense: dense,
                   excludedNote: _excludedNote(week),
+                  blockedNote: _blockedNote(_personRows(week)),
                   onOpenAttendance: _openAttendances,
                   onConfirmWeek: () => _commitWeek(week),
                   onNextAction: () => _runNextWeekAction(week),
@@ -3377,12 +4305,453 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
   }
 }
 
-// ── Piezas móviles (spec 390: tarjeta 12, CTA 50/11, targets 48) ────────────
+// ── Piezas móviles (spec 390: tarjeta 12, targets 48) ───────────────────────
+// Toda altura táctil sale de `PayrollTokens.touchMobile` (F-06 · TOUCH 48).
+
+/// Métrica del esqueleto expuesta para su contrato.
+///
+/// La silueta es privada —nadie la monta desde fuera— pero **cuántas filas se
+/// insinúan** es una decisión que hay que poder auditar sin renderizar seis
+/// ventanas de alturas distintas.
+@visibleForTesting
+abstract final class PayrollLoadingSkeletonMetrics {
+  static int ghostRowsFor(double availableHeight) =>
+      _PayrollLoadingSkeleton.ghostRowsFor(availableHeight);
+}
+
+/// **5k · esqueleto de carga con la silueta real** — consume `X-01`
+/// ([VbSkeleton]) para el relleno y **pone el marco él mismo**.
+///
+/// La regla del frame es literal: «se dibuja la silueta real de la tabla —no un
+/// spinner— para que la posición del control de decisión no salte al llegar los
+/// datos». Por eso cada banda toma su altura del token que usa la superficie de
+/// verdad (`moduleCommandH`, `queueStripH`, `tableHeaderH`, `rowH`,
+/// `moneyBarH`, `touchMobile`) en vez de un número plausible: si la tabla
+/// cambia de densidad, la silueta cambia con ella y el contrato lo comprueba.
+///
+/// **La banda de comando va vacía, a propósito.** Se dibuja sobre el cromo
+/// navy, donde los roles neutros de `X-01` no corresponden, y su contenido son
+/// conteos que todavía no existen. Reservar el alto es honesto; rellenarlo con
+/// cifras fantasma sería inventar.
+class _PayrollLoadingSkeleton extends StatelessWidget {
+  const _PayrollLoadingSkeleton({required this.compact});
+
+  final bool compact;
+
+  /// La anatomía de fila que publica `X-01`: `26px 1fr 90px 110px`, gap 10.
+  static const double _ghostGap = 10;
+  static const double _ghostAmount = 90;
+  static const double _ghostStatus = 110;
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = PayrollVisualTokens.of(context);
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      // La estructura se lee de la semántica; sin esta etiqueta un lector de
+      // pantalla no anuncia nada mientras carga y la pantalla parece rota.
+      label: 'Cargando las semanas de nómina',
+      child: VbSkeletonGroup(
+        // Un solo reloj para toda la silueta: con uno por celda serían ~40
+        // tickers y, peor, 40 fases sueltas parpadeando por su cuenta.
+        child: Container(
+          key: const ValueKey('payroll-loading-skeleton'),
+          color: visual.canvas,
+          child:
+              compact ? _compact(context, visual) : _desktop(context, visual),
+        ),
+      ),
+    );
+  }
+
+  Widget _desktop(BuildContext context, PayrollVisualTokens visual) {
+    final chrome = WorkspaceChromeStyle.maybeOf(context) ??
+        WorkspaceChromeStyleData.vinabike;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Container(
+          key: const ValueKey('payroll-loading-command-band'),
+          height: PayrollTokens.moduleCommandH,
+          decoration: BoxDecoration(
+            color: chrome.canvas,
+            border: Border(bottom: BorderSide(color: chrome.edge)),
+          ),
+        ),
+        Container(
+          key: const ValueKey('payroll-loading-week-strip'),
+          height: PayrollTokens.queueStripH,
+          decoration: BoxDecoration(
+            color: visual.surface,
+            border: Border(bottom: BorderSide(color: visual.border)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+          child: Row(
+            children: <Widget>[
+              for (var i = 0; i < 3; i++) ...<Widget>[
+                Expanded(child: _weekCardGhost(visual)),
+                if (i != 2) const SizedBox(width: PayrollTokens.gapCards),
+              ],
+            ],
+          ),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+            child: LayoutBuilder(
+              builder: (context, constraints) => Align(
+                alignment: Alignment.topCenter,
+                child: _tableGhost(visual, constraints.maxHeight),
+              ),
+            ),
+          ),
+        ),
+        Container(
+          key: const ValueKey('payroll-loading-money-bar'),
+          height: PayrollTokens.moneyBarH,
+          decoration: BoxDecoration(
+            color: visual.surface,
+            border: Border(top: BorderSide(color: visual.borderStrong)),
+            boxShadow: visual.moneyBar,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          child: Row(
+            children: <Widget>[
+              const VbSkeleton.bar(width: 74, height: VbSkeleton.labelHeight),
+              const SizedBox(width: 8),
+              const VbSkeleton.bar(width: 118, height: 20),
+              const Spacer(),
+              // El control de decisión, en su sitio exacto: es LO que no puede
+              // saltar cuando lleguen los datos.
+              SizedBox(
+                key: const ValueKey('payroll-loading-primary-action'),
+                width: 168,
+                height: PayrollTokens.ctaH,
+                child: _ghostSurface(
+                  visual,
+                  radius: PayrollTokens.rControl,
+                  key: const ValueKey('payroll-loading-ghost-surface'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _compact(BuildContext context, PayrollVisualTokens visual) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Container(
+          height: PayrollTokens.touchMobile,
+          color: visual.surface,
+          foregroundDecoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: visual.border)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+          child: Row(
+            children: <Widget>[
+              for (var i = 0; i < 3; i++) ...<Widget>[
+                const VbSkeleton.bar(width: 62),
+                if (i != 2) const SizedBox(width: 14),
+              ],
+            ],
+          ),
+        ),
+        Container(
+          height: 62,
+          color: visual.surface,
+          padding: const EdgeInsets.fromLTRB(9, 7, 9, 7),
+          child: Row(
+            children: <Widget>[
+              for (var i = 0; i < 3; i++) ...<Widget>[
+                Expanded(
+                  child: _ghostSurface(visual, radius: PayrollTokens.rField),
+                ),
+                if (i != 2) const SizedBox(width: 7),
+              ],
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(13),
+            children: <Widget>[
+              for (var i = 0; i < 3; i++) ...<Widget>[
+                _personCardGhost(visual),
+                const SizedBox(height: 10),
+              ],
+            ],
+          ),
+        ),
+        Container(
+          key: const ValueKey('payroll-loading-money-bar'),
+          padding: const EdgeInsets.fromLTRB(13, 10, 13, 12),
+          decoration: BoxDecoration(
+            color: visual.surface,
+            border: Border(top: BorderSide(color: visual.borderStrong)),
+            boxShadow: visual.moneyBar,
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                SizedBox(
+                  // La fila de `FALTA · $…` la mide su cifra, y la cifra la
+                  // mide su estilo: `numBar` a 19 con `height 1.15`. Poner 19
+                  // acá dejaba la silueta 3 px más baja que la barra real —el
+                  // salto que 5k persigue, en pequeño— y sólo se vio al
+                  // comparar los dos rectángulos. El `ceil` no es adorno: el
+                  // motor redondea la caja de línea al píxel lógico entero
+                  // (19 × 1,15 = 21,85 se dibuja 22), y sin él quedaba un
+                  // desfase de 0,15 px. El contrato compara los dos rectángulos
+                  // exactos, así que si eso cambia, se entera.
+                  height: ((visual.numBar.height ?? 1) * 19).ceilToDouble(),
+                  child: const Row(
+                    children: <Widget>[
+                      VbSkeleton.bar(width: 46, height: VbSkeleton.labelHeight),
+                      SizedBox(width: 8),
+                      VbSkeleton.bar(width: 108, height: 19),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  // El CTA de la barra compacta mide `TOUCH`: reservarlo con
+                  // otra altura devolvería exactamente el salto que 5k corrige.
+                  key: const ValueKey('payroll-loading-primary-action'),
+                  height: PayrollTokens.touchMobile,
+                  child: _ghostSurface(
+                    visual,
+                    radius: PayrollTokens.rField,
+                    key: const ValueKey('payroll-loading-ghost-surface'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _weekCardGhost(PayrollVisualTokens visual) {
+    return Container(
+      decoration: BoxDecoration(
+        color: visual.surfaceSunken,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: visual.border),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          VbSkeleton.bar(width: 74, height: VbSkeleton.labelHeight),
+          VbSkeleton.bar(width: 96),
+        ],
+      ),
+    );
+  }
+
+  /// Cuántas filas caben de verdad en el hueco que le queda a la tabla.
+  ///
+  /// El número **no sale del frame**: `5k` dibuja dos filas a modo ilustrativo
+  /// y el panel de `X-01` en la guía se corta antes de decir nada al respecto.
+  /// Un 5 fijo era presentar una cifra adivinada como si fuera del diseño, y
+  /// además dejaba hueco en una ventana alta y desbordaba en una baja. Se
+  /// derivan del alto disponible, descontando las dos franjas de cabecera.
+  ///
+  /// **Sin techo, y esa es la corrección** (revisión de Codex, 2026-08-01, que
+  /// deroga el `maxGhostRows = 6` que estuvo vigente unas horas). El 6 se había
+  /// defendido con las semanas que había ese día en producción —4, 4, 3 y 3
+  /// personas—, y **una muestra de hoy no es un owner canónico**: el taller
+  /// contrata y despide, y el número habría quedado congelado sin que nadie
+  /// supiera de dónde salía. Un esqueleto **no promete una cantidad**: expresa
+  /// que la cardinalidad todavía no se conoce, y para eso lo honesto es ocupar
+  /// el sitio que hay. Si un día aparece un owner estable del tamaño de una
+  /// nómina, se cita y se vuelve a poner un tope; mientras tanto, no.
+  ///
+  /// El piso es **una fila**: es el mínimo estructural para que lo dibujado se
+  /// lea como una tabla y no como dos franjas sueltas.
+  static int ghostRowsFor(double availableHeight) {
+    final body =
+        availableHeight - PayrollTokens.tableHeaderH - PayrollTokens.tableColsH;
+    if (body <= 0) return 1;
+    // Sólo filas COMPLETAS: media fila insinuada se lee como una fila cortada.
+    final fits = (body / PayrollTokens.rowH).floor();
+    return fits < 1 ? 1 : fits;
+  }
+
+  Widget _tableGhost(PayrollVisualTokens visual, double availableHeight) {
+    final rows = ghostRowsFor(availableHeight);
+    return Container(
+      key: const ValueKey('payroll-loading-table'),
+      decoration: BoxDecoration(
+        color: visual.surface,
+        borderRadius: BorderRadius.circular(PayrollTokens.rPanel),
+        border: Border.all(color: visual.borderStrong),
+        boxShadow: visual.raised,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          // La tabla real tiene DOS franjas antes de las filas, y cada una es
+          // de un token distinto: el título (`tableHeaderH`) y los rótulos de
+          // columna (`tableColsH`, sobre `surfaceSunken`). Reservar sólo la
+          // primera dejaba la primera fila **30 px** más arriba de donde iba a
+          // aterrizar: el mismo salto que 5k corrige, escondido dentro de la
+          // tabla (hallazgo de la revisión de Codex, 2026-08-01).
+          Container(
+            key: const ValueKey('payroll-loading-table-title'),
+            height: PayrollTokens.tableHeaderH,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: visual.border)),
+            ),
+            child: const Row(
+              children: <Widget>[
+                VbSkeleton.bar(width: 168, height: 13),
+                SizedBox(width: 11),
+                VbSkeleton.bar(width: 152),
+              ],
+            ),
+          ),
+          Container(
+            key: const ValueKey('payroll-loading-table-columns'),
+            height: PayrollTokens.tableColsH,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: visual.surfaceSunken,
+              border: Border(bottom: BorderSide(color: visual.border)),
+            ),
+            child: const Row(
+              children: <Widget>[
+                SizedBox(width: VbSkeleton.blockSize),
+                SizedBox(width: _ghostGap),
+                Expanded(
+                  child:
+                      VbSkeleton.bar(width: 56, height: VbSkeleton.labelHeight),
+                ),
+                SizedBox(
+                  width: _ghostAmount,
+                  child: VbSkeleton.bar(height: VbSkeleton.labelHeight),
+                ),
+                SizedBox(width: _ghostGap),
+                SizedBox(
+                  width: _ghostStatus,
+                  child: VbSkeleton.bar(height: VbSkeleton.labelHeight),
+                ),
+              ],
+            ),
+          ),
+          for (var i = 0; i < rows; i++)
+            Container(
+              height: PayrollTokens.rowH,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: i == rows - 1
+                  ? null
+                  : BoxDecoration(
+                      border: Border(bottom: BorderSide(color: visual.border)),
+                    ),
+              child: const Row(
+                children: <Widget>[
+                  VbSkeleton.block(size: VbSkeleton.blockSize),
+                  SizedBox(width: _ghostGap),
+                  Expanded(child: VbSkeleton.bar()),
+                  SizedBox(width: _ghostGap),
+                  SizedBox(width: _ghostAmount, child: VbSkeleton.bar()),
+                  SizedBox(width: _ghostGap),
+                  SizedBox(width: _ghostStatus, child: VbSkeleton.bar()),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _personCardGhost(PayrollVisualTokens visual) {
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: visual.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: visual.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const Row(
+            children: <Widget>[
+              VbSkeleton.block(size: 34, radius: PayrollTokens.rField),
+              SizedBox(width: _ghostGap),
+              Expanded(child: VbSkeleton.bar()),
+              SizedBox(width: _ghostGap),
+              VbSkeleton.bar(width: 72),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const VbSkeleton.bar(height: VbSkeleton.labelHeight),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: PayrollTokens.touchMobile,
+            child: _ghostSurface(visual, radius: PayrollTokens.rField),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Un control entero insinuado. No usa [VbSkeleton] porque no es texto: es
+  /// una superficie, y el barrido de la guía es para el relleno de una línea.
+  ///
+  /// **Lleva borde, y no es decoración.** La primera versión pintaba sólo
+  /// `neutralSoft` y en **oscuro desaparecía sobre el lienzo**: la captura de
+  /// la app viva a 834 mostró la tira de semanas completamente vacía donde
+  /// debía haber tres pastillas. Los controles reales que insinúa —la pastilla
+  /// de semana, el CTA— se apoyan en `surfaceSunken` **con borde**, así que el
+  /// fantasma usa el mismo par y se ve en los dos brillos.
+  Widget _ghostSurface(
+    PayrollVisualTokens visual, {
+    required double radius,
+    Key? key,
+  }) {
+    return DecoratedBox(
+      key: key,
+      decoration: BoxDecoration(
+        color: visual.surfaceSunken,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: visual.border),
+      ),
+    );
+  }
+}
 
 class _PayrollEmptyWeeks extends StatelessWidget {
-  const _PayrollEmptyWeeks({required this.onOpenAttendance});
+  const _PayrollEmptyWeeks({
+    super.key,
+    required this.title,
+    required this.body,
+    required this.actionLabel,
+    required this.actionKey,
+    required this.icon,
+    required this.onAction,
+  });
 
-  final VoidCallback onOpenAttendance;
+  final String title;
+  final String body;
+  final String actionLabel;
+  final Key actionKey;
+  final IconData icon;
+  final VoidCallback onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -3403,31 +4772,26 @@ class _PayrollEmptyWeeks extends StatelessWidget {
                   borderRadius: BorderRadius.circular(PayrollTokens.rField),
                   border: Border.all(color: visual.accentBorder),
                 ),
-                child: Icon(
-                  Icons.calendar_month_outlined,
-                  color: visual.accent,
-                  size: 21,
-                ),
+                child: Icon(icon, color: visual.accent, size: 21),
               ),
               const SizedBox(height: 14),
               Text(
-                'No hay semanas por resolver',
+                title,
                 textAlign: TextAlign.center,
                 style: visual.sectionTitle,
               ),
               const SizedBox(height: 6),
               Text(
-                'Cuando cierres horas en Asistencias, la semana aparecerá aquí '
-                'lista para confirmar y pagar.',
+                body,
                 textAlign: TextAlign.center,
                 style: visual.bodyS,
               ),
               const SizedBox(height: 16),
               OutlinedButton.icon(
-                key: const ValueKey('payroll-empty-weeks-open-attendance'),
-                onPressed: onOpenAttendance,
+                key: actionKey,
+                onPressed: onAction,
                 icon: const Icon(Icons.open_in_new, size: 16),
-                label: const Text('Abrir Asistencias'),
+                label: Text(actionLabel),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: visual.accent,
                   minimumSize: const Size(0, PayrollTokens.touchMobile),
@@ -3706,7 +5070,6 @@ class _MobilePersonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visual = PayrollVisualTokens.of(context);
-    final tone = vm.toneFor(visual);
     final pending = vm.isPending;
     final hasAction =
         vm.actionMode != PayrollRowActionMode.none && vm.actionLabel.isNotEmpty;
@@ -3843,24 +5206,48 @@ class _MobilePersonCard extends StatelessWidget {
               // El estado sólo se rotula cuando la acción no lo dice ya: con
               // «Pagar» debajo, un chip «Por pagar» es la misma frase dos
               // veces.
+              //
+              // `5c`: **la gramática de decisión no cambia con el ancho**. Si
+              // la fila está bloqueada, en el teléfono tampoco lleva píldora —
+              // esa figura es la de las formas activas— sino el hecho en texto
+              // pasivo, con su motivo debajo, que acá sí cabe entero.
               if (!hasAction)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: tone.soft,
-                    borderRadius: BorderRadius.circular(PayrollTokens.rPill),
-                    border: Border.all(color: tone.border),
-                  ),
-                  child: Text(
-                    vm.statusMeta.isEmpty
+                Expanded(
+                  child: Semantics(
+                    enabled: false,
+                    label: vm.blockedReason.isEmpty
                         ? vm.statusLabel
-                        : '${vm.statusLabel} ${vm.statusMeta}',
-                    style: visual.labelStrong.copyWith(
-                      fontSize: 9.5,
-                      color: tone.fg,
+                        : '${vm.statusLabel}. ${vm.blockedReason}',
+                    excludeSemantics: true,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          vm.statusMeta.isEmpty
+                              ? vm.statusLabel
+                              : '${vm.statusLabel} ${vm.statusMeta}',
+                          key: ValueKey<String>(
+                            'payroll-mobile-blocked-${vm.name}',
+                          ),
+                          style: visual.bodyS.copyWith(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w400,
+                            color: visual.inkFaint,
+                          ),
+                        ),
+                        if (vm.blockedReason.isNotEmpty &&
+                            vm.blockedReasonIsPersonal)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2, right: 8),
+                            child: Text(
+                              vm.blockedReason,
+                              style: visual.bodyS.copyWith(
+                                fontSize: 10.5,
+                                color: visual.inkFaint,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
@@ -3928,6 +5315,17 @@ class _MobilePersonCard extends StatelessWidget {
                     label: 'Pagos registrados',
                     value: vm.paymentsSummary,
                   ),
+                  // El destino no es un lujo de escritorio: quien transfiere
+                  // desde el teléfono necesita el mismo dato. La pista de
+                  // teclado, en cambio, se queda en escritorio: acá no hay
+                  // teclas que mover.
+                  if (vm.destination case final destination?)
+                    factRow(
+                      label: 'Cuenta de destino',
+                      value: destination.missing
+                          ? 'Sin registrar'
+                          : destination.label!,
+                    ),
                 ],
               ),
             ),
@@ -3944,7 +5342,7 @@ class _MobilePersonCard extends StatelessWidget {
                     : 'Ver respaldo del pago',
                 semanticLabel: '${vm.actionLabel} para ${vm.name}',
                 onTap: vm.onAction,
-                height: 50,
+                height: PayrollTokens.touchMobile,
                 fontSize: 13,
                 borderRadius: 11,
               )
@@ -3974,7 +5372,7 @@ class _MobilePersonCard extends StatelessWidget {
                     onTap: vm.onAction,
                     mouseCursor: SystemMouseCursors.click,
                     child: SizedBox(
-                      height: 50,
+                      height: PayrollTokens.touchMobile,
                       child: Center(
                         child: Text(
                           pending
@@ -4021,6 +5419,10 @@ class _MobileMoneyBar extends StatelessWidget {
     final showAction = hasNextAction || totals.showCommitAction;
 
     return Container(
+      // Identidad de producción, igual que su par de escritorio: el contrato
+      // del esqueleto la buscaba por ancestro y eso se rompe con cualquier
+      // envoltorio nuevo (revisión de Codex, 2026-08-01).
+      key: const ValueKey<String>('payroll-mobile-money-bar'),
       padding: const EdgeInsets.fromLTRB(13, 10, 13, 12),
       decoration: BoxDecoration(
         color: visual.surface,

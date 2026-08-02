@@ -1567,10 +1567,9 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
 
     late final OverlayEntry entry;
     entry = OverlayEntry(
-      builder: (overlayContext) => Positioned(
-        top: 10,
-        left: 16,
-        right: 16,
+      builder: (overlayContext) => WorkspaceTopOverlay(
+        topGap: 10,
+        horizontalMargin: 16,
         child: Material(
           color: Colors.transparent,
           child: Center(

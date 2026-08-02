@@ -96,7 +96,74 @@ enum EmployeeStatus { active, inactive, onLeave, terminated }
 
 enum PaymentMethod { cash, transfer, check }
 
-enum BankAccountType { checking, savings, vista }
+/// Tipo de cuenta bancaria de un trabajador.
+///
+/// **Owner canónico del dominio, y la fuente es el constraint de producción**,
+/// no una lista escrita a mano en cada pantalla:
+///
+/// ```sql
+/// employees_bank_account_type_check
+///   CHECK (bank_account_type = ANY (ARRAY[
+///     'Cuenta Corriente', 'Cuenta Vista', 'Cuenta de Ahorro']))
+/// ```
+///
+/// **Por qué existe este enum enriquecido.** Hasta el 2026-08-01 el enum
+/// serializaba `'checking' / 'savings' / 'vista'` —códigos en inglés que el
+/// CHECK **rechaza**— y el desplegable del editor rotulaba «Cuenta Ahorro»,
+/// que tampoco es uno de los tres valores. O sea: el único camino que escribía
+/// este campo no podía escribirlo. Es consistente con lo que muestran los
+/// datos: los 7 trabajadores lo tienen en `NULL`.
+///
+/// **La causa de fondo, para que no se repita:** se derivó el dominio del
+/// **tipo de dato** (`information_schema.columns` decía `text`, así que se
+/// asumió texto libre) sin mirar **los constraints** de la tabla. Un `text` con
+/// `CHECK` es un enum disfrazado. Antes de declarar que una columna admite
+/// cualquier valor, se lee `pg_constraint`.
+///
+/// [decode] acepta lo viejo y lo vivo para no perder lo ya guardado;
+/// [storageValue] es lo único que se escribe.
+enum BankAccountType {
+  checking('Cuenta Corriente'),
+  vista('Cuenta Vista'),
+  savings('Cuenta de Ahorro');
+
+  const BankAccountType(this.storageValue);
+
+  /// El valor exacto que admite el CHECK. Es también la etiqueta: son frases
+  /// del dueño, no códigos, así que traducirlas otra vez sólo agrega una
+  /// oportunidad de divergir.
+  final String storageValue;
+
+  String get label => storageValue;
+
+  /// El dominio completo, para que una pantalla ofrezca opciones sin
+  /// reescribir la lista.
+  static List<String> get storageDomain =>
+      List<String>.unmodifiable(values.map((value) => value.storageValue));
+
+  /// Acepta los valores vivos y los códigos legacy en inglés.
+  ///
+  /// También tolera «Cuenta Ahorro» —sin el «de»— porque es lo que el
+  /// desplegable del editor mostraba, y alguien pudo copiarlo a mano.
+  static BankAccountType? decode(String? raw) {
+    final value = raw?.trim();
+    if (value == null || value.isEmpty) return null;
+    for (final candidate in values) {
+      if (candidate.storageValue.toLowerCase() == value.toLowerCase()) {
+        return candidate;
+      }
+    }
+    return switch (value.toLowerCase()) {
+      'checking' || 'cuenta corriente' || 'corriente' => checking,
+      'savings' || 'cuenta ahorro' || 'ahorro' => savings,
+      'vista' || 'cuenta vista' => vista,
+      _ => null,
+    };
+  }
+
+  /// Lo único que se manda a la base.
+  static String? encode(BankAccountType? type) => type?.storageValue;
+}
 
 class Employee {
   final String? id;
@@ -342,29 +409,13 @@ class Employee {
     }
   }
 
-  static BankAccountType? _bankAccountTypeFromString(String? value) {
-    switch (value) {
-      case 'checking':
-        return BankAccountType.checking;
-      case 'savings':
-        return BankAccountType.savings;
-      case 'vista':
-        return BankAccountType.vista;
-      default:
-        return null;
-    }
-  }
+  // El dominio lo publica `BankAccountType`, que lo toma del constraint de
+  // producción. Estas dos envolturas quedan sólo para no tocar los llamadores.
+  static BankAccountType? _bankAccountTypeFromString(String? value) =>
+      BankAccountType.decode(value);
 
-  static String _bankAccountTypeToString(BankAccountType type) {
-    switch (type) {
-      case BankAccountType.checking:
-        return 'checking';
-      case BankAccountType.savings:
-        return 'savings';
-      case BankAccountType.vista:
-        return 'vista';
-    }
-  }
+  static String _bankAccountTypeToString(BankAccountType type) =>
+      type.storageValue;
 
   Employee copyWith({
     String? id,

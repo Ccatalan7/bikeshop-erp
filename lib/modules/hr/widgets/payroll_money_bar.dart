@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/utils/responsive_viewport.dart';
+
 /// Chilean peso amounts, always integral and grouped with a period.
 ///
 /// Payroll money is compared across a bank statement, a voucher line and a
@@ -79,7 +81,10 @@ class PayrollMoneyBar extends StatelessWidget {
   });
 
   static const double minimumTouchTarget = 48;
-  static const double _secondaryFiguresWidth = 600;
+
+  /// Las cifras secundarias necesitan su propio ancho: por debajo de esto
+  /// «Monto reconocido» no cabe junto a la principal sin recortarse.
+  static const double _secondaryFiguresWidth = 520;
 
   /// Below this the actions move under the figures.
   ///
@@ -87,7 +92,15 @@ class PayrollMoneyBar extends StatelessWidget {
   /// Squeezing two touch-sized buttons and an amount onto one line at 384 px or
   /// inside a 480 px sheet either clips the action or shrinks the label below a
   /// readable size, and the action is the point of the bar.
-  static const double _stackedActionsWidth = 520;
+  /// **Bajo el compacto canónico las acciones se apilan a ancho completo.**
+  ///
+  /// Con 520 la barra mantenía figuras y botón en la misma fila hasta muy
+  /// abajo, y el rótulo largo del primario —«Confirmar N semanas y aplicar
+  /// conciliación»— se recortaba a «Confirmar 4 sema…», junto con «Monto
+  /// reco…». Un botón que no dice qué hace no es una acción: es una adivinanza
+  /// sobre dinero. Apilando, el primario ocupa la fila entera y el texto entra
+  /// completo en tablet y teléfono.
+  static const double _stackedActionsWidth = ResponsiveViewport.desktopMin;
 
   final List<PayrollMoneyFigure> figures;
   final Widget? primaryAction;
@@ -151,23 +164,48 @@ class PayrollMoneyBar extends StatelessWidget {
                 if (actions.isEmpty) return figuresRow;
 
                 if (stackActions) {
+                  // **Bajo teléfono las acciones se apilan; en tablet siguen
+                  // en fila.** Repartir la fila por proporción falla en los
+                  // dos sentidos: mitad y mitad cortaba «Confirmar N semanas y
+                  // aplicar conciliación», y darle 3 de 4 dejaba a «Cancelar»
+                  // sin espacio. A 430 no hay reparto que salve una frase y
+                  // una palabra a la vez, así que cada una toma la fila
+                  // entera. A 834 sí caben lado a lado.
+                  // `5m` nota 04: «A 834 la barra monetaria se apila: cifra y
+                  // razón arriba, botón de 46 abajo. Nada de un botón de 34
+                  // perdido en una esquina táctil.» Eso vale para la barra de
+                  // **una sola acción** —la semana—; el caso de dos acciones
+                  // del OCR conserva su fila, que es la decisión del párrafo
+                  // de arriba y no se deshace.
+                  final stackVertically = constraints.maxWidth <
+                          ResponsiveViewport.phoneMaxExclusive ||
+                      actions.length == 1;
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       figuresRow,
                       const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          for (var index = 0;
-                              index < actions.length;
-                              index++) ...[
-                            Expanded(child: actions[index]),
-                            if (index < actions.length - 1)
+                      if (stackVertically)
+                        for (var index = actions.length - 1;
+                            index >= 0;
+                            index--) ...[
+                          // El primario arriba: es lo que la etapa pide.
+                          actions[index],
+                          if (index > 0) const SizedBox(height: 8),
+                        ]
+                      else
+                        Row(
+                          children: [
+                            for (var index = 0;
+                                index < actions.length - 1;
+                                index++) ...[
+                              actions[index],
                               const SizedBox(width: 8),
+                            ],
+                            Expanded(child: actions.last),
                           ],
-                        ],
-                      ),
+                        ),
                     ],
                   );
                 }
@@ -265,7 +303,17 @@ class PayrollPrimaryAction extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : Icon(icon ?? Icons.arrow_forward_rounded, size: 18),
-      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      // **Dos líneas, no puntos suspensivos.** Este botón mueve dinero: en la
+      // app viva a 834 y 430 decía «Confirmar 4 sema…» y «Ir a apli…», que no
+      // es una acción sino una adivinanza. Un rótulo que envuelve sigue
+      // diciendo entero lo que va a pasar; el alto mínimo táctil se conserva y
+      // el botón crece si hace falta.
+      label: Text(
+        label,
+        maxLines: 3,
+        textAlign: TextAlign.center,
+        overflow: TextOverflow.ellipsis,
+      ),
       style: FilledButton.styleFrom(
         minimumSize: const Size(0, PayrollMoneyBar.minimumTouchTarget),
       ),
@@ -291,7 +339,12 @@ class PayrollSecondaryAction extends StatelessWidget {
     return OutlinedButton.icon(
       onPressed: onPressed,
       icon: Icon(icon ?? Icons.more_horiz_rounded, size: 18),
-      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      label: Text(
+        label,
+        maxLines: 3,
+        textAlign: TextAlign.center,
+        overflow: TextOverflow.ellipsis,
+      ),
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(0, PayrollMoneyBar.minimumTouchTarget),
       ),

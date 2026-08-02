@@ -38,8 +38,14 @@ class AdvanceLedgerRowVM {
     required this.statusLabel,
     required this.tone,
     this.detail,
+    this.evidenceFileName,
+    this.onOpenEvidence,
   });
   final String date;
+
+  /// Lo que el operador escribió al entregar el dinero. Con `v3` sale de
+  /// `reason.explanation`; sólo en asientos legacy —sin motivo estructurado—
+  /// cae al respaldo de `reference`/`notes`.
   final String reason;
   final String? detail;
   final String amount;
@@ -47,6 +53,13 @@ class AdvanceLedgerRowVM {
   final String balance;
   final String statusLabel;
   final PayrollStateTone tone;
+
+  /// Nombre del comprobante original, cuando el asiento trae uno.
+  final String? evidenceFileName;
+
+  /// Abre ese comprobante en Archivos. Nulo cuando no hay evidencia: una
+  /// acción que no puede cumplir es peor que ninguna.
+  final VoidCallback? onOpenEvidence;
 }
 
 class PayrollAdvancesSurface extends StatelessWidget {
@@ -83,6 +96,10 @@ class PayrollAdvancesSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _body(context);
+  }
+
+  Widget _body(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < PayrollTokens.bpDesktop) {
@@ -407,12 +424,21 @@ class _CompactAdvancePersonChooser extends StatelessWidget {
             enableFilter: searchable,
             enableSearch: searchable,
             requestFocusOnTap: searchable,
+            // `label` es lo que el `DropdownMenu` **escribe en el campo**, y ahí
+            // no hay elipsis: lo que no cabe se corta en seco (§4.6, se veía
+            // «Rodrigo … · $36.000 aplica»). Se deja corto —persona y saldo, que
+            // es la pregunta— y la glosa viaja en `labelWidget`, que sólo se
+            // dibuja dentro del menú, donde sí hay ancho.
             dropdownMenuEntries: <DropdownMenuEntry<String>>[
               for (final person in people)
                 DropdownMenuEntry<String>(
                   value: person.id,
-                  label:
-                      '${person.name} · ${person.balanceLabel} ${person.caption}',
+                  label: '${person.name} · ${person.balanceLabel}',
+                  labelWidget: Text(
+                    '${person.name} · ${person.balanceLabel} ${person.caption}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
             ],
             onSelected: (id) {
@@ -474,6 +500,7 @@ class _CompactLedgerRow extends StatelessWidget {
                           color: visual.inkFaint,
                         ),
                       ),
+                    _LedgerEvidenceAction(vm: vm, compact: true),
                   ],
                 ),
               ),
@@ -1092,6 +1119,7 @@ class _LedgerRow extends StatelessWidget {
                       color: visual.inkFaint,
                     ),
                   ),
+                _LedgerEvidenceAction(vm: vm, compact: false),
               ],
             ),
           ),
@@ -1505,7 +1533,8 @@ class PayrollCashSurface extends StatelessWidget {
             child: PayrollAccentAction(
               label: 'Confirmar entrega $deliverLabel',
               onTap: onConfirm,
-              height: 50,
+              // `F-06 VbDensity` · `Control/botón · TOUCH 48`.
+              height: PayrollTokens.touchMobile,
               fontSize: 14,
               borderRadius: 11,
             ),
@@ -1859,6 +1888,76 @@ class _NextChoice extends StatelessWidget {
                     Icons.arrow_forward_rounded,
                     size: 15,
                     color: visual.accent,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// `5h` · el comprobante original del anticipo, si lo hay.
+///
+/// No abre Storage por ruta ni por id de objeto: **empuja** `/storage` con el
+/// `appFileId` y un `openRequest` nuevo, que es lo que hace que dos aperturas
+/// seguidas del mismo archivo no se coman la segunda. Y es `push`, no `go`:
+/// desde Archivos se vuelve al ledger.
+class _LedgerEvidenceAction extends StatelessWidget {
+  const _LedgerEvidenceAction({required this.vm, required this.compact});
+
+  final AdvanceLedgerRowVM vm;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = PayrollVisualTokens.of(context);
+    final open = vm.onOpenEvidence;
+    final name = vm.evidenceFileName?.trim() ?? '';
+    if (open == null || name.isEmpty) return const SizedBox.shrink();
+    return Semantics(
+      button: true,
+      label: 'Ver comprobante $name',
+      excludeSemantics: true,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(PayrollTokens.rField),
+        child: InkWell(
+          key: ValueKey<String>('payroll-advance-evidence-$name'),
+          onTap: open,
+          mouseCursor: SystemMouseCursors.click,
+          borderRadius: BorderRadius.circular(PayrollTokens.rField),
+          child: ConstrainedBox(
+            // En compacto el objetivo táctil manda: `PayrollTokens.touchMin`.
+            constraints: BoxConstraints(
+              minHeight: compact ? PayrollTokens.touchMin : 28,
+            ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 10 : 8,
+                vertical: 4,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Icon(
+                    Icons.attachment_rounded,
+                    size: compact ? 17 : 15,
+                    color: visual.accent,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Ver comprobante',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: visual.labelStrong.copyWith(
+                        fontSize: compact ? 12 : 11,
+                        color: visual.accent,
+                      ),
+                    ),
                   ),
                 ],
               ),

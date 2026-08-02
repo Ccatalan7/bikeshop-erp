@@ -15,6 +15,9 @@ import '../payroll/surfaces/payroll_reconciliation_surface.dart';
 import '../payroll/surfaces/payroll_transfer_review_surface.dart';
 import '../payroll/theme/payroll_tokens.dart';
 import '../services/payroll_reconciliation_service.dart';
+import '../../../shared/utils/responsive_breakpoints.dart';
+import '../../../shared/utils/responsive_viewport.dart';
+import '../../../shared/widgets/vb_short_select.dart';
 import '../services/payroll_statement_capture_cleanup.dart';
 import '../services/payroll_statement_extraction_service.dart';
 import '../services/payroll_statement_local_image_ocr.dart';
@@ -24,6 +27,8 @@ import '../widgets/payroll_money_bar.dart';
 import '../widgets/payroll_payment_sheet.dart'
     show ClpAmountInputFormatter, parsePayrollAmount;
 import '../widgets/payroll_reconciliation_row.dart';
+import '../../../shared/widgets/vb_money_text.dart';
+import '../../../shared/widgets/vb_notice.dart';
 
 /// A statement chosen by the operator. Bytes stay in memory only.
 @immutable
@@ -159,11 +164,20 @@ class PayrollReconciliationActions {
 
 enum PayrollReconciliationStage { file, extract, review, apply }
 
+/// Los cuatro pasos, con las palabras de Design `7c`.
+///
+/// **Corrige el wording del 2026-07-30** (`Subir cartola · Extraer · Revisar`).
+/// Adjudicado el 2026-08-01: **`Cargar`** y no «subir», porque el archivo se
+/// procesa **en el equipo** y no viaja a ningún servidor —decir «subir» describe
+/// algo que no pasa—; **`Lectura`** porque el paso 2 muestra lo que el OCR leyó,
+/// no una acción del operador; y **`Propuestas`** porque el paso 3 contiene
+/// propuestas de pago que se aceptan o se cambian, que es más preciso que el
+/// «revisar» genérico que este ERP usa en otros seis módulos.
 extension _StageCopy on PayrollReconciliationStage {
   String get label => switch (this) {
-        PayrollReconciliationStage.file => 'Subir cartola',
-        PayrollReconciliationStage.extract => 'Extraer',
-        PayrollReconciliationStage.review => 'Revisar',
+        PayrollReconciliationStage.file => 'Cargar cartola',
+        PayrollReconciliationStage.extract => 'Lectura',
+        PayrollReconciliationStage.review => 'Propuestas',
         PayrollReconciliationStage.apply => 'Aplicar',
       };
 }
@@ -232,6 +246,106 @@ class _ConfirmationItem {
   /// pending amounts on "not paid" rows).
   final bool isMoney;
   final String? accountLabel;
+}
+
+/// 5j paso 4 · una fila de «IMPACTO POR SEMANA».
+///
+/// El frame dibuja `antes → después` con el rótulo `falta pagar`. Las dos
+/// cifras son **derivables** y por eso la columna existe: `antes` es la suma de
+/// `pendingAmountClp` de las líneas de esa semana en la reconciliación
+/// preparada, y `después` es esa suma menos lo que las decisiones de dinero de
+/// esta cartola van a saldar. Nada de esto pregunta al servidor: el borrador ya
+/// trae el saldo por línea.
+@immutable
+class _WeekImpact {
+  const _WeekImpact({
+    required this.voucherId,
+    required this.weekLabel,
+    required this.beforeClp,
+    required this.appliedClp,
+    required this.transferCount,
+    required this.cashCount,
+    required this.advanceCount,
+    required this.partialCount,
+  });
+
+  final String voucherId;
+  final String weekLabel;
+
+  /// Lo que faltaba pagar en esa semana antes de aplicar esta cartola.
+  final int beforeClp;
+
+  /// Lo que esta cartola va a saldar en esa semana.
+  final int appliedClp;
+
+  final int transferCount;
+  final int cashCount;
+  final int advanceCount;
+  final int partialCount;
+
+  /// Nunca negativo: el cliente ya acota cada decisión al saldo de su línea
+  /// (`min(banco, esperado)` en las transferencias, el saldo pendiente en el
+  /// efectivo), así que un `después` bajo cero sería un defecto de cálculo, no
+  /// un estado del negocio. Se acota igual para que la pantalla no pueda
+  /// mostrar un número imposible.
+  int get afterClp => beforeClp - appliedClp < 0 ? 0 : beforeClp - appliedClp;
+
+  int get movementCount => transferCount + cashCount + advanceCount;
+}
+
+/// 5j paso 4 · el resumen que se muestra **antes** de escribir.
+///
+/// Cada campo tiene una fuente comprobable en `apply`. Lo que el frame dibuja y
+/// esta clase **no** tiene es deliberado, no un olvido:
+///
+/// - **`Gasto a Contabilidad`** no existe. `payroll_statement_decisions` admite
+///   siete acciones —`bank_payment`, `cash_payment`, `advance_allocation`,
+///   `not_paid`, `ignore`, `hold`, `already_resolved`— y ninguna crea un gasto
+///   en Contabilidad. Mostrar esa fila sería afirmar un asiento que nunca
+///   ocurre.
+/// - **`Omitidos por duplicado`** se convirtió en [alreadyResolvedCount], que
+///   cuenta sólo `already_resolved`. `PayrollRowDisposition.ignore` se rotula
+///   «Error o duplicado» y **mezcla las dos cosas**: contarlo como duplicado
+///   diría que hubo una repetición donde pudo haber una lectura errónea.
+@immutable
+class _ApplySummary {
+  const _ApplySummary({
+    required this.paymentCount,
+    required this.partialCount,
+    required this.partialAmountClp,
+    required this.advanceCount,
+    required this.advanceAmountClp,
+    required this.alreadyResolvedCount,
+    required this.operatorExcludedCount,
+    required this.totalClp,
+  });
+
+  /// Transferencias + efectivo. Un anticipo **no** es un pago que se crea:
+  /// consume saldo que ya era del trabajador.
+  final int paymentCount;
+
+  /// Subconjunto de [paymentCount]: pagos con `variance_disposition = partial`.
+  /// El RPC posta exactamente el monto del banco y deja el resto abierto.
+  final int partialCount;
+  final int partialAmountClp;
+
+  final int advanceCount;
+  final int advanceAmountClp;
+
+  /// Filas que una importación anterior ya resolvió. Es la **única** señal de
+  /// repetición que el modelo distingue.
+  final int alreadyResolvedCount;
+
+  /// Sólo lo que el operador excluyó **a mano**. Los descartes automáticos —un
+  /// abono, una fila sin salida bancaria— no son decisiones suyas y contarlos
+  /// acá le atribuiría un criterio que no aplicó.
+  final int operatorExcludedCount;
+
+  /// Todo lo que reduce lo que falta pagar: transferencias, efectivo y
+  /// anticipos. Es el mismo conjunto que la barra de dinero llama «Monto
+  /// reconocido», a propósito: dos cifras distintas para lo mismo es como se
+  /// pierde la confianza en una pantalla de dinero.
+  final int totalClp;
 }
 
 @immutable
@@ -434,6 +548,31 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       );
       if (replace != true || !mounted) return;
     }
+    // **El selector se espera FUERA del estado ocupado.** Antes la etapa
+    // entraba en `Validando el archivo…` en el instante en que se abría el
+    // panel del sistema, y eso era falso por partida doble: no se estaba
+    // validando nada —el operador todavía estaba eligiendo— y, si el panel no
+    // devolvía nunca, la etapa se quedaba ahí **para siempre** con `Cancelar`
+    // deshabilitado por `_isBusy`. Visto en vivo el 2026-08-01: un panel que
+    // el sistema dejó sin responder obligó a matar la sesión.
+    //
+    // El panel del sistema ya es modal a nivel de SO, así que no hace falta
+    // bloquear la pantalla por debajo mientras está abierto.
+    final PayrollPickedStatement? picked;
+    try {
+      picked = await picker();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'No pudimos abrir el selector de archivos. Intenta de nuevo.';
+        _errorRecoveryAction = PayrollReconciliationRecoveryAction.none;
+        _canRetrySameOperation = true;
+      });
+      _logFailure('Falla al abrir el selector de cartola', error);
+      return;
+    }
+    if (picked == null || !mounted) return;
+
     setState(() {
       _isBusy = true;
       _preparationProgress = const PayrollStatementPreparationProgress(
@@ -444,16 +583,6 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       _canRetrySameOperation = false;
     });
     try {
-      final picked = await picker();
-      if (picked == null) {
-        if (mounted) {
-          setState(() {
-            _isBusy = false;
-            _preparationProgress = null;
-          });
-        }
-        return;
-      }
       final actions = _actions();
       final prepareWithProgress = actions.prepareWithProgress;
       final draft = prepareWithProgress == null
@@ -1967,9 +2096,9 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
   String get _workflowTitle {
     if (_appliedMessage != null) return 'Conciliación registrada';
     return switch (_stage) {
-      PayrollReconciliationStage.file => 'Subir cartola',
-      PayrollReconciliationStage.extract => 'Extraer movimientos',
-      PayrollReconciliationStage.review => 'Revisar coincidencias',
+      PayrollReconciliationStage.file => 'Cargar cartola',
+      PayrollReconciliationStage.extract => 'Lectura de la cartola',
+      PayrollReconciliationStage.review => 'Propuestas de pago',
       PayrollReconciliationStage.apply => 'Aplicar conciliación',
     };
   }
@@ -1997,9 +2126,9 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       _appliedMessage != null,
     ];
     const compactNames = <String>[
-      'Subir',
-      'Extraer',
-      'Revisar',
+      'Cargar',
+      'Lectura',
+      'Propuestas',
       'Aplicar',
     ];
     // The transfer counter reports the human workload: suggestions and real
@@ -2736,6 +2865,163 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     return 'Impacto por semana: $parts';
   }
 
+  /// Mapa línea → semana del borrador. Varias decisiones (efectivo, anticipos,
+  /// «no pagado») traen `voucherId`, pero una transferencia reasignada a mano
+  /// puede traer sólo la línea: sin este mapa esa decisión se caería del
+  /// impacto por semana y la columna mostraría menos de lo que se va a escribir.
+  Map<String, String> _voucherIdByLineId() {
+    final draft = _draft;
+    if (draft == null) return const <String, String>{};
+    return <String, String>{
+      for (final voucher in draft.vouchers)
+        if (voucher.id case final voucherId?)
+          for (final line in voucher.lines)
+            if (line.id case final lineId?) lineId: voucherId,
+    };
+  }
+
+  bool _isMoneyDecision(PayrollStatementReviewDecision decision) =>
+      decision.kind == PayrollReviewDecisionKind.bankPayment ||
+      decision.kind == PayrollReviewDecisionKind.cashPayment ||
+      decision.kind == PayrollReviewDecisionKind.advanceAllocation;
+
+  /// 5j paso 4 · columna «IMPACTO POR SEMANA».
+  ///
+  /// Sólo aparecen las semanas que esta cartola **toca con dinero**: una semana
+  /// cuya única decisión es «todavía no pagado» no cambia de saldo, y ponerla
+  /// acá sugeriría un impacto que no existe.
+  List<_WeekImpact> _weekImpacts(
+    List<PayrollStatementReviewDecision> decisions,
+  ) {
+    final draft = _draft;
+    if (draft == null) return const <_WeekImpact>[];
+    final voucherIdByLineId = _voucherIdByLineId();
+
+    final beforeByVoucher = <String, int>{};
+    for (final result in draft.reconciliation.lineResults) {
+      final line = result.voucherLine;
+      beforeByVoucher.update(
+        line.voucherId,
+        (value) => value + line.pendingAmountClp,
+        ifAbsent: () => line.pendingAmountClp,
+      );
+    }
+
+    final applied = <String, int>{};
+    final transfers = <String, int>{};
+    final cash = <String, int>{};
+    final advances = <String, int>{};
+    final partials = <String, int>{};
+    for (final decision in decisions) {
+      if (!_isMoneyDecision(decision)) continue;
+      final voucherId = decision.voucherId ??
+          (decision.voucherLineId == null
+              ? null
+              : voucherIdByLineId[decision.voucherLineId]);
+      if (voucherId == null) continue;
+      applied.update(
+        voucherId,
+        (value) => value + (decision.amountClp ?? 0),
+        ifAbsent: () => decision.amountClp ?? 0,
+      );
+      switch (decision.kind) {
+        case PayrollReviewDecisionKind.bankPayment:
+          transfers.update(voucherId, (v) => v + 1, ifAbsent: () => 1);
+          if (decision.varianceDisposition ==
+              PayrollVarianceDisposition.partial) {
+            partials.update(voucherId, (v) => v + 1, ifAbsent: () => 1);
+          }
+        case PayrollReviewDecisionKind.cashPayment:
+          cash.update(voucherId, (v) => v + 1, ifAbsent: () => 1);
+        case PayrollReviewDecisionKind.advanceAllocation:
+          advances.update(voucherId, (v) => v + 1, ifAbsent: () => 1);
+        case _:
+          break;
+      }
+    }
+
+    final impacts = <_WeekImpact>[
+      for (final entry in applied.entries)
+        _WeekImpact(
+          voucherId: entry.key,
+          weekLabel: _periodLabelFor(entry.key),
+          beforeClp: beforeByVoucher[entry.key] ?? 0,
+          appliedClp: entry.value,
+          transferCount: transfers[entry.key] ?? 0,
+          cashCount: cash[entry.key] ?? 0,
+          advanceCount: advances[entry.key] ?? 0,
+          partialCount: partials[entry.key] ?? 0,
+        ),
+    ]..sort((left, right) => left.weekLabel.compareTo(right.weekLabel));
+    return List<_WeekImpact>.unmodifiable(impacts);
+  }
+
+  /// 5j paso 4 · panel «RESUMEN ANTES DE ESCRIBIR».
+  _ApplySummary _applySummary(
+    List<PayrollStatementReviewDecision> decisions,
+  ) {
+    var paymentCount = 0;
+    var partialCount = 0;
+    var partialAmountClp = 0;
+    var advanceCount = 0;
+    var advanceAmountClp = 0;
+    var alreadyResolvedCount = 0;
+    var totalClp = 0;
+
+    for (final decision in decisions) {
+      final amount = decision.amountClp ?? 0;
+      switch (decision.kind) {
+        case PayrollReviewDecisionKind.bankPayment:
+          paymentCount++;
+          totalClp += amount;
+          if (decision.varianceDisposition ==
+              PayrollVarianceDisposition.partial) {
+            partialCount++;
+            partialAmountClp += amount;
+          }
+        case PayrollReviewDecisionKind.cashPayment:
+          paymentCount++;
+          totalClp += amount;
+        case PayrollReviewDecisionKind.advanceAllocation:
+          advanceCount++;
+          advanceAmountClp += amount;
+          totalClp += amount;
+        case PayrollReviewDecisionKind.alreadyResolved:
+          alreadyResolvedCount++;
+        case _:
+          break;
+      }
+    }
+
+    // «Excluidos por ti» se cuenta sobre las filas, no sobre las decisiones, y
+    // sólo cuando el operador tocó la fila: `_dispositions` guarda exactamente
+    // sus elecciones explícitas. Un descarte automático —un abono, una fila sin
+    // salida bancaria— produce la misma decisión `ignore` y no es suyo.
+    var operatorExcludedCount = 0;
+    for (final row in _transferRows) {
+      if (!_dispositions.containsKey(row.id)) continue;
+      switch (_dispositionFor(row)) {
+        case PayrollRowDisposition.ignore:
+        case PayrollRowDisposition.notPayroll:
+        case PayrollRowDisposition.hold:
+          operatorExcludedCount++;
+        case _:
+          break;
+      }
+    }
+
+    return _ApplySummary(
+      paymentCount: paymentCount,
+      partialCount: partialCount,
+      partialAmountClp: partialAmountClp,
+      advanceCount: advanceCount,
+      advanceAmountClp: advanceAmountClp,
+      alreadyResolvedCount: alreadyResolvedCount,
+      operatorExcludedCount: operatorExcludedCount,
+      totalClp: totalClp,
+    );
+  }
+
   Widget _buildFileStage() {
     final visual = PayrollVisualTokens.of(context);
     final actions = _actions();
@@ -2760,6 +3046,42 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
               ),
               child: Column(
                 children: [
+                  if (_versionedBackendMissing) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      key: const ValueKey(
+                        'payroll-reconciliation-backend-missing',
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: visual.warningSoft,
+                        borderRadius:
+                            BorderRadius.circular(PayrollTokens.rField),
+                        border: Border.all(color: visual.warningBorder),
+                      ),
+                      child: Text(
+                        // Va ARRIBA, antes de la zona de carga: quien no va a
+                        // poder aplicar tiene que saberlo **antes** de elegir un
+                        // archivo, no después de bajar el scroll. Estaba al pie
+                        // y mi propio cambio lo empujó fuera de la primera
+                        // pantalla — el test lo destapó, pero el defecto era de
+                        // orden, no de la prueba.
+                        'Modo revisión: el servidor aún no tiene la '
+                        'actualización de nóminas. Puedes cargar, leer y '
+                        'revisar la cartola; importar y aplicar quedarán '
+                        'disponibles cuando se instale.',
+                        textAlign: TextAlign.center,
+                        style: visual.bodyS.copyWith(
+                          color: visual.warningFg,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
                   Container(
                     width: 46,
                     height: 46,
@@ -2777,7 +3099,7 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
                   ),
                   const SizedBox(height: 13),
                   Text(
-                    'Sube la cartola',
+                    'Carga la cartola',
                     style: visual.sectionTitle.copyWith(fontSize: 15),
                   ),
                   const SizedBox(height: 6),
@@ -2796,65 +3118,18 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
                     ),
                   ),
                   const SizedBox(height: 13),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      const _CapabilityChip(
-                        label: 'PDF con texto',
-                        available: true,
-                      ),
-                      _CapabilityChip(
-                        label: 'PDF escaneado e imágenes',
-                        available: supportsImages,
-                      ),
-                      _CapabilityChip(
-                        label: 'Cámara',
-                        available: supportsCapture,
-                        unavailableLabel: 'Sólo Android/iPhone',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
                   Text(
-                    'Al aplicar se guarda evidencia estructurada; no se '
-                    'conserva la imagen ni el texto OCR completo.',
+                    // El límite lo publica el extractor, no el frame: `5j` dibuja
+                    // «hasta 20 MB» y el código rechaza sobre **12**. Decirlo
+                    // antes ahorra elegir un archivo que va a fallar.
+                    'Hasta 12 MB. Al aplicar se guarda evidencia estructurada; '
+                    'no se conserva la imagen ni el texto OCR completo.',
                     textAlign: TextAlign.center,
                     style: visual.bodyS.copyWith(
                       color: visual.inkFaint,
                       height: 1.35,
                     ),
                   ),
-                  if (_versionedBackendMissing) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      key: const ValueKey(
-                        'payroll-reconciliation-backend-missing',
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: visual.warningSoft,
-                        borderRadius:
-                            BorderRadius.circular(PayrollTokens.rField),
-                        border: Border.all(color: visual.warningBorder),
-                      ),
-                      child: Text(
-                        'Modo revisión: el servidor aún no tiene la '
-                        'actualización de nóminas. Puedes cargar, leer y '
-                        'revisar la cartola; importar y aplicar quedarán '
-                        'disponibles cuando se instale.',
-                        textAlign: TextAlign.center,
-                        style: visual.bodyS.copyWith(
-                          color: visual.warningFg,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 18),
                   Wrap(
                     alignment: WrapAlignment.center,
@@ -2907,6 +3182,19 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
                       progress: _preparationProgress!,
                     ),
                   ],
+                  const SizedBox(height: PayrollTokens.gapBlocks),
+                  // 5j paso 1: Design reemplaza los tres chips por tres
+                  // tarjetas que dicen **qué esperar de cada fuente**, que es
+                  // la decisión que el operador toma acá. Se copia esa
+                  // composición —y su POSICIÓN: el frame las dibuja **debajo**
+                  // de los botones, no encima. Ponerlas arriba empujaba
+                  // `Elegir archivo` fuera de la primera pantalla en teléfono,
+                  // que es donde más se usa la cámara. El texto se ancla a lo
+                  // que el extractor hace de verdad — compuerta en el ledger.
+                  _SourceExpectations(
+                    supportsImages: supportsImages,
+                    supportsCapture: supportsCapture,
+                  ),
                 ],
               ),
             ),
@@ -3149,17 +3437,84 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       key: const ValueKey('payroll-pending-decision-card'),
       counterLabel: '${index + 1} DE ${pending.length}',
       explainer: _rowWhy(row),
-      onPrevious:
-          pending.length > 1 && index > 0 ? () => _moveQuestion(-1) : null,
-      onNext: pending.length > 1 && index < pending.length - 1
-          ? () => _moveQuestion(1)
+      onPrevious: index > 0 ? () => _moveQuestion(pending, index, -1) : null,
+      // **`Siguiente` sigue activo en la última pregunta si ésta ya quedó
+      // resuelta**, porque ahí lo que hace es soltarla. Con el guard anterior
+      // (`index < pending.length - 1`) el operador quedaba clavado en la
+      // última tarjeta respondida, sin forma de sacarla de la pila.
+      onNext: index < pending.length - 1 || _releasesOnAdvance(row)
+          ? () => _moveQuestion(pending, index, 1)
           : null,
       child: _reviewRow(row, isFirst: true),
     );
   }
 
-  void _moveQuestion(int delta) {
-    setState(() => _pendingQuestionIndex += delta);
+  /// Una fila respondida «en el sitio» que ya no le debe nada a nadie: tiene
+  /// disposición y, si trae diferencia o exige razón de auditoría, las dos
+  /// están resueltas. Mientras le falte algo se queda en la pregunta abierta
+  /// **a propósito**, que es lo que el comentario de `_setDisposition` promete.
+  bool _releasesOnAdvance(PayrollDecisionRowData row) {
+    if (!_answeredInPlaceRowIds.contains(row.id)) return false;
+    final disposition = _dispositionFor(row);
+    if (disposition == PayrollRowDisposition.pending) return false;
+    if (disposition != PayrollRowDisposition.confirm) return true;
+    if (row.hasVariance &&
+        _varianceFor(row) == PayrollVarianceDisposition.none) {
+      return false;
+    }
+    if (row.needsReviewReason && _reviewReasonFor(row).isEmpty) return false;
+    return true;
+  }
+
+  /// Mueve la pregunta abierta **soltando la que se deja atrás**.
+  ///
+  /// El contrato lo escribió el propio código al responder: *«Answering does
+  /// not make the question vanish… It leaves only on "next question".»* Pero
+  /// esto sólo hacía `_pendingQuestionIndex += delta` y **nunca sacaba la fila
+  /// de `_answeredInPlaceRowIds`**, así que la promesa no se cumplía: la
+  /// tarjeta ya respondida seguía rotulada «Pendiente de decisión», el contador
+  /// no bajaba nunca de `N DE 10`, y para llegar a una sin responder había que
+  /// recorrer la lista entera — y al topar con la última, caminar hacia atrás.
+  /// Medido recorriendo las 10 decisiones en la app viva el 2026-08-01.
+  void _moveQuestion(
+    List<PayrollDecisionRowData> pending,
+    int index,
+    int delta,
+  ) {
+    setState(() {
+      final leaving =
+          index >= 0 && index < pending.length ? pending[index] : null;
+      // **El id «en revisión» se limpia en TODA navegación**, no sólo cuando
+      // la fila se suelta. `_stagedQuestionRowId` manda sobre el índice al
+      // elegir qué tarjeta encabeza la etapa, así que dejarlo puesto hacía que
+      // la flecha moviera el índice y la pantalla siguiera mostrando la misma
+      // tarjeta: para el operador, la flecha no hacía nada.
+      if (leaving != null && _stagedQuestionRowId == leaving.id) {
+        _stagedQuestionRowId = null;
+      }
+      // **Sólo `Siguiente` suelta la fila.** El contrato dice «It leaves only
+      // on "next question"», y `Anterior` existe justamente para volver a
+      // mirar lo que se acaba de decidir: si retroceder también la sacara de
+      // la pila, volver sería imposible.
+      final releases =
+          delta > 0 && leaving != null && _releasesOnAdvance(leaving);
+      if (releases) {
+        _answeredInPlaceRowIds.remove(leaving.id);
+        // La lista se acorta justo en esta posición y la siguiente ocupa el
+        // hueco, así que el índice se queda donde está.
+        _pendingQuestionIndex = index;
+      } else {
+        // **`index + delta`, no `+= delta`.** El índice que llega es el
+        // EFECTIVO —el que la tarjeta está mostrando— y puede venir de
+        // `stagedIndex`, que no tiene por qué coincidir con
+        // `_pendingQuestionIndex`. Sumar sobre el guardado saltaba a una fila
+        // distinta de la que el operador tenía delante.
+        _pendingQuestionIndex = index + delta;
+      }
+      final remaining = releases ? pending.length - 1 : pending.length;
+      _pendingQuestionIndex =
+          remaining <= 0 ? 0 : _pendingQuestionIndex.clamp(0, remaining - 1);
+    });
   }
 
   /// A dense, auditable line inside a collapsed group. It carries the row's own
@@ -3362,31 +3717,44 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
             isError: true,
           )
         else
-          DropdownButtonFormField<String>(
-            key: const ValueKey('payroll-statement-erp-account'),
-            initialValue: _selectedErpAccountId,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Cuenta ERP de esta cartola',
-              helperText:
-                  'Se usará la misma cuenta para todos los pagos bancarios.',
-            ),
-            items: [
-              for (final option in _bankAccountOptions)
-                DropdownMenuItem<String>(
-                  value: option.accountId,
-                  child: Text(
-                    option.label,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+          // **`S-05` a través de [VbShortSelect]**, no un `DropdownButton` con
+          // estilo propio. El techo de la guía se cumple con margen: medido en
+          // producción el 2026-08-01, **ningún tenant tiene más de UNA** cuenta
+          // ERP distinta con método de transferencia activo. Si algún día
+          // pasara de siete, el `assert` del owner lo dice y el componente
+          // correcto pasa a ser S-06 — no un S-05 más alto.
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              VbShortSelect<String?>(
+                key: const ValueKey('payroll-statement-erp-account'),
+                value: _selectedErpAccountId,
+                label: 'Cuenta ERP de esta cartola',
+                sheetTitle: 'Cuenta ERP de esta cartola',
+                semanticLabel: 'Cuenta ERP de esta cartola',
+                placeholder: 'Elegir cuenta',
+                options: [
+                  for (final option in _bankAccountOptions)
+                    VbShortSelectOption<String?>(
+                      value: option.accountId,
+                      label: option.label,
+                    ),
+                ],
+                onChanged: _isReviewLocked
+                    ? null
+                    : (value) => setState(() {
+                          _selectedErpAccountId = value;
+                          _error = null;
+                        }),
+              ),
+              const SizedBox(height: 5),
+              // El texto de apoyo no es parte de S-05, así que lo pone el
+              // llamador: dice algo real de esta pantalla, no del control.
+              Text(
+                'Se usará la misma cuenta para todos los pagos bancarios.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ],
-            onChanged: _isReviewLocked
-                ? null
-                : (value) => setState(() {
-                      _selectedErpAccountId = value;
-                      _error = null;
-                    }),
           ),
         const SizedBox(height: 12),
         if (rows.isEmpty)
@@ -3442,6 +3810,9 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // `7c` encabeza la tabla con sus rótulos de columna. Va sobre
+                  // el grupo de calces, que es el que la tabla dibuja.
+                  const PayrollReviewColumnHeader(),
                   for (var i = 0; i < suggestedRows.length; i++)
                     _ledgerRowFor(suggestedRows[i], isFirst: i == 0),
                 ],
@@ -3517,7 +3888,7 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
                       'reabrirlo cuando quieras; nada se borra.',
                 ),
               ];
-              if (constraints.maxWidth < 900) {
+              if (constraints.maxWidth < ResponsiveBreakpoints.desktopMin) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -3562,39 +3933,11 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-          decoration: BoxDecoration(
-            color: visual.surface,
-            borderRadius: BorderRadius.circular(PayrollTokens.rField),
-            border: Border.all(color: visual.border),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                margin: const EdgeInsets.only(top: 5),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: visual.warningFg,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'El efectivo no aparece en la cartola. Revisa una persona '
-                  'a la vez y confirma qué pasó; nada avanza solo.',
-                  style: visual.bodyS.copyWith(height: 1.4),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
         if (lines.isEmpty)
-          const _Notice(message: 'Nadie de esta nómina cobra en efectivo.')
+          const VbNotice(
+            tone: VbNoticeTone.neutral,
+            title: 'Nadie de esta nómina cobra en efectivo',
+          )
         else ...[
           Container(
             decoration: BoxDecoration(
@@ -3674,24 +4017,77 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
             ),
           ] else ...[
             const SizedBox(height: 14),
-            const _Notice(
-              message: 'Todas las personas en efectivo tienen respuesta. '
-                  'Puedes tocar a cualquiera para cambiarla, o continuar al '
+            const VbNotice(
+              tone: VbNoticeTone.success,
+              title: 'Todas las personas en efectivo tienen respuesta',
+              body: 'Puedes tocar a cualquiera para cambiarla, o seguir al '
                   'resumen.',
             ),
           ],
+          const SizedBox(height: 14),
+          // Copy del frame 5j paso 4, comprobada contra el código antes de
+          // copiarla: `_canApply` exige `_cashStageIsComplete`, así que una
+          // persona en efectivo sin responder bloquea de verdad la aplicación
+          // entera —y con ella la confirmación de la semana—. La frase se puede
+          // sostener porque el gate existe, no porque el frame la dibuje.
+          VbNotice(
+            key: const ValueKey<String>('payroll-reconciliation-cash-policy'),
+            tone: unanswered.isEmpty
+                ? VbNoticeTone.neutral
+                : VbNoticeTone.warning,
+            title: 'La cartola nunca prueba un pago en efectivo',
+            body: 'Si queda sin responder, la semana no se puede confirmar, y '
+                'eso es correcto: el módulo no inventa entregas.',
+          ),
         ],
       ],
     );
   }
 
-  Widget _buildConfirmSection() {
+  /// 5j paso 4 · tercera columna: el resumen y lo que se compromete con él.
+  ///
+  /// **El detalle no vive acá.** El frame no dibuja la lista decisión por
+  /// decisión en el paso 4 —ésa era la pantalla del paso 3—, y meterla en una
+  /// columna del 40% la deja alta y angosta justo al lado de dos columnas
+  /// cortas. Va debajo, a todo el ancho, en [_buildConfirmDetail].
+  Widget _buildConfirmSection(_ApplySummary summary) {
+    final decisions = _buildDecisions();
+    final draftVouchersToCommit = _draftVouchersToCommit(decisions);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ApplySummaryPanel(summary: summary),
+        const SizedBox(height: 10),
+        // El frame promete, palabra por palabra, que una segunda aplicación
+        // hará que «el resumen diga "0 nuevos, 4 ya aplicados"». **El recibo no
+        // trae ese desglose**: `apply_payroll_statement_reconciliation` devuelve
+        // el recibo guardado tal cual en un reintento, con los mismos conteos.
+        // Lo que sí es cierto —y es lo que dice acá— es que la segunda no crea
+        // nada. Prometer el desglose sería inventar una pantalla que no existe.
+        const VbNotice(
+          key: ValueKey<String>('payroll-reconciliation-idempotence-notice'),
+          tone: VbNoticeTone.success,
+          title: 'Aplicar dos veces no duplica nada',
+          body: 'Cada movimiento se escribe con su huella. Si esta misma '
+              'conciliación se aplica de nuevo, la segunda vez no crea ningún '
+              'pago.',
+        ),
+        if (draftVouchersToCommit.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _DraftCommitmentPanel(vouchers: draftVouchersToCommit),
+        ],
+      ],
+    );
+  }
+
+  /// El detalle decisión por decisión, a todo el ancho y debajo de las tres
+  /// columnas: agrupado por semana, más lo que falta resolver y el error.
+  Widget _buildConfirmDetail() {
     final theme = Theme.of(context);
-    final visual = PayrollVisualTokens.of(context);
     final blockers = _blockers;
     final decisions = _buildDecisions();
     final items = _confirmationItems(decisions);
-    final draftVouchersToCommit = _draftVouchersToCommit(decisions);
     final informationalRows = decisions.where((decision) {
       if (decision.kind != PayrollReviewDecisionKind.ignore ||
           decision.sourceRowId == null) {
@@ -3708,37 +4104,6 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-          decoration: BoxDecoration(
-            color: visual.surface,
-            borderRadius: BorderRadius.circular(PayrollTokens.rField),
-            border: Border.all(color: visual.border),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.playlist_add_check_rounded,
-                size: 18,
-                color: visual.accent,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Se registrará ${decisions.length} '
-                  '${decisions.length == 1 ? 'decisión' : 'decisiones'} en '
-                  'una sola operación, agrupadas por semana.',
-                  style: visual.bodyS.copyWith(height: 1.4),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (draftVouchersToCommit.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          _DraftCommitmentPanel(vouchers: draftVouchersToCommit),
-        ],
-        const SizedBox(height: 12),
         if (items.isEmpty)
           Container(
             decoration: BoxDecoration(
@@ -3882,60 +4247,106 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     }
     final rows = draft.parseResult.rows;
     final outgoing = rows.where((row) => row.isOutgoingCandidate).length;
-    final incomplete =
-        rows.where((row) => !row.hasCompleteStructuredEvidence).length;
+    // **UNA sola regla gobierna orden, etiqueta, resumen y conteo.** Antes eran
+    // tres cálculos parecidos y ya divergían: «Requieren tu lectura» contaba
+    // sólo las de campos incompletos y dejaba fuera las que la propia pantalla
+    // ordenaba primero por traer un aviso.
+    //   0 · le faltan campos    1 · completa pero con algún aviso    2 · limpia
+    int rank(PayrollStatementRow row) => !row.hasCompleteStructuredEvidence
+        ? 0
+        : _warningCodesFor(row).isNotEmpty
+            ? 1
+            : 2;
+    // `needsReview`, no `needsReading`: el conjunto incluye
+    // `out_of_statement_range`, que pide **revisión** —la fecha cae tras el
+    // cierre declarado— y no releer el OCR. El rótulo tiene que decir lo mismo.
+    final needsReview = rows.where((row) => rank(row) < 2).length;
     final dates = rows
         .map((row) => row.bookingDate)
         .whereType<PayrollCivilDate>()
         .toList()
       ..sort((a, b) => a.compareTo(b));
-    final weekLabels = {
-      for (final voucher in draft.vouchersById.values)
-        if (voucher.id case final id?) _periodLabelFor(id),
-    }.toList();
-    // Las líneas que exigen lectura humana van primero; el resto se resume.
-    final ordered = [...rows]..sort((a, b) {
-        int weight(PayrollStatementRow row) =>
-            !row.hasCompleteStructuredEvidence
-                ? 0
-                : _warningCodesFor(row).isNotEmpty
-                    ? 1
-                    : 2;
-        return weight(a).compareTo(weight(b));
-      });
-    const visibleCap = 9;
-    final visible = ordered.take(visibleCap).toList(growable: false);
+    // **Esto NO son «las semanas que cubre la cartola».** `vouchersById` viene
+    // de `_loadOpenVouchers`, que carga **todas** las nóminas abiertas del
+    // tenant (`draft`/`confirmed`/`partial`), estén o no dentro del rango del
+    // documento. Rotularlas como cobertura de la cartola era afirmar algo
+    // falso: una nómina abierta de otro mes aparecía como «cubierta».
+    // Orden **cronológico**, por el dato que manda: `periodStart`. Un `..sort()`
+    // sobre la etiqueta ya formada daba orden **lexicográfico** —«Semana 10»
+    // antes que «Semana 9»— y yo lo había declarado cronológico. Se ordena por
+    // el dueño y recién después se forma el texto.
+    final openPayrollVouchers = draft.vouchersById.values
+        .where((voucher) => voucher.id != null)
+        .toList()
+      ..sort((a, b) => a.periodStart.compareTo(b.periodStart));
+    final openPayrollLabels = <String>[
+      for (final voucher in openPayrollVouchers) _periodLabelFor(voucher.id!),
+    ];
+    final ordered = [...rows]..sort((a, b) => rank(a).compareTo(rank(b)));
+    // **Qué se ve, y por qué.** La versión anterior mostraba «las que piden
+    // atención, o todas si no hay ninguna», y eso **escondía todos los abonos
+    // en cuanto aparecía una sola fila incompleta** — justo mientras la nota de
+    // abajo prometía que los abonos quedan acá. Contradicción funcional.
+    //
+    // Obligatorias, siempre: (a) las que piden atención y (b) **todos los
+    // abonos**, porque de ellos se afirma explícitamente que se muestran uno a
+    // uno. Después se completa con egresos limpios, en orden, hasta las
+    // **cuatro filas** que `frames[5j]` publica en su copy —el único número de
+    // filas visibles con fuente en Design—. Si las obligatorias ya pasan de
+    // cuatro, se muestran todas.
+    const publishedPreviewRows = 4;
+    final mandatory = ordered
+        .where(
+          (row) =>
+              rank(row) < 2 ||
+              row.direction == PayrollStatementMovementDirection.incoming,
+        )
+        .toList();
+    final fillers = ordered.where((row) => !mandatory.contains(row));
+    final visible = <PayrollStatementRow>[
+      ...mandatory,
+      ...fillers.take(
+        (publishedPreviewRows - mandatory.length).clamp(0, rows.length),
+      ),
+    ];
+    // Lo resumido sólo puede ser egreso limpio: es lo único de lo que el pie
+    // puede afirmar algo sin mentir.
     final hidden = rows.length - visible.length;
 
-    Widget readingTag(PayrollStatementRow row) {
+    // El estado lo pinta `PayrollStatementLedgerRow` con su propio
+    // `statusLabel`/`statusTone`: duplicarlo acá con un `Container` de
+    // `padding 7/2` y `monoS` era inventar un segundo tag sin dueño.
+    ({String label, PayrollStateTone tone}) readingStatus(
+      PayrollStatementRow row,
+    ) {
       final PayrollStateTone tone;
       final String label;
-      if (!row.hasCompleteStructuredEvidence) {
+      if (rank(row) == 0) {
         tone = visual.danger;
-        label = 'ILEGIBLE';
-      } else if (_warningCodesFor(row).isNotEmpty) {
+        // **No dice `ILEGIBLE`.** `hasCompleteStructuredEvidence` sólo exige
+        // fecha, dirección, monto positivo y descripción: su `false` prueba que
+        // **faltan campos**, no que el OCR no pudiera leer.
+        label = 'CAMPOS INCOMPLETOS';
+      } else if (rank(row) == 1) {
         tone = visual.warning;
-        label = 'LECTURA DUDOSA';
+        // **No dice `LECTURA DUDOSA`.** Uno de los avisos posibles es
+        // `out_of_statement_range` —la fecha cae después del cierre declarado—,
+        // que no tiene nada que ver con la calidad de la lectura. Llamarlo
+        // lectura dudosa era falso para esa fila.
+        label = 'REVISAR';
       } else {
         tone = visual.success;
-        label = 'NÍTIDA';
+        // **No dice `NÍTIDA`, y la diferencia no es de estilo.** Lo que esta
+        // rama sabe es que el parser reconoció **todos los campos** de la fila
+        // (`hasCompleteStructuredEvidence`, sin avisos). No sabe si el OCR leyó
+        // bien: un dígito mal leído produce una fila perfectamente estructurada
+        // con el monto equivocado, y `NÍTIDA` en verde invitaba a confiar en
+        // ella. En una pantalla que decide dinero eso es afirmar una precisión
+        // que nadie midió — `GUI_DESIGN_PRINCIPLES.md`, «un estado se deriva
+        // del PORQUÉ, no de un número».
+        label = 'CAMPOS COMPLETOS';
       }
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-        decoration: BoxDecoration(
-          color: tone.soft,
-          borderRadius: BorderRadius.circular(PayrollTokens.rTag),
-          border: Border.all(color: tone.border),
-        ),
-        child: Text(
-          label,
-          style: visual.monoS.copyWith(
-            fontSize: 9.5,
-            fontWeight: FontWeight.w600,
-            color: tone.fg,
-          ),
-        ),
-      );
+      return (label: label, tone: tone);
     }
 
     Widget factRow(String label, String value, {PayrollStateTone? tone}) {
@@ -3946,7 +4357,12 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
           borderRadius: BorderRadius.circular(PayrollTokens.rField),
           border: Border.all(color: tone?.border ?? visual.border),
         ),
+        // El valor **envuelve**: con cinco nóminas abiertas —un taller con
+        // semanas acumuladas, que es el caso normal— este `Row` desbordaba
+        // **404 px** a la derecha. El `Text` del valor no tenía ni `Flexible`
+        // ni `softWrap`, así que crecía sin límite dentro de un panel de 320.
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: Text(
@@ -3957,12 +4373,17 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
                 ),
               ),
             ),
-            Text(
-              value,
-              style: visual.monoM.copyWith(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: tone?.fg ?? visual.ink,
+            const SizedBox(width: PayrollTokens.gapCards),
+            Flexible(
+              child: Text(
+                value,
+                textAlign: TextAlign.right,
+                softWrap: true,
+                style: visual.monoM.copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: tone?.fg ?? visual.ink,
+                ),
               ),
             ),
           ],
@@ -3989,11 +4410,16 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
               children: [
                 Expanded(
                   child: Text(
-                    '${rows.length} de ${rows.length} líneas leídas',
+                    // `parseResult` sólo conserva las filas que detectó: no
+                    // existe un total de líneas del documento contra el cual
+                    // comparar, así que «N de N» era tautológico.
+                    '${rows.length} ${rows.length == 1 ? 'movimiento detectado' : 'movimientos detectados'}',
                     style: visual.monoM.copyWith(fontSize: 11),
                   ),
                 ),
-                Text('LECTURA', style: visual.overline),
+                // `ESTADO`, no `LECTURA`: la columna dice qué campos se
+                // reconocieron, no cómo salió la lectura.
+                Text('ESTADO', style: visual.overline),
               ],
             ),
           ),
@@ -4007,7 +4433,8 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
                 final amount? => formatPayrollClp(amount),
                 null => '—',
               },
-              trailing: readingTag(visible[index]),
+              statusLabel: readingStatus(visible[index]).label,
+              statusTone: readingStatus(visible[index]).tone,
             ),
           if (hidden > 0)
             Container(
@@ -4016,8 +4443,11 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
                 border: Border(top: BorderSide(color: visual.border)),
               ),
               child: Text(
-                '… $hidden ${hidden == 1 ? 'movimiento más' : 'movimientos más'} '
-                'con lectura nítida. Todos quedan en la revisión.',
+                // Sólo se resumen egresos limpios, y el pie no promete que
+                // «todos quedan en la revisión»: no todos los movimientos
+                // alimentan `_buildTransferRows`.
+                '… $hidden ${hidden == 1 ? 'egreso más' : 'egresos más'} '
+                'con todos sus campos reconocidos y sin avisos.',
                 style: visual.bodyS.copyWith(
                   fontSize: 10.5,
                   color: visual.inkFaint,
@@ -4041,16 +4471,18 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
         ),
         const SizedBox(height: 7),
         factRow(
-          'Semanas que cubre',
-          weekLabels.isEmpty ? '—' : weekLabels.join(' · '),
+          'Nóminas abiertas que se compararán',
+          openPayrollLabels.isEmpty ? '—' : openPayrollLabels.join(' · '),
         ),
         const SizedBox(height: 7),
-        factRow('Egresos leídos', '$outgoing de ${rows.length}'),
-        if (incomplete > 0) ...[
+        // `detectados`, no `leídos`: es un conteo de filas clasificadas como
+        // egreso, no una medida de cobertura de lectura.
+        factRow('Egresos detectados', '$outgoing de ${rows.length}'),
+        if (needsReview > 0) ...[
           const SizedBox(height: 7),
           factRow(
-            'Requieren tu lectura',
-            '$incomplete ${incomplete == 1 ? 'línea' : 'líneas'}',
+            'Requieren revisión',
+            '$needsReview ${needsReview == 1 ? 'línea' : 'líneas'}',
             tone: visual.warning,
           ),
         ],
@@ -4063,9 +4495,13 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
             border: Border.all(color: visual.accentBorder),
           ),
           child: Text(
-            'Los abonos se descartan de entrada: un sueldo siempre es '
-            'egreso. Aun así quedan visibles en «Otros movimientos» para '
-            'que nadie sospeche que se perdió algo.',
+            // **«Otros movimientos» no existe en este flujo.** `_buildTransferRows`
+            // arma la revisión con los egresos sin calzar y las filas de campos
+            // incompletos; un abono completo no entra ahí. Prometer una sección
+            // que no se construye es inventar el consumidor.
+            'Los abonos no pasan a las coincidencias: un sueldo siempre es '
+            'egreso. Se muestran uno a uno en esta lectura para que nadie '
+            'sospeche que se perdió algo.',
             style: visual.bodyS.copyWith(
               fontSize: 10.5,
               height: 1.45,
@@ -4082,7 +4518,7 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
-            if (constraints.maxWidth < 900) {
+            if (constraints.maxWidth < ResponsiveBreakpoints.desktopMin) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [table, const SizedBox(height: 14), facts],
@@ -4102,39 +4538,134 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     );
   }
 
+  /// Lo que el encabezado del paso 4 puede afirmar **hoy**, no lo que el frame
+  /// dibuja siempre.
+  ///
+  /// El frame rotula «Nada se escribió todavía» de forma incondicional, y eso
+  /// deja de ser cierto en cuanto un intento de aplicar falla: `_apply()` llama
+  /// `createImport` **antes** que `apply`, y ese RPC inserta la importación y
+  /// sus filas. Los pagos no se crearon —`apply` es una sola transacción— pero
+  /// la cartola sí quedó registrada, y una pantalla de dinero que dice «nada»
+  /// cuando ya hay algo es la misma clase de afirmación falsa que 5d corrigió.
+  String get _applyWriteStateNote => _importReceipt == null
+      ? 'Nada se escribió todavía. Este es el último punto de retorno.'
+      : 'La cartola ya quedó registrada por el intento anterior. Ningún pago '
+          'se ha creado todavía.';
+
+  /// Ancho mínimo para la composición de tres columnas del frame.
+  ///
+  /// Sale del propio frame, medido sobre el PNG publicado (recorte sin
+  /// reescalar, 1342×390): las columnas miden **430 · 430 · 400** con
+  /// **20** de canaleta, y suman los 1340 de canvas que declara el `spec.json`.
+  /// La más angosta que Design dibuja es 400, así que por debajo de
+  /// `3×400 + 2×20` las tres ya no caben en su proporción y se apilan. No es un
+  /// número elegido: es el propio frame diciendo cuánto necesita.
+  static const double _applyThreeColumnMinWidth = 3 * 400 + 2 * _applyColumnGap;
+  static const double _applyColumnGap = 20;
+
   Widget _buildApplyStage() {
     final visual = PayrollVisualTokens.of(context);
+    final decisions = _buildDecisions();
+    final impacts = _weekImpacts(decisions);
+    final summary = _applySummary(decisions);
+
+    // El orden es el del frame: impacto · efectivo · resumen. Apilado sigue
+    // siendo el mismo orden, porque es el de la lectura: qué cambia, qué falta
+    // preguntar, y recién entonces qué se va a escribir.
+    final columns = <({int flex, String title, Widget child})>[
+      if (impacts.isNotEmpty)
+        (
+          flex: 43,
+          title: 'IMPACTO POR SEMANA',
+          child: _buildWeekImpactSection(impacts),
+        ),
+      // t5-5j: el efectivo vive dentro de Aplicar. La cartola nunca prueba
+      // una entrega en mano, así que se pregunta aquí, persona por persona,
+      // junto al resumen y al único punto de escritura.
+      if (_cashLines.isNotEmpty)
+        (
+          flex: 43,
+          title: 'EFECTIVO · SIEMPRE PREGUNTADO A MANO',
+          child: _buildCashSection(),
+        ),
+      (
+        flex: 40,
+        title: 'RESUMEN ANTES DE ESCRIBIR',
+        child: _buildConfirmSection(summary),
+      ),
+    ];
+
+    Widget titled(({int flex, String title, Widget child}) column) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(column.title, style: visual.overline),
+          const SizedBox(height: 9),
+          column.child,
+        ],
+      );
+    }
+
     return ListView(
       key: const PageStorageKey<String>('payroll-reconciliation-apply'),
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
       children: [
-        // t5-5j: el efectivo vive dentro de Aplicar. La cartola nunca prueba
-        // una entrega en mano, así que se pregunta aquí, persona por persona,
-        // junto al resumen y al único punto de escritura.
-        if (_cashLines.isNotEmpty) ...[
-          Text('EFECTIVO · SIEMPRE PREGUNTADO A MANO', style: visual.overline),
-          const SizedBox(height: 9),
-          _buildCashSection(),
-          const SizedBox(height: 18),
-        ],
-        Row(
-          children: [
-            Text('RESUMEN ANTES DE ESCRIBIR', style: visual.overline),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Nada se escribió todavía; este es el último punto de retorno.',
-                style: visual.bodyS.copyWith(
-                  fontSize: 10.5,
-                  color: visual.inkFaint,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+        Text(
+          _applyWriteStateNote,
+          key:
+              const ValueKey<String>('payroll-reconciliation-apply-write-note'),
+          style: visual.bodyS.copyWith(
+            fontSize: 10.5,
+            color: visual.inkFaint,
+          ),
         ),
+        const SizedBox(height: 14),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            if (columns.length < 3 ||
+                constraints.maxWidth < _applyThreeColumnMinWidth) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var index = 0; index < columns.length; index++) ...[
+                    if (index > 0) const SizedBox(height: 18),
+                    titled(columns[index]),
+                  ],
+                ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var index = 0; index < columns.length; index++) ...[
+                  if (index > 0) const SizedBox(width: _applyColumnGap),
+                  Expanded(
+                    flex: columns[index].flex,
+                    child: titled(columns[index]),
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 18),
+        Text('DETALLE POR SEMANA', style: visual.overline),
         const SizedBox(height: 9),
-        _buildConfirmSection(),
+        _buildConfirmDetail(),
+      ],
+    );
+  }
+
+  /// 5j paso 4 · «IMPACTO POR SEMANA»: antes tachado → después, con el rótulo
+  /// `falta pagar` que el frame usa para decir qué significa la cifra grande.
+  Widget _buildWeekImpactSection(List<_WeekImpact> impacts) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < impacts.length; index++) ...[
+          if (index > 0) const SizedBox(height: 9),
+          _WeekImpactCard(impact: impacts[index]),
+        ],
       ],
     );
   }
@@ -4205,7 +4736,7 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
                     : () => _enterStage(PayrollReconciliationStage.extract),
           ),
         PayrollReconciliationStage.extract => PayrollPrimaryAction(
-            label: 'Revisar coincidencias',
+            label: 'Ver propuestas de pago',
             onPressed:
                 _isBusy || !_canEnterStage(PayrollReconciliationStage.review)
                     ? null
@@ -5074,59 +5605,154 @@ class _PreparationProgress extends StatelessWidget {
   }
 }
 
-class _CapabilityChip extends StatelessWidget {
-  const _CapabilityChip({
-    required this.label,
-    required this.available,
-    this.unavailableLabel = 'No disponible aquí',
+/// **5j · paso 1** — qué esperar de cada fuente, antes de elegir.
+///
+/// Design dibuja tres tarjetas con una línea cada una. Se copia la composición
+/// porque resuelve la decisión real del operador —«¿escaneo o saco una foto?»—
+/// que los chips anteriores no resolvían: decían si la fuente estaba disponible,
+/// no qué calidad de lectura iba a dar.
+///
+/// **El texto NO se copia entero**, y ésa es la parte que importa:
+/// - *PDF del banco* — el frame promete que «la extracción es **exacta**». No
+///   se copia: `embeddedPdfText` sólo nombra el método **inicial**, y
+///   `_needsPdfOcrRetry` fuerza OCR de imagen cuando menos de la mitad de las
+///   filas traen evidencia estructurada completa. Se promete lo que sí se
+///   cumple: que lee el texto incorporado y no usa OCR cuando viene
+///   estructurado.
+/// - *Imagen o captura* — el frame promete «OCR **con confianza por línea**; las
+///   dudosas se marcan». Esa confianza **no existe en la extracción**: la única
+///   `PayrollMatchConfidence` del módulo es la del **match** del paso 3, otra
+///   cosa. Y «lo que quede ilegible se marca» tampoco se puede prometer: el
+///   parser señala **filas reconocidas con campos que no reconoció**
+///   (`missing_date`, `invalid_date`, `ambiguous_direction`,
+///   `missing_transaction_amount`, `unstructured_row`), que no es cobertura
+///   total de lo ilegible. Se nombra exactamente eso.
+/// - *Cámara* — el frame promete «guía de encuadre y recorte». **No existe**
+///   ninguna, así que se descarta la promesa y se conserva la disponibilidad
+///   real, que el frame no dibuja.
+class _SourceExpectations extends StatelessWidget {
+  const _SourceExpectations({
+    required this.supportsImages,
+    required this.supportsCapture,
   });
 
-  final String label;
-  final bool available;
-  final String unavailableLabel;
+  final bool supportsImages;
+  final bool supportsCapture;
 
   @override
   Widget build(BuildContext context) {
     final visual = PayrollVisualTokens.of(context);
-    final foreground = available ? visual.successFg : visual.inkFaint;
-    final background = available ? visual.successSoft : visual.surfaceSunken;
-    final border = available ? visual.successBorder : visual.border;
-    final stateLabel = available ? 'Disponible' : unavailableLabel;
 
-    return Semantics(
-      label: '$label. $stateLabel.',
-      excludeSemantics: true,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 280),
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+    Widget card({
+      required String title,
+      required String body,
+      required bool available,
+      String? unavailable,
+    }) {
+      return Container(
+        key: ValueKey<String>('payroll-source-expectation-$title'),
+        // **Todo el espaciado sale de `PayrollTokens`**, que es el único dueño
+        // de espaciado del módulo. Una versión anterior traía `12/10`, `4` y
+        // `8` inventados acá, y encima el ledger afirmaba que venían de tokens.
+        // El radio se toma de `rField` porque es radio; **no se usa un token de
+        // radio como spacing**.
+        padding: const EdgeInsets.all(PayrollTokens.gapBlocks),
         decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(PayrollTokens.rPill),
-          border: Border.all(color: border),
+          color: visual.surfaceSunken,
+          borderRadius: BorderRadius.circular(PayrollTokens.rField),
+          border: Border.all(color: visual.border),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              available ? Icons.check_rounded : Icons.remove_rounded,
-              size: 14,
-              color: foreground,
+          children: <Widget>[
+            Text(
+              title,
+              // `labelStrong` sin tocar tamaño ni alto: sólo el color, que es
+              // un rol.
+              style: visual.labelStrong.copyWith(
+                color: available ? visual.ink : visual.inkFaint,
+              ),
             ),
-            const SizedBox(width: 5),
-            Flexible(
-              child: Text(
-                '$label · $stateLabel',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: visual.bodyS.copyWith(
-                  color: foreground,
-                  fontWeight: FontWeight.w600,
-                ),
+            const SizedBox(height: PayrollTokens.gapCards),
+            Text(
+              available ? body : (unavailable ?? body),
+              // `bodyS` **entero**: es 11,5, no 11. Reducirlo acá era inventar
+              // un tamaño de texto propio de esta pantalla.
+              style: visual.bodyS.copyWith(
+                color: available ? visual.inkMuted : visual.inkFaint,
               ),
             ),
           ],
         ),
+      );
+    }
+
+    final cards = <Widget>[
+      card(
+        title: 'PDF del banco',
+        body: 'Lee el texto incorporado al PDF; no usa OCR cuando viene '
+            'estructurado.',
+        available: true,
       ),
+      card(
+        title: 'Imagen o captura',
+        body: 'Se lee con OCR en este dispositivo. Las filas con campos que no '
+            'se reconocen quedan señaladas para que las revises en el paso 2.',
+        available: supportsImages,
+        unavailable: 'No disponible en este dispositivo: usa un PDF con texto.',
+      ),
+      card(
+        // **No se copia el rótulo del frame.** `5j` titula esta tarjeta
+        // «Cámara», que es **exactamente** el texto del control que dispara la
+        // captura: dos cosas distintas con el mismo nombre en la misma
+        // pantalla. Un lector de pantalla anuncia dos «Cámara» y el operador no
+        // sabe cuál actúa. La tarjeta describe, el botón hace.
+        title: 'Foto con la cámara',
+        body: 'Una foto de la cartola en el mesón, con la misma lectura que '
+            'una imagen.',
+        available: supportsCapture,
+        unavailable: 'Sólo en Android y iPhone.',
+      ),
+    ];
+
+    // El corte lo decide el **owner responsivo canónico**, no un número de
+    // esta pantalla: `ResponsiveBreakpoints.phoneMaxExclusive`. Una versión
+    // anterior comparaba el ancho del contenido contra un `560` explicado sólo
+    // por «se ve apretado» — un breakpoint feature-local sin dueño, que es lo
+    // que `universal-ui-component-system.md` prohíbe.
+    final stacked = ResponsiveViewport.widthOf(context) <
+        ResponsiveBreakpoints.phoneMaxExclusive;
+    return Builder(
+      builder: (context) {
+        if (stacked) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              for (var i = 0; i < cards.length; i++) ...<Widget>[
+                cards[i],
+                if (i != cards.length - 1)
+                  const SizedBox(height: PayrollTokens.gapCards),
+              ],
+            ],
+          );
+        }
+        // `IntrinsicHeight` y no `stretch` a secas: dentro del `ListView` la
+        // altura no está acotada, y un `Row` que estira pide infinito — el
+        // árbol reventaba y la prueba lo veía como «el aviso no existe».
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              for (var i = 0; i < cards.length; i++) ...<Widget>[
+                Expanded(child: cards[i]),
+                if (i != cards.length - 1)
+                  const SizedBox(width: PayrollTokens.gapCards),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -5165,6 +5791,237 @@ class _ReceiptIdentifier extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 5j paso 4 · una semana de la columna «IMPACTO POR SEMANA».
+///
+/// Geometría del frame publicado (`handoff-t5/frames/5j-paso4.png`, 1342×390,
+/// recorte sin reescalar): tarjeta de **69** de alto y **9** de separación,
+/// borde `border` y radio `rPanel`. Los colores no se miden: salen de
+/// [PayrollVisualTokens], que es quien los ata al preset y al brillo.
+class _WeekImpactCard extends StatelessWidget {
+  const _WeekImpactCard({required this.impact});
+
+  final _WeekImpact impact;
+
+  /// La glosa de la derecha, en el idioma del módulo. El frame escribe
+  /// «1 transferencia + 1 efectivo» y «1 pago parcial de $100.000»: cuenta
+  /// movimientos, no decisiones.
+  String get _movementsLabel {
+    final parts = <String>[
+      if (impact.transferCount > 0)
+        '${impact.transferCount} '
+            '${impact.transferCount == 1 ? 'transferencia' : 'transferencias'}',
+      if (impact.cashCount > 0) '${impact.cashCount} en efectivo',
+      if (impact.advanceCount > 0)
+        '${impact.advanceCount} '
+            '${impact.advanceCount == 1 ? 'anticipo' : 'anticipos'}',
+    ];
+    final base = parts.join(' + ');
+    if (impact.partialCount == 0) return base;
+    return '$base · ${impact.partialCount} '
+        '${impact.partialCount == 1 ? 'parcial' : 'parciales'}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = PayrollVisualTokens.of(context);
+    return Container(
+      key: ValueKey<String>('payroll-week-impact-${impact.voucherId}'),
+      padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
+      decoration: BoxDecoration(
+        color: visual.surface,
+        borderRadius: BorderRadius.circular(PayrollTokens.rPanel),
+        border: Border.all(color: visual.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  impact.weekLabel,
+                  style: visual.cardTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  _movementsLabel,
+                  style: visual.bodyS.copyWith(color: visual.inkFaint),
+                  textAlign: TextAlign.right,
+                  maxLines: 2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          // `antes → después`. El «antes» va tachado porque deja de ser cierto
+          // en cuanto se aplica; el «después» es la cifra que manda y por eso
+          // lleva el rótulo que dice qué es. Sin ese rótulo, una cifra sola en
+          // una pantalla de nómina se lee como «lo que se va a pagar», que es
+          // justo lo contrario.
+          //
+          // **Excepción declarada a F-03, y por qué NO se ensancha su API.**
+          // Estas dos cifras usan `VbMoneyText.formatClp` dentro de un `Text`
+          // en vez del widget `VbMoneyText`, porque necesitan dos cosas que el
+          // componente canónico no ofrece **a propósito**: tachado para el
+          // «antes» y el tamaño mayor de `numCard` para el «después».
+          // `universal-ui-component-system.md` prohíbe que un componente
+          // canónico acepte overrides visuales arbitrarios, y `VbMoneyText`
+          // documenta que una versión suya con `size`/`weight`/`color` fue
+          // retirada justo por eso. Agregarle parámetros para este caso sería
+          // reabrir esa puerta para una sola pantalla.
+          // Lo que sí es innegociable es el **formato**, y por eso se usa
+          // `formatClp`, que el propio F-03 publica como `static` precisamente
+          // para que un `Text`, una etiqueta de semántica y una prueba escriban
+          // el peso de la misma manera. La cifra del total del resumen, que no
+          // necesita ninguna de las dos excepciones, sí usa `VbMoneyText`.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                VbMoneyText.formatClp(impact.beforeClp),
+                style: visual.monoM.copyWith(
+                  color: visual.inkFaint,
+                  decoration: TextDecoration.lineThrough,
+                  decorationColor: visual.inkFaint,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.arrow_forward_rounded,
+                  size: 13, color: visual.inkFaint),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  VbMoneyText.formatClp(impact.afterClp),
+                  style: visual.numCard,
+                  maxLines: 1,
+                  softWrap: false,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Text(
+                'falta pagar',
+                style: visual.bodyS.copyWith(color: visual.inkMuted),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 5j paso 4 · panel «RESUMEN ANTES DE ESCRIBIR».
+///
+/// Cada fila corresponde a algo que `apply` hace de verdad. Las dos filas del
+/// frame que no sobrevivieron la auditoría están documentadas en [_ApplySummary]
+/// con su razón; no se descartaron por gusto.
+class _ApplySummaryPanel extends StatelessWidget {
+  const _ApplySummaryPanel({required this.summary});
+
+  final _ApplySummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = PayrollVisualTokens.of(context);
+    final rows = <({String label, String value, bool emphasis})>[
+      (
+        label: 'Pagos que se crearán',
+        value: '${summary.paymentCount}',
+        emphasis: false,
+      ),
+      if (summary.partialCount > 0)
+        (
+          label: 'De ellos, pagos parciales',
+          value: '${summary.partialCount} · '
+              '${VbMoneyText.formatClp(summary.partialAmountClp)}',
+          emphasis: true,
+        ),
+      if (summary.advanceCount > 0)
+        (
+          label: 'Anticipos que se descontarán',
+          value: '${summary.advanceCount} · '
+              '${VbMoneyText.formatClp(summary.advanceAmountClp)}',
+          emphasis: false,
+        ),
+      if (summary.alreadyResolvedCount > 0)
+        (
+          label: 'Ya conciliados en otra cartola',
+          value: '${summary.alreadyResolvedCount}',
+          emphasis: false,
+        ),
+      if (summary.operatorExcludedCount > 0)
+        (
+          label: 'Excluidos por ti',
+          value: '${summary.operatorExcludedCount}',
+          emphasis: false,
+        ),
+    ];
+
+    return Container(
+      key: const ValueKey<String>('payroll-reconciliation-apply-summary'),
+      padding: const EdgeInsets.fromLTRB(15, 13, 15, 13),
+      decoration: BoxDecoration(
+        color: visual.surfaceSelected,
+        borderRadius: BorderRadius.circular(PayrollTokens.rPanel),
+        border: Border.all(color: visual.accentBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var index = 0; index < rows.length; index++) ...[
+            if (index > 0) const SizedBox(height: 9),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    rows[index].label,
+                    style: visual.bodyS.copyWith(color: visual.ink),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  rows[index].value,
+                  style: visual.monoM.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: rows[index].emphasis ? visual.warningFg : visual.ink,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          Divider(height: 1, color: visual.accentBorder),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  // «Imputar» quedó derogado por el propio Design en el turno 7
+                  // («Decisiones de producto respetadas: "Imputar" →
+                  // "Aplicar"»), y el contrato de sincronía lo nombra como el
+                  // ejemplo de copy que este módulo no usa. El frame del turno 5
+                  // conserva la palabra vieja; gana la decisión posterior.
+                  'Total a aplicar',
+                  style: visual.labelStrong,
+                ),
+              ),
+              const SizedBox(width: 12),
+              VbMoneyText(summary.totalClp),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

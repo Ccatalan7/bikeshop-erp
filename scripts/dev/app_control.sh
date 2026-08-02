@@ -11,6 +11,8 @@
 #   app_control.sh tap  --key|--label X  # resolve and tap one live target
 #   app_control.sh type "texto"
 #   app_control.sh key <keycode>         # 36=return 53=esc 48=tab 51=delete
+#   app_control.sh choose-file /abs/path # file in the current macOS Open panel
+#   app_control.sh resize W H            # largest window of the exact debug PID
 #   app_control.sh geometry              # pid + window frame + frame size
 #
 # Read docs/development/AGENT_MACOS_APP_CONTROL.md first.
@@ -50,11 +52,24 @@ ensure_mouse() {
   }
 }
 
-window_frame() { # -> "X Y W H" (screen points)
+window_frame() { # -> "X Y W H" (screen points), largest window of exact PID
   osascript <<EOF 2>/dev/null
 tell application "System Events" to tell (first process whose unix id is $pid)
-  set p to position of window 1
-  set s to size of window 1
+  set bestIndex to 0
+  set bestArea to -1
+  repeat with candidateIndex from 1 to count of windows
+    try
+      set candidateSize to size of window candidateIndex
+      set candidateArea to (item 1 of candidateSize) * (item 2 of candidateSize)
+      if candidateArea > bestArea then
+        set bestArea to candidateArea
+        set bestIndex to candidateIndex
+      end if
+    end try
+  end repeat
+  if bestIndex is 0 then error "the debug process has no accessible window"
+  set p to position of window bestIndex
+  set s to size of window bestIndex
   return ((item 1 of p) as text) & " " & ((item 2 of p) as text) & " " & ((item 1 of s) as text) & " " & ((item 2 of s) as text)
 end tell
 EOF
@@ -142,7 +157,28 @@ PY
 }
 
 focus() {
-  osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $pid) to true" >/dev/null 2>&1
+  # A Flutter process can retain a tiny auxiliary window (66x20 was observed
+  # on 2026-08-01). Raising `window 1` or merely making the process frontmost
+  # then targets that residue and every OS-backed click appears broken. Raise
+  # the largest window of the exact debug PID instead.
+  osascript <<EOF >/dev/null 2>&1
+tell application "System Events" to tell (first process whose unix id is $pid)
+  set frontmost to true
+  set bestIndex to 0
+  set bestArea to -1
+  repeat with candidateIndex from 1 to count of windows
+    try
+      set candidateSize to size of window candidateIndex
+      set candidateArea to (item 1 of candidateSize) * (item 2 of candidateSize)
+      if candidateArea > bestArea then
+        set bestArea to candidateArea
+        set bestIndex to candidateIndex
+      end if
+    end try
+  end repeat
+  if bestIndex is not 0 then perform action "AXRaise" of window bestIndex
+end tell
+EOF
   sleep 0.4
 }
 
@@ -181,6 +217,43 @@ case "${1:-}" in
     tmp="$(mktemp -t frameshot).png"
     read -r fw fh < <(frame_shot "$tmp") && rm -f "$tmp"
     echo "pid $pid · ventana ${ww}x${wh} @ $wx,$wy · frame ${fw}x${fh}"
+    ;;
+
+  resize)
+    if [ $# -ne 3 ]; then
+      echo "uso: app_control.sh resize ANCHO ALTO" >&2
+      exit 2
+    fi
+    case "$2:$3" in
+      *[!0-9:]*|:*|*:) echo "ancho y alto deben ser enteros positivos" >&2; exit 2 ;;
+    esac
+    if [ "$2" -le 0 ] || [ "$3" -le 0 ]; then
+      echo "ancho y alto deben ser enteros positivos" >&2
+      exit 2
+    fi
+    osascript <<EOF >/dev/null 2>&1
+tell application "System Events" to tell (first process whose unix id is $pid)
+  set frontmost to true
+  set bestIndex to 0
+  set bestArea to -1
+  repeat with candidateIndex from 1 to count of windows
+    try
+      set candidateSize to size of window candidateIndex
+      set candidateArea to (item 1 of candidateSize) * (item 2 of candidateSize)
+      if candidateArea > bestArea then
+        set bestArea to candidateArea
+        set bestIndex to candidateIndex
+      end if
+    end try
+  end repeat
+  if bestIndex is 0 then error "the debug process has no accessible window"
+  set size of window bestIndex to {$2, $3}
+  perform action "AXRaise" of window bestIndex
+end tell
+EOF
+    sleep 0.5
+    read -r wx wy ww wh < <(window_frame)
+    echo "pid $pid · ventana ${ww}x${wh} @ $wx,$wy"
     ;;
 
   # ── Tocar por identidad, no por píxel ─────────────────────────────────────
@@ -308,6 +381,111 @@ for candidate_index, match in enumerate(payload.get('matches', [payload.get('tap
         match.get('label') or '',
     ))
 PY
+    ;;
+
+  choose-file)
+    if [ $# -ne 2 ]; then
+      echo "uso: app_control.sh choose-file /ruta/absoluta/al/archivo" >&2
+      exit 2
+    fi
+    file_path="$2"
+    case "$file_path" in
+      /*) ;;
+      *) echo "choose-file exige una ruta absoluta" >&2; exit 2 ;;
+    esac
+    [ -f "$file_path" ] || {
+      echo "el archivo no existe o no es regular: $file_path" >&2
+      exit 2
+    }
+
+    # The Flutter picker is an OS window, so it is outside the VM-service
+    # semantics tree used by `tap`. Target the exact debug bundle/PID and
+    # require its current Open panel before sending any keyboard shortcut.
+    #
+    # Do not type the path character by character. The native Go-to-folder
+    # sheet was already proven live with paste, while per-character keystrokes
+    # race the sheet animation and lose input. Preserve the owner's clipboard
+    # (including non-text flavours), paste once, and restore it before exit.
+    # This also prevents Cmd+Shift+G from landing in Claude, Terminal, or an
+    # installed copy of the ERP — all three happened while the real dialog was
+    # open behind another app on 2026-08-01.
+    #
+    # Do not store the Accessibility process in an AppleScript variable. A
+    # process reference selected by unix id is serialized back as its *name*;
+    # when an installed build and the debug build are both named
+    # `vinabike_erp`, later `tell targetProcess` resolves the wrong one. Keep
+    # the exact-PID predicate inline at every access. For the same reason do
+    # not use `open -a`: duplicate bundle identifiers may activate the installed
+    # copy even when given the debug bundle path.
+    if ! osascript - "$file_path" <<EOF >/dev/null
+on run argv
+  set filePath to item 1 of argv
+  set savedClipboard to missing value
+  try
+    set savedClipboard to the clipboard as record
+  end try
+
+  tell application "System Events"
+    tell (first process whose unix id is $pid)
+      set hasOpenPanel to false
+      set windowCount to count of windows
+      repeat with candidateIndex from 1 to windowCount
+        try
+          set candidateText to name of window candidateIndex as text
+          if candidateText is "Open" or candidateText is "Abrir" then
+            set hasOpenPanel to true
+            exit repeat
+          end if
+        end try
+      end repeat
+      if hasOpenPanel is false then error "la app debug no tiene un selector Open visible"
+      set frontmost to true
+    end tell
+  end tell
+
+  try
+    set the clipboard to filePath
+    tell application "System Events"
+      keystroke "g" using {command down, shift down}
+      delay 0.5
+      keystroke "v" using {command down}
+      delay 0.3
+      key code 36
+      delay 1
+      key code 36
+    end tell
+
+    repeat with attempt from 1 to 50
+      delay 0.1
+      set panelStillOpen to false
+      tell application "System Events" to tell (first process whose unix id is $pid)
+        set windowCount to count of windows
+        repeat with candidateIndex from 1 to windowCount
+          try
+            set candidateText to name of window candidateIndex as text
+            if candidateText is "Open" or candidateText is "Abrir" then
+              set panelStillOpen to true
+              exit repeat
+            end if
+          end try
+        end repeat
+      end tell
+      if panelStillOpen is false then exit repeat
+    end repeat
+    if panelStillOpen then error "el selector no se cerró; no se confirmó el archivo"
+  on error errorMessage number errorNumber
+    if savedClipboard is not missing value then set the clipboard to savedClipboard
+    error errorMessage number errorNumber
+  end try
+
+  if savedClipboard is not missing value then set the clipboard to savedClipboard
+end run
+EOF
+    then
+      echo "no pude elegir el archivo en el selector de la app debug" >&2
+      exit 1
+    fi
+    echo "archivo elegido en la app debug: $file_path"
     ;;
 
   click|scroll|drag)

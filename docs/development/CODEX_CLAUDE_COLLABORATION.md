@@ -28,7 +28,8 @@ is sent**:
 1. The selected surface says **Code**, not Home.
 2. The selected repository says `bikeshop-erp`.
 3. The model is **Fable 5** (preferred) or **Opus 5**.
-4. The effort label says exactly **Effort: Ultracode**.
+4. The effort label says **Effort: Ultracode** while workflows/subagents are
+   enabled. While the owner has them suspended, it says **Effort: xhigh**.
 
 Re-run the four checks after navigating to another chat because model, effort,
 surface, and repository are session UI state and must not be inferred from a
@@ -39,11 +40,12 @@ while changing Home/Code or chat state. Immediately before pressing Send,
 confirm the intended chat title or URL as well as all four preflight signals;
 changing a selector can move focus to another conversation.
 
-Extra and every lower effort are below the acceptance boundary for this ERP.
-If any material work was produced there, stop using that result as accepted
-evidence and have Fable 5 or Opus 5 independently re-review it in Ultracode.
-Claude subagents use `model: inherit`; start them only from a parent session
-that already passed this preflight.
+Extra and every effort below `xhigh` are below the acceptance boundary for this
+ERP. Anthropic defines Ultracode as `xhigh` plus automatic workflow
+orchestration: do not re-enable workflows merely to obtain that label while a
+zero-subagent suspension is active. When the suspension is lifted, Claude
+subagents use `model: inherit` and start only from a parent session that already
+passed the Ultracode preflight.
 
 ## Claude Design authority
 
@@ -153,11 +155,13 @@ an inaccessible screenshot.
 
 ## Dual diagnosis gate
 
-Every newly identified non-trivial defect must receive an independent diagnosis
-and solution proposal from **both Codex and Claude before implementation**. The
-first agent shares only a neutral evidence packet (symptom, reproduction,
-affected boundary and relevant files), not its conclusion, so the second agent
-does not merely ratify it. Each response must state:
+P0/P1 findings and seams involving financial integrity, security, tenant
+isolation, concurrency, navigation ownership or another broad invariant receive
+an independent diagnosis and solution proposal from **both Codex and Claude
+before implementation**. The first agent shares only a neutral evidence packet
+(symptom, reproduction, affected boundary and relevant files), not its
+conclusion, so the second agent does not merely ratify it. Each response must
+state:
 
 - reproduced fact versus hypothesis;
 - likely root cause and affected invariant;
@@ -171,12 +175,12 @@ record why one option or a synthesized option won and preserve any material
 dissent as an explicit risk. Neither agent may skip the other's diagnostic
 because it is the domain lead.
 
-Batch related findings into one bounded evidence packet and one response per
-agent. Do not start one Claude session per defect. A purely mechanical failure
-discovered while running an already-approved correction (formatting, syntax or
-an expectation made obsolete by the test's own new fixture) may be repaired
-locally, but it must be included in the next shared review packet if it changes
-behavior or the proposed design.
+Batch related findings into one bounded evidence packet and review them at a
+coherent feature/block boundary. Do not start one Claude session per defect.
+Local layout, copy, formatting, syntax and other mechanical defects are repaired
+by the active lead and included in the next checkpoint; they do not stop the
+feature for a separate dual-diagnosis round. If a local repair reveals one of
+the broad invariants above, promote it to this gate.
 
 ## Working loop
 
@@ -219,17 +223,35 @@ behavior or the proposed design.
   logs, or handoffs.
 - Do not add direct Supabase/database MCP access. It bypasses the repository's
   audited database contract.
-- Claude Desktop currently launches its local agent in `bypassPermissions`.
-  The project `PreToolUse` guard therefore blocks production writes, deployment,
-  publication, commit/push/PR operations, destructive Git cleanup, generic
-  process signaling, and recursive deletion even when ordinary permission
-  prompts are skipped. An owner-authorized external mutation is handed back to
-  Codex or performed from a fresh non-bypass session with the guard deliberately
-  reviewed for that exact action.
+- **Correction 2026-08-01:** this workspace now uses Claude **Auto mode** by
+  default. `bypassPermissions` is exceptional and is not the normal launch
+  contract. The project `PreToolUse` guard still runs in either mode. Today it
+  blocks production writes, deployment
+  (`firebase deploy`, `supabase functions deploy`, `scripts/deploy.sh`),
+  `supabase db|migration`, history rewrites, open-scope `git restore`, generic
+  process signaling and recursive deletion. It **no longer** blocks
+  `git add/commit/push` or `scripts/publish_*` / `scripts/releases/*`.
+- **That change did not move the rule.** The guard measures **capability, not
+  permission**. Commits, pushes, PRs, deployment, publication and production
+  writes still require the owner's explicit authorization, **per action**, as
+  the first bullet of this section states; a one-off authorization never
+  becomes a standing one. An agent that infers permission from "nothing stopped
+  me" has misread this section. An owner-authorized external mutation is handed
+  back to Codex or performed from a fresh non-bypass session with the guard
+  deliberately reviewed for that exact action.
 - Do not pattern-kill Flutter, Dart, browser, or preview processes. Use the
   canonical preview owner and verified process identity.
 - **Sin techo de herramientas** (decisión del owner, 2026-07-31): Workflows,
   agent teams y subagentes anidados quedan disponibles sin aprobación previa.
+  - **Suspensión temporal (2026-08-01, tarea de migración visual de Nóminas):**
+    el owner pidió **no lanzar subagentes, agent teams ni Workflows** mientras
+    dure esa tarea, tras dos corridas que se estancaron. Es una suspensión
+    **acotada a esa tarea, no una derogación** de la regla de arriba: quien
+    trabaje en otra tarea, o cuando el owner la levante, vuelve al techo
+    abierto. Mientras rija, los settings lo hacen fail-closed con
+    `disableWorkflows: true` y `permissions.deny: ["Agent"]`; se trabaja
+    secuencialmente en una sola sesión, con esfuerzo `xhigh`, y no se persigue
+    la etiqueta Ultracode reactivando aquello que el owner suspendió.
   El agente elige la herramienta que el problema pide y usa criterio para no
   gastar de más.
 - Start with one Claude session and a coherent evidence packet, but budget by
@@ -251,6 +273,17 @@ behavior or the proposed design.
   arbitrary low ceiling.
 - The parent performs the final synthesis without tools or additional agents.
   More review rounds need a newly stated evidence gap and cost checkpoint.
+
+## Continuity and compaction
+
+The handoff is a recovery mechanism, not a routine phase of each implementation
+round. Continue in the same primary chat while it remains healthy. Automatic
+compaction starts at the configured 70% threshold; use `/compact` with the
+current feature focus if a manual boundary is useful. Open a new chat only when
+compaction fails, the session is unusable, or ownership crosses a real work
+boundary. Never pause an otherwise active implementation merely to prepare a
+handoff. Durable discoveries still go into their owning repository document in
+the same round.
 
 ## Handoff packet
 
@@ -275,8 +308,10 @@ Every agent-to-agent handoff contains:
 Use this prompt for a new Claude session in this checkout:
 
 > Confirma primero que esta sesión está en Code, repo `bikeshop-erp`,
-> Fable 5 (preferido; Opus 5 permitido) y Effort: Ultracode. Si no ves esas
-> cuatro señales, no empieces el trabajo. Trabaja como par independiente de
+> Fable 5 (preferido; Opus 5 permitido) y el esfuerzo máximo permitido por la
+> política activa: Ultracode con workflows habilitados; xhigh durante una
+> suspensión de subagentes. Si no ves esas cuatro señales, no empieces el
+> trabajo. Trabaja como par independiente de
 > Codex en Vinabike ERP. Antes de editar,
 > lee `CLAUDE.md`, `AGENTS.md` y
 > `docs/development/CODEX_CLAUDE_COLLABORATION.md`; registra branch, HEAD y
@@ -298,10 +333,10 @@ Use this prompt for a new Claude session in this checkout:
 > y regresión mínima antes de leer la conclusión de Codex; Codex hará lo mismo
 > de forma independiente antes de implementar. Divide ownership por archivos,
 > nunca escribas a la vez en
-> los mismos archivos que otro agente. Usa un solo revisor para el riesgo
-> principal, y elige libremente Workflow, agent teams o agentes anidados si el
-> problema los pide: no hay techo de herramientas. Ejecuta el
-> skill `cross-review` antes de declarar terminado. No hagas commit, push,
+> los mismos archivos que otro agente. Mientras siga la suspensión de Nóminas,
+> no uses Workflow, agent teams ni subagentes; realiza el cross-review directo
+> con Codex al cierre de cada bloque coherente. Cuando el owner levante esa
+> suspensión vuelve a regir el techo abierto de herramientas. No hagas commit, push,
 > deploy, publicación ni escritura en producción sin autorización explícita.
 > Entrega evidencia real y desacuerdos pendientes; no respondas por deferencia.
 

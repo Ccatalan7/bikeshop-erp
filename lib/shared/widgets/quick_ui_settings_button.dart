@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../modules/settings/services/appearance_service.dart';
 import '../services/notification_service.dart';
+import 'vb_shell_icon_button.dart';
 import 'workspace_shell_scope.dart';
 
 class QuickUiSettingsButton extends StatelessWidget {
@@ -15,21 +16,28 @@ class QuickUiSettingsButton extends StatelessWidget {
     final theme = Theme.of(context);
     final chrome = WorkspaceChromeStyle.maybeOf(context);
 
+    // `A-02` sobre shell, mismo dueño que el resto del grupo. El `Tooltip`
+    // externo se retira: el owner ya pone tooltip + `semanticLabel`, y dos
+    // tooltips anidados dejaban dos nodos accesibles para un solo control.
+    if (chrome != null) {
+      return VbShellIconButton(
+        buttonKey: const ValueKey<String>('workspace-quick-settings'),
+        icon: Icons.settings_outlined,
+        tooltip: 'Configuración rápida',
+        onPressed: () => _showQuickSettings(context),
+      );
+    }
     return Tooltip(
       message: 'Configuración rápida',
       child: IconButton(
         visualDensity: VisualDensity.compact,
         padding: EdgeInsets.zero,
-        constraints: chrome == null
-            ? null
-            : const BoxConstraints.tightFor(width: 28, height: 28),
         tooltip: 'Configuración rápida',
         onPressed: () => _showQuickSettings(context),
         icon: Icon(
           Icons.settings_outlined,
           size: 20,
-          color: chrome?.mutedForeground ??
-              theme.colorScheme.onSurface.withValues(alpha: 0.72),
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
         ),
       ),
     );

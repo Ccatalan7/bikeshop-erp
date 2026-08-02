@@ -10,8 +10,11 @@ void main() {
     'compact keeps unzoomed scale while desktop preserves the zoom preference',
     (tester) async {
       tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetDevicePixelRatio);
-      addTearDown(tester.view.resetPhysicalSize);
+      tester.view.padding = const FakeViewPadding(top: 24, left: 8);
+      tester.view.viewPadding = const FakeViewPadding(top: 24, left: 8);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+      tester.view.systemGestureInsets = const FakeViewPadding(bottom: 16);
+      addTearDown(tester.view.reset);
 
       for (final viewportWidth in <double>[384, 599, 600, 899, 900, 1440]) {
         final zoomService = WindowZoomService();
@@ -19,6 +22,10 @@ void main() {
         double? logicalMediaQueryWidth;
         double? appliedScale;
         bool? compact;
+        EdgeInsets? logicalPadding;
+        EdgeInsets? logicalViewPadding;
+        EdgeInsets? logicalViewInsets;
+        EdgeInsets? logicalGestureInsets;
 
         tester.view.physicalSize = Size(viewportWidth, 824);
         await tester.pumpWidget(
@@ -35,6 +42,11 @@ void main() {
                   appliedScale =
                       WindowViewportMetrics.maybeOf(context)?.appliedScale;
                   compact = ResponsiveViewport.usesCompactShell(context);
+                  final media = MediaQuery.of(context);
+                  logicalPadding = media.padding;
+                  logicalViewPadding = media.viewPadding;
+                  logicalViewInsets = media.viewInsets;
+                  logicalGestureInsets = media.systemGestureInsets;
                   return const SizedBox.shrink();
                 },
               ),
@@ -57,6 +69,12 @@ void main() {
           viewportWidth < ResponsiveViewport.desktopMin,
           reason: 'viewport width $viewportWidth must keep its composition',
         );
+        expect(logicalPadding!.top * expectedScale, closeTo(24, 0.001));
+        expect(logicalPadding!.left * expectedScale, closeTo(8, 0.001));
+        expect(logicalViewPadding!.top * expectedScale, closeTo(24, 0.001));
+        expect(logicalViewInsets!.bottom * expectedScale, closeTo(280, 0.001));
+        expect(
+            logicalGestureInsets!.bottom * expectedScale, closeTo(16, 0.001));
 
         await tester.pumpWidget(const SizedBox.shrink());
         zoomService.dispose();

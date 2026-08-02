@@ -470,7 +470,10 @@ class _RegisterButton extends StatelessWidget {
       onTap: onTap,
       enabled: enabled,
       busy: submitting,
-      height: compact ? 50 : 38,
+      // `F-06 VbDensity` publica `Control/botón · COMPACT 32 · COMFORT 38 ·
+      // TOUCH 48`. En compacto va el target táctil canónico, no un 50 heredado
+      // del frame.
+      height: compact ? PayrollTokens.touchMobile : 38,
       fontSize: compact ? 13 : 12.5,
       horizontalPadding: 16,
       disabledStyle: PayrollAccentDisabledStyle.neutral,
@@ -527,6 +530,13 @@ _AmountCase _amountCaseOf(String typed, String suggested) {
 
 /// Los tres casos de 5e, lado a lado. Marca cuál está ocurriendo; no cambia
 /// el monto ni la validación.
+/// Alto de las tarjetas `MODO DEL PAGO`, leído de Design (`7d`, turno 7:
+/// `height:46px`) y confirmado por su anotación, que lo declara heredado del
+/// turno 5. No tiene token propio en `PayrollTokens` —la escalera salta de
+/// `ctaH 34` a `rowH 48`—, así que se publica acá con su procedencia en vez de
+/// derivarlo de un token que significa otra cosa.
+const double paymentModeCardHeight = 46;
+
 class _AmountCaseStrip extends StatelessWidget {
   const _AmountCaseStrip({
     required this.suggestedLabel,
@@ -542,33 +552,41 @@ class _AmountCaseStrip extends StatelessWidget {
     final active = _amountCaseOf(typedLabel, suggestedLabel);
     final difference = _clpDigits(typedLabel) - _clpDigits(suggestedLabel);
 
+    // 7d, anotación literal del frame: «Los tres modos del composer mantienen
+    // la geometría del turno 5: **46 de alto**, rótulo y caption, y el activo
+    // con fondo `selectionRow` más borde de acento». El inactivo va en
+    // `sunken` con borde `divider`; ninguno de los dos es `surface`.
     Widget chip(_AmountCase value, String label, String detail) {
       final selected = active == value;
       return Container(
         key: ValueKey<String>('payroll-composer-case-${value.name}'),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        height: paymentModeCardHeight,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: selected ? visual.accentSoft : visual.surface,
+          color: selected ? visual.surfaceSelected : visual.surfaceSunken,
           borderRadius: BorderRadius.circular(PayrollTokens.rField),
           border: Border.all(
             color: selected ? visual.accent : visual.border,
-            width: selected ? 1.5 : 1,
           ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: visual.labelStrong.copyWith(
                 fontSize: 11,
-                color: selected ? visual.accent : visual.inkMuted,
+                color: selected ? visual.accent : visual.ink,
               ),
             ),
-            const SizedBox(height: 2),
             Text(
               detail,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: visual.monoS.copyWith(fontSize: 9.5),
             ),
           ],
@@ -576,22 +594,26 @@ class _AmountCaseStrip extends StatelessWidget {
       );
     }
 
-    return Wrap(
-      spacing: 7,
-      runSpacing: 7,
+    return Row(
       children: <Widget>[
-        chip(_AmountCase.exact, 'Completo', suggestedLabel),
-        chip(
-          _AmountCase.over,
-          'Con diferencia',
-          difference > 0 ? '+${formatPayrollClp(difference)}' : 'de más',
+        Expanded(child: chip(_AmountCase.exact, 'Completo', suggestedLabel)),
+        const SizedBox(width: 7),
+        Expanded(
+          child: chip(
+            _AmountCase.over,
+            'Con diferencia',
+            difference > 0 ? '+${formatPayrollClp(difference)}' : 'de más',
+          ),
         ),
-        chip(
-          _AmountCase.partial,
-          'Parcial',
-          difference < 0
-              ? formatPayrollClp(_clpDigits(typedLabel))
-              : 'de menos',
+        const SizedBox(width: 7),
+        Expanded(
+          child: chip(
+            _AmountCase.partial,
+            'Parcial',
+            difference < 0
+                ? formatPayrollClp(_clpDigits(typedLabel))
+                : 'de menos',
+          ),
         ),
       ],
     );

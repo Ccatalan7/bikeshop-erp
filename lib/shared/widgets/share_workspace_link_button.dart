@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../services/route_share_service.dart';
 import '../services/workspace_manager.dart';
+import 'vb_shell_icon_button.dart';
 import 'workspace_shell_scope.dart';
 
 class ShareWorkspaceLinkButton extends StatelessWidget {
@@ -14,17 +15,27 @@ class ShareWorkspaceLinkButton extends StatelessWidget {
     final theme = Theme.of(context);
     final chrome = WorkspaceChromeStyle.maybeOf(context);
 
+    // Dentro del shell manda `A-02` sobre shell, y su dueño es
+    // `VbShellIconButton`: 32 / r7 / glifo 16 para TODAS las acciones del
+    // grupo. Antes esta traía 28 y glifo 18, y mezclada con las demás dejaba
+    // el chrome con tres alturas distintas.
+    if (chrome != null) {
+      return VbShellIconButton(
+        buttonKey: const ValueKey<String>('workspace-share-link'),
+        icon: Icons.ios_share_outlined,
+        tooltip: 'Copiar enlace de página',
+        onPressed: () => _copyCurrentLink(context),
+      );
+    }
+    // Fuera del shell este botón tiene otros hosts: se deja como estaba.
     return IconButton(
       tooltip: 'Copiar enlace de página',
       visualDensity: VisualDensity.compact,
       padding: EdgeInsets.zero,
-      constraints: chrome == null
-          ? null
-          : const BoxConstraints.tightFor(width: 28, height: 28),
       icon: Icon(
         Icons.ios_share_outlined,
         size: 18,
-        color: chrome?.mutedForeground ?? theme.colorScheme.onSurface,
+        color: theme.colorScheme.onSurface,
       ),
       onPressed: () => _copyCurrentLink(context),
     );

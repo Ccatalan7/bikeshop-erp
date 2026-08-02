@@ -121,6 +121,19 @@ class _ZoomContent extends StatelessWidget {
   final double scale;
   final Widget child;
 
+  EdgeInsets _toZoomedLogicalInsets(
+    EdgeInsets physicalLogicalInsets,
+    double appliedScale,
+  ) {
+    if (appliedScale == 1) return physicalLogicalInsets;
+    return EdgeInsets.fromLTRB(
+      physicalLogicalInsets.left / appliedScale,
+      physicalLogicalInsets.top / appliedScale,
+      physicalLogicalInsets.right / appliedScale,
+      physicalLogicalInsets.bottom / appliedScale,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -130,6 +143,7 @@ class _ZoomContent extends StatelessWidget {
             constraints.maxWidth < ResponsiveBreakpoints.desktopMin
                 ? 1.0
                 : scale;
+        final rootMediaQuery = MediaQuery.of(context);
 
         // Keep this wrapper topology stable at both sides of 899/900. Swapping
         // the compact branch to [child] directly would recreate the navigator
@@ -147,10 +161,33 @@ class _ZoomContent extends StatelessWidget {
                 width: constraints.maxWidth / appliedScale,
                 height: constraints.maxHeight / appliedScale,
                 child: MediaQuery(
-                  data: MediaQuery.of(context).copyWith(
+                  // The child lives in pre-transform logical coordinates.
+                  // View/system insets arrive in viewport coordinates, so
+                  // leaving them unchanged would scale a 24px safe boundary
+                  // to 19.2px at the default 0.8 desktop zoom. Normalize all
+                  // physical inset families here; descendants can keep using
+                  // ordinary SafeArea/viewPadding and still land on the real
+                  // status bar, keyboard, and system-gesture boundaries.
+                  data: rootMediaQuery.copyWith(
                     size: Size(
                       constraints.maxWidth / appliedScale,
                       constraints.maxHeight / appliedScale,
+                    ),
+                    padding: _toZoomedLogicalInsets(
+                      rootMediaQuery.padding,
+                      appliedScale,
+                    ),
+                    viewPadding: _toZoomedLogicalInsets(
+                      rootMediaQuery.viewPadding,
+                      appliedScale,
+                    ),
+                    viewInsets: _toZoomedLogicalInsets(
+                      rootMediaQuery.viewInsets,
+                      appliedScale,
+                    ),
+                    systemGestureInsets: _toZoomedLogicalInsets(
+                      rootMediaQuery.systemGestureInsets,
+                      appliedScale,
                     ),
                   ),
                   child: child,
